@@ -23,6 +23,12 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/parser"
+)
+
+const (
+	inverseDirective = "hasInverse"
+	inverseArg       = "field"
 )
 
 type scalar struct {
@@ -30,54 +36,55 @@ type scalar struct {
 	dgraphType string
 }
 
-type directive struct {
-	directiveDefn  *ast.DirectiveDefinition
-	validationFunc func(
-		sch *ast.Schema,
-		typ *ast.Definition,
-		field *ast.FieldDefinition,
-		dir *ast.Directive) *gqlerror.Error
+type directiveValidator func(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error
+
+// schemaExtras is everything that gets added to an input schema to make it
+// GraphQL valid and for the completion algorithm to use to build in search
+// capability into the schema.
+var schemaExtras = `
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+`
+
+// GraphQL scalar -> Dgraph scalar
+var scalarToDgraph = map[string]string{
+	"ID":       "uid",
+	"Boolean":  "bool",
+	"Int":      "int",
+	"Float":    "float",
+	"String":   "string",
+	"DateTime": "dateTime",
 }
 
-var supportedScalars = map[string]scalar{
-	"ID":       scalar{name: "ID", dgraphType: "uid"},
-	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
-	"Int":      scalar{name: "Int", dgraphType: "int"},
-	"Float":    scalar{name: "Float", dgraphType: "float"},
-	"String":   scalar{name: "String", dgraphType: "string"},
-	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
-}
-
-var supportedDirectives = map[string]directive{
-	"hasInverse": directive{
-		directiveDefn: &ast.DirectiveDefinition{
-			Name:      "hasInverse",
-			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
-			Arguments: []*ast.ArgumentDefinition{&ast.ArgumentDefinition{
-				Name: "field",
-				Type: &ast.Type{NamedType: "String", NonNull: true},
-			}},
-		},
-		validationFunc: hasInverseValidation,
-	},
+var directiveValidators = map[string]directiveValidator{
+	inverseDirective: hasInverseValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
-func addScalars(doc *ast.SchemaDocument) {
-	for _, s := range supportedScalars {
-		doc.Definitions = append(
-			doc.Definitions,
-			// Empty Position because it is being inserted by the engine.
-			&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
-		)
+func expandSchema(doc *ast.SchemaDocument) {
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
+	if gqlErr != nil {
+		panic(gqlErr)
 	}
-}
 
-func addDirectives(doc *ast.SchemaDocument) {
-	for _, d := range supportedDirectives {
-		doc.Directives = append(doc.Directives, d.directiveDefn)
+	for _, defn := range docExtras.Definitions {
+		doc.Definitions = append(doc.Definitions, defn)
+	}
+
+	for _, dir := range docExtras.Directives {
+		doc.Directives = append(doc.Directives, dir)
 	}
 }
 
@@ -113,7 +120,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
-					supportedDirectives[dir.Name].validationFunc(schema, typ, field, dir))
+					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
 		}
 	}

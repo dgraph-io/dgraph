@@ -88,8 +88,7 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	addScalars(doc)
-	addDirectives(doc)
+	expandSchema(doc)
 
 	defns := make([]string, len(doc.Definitions))
 	for i, defn := range doc.Definitions {
@@ -146,7 +145,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, supportedScalars[f.Type.Name()].dgraphType, suffix,
+						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",

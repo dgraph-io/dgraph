@@ -189,7 +189,7 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 }
 
 func isScalar(s string) bool {
-	_, ok := supportedScalars[s]
+	_, ok := scalarToDgraph[s]
 	return ok
 }
 
