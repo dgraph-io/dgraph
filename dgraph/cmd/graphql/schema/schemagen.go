@@ -26,33 +26,57 @@ import (
 	"github.com/vektah/gqlparser/validator"
 )
 
-type SchemaHandler interface {
+// A Handler can produce valid GraphQL and Dgraph schemas given an input of
+// types and relationships
+type Handler interface {
 	DGSchema() string
 	GQLSchema() string
 }
 
-type schemaHandler struct {
+type handler struct {
 	Input          string
 	completeSchema *ast.Schema
 	dgraphSchema   string
 }
 
-func (s *schemaHandler) GQLSchema() string {
+func (s *handler) GQLSchema() string {
 	return Stringify(s.completeSchema)
 }
 
-func (s *schemaHandler) DGSchema() string {
+func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-// NewSchemaHandler processes the input schema, returns errorlist if any
-// and the schemaHandler object.
-func NewSchemaHandler(input string) (SchemaHandler, error) {
+// NewHandler processes the input schema.  If there are no errors, it returns
+// a valid Handler, otherwise it returns nil and an error.
+func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	handler := &schemaHandler{Input: input}
+	// The input schema should contain just what's required to describe the types,
+	// relationships and searchability ... but that's not really enough to make a
+	// valid GraphQL schema: e.g. we allow a schema file like
+	//
+	// type T {
+	//   f: Int @searchable
+	// }
+	//
+	// But, that's not valid GraphQL unless there's also definitions of scalars
+	// (Int, String, etc) and definitions of the directives (@searchable, etc).
+	// We don't want to make the user have those in their file and then we have
+	// to check that they've made the right definitions, etc, etc.
+	//
+	// So we allow input of just what the user cares about.  We parse that and
+	// run a validation to make sure it only contains things that it should.
+	// To that we add all the scalars and other definitions we set as defaults.
+	// Then, we GraphQL validate to make sure their definitions plus our additions
+	// is GraphQL valid.  Our next validation ensure that the definitions are made
+	// in such a way that our GraphQL API will be able to interpret the schema
+	// correctly.
+	//
+	// Then we can complete the process by adding in queries and mutations etc to
+	// make the final full GraphQL schema.
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
 	if gqlErr != nil {
@@ -68,7 +92,6 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 	addDirectives(doc)
 
 	defns := make([]string, len(doc.Definitions))
-
 	for i, defn := range doc.Definitions {
 		defns[i] = defn.Name
 	}
@@ -83,10 +106,12 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 		return nil, gqlErrList
 	}
 
-	handler.dgraphSchema = genDgSchema(sch, defns)
-
-	generateCompleteSchema(sch, defns)
-	handler.completeSchema = sch
+	handler := &handler{
+		Input:          input,
+		dgraphSchema:   genDgSchema(sch, defns),
+		completeSchema: sch,
+	}
+	completeSchema(sch, defns)
 	return handler, nil
 }
 

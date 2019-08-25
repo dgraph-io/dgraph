@@ -25,9 +25,6 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
-
 type scalar struct {
 	name       string
 	dgraphType string
@@ -35,8 +32,11 @@ type scalar struct {
 
 type directive struct {
 	directiveDefn  *ast.DirectiveDefinition
-	validationFunc func(sch *ast.Schema, typ *ast.Definition,
-		field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error
+	validationFunc func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error
 }
 
 var supportedScalars = map[string]scalar{
@@ -62,7 +62,9 @@ var supportedDirectives = map[string]directive{
 	},
 }
 
-// addScalars adds all the supported scalars in the schema.
+var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
+var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
+
 func addScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
 		doc.Definitions = append(
@@ -79,7 +81,11 @@ func addDirectives(doc *ast.SchemaDocument) {
 	}
 }
 
-// preGQLValidation validates schema before gql validation
+// preGQLValidation validates schema before GraphQL validation.  Validation before
+// before GraphQL validation means the schema only has allowed structures, and
+// means we can give better errors than GrqphQL validation would give if their
+// schema contains something that will fail because of the extras we inject into
+// the schema.
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -90,7 +96,10 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-// postGQLValidation validates schema after gql validation.
+// postGQLValidation validates schema after gql validation.  Some validations
+// are easier to run once we know that the schema is GraphQL valid and that validation
+// has fleshed out the schema structure; we just need to check if it also satisfies
+// the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -133,9 +142,9 @@ func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
 	return errs
 }
 
-// generateCompleteSchema generates all the required query/mutation/update functions
-// for all the types mentioned the the schema.
-func generateCompleteSchema(sch *ast.Schema, definitions []string) {
+// completeSchema generates all the required types and fields for
+// query/mutation/update for all the types mentioned the the schema.
+func completeSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
 		Kind:        ast.Object,

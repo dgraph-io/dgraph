@@ -47,7 +47,7 @@ func TestDGSchemaGen(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				schHandler, errs := NewSchemaHandler(sch.Input)
+				schHandler, errs := NewHandler(sch.Input)
 				require.NoError(t, errs)
 
 				dgSchema := schHandler.DGSchema()
@@ -70,7 +70,7 @@ func TestSchemaString(t *testing.T) {
 			str1, err := ioutil.ReadFile(inputFileName)
 			require.NoError(t, err)
 
-			schHandler, errs := NewSchemaHandler(string(str1))
+			schHandler, errs := NewHandler(string(str1))
 			require.NoError(t, errs)
 
 			newSchemaStr := schHandler.GQLSchema()
@@ -96,7 +96,7 @@ func TestSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewSchemaHandler(sch.Input)
+				_, errlist := NewHandler(sch.Input)
 				require.NoError(t, errlist, sch.Name)
 			})
 		}
@@ -105,7 +105,7 @@ func TestSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewSchemaHandler(sch.Input)
+				_, errlist := NewHandler(sch.Input)
 				require.Equal(t, errlist, sch.Errlist, sch.Name)
 			})
 		}
