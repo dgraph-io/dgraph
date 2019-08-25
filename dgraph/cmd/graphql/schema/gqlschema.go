@@ -211,7 +211,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 		Name:   "Patch" + defn.Name,
 		Fields: getNonIDFields(schema, defn),
 	}
-	schema.Types[defn.Name+"Update"] = patchDefn
+	schema.Types["Patch"+defn.Name] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
