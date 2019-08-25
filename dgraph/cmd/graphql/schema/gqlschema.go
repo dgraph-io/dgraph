@@ -155,39 +155,41 @@ func generateCompleteSchema(sch *ast.Schema, definitions []string) {
 		defn := sch.Types[key]
 
 		if defn.Kind == ast.Object {
-			sch.Types[defn.Name+"Input"] = genInputType(sch, defn)
-			sch.Types[defn.Name+"Ref"] = genRefType(defn)
-			sch.Types["Patch"+defn.Name] = genPatchType(sch, defn)
-			sch.Types[defn.Name+"Update"] = genUpdateType(sch, defn)
-			sch.Types[defn.Name+"Filter"] = genFilterType(defn)
-			sch.Types["Add"+defn.Name+"Payload"] = genAddResultType(defn)
-			sch.Types["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
-			sch.Types["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
+			// types and inputs needed for mutations
+			addInputType(sch, defn)
+			addReferenceType(sch, defn)
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addAddPayloadType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+			addDeletePayloadType(sch, defn)
+			addMutations(sch, defn)
 
-			sch.Query.Fields = append(sch.Query.Fields, addQueryType(defn)...)
-			sch.Mutation.Fields = append(sch.Mutation.Fields, addMutationType(defn)...)
+			// types and inputs needed for query and search
+			addFilterType(sch, defn)
+			addQueries(sch, defn)
 		}
 	}
 }
 
-func genInputType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addInputType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Input",
 		Fields: getNonIDFields(schema, defn),
 	}
 }
 
-func genRefType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Ref"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Ref",
 		Fields: getIDField(defn),
 	}
 }
 
-func genUpdateType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
+	updType := &ast.Definition{
 		Kind: ast.InputObject,
 		Name: "Update" + defn.Name + "Input",
 		Fields: append(
@@ -200,32 +202,32 @@ func genUpdateType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
 				},
 			}),
 	}
+	schema.Types["Update"+defn.Name+"Input"] = updType
 }
 
-func genPatchType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
+func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   "Patch" + defn.Name,
 		Fields: getNonIDFields(schema, defn),
 	}
+	schema.Types[defn.Name+"Update"] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
 	}
-
-	return patchDefn
 }
 
-func genFilterType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addFilterType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Filter"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Filter",
 		Fields: getFilterField(),
 	}
 }
 
-func genAddResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Add" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
@@ -239,12 +241,12 @@ func genAddResultType(defn *ast.Definition) *ast.Definition {
 	}
 }
 
-func genUpdResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{ // Field type is same as the parent object type
+			&ast.FieldDefinition{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -254,8 +256,8 @@ func genUpdResultType(defn *ast.Definition) *ast.Definition {
 	}
 }
 
-func genDelResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
@@ -269,27 +271,28 @@ func genDelResultType(defn *ast.Definition) *ast.Definition {
 	}
 }
 
-func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Query " + defn.Name + " by ID",
-		Name:        "get" + defn.Name,
-		Type: &ast.Type{
-			NamedType: defn.Name,
-		},
-		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
-				Name: "id",
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   true,
+func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+	schema.Query.Fields = append(schema.Query.Fields,
+		&ast.FieldDefinition{
+			Description: "Get " + defn.Name + " by ID",
+			Name:        "get" + defn.Name,
+			Type: &ast.Type{
+				NamedType: defn.Name,
+			},
+			Arguments: []*ast.ArgumentDefinition{
+				&ast.ArgumentDefinition{
+					Name: "id",
+					Type: &ast.Type{
+						NamedType: idTypeFor(defn),
+						NonNull:   true,
+					},
 				},
 			},
-		},
-	}
+		})
 }
 
-func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
 		Description: "Query " + defn.Name,
 		Name:        "query" + defn.Name,
 		Type: &ast.Type{
@@ -308,18 +311,17 @@ func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueryType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
-	flds = append(flds, createGetFld(defn))
-	flds = append(flds, createQryFld(defn))
-
-	return
+func addQueries(schema *ast.Schema, defn *ast.Definition) {
+	addGetQuery(schema, defn)
+	addFilterQuery(schema, defn)
 }
 
-func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Function for adding " + defn.Name,
+func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
+	add := &ast.FieldDefinition{
+		Description: "Add a " + defn.Name,
 		Name:        "add" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Add" + defn.Name + "Payload",
@@ -334,30 +336,32 @@ func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
 }
 
-func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Update a " + defn.Name,
-		Name:        "update" + defn.Name,
-		Type: &ast.Type{
-			NamedType: "Update" + defn.Name + "Payload",
-		},
-		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
-				Name: "input",
-				Type: &ast.Type{
-					NamedType: "Update" + defn.Name + "Input",
-					NonNull:   true,
+func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
+	schema.Mutation.Fields = append(schema.Mutation.Fields,
+		&ast.FieldDefinition{
+			Description: "Update a " + defn.Name,
+			Name:        "update" + defn.Name,
+			Type: &ast.Type{
+				NamedType: "Update" + defn.Name + "Payload",
+			},
+			Arguments: []*ast.ArgumentDefinition{
+				&ast.ArgumentDefinition{
+					Name: "input",
+					Type: &ast.Type{
+						NamedType: "Update" + defn.Name + "Input",
+						NonNull:   true,
+					},
 				},
 			},
-		},
-	}
+		})
 }
 
-func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Function for deleting " + defn.Name,
+func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
+	del := &ast.FieldDefinition{
+		Description: "Delete a " + defn.Name,
 		Name:        "delete" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Delete" + defn.Name + "Payload",
@@ -372,14 +376,13 @@ func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
-func addMutationType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
-	flds = append(flds, createAddFld(defn))
-	flds = append(flds, createUpdFld(defn))
-	flds = append(flds, createDelFld(defn))
-
-	return
+func addMutations(schema *ast.Schema, defn *ast.Definition) {
+	addAddMutation(schema, defn)
+	addUpdateMutation(schema, defn)
+	addDeleteMutation(schema, defn)
 }
 
 func getFilterField() ast.FieldList {
