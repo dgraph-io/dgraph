@@ -1095,6 +1095,42 @@
 			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
+			"checksumSHA1": "U69onz/mOEvCATmF+2JKc5RdaG0=",
+			"path": "github.com/vektah/gqlparser/ast",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "GlbVsnW+0EzdY8iBnaMNineFOdQ=",
+			"path": "github.com/vektah/gqlparser/gqlerror",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "FEXjwQ38iI0tvWw/ORORixouYtw=",
+			"path": "github.com/vektah/gqlparser/lexer",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "eS/hxRqeGEPkByulu6IPoTaQMQQ=",
+			"path": "github.com/vektah/gqlparser/parser",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "zDp/NBYciidgGVdOP95lKYW++1k=",
+			"path": "github.com/vektah/gqlparser/validator",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "YOOQqMcWmH6hc7KJFL0cVAer1zs=",
+			"path": "github.com/vektah/gqlparser/validator/rules",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
 			"checksumSHA1": "+25Opx2Qr/VmlVeKxtbr+SHgoy0=",
 			"path": "github.com/willf/bitset",
 			"revision": "71fa2377963fc761fc6556dd5895dff5816d4e8c",
