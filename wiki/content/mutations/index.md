@@ -851,11 +851,11 @@ cat data.json | jq '{set: .}'
 
 ## Upsert Block
 
-The Upsert block allows performing queries and mutations in a single request. The Upsert
-block contains one query block and one mutation block. Variables defined in the
-query block can be used in the mutation block using the `uid` function.
-
+The Upsert Block allows performing queries and mutations in a single request. The Upsert
+block contains one query block and one mutation block. Variables defined in the query
+block can be used in the mutation block using the `uid` function.
 In general, the structure of the Upsert block is as follows:
+
 
 ```
 upsert {
@@ -866,12 +866,11 @@ upsert {
 ```
 
 The Mutation block currently only allows the `uid` function, which allows extracting UIDs
-from variables defined in the query block. There are 3 possible outcomes based on the
+from variables defined in the query block. There are two possible outcomes based on the
 results of executing the query block:
 
-* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
-* If the variable stores exactly one UID, the `uid` function returns the uid stored in the variable.
-* If the variable stores more than one UID, the mutation fails. We plan to support this use case in the future.
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
 ### Example
 
@@ -880,32 +879,31 @@ Consider an example with following schema:
 ```sh
 curl localhost:8080/alter -X POST -d $'
   name: string @index(term) .
-  email: string @index(exact) @upsert .
+  email: string @index(exact, trigram) @upsert .
   age: int @index(int) .
-  friend: uid @reverse .
 ' | jq
 ```
 
-### Insert Use Case
+Now, let's say we want to create a new user with `email` and `name` information.
+We also want to make sure that one email id has exactly one corresponding user in
+the database. To achieve this, we need to first query whether a user exists
+in the database with the given email id. If a user exists, we use the returned UID
+of the user to update the `name` information. If the user doesn't exist, we create
+a new user and update the `email` and `name` information.
 
-Now, let's say we want to create a new user with `email`, and `name` information.
-We also want to make sure that two users cannot have same email id in the database.
-
-We can do this using the Upsert block as follows:
+We can do this using the Upsert Block as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
-    me(func: eq(email, "user@dgraph.io")) {
-      v as uid
-    }
+    v as var(func: eq(email, "user@company1.io"))
   }
 
   mutation {
     set {
       uid(v) <name> "first last" .
-      uid(v) <email> "user@dgraph.io" .
+      uid(v) <email> "user@company1.io" .
     }
   }
 }
@@ -923,40 +921,24 @@ Result:
       "uid(v)": "0x2"
     }
   },
-  "extensions": {
-    "server_latency": {
-      "parsing_ns": 71033,
-      "processing_ns": 22994018
-    },
-    "txn": {
-      "start_ts": 4,
-      "commit_ts": 5,
-      "preds": [
-        "1-email",
-        "1-name"
-      ]
-    }
-  }
+  "extensions": {...}
 }
 ```
 
-The upsert first checks whether a user with the email `user@dgraph.io` exists. Because
-the database is currently empty, no such user exists. Hence, the variable `v` will be
-empty. In this case, the `uid` function returns a new UID for the variable `v` replacing
-with the new UID value wherever `uid(v)` is used.
-
-### Update Use Case
+The query part of the upsert block stores the UID of the user with the provided email
+id in the variable `v`. The mutation part then extracts the UID from variable `v` and
+stores the `name` and `email` information in the database. In case the user exists,
+the information is updated whereas if the user doesn't exist, `uid(v)` is treated
+as a blank node and a new user is created as explained above.
 
 Now, we want to add the `age` information for the same user having email ID
-`user@dgraph.io`. We can use the Upsert block to do the same as follows:
+`user@company1.io`. We can use the Upsert block to do the same as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
-    me(func: eq(email, "user@dgraph.io")) {
-      v as uid
-    }
+    v as var(func: eq(email, "user@company1.io"))
   }
 
   mutation {
@@ -977,22 +959,46 @@ Result:
     "message": "Done",
     "uids": {}
   },
-  "extensions": {
-    "server_latency": {
-      "parsing_ns": 39017,
-      "processing_ns": 21231954
-    },
-    "txn": {
-      "start_ts": 7,
-      "commit_ts": 8,
-      "preds": [
-        "1-age"
-      ]
-    }
-  }
+  "extensions": {...}
 }
 ```
 
-Here, the query block queries for a user with `email` as `user@dgraph.io`. It stores the
-`uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user. The `uid` function extracts the uid from the variable `v`.
+Here, the query block queries for a user with `email` as `user@company1.io`. It stores
+the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user by extracting the uid from the variable `v` using `uid` function.
+
+### Bulk Delete Example
+
+Let's we want to delete all the users of `company1` from the database. This can be
+achieved in just one query using the Upsert Block -
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: regexp(email, /.*@company1.io$/))
+  }
+
+  mutation {
+    delete {
+      uid(v) <name> * .
+      uid(v) <email> * .
+      uid(v) <age> * .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
