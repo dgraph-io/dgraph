@@ -89,7 +89,12 @@ input PostInput {
 	author: AuthorRef!
 }
 
-input PostUpdate {
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
+}
+
+input PatchPost {
 	title: String
 	text: String
 }
@@ -104,7 +109,7 @@ type UpdatePostPayload {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 }
 `
 
@@ -280,7 +285,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 
 func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		updatePost(id: "0x1", input: {text: "Some more text"}) {
+		updatePost(input: { id: "0x1", patch: { text: "Some more text" } }) {
 			post {
 				title
 				text

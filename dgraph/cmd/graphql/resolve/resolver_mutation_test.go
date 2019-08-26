@@ -32,7 +32,7 @@ import (
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]string{
 		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-		"Update Post ": `updatePost(id: "0x4", input: {text: "Updated text"}) `,
+		"Update Post ": `updatePost(input: { id: "0x4", patch: { text: "Updated text" } }) `,
 	}
 
 	b, err := ioutil.ReadFile("resolver_mutation_query_test.yaml")
