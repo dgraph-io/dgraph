@@ -63,6 +63,12 @@
 			"revisionTime": "2019-05-27T09:17:52Z"
 		},
 		{
+			"checksumSHA1": "o437TwM6wCsddwGudOGKYkhrEvw=",
+			"path": "github.com/agnivade/levenshtein",
+			"revision": "d6649a458d45cfa1349f4e99a866206af865330d",
+			"revisionTime": "2019-04-04T07:49:22Z"
+		},
+		{
 			"checksumSHA1": "gEOtyPsAyrbkLEc3F39vLmQhxog=",
 			"path": "github.com/apache/thrift/lib/go/thrift",
 			"revision": "370d7513f074d96007006a82fca4d45e72afe4da",
@@ -1093,6 +1099,42 @@
 			"path": "github.com/twpayne/go-geom/encoding/wkbcommon",
 			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
 			"revisionTime": "2017-03-17T09:06:30Z"
+		},
+		{
+			"checksumSHA1": "U69onz/mOEvCATmF+2JKc5RdaG0=",
+			"path": "github.com/vektah/gqlparser/ast",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "GlbVsnW+0EzdY8iBnaMNineFOdQ=",
+			"path": "github.com/vektah/gqlparser/gqlerror",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "FEXjwQ38iI0tvWw/ORORixouYtw=",
+			"path": "github.com/vektah/gqlparser/lexer",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "eS/hxRqeGEPkByulu6IPoTaQMQQ=",
+			"path": "github.com/vektah/gqlparser/parser",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "zDp/NBYciidgGVdOP95lKYW++1k=",
+			"path": "github.com/vektah/gqlparser/validator",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
+		},
+		{
+			"checksumSHA1": "YOOQqMcWmH6hc7KJFL0cVAer1zs=",
+			"path": "github.com/vektah/gqlparser/validator/rules",
+			"revision": "96ed341bd01db83c4c3b6cda812302722fef82ac",
+			"revisionTime": "2019-08-07T07:43:48Z"
 		},
 		{
 			"checksumSHA1": "+25Opx2Qr/VmlVeKxtbr+SHgoy0=",
