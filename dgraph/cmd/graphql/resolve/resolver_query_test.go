@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
@@ -66,15 +67,15 @@ func TestQueryRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
 			client := &queryRecorder{}
-			resp := resolveWithClient(gqlSchema, test.GQLQuery, client)
+			resp := resolveWithClient(gqlSchema, tcase.GQLQuery, client)
 
 			require.Nil(t, resp.Errors)
-			require.Equal(t, test.DGQuery, client.query)
+			require.Equal(t, tcase.DGQuery, client.query)
 		})
 	}
 }
