@@ -63,6 +63,12 @@
 			"revisionTime": "2019-05-27T09:17:52Z"
 		},
 		{
+			"checksumSHA1": "o437TwM6wCsddwGudOGKYkhrEvw=",
+			"path": "github.com/agnivade/levenshtein",
+			"revision": "d6649a458d45cfa1349f4e99a866206af865330d",
+			"revisionTime": "2019-04-04T07:49:22Z"
+		},
+		{
 			"checksumSHA1": "gEOtyPsAyrbkLEc3F39vLmQhxog=",
 			"path": "github.com/apache/thrift/lib/go/thrift",
 			"revision": "370d7513f074d96007006a82fca4d45e72afe4da",
