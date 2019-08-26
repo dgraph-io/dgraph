@@ -230,14 +230,9 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 		}
 		list.Kv = append(list.Kv, kvs...)
 	case posting.BitSchemaPosting:
-		var valCopy []byte
-		if !item.IsDeletedOrExpired() {
-			// No need to copy value if item is deleted or expired.
-			var err error
-			valCopy, err = item.ValueCopy(nil)
-			if err != nil {
-				return nil, errors.Wrapf(err, "while copying value")
-			}
+		valCopy, err := item.ValueCopy(nil)
+		if err != nil {
+			return nil, errors.Wrapf(err, "while copying value")
 		}
 
 		backupKey, err := toBackupKey(key)
