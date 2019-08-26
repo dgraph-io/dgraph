@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/rewrite"
 	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
@@ -81,10 +82,11 @@ import (
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
 type RequestResolver struct {
-	GqlReq *schema.Request
-	Schema schema.Schema
-	dgraph dgraph.Client
-	resp   *schema.Response
+	GqlReq          *schema.Request
+	Schema          schema.Schema
+	dgraph          dgraph.Client
+	mutationBuilder rewrite.MutationBuilder
+	resp            *schema.Response
 }
 
 // A resolved is the result of resolving a single query or mutation.
@@ -99,9 +101,10 @@ type resolved struct {
 // New creates a new RequestResolver
 func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
-		Schema: s,
-		dgraph: dg,
-		resp:   &schema.Response{},
+		Schema:          s,
+		dgraph:          dg,
+		resp:            &schema.Response{},
+		mutationBuilder: rewrite.NewMutationBuilder(),
 	}
 }
 
@@ -188,9 +191,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			}
 
 			mr := &mutationResolver{
-				mutation: m,
-				schema:   r.Schema,
-				dgraph:   r.dgraph,
+				mutation:        m,
+				schema:          r.Schema,
+				dgraph:          r.dgraph,
+				mutationBuilder: r.mutationBuilder,
 			}
 			res := mr.resolve(ctx)
 			r.WithError(res.err)
