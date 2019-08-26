@@ -88,15 +88,15 @@ func SetConfiguration(newConfig Options) {
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
 const MinAllottedMemory = 1024.0
 
-func (o *Options) validate() {
-	pd, err := filepath.Abs(o.PostingDir)
+func (opt *Options) validate() {
+	pd, err := filepath.Abs(opt.PostingDir)
 	x.Check(err)
-	wd, err := filepath.Abs(o.WALDir)
+	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
-	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-	x.AssertTruefNoTrace(o.AllottedMemory != -1,
+	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
+	x.AssertTruefNoTrace(opt.AllottedMemory != -1,
 		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
-	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
+	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
-		MinAllottedMemory, o.AllottedMemory)
+		MinAllottedMemory, opt.AllottedMemory)
 }

@@ -232,12 +232,15 @@ func TestTxnRead5(t *testing.T) {
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
-	mu.CommitNow = true
-	res, err := dc.Mutate(context.Background(), mu)
+	muReq := api.Request{
+		Mutations: []*api.Mutation{mu},
+		CommitNow: true,
+	}
+	res, err := dc.Query(context.Background(), &muReq)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	x.AssertTrue(res.Context.StartTs > 0)
+	x.AssertTrue(res.Txn.StartTs > 0)
 	resp, err = dc.Query(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
@@ -564,7 +567,7 @@ func TestNameSet(t *testing.T) {
 // retrieve the uids in the uidMap in the order of ascending keys
 func retrieveUids(uidMap map[string]string) []string {
 	keys := make([]string, 0, len(uidMap))
-	for key, _ := range uidMap {
+	for key := range uidMap {
 		keys = append(keys, key)
 	}
 

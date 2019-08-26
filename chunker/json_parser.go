@@ -224,14 +224,15 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	return true, nil
 }
 
+// NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
+// negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
 	batchSize int
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
 }
 
-// NewNQuadBuffer would return a new buffer. It would batch up batchSize NQuads per push to channel,
-// accessible via Ch(). If batchSize is negative, it would only do one push to Ch() during Flush.
+// NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
 func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	buf := &NQuadBuffer{
 		batchSize: batchSize,

@@ -198,6 +198,7 @@ func (m *Manifest) GoString() string {
 func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
+	// TODO: This for loop doesn't seem right. We should only have one iteration here.
 	for itr.Valid() {
 		item := itr.Item()
 		if !bytes.Equal(item.Key(), key) {

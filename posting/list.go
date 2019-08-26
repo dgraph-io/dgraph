@@ -44,7 +44,8 @@ var (
 	// In such a case, retry.
 	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = errors.New("No value found")
+	ErrNoValue = errors.New("No value found")
+	// ErrStopIteration is returned when an iteration is terminated early.
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2

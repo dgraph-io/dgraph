@@ -2266,6 +2266,21 @@ func TestDateTimeQuery(t *testing.T) {
 		processQueryNoErr(t, query))
 }
 
+func TestCountUidWithAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23, 24, 25, 31)) {
+				countUid: count(uid)
+				name
+			}
+		}
+		`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"me":[{"countUid":5},{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`,
+		js)
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {

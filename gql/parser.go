@@ -93,7 +93,7 @@ type RecurseArgs struct {
 	AllowLoop bool
 }
 
-// SHortestPathArgs stores the arguments needed to process the shortest path query.
+// ShortestPathArgs stores the arguments needed to process the shortest path query.
 type ShortestPathArgs struct {
 	// From, To can have a uid or a uid function as the argument.
 	// 1. from: 0x01
@@ -2879,6 +2879,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					gq.Var = varName
 					if alias != "" {
 						gq.UidCountAlias = alias
+						// This is a count(uid) node.
+						// Reset the alias here after assigning to UidCountAlias, so that siblings
+						// of this node don't get it.
+						alias = ""
 					}
 					it.Next()
 					it.Next()

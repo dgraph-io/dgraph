@@ -133,12 +133,12 @@ func runJSONQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	return err
 }
 
 func runJSONMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/json", true, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/json", true, true, 0)
 	return err
 }
 
@@ -1294,14 +1294,15 @@ func TestDeleteAllSP2(t *testing.T) {
 }
 
 func TestDeleteScalarValue(t *testing.T) {
-	var s = `name: string .`
+	var s = `name: string @index(exact) .`
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	require.NoError(t, alterSchemaWithRetry(s))
 
 	var m = `
 	{
 	  set {
-	    <0x12345> <name> "xxx" .
+		<0x12345> <name> "xxx" .
+		<0x12346> <name> "xxx" .
 	  }
 	}
 	`
@@ -1342,6 +1343,17 @@ func TestDeleteScalarValue(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
 
+	indexQuery := `
+	{
+		me(func: eq(name, "xxx")) {
+			name
+		}
+	}
+	`
+	output, err = runGraphqlQuery(indexQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}, {"name":"xxx"}]}}`, output)
+
 	var d2 = `
 	{
       delete {
@@ -1356,6 +1368,11 @@ func TestDeleteScalarValue(t *testing.T) {
 	output, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
+
+	// Verify index was also updated this time and one of the triples got deleted.
+	output, err = runGraphqlQuery(indexQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name": "xxx"}]}}`, output)
 }
 
 func TestDeleteValueLang(t *testing.T) {

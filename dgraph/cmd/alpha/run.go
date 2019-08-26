@@ -93,8 +93,6 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.Bool("enterprise_features", false, "Enable Dgraph enterprise features. "+
-		"If you set this to true, you agree to the Dgraph Community License.")
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
@@ -435,11 +433,6 @@ func run() {
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
-		if !Alpha.Conf.GetBool("enterprise_features") {
-			glog.Fatalf("You must enable Dgraph enterprise features with the " +
-				"--enterprise_features option in order to use ACL.")
-		}
-
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
