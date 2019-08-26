@@ -582,6 +582,9 @@ func Stringify(schema *ast.Schema, orriginalTypes []string) string {
 		printed[typName] = true
 	}
 
+	// schemaExtras gets added to the result as a string, but we need to mark
+	// off all it's contents as printed, so nothing in there gets printed with
+	// the generated definitions.
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		panic(gqlErr)
