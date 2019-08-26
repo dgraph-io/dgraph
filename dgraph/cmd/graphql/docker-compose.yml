@@ -202,3 +202,43 @@ services:
     labels:
       cluster: test
     command: minio server /data/minio --address :9001
+
+  graphql-init:
+    image: dgraph/dgraph:latest
+    container_name: graphql-init
+    working_dir: /data/graphql
+    volumes:
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql
+        target: /schema
+        read_only: true
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    depends_on:
+      - alpha1
+    restart: on-failure
+    labels:
+      cluster: test
+    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 -v3
+ 
+  graphql:
+    image: dgraph/dgraph:latest
+    container_name: graphql 
+    working_dir: /data/graphql
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 9000:9000
+    depends_on:
+      - graphql-init 
+    restart: always
+    labels:
+      cluster: test
+      service: graphql 
+    command: /gobin/dgraph graphql --alpha alpha1:9180 
+
