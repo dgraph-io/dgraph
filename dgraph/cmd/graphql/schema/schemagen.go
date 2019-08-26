@@ -35,13 +35,13 @@ type Handler interface {
 
 type handler struct {
 	input          string
-	orriginalDefs  []string
+	originalDefs   []string
 	completeSchema *ast.Schema
 	dgraphSchema   string
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.orriginalDefs)
+	return Stringify(s.completeSchema, s.originalDefs)
 }
 
 func (s *handler) DGSchema() string {
@@ -117,7 +117,7 @@ func NewHandler(input string) (Handler, error) {
 		input:          input,
 		dgraphSchema:   dgSchema,
 		completeSchema: sch,
-		orriginalDefs:  defns,
+		originalDefs:   defns,
 	}, nil
 }
 

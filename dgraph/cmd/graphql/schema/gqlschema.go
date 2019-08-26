@@ -561,7 +561,7 @@ func generateScalarString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
-func Stringify(schema *ast.Schema, orriginalTypes []string) string {
+func Stringify(schema *ast.Schema, originalTypes []string) string {
 	var sch, original, object, input strings.Builder
 
 	if schema.Types == nil {
@@ -572,7 +572,7 @@ func Stringify(schema *ast.Schema, orriginalTypes []string) string {
 
 	// original defs can only be types and enums, print those in the same order
 	// as the original schema.
-	for _, typName := range orriginalTypes {
+	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
 		if typ.Kind == ast.Object {
 			original.WriteString(generateObjectString(typ) + "\n")
