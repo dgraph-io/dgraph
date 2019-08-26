@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/gqlerror"
 	"gopkg.in/yaml.v2"
@@ -79,7 +80,9 @@ func TestSchemaString(t *testing.T) {
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
 
-			require.Equal(t, string(str2), newSchemaStr)
+			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
+				t.Errorf("schema mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
