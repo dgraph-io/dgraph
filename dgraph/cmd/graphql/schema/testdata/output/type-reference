@@ -1,6 +1,36 @@
 #######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	title: String!
+	text: String
+	author: Author!
+}
+
+type Author {
+	id: ID!
+	name: String!
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+
+#######################
 # Generated Types
 #######################
+
 type AddAuthorPayload {
 	author: Author
 }
@@ -9,22 +39,12 @@ type AddPostPayload {
 	post: Post
 }
 
-type Author {
-	id: ID!
-	posts: [Post!]! @hasInverse(field: "author")
-}
-
 type DeleteAuthorPayload {
 	msg: String
 }
 
 type DeletePostPayload {
 	msg: String
-}
-
-type Post {
-	id: ID!
-	author: Author! @hasInverse(field: "posts")
 }
 
 type UpdateAuthorPayload {
@@ -36,26 +56,15 @@ type UpdatePostPayload {
 }
 
 #######################
-# Scalar Definitions
+# Generated Inputs
 #######################
-scalar Boolean
-scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
-#######################
-# Enum Definitions
-#######################
-#######################
-# Input Definitions
-#######################
+
 input AuthorFilter {
 	dgraph: String
 }
 
 input AuthorInput {
-	posts: [PostRef!]!
+	name: String!
 }
 
 input AuthorRef {
@@ -63,10 +72,12 @@ input AuthorRef {
 }
 
 input PatchAuthor {
-	posts: [PostRef!]
+	name: String
 }
 
 input PatchPost {
+	title: String
+	text: String
 	author: AuthorRef
 }
 
@@ -75,6 +86,8 @@ input PostFilter {
 }
 
 input PostInput {
+	title: String!
+	text: String
 	author: AuthorRef!
 }
 
@@ -95,15 +108,18 @@ input UpdatePostInput {
 #######################
 # Generated Query
 #######################
+
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter!): [Post!]
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter!): [Author!]
 }
+
 #######################
 # Generated Mutations
 #######################
+
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
