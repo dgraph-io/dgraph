@@ -29,18 +29,11 @@ import (
 const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
-)
 
-type directiveValidator func(
-	sch *ast.Schema,
-	typ *ast.Definition,
-	field *ast.FieldDefinition,
-	dir *ast.Directive) *gqlerror.Error
-
-// schemaExtras is everything that gets added to an input schema to make it
-// GraphQL valid and for the completion algorithm to use to build in search
-// capability into the schema.
-var schemaExtras = `
+	// schemaExtras is everything that gets added to an input schema to make it
+	// GraphQL valid and for the completion algorithm to use to build in search
+	// capability into the schema.
+	schemaExtras = `
 scalar Boolean
 scalar DateTime
 scalar Float
@@ -50,6 +43,13 @@ scalar String
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 `
+)
+
+type directiveValidator func(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error
 
 // GraphQL scalar -> Dgraph scalar
 var scalarToDgraph = map[string]string{
@@ -83,7 +83,7 @@ func expandSchema(doc *ast.SchemaDocument) {
 	}
 }
 
-// preGQLValidation validates schema before GraphQL validation.  Validation before
+// preGQLValidation validates schema before GraphQL validation.  Validation
 // before GraphQL validation means the schema only has allowed structures, and
 // means we can give better errors than GrqphQL validation would give if their
 // schema contains something that will fail because of the extras we inject into

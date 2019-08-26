@@ -54,9 +54,9 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	// The input schema should contain just what's required to describe the types,
-	// relationships and searchability ... but that's not really enough to make a
-	// valid GraphQL schema: e.g. we allow a schema file like
+	// The input schema contains just what's required to describe the types,
+	// relationships and searchability - but that's not enough to define a
+	// valid GraphQL schema: e.g. we allow an input schema file like
 	//
 	// type T {
 	//   f: Int @searchable
@@ -67,15 +67,19 @@ func NewHandler(input string) (Handler, error) {
 	// We don't want to make the user have those in their file and then we have
 	// to check that they've made the right definitions, etc, etc.
 	//
-	// So we allow input of just what the user cares about.  We parse that and
+	// So we parse the original input of just types and relationships and
 	// run a validation to make sure it only contains things that it should.
-	// To that we add all the scalars and other definitions we set as defaults.
+	// To that we add all the scalars and other definitions we always require.
+	//
 	// Then, we GraphQL validate to make sure their definitions plus our additions
-	// is GraphQL valid.  Our next validation ensure that the definitions are made
+	// is GraphQL valid.  At this point we know the definitions are GraphQL valid,
+	// but we need to check if it makes sense to our layer.
+	//
+	// The next final validation ensures that the definitions are made
 	// in such a way that our GraphQL API will be able to interpret the schema
 	// correctly.
 	//
-	// Then we can complete the process by adding in queries and mutations etc to
+	// Then we can complete the process by adding in queries and mutations etc. to
 	// make the final full GraphQL schema.
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
@@ -105,13 +109,14 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	handler := &handler{
-		Input:          input,
-		dgraphSchema:   genDgSchema(sch, defns),
-		completeSchema: sch,
-	}
+	dgSchema := genDgSchema(sch, defns)
 	completeSchema(sch, defns)
-	return handler, nil
+
+	return &handler{
+		Input:          input,
+		dgraphSchema:   dgSchema,
+		completeSchema: sch,
+	}, nil
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
