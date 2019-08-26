@@ -51,18 +51,17 @@ import (
 )
 
 type options struct {
-	dataFiles           string
-	dataFormat          string
-	schemaFile          string
-	zero                string
-	concurrent          int
-	batchSize           int
-	clientDir           string
-	ignoreIndexConflict bool
-	authToken           string
-	useCompression      bool
-	newUids             bool
-	verbose             bool
+	dataFiles      string
+	dataFormat     string
+	schemaFile     string
+	zero           string
+	concurrent     int
+	batchSize      int
+	clientDir      string
+	authToken      string
+	useCompression bool
+	newUids        bool
+	verbose        bool
 }
 
 var (
@@ -97,8 +96,6 @@ func init() {
 	flag.IntP("batch", "b", 1000,
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
-	flag.BoolP("ignore_index_conflict", "i", true,
-		"Ignores conflicts on index keys during transaction")
 	flag.StringP("auth_token", "t", "",
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
@@ -273,18 +270,17 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 func run() error {
 	x.PrintVersion()
 	opt = options{
-		dataFiles:           Live.Conf.GetString("files"),
-		dataFormat:          Live.Conf.GetString("format"),
-		schemaFile:          Live.Conf.GetString("schema"),
-		zero:                Live.Conf.GetString("zero"),
-		concurrent:          Live.Conf.GetInt("conc"),
-		batchSize:           Live.Conf.GetInt("batch"),
-		clientDir:           Live.Conf.GetString("xidmap"),
-		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
-		authToken:           Live.Conf.GetString("auth_token"),
-		useCompression:      Live.Conf.GetBool("use_compression"),
-		newUids:             Live.Conf.GetBool("new_uids"),
-		verbose:             Live.Conf.GetBool("verbose"),
+		dataFiles:      Live.Conf.GetString("files"),
+		dataFormat:     Live.Conf.GetString("format"),
+		schemaFile:     Live.Conf.GetString("schema"),
+		zero:           Live.Conf.GetString("zero"),
+		concurrent:     Live.Conf.GetInt("conc"),
+		batchSize:      Live.Conf.GetInt("batch"),
+		clientDir:      Live.Conf.GetString("xidmap"),
+		authToken:      Live.Conf.GetString("auth_token"),
+		useCompression: Live.Conf.GetBool("use_compression"),
+		newUids:        Live.Conf.GetBool("new_uids"),
+		verbose:        Live.Conf.GetBool("verbose"),
 	}
 	go func() {
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {

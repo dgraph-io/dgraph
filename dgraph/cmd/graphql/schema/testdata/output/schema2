@@ -2,35 +2,37 @@
 # Generated Types
 #######################
 type AddAuthorPayload {
-	author: Author!
+	author: Author
 }
 
 type AddPostPayload {
-	post: Post!
+	post: Post
 }
 
 type Author {
+	id: ID!
 	posts: [Post!]! @hasInverse(field: "author")
 }
 
 type DeleteAuthorPayload {
-	msg: String!
+	msg: String
 }
 
 type DeletePostPayload {
-	msg: String!
+	msg: String
 }
 
 type Post {
+	id: ID!
 	author: Author! @hasInverse(field: "posts")
 }
 
 type UpdateAuthorPayload {
-	author: Author!
+	author: Author
 }
 
 type UpdatePostPayload {
-	post: Post!
+	post: Post
 }
 
 #######################
@@ -57,10 +59,15 @@ input AuthorInput {
 }
 
 input AuthorRef {
+	id: ID!
 }
 
-input AuthorUpdate {
+input PatchAuthor {
 	posts: [PostRef!]
+}
+
+input PatchPost {
+	author: AuthorRef
 }
 
 input PostFilter {
@@ -72,29 +79,36 @@ input PostInput {
 }
 
 input PostRef {
+	id: ID!
 }
 
-input PostUpdate {
-	author: AuthorRef
+input UpdateAuthorInput {
+	id: ID!
+	patch: PatchAuthor!
+}
+
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
 }
 
 #######################
 # Generated Query
 #######################
 type Query {
-	getPost(id: ID!): Post!
-	queryPost(filter: PostFilter!): [Post!]!
-	getAuthor(id: ID!): Author!
-	queryAuthor(filter: AuthorFilter!): [Author!]!
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter!): [Post!]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter!): [Author!]
 }
 #######################
 # Generated Mutations
 #######################
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload!
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload!
-	deletePost(id: ID!): DeletePostPayload!
-	addAuthor(input: AuthorInput!): AddAuthorPayload!
-	updateAuthor(id: ID!, input: AuthorUpdate): UpdateAuthorPayload!
-	deleteAuthor(id: ID!): DeleteAuthorPayload!
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(id: ID!): DeletePostPayload
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(id: ID!): DeleteAuthorPayload
 }

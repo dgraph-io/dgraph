@@ -23,63 +23,71 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/parser"
 )
+
+const (
+	inverseDirective = "hasInverse"
+	inverseArg       = "field"
+
+	// schemaExtras is everything that gets added to an input schema to make it
+	// GraphQL valid and for the completion algorithm to use to build in search
+	// capability into the schema.
+	schemaExtras = `
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+`
+)
+
+type directiveValidator func(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error
+
+// GraphQL scalar -> Dgraph scalar
+var scalarToDgraph = map[string]string{
+	"ID":       "uid",
+	"Boolean":  "bool",
+	"Int":      "int",
+	"Float":    "float",
+	"String":   "string",
+	"DateTime": "dateTime",
+}
+
+var directiveValidators = map[string]directiveValidator{
+	inverseDirective: hasInverseValidation,
+}
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
-type scalar struct {
-	name       string
-	dgraphType string
-}
+func expandSchema(doc *ast.SchemaDocument) {
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
+	if gqlErr != nil {
+		panic(gqlErr)
+	}
 
-type directive struct {
-	directiveDefn  *ast.DirectiveDefinition
-	validationFunc func(sch *ast.Schema, typ *ast.Definition,
-		field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error
-}
+	for _, defn := range docExtras.Definitions {
+		doc.Definitions = append(doc.Definitions, defn)
+	}
 
-var supportedScalars = map[string]scalar{
-	"ID":       scalar{name: "ID", dgraphType: "uid"},
-	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
-	"Int":      scalar{name: "Int", dgraphType: "int"},
-	"Float":    scalar{name: "Float", dgraphType: "float"},
-	"String":   scalar{name: "String", dgraphType: "string"},
-	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
-}
-
-var supportedDirectives = map[string]directive{
-	"hasInverse": directive{
-		directiveDefn: &ast.DirectiveDefinition{
-			Name:      "hasInverse",
-			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
-			Arguments: []*ast.ArgumentDefinition{&ast.ArgumentDefinition{
-				Name: "field",
-				Type: &ast.Type{NamedType: "String", NonNull: true},
-			}},
-		},
-		validationFunc: hasInverseValidation,
-	},
-}
-
-// addScalars adds all the supported scalars in the schema.
-func addScalars(doc *ast.SchemaDocument) {
-	for _, s := range supportedScalars {
-		doc.Definitions = append(
-			doc.Definitions,
-			// Empty Position because it is being inserted by the engine.
-			&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
-		)
+	for _, dir := range docExtras.Directives {
+		doc.Directives = append(doc.Directives, dir)
 	}
 }
 
-func addDirectives(doc *ast.SchemaDocument) {
-	for _, d := range supportedDirectives {
-		doc.Directives = append(doc.Directives, d.directiveDefn)
-	}
-}
-
-// preGQLValidation validates schema before gql validation
+// preGQLValidation validates schema before GraphQL validation.  Validation
+// before GraphQL validation means the schema only has allowed structures, and
+// means we can give better errors than GrqphQL validation would give if their
+// schema contains something that will fail because of the extras we inject into
+// the schema.
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -90,7 +98,10 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-// postGQLValidation validates schema after gql validation.
+// postGQLValidation validates schema after gql validation.  Some validations
+// are easier to run once we know that the schema is GraphQL valid and that validation
+// has fleshed out the schema structure; we just need to check if it also satisfies
+// the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -104,7 +115,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
-					supportedDirectives[dir.Name].validationFunc(schema, typ, field, dir))
+					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
 		}
 	}
@@ -133,9 +144,9 @@ func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
 	return errs
 }
 
-// generateCompleteSchema generates all the required query/mutation/update functions
-// for all the types mentioned the the schema.
-func generateCompleteSchema(sch *ast.Schema, definitions []string) {
+// completeSchema generates all the required types and fields for
+// query/mutation/update for all the types mentioned the the schema.
+func completeSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
 		Kind:        ast.Object,
@@ -155,60 +166,79 @@ func generateCompleteSchema(sch *ast.Schema, definitions []string) {
 		defn := sch.Types[key]
 
 		if defn.Kind == ast.Object {
-			sch.Types[defn.Name+"Input"] = genInputType(sch, defn)
-			sch.Types[defn.Name+"Ref"] = genRefType(defn)
-			sch.Types[defn.Name+"Update"] = genUpdateType(sch, defn)
-			sch.Types[defn.Name+"Filter"] = genFilterType(defn)
-			sch.Types["Add"+defn.Name+"Payload"] = genAddResultType(defn)
-			sch.Types["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
-			sch.Types["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
+			// types and inputs needed for mutations
+			addInputType(sch, defn)
+			addReferenceType(sch, defn)
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addAddPayloadType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+			addDeletePayloadType(sch, defn)
+			addMutations(sch, defn)
 
-			sch.Query.Fields = append(sch.Query.Fields, addQueryType(defn)...)
-			sch.Mutation.Fields = append(sch.Mutation.Fields, addMutationType(defn)...)
+			// types and inputs needed for query and search
+			addFilterType(sch, defn)
+			addQueries(sch, defn)
 		}
 	}
 }
 
-func genInputType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addInputType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Input",
 		Fields: getNonIDFields(schema, defn),
 	}
 }
 
-func genRefType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Ref"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Ref",
 		Fields: getIDField(defn),
 	}
 }
 
-func genUpdateType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
-	updDefn := &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   defn.Name + "Update",
-		Fields: getNonIDFields(schema, defn),
+func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
+	updType := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: "Update" + defn.Name + "Input",
+		Fields: append(
+			getIDField(defn),
+			&ast.FieldDefinition{
+				Name: "patch",
+				Type: &ast.Type{
+					NamedType: "Patch" + defn.Name,
+					NonNull:   true,
+				},
+			}),
 	}
-
-	for _, fld := range updDefn.Fields {
-		fld.Type.NonNull = false
-	}
-
-	return updDefn
+	schema.Types["Update"+defn.Name+"Input"] = updType
 }
 
-func genFilterType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addPatchType(schema *ast.Schema, defn *ast.Definition) {
+	patchDefn := &ast.Definition{
+		Kind:   ast.InputObject,
+		Name:   "Patch" + defn.Name,
+		Fields: getNonIDFields(schema, defn),
+	}
+	schema.Types["Patch"+defn.Name] = patchDefn
+
+	for _, fld := range patchDefn.Fields {
+		fld.Type.NonNull = false
+	}
+}
+
+func addFilterType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types[defn.Name+"Filter"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Filter",
 		Fields: getFilterField(),
 	}
 }
 
-func genAddResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Add" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
@@ -216,31 +246,29 @@ func genAddResultType(defn *ast.Definition) *ast.Definition {
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
-					NonNull:   true,
 				},
 			},
 		},
 	}
 }
 
-func genUpdResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{ // Field type is same as the parent object type
+			&ast.FieldDefinition{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
-					NonNull:   true,
 				},
 			},
 		},
 	}
 }
 
-func genDelResultType(defn *ast.Definition) *ast.Definition {
-	return &ast.Definition{
+func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
@@ -248,20 +276,18 @@ func genDelResultType(defn *ast.Definition) *ast.Definition {
 				Name: "msg",
 				Type: &ast.Type{
 					NamedType: "String",
-					NonNull:   true,
 				},
 			},
 		},
 	}
 }
 
-func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Query " + defn.Name + " by ID",
+func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
+		Description: "Get " + defn.Name + " by ID",
 		Name:        "get" + defn.Name,
 		Type: &ast.Type{
 			NamedType: defn.Name,
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -273,14 +299,14 @@ func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
 		Description: "Query " + defn.Name,
 		Name:        "query" + defn.Name,
 		Type: &ast.Type{
-			NonNull: true,
 			Elem: &ast.Type{
 				NamedType: defn.Name,
 				NonNull:   true,
@@ -296,22 +322,20 @@ func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueryType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
-	flds = append(flds, createGetFld(defn))
-	flds = append(flds, createQryFld(defn))
-
-	return
+func addQueries(schema *ast.Schema, defn *ast.Definition) {
+	addGetQuery(schema, defn)
+	addFilterQuery(schema, defn)
 }
 
-func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Function for adding " + defn.Name,
+func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
+	add := &ast.FieldDefinition{
+		Description: "Add a " + defn.Name,
 		Name:        "add" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Add" + defn.Name + "Payload",
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -323,45 +347,35 @@ func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
 }
 
-func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
-	updArgs := make([]*ast.ArgumentDefinition, 0)
-	updArg := &ast.ArgumentDefinition{
-		Name: "id",
-		Type: &ast.Type{
-			NamedType: idTypeFor(defn),
-			NonNull:   true,
-		},
-	}
-	updArgs = append(updArgs, updArg)
-	updArg = &ast.ArgumentDefinition{
-		Name: "input",
-		Type: &ast.Type{
-			NamedType: defn.Name + "Update",
-			NonNull:   false,
-		},
-	}
-	updArgs = append(updArgs, updArg)
-
-	return &ast.FieldDefinition{
-		Description: "Function for updating " + defn.Name,
+func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
+	upd := &ast.FieldDefinition{
+		Description: "Update a " + defn.Name,
 		Name:        "update" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Update" + defn.Name + "Payload",
-			NonNull:   true,
 		},
-		Arguments: updArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "input",
+				Type: &ast.Type{
+					NamedType: "Update" + defn.Name + "Input",
+					NonNull:   true,
+				},
+			},
+		},
 	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, upd)
 }
 
-func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
-	return &ast.FieldDefinition{
-		Description: "Function for deleting " + defn.Name,
+func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
+	del := &ast.FieldDefinition{
+		Description: "Delete a " + defn.Name,
 		Name:        "delete" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Delete" + defn.Name + "Payload",
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -373,14 +387,13 @@ func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
-func addMutationType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
-	flds = append(flds, createAddFld(defn))
-	flds = append(flds, createUpdFld(defn))
-	flds = append(flds, createDelFld(defn))
-
-	return
+func addMutations(schema *ast.Schema, defn *ast.Definition) {
+	addAddMutation(schema, defn)
+	addUpdateMutation(schema, defn)
+	addDeleteMutation(schema, defn)
 }
 
 func getFilterField() ast.FieldList {

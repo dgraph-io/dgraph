@@ -40,7 +40,7 @@ import (
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
-	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
 type options struct {
@@ -157,14 +157,14 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	schema, gqlErr := validator.ValidateSchemaDocument(doc)
+	gqlschema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
-		schema:       schema,
+		schema:       gqlschema,
 	}
 
 	http.Handle("/graphql", api.WithRequestID(handler))
@@ -189,7 +189,7 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	schHandler, err := gschema.NewSchemaHandler(inputSchema)
+	schHandler, err := schema.NewHandler(inputSchema)
 	if err != nil {
 		return err
 	}

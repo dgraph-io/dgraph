@@ -4466,8 +4466,9 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	mu, err := ParseMutation(m)
+	req, err := ParseMutation(m)
 	require.NoError(t, err)
+	mu := req.Mutations[0]
 	require.NotNil(t, mu)
 	sets, err := parseNquads(mu.SetNquads)
 	require.NoError(t, err)
