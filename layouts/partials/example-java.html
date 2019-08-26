@@ -13,18 +13,18 @@ import io.dgraph.DgraphGrpc.DgraphStub;
 import io.dgraph.DgraphProto.Response;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import java.util.Collections;
+
 import java.util.Map;
 
-public class DgraphMain {
+public class App {
+
     public static void main(final String[] args) {
         ManagedChannel channel =
             ManagedChannelBuilder.forAddress("localhost", 9080).usePlaintext(true).build();
         DgraphStub stub = DgraphGrpc.newStub(channel);
-        DgraphClient dgraphClient = new DgraphClient(Collections.singletonList(stub));
+        DgraphClient dgraphClient = new DgraphClient(stub);
 
-        {{/* TODO: Need to work on converting query logic to java compatible single line since java doesn't support multiline string literal. */}}
-        String query = "<span class="java-query">{{ .Code }}</span>"
+        String query = "<span class="java-query">{{ .Code }}</span>";
 
     {{ if eq .Vars nil }}
         Response res = dgraphClient.newTransaction().query(query);
@@ -32,7 +32,7 @@ public class DgraphMain {
         Map{{ "<String, String>" }} vars = ImmutableMap.of({{ replace (trim .Vars "{}") ":" "," }});
         Response res = dgraphClient.newTransaction().queryWithVars(query, vars);
     {{ end }}
-        System.out.println(res.getJson().toStringUtf8());
+        System.out.printf("Response: %s", res.getJson().toStringUtf8());
     }
 }
 
