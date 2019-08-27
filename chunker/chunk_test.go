@@ -45,7 +45,8 @@ func TestJSONLoadStart(t *testing.T) {
 
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat, 1000)
-		require.Error(t, chunker.Begin(bufioReader(test.json)), test.desc)
+		_, err := chunker.Chunk(bufioReader(test.json))
+		require.Error(t, err, test.desc)
 	}
 }
 
@@ -54,30 +55,26 @@ func TestChunkJSONMapAndArray(t *testing.T) {
 		json   string
 		chunks []string
 	}{
-		{`[]`, []string{"<nil>"}},
-		{`[{}]`, []string{"{}"}},
-		{`[{"user": "alice"}]`, []string{`{"user": "alice"}`}},
-		{`[{"user": "alice", "age", 26}]`, []string{`{"user": "alice", "age", 26}`}},
-		{`[{"user": "alice", "age", 26}, {"name": "bob"}]`, []string{`{"user": "alice", "age", 26}`,
-			`{"name": "bob"}`}},
+		{`[]`, []string{"[]"}},
+		{`[{}]`, []string{"[{}]"}},
+		{`[{"user": "alice"}]`, []string{`[{"user":"alice"}]`}},
+		{`[{"user": "alice", "age": 26}]`, []string{`[{"user":"alice","age":26}]`}},
+		{`[{"user": "alice", "age": 26}, {"name": "bob"}]`, []string{`[{"user":"alice","age":26},{"name":"bob"}]`}},
 	}
 
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat, 1000)
 		r := bufioReader(test.json)
-		require.NoError(t, chunker.Begin(r))
-
 		var chunks []string
 		for {
 			chunkBuf, err := chunker.Chunk(r)
-			if err != nil && err != io.EOF {
-				t.FailNow()
+			if err != nil {
+				require.Equal(t, io.EOF, err, "Received error for %s", test)
 			}
 
 			chunks = append(chunks, chunkBuf.String())
 
 			if err == io.EOF {
-				require.NoError(t, chunker.End(r), "Got an error while validating end of reader")
 				break
 			}
 		}
@@ -100,8 +97,6 @@ func TestJSONLoadReadNext(t *testing.T) {
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
 		chunkBuf, err := chunker.Chunk(reader)
 		if err == nil {
 			err = chunker.Parse(chunkBuf)
@@ -119,41 +114,39 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		expt string
 		desc string
 	}{
-		{"[{}]", "{}", "empty map"},
-		{`[{"closingDelimeter":"}"}]`, `{"closingDelimeter":"}"}`, "quoted closing brace"},
-		{`[{"company":"dgraph"}]`, `{"company":"dgraph"}`, "simple, compact map"},
+		{"[{}]", "[{}]", "empty map"},
+		{`[{"closingDelimeter":"}"}]`, `[{"closingDelimeter":"}"}]`, "quoted closing brace"},
+		{`[{"company":"dgraph"}]`, `[{"company":"dgraph"}]`, "simple, compact map"},
 		{
 			"[\n  {\n    \"company\" : \"dgraph\"\n  }\n]\n",
-			"{\n    \"company\" : \"dgraph\"\n  }",
+			"[{\"company\":\"dgraph\"}]",
 			"simple, pretty map",
 		},
 		{
 			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
-			`{"professor":"Alastor \"Mad-Eye\" Moody"}`,
+			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
 			"escaped balanced quotes",
 		},
 		{
 
 			`[{"something{": "}something"}]`,
-			`{"something{": "}something"}`,
+			`[{"something{":"}something"}]`,
 			"escape quoted brackets",
 		},
 		{
 			`[{"height":"6'0\""}]`,
-			`{"height":"6'0\""}`,
+			`[{"height":"6'0\""}]`,
 			"escaped unbalanced quote",
 		},
 		{
 			`[{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}]`,
-			`{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}`,
+			`[{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}]`,
 			"nested braces",
 		},
 	}
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
 		json, err := chunker.Chunk(reader)
 		if err == io.EOF {
 			// pass
@@ -219,8 +212,7 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	var json *bytes.Buffer
 	var idx int
 
-	err := chunker.Begin(reader)
-	require.NoError(t, err, "begin reading JSON document")
+	var err error
 	for idx = 0; err == nil; idx++ {
 		desc := fmt.Sprintf("reading chunk #%d", idx+1)
 		json, err = chunker.Chunk(reader)
@@ -230,6 +222,5 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 			require.Equal(t, testChunks[idx], json.String(), desc)
 		}
 	}
-	err = chunker.End(reader)
-	require.NoError(t, err, "end reading JSON document")
+	require.Equal(t, io.EOF, err, "end reading JSON document")
 }

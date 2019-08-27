@@ -479,7 +479,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	}
 
 	if len(list) == 0 && len(ms) == 0 {
-		return errors.Errorf("Couldn't parse json as a map or an array")
+		return nil
 	}
 
 	if len(list) > 0 {
