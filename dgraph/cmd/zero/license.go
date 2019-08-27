@@ -18,21 +18,20 @@
 
 package zero
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/dgraph-io/badger/y"
+)
 
 // dummy function as enterprise features are not available in oss binary.
-func (n *node) proposeTrialLicense() {
-	return
+func (n *node) proposeTrialLicense() error {
+	return nil
 }
 
-// dummy function as enterprise features are not available in oss binary.
-func (s *Server) updateEnterpriseState() {
-	return
-}
-
-// dummy function as enterprise features are not available in oss binary.
-func (s *Server) licenseExpiryWarning() {
-	return
+// periodically checks the validity of the enterprise license and updates the membership state.
+func (n *node) updateEnterpriseState(closer *y.Closer) {
+	closer.Done()
 }
 
 func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {

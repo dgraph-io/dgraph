@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -370,6 +369,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, errInvalidProposal
 		}
 		state.License = p.License
+		// Check expiry and set enabled accordingly.
+		expiry := time.Unix(state.License.ExpiryTs, 0)
+		state.License.Enabled = time.Now().Before(expiry)
 	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
@@ -516,36 +518,15 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			n.proposeTrialLicense()
+			if err := n.proposeTrialLicense(); err != nil {
+				glog.Errorf("while proposing trial license to cluster: %v", err)
+			}
 		}()
 	}
 
 	go n.Run()
 	go n.BatchAndSendMessages()
 	return nil
-}
-
-// periodically checks the validity of the enterprise license and updates the membership state.
-func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
-	defer closer.Done()
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	dailyTicker := time.NewTicker(humanize.Day)
-	defer dailyTicker.Stop()
-
-	n.server.updateEnterpriseState()
-	for {
-		select {
-		case <-ticker.C:
-			n.server.updateEnterpriseState()
-		case <-dailyTicker.C:
-			n.server.licenseExpiryWarning()
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
@@ -557,7 +538,6 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 		select {
 		case <-ticker.C:
 			n.server.updateZeroLeader()
-
 		case <-closer.HasBeenClosed():
 			return
 		}
@@ -653,7 +633,7 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
-	go n.updateEnterpriseStatePeriodically(closer)
+	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)

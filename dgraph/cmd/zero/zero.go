@@ -745,7 +745,7 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 	return ms, nil
 }
 
-func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reader) error {
+func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 	var l license
 	if err := verifySignature(signedData, strings.NewReader(publicKey), &l); err != nil {
 		return errors.Wrapf(err, "while extracting enterprise details from the license")

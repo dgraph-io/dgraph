@@ -19,15 +19,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
 // proposeTrialLicense proposes an enterprise license valid for 30 days.
-func (n *node) proposeTrialLicense() {
+func (n *node) proposeTrialLicense() error {
 	// Apply enterprise license valid for 30 days from now.
 	proposal := &pb.ZeroProposal{
 		License: &pb.License{
@@ -35,57 +37,63 @@ func (n *node) proposeTrialLicense() {
 			ExpiryTs: time.Now().Add(humanize.Month).Unix(),
 		},
 	}
-	for {
-		err := n.proposeAndWait(context.Background(), proposal)
-		if err == nil {
-			glog.Infof("Enterprise state proposed to the cluster: %v", proposal)
-			return
-		}
-		if err == errInvalidProposal {
-			glog.Errorf("invalid proposal error while proposing enteprise state")
-			return
-		}
-		glog.Errorf("While proposing enterprise state: %v. Retrying...", err)
-		time.Sleep(3 * time.Second)
+	err := n.proposeAndWait(context.Background(), proposal)
+	if err != nil {
+		return err
+
 	}
+	glog.Infof("Enterprise state proposed to the cluster: %v", proposal)
+	return nil
 }
 
-// updateEnterpriseState periodically checks the validity of the enterprise license
-// based on its expiry.
-func (s *Server) updateEnterpriseState() {
-	s.Lock()
-	defer s.Unlock()
-
-	// Return early if license is not enabled. This would happen when user didn't supply us a
-	// license file yet.
-	if s.state.GetLicense() == nil {
-		return
-	}
-
-	enabled := s.state.GetLicense().GetEnabled()
-	expiry := time.Unix(s.state.License.ExpiryTs, 0)
-	s.state.License.Enabled = time.Now().Before(expiry)
-	if enabled && !s.state.License.Enabled {
-		// License was enabled earlier and has just now been disabled.
-		glog.Infof("Enterprise license has expired and enterprise features would be disabled now. " +
-			"Talk to us at contact@dgraph.io to get a new license.")
-	}
-}
-
-// Prints out an info log about the expiry of the license if its about to expire in less than a
-// week.
-func (s *Server) licenseExpiryWarning() {
+func (s *Server) license() *pb.License {
 	s.RLock()
 	defer s.RUnlock()
+	return proto.Clone(s.state.GetLicense()).(*pb.License)
+}
 
-	if s.state.GetLicense() == nil {
-		return
-	}
-	enabled := s.state.GetLicense().GetEnabled()
-	expiry := time.Unix(s.state.License.ExpiryTs, 0)
-	timeToExpire := expiry.Sub(time.Now())
-	if enabled && timeToExpire > 0 && timeToExpire < humanize.Week {
-		glog.Infof("Enterprise license is going to expire in %s.", humanize.Time(expiry))
+func (s *Server) disableLicense() {
+	s.Lock()
+	defer s.Unlock()
+	s.state.License.Enabled = false
+}
+
+// periodically checks the validity of the enterprise license and
+// 1. Sets license.Enabled to false in membership state if license has expired.
+// 2. Prints out warning once every day a week before the license is set to expire.
+func (n *node) updateEnterpriseState(closer *y.Closer) {
+	defer closer.Done()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	intervalsInDay := int64(24*time.Hour) / int64(5*time.Second)
+	var counter int64
+	for {
+
+		select {
+		case <-ticker.C:
+			counter++
+			license := n.server.license()
+			expiry := time.Unix(license.ExpiryTs, 0)
+			if !license.GetEnabled() {
+				continue
+			}
+
+			timeToExpire := expiry.Sub(time.Now())
+			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
+				glog.Warningf("Enterprise license is going to expire in %s.", humanize.Time(expiry))
+			}
+
+			enabled := time.Now().Before(expiry)
+			if !enabled {
+				n.server.disableLicense()
+				glog.Warningf("Enterprise license has expired and enterprise features would be" +
+					"disabled now. Talk to us at contact@dgraph.io to get a new license.")
+			}
+		case <-closer.HasBeenClosed():
+			return
+		}
 	}
 }
 
@@ -113,7 +121,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := st.zero.applyEnterpriseLicense(ctx, bytes.NewReader(b)); err != nil {
+	if err := st.zero.applyLicense(ctx, bytes.NewReader(b)); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
