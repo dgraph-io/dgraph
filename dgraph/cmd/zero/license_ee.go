@@ -64,23 +64,28 @@ func (s *Server) disableLicense() {
 func (n *node) updateEnterpriseState(closer *y.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(5 * time.Second)
+	interval := 5 * time.Second
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	intervalsInDay := int64(24*time.Hour) / int64(5*time.Second)
+	intervalsInDay := int64(24*time.Hour) / int64(interval)
 	var counter int64
 	for {
-
 		select {
 		case <-ticker.C:
 			counter++
 			license := n.server.license()
-			expiry := time.Unix(license.ExpiryTs, 0)
+			if license == nil {
+				continue
+			}
+
+			expiry := time.Unix(license.GetExpiryTs(), 0)
 			if !license.GetEnabled() {
 				continue
 			}
 
 			timeToExpire := expiry.Sub(time.Now())
+			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
 				glog.Warningf("Enterprise license is going to expire in %s.", humanize.Time(expiry))
 			}
