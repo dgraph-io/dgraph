@@ -974,7 +974,6 @@ var testNQuads = []struct {
 func TestLex(t *testing.T) {
 	l := &lex.Lexer{}
 	for _, test := range testNQuads {
-		t.Logf("Testing %v", test.input)
 		l.Reset(test.input)
 		rnq, err := ParseRDF(test.input, l)
 		if test.expectedErr && test.shouldIgnore {

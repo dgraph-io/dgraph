@@ -38,6 +38,7 @@ func TestJSONLoadStart(t *testing.T) {
 		desc string
 	}{
 		{"", "file is empty"},
+		{"{}]", "JSON map is followed by an extraneous ]"},
 		{"  \t   ", "file is white space"},
 		{"These are words.", "file is not JSON"},
 		{"\x1f\x8b\x08\x08\x3e\xc7\x0a\x5c\x00\x03\x65\x6d\x70\x74\x79\x00", "file is binary"},
