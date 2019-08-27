@@ -19,7 +19,6 @@ package graphql
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -331,7 +330,6 @@ func TestGraphQLMutation(t *testing.T) {
 
 			// read the response body.
 			bodyBytes, err := ioutil.ReadAll(resp.Body)
-			fmt.Println(string(bodyBytes))
 			require.NoError(t, err)
 			// Parse the response from the GraphQL server.
 			var graphqlResponse GraphqlResponse
