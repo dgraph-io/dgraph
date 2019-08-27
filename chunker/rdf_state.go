@@ -136,17 +136,20 @@ func lexText(l *lex.Lexer) lex.StateFn {
 				l.Depth = atSubject
 			}
 
-		// TODO(Aman): add support for more functions here.
-		case r == 'u':
+		case isSpace(r):
+			continue
+
+		// Because we only support UID and VAL functions, it's okay
+		// to check only for alphabets. In future, we can change it.
+		case (r >= 'a' || r <= 'z') || (r >= 'A' && r <= 'Z'):
 			if l.Depth != atSubject && l.Depth != atObject {
-				return l.Errorf("Unexpected char 'u'")
+				return l.Errorf("Unexpected char '%s'", r)
 			}
 			l.Backup()
 			l.Emit(itemText)
 			return lexVariable
 
-		case isSpace(r):
-			continue
+
 		default:
 			l.Errorf("Invalid input: %c at lexText", r)
 		}
@@ -422,12 +425,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 func lexVariable(l *lex.Lexer) lex.StateFn {
 	var r rune
 
-	// TODO(Aman): add support for more functions here.
-	for _, c := range "uid" {
-		if r = l.Next(); r != c {
-			return l.Errorf("Unexpected char '%c' when parsing uid keyword", r)
-		}
-	}
+	l.AcceptUntil(isSpecificChar('('))
 	if l.Depth == atObject {
 		l.Emit(itemObjectFunc)
 	} else if l.Depth == atSubject {
@@ -435,9 +433,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	}
 	l.IgnoreRun(isSpace)
 
-	if r = l.Next(); r != '(' {
-		return l.Errorf("Expected '(' after uid keyword, found: '%c'", r)
-	}
+	l.Next()
 	l.Emit(itemLeftRound)
 	l.IgnoreRun(isSpace)
 
@@ -454,12 +450,18 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != ')' {
-		return l.Errorf("Expected ')' while reading uid func, found: '%c'", r)
+		return l.Errorf("Expected ')' while reading function found: '%c'", r)
 	}
 	l.Emit(itemRightRound)
 	l.Depth++
 
 	return lexText
+}
+
+func isSpecificChar(r rune) func(c rune) bool {
+	return (func(c rune) bool {
+		return r == c;
+	})
 }
 
 // isSpace returns true if the rune is a tab or space.
