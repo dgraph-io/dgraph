@@ -75,15 +75,11 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 		case <-ticker.C:
 			counter++
 			license := n.server.license()
-			if license == nil {
-				continue
-			}
-
-			expiry := time.Unix(license.GetExpiryTs(), 0)
 			if !license.GetEnabled() {
 				continue
 			}
 
+			expiry := time.Unix(license.GetExpiryTs(), 0)
 			timeToExpire := expiry.Sub(time.Now())
 			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
