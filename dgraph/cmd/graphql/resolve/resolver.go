@@ -99,12 +99,12 @@ type resolved struct {
 }
 
 // New creates a new RequestResolver
-func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
+func New(s schema.Schema, dg dgraph.Client, mutBld rewrite.MutationBuilder) *RequestResolver {
 	return &RequestResolver{
 		Schema:          s,
 		dgraph:          dg,
 		resp:            &schema.Response{},
-		mutationBuilder: rewrite.NewMutationBuilder(),
+		mutationBuilder: mutBld,
 	}
 }
 
