@@ -183,22 +183,24 @@ func (*jsonChunker) Begin(r *bufio.Reader) error {
 
 // Chunk tries to consume multiple top-level maps from the reader until a size threshold is
 // reached, or the end of file is reached.
-func (j *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	if j.eofReached {
+func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+	if jc.eofReached {
 		return nil, io.EOF
 	}
 
-	ch, err := j.nextRune(r)
+	ch, err := jc.nextRune(r)
 	if err != nil {
 		return nil, err
 	}
 	// If the file starts with a list rune [, we set the inList flag, and keep consuming maps
 	// until we reach the threshold.
 	if ch == '[' {
-		j.inList = true
+		jc.inList = true
 	} else if ch == '{' {
 		// put the rune back for it to be consumed in the consumeMap function
-		r.UnreadRune()
+		if err := r.UnreadRune(); err != nil {
+			return nil, err
+		}
 	} else {
 		return nil, errors.Errorf("file is not JSON")
 	}
@@ -206,34 +208,34 @@ func (j *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.WriteRune('[')
 	hasMapsBefore := false
-	for out.Len() < j.chunkSize {
+	for out.Len() < jc.chunkSize {
 		if hasMapsBefore {
 			out.WriteRune(',')
 		}
-		if err := j.consumeMap(r, out); err != nil {
+		if err := jc.consumeMap(r, out); err != nil {
 			return nil, err
 		}
 		hasMapsBefore = true
 
 		// handle the legal termination cases, by checking the next rune after the map
-		ch, err := j.nextRune(r)
+		ch, err := jc.nextRune(r)
 		if err != nil {
 			if err != io.EOF {
 				return nil, err
 			}
 
 			// handles the EOF case, return the buffer which represents the top level map
-			if j.inList {
+			if jc.inList {
 				return nil, errors.Errorf("JSON file ends abruptly, expecting ]")
 			}
 
-			j.eofReached = true
+			jc.eofReached = true
 			out.WriteRune(']')
 			return out, io.EOF
 		}
 
 		if ch == ']' {
-			if !j.inList {
+			if !jc.inList {
 				return nil, errors.Errorf("JSON map is followed by an extraneous ]")
 			}
 
@@ -242,7 +244,7 @@ func (j *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.New("Not all of JSON file consumed")
 			}
 
-			j.eofReached = true
+			jc.eofReached = true
 			out.WriteRune(']')
 			return out, io.EOF
 		}
@@ -259,19 +261,21 @@ func (j *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 // consumeMap consumes the next map from the reader, and stores the result into the buffer out.
 // After ignoring spaces, if the reader does not begin with {, no rune will be consumed
 // from the reader.
-func (j *jsonChunker) consumeMap(r *bufio.Reader, out *bytes.Buffer) error {
+func (jc *jsonChunker) consumeMap(r *bufio.Reader, out *bytes.Buffer) error {
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
 	depth := 0
 	for {
-		ch, err := j.nextRune(r)
+		ch, err := jc.nextRune(r)
 		if err != nil {
 			return errors.New("Malformed JSON")
 		}
 		if depth == 0 && ch != '{' {
 			// We encountered a beginning rune that's not {,
 			// unread the char and return without consuming anything.
-			r.UnreadRune()
+			if err := r.UnreadRune(); err != nil {
+				return err
+			}
 			return nil
 		}
 
