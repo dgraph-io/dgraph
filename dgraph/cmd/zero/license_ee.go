@@ -34,7 +34,7 @@ func (n *node) proposeTrialLicense() error {
 	proposal := &pb.ZeroProposal{
 		License: &pb.License{
 			MaxNodes: math.MaxUint64,
-			ExpiryTs: time.Now().Add(humanize.Month).Unix(),
+			ExpiryTs: time.Now().UTC().Add(humanize.Month).Unix(),
 		},
 	}
 	err := n.proposeAndWait(context.Background(), proposal)
@@ -79,14 +79,14 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 				continue
 			}
 
-			expiry := time.Unix(license.GetExpiryTs(), 0)
-			timeToExpire := expiry.Sub(time.Now())
+			expiry := time.Unix(license.GetExpiryTs(), 0).UTC()
+			timeToExpire := expiry.Sub(time.Now().UTC())
 			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
 				glog.Warningf("Enterprise license is going to expire in %s.", humanize.Time(expiry))
 			}
 
-			active := time.Now().Before(expiry)
+			active := time.Now().UTC().Before(expiry)
 			if !active {
 				n.server.expireLicense()
 				glog.Warningf("Enterprise license has expired and enterprise features would be " +

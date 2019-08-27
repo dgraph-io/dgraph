@@ -370,8 +370,8 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		}
 		state.License = p.License
 		// Check expiry and set enabled accordingly.
-		expiry := time.Unix(state.License.ExpiryTs, 0)
-		state.License.Enabled = time.Now().Before(expiry)
+		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
+		state.License.Enabled = time.Now().UTC().Before(expiry)
 	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
