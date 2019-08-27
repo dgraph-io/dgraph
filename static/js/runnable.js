@@ -216,7 +216,7 @@ function eraseCookie(name) {
   // updateQueryContents updates the query contents in all tabs
   function updateQueryContents($runnables, newQuery) {
     var cleanValue = newQuery.trim().replace(/\n$/g, "");
-    var cleanValueForCurl = cleanValue.replace(/\"/g, '\\"').replace(/\n/g, '\\n');
+    var cleanValueForCurl = cleanValue.replace(/\"/g, '\\"').replace(/\n[ ]*/g, '\\n ');
 
     $runnables.find(".query-content").text(cleanValue);
     $runnables.find(".curl-query").text(cleanValueForCurl);

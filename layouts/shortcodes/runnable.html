@@ -50,13 +50,7 @@
             </div>
 
             <div class="runnable-tab-content" data-tab="curl">
-            {{ if eq (.Get "vars") nil }}
-              <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d '<br/><span class="query-content">{{ $code }}</span>' | python -m json.tool | less
-                </code></pre>
-            {{ else }}
-              <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d '{ <br/>"query": "<span class="curl-query">{{ $code }}</span>",<br/>"variables": {{ .Get "vars" }}<br/>}' | python -m json.tool | less
-                </code></pre>
-            {{ end }}
+                {{ partial "example-curl" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
             </div>
             <div class="runnable-tab-content" data-tab="go-grpc">
               {{ if eq $customExampleGoGRPC "" }}

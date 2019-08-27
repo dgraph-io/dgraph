@@ -1,0 +1,24 @@
+{{ $currentBranch := getenv "CURRENT_BRANCH" }}
+
+{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
+{{ $majorVersion := int (index $version 0) }}
+{{ $minorVersion := int (index $version 1) }}
+{{ $patchVersion := int (index $version 2) }}
+{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+{{ $versionGe11 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 1)) }}
+
+{{ if $versionGe11 }}
+    {{ if eq ( .Vars ) nil }}
+        <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d '<br/><span class="query-content">{{ .Code }}</span>' | python -m json.tool | less
+        </code></pre>
+    {{ else }}
+        <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d '{
+    "query": "<span class="curl-query">{{ .Code }}</span>",
+    "variables": {{ .Vars }}
+}' | python -m json.tool | less
+        </code></pre>
+    {{ end }}
+{{ else }}
+    <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST {{ with .Vars }}-H 'X-Dgraph-Vars: {{.}}' {{ end }}-d '<br/><span class="query-content">{{ .Code }}</span>' | python -m json.tool | less
+    </code></pre>
+{{ end }}
