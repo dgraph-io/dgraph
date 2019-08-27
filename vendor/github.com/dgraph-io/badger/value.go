@@ -399,8 +399,8 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			ne.Value = append([]byte{}, e.Value...)
 			es := int64(ne.estimateSize(vlog.opt.ValueThreshold))
 			// Ensure length and size of wb is within transaction limits.
-			if int64(len(wb)+1) > vlog.opt.maxBatchCount ||
-				size+es > vlog.opt.maxBatchSize {
+			if int64(len(wb)+1) >= vlog.opt.maxBatchCount ||
+				size+es >= vlog.opt.maxBatchSize {
 				tr.LazyPrintf("request has %d entries, size %d", len(wb), size)
 				if err := vlog.db.batchSet(wb); err != nil {
 					return err
@@ -569,6 +569,9 @@ func (vlog *valueLog) deleteLogFile(lf *logFile) error {
 	if lf == nil {
 		return nil
 	}
+	lf.lock.Lock()
+	defer lf.lock.Unlock()
+
 	path := vlog.fpath(lf.fid)
 	if err := lf.munmap(); err != nil {
 		_ = lf.fd.Close()
@@ -1383,47 +1386,50 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 
 func (vlog *valueLog) updateDiscardStats(stats map[uint32]int64) error {
 	vlog.lfDiscardStats.Lock()
-	defer vlog.lfDiscardStats.Unlock()
 
 	for fid, sz := range stats {
 		vlog.lfDiscardStats.m[fid] += sz
 		vlog.lfDiscardStats.updatesSinceFlush++
 	}
 	if vlog.lfDiscardStats.updatesSinceFlush > discardStatsFlushThreshold {
-		if err := vlog.flushDiscardStats(); err != nil {
-			return err
-		}
-		vlog.lfDiscardStats.updatesSinceFlush = 0
+		vlog.lfDiscardStats.Unlock()
+		// flushDiscardStats also acquires lock. So, we need to unlock here.
+		return vlog.flushDiscardStats()
 	}
+	vlog.lfDiscardStats.Unlock()
 	return nil
 }
 
 // flushDiscardStats inserts discard stats into badger. Returns error on failure.
 func (vlog *valueLog) flushDiscardStats() error {
 	vlog.lfDiscardStats.Lock()
+	defer vlog.lfDiscardStats.Unlock()
+
 	if len(vlog.lfDiscardStats.m) == 0 {
-		vlog.lfDiscardStats.Unlock()
 		return nil
 	}
-	vlog.lfDiscardStats.Unlock()
-
 	entries := []*Entry{{
 		Key:   y.KeyWithTs(lfDiscardStatsKey, 1),
 		Value: vlog.encodedDiscardStats(),
 	}}
 	req, err := vlog.db.sendToWriteCh(entries)
-	if err != nil {
+	if err == ErrBlockedWrites {
+		// We'll block write while closing db.
+		// When L0 compaction in close may push discard stats.
+		// So ignoring it.
+		// https://github.com/dgraph-io/badger/issues/970
+		return nil
+	} else if err != nil {
 		return errors.Wrapf(err, "failed to push discard stats to write channel")
 	}
+	vlog.lfDiscardStats.updatesSinceFlush = 0
 	return req.Wait()
 }
 
 // encodedDiscardStats returns []byte representation of lfDiscardStats
 // This will be called while storing stats in BadgerDB
+// caller should acquire lock before encoding the stats.
 func (vlog *valueLog) encodedDiscardStats() []byte {
-	vlog.lfDiscardStats.Lock()
-	defer vlog.lfDiscardStats.Unlock()
-
 	encodedStats, _ := json.Marshal(vlog.lfDiscardStats.m)
 	return encodedStats
 }
