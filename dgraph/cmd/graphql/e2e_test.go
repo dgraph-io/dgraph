@@ -19,6 +19,7 @@ package graphql
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -104,13 +105,56 @@ var queries = []string{
 	// for type Message in the GraphQL schema,
 	// addMessage is one of the valid mutations.
 	`mutation additionMessages($message: MessageInput!) { 
-		addMessagessss(input: $message) {
+		addMessagessss(input: $message) { 
 			message {
 				id 
 				content 
 				author 
 				datePosted
 			}
+		}
+	}`,
+
+	`query {
+		getMessage(id: "$id") {
+			id
+			content 
+			author
+			datePosted
+		}
+	}`,
+
+	`query {
+		getMessage(id: $id) {
+			id
+			content 
+		}
+	}`,
+
+	`query {
+		getMessage(id: $id) {
+			id
+			content 
+			author
+		}
+	}`,
+	`query {
+		getMessage(id: $id) {
+			content 
+			author
+			datePosted
+		}
+	}`,
+	`query {
+		getMessage(id: $id) {
+			content 
+			author
+		}
+	}`,
+	`query {
+		getMessage(id: $id) {
+			content 
+			datePosted
 		}
 	}`,
 }
@@ -142,6 +186,38 @@ type SchemaData struct {
 
 type SchemaResponse struct {
 	Data SchemaData `json:"data"`
+}
+
+// Performs GraphQL query and mutations.
+// Input type: GraphqlParams
+// Return: Bytes body of HTTP POST response and status code on sucess.
+//         Error on failure.
+func DoGraphQLRequest(mutationParams GraphqlParams) ([]byte, int, error) {
+	d2, err := json.Marshal(mutationParams)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	buf := bytes.NewBuffer(d2)
+	// Send the request to the GraphQL server running at "graphqlURL".
+	req, err := http.NewRequest("POST", graphqlURL, buf)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil,-1,  err
+	}
+
+	// read the response body.
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, -1, err
+	}
+	return bodyBytes, resp.StatusCode, nil
 }
 
 // The Graphql layer autogenerates Dgraph DB schema
@@ -315,29 +391,15 @@ func TestGraphQLMutation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Construct the post request body for the GraphQL request.
-			d2, err := json.Marshal(test.graphqlReq)
+			bodyBytes, respStatus, err := DoGraphQLRequest(test.graphqlReq)
 			require.NoError(t, err)
 
-			buf := bytes.NewBuffer(d2)
-			// Send the request to the GraphQL server running at "graphqlURL".
-			req, err := http.NewRequest("POST", graphqlURL, buf)
-			require.NoError(t, err)
-
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			require.NoError(t, err)
-
-			// read the response body.
-			bodyBytes, err := ioutil.ReadAll(resp.Body)
-			require.NoError(t, err)
-			// Parse the response from the GraphQL server.
 			var graphqlResponse GraphqlResponse
 			err = json.Unmarshal(bodyBytes, &graphqlResponse)
 			require.NoError(t, err)
 
 			// Verify the response status code.
-			require.Equal(t, test.wantCode, resp.StatusCode)
+			require.Equal(t, test.wantCode, respStatus)
 
 			// Validate the error response for cases
 			// where error is expected.
@@ -370,4 +432,46 @@ func TestGraphQLMutation(t *testing.T) {
 				" differs from the expected one.")
 		})
 	}
+}
+
+
+// Runs GraphQL queries and validates the response. 
+// Any changes to the response format for error and
+// non-error cases for GraphQL queries should be caught by this test.
+func TestGraphQLQueries(t *testing.T) {
+	// Add data through mutation before starting tests for queries. 
+	graphqlReq := GraphqlParams{
+		Query: toSingleLine(queries[0]),
+		Variables: map[string]map[string]string{
+			"message": map[string]string{
+				"content":    "Test Data for query test",
+				"author":     "TestGraphQLQueries",
+				"datePosted": "2019-08-08T05:04:33Z",
+			},
+		},
+	}
+
+	bodyBytes, _, err := DoGraphQLRequest(graphqlReq)
+	require.NoError(t, err)
+	// parse the mutation response.
+	var graphqlResponse GraphqlResponse
+	err = json.Unmarshal(bodyBytes, &graphqlResponse)
+	require.NoError(t, err)
+
+	var mutationResponse MessageMutation
+	err = json.Unmarshal(graphqlResponse.Data, &mutationResponse)
+	require.NoError(t, err)
+	// fetch the node ID from the mutation.
+	id := mutationResponse.AddMessage.Message.ID
+
+	// Add the ID to the GraphQL query string. 
+	query := strings.ReplaceAll(toSingleLine(queries[2]), "$id", id)
+	graphqlReq = GraphqlParams{
+		Query: query,
+	}
+	// perform the query. 
+	bodyBytes, _, err = DoGraphQLRequest(graphqlReq)
+	require.NoError(t, err)
+
+	fmt.Println(string(bodyBytes))
 }
