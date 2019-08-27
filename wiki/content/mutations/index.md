@@ -856,7 +856,6 @@ block contains one query block and one mutation block. Variables defined in the 
 block can be used in the mutation block using the `uid` function.
 In general, the structure of the Upsert block is as follows:
 
-
 ```
 upsert {
   query <query block>
@@ -874,7 +873,7 @@ results of executing the query block:
 
 ### Example
 
-Consider an example with following schema:
+Consider an example with the following schema:
 
 ```sh
 curl localhost:8080/alter -X POST -d $'
@@ -931,7 +930,7 @@ stores the `name` and `email` information in the database. In case the user exis
 the information is updated whereas if the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
-Now, we want to add the `age` information for the same user having email ID
+Now, we want to add the `age` information for the same user having the same email ID
 `user@company1.io`. We can use the Upsert block to do the same as follows:
 
 ```sh
@@ -969,7 +968,7 @@ user by extracting the uid from the variable `v` using `uid` function.
 
 ### Bulk Delete Example
 
-Let's we want to delete all the users of `company1` from the database. This can be
+Let's say we want to delete all the users of `company1` from the database. This can be
 achieved in just one query using the Upsert Block -
 
 ```sh
@@ -1001,4 +1000,46 @@ Result:
   },
   "extensions": {...}
 }
+```
+
+## Conditional Upsert
+
+The Upsert Block also allows specifying a conditional mutation block using a `@if`
+directive. The mutation is executed only when the specified condition is true. If the
+condition is false, the mutation is silently ignored. The general structure of
+Conditional Upsert looks like as follows -
+
+```
+upsert {
+  query <query block>
+  [fragment <fragment block>]
+  mutation @if(...) <mutation block>
+}
+```
+
+`@if` directive accepts conditions on variables defined in the query block and can be
+connected using `AND`, `OR` and `NOT`.
+
+### Example
+
+Let's say in our previous example, we know the `company1` has less than 100 employees.
+For safety, we want the mutation to execute only when the variable `v` stores less than
+100 UIDs in it. This can be achieved as follows -
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: regexp(email, /.*@company1.io$/))
+  }
+
+  mutation @if(lt(len(v), 100)) {
+    delete {
+      uid(v) <name> * .
+      uid(v) <email> * .
+      uid(v) <age> * .
+    }
+  }
+}
+' | jq
 ```
