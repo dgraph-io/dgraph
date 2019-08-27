@@ -1351,19 +1351,23 @@ func TestUpsertBulkUpdateBranch(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
 name: string @index(exact) .
-branch: string .`))
+branch: string .
+amount: float .`))
 
 	m1 := `
 {
   set {
     _:user1 <name> "user1" .
     _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
 
     _:user2 <name> "user2" .
     _:user2 <branch> "Fuller Street, San Francisco" .
+    _:user2 <amount> "100" .
 
     _:user3 <name> "user3" .
     _:user3 <branch> "Fuller Street, San Francisco" .
+    _:user3 <amount> "1000" .
   }
 }`
 
@@ -1391,6 +1395,7 @@ upsert {
   q(func: has(branch)) {
     name
     branch
+    amount
   }
 }`
 	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
@@ -1401,8 +1406,49 @@ upsert {
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "Fuller Street, SF")
 
-	// Bulk Delete: delete everyone's branch
+	// Check for val in upsert. Adding interest to everyone's account
 	m3 := `
+  upsert {
+    query {
+      u as var(func: has(amount)) {
+        amt as amount 
+      }
+    }
+
+    mutation {
+      set {
+        uid(u) <amount> val(amt) .
+      }
+    }
+  }
+  `
+
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	expected_res := `
+	{
+	"data": {
+		"q": [{
+			"name": "user3",
+			"branch": "Fuller Street, SF",
+			"amount": 1000.000000
+		}, {
+			"name": "user1",
+			"branch": "Fuller Street, SF",
+			"amount": 10.000000
+		}, {
+			"name": "user2",
+			"branch": "Fuller Street, SF",
+			"amount": 100.000000
+		}]
+	}
+}`
+	testutil.CompareJSON(t, res, expected_res)
+
+	// Bulk Delete: delete everyone's branch
+	m4 := `
   upsert {
     query {
       u as var(func: has(branch))
@@ -1414,7 +1460,7 @@ upsert {
       }
     }
   }`
-	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)

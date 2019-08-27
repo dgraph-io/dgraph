@@ -654,6 +654,21 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		varToUID[name] = uids
 	}
 
+	varToVAL := make(map[string]map[string]string)
+	for name, v := range qr.Vars {
+		if v.Vals == nil || len(v.Vals) <= 0 {
+			continue
+		}
+
+		vals := make(map[string]string)
+		for uid, value := range v.Vals {
+			vals[strconv.FormatUint(uid, 10)] = fmt.Sprintf("%v", value.Value)
+		}
+
+		varToVAL[name] = vals
+
+	}
+
 	// If @if condition is false, no need to process the mutations
 	if isCondUpsert {
 		v, ok := qr.Vars[varName]
@@ -665,7 +680,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		}
 	}
 
-	updateMutations(gmu, varToUID)
+	updateMutations(gmu, varToUID, varToVAL)
 	return l, nil
 }
 
@@ -673,7 +688,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 func findVars(gmu *gql.Mutation) []string {
 	vars := make(map[string]struct{})
 	updateVars := func(s string) {
-		if strings.HasPrefix(s, "uid(") {
+		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
 			vars[varName] = struct{}{}
 		}
@@ -698,10 +713,47 @@ func findVars(gmu *gql.Mutation) []string {
 	return varsList
 }
 
+// updateValMutations picks the val() from object, gets the value according to the uid
+// Assumption is that val should be there only in the object, and its subject is the corresponding UID
+func updateValMutation(gmu *gql.Mutation, varToVAL map[string]map[string]string) {
+	getNewVals := func(s string) (map[string]string, bool) {
+		if strings.HasPrefix(s, "val(") {
+			varName := s[4 : len(s)-1]
+			if vals, ok := varToVAL[varName]; ok {
+				return vals, true
+			}
+		}
+		return nil, false
+	}
+
+	updateNquad := func(nq *api.NQuad, s string) *api.NQuad {
+		// The following copy is fine because we only modify ObjectVal.
+		// The pointer values are not modified across different copies of NQuad.
+		n := *nq
+		n.ObjectId = ""
+		n.ObjectValue = &api.Value{Val: &api.Value_StrVal{
+			StrVal: s}}
+		return &n
+	}
+
+	gmuSet := make([]*api.NQuad, 0, len(gmu.Set))
+	for _, nq := range gmu.Set {
+		newObs, exists := getNewVals(nq.ObjectId)
+		if !exists {
+			gmuSet = append(gmuSet, nq)
+			continue
+		}
+		o := newObs[nq.Subject]
+		gmuSet = append(gmuSet, updateNquad(nq, o))
+	}
+	gmu.Set = gmuSet
+}
+
 // updateMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+
+func updateMutations(gmu *gql.Mutation, varToUID map[string][]string, varToVAL map[string]map[string]string) {
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
@@ -760,6 +812,8 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 		}
 	}
 	gmu.Set = gmuSet
+
+	updateValMutation(gmu, varToVAL)
 }
 
 // Query handles queries and returns the data.
