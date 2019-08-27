@@ -93,7 +93,7 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 			enabled := time.Now().Before(expiry)
 			if !enabled {
 				n.server.disableLicense()
-				glog.Warningf("Enterprise license has expired and enterprise features would be" +
+				glog.Warningf("Enterprise license has expired and enterprise features would be " +
 					"disabled now. Talk to us at contact@dgraph.io to get a new license.")
 			}
 		case <-closer.HasBeenClosed():
