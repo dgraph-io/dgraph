@@ -654,6 +654,21 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		varToUID[name] = uids
 	}
 
+	varToVAL := make(map[string]map[string]string)
+	for name, v := range qr.Vars {
+		if v.Vals == nil || len(v.Vals) <= 0 {
+			continue
+		}
+
+		vals := make(map[string]string)
+		for uid, value := range v.Vals {
+			vals[strconv.FormatUint(uid, 10)] = fmt.Sprintf("%v", value.Value)
+		}
+
+		varToVAL[name] = vals
+
+	}
+
 	// If @if condition is false, no need to process the mutations
 	if isCondUpsert {
 		v, ok := qr.Vars[varName]
@@ -665,7 +680,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		}
 	}
 
-	updateMutations(gmu, varToUID)
+	updateMutations(gmu, varToUID, varToVAL)
 	return l, nil
 }
 
@@ -673,7 +688,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 func findVars(gmu *gql.Mutation) []string {
 	vars := make(map[string]struct{})
 	updateVars := func(s string) {
-		if strings.HasPrefix(s, "uid(") {
+		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
 			vars[varName] = struct{}{}
 		}
@@ -701,27 +716,50 @@ func findVars(gmu *gql.Mutation) []string {
 // updateMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
-	getNewVals := func(s string) []string {
+
+type isUIDorVal struct {
+	isUID bool
+	value []string
+}
+
+func updateMutations(gmu *gql.Mutation, varToUID map[string][]string, varToVAL map[string]map[string]string) {
+	getNewVals := func(s string) isUIDorVal {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
 			if uids, ok := varToUID[varName]; ok {
-				return uids
+				return isUIDorVal{isUID: true, value: uids}
 			}
 
-			return []string{"_:" + s}
+			return isUIDorVal{isUID: true, value: []string{"_:" + s}}
 		}
 
-		return []string{s}
+		if strings.HasPrefix(s, "val(") {
+			valName := s[4 : len(s)-1]
+			if vals, ok := varToVAL[valName]; ok {
+				arr := []string{}
+				for _, val := range vals {
+					arr = append(arr, val)
+				}
+				return isUIDorVal{isUID: false, value: arr}
+			}
+		}
+
+		return isUIDorVal{isUID: true, value: []string{s}}
 	}
 
-	getNewNQuad := func(nq *api.NQuad, s, o string) *api.NQuad {
+	getNewNQuad := func(nq *api.NQuad, s, o string, isObjectUID bool) *api.NQuad {
 		// The following copy is fine because we only modify Subject and ObjectId.
 		// The pointer values are not modified across different copies of NQuad.
 		n := *nq
 
 		n.Subject = s
-		n.ObjectId = o
+		if isObjectUID {
+			n.ObjectId = o
+		} else {
+			n.ObjectId = ""
+			n.ObjectValue = &api.Value{Val: &api.Value_StrVal{
+				StrVal: o}}
+		}
 		return &n
 	}
 
@@ -733,15 +771,29 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 		newSubs := getNewVals(nq.Subject)
 		newObs := getNewVals(nq.ObjectId)
 
-		for _, s := range newSubs {
-			for _, o := range newObs {
-				// Blank node has no meaning in case of deletion.
+		if newSubs.isUID && newObs.isUID {
+			for _, s := range newSubs.value {
+				for _, o := range newObs.value {
+					// Blank node has no meaning in case of deletion.
+					if strings.HasPrefix(s, "_:uid(") ||
+						strings.HasPrefix(o, "_:uid(") {
+						continue
+					}
+
+					gmuDel = append(gmuDel, getNewNQuad(nq, s, o, newObs.isUID))
+				}
+			}
+		} else {
+			for i := range newSubs.value {
+				s := newSubs.value[i]
+				o := newObs.value[i]
+
 				if strings.HasPrefix(s, "_:uid(") ||
 					strings.HasPrefix(o, "_:uid(") {
 					continue
 				}
 
-				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
+				gmuDel = append(gmuDel, getNewNQuad(nq, s, o, newObs.isUID))
 			}
 		}
 	}
@@ -753,9 +805,15 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 		newSubs := getNewVals(nq.Subject)
 		newObs := getNewVals(nq.ObjectId)
 
-		for _, s := range newSubs {
-			for _, o := range newObs {
-				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
+		if newSubs.isUID && newObs.isUID {
+			for _, s := range newSubs.value {
+				for _, o := range newObs.value {
+					gmuSet = append(gmuSet, getNewNQuad(nq, s, o, newObs.isUID))
+				}
+			}
+		} else {
+			for i := range newSubs.value {
+				gmuSet = append(gmuSet, getNewNQuad(nq, newSubs.value[i], newObs.value[i], newObs.isUID))
 			}
 		}
 	}
