@@ -52,7 +52,7 @@ func (s *Server) license() *pb.License {
 	return proto.Clone(s.state.GetLicense()).(*pb.License)
 }
 
-func (s *Server) disableLicense() {
+func (s *Server) expireLicense() {
 	s.Lock()
 	defer s.Unlock()
 	s.state.License.Enabled = false
@@ -86,9 +86,9 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 				glog.Warningf("Enterprise license is going to expire in %s.", humanize.Time(expiry))
 			}
 
-			enabled := time.Now().Before(expiry)
-			if !enabled {
-				n.server.disableLicense()
+			active := time.Now().Before(expiry)
+			if !active {
+				n.server.expireLicense()
 				glog.Warningf("Enterprise license has expired and enterprise features would be " +
 					"disabled now. Talk to us at contact@dgraph.io to get a new license.")
 			}
