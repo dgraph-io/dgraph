@@ -169,7 +169,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.cache.GetFromDelta(key)
+	plist, err := txn.Get(key)
 	if err != nil {
 		return err
 	}
