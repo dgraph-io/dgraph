@@ -45,6 +45,7 @@ type MutationType string
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
+	SchemaQuery          QueryType    = "schema"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -58,6 +59,7 @@ const (
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
+	ASTSchema() *ast.Schema
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -68,6 +70,7 @@ type Operation interface {
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
+	Definition() *ast.OperationDefinition
 }
 
 // A Field is one field from an Operation.
@@ -171,9 +174,17 @@ func (o *operation) Mutations() (ms []Mutation) {
 	return
 }
 
+func (o *operation) Definition() *ast.OperationDefinition {
+	return o.op
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) Schema {
 	return &schema{schema: s}
+}
+
+func (s *schema) ASTSchema() *ast.Schema {
+	return s.schema
 }
 
 func responseName(f *ast.Field) string {
@@ -275,6 +286,8 @@ func (q *query) QueryType() QueryType {
 	switch {
 	case strings.HasPrefix(q.Name(), "get"):
 		return GetQuery
+	case q.Name() == "__schema":
+		return SchemaQuery
 	default:
 		return NotSupportedQuery
 	}

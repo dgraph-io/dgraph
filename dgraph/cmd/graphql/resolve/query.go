@@ -18,20 +18,25 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // queryResolver can resolve a single GraphQL query field
 type queryResolver struct {
-	query  schema.Query
-	schema schema.Schema
-	dgraph dgraph.Client
+	query        schema.Query
+	schema       schema.Schema
+	dgraph       dgraph.Client
+	operationDef *ast.OperationDefinition
 }
 
 // resolve a query.
@@ -48,6 +53,20 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			WithTypeFilter(qr.query.Type().Name()).
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
+	case schema.SchemaQuery:
+		op := qr.operationDef
+		reqCtx := graphql.NewRequestContext(nil, "", map[string]interface{}{})
+		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
+
+		resp := schema.IntrospectionQuery(ctx, op, qr.schema.ASTSchema())
+		b, err := json.Marshal(resp)
+		if err != nil {
+			res.err = err
+			log.Printf("error while marshaling json: %+v\n", err)
+			return res
+		}
+		res.data = b[1 : len(b)-1]
+		return res
 	default:
 		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
 		return res

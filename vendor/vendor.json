@@ -27,6 +27,18 @@
 			"versionExact": "v0.1.0"
 		},
 		{
+			"checksumSHA1": "e0wENgOg5QZb9eC7qlJZ//JqIPU=",
+			"path": "github.com/99designs/gqlgen/graphql",
+			"revision": "7e643fdc5cc5097f786ef6a386e28feee293fd7a",
+			"revisionTime": "2019-08-19T03:25:35Z"
+		},
+		{
+			"checksumSHA1": "YaGnu2JI8RKm6HjVi441HM32EM0=",
+			"path": "github.com/99designs/gqlgen/graphql/introspection",
+			"revision": "7e643fdc5cc5097f786ef6a386e28feee293fd7a",
+			"revisionTime": "2019-08-19T03:25:35Z"
+		},
+		{
 			"checksumSHA1": "+Bo3QheGAtKFk7QPb+pdIEZNiYI=",
 			"path": "github.com/AndreasBriese/bbloom",
 			"revision": "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e",
@@ -1099,6 +1111,12 @@
 			"path": "github.com/twpayne/go-geom/encoding/wkbcommon",
 			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
 			"revisionTime": "2017-03-17T09:06:30Z"
+		},
+		{
+			"checksumSHA1": "3Des3WuXR32DUdrJvAn8Cywrw/g=",
+			"path": "github.com/vektah/gqlparser",
+			"revision": "7ceb135a49ae8d9f1064072fab6e6dd389055569",
+			"revisionTime": "2019-07-16T02:30:15Z"
 		},
 		{
 			"checksumSHA1": "U69onz/mOEvCATmF+2JKc5RdaG0=",
