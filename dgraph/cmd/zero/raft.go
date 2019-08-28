@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -370,6 +369,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, errInvalidProposal
 		}
 		state.License = p.License
+		// Check expiry and set enabled accordingly.
+		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
+		state.License.Enabled = time.Now().UTC().Before(expiry)
 	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
@@ -516,25 +518,8 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			// Apply enterprise license valid for 30 days from now.
-			proposal := &pb.ZeroProposal{
-				License: &pb.License{
-					MaxNodes: math.MaxUint64,
-					ExpiryTs: time.Now().Add(humanize.Month).Unix(),
-				},
-			}
-			for {
-				err := n.proposeAndWait(context.Background(), proposal)
-				if err == nil {
-					glog.Infof("Enterprise state proposed to the cluster: %v", proposal)
-					return
-				}
-				if err == errInvalidProposal {
-					glog.Errorf("invalid proposal error while proposing enteprise state")
-					return
-				}
-				glog.Errorf("While proposing enterprise state: %v. Retrying...", err)
-				time.Sleep(3 * time.Second)
+			if err := n.proposeTrialLicense(); err != nil {
+				glog.Errorf("while proposing trial license to cluster: %v", err)
 			}
 		}()
 	}
@@ -542,29 +527,6 @@ func (n *node) initAndStartNode() error {
 	go n.Run()
 	go n.BatchAndSendMessages()
 	return nil
-}
-
-// periodically checks the validity of the enterprise license and updates the membership state.
-func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
-	defer closer.Done()
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	dailyTicker := time.NewTicker(humanize.Day)
-	defer dailyTicker.Stop()
-
-	n.server.updateEnterpriseState()
-	for {
-		select {
-		case <-ticker.C:
-			n.server.updateEnterpriseState()
-		case <-dailyTicker.C:
-			n.server.licenseExpiryWarning()
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
@@ -576,7 +538,6 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 		select {
 		case <-ticker.C:
 			n.server.updateZeroLeader()
-
 		case <-closer.HasBeenClosed():
 			return
 		}
@@ -672,7 +633,7 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
-	go n.updateEnterpriseStatePeriodically(closer)
+	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)

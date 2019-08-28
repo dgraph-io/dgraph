@@ -420,7 +420,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	item.meta = vs.Meta
 	item.userMeta = vs.UserMeta
 	item.db = txn.db
-	item.vptr = vs.Value // TODO: Do we need to copy this over?
+	item.vptr = y.SafeCopy(item.vptr, vs.Value)
 	item.txn = txn
 	item.expiresAt = vs.ExpiresAt
 	return item, nil
