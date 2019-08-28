@@ -286,3 +286,35 @@ func TestIntrospectionQuery_InputObject(t *testing.T) {
 	require.Equal(t, expected, string(b))
 
 }
+
+func TestIntrospectioNQuery_full(t *testing.T) {
+	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
+	// https://github.com/graphql/graphql-js/blob/master/src/type/__tests__/introspection-test.js#L35
+	t.Skip()
+	sch := gqlparser.MustLoadSchema(
+		&ast.Source{Name: "schema.graphql", Input: `
+	schema {
+		query: TestType
+	}
+
+	type TestType {
+		testField: String
+	}
+`})
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: introspectionQuery})
+	require.Nil(t, gqlErr)
+
+	listErr := validator.Validate(sch, doc)
+	require.Equal(t, 0, len(listErr))
+
+	op := doc.Operations.ForName(doc.Operations[0].Name)
+	require.NotNil(t, op)
+
+	reqCtx := graphql.NewRequestContext(doc, introspectionQuery, map[string]interface{}{})
+	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
+
+	resp := IntrospectionQuery(ctx, op, sch)
+	_, err := json.Marshal(resp)
+	require.NoError(t, err)
+}
