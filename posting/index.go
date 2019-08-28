@@ -169,7 +169,18 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.Get(key)
+	hasCountIndex := schema.State().HasCount(t.Attr)
+
+	var getFn func(key []byte) (*List, error)
+	if hasCountIndex {
+		// We need to retrieve the full posting list from disk, to allow us to get the length of the
+		// posting list for the counts.
+		getFn = txn.Get
+	} else {
+		// We are just adding a reverse edge. No need to read the list from disk.
+		getFn = txn.GetFromDelta
+	}
+	plist, err := getFn(key)
 	if err != nil {
 		return err
 	}
@@ -184,7 +195,6 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Facets:  t.Facets,
 	}
 
-	hasCountIndex := schema.State().HasCount(t.Attr)
 	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
 		return err
