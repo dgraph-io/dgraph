@@ -80,7 +80,14 @@ func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
 	resp, err := dg.client.NewTxn().
 		Query(metadata.NewOutgoingContext(ctx, md), q)
 
-	return resp.Json, schema.GQLWrapf(err, "Dgraph query failed")
+	return responseBytes(resp), schema.GQLWrapf(err, "Dgraph query failed")
+}
+
+func responseBytes(resp *dgoapi.Response) []byte {
+	if resp == nil {
+		return nil
+	}
+	return resp.Json
 }
 
 func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
