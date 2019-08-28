@@ -136,12 +136,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 				l.Depth = atSubject
 			}
 
-		case isSpace(r):
-			continue
-
-		// Because we only support UID and VAL functions, it's okay
-		// to check only for alphabets. In future, we can change it.
-		case (r >= 'a' || r <= 'z') || (r >= 'A' && r <= 'Z'):
+		case r == 'u' || r == 'v':
 			if l.Depth != atSubject && l.Depth != atObject {
 				return l.Errorf("Unexpected char '%s'", r)
 			}
@@ -149,6 +144,8 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemText)
 			return lexVariable
 
+		case isSpace(r):
+			continue
 
 		default:
 			l.Errorf("Invalid input: %c at lexText", r)
@@ -460,7 +457,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 
 func isSpecificChar(r rune) func(c rune) bool {
 	return (func(c rune) bool {
-		return r == c;
+		return r == c
 	})
 }
 

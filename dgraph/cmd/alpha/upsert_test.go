@@ -1467,4 +1467,24 @@ upsert {
 	require.NoError(t, err)
 	require.NotContains(t, res, "San Francisco")
 	require.NotContains(t, res, "Fuller Street, SF")
+
+	// Checking for error when some wrong field is being used
+	m5 := `
+  upsert {
+    query {
+      u as var(func: has(amount)) {
+        amt as nofield
+      }
+    }
+
+    mutation {
+      set {
+        uid(u) <nofield> val(amt) .
+      }
+    }
+  }
+  `
+
+	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "strconv.ParseUint: parsing \"val(amt)\": invalid syntax")
 }

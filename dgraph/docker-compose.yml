@@ -195,8 +195,7 @@ services:
     image: minio/minio:latest
     container_name: minio1
     env_file:
-      - ./minio.env
-            #      - $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/minio.env
+      - $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/minio.env
     working_dir: /data/minio1
     ports:
       - 9001:9001
