@@ -17,6 +17,8 @@
 package schema
 
 import (
+	"fmt"
+
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
@@ -49,6 +51,7 @@ func (s schema) Operation(req *Request) (Operation, error) {
 	if len(listErr) != 0 {
 		return nil, listErr
 	}
+	fmt.Println("I am here")
 
 	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {

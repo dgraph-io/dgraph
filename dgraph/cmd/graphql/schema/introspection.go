@@ -10,10 +10,19 @@ import (
 	"github.com/vektah/gqlparser/ast"
 )
 
-func IntrospectionQuery(ctx context.Context, op *ast.OperationDefinition,
-	schema *ast.Schema) *graphql.Response {
-	ec := executionContext{graphql.GetRequestContext(ctx), schema}
-	data := ec.handleQuery(ctx, op.SelectionSet)
+func IntrospectionQuery(ctx context.Context, o Operation,
+	s Schema) *graphql.Response {
+	sch, ok := s.(*schema)
+	if !ok {
+		// TODO - return an error
+	}
+	op, ok := o.(*operation)
+	if !ok {
+
+	}
+
+	ec := executionContext{graphql.GetRequestContext(ctx), sch.schema}
+	data := ec.handleQuery(ctx, op.op.SelectionSet)
 	var buf bytes.Buffer
 	data.MarshalGQL(&buf)
 	d := buf.Bytes()

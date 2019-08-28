@@ -1,5 +1,7 @@
 package ast
 
+import "fmt"
+
 type SelectionSet []Selection
 
 type Selection interface {
@@ -35,5 +37,6 @@ type Argument struct {
 }
 
 func (f *Field) ArgumentMap(vars map[string]interface{}) map[string]interface{} {
+	fmt.Printf("f: %+v\n", f)
 	return arg2map(f.Definition.Arguments, f.Arguments, vars)
 }

@@ -27,16 +27,15 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // queryResolver can resolve a single GraphQL query field
 type queryResolver struct {
-	query        schema.Query
-	schema       schema.Schema
-	dgraph       dgraph.Client
-	operationDef *ast.OperationDefinition
+	query     schema.Query
+	schema    schema.Schema
+	dgraph    dgraph.Client
+	operation schema.Operation
 }
 
 // resolve a query.
@@ -54,18 +53,23 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	case schema.SchemaQuery:
-		op := qr.operationDef
+		op := qr.operation
+		// TODO - Pass in the correct values here, i.e. a document and variables.
 		reqCtx := graphql.NewRequestContext(nil, "", map[string]interface{}{})
 		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
-		resp := schema.IntrospectionQuery(ctx, op, qr.schema.ASTSchema())
+		resp := schema.IntrospectionQuery(ctx, op, qr.schema)
 		b, err := json.Marshal(resp)
 		if err != nil {
 			res.err = err
 			log.Printf("error while marshaling json: %+v\n", err)
 			return res
 		}
-		res.data = b[1 : len(b)-1]
+		// We are doing this because introspectionQuery returns the result inside
+		// `{"data": {}}`
+		// TODO - This isn't nice at all. Modify IntrospectionQuery to not marshal `data`.
+		// Also check if schema queries are allowed along with normal queries.
+		res.data = b[9 : len(b)-2]
 		return res
 	default:
 		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
