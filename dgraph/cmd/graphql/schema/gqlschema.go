@@ -593,6 +593,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		printed[defn.Name] = true
 	}
 
+	// schema.Types is all type names (types, inputs, enums, etc.).
+	// The original schema defs have already been printed, and everything in
+	// schemaExtras is marked as printed.  So build typeNames as anything
+	// left to be printed.
 	typeNames := make([]string, 0, len(schema.Types))
 	for typName := range schema.Types {
 		if !printed[typName] {
