@@ -1486,5 +1486,5 @@ upsert {
   `
 
 	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, 0)
-	require.Contains(t, err.Error(), "strconv.ParseUint: parsing \"val(amt)\": invalid syntax")
+	require.NoError(t, err)
 }

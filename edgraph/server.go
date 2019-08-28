@@ -716,33 +716,27 @@ func findVars(gmu *gql.Mutation) []string {
 
 // updateValMutations picks the val() from object and replaces it with its value
 // Assumption is that Subject should contain UID, whereas Object will VAL
+// If val(variable) exists in a query, but the values are not there for the variable,
+// it will delete the mutation itself, and stop it from execution
 func updateVALinMutation(gmu *gql.Mutation, varToVAL map[string]map[string]string) {
-	getNewVals := func(s string) map[string]string {
+	getNewVals := func(s string) (map[string]string, bool) {
 		if strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
 			if vals, ok := varToVAL[varName]; ok {
-				return vals
+				return vals, true
 			}
+			return nil, true
 		}
-		return nil
+		return nil, false
 	}
 
-	for _, nq := range gmu.Del {
-		newObs := getNewVals(nq.ObjectId)
-		val, ok := newObs[nq.Subject]
-		if !ok {
-			continue
-		}
-		nq.ObjectId = ""
-		nq.ObjectValue = &api.Value{
-			Val: &api.Value_StrVal{
-				StrVal: val,
-			},
-		}
-	}
-
+	gmuSet := gmu.Set[:0]
 	for _, nq := range gmu.Set {
-		newObs := getNewVals(nq.ObjectId)
+		newObs, exists := getNewVals(nq.ObjectId)
+		if !exists {
+			gmuSet = append(gmuSet, nq)
+			continue
+		}
 		val, ok := newObs[nq.Subject]
 		if !ok {
 			continue
@@ -753,7 +747,10 @@ func updateVALinMutation(gmu *gql.Mutation, varToVAL map[string]map[string]strin
 				StrVal: val,
 			},
 		}
+		gmuSet = append(gmuSet, nq)
 	}
+
+	gmu.Set = gmu.Set[:len(gmuSet)]
 }
 
 // updateMutations does following transformations:
