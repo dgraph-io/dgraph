@@ -41,6 +41,11 @@ import (
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+
+	if err := x.HealthCheck(); err != nil {
+		return nil, err
+	}
+
 	if !worker.EnterpriseEnabled() {
 		return nil, errors.New("Enterprise features are disabled. You can enable them by " +
 			"supplying the appropriate license file to Dgraph Zero uing the HTTP endpoint.")
