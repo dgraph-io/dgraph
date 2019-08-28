@@ -4,7 +4,7 @@
 {{ $majorVersion := int (index $version 0) }}
 {{ $minorVersion := int (index $version 1) }}
 {{ $patchVersion := int (index $version 2) }}
-{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+
 {{ $versionGe11 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 1)) }}
 
 {{ if $versionGe11 }}
