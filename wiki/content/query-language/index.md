@@ -3101,6 +3101,14 @@ fragment TestFragB {
 ## GraphQL Variables
 
 `Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
+For **HTTP requests** with GraphQL Variables, we must use `Content-Type: application/json` header and pass data with a JSON object containing `query` and `variables`.
+
+```sh
+curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d $'{
+  "query": "query test($a: string) { test(func: eq(name, $a)) { \n uid \n name \n } }",
+  "variables": { "$a": "Alice" }
+}' | python -m json.tool | less
+```
 
 {{< runnable vars="{\"$a\": \"5\", \"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
 query test($a: int, $b: int, $name: string) {
