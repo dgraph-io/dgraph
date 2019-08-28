@@ -309,7 +309,6 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
-				NonNull:   true,
 			},
 		},
 		Arguments: []*ast.ArgumentDefinition{

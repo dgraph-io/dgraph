@@ -79,7 +79,7 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(filter: PostFilter!): [Post!]
+	queryPost(filter: PostFilter!): [Post]
 }
 
 #######################

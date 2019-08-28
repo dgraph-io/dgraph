@@ -73,7 +73,7 @@ input UpdateMessageInput {
 
 type Query {
 	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter!): [Message!]
+	queryMessage(filter: MessageFilter!): [Message]
 }
 
 #######################
