@@ -1513,7 +1513,7 @@ The release date is assigned to a variable, then it is aggregated and fetched in
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example:  Directors called Steven and the date of release of their first movie, in ascending order of first movie.
 
@@ -1553,7 +1553,7 @@ The release date is assigned to a variable, then it is aggregated and fetched in
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example: Quentin Tarantino's movies and date of release of the most recent movie.
 
@@ -1589,7 +1589,7 @@ Steven or Tom in their name.
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example: Steven Spielberg's movies, with the number of recorded genres per movie, and the total number of genres and average genres per movie.
 
@@ -2062,7 +2062,7 @@ them based on their type. The type system is also used during expand queries.
 Keep in mind that the type system is a work in progress and more features will
 be added in coming versions.
 
-#### Type definition.
+#### Type definition
 
 Types are defined using the GraphQL standard. Here's an example of a basic type.
 
@@ -2112,7 +2112,7 @@ system starts using them.
 If you send a type definition through the Alter endpoint for a type that already
 exists, the current definition will be overwritten.
 
-#### Setting the type of a node.
+#### Setting the type of a node
 
 Scalar nodes cannot have types since they only have one attribute and its type
 is the type of the node. UID nodes can have a type. The type is set by setting
@@ -2131,7 +2131,7 @@ types. Here's an example of how to set the types of a node:
 
 `dgraph.type` is a reserved predicate and cannot be removed or modified.
 
-#### Using types during queries.
+#### Using types during queries
 
 The type system can be used as a top level function in the query language. Here's an example:
 
@@ -3724,4 +3724,3 @@ num: int @index(factor) .
   }
 }
 ```
-
