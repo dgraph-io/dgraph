@@ -216,10 +216,13 @@ function eraseCookie(name) {
   // updateQueryContents updates the query contents in all tabs
   function updateQueryContents($runnables, newQuery) {
     var cleanValue = newQuery.trim().replace(/\n$/g, "");
-    var cleanValueForJava = cleanValue.replace(/\"/g, '\\"').replace(/\n/g, '\\n"+"');
+    var tmpCleanValue = cleanValue.replace(/\"/g, '\\"');
+    var cleanValueForJava = tmpCleanValue.replace(/\n/g, '\\n"+"');
+    var cleanValueForCurl = tmpCleanValue.replace(/\n[ ]*/g, '\\n ');
 
     $runnables.find(".query-content").text(cleanValue);
     $runnables.find(".java-query").text(cleanValueForJava);
+    $runnables.find(".curl-query").text(cleanValueForCurl);
   }
 
   function getLatencyTooltipHTML(serverLatencyInfo, networkLatency) {
@@ -338,10 +341,16 @@ function eraseCookie(name) {
     codeEl.text("Waiting for the server response...");
 
     var startTime;
+    var headers = { "Content-Type": "application/graphql+-"};
+    var postBody = query;
+    if(vars) {
+      headers = { "Content-Type": "application/json"};
+      postBody = JSON.stringify({ "query": query, "variables": JSON.parse(vars) })
+    }
     $.post({
       url: window.DGRAPH_ENDPOINT,
-      headers: { "X-Dgraph-Vars": vars },
-      data: query,
+      headers: headers,
+      data: postBody,
       dataType: "json",
       beforeSend: function() {
         startTime = new Date().getTime();
