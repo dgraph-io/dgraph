@@ -1,0 +1,24 @@
+{
+  "data": {
+      "schemaType": {
+          "fields": [
+              {
+                  "name": "types"
+              },
+              {
+                  "name": "queryType"
+              },
+              {
+                  "name": "mutationType"
+              },
+              {
+                  "name": "subscriptionType"
+              },
+              {
+                  "name": "directives"
+              }
+          ],
+          "name": "__Schema"
+      }
+  }
+}

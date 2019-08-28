@@ -1,0 +1,33 @@
+{
+    "data": {
+      "typeKindType": {
+        "name": "__TypeKind",
+        "enumValues": [
+          {
+            "name": "SCALAR"
+          },
+          {
+            "name": "OBJECT"
+          },
+          {
+            "name": "INTERFACE"
+          },
+          {
+            "name": "UNION"
+          },
+          {
+            "name": "ENUM"
+          },
+          {
+            "name": "INPUT_OBJECT"
+          },
+          {
+            "name": "LIST"
+          },
+          {
+            "name": "NON_NULL"
+          }
+        ]
+      }
+    }
+}

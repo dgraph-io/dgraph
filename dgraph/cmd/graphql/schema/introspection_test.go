@@ -3,9 +3,11 @@ package schema
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"testing"
 
 	"github.com/99designs/gqlgen/graphql"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser"
 	"github.com/vektah/gqlparser/ast"
@@ -99,192 +101,83 @@ var introspectionQuery = `
   }
 `
 
-func TestIntrospectionQuery_Typekind(t *testing.T) {
-	sch := gqlparser.MustLoadSchema(
-		&ast.Source{Name: "schema.graphql", Input: `
-	schema {
+func TestIntrospectionQuery(t *testing.T) {
+	simpleSchema := `schema {
 		query: QueryRoot
 	}
 
 	type QueryRoot {
 		onlyField: String
-	}
-`})
+	}`
 
-	query := `{
-        typeKindType: __type(name: "__TypeKind") {
-          name,
-          enumValues {
-            name,
-          }
-        }
-      }`
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: query})
-	require.Nil(t, gqlErr)
+	var tests = []struct {
+		name       string
+		schema     string
+		queryFile  string
+		outputFile string
+	}{
+		{
+			"Filter on __type",
+			simpleSchema,
+			"testdata/input/introspection_type_filter.txt",
+			"testdata/output/introspection_type_filter.json",
+		},
+		{"Filter __Schema on __type",
+			simpleSchema,
+			"testdata/input/introspection_type_schema_filter.txt",
+			"testdata/output/introspection_type_schema_filter.json",
+		},
+		{"Filter object type __type",
+			simpleSchema,
+			"testdata/input/introspection_type_object_name_filter.txt",
+			"testdata/output/introspection_type_object_name_filter.json",
+		},
+		{"Filter complex object type __type",
+			`
+    schema {
+      query: TestType
+    }
 
-	listErr := validator.Validate(sch, doc)
-	require.Equal(t, 0, len(listErr))
+    input TestInputObject {
+      a: String = test
+      b: [String]
+      c: String = null
+    }
 
-	op := doc.Operations.ForName(doc.Operations[0].Name)
-	require.NotNil(t, op)
 
-	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
-	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
-
-	resp := IntrospectionQuery(ctx, op, sch)
-	b, err := json.Marshal(resp)
-	require.NoError(t, err)
-
-	expected := `{"data":{"typeKindType":{"name":"__TypeKind","enumValues":[{"name":"SCALAR"},{"name":"OBJECT"},{"name":"INTERFACE"},{"name":"UNION"},{"name":"ENUM"},{"name":"INPUT_OBJECT"},{"name":"LIST"},{"name":"NON_NULL"}]}}}`
-	require.Equal(t, expected, string(b))
-}
-
-func TestIntrospectionQuery_TypeSchema(t *testing.T) {
-	sch := gqlparser.MustLoadSchema(
-		&ast.Source{Name: "schema.graphql", Input: `
-	schema {
-		query: QueryRoot
-	}
-
-	type QueryRoot {
-		onlyField: String
-	}
-`})
-
-	query := `
-      {
-        schemaType: __type(name: "__Schema") {
-          name,
-          fields {
-            name,
-          }
-        }
-      }`
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: query})
-	require.Nil(t, gqlErr)
-
-	listErr := validator.Validate(sch, doc)
-	require.Equal(t, 0, len(listErr))
-
-	op := doc.Operations.ForName(doc.Operations[0].Name)
-	require.NotNil(t, op)
-
-	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
-	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
-
-	resp := IntrospectionQuery(ctx, op, sch)
-	b, err := json.Marshal(resp)
-	require.NoError(t, err)
-
-	expected := `{"data":{"schemaType":{"name":"__Schema","fields":[{"name":"types"},{"name":"queryType"},{"name":"mutationType"},{"name":"subscriptionType"},{"name":"directives"}]}}}`
-	require.Equal(t, expected, string(b))
-}
-
-func TestIntrospectionQuery_TypeAtRoot(t *testing.T) {
-	sch := gqlparser.MustLoadSchema(
-		&ast.Source{Name: "schema.graphql", Input: `
-	schema {
-		query: TestType
+    input TestType {
+      complex: TestInputObject
+    }
+    `,
+			"testdata/input/introspection_type_complex_object_name_filter.txt",
+			"testdata/output/introspection_type_complex_object_name_filter.json",
+		},
 	}
 
-	type TestType {
-		testField: String
+	for _, tt := range tests {
+		sch := gqlparser.MustLoadSchema(
+			&ast.Source{Name: "schema.graphql", Input: tt.schema})
+
+		q, err := ioutil.ReadFile(tt.queryFile)
+		require.NoError(t, err)
+
+		doc, gqlErr := parser.ParseQuery(&ast.Source{Input: string(q)})
+		require.Nil(t, gqlErr)
+		listErr := validator.Validate(sch, doc)
+		require.Equal(t, 0, len(listErr))
+		op := doc.Operations.ForName(doc.Operations[0].Name)
+		require.NotNil(t, op)
+		reqCtx := graphql.NewRequestContext(doc, string(q), map[string]interface{}{})
+		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
+
+		resp := IntrospectionQuery(ctx, op, sch)
+		b, err := json.Marshal(resp)
+		require.NoError(t, err)
+
+		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
+		require.NoError(t, err)
+		testutil.CompareJSON(t, string(expectedBuf), string(b))
 	}
-`})
-
-	query := `
-      {
-        __type(name: "TestType") {
-          name
-        }
-      }`
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: query})
-	require.Nil(t, gqlErr)
-
-	listErr := validator.Validate(sch, doc)
-	require.Equal(t, 0, len(listErr))
-
-	op := doc.Operations.ForName(doc.Operations[0].Name)
-	require.NotNil(t, op)
-
-	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
-	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
-
-	resp := IntrospectionQuery(ctx, op, sch)
-	b, err := json.Marshal(resp)
-	require.NoError(t, err)
-
-	expected := `{"data":{"__type":{"name":"TestType"}}}`
-	require.Equal(t, expected, string(b))
-
-}
-
-func TestIntrospectionQuery_InputObject(t *testing.T) {
-	sch := gqlparser.MustLoadSchema(
-		&ast.Source{Name: "schema.graphql", Input: `
-	schema {
-		query: TestType
-	}
-
-	input TestInputObject {
-		a: String = "tes\t de\fault"
-		b: [String]
-		c: String = null
-	}
-
-
-	input TestType {
-		complex: TestInputObject
-	}
-	`})
-
-	query := `     {
-        __type(name: "TestInputObject") {
-          kind
-          name
-          inputFields {
-            name
-            type { ...TypeRef }
-            defaultValue
-          }
-        }
-      }
-      fragment TypeRef on __Type {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-            }
-          }
-        }
-      }`
-
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: query})
-	require.Nil(t, gqlErr)
-
-	listErr := validator.Validate(sch, doc)
-	require.Equal(t, 0, len(listErr))
-
-	op := doc.Operations.ForName(doc.Operations[0].Name)
-	require.NotNil(t, op)
-
-	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
-	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
-
-	resp := IntrospectionQuery(ctx, op, sch)
-	b, err := json.Marshal(resp)
-	require.NoError(t, err)
-
-	expected := `{"data":{"__type":{"kind":"INPUT_OBJECT","name":"TestInputObject","inputFields":[{"name":"a","type":{"kind":"SCALAR","name":"String","ofType":null},"defaultValue":"\"tes\\t de\\fault\""},{"name":"b","type":{"kind":"LIST","name":null,"ofType":{"kind":"SCALAR","name":"String","ofType":null}},"defaultValue":null},{"name":"c","type":{"kind":"SCALAR","name":"String","ofType":null},"defaultValue":"null"}]}}}`
-	require.Equal(t, expected, string(b))
-
 }
 
 func TestIntrospectioNQuery_full(t *testing.T) {
