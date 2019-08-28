@@ -6,8 +6,8 @@
 {{ $patchVersion := int (index $version 2) }}
 {{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
 
-<pre><code class="no-copy" tabindex="-1">import com.google.common.collect.ImmutableMap;
-import io.dgraph.DgraphClient;
+<pre><code class="no-copy" tabindex="-1">{{ if .Vars }}import com.google.common.collect.ImmutableMap;
+{{ end }}import io.dgraph.DgraphClient;
 import io.dgraph.DgraphGrpc;
 import io.dgraph.DgraphGrpc.DgraphStub;
 import io.dgraph.DgraphProto.Response;

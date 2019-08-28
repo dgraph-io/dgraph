@@ -217,7 +217,7 @@ function eraseCookie(name) {
   function updateQueryContents($runnables, newQuery) {
     var cleanValue = newQuery.trim().replace(/\n$/g, "");
     var tmpCleanValue = cleanValue.replace(/\"/g, '\\"');
-    var cleanValueForJava = tmpCleanValue.replace(/\n/g, '\\n"+"');
+    var cleanValueForJava = tmpCleanValue.replace(/\n[ ]*/g, '\\n "+"');
     var cleanValueForCurl = tmpCleanValue.replace(/\n[ ]*/g, '\\n ');
 
     $runnables.find(".query-content").text(cleanValue);
