@@ -37,9 +37,9 @@ func TestJSONLoadStart(t *testing.T) {
 		json string
 		desc string
 	}{
-		{"", "file is empty"},
+		{"[,]", "Illegal rune found \",\", expecting {"},
+		{"[a]", "Illegal rune found \"a\", expecting {"},
 		{"{}]", "JSON map is followed by an extraneous ]"},
-		{"  \t   ", "file is white space"},
 		{"These are words.", "file is not JSON"},
 		{"\x1f\x8b\x08\x08\x3e\xc7\x0a\x5c\x00\x03\x65\x6d\x70\x74\x79\x00", "file is binary"},
 	}
@@ -47,7 +47,7 @@ func TestJSONLoadStart(t *testing.T) {
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat, 1000)
 		_, err := chunker.Chunk(bufioReader(test.json))
-		require.Error(t, err, test.desc)
+		require.True(t, err != nil && err != io.EOF, test.desc)
 	}
 }
 
@@ -101,9 +101,9 @@ func TestJSONLoadReadNext(t *testing.T) {
 		chunkBuf, err := chunker.Chunk(reader)
 		if err == nil {
 			err = chunker.Parse(chunkBuf)
-			require.Error(t, err, test.desc)
+			require.True(t, err != nil && err != io.EOF, test.desc)
 		} else {
-			require.Error(t, err, test.desc)
+			require.True(t, err != io.EOF, test.desc)
 		}
 	}
 }

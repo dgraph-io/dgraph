@@ -51,12 +51,8 @@ func (rc *rdfChunker) NQuads() *NQuadBuffer {
 }
 
 type jsonChunker struct {
-	nqs        *NQuadBuffer
-	inList     bool
-	eofReached bool
-	// chunkSize is the size threshold of the buffer. After it is reached,
-	// the buffer will be returned by the Chunk function, and passed for parsing.
-	chunkSize int
+	nqs    *NQuadBuffer
+	inList bool
 }
 
 func (jc *jsonChunker) NQuads() *NQuadBuffer {
@@ -85,8 +81,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 		}
 	case JsonFormat:
 		return &jsonChunker{
-			nqs:       NewNQuadBuffer(batchSize),
-			chunkSize: 10000,
+			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
 		panic("unknown input format")
@@ -152,42 +147,9 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 	return nil
 }
 
-func (*jsonChunker) Begin(r *bufio.Reader) error {
-	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
-	// This function must be called before calling readJSONChunk for the first time to advance
-	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
-	// one array element at a time instead of having to read the entire array into memory.
-	if err := slurpSpace(r); err != nil {
-		return err
-	}
-	chs, err := r.Peek(1)
-
-	if err != nil {
-		return err
-	}
-	switch chs[0] {
-	case '[':
-		// consume the [ so that each Chunk call consumes a map
-		_, _, err := r.ReadRune()
-		if err != nil {
-			return err
-		}
-	case '{':
-		// do not consume so that the next Chunk call consumes the top level map
-	default:
-		return errors.Errorf("JSON file must begin with [ or {. Found: %v(%c)", chs[0], chs[0])
-	}
-
-	return nil
-}
-
 // Chunk tries to consume multiple top-level maps from the reader until a size threshold is
 // reached, or the end of file is reached.
 func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	if jc.eofReached {
-		return nil, io.EOF
-	}
-
 	ch, err := jc.nextRune(r)
 	if err != nil {
 		return nil, err
@@ -208,7 +170,7 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.WriteRune('[')
 	hasMapsBefore := false
-	for out.Len() < jc.chunkSize {
+	for out.Len() < 1e5 {
 		if hasMapsBefore {
 			out.WriteRune(',')
 		}
@@ -219,19 +181,16 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 
 		// handle the legal termination cases, by checking the next rune after the map
 		ch, err := jc.nextRune(r)
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
-
+		if err == io.EOF {
 			// handles the EOF case, return the buffer which represents the top level map
 			if jc.inList {
 				return nil, errors.Errorf("JSON file ends abruptly, expecting ]")
 			}
 
-			jc.eofReached = true
 			out.WriteRune(']')
 			return out, io.EOF
+		} else if err != nil {
+			return nil, err
 		}
 
 		if ch == ']' {
@@ -244,14 +203,17 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.New("Not all of JSON file consumed")
 			}
 
-			jc.eofReached = true
 			out.WriteRune(']')
 			return out, io.EOF
 		}
 
-		// In the non termination cases, the only allowed char after a map is ",".
+		// In the non termination cases, ensure at least one map has been consumed, and
+		// the only allowed char after the map is ",".
+		if out.Len() == 1 { // 1 represents the [ inserted before the for loop
+			return nil, errors.Errorf("Illegal rune found \"%c\", expecting {", ch)
+		}
 		if ch != ',' {
-			return nil, errors.Errorf("JSON map is followed by illegal rune %v(%c)", ch, ch)
+			return nil, errors.Errorf("JSON map is followed by illegal rune \"%c\"", ch)
 		}
 	}
 	out.WriteRune(']')
