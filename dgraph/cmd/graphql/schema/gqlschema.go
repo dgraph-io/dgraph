@@ -597,7 +597,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// The original schema defs have already been printed, and everything in
 	// schemaExtras is marked as printed.  So build typeNames as anything
 	// left to be printed.
-	typeNames := make([]string, 0, len(schema.Types))
+	typeNames := make([]string, 0, len(schema.Types)-len(printed))
 	for typName := range schema.Types {
 		if !printed[typName] {
 			typeNames = append(typeNames, typName)
