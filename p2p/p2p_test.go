@@ -78,6 +78,8 @@ func TestStart(t *testing.T) {
 		t.Fatalf("NewService error: %s", err)
 	}
 
+	defer s.Stop()
+
 	e := s.Start()
 	err = <-e
 	if err != nil {
@@ -88,13 +90,15 @@ func TestStart(t *testing.T) {
 func TestService_PeerCount(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
-		Port:        7001,
+		Port:        7002,
 	}
 
 	sa, err := NewService(testServiceConfigA)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
+
+	defer sa.Stop()
 
 	e := sa.Start()
 	err = <-e
@@ -104,7 +108,7 @@ func TestService_PeerCount(t *testing.T) {
 
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
-		Port:        7007,
+		Port:        7003,
 	}
 
 	sb, err := NewService(testServiceConfigB)
@@ -112,8 +116,10 @@ func TestService_PeerCount(t *testing.T) {
 		t.Fatalf("NewService error: %s", err)
 	}
 
+	defer sb.Stop()
+
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[2].String(), sa.Host().ID()))
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,21 +138,20 @@ func TestService_PeerCount(t *testing.T) {
 	if count == 0 {
 		t.Fatalf("incorrect peerCount got %d", count)
 	}
-
-	sa.Stop()
-	sb.Stop()
 }
 
 func TestSend(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
-		Port:        7001,
+		Port:        7004,
 	}
 
 	sa, err := NewService(testServiceConfigA)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
+
+	defer sa.Stop()
 
 	e := sa.Start()
 	err = <-e
@@ -156,7 +161,7 @@ func TestSend(t *testing.T) {
 
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
-		Port:        7007,
+		Port:        7005,
 	}
 
 	sb, err := NewService(testServiceConfigB)
@@ -164,8 +169,10 @@ func TestSend(t *testing.T) {
 		t.Fatalf("NewService error: %s", err)
 	}
 
+	defer sb.Stop()
+
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[2].String(), sa.Host().ID()))
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,13 +208,15 @@ func TestSend(t *testing.T) {
 func TestNoBootstrap(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
-		Port:        7001,
+		Port:        7006,
 	}
 
 	sa, err := NewService(testServiceConfigA)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
+
+	defer sa.Stop()
 
 	e := sa.Start()
 	err = <-e

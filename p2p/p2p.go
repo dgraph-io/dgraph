@@ -27,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/ChainSafe/log15"
+
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
@@ -41,8 +42,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-const protocolPrefix2 = "/substrate/dot/2"
-const protocolPrefix3 = "/substrate/dot/3"
+const ProtocolPrefix = "/substrate/dot/2"
 const mdnsPeriod = time.Minute
 
 // Service describes a p2p service, including host and dht
@@ -79,8 +79,7 @@ func NewService(conf *Config) (*Service, error) {
 		return nil, err
 	}
 
-	h.SetStreamHandler(protocolPrefix2, handleStream)
-	h.SetStreamHandler(protocolPrefix3, handleStream)
+	h.SetStreamHandler(ProtocolPrefix, handleStream)
 
 	dstore := dsync.MutexWrap(ds.NewMapDatastore())
 	dht := kaddht.NewDHT(ctx, h, dstore)
@@ -96,7 +95,7 @@ func NewService(conf *Config) (*Service, error) {
 
 	var mdns discovery.Service
 	if !conf.NoMdns {
-		mdns, err = discovery.NewMdnsService(ctx, h, mdnsPeriod, protocolPrefix3)
+		mdns, err = discovery.NewMdnsService(ctx, h, mdnsPeriod, ProtocolPrefix)
 		if err != nil {
 			return nil, err
 		}
@@ -187,19 +186,24 @@ func (s *Service) Stop() <-chan error {
 }
 
 // Send sends a message to a specific peer
-func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) error {
-	err := s.host.Connect(s.ctx, peer)
-	if err != nil {
-		return err
-	}
+func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) (err error) {
+	log.Debug("sending message", "peer", peer.ID, "msg", fmt.Sprintf("0x%x", msg))
 
-	stream, err := s.host.NewStream(s.ctx, peer.ID, protocolPrefix3)
-	if err != nil {
-		return err
+	stream := s.getExistingStream(peer.ID)
+	if stream == nil {
+		stream, err = s.host.NewStream(s.ctx, peer.ID, ProtocolPrefix)
+		log.Debug("opening new stream ", "peer", peer.ID)
+		if err != nil {
+			log.Error("failed to open stream", "error", err)
+			return err
+		}
+	} else {
+		log.Debug("using existing stream", "peer", peer.ID)
 	}
 
 	_, err = stream.Write(msg)
 	if err != nil {
+		log.Error("fail to send message", "error", err)
 		return err
 	}
 
@@ -236,6 +240,12 @@ func (s *Service) Ctx() context.Context {
 	return s.ctx
 }
 
+// PeerCount returns the number of connected peers
+func (s *Service) PeerCount() int {
+	peers := s.host.Network().Peers()
+	return len(peers)
+}
+
 func (sc *Config) buildOpts() ([]libp2p.Option, error) {
 	ip := "0.0.0.0"
 
@@ -249,12 +259,15 @@ func (sc *Config) buildOpts() ([]libp2p.Option, error) {
 		return nil, err
 	}
 
+	connMgr := ConnManager{}
+
 	return []libp2p.Option{
 		libp2p.ListenAddrs(addr),
 		libp2p.DisableRelay(),
 		libp2p.Identity(priv),
 		libp2p.NATPortMap(),
 		libp2p.Ping(true),
+		libp2p.ConnectionManager(connMgr),
 	}, nil
 }
 
@@ -280,43 +293,64 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
+// getExistingStream gets an existing stream for a peer that uses ProtocolPrefix
+func (s *Service) getExistingStream(p peer.ID) net.Stream {
+	conns := s.host.Network().ConnsToPeer(p)
+	for _, conn := range conns {
+		streams := conn.GetStreams()
+		for _, stream := range streams {
+			if stream.Protocol() == ProtocolPrefix {
+				return stream
+			}
+		}
+	}
+
+	return nil
+}
+
 // handles stream; reads message length, message type, and decodes message based on type
 // TODO: implement all message types; send message back to peer when we get a message; gossip for certain message types
 func handleStream(stream net.Stream) {
 	defer func() {
 		if err := stream.Close(); err != nil {
-			log.Error("error closing stream", "err", err)
+			log.Error("fail to close stream", "error", err)
 		}
 	}()
+
+	log.Debug("got stream", "peer", stream.Conn().RemotePeer())
 
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	lengthByte, err := rw.Reader.ReadByte()
 	if err != nil {
-		log.Error("stream handler", "got stream from", stream.Conn().RemotePeer(), "err", err)
+		log.Error("failed to read message length", "peer", stream.Conn().RemotePeer(), "error", err)
+		return
 	}
 
 	// decode message length using LEB128
 	length := LEB128ToUint64([]byte{lengthByte})
-	log.Info("stream handler", "got message with length", length)
+
+	// read message type byte
+	msgType, err := rw.Reader.Peek(1)
+	if err != nil {
+		log.Error("failed to read message type", "err", err)
+		return
+	}
 
 	// read entire message
-	rawMsg, err := rw.Reader.Peek(int(length))
+	rawMsg, err := rw.Reader.Peek(int(length) - 1)
 	if err != nil {
-		log.Error("stream handler", "err", err)
+		log.Error("failed to read message", "err", err)
+		return
 	}
 
-	log.Info("stream handler", "got stream from", stream.Conn().RemotePeer(), "message", fmt.Sprintf("%x", rawMsg))
+	log.Debug("got stream", "peer", stream.Conn().RemotePeer(), "msg", fmt.Sprintf("0x%x", rawMsg))
 
-	msg, err := DecodeMessage(rw, length)
+	// decode message
+	msg, err := DecodeMessage(rw.Reader)
 	if err != nil {
-		log.Error("stream handler", "err", err)
+		log.Error("failed to decode message", "error", err)
+		return
 	}
 
-	log.Info("stream handler", "got message from", stream.Conn().RemotePeer(), "message", msg.String())
-}
-
-// PeerCount returns the number of connected peers
-func (s *Service) PeerCount() int {
-	peers := s.host.Network().Peers()
-	return len(peers)
+	log.Debug("got message", "peer", stream.Conn().RemotePeer(), "type", msgType, "msg", msg.String())
 }

@@ -35,43 +35,29 @@ var encodeTests = []encodeTest{
 	{val: int8(1), output: []byte{0x01}, bytesEncoded: 1},
 	{val: uint8(1), output: []byte{0x01}, bytesEncoded: 1},
 
-	{val: int16(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: int16(1), output: []byte{0x01, 0}, bytesEncoded: 2},
 	{val: int16(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
 
-	{val: uint16(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: uint16(1), output: []byte{0x01, 0}, bytesEncoded: 2},
 	{val: uint16(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
 
-	{val: int32(1), output: []byte{0x01}, bytesEncoded: 1},
-	{val: int32(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+	{val: int32(1), output: []byte{0x01, 0, 0, 0}, bytesEncoded: 4},
+	{val: int32(16383), output: []byte{0xff, 0x3f, 0, 0}, bytesEncoded: 4},
 	{val: int32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
 
-	{val: uint32(1), output: []byte{0x01}, bytesEncoded: 1},
-	{val: uint32(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+	{val: uint32(1), output: []byte{0x01, 0, 0, 0}, bytesEncoded: 4},
+	{val: uint32(16383), output: []byte{0xff, 0x3f, 0, 0}, bytesEncoded: 4},
 	{val: uint32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
 
 	// compact integers
-	{val: int64(0), output: []byte{0x00}, bytesEncoded: 1},
-	{val: int64(1), output: []byte{0x04}, bytesEncoded: 1},
-	{val: int64(42), output: []byte{0xa8}, bytesEncoded: 1},
-	{val: int64(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
-	{val: int64(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
-	{val: int64(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
-	{val: int64(1073741823), output: []byte{0xfe, 0xff, 0xff, 0xff}, bytesEncoded: 4},
-	{val: int64(1073741824), output: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, bytesEncoded: 5},
-	{val: int64(1<<32 - 1), output: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, bytesEncoded: 5},
-	{val: int64(1 << 32), output: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, bytesEncoded: 6},
-
-	{val: uint64(0), output: []byte{0x00}, bytesEncoded: 1},
-	{val: uint64(1), output: []byte{0x04}, bytesEncoded: 1},
-	{val: uint64(42), output: []byte{0xa8}, bytesEncoded: 1},
-	{val: uint64(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
-	{val: uint64(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
-	{val: uint64(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
-	{val: uint64(1 << 63), output: []byte{0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80}, bytesEncoded: 9},
-	{val: uint64(1073741823), output: []byte{0xfe, 0xff, 0xff, 0xff}, bytesEncoded: 4},
-	{val: uint64(1073741824), output: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, bytesEncoded: 5},
-	{val: uint64(1<<32 - 1), output: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, bytesEncoded: 5},
-	{val: uint64(1 << 32), output: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, bytesEncoded: 6},
+	{val: big.NewInt(0), output: []byte{0x00}, bytesEncoded: 1},
+	{val: big.NewInt(1), output: []byte{0x04}, bytesEncoded: 1},
+	{val: big.NewInt(42), output: []byte{0xa8}, bytesEncoded: 1},
+	{val: big.NewInt(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
+	{val: big.NewInt(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
+	{val: big.NewInt(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
+	{val: big.NewInt(1073741823), output: []byte{0xfe, 0xff, 0xff, 0xff}, bytesEncoded: 4},
+	{val: big.NewInt(1<<32 - 1), output: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, bytesEncoded: 5},
 
 	// byte arrays
 	{val: []byte{0x01}, output: []byte{0x04, 0x01}, bytesEncoded: 2},
@@ -85,32 +71,24 @@ var encodeTests = []encodeTest{
 	{val: true, output: []byte{0x01}, bytesEncoded: 1},
 	{val: false, output: []byte{0x00}, bytesEncoded: 1},
 
-	// big ints
-	{val: big.NewInt(0), output: []byte{0x00}, bytesEncoded: 1},
-	{val: big.NewInt(1), output: []byte{0x04}, bytesEncoded: 1},
-	{val: big.NewInt(42), output: []byte{0xa8}, bytesEncoded: 1},
-	{val: big.NewInt(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
-	{val: big.NewInt(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
-	{val: big.NewInt(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
-
 	// structs
-	{val: struct {
+	{val: &struct {
 		Foo []byte
-		Bar int64
-	}{[]byte{0x01}, 2}, output: []byte{0x04, 0x01, 0x08}, bytesEncoded: 3},
-	{val: struct {
+		Bar int32
+	}{[]byte{0x01}, 2}, output: []byte{0x04, 0x01, 0x02, 0, 0, 0}, bytesEncoded: 6},
+	{val: &struct {
 		Foo []byte
-		Bar int64
+		Bar int32
 		Ok  bool
-	}{[]byte{0x01}, 2, true}, output: []byte{0x04, 0x01, 0x08, 0x01}, bytesEncoded: 4},
-	{val: struct {
+	}{[]byte{0x01}, 2, true}, output: []byte{0x04, 0x01, 0x02, 0, 0, 0, 0x01}, bytesEncoded: 7},
+	{val: &struct {
+		Foo int32
+		Bar []byte
+	}{16384, []byte{0xff}}, output: []byte{0, 0x40, 0, 0, 0x04, 0xff}, bytesEncoded: 6},
+	{val: &struct {
 		Foo int64
 		Bar []byte
-	}{int64(16384), []byte{0xff}}, output: []byte{0x02, 0x00, 0x01, 0x00, 0x04, 0xff}, bytesEncoded: 6},
-	{val: struct {
-		Foo int64
-		Bar []byte
-	}{int64(1073741824), byteArray(64)}, output: append([]byte{0x03, 0x00, 0x00, 0x00, 0x40, 0x01, 0x01}, byteArray(64)...), bytesEncoded: 71},
+	}{int64(1073741824), byteArray(64)}, output: append([]byte{0, 0, 0, 0x40, 0, 0, 0, 0, 1, 1}, byteArray(64)...), bytesEncoded: 74},
 
 	// Arrays
 	{val: []int{1, 2, 3, 4}, output: []byte{0x10, 0x04, 0x08, 0x0c, 0x10}, bytesEncoded: 5},

@@ -23,6 +23,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+
+	"github.com/ChainSafe/gossamer/common"
 )
 
 // Encoder is a wrapping around io.Writer
@@ -48,29 +50,19 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 		n, err = se.encodeByteArray(v[:])
 	case *big.Int:
 		n, err = se.encodeBigInteger(v)
-	case int8:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case int16:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case int32:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case int64:
-		n, err = se.encodeInteger(uint(v))
-	case uint8:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case uint16:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case uint32:
-		n, err = se.encodeFixedWidthInteger(int(v))
-	case uint64:
-		n, err = se.encodeInteger(uint(v))
+	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+		n, err = se.encodeFixedWidthInteger(v)
 	case string:
 		n, err = se.encodeByteArray([]byte(v))
 	case bool:
 		n, err = se.encodeBool(v)
+	case common.Hash:
+		n, err = se.Writer.Write(v.ToBytes())
 	case interface{}:
 		t := reflect.TypeOf(b).Kind()
 		switch t {
+		case reflect.Ptr:
+			n, err = se.encodeTuple(v)
 		case reflect.Struct:
 			n, err = se.encodeTuple(v)
 		case reflect.Slice, reflect.Array:
@@ -102,21 +94,36 @@ func (se *Encoder) encodeByteArray(b []byte) (bytesEncoded int, err error) {
 }
 
 // encodeFixedWidthInteger encodes an int with size < 2**32 by putting it into little endian byte format
-func (se *Encoder) encodeFixedWidthInteger(i int) (bytesEncoded int, err error) {
-	if i >= 1<<32 {
-		return 0, errors.New("error encoding fixed width int: int greater than 32 bits")
-	}
-
-	if i < 1<<8 {
+func (se *Encoder) encodeFixedWidthInteger(in interface{}) (bytesEncoded int, err error) {
+	switch i := in.(type) {
+	case int8:
 		err = binary.Write(se.Writer, binary.LittleEndian, byte(i))
 		bytesEncoded = 1
-	} else if i < 1<<16 {
+	case uint8:
+		err = binary.Write(se.Writer, binary.LittleEndian, byte(i))
+		bytesEncoded = 1
+	case int16:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i))
 		bytesEncoded = 2
-	} else if i < 1<<32 {
+	case uint16:
+		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i))
+		bytesEncoded = 2
+	case int32:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i))
 		bytesEncoded = 4
+	case uint32:
+		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i))
+		bytesEncoded = 4
+	case int64:
+		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
+		bytesEncoded = 8
+	case uint64:
+		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
+		bytesEncoded = 8
+	default:
+		err = errors.New("could not encode fixed width int: invalid type")
 	}
+
 	return bytesEncoded, err
 }
 
@@ -212,7 +219,13 @@ func (se *Encoder) encodeBool(l bool) (bytesEncoded int, err error) {
 // encodeTuple reads the number of fields in the struct and their types and writes to the buffer each of the struct fields
 // encoded as their respective types
 func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
-	v := reflect.ValueOf(t)
+	var v reflect.Value
+	switch reflect.ValueOf(t).Kind() {
+	case reflect.Ptr:
+		v = reflect.ValueOf(t).Elem()
+	case reflect.Slice, reflect.Array:
+		v = reflect.ValueOf(t)
+	}
 
 	values := make([]interface{}, v.NumField())
 
