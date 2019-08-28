@@ -183,7 +183,6 @@ func TestIntrospectionQuery(t *testing.T) {
 func TestIntrospectioNQuery_full(t *testing.T) {
 	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
 	// https://github.com/graphql/graphql-js/blob/master/src/type/__tests__/introspection-test.js#L35
-	t.Skip()
 	sch := gqlparser.MustLoadSchema(
 		&ast.Source{Name: "schema.graphql", Input: `
 	schema {
@@ -208,6 +207,9 @@ func TestIntrospectioNQuery_full(t *testing.T) {
 	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
 	resp := IntrospectionQuery(ctx, op, sch)
-	_, err := json.Marshal(resp)
+	b, err := json.Marshal(resp)
 	require.NoError(t, err)
+
+	expected := `{"data":{"__schema":{"queryType":{"name":"TestType"},"mutationType":null,"subscriptionType":null,"types":[{"kind":"SCALAR","name":"Float","fields":[],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]},{"kind":"OBJECT","name":"TestType","fields":[{"name":"testField","args":[],"type":{"kind":"SCALAR","name":"String","ofType":null},"isDeprecated":false,"deprecationReason":null}],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]},{"kind":"SCALAR","name":"ID","fields":[],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]},{"kind":"SCALAR","name":"String","fields":[],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]},{"kind":"SCALAR","name":"Boolean","fields":[],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]},{"kind":"SCALAR","name":"Int","fields":[],"inputFields":[],"interfaces":[],"enumValues":[],"possibleTypes":[]}],"directives":[{"name":"include","locations":["FIELD","FRAGMENT_SPREAD","INLINE_FRAGMENT"],"args":[{"name":"if","type":{"kind":"NON_NULL","name":null,"ofType":{"kind":"SCALAR","name":"Boolean","ofType":null}},"defaultValue":null}]},{"name":"skip","locations":["FIELD","FRAGMENT_SPREAD","INLINE_FRAGMENT"],"args":[{"name":"if","type":{"kind":"NON_NULL","name":null,"ofType":{"kind":"SCALAR","name":"Boolean","ofType":null}},"defaultValue":null}]},{"name":"deprecated","locations":["FIELD_DEFINITION","ENUM_VALUE"],"args":[{"name":"reason","type":{"kind":"SCALAR","name":"String","ofType":null},"defaultValue":"\"No longer supported\""}]}]}}}`
+	testutil.CompareJSON(t, string(expected), string(b))
 }
