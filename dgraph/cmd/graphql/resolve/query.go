@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/99designs/gqlgen/graphql"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
@@ -54,9 +53,6 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		// TODO: also builder.withPagination() ... etc ...
 	case schema.SchemaQuery:
 		op := qr.operation
-		// TODO - Pass in the correct values here, i.e. a document and variables.
-		reqCtx := graphql.NewRequestContext(nil, "", map[string]interface{}{})
-		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
 		resp := schema.IntrospectionQuery(ctx, op, qr.schema)
 		b, err := json.Marshal(resp)

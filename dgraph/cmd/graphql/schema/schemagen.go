@@ -82,7 +82,7 @@ func NewHandler(input string) (Handler, error) {
 	// Then we can complete the process by adding in queries and mutations etc. to
 	// make the final full GraphQL schema.
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
+	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: input})
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
@@ -94,9 +94,12 @@ func NewHandler(input string) (Handler, error) {
 
 	expandSchema(doc)
 
-	defns := make([]string, len(doc.Definitions))
-	for i, defn := range doc.Definitions {
-		defns[i] = defn.Name
+	var defns []string
+	for _, defn := range doc.Definitions {
+		if strings.HasPrefix(defn.Name, "__") {
+			continue
+		}
+		defns = append(defns, defn.Name)
 	}
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)

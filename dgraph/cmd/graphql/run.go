@@ -152,7 +152,7 @@ func run() error {
 		return fmt.Errorf("No GraphQL schema was found")
 	}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
+	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}

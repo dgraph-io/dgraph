@@ -34,13 +34,6 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
-scalar Boolean
-scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
-
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 `
 )
@@ -563,9 +556,13 @@ func Stringify(schema *ast.Schema) string {
 	}
 
 	keys := make([]string, 0, len(schema.Types))
-	for k := range schema.Types {
+	for k, v := range schema.Types {
+		if strings.HasPrefix(k, "__") || v.Kind == ast.Scalar {
+			continue
+		}
 		keys = append(keys, k)
 	}
+	keys = keys[:len(keys)]
 	sort.Strings(keys)
 
 	for _, key := range keys {

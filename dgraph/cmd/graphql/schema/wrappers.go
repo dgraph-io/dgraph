@@ -123,11 +123,15 @@ type schema struct {
 type operation struct {
 	op   *ast.OperationDefinition
 	vars map[string]interface{}
+
+	query string
+	doc   *ast.QueryDocument
 }
 
 type field struct {
-	field *ast.Field
-	op    *operation
+	field    *ast.Field
+	op       *operation
+	original string
 }
 type mutation field
 type query field
@@ -276,7 +280,7 @@ func (q *query) QueryType() QueryType {
 	switch {
 	case strings.HasPrefix(q.Name(), "get"):
 		return GetQuery
-	case q.Name() == "__schema":
+	case q.Name() == "__schema" || q.Name() == "__type":
 		return SchemaQuery
 	default:
 		return NotSupportedQuery

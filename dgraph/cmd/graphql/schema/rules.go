@@ -25,7 +25,7 @@ import (
 )
 
 func init() {
-	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
+	defnValidations = append(defnValidations, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck)

@@ -3,6 +3,7 @@ package schema
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -14,14 +15,21 @@ func IntrospectionQuery(ctx context.Context, o Operation,
 	s Schema) *graphql.Response {
 	sch, ok := s.(*schema)
 	if !ok {
+		fmt.Printf("sch not ok")
+
 		// TODO - return an error
 	}
 	op, ok := o.(*operation)
 	if !ok {
-
+		fmt.Printf("op not ok")
 	}
 
-	ec := executionContext{graphql.GetRequestContext(ctx), sch.schema}
+	query := op.query
+	doc := op.doc
+	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
+	ctx = graphql.WithRequestContext(ctx, reqCtx)
+
+	ec := executionContext{reqCtx, sch.schema}
 	data := ec.handleQuery(ctx, op.op.SelectionSet)
 	var buf bytes.Buffer
 	data.MarshalGQL(&buf)
