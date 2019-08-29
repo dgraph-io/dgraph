@@ -1347,6 +1347,106 @@ upsert {
 	require.NotContains(t, res, "post4")
 }
 
+func TestUpsertMultiTypeUpdate(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+age: int .
+active: bool .
+openDate: dateTime .
+password: password .
+loc: geo .
+amount: float .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
+    _:user1 <age> "30" .
+    _:user1 <active> "1" .
+    _:user1 <openDate> "1980-01-01" .
+    _:user1 <password> "password" .
+    _:user1 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+
+    _:user2 <name> "user2" .
+    _:user2 <branch> "Fuller Street, San Francisco" .
+    _:user2 <amount> "10" .
+    _:user2 <age> "30" .
+    _:user2 <active> "1" .
+    _:user2 <openDate> "1980-01-01" .
+    _:user2 <password> "password" .
+    _:user2 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+
+    _:user3 <name> "user3" .
+    _:user3 <branch> "Fuller Street, San Francisco" .
+    _:user3 <amount> "10" .
+    _:user3 <age> "30" .
+    _:user3 <active> "1" .
+    _:user3 <openDate> "1980-01-01" .
+    _:user3 <password> "password" .
+    _:user3 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(branch)) {
+    name
+    branch
+    amount
+    age
+    active
+    openDate
+    password
+    loc
+  }
+}`
+	expectedRes, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	m3 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount 
+      n as name
+      b as branch
+      a as age
+      ac as active
+      open as openDate
+      pass as password
+      l as loc
+    }
+  }
+
+  mutation {
+    set {
+      uid(u ) <amount> val(amt) .
+      uid(u) <name> val (n) .
+      uid(u) <branch> val( b) .
+      uid(u) <age> val(a) .
+      uid(u) <active> val(ac) .
+      uid(u) <openDate> val(open) .
+      uid(u) <password> val(pass) .
+      uid(u) <loc> val(l) .
+    }
+  }
+}
+  `
+
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
 func TestUpsertBulkUpdateBranch(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
