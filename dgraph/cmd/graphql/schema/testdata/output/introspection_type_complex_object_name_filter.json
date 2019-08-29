@@ -1,41 +1,39 @@
 {
-    "data": {
-      "__type": {
-        "kind": "INPUT_OBJECT",
-        "name": "TestInputObject",
-        "inputFields": [
-          {
-            "name": "a",
-            "type": {
-              "kind": "SCALAR",
-              "name": "String",
-              "ofType": null
-            },
-            "defaultValue": "test"
-          },
-          {
-            "name": "b",
-            "type": {
-              "kind": "LIST",
-              "name": null,
-              "ofType": {
-                "kind": "SCALAR",
-                "name": "String",
-                "ofType": null
-              }
-            },
-            "defaultValue": null
-          },
-          {
-            "name": "c",
-            "type": {
-              "kind": "SCALAR",
-              "name": "String",
-              "ofType": null
-            },
-            "defaultValue": "null"
+  "__type": {
+    "kind": "INPUT_OBJECT",
+    "name": "TestInputObject",
+    "inputFields": [
+      {
+        "name": "a",
+        "type": {
+          "kind": "SCALAR",
+          "name": "String",
+          "ofType": null
+        },
+        "defaultValue": "test"
+      },
+      {
+        "name": "b",
+        "type": {
+          "kind": "LIST",
+          "name": null,
+          "ofType": {
+            "kind": "SCALAR",
+            "name": "String",
+            "ofType": null
           }
-        ]
+        },
+        "defaultValue": null
+      },
+      {
+        "name": "c",
+        "type": {
+          "kind": "SCALAR",
+          "name": "String",
+          "ofType": null
+        },
+        "defaultValue": "null"
       }
-    }
+    ]
+  }
 }
