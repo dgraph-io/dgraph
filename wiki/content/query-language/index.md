@@ -1823,8 +1823,13 @@ type Animal {
 
 type Pet {
     owner: uid
-    veterinarian: uid
+    veterinarian: Person
 }
+
+type Person {
+    name: string
+}
+
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
@@ -2103,8 +2108,8 @@ student_name: string @index(exact) .
 textbook_name: string @lang @index(fulltext) .
 ```
 
-Types also support list attributes (i.e `friends: [uid]`) and non-nullable types
-(i.e `friends: [uid]!`). However, the type of the attributes are not being used
+Types also support list attributes (i.e `friends: [Person]`) and non-nullable types
+(i.e `friends: [Person]!`). However, the type of the attributes are not being used
 right now, as the type system is still a work in progress. It's a good idea to
 properly think about how they should be setup to avoid any issues once the type
 system starts using them.
@@ -2182,6 +2187,41 @@ err := c.Alter(context.Background(), &api.Operation{
 Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
 functions now require that the types of the nodes to expand have been properly
 set. Refer to that section for more information.
+
+In addition, reverse edges must be specified in the Schema Type. In both directions. The reverse edge can be an Alias ​​or even the same value as the outcoming edge. Also queries with `expand(_all_)` and `expand(_reverse_)` will be expanded normally.
+
+{{% notice "note" %}} Note: You do not have to specify a predicate for "author" inside Article Type. Because this is an Alias.{{% /notice  %}}
+
+E.g.
+```
+type Author {
+  name: string
+  age: int
+  nationality: string
+  articles: [Article]
+}
+
+type Article {
+  title: string
+  points: int
+  author: [Author]
+}
+```
+In the above example "author" inside "Article" Type represents a reverse edge to be used as Alias. As in the query below.
+
+```
+{
+		q(func: type(Article)) {
+			uid
+			points
+			title
+			author : ~articles {
+				name
+				age
+			}
+		}
+	}
+```
 
 ### Predicates i18n
 
