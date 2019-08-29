@@ -28,8 +28,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Tests that rewriting GraphQL mutations into Dgraph mutations is working
-// as expected.
+// Tests showing that GraphQL mutations -> Dgraph mutations
+// is working as expected.
 //
 // Note: this doesn't include GQL validation errors!  The rewriting code assumes
 // it's rewriting a mutation that's valid (with valid variables) for the schema.

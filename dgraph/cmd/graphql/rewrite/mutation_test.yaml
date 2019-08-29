@@ -83,7 +83,7 @@
       }
     }
   explanation: "The reference to country should get transformed to 'uid' for the 
-    Dgraph JSOn mutation"
+    Dgraph JSON mutation"
   dgraphmuation: |
     { "uid":"_:newnode",
       "dgraph.type":"Author", 

@@ -109,8 +109,14 @@ func (mb *mutationBuilder) Build(m schema.Mutation) (interface{}, error) {
 		} else {
 			// must be schema.UpdateMutation, so the mutation payload came in like
 			// { id: 0x123, patch { ... the actual changes ... } }
-			// it's that "patch" object that needs to be be built into the mutation.
-
+			// it's that "patch" object that needs to be built into the mutation.
+			//
+			// Patch can't be nil, schema gen builds updates with inputs like
+			// input UpdateAuthorInput {
+			// 	id: ID!
+			// 	patch: PatchAuthor!
+			// }
+			// If patch were nil, validation would have failed.
 			val = val["patch"].(map[string]interface{})
 
 			uid, err := mb.GetUpdUID(m)
@@ -216,7 +222,7 @@ func buildObject(
 	// have some sort of cascading delete or for scalars allow 'deleting'
 	// to set to a default value.
 
-	result := make(map[string]interface{})
+	result := make(map[string]interface{}, len(obj))
 
 	for field, val := range obj {
 		var res interface{}
@@ -232,6 +238,12 @@ func buildObject(
 			// the current UID and then set to that.
 			res, err = buildObject(fieldDef.Type(), fieldDef, srcUID, val)
 		case []interface{}:
+			// This field is either a list of objects
+			// { "title": "...", "authors": [ { "id": "0x123" }, { "id": "0x321" }, ...] }
+			//          like here ^^
+			// or it's a list of scalars - e.g. if schema said `scores: [Float]`
+			// { "title": "...", "scores": [10.5, 9.3, ... ]
+			//          like here ^^
 			res, err = buildList(fieldDef.Type(), fieldDef, srcUID, val)
 		default:
 			// scalar value
