@@ -422,7 +422,18 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 func lexVariable(l *lex.Lexer) lex.StateFn {
 	var r rune
 
-	l.AcceptUntil(isSpecificChar('('))
+	functionName := "uid"
+	if r = l.Next(); r == 'v' {
+		functionName = "val"
+	}
+	l.Backup()
+
+	for _, c := range functionName {
+		if r = l.Next(); r != c {
+			return l.Errorf("Unexpected char '%c' when parsing uid keyword", r)
+		}
+	}
+
 	if l.Depth == atObject {
 		l.Emit(itemObjectFunc)
 	} else if l.Depth == atSubject {
@@ -430,7 +441,10 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	}
 	l.IgnoreRun(isSpace)
 
-	l.Next()
+	if r = l.Next(); r != '(' {
+		return l.Errorf("Expected '(' after uid keyword, found: '%c'", r)
+	}
+
 	l.Emit(itemLeftRound)
 	l.IgnoreRun(isSpace)
 
@@ -453,12 +467,6 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	l.Depth++
 
 	return lexText
-}
-
-func isSpecificChar(r rune) func(c rune) bool {
-	return (func(c rune) bool {
-		return r == c
-	})
 }
 
 // isSpace returns true if the rune is a tab or space.
