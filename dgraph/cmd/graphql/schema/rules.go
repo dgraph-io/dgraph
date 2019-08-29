@@ -25,15 +25,17 @@ import (
 )
 
 func init() {
-	defnValidations = append(defnValidations, nameCheck)
+	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-
-	if defn.Kind != ast.Object && defn.Kind != ast.Enum {
+	// TODO - Check into how to not much around with this validation. Perhaps do it before
+	// appending Prelude schema.
+	if defn.Kind != ast.Object && defn.Kind != ast.Enum &&
+		!strings.HasPrefix(defn.Name, "__") && defn.Kind != ast.Scalar {
 		return gqlerror.ErrorPosf(
 			defn.Position,
 			"You can't add %s definitions. Only type and enums are allowed in initial schema.",

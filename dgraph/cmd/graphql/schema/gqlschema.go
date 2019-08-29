@@ -33,9 +33,7 @@ const (
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
-	schemaExtras = `
-directive @hasInverse(field: String!) on FIELD_DEFINITION
-`
+	schemaExtras = `directive @hasInverse(field: String!) on FIELD_DEFINITION`
 )
 
 type directiveValidator func(
@@ -557,6 +555,9 @@ func Stringify(schema *ast.Schema) string {
 
 	keys := make([]string, 0, len(schema.Types))
 	for k, v := range schema.Types {
+		// Skip types like __Schema, __Type, __Field which are used for schema introspection.
+		// Also skip scalar types like Boolean, Float etc. since we add them after fetching the
+		// schema from Dgraph.
 		if strings.HasPrefix(k, "__") || v.Kind == ast.Scalar {
 			continue
 		}
