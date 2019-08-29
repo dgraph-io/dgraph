@@ -85,6 +85,7 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 	var invalids uint32
 	for i, field := range fields {
 		switch field.Name {
+		// TODO - Add tests for __typename.
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
 		case "__type":
@@ -120,7 +121,7 @@ func (ec *executionContext) handleDirective(ctx context.Context, sel ast.Selecti
 		case "description":
 			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "locations":
-			out.Values[i] = ec.marshalN__DirectiveLocation2ᚕstring(ctx, field.Selections,
+			out.Values[i] = ec.marshalDirectionLocationSlice(ctx, field.Selections,
 				obj.Locations)
 			if out.Values[i] == graphql.Null {
 				invalids++
@@ -164,7 +165,7 @@ func (ec *executionContext) handleEnumValue(ctx context.Context, sel ast.Selecti
 				invalids++
 			}
 		case "deprecationReason":
-			out.Values[i] = ec.marshalOString2ᚖstring(ctx, field.Selections,
+			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
 				obj.DeprecationReason())
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -210,7 +211,7 @@ func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSe
 				invalids++
 			}
 		case "deprecationReason":
-			out.Values[i] = ec.marshalOString2ᚖstring(ctx, field.Selections,
+			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
 				obj.DeprecationReason())
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -246,7 +247,7 @@ func (ec *executionContext) handleInputValue(ctx context.Context, sel ast.Select
 				invalids++
 			}
 		case "defaultValue":
-			out.Values[i] = ec.marshalOString2ᚖstring(ctx, field.Selections, obj.DefaultValue)
+			out.Values[i] = ec.marshalOString2string(ctx, field.Selections, obj.DefaultValue)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -309,12 +310,12 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Type")
 		case "kind":
-			out.Values[i] = ec.marshalN__TypeKind2string(ctx, field.Selections, obj.Kind())
+			out.Values[i] = ec.marshalNTypeKind2string(ctx, field.Selections, obj.Kind())
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
 		case "name":
-			out.Values[i] = ec.marshalOString2ᚖstring(ctx, field.Selections, obj.Name())
+			out.Values[i] = ec.marshalOString2string(ctx, field.Selections, obj.Name())
 		case "description":
 			out.Values[i] = graphql.MarshalString(obj.Description())
 		case "fields":
@@ -322,7 +323,8 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 		case "interfaces":
 			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, field.Selections, obj.Interfaces())
 		case "possibleTypes":
-			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, field.Selections, obj.PossibleTypes())
+			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, field.Selections,
+				obj.PossibleTypes())
 		case "enumValues":
 			out.Values[i] = ec.handleTypeEnumValues(ctx, field, obj)
 		case "inputFields":
@@ -373,7 +375,7 @@ func (ec *executionContext) marshalDirectiveSlice(ctx context.Context, sel ast.S
 	return ret
 }
 
-func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Context,
+func (ec *executionContext) marshalDirectionLocation(ctx context.Context,
 	sel ast.SelectionSet, v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
@@ -384,11 +386,11 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	return res
 }
 
-func (ec *executionContext) marshalN__DirectiveLocation2ᚕstring(ctx context.Context,
+func (ec *executionContext) marshalDirectionLocationSlice(ctx context.Context,
 	sel ast.SelectionSet, v []string) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
-		ret[i] = ec.marshalN__DirectiveLocation2string(ctx, sel, v[i])
+		ret[i] = ec.marshalDirectionLocation(ctx, sel, v[i])
 	}
 	return ret
 }
@@ -422,7 +424,7 @@ func (ec *executionContext) marshalIntrospectionType(ctx context.Context, sel as
 	return ec.handleType(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel ast.SelectionSet,
+func (ec *executionContext) marshalNTypeKind2string(ctx context.Context, sel ast.SelectionSet,
 	v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
@@ -433,7 +435,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel ast.SelectionSet,
+func (ec *executionContext) marshalOString2string(ctx context.Context, sel ast.SelectionSet,
 	v *string) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
