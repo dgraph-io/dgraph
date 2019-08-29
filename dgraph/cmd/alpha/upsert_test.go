@@ -1406,60 +1406,123 @@ upsert {
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "Fuller Street, SF")
 
-	// Check for val in upsert. Adding interest to everyone's account
+	// Resetting the val in upsert, to check if the values are not switched
 	m3 := `
-  upsert {
-    query {
-      u as var(func: has(amount)) {
-        amt as amount 
-      }
-    }
-
-    mutation {
-      set {
-        uid(u) <amount> val(amt) .
-      }
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount 
     }
   }
+
+  mutation {
+    set {
+      uid(u) <amount> val(amt) .
+    }
+  }
+}
   `
 
 	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
-	expected_res := `
-	{
-	"data": {
-		"q": [{
-			"name": "user3",
-			"branch": "Fuller Street, SF",
-			"amount": 1000.000000
-		}, {
-			"name": "user1",
-			"branch": "Fuller Street, SF",
-			"amount": 10.000000
-		}, {
-			"name": "user2",
-			"branch": "Fuller Street, SF",
-			"amount": 100.000000
-		}]
-	}
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "user3",
+       "branch": "Fuller Street, SF",
+       "amount": 1000.000000
+     }, {
+       "name": "user1",
+       "branch": "Fuller Street, SF",
+       "amount": 10.000000
+     }, {
+       "name": "user2",
+       "branch": "Fuller Street, SF",
+       "amount": 100.000000
+     }]
+   }
 }`
-	testutil.CompareJSON(t, res, expected_res)
+	testutil.CompareJSON(t, res, expectedRes)
+
+	// Checking for error when some wrong field is being used
+	m5 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as nofield
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(amt) .
+    }
+  }
+}
+  `
+
+	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	//Checking support for aggregate variable in upsert
+	m6 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount 
+    }
+    me() {
+      max_amt as max(val(amt))
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(max_amt) .
+    }
+  }
+}
+  `
+	_, _, _, err = mutationWithTs(m6, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	expectedRes = `
+{
+  "data": {
+    "q": [{
+       "name": "user3",
+       "branch": "Fuller Street, SF",
+       "amount": 1000.000000
+     }, {
+       "name": "user1",
+       "branch": "Fuller Street, SF",
+       "amount": 1000.000000
+     }, {
+       "name": "user2",
+       "branch": "Fuller Street, SF",
+       "amount": 1000.000000
+     }]
+   }
+}`
+	testutil.CompareJSON(t, res, expectedRes)
 
 	// Bulk Delete: delete everyone's branch
 	m4 := `
-  upsert {
-    query {
-      u as var(func: has(branch))
-    }
+upsert {
+  query {
+    u as var(func: has(branch))
+  }
 
-    mutation {
-      delete {
-        uid(u) <branch> * .
-      }
+  mutation {
+    delete {
+      uid(u) <branch> * .
     }
-  }`
+  }
+}`
 	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
@@ -1467,24 +1530,4 @@ upsert {
 	require.NoError(t, err)
 	require.NotContains(t, res, "San Francisco")
 	require.NotContains(t, res, "Fuller Street, SF")
-
-	// Checking for error when some wrong field is being used
-	m5 := `
-  upsert {
-    query {
-      u as var(func: has(amount)) {
-        amt as nofield
-      }
-    }
-
-    mutation {
-      set {
-        uid(u) <nofield> val(amt) .
-      }
-    }
-  }
-  `
-
-	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, 0)
-	require.NoError(t, err)
 }

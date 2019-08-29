@@ -654,18 +654,22 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		varToUID[name] = uids
 	}
 
-	varToVAL := make(map[string]map[string]string)
+	// VarToVal contains a map from variable name, to the result of the query.
+	// Result will either be a map from uid to value of that variable or the
+	// variable can be an aggregate variable, in which case the result is
+	// stored in key 0
+	varToVal := make(map[string]map[string]string)
 	for name, v := range qr.Vars {
-		if v.Vals == nil || len(v.Vals) <= 0 {
+		if len(v.Vals) <= 0 {
 			continue
 		}
 
-		vals := make(map[string]string)
+		vals := make(map[string]string, len(v.Vals))
 		for uid, value := range v.Vals {
 			vals[strconv.FormatUint(uid, 10)] = fmt.Sprintf("%v", value.Value)
 		}
 
-		varToVAL[name] = vals
+		varToVal[name] = vals
 
 	}
 
@@ -681,7 +685,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	}
 
 	updateUIDinMutations(gmu, varToUID)
-	updateVALinMutation(gmu, varToVAL)
+	updateVALinMutations(gmu, varToVal)
 	return l, nil
 }
 
@@ -715,20 +719,49 @@ func findVars(gmu *gql.Mutation) []string {
 }
 
 // updateValMutations picks the val() from object and replaces it with its value
-// Assumption is that Subject should contain UID, whereas Object will VAL
+// Assumption is that Subject should contain UID, whereas Object should contain VAL
 // If val(variable) exists in a query, but the values are not there for the variable,
-// it will delete the mutation itself, and stop it from execution
-func updateVALinMutation(gmu *gql.Mutation, varToVAL map[string]map[string]string) {
+// it will delete the mutation itself, and ignore the mutation silently
+func updateVALinMutations(gmu *gql.Mutation, varToVal map[string]map[string]string) {
 	getNewVals := func(s string) (map[string]string, bool) {
-		if strings.HasPrefix(s, "val(") {
-			varName := s[4 : len(s)-1]
-			if vals, ok := varToVAL[varName]; ok {
+		const valString = "val("
+		if strings.HasPrefix(s, valString) {
+			varName := s[len(valString) : len(s)-1]
+			if vals, ok := varToVal[varName]; ok {
 				return vals, true
 			}
 			return nil, true
 		}
 		return nil, false
 	}
+
+	gmuDel := gmu.Del[:0]
+	for _, nq := range gmu.Del {
+		newObs, exists := getNewVals(nq.ObjectId)
+		if !exists {
+			gmuDel = append(gmuDel, nq)
+			continue
+		}
+		val, ok := newObs[nq.Subject]
+		if !ok {
+			// Check if the variable is aggregate variable
+			// 0 key would exist only for aggregate variable
+			val, ok = newObs["0"]
+			if !ok {
+				//Value doesn't exist, ignore mutation
+				continue
+			}
+		}
+		nq.ObjectId = ""
+		nq.ObjectValue = &api.Value{
+			Val: &api.Value_StrVal{
+				StrVal: val,
+			},
+		}
+		gmuDel = append(gmuDel, nq)
+	}
+
+	gmu.Del = gmuDel
 
 	gmuSet := gmu.Set[:0]
 	for _, nq := range gmu.Set {
@@ -739,7 +772,13 @@ func updateVALinMutation(gmu *gql.Mutation, varToVAL map[string]map[string]strin
 		}
 		val, ok := newObs[nq.Subject]
 		if !ok {
-			continue
+			// Check if the variable is aggregate variable
+			// 0 key would exist only for aggregate variable
+			val, ok = newObs["0"]
+			if !ok {
+				//Value doesn't exist, ignore mutation
+				continue
+			}
 		}
 		nq.ObjectId = ""
 		nq.ObjectValue = &api.Value{
@@ -750,10 +789,10 @@ func updateVALinMutation(gmu *gql.Mutation, varToVAL map[string]map[string]strin
 		gmuSet = append(gmuSet, nq)
 	}
 
-	gmu.Set = gmu.Set[:len(gmuSet)]
+	gmu.Set = gmuSet
 }
 
-// updateMutations does following transformations:
+// updateUIDinMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
 
