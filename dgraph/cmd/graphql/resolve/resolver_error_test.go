@@ -21,8 +21,6 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/rewrite"
-
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
@@ -358,7 +356,7 @@ func resolveWithClient(
 	gqlSchema *ast.Schema,
 	gqlQuery string,
 	client dgraph.Client) *schema.Response {
-	resolver := New(schema.AsSchema(gqlSchema), client, rewrite.NewMutationBuilder())
+	resolver := New(schema.AsSchema(gqlSchema), client, dgraph.NewMutationRewriter())
 	resolver.GqlReq = &schema.Request{Query: gqlQuery}
 	return resolver.Resolve(context.Background())
 }
