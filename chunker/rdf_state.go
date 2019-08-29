@@ -138,7 +138,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 
 		case r == 'u' || r == 'v':
 			if l.Depth != atSubject && l.Depth != atObject {
-				return l.Errorf("Unexpected char '%s'", r)
+				return l.Errorf("Unexpected char '%c'", r)
 			}
 			l.Backup()
 			l.Emit(itemText)
