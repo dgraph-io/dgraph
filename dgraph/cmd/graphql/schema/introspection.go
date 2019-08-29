@@ -60,69 +60,19 @@ func (ec *executionContext) querySchema(ctx context.Context,
 	return ec.handleSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) ___Schema_types(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
-	res := obj.Types()
-	return ec.marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Schema_queryType(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
-	res := obj.QueryType()
-	return ec.marshalIntrospectionType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Schema_mutationType(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
-	res := obj.MutationType()
-	return ec.marshalType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Schema_subscriptionType(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
-	res := obj.SubscriptionType()
-	return ec.marshalType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Schema_directives(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
-	res := obj.Directives()
-	return ec.marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_kind(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	res := obj.Kind()
-	return ec.marshalN__TypeKind2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_fields(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+func (ec *executionContext) handleTypeFields(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.Fields(args["includeDeprecated"].(bool))
-	return ec.marshalO__Field2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx, field.Selections, res)
+	return ec.marshalIntrospectionFieldSlice(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) ___Type_interfaces(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	res := obj.Interfaces()
-	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_possibleTypes(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	res := obj.PossibleTypes()
-	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_enumValues(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+func (ec *executionContext) handleTypeEnumValues(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.EnumValues(args["includeDeprecated"].(bool))
 	if res == nil {
 		return graphql.Null
 	}
-	return ec.marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValue(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_inputFields(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	res := obj.InputFields()
-	return ec.marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	res := obj.OfType()
-	return ec.marshalType(ctx, field.Selections, res)
+	return ec.marshalOptionalEnumValueSlice(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) handleQuery(ctx context.Context,
@@ -317,21 +267,21 @@ func (ec *executionContext) handleSchema(ctx context.Context, sel ast.SelectionS
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Schema")
 		case "types":
-			out.Values[i] = ec.___Schema_types(ctx, field, obj)
+			out.Values[i] = ec.marshalIntrospectionTypeSlice(ctx, field.Selections, obj.Types())
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
 		case "queryType":
-			out.Values[i] = ec.___Schema_queryType(ctx, field, obj)
+			out.Values[i] = ec.marshalIntrospectionType(ctx, field.Selections, obj.QueryType())
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
 		case "mutationType":
-			out.Values[i] = ec.___Schema_mutationType(ctx, field, obj)
+			out.Values[i] = ec.marshalType(ctx, field.Selections, obj.MutationType())
 		case "subscriptionType":
-			out.Values[i] = ec.___Schema_subscriptionType(ctx, field, obj)
+			out.Values[i] = ec.marshalType(ctx, field.Selections, obj.SubscriptionType())
 		case "directives":
-			out.Values[i] = ec.___Schema_directives(ctx, field, obj)
+			out.Values[i] = ec.marshalDirectiveSlice(ctx, field.Selections, obj.Directives())
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -357,7 +307,7 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Type")
 		case "kind":
-			out.Values[i] = ec.___Type_kind(ctx, field, obj)
+			out.Values[i] = ec.marshalN__TypeKind2string(ctx, field.Selections, obj.Kind())
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -366,17 +316,18 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 		case "description":
 			out.Values[i] = graphql.MarshalString(obj.Description())
 		case "fields":
-			out.Values[i] = ec.___Type_fields(ctx, field, obj)
+			out.Values[i] = ec.handleTypeFields(ctx, field, obj)
 		case "interfaces":
-			out.Values[i] = ec.___Type_interfaces(ctx, field, obj)
+			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, field.Selections, obj.Interfaces())
 		case "possibleTypes":
-			out.Values[i] = ec.___Type_possibleTypes(ctx, field, obj)
+			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, field.Selections, obj.PossibleTypes())
 		case "enumValues":
-			out.Values[i] = ec.___Type_enumValues(ctx, field, obj)
+			out.Values[i] = ec.handleTypeEnumValues(ctx, field, obj)
 		case "inputFields":
-			out.Values[i] = ec.___Type_inputFields(ctx, field, obj)
+			out.Values[i] = ec.marshalOptionalInputValueSlice(ctx, field.Selections,
+				obj.InputFields())
 		case "ofType":
-			out.Values[i] = ec.___Type_ofType(ctx, field, obj)
+			out.Values[i] = ec.marshalType(ctx, field.Selections, obj.OfType())
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -409,14 +360,11 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
-	return ec.handleDirective(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v []introspection.Directive) graphql.Marshaler {
+func (ec *executionContext) marshalDirectiveSlice(ctx context.Context, sel ast.SelectionSet,
+	v []introspection.Directive) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
-		ret[i] = ec.marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx, sel, v[i])
+		ret[i] = ec.handleDirective(ctx, sel, &v[i])
 	}
 	return ret
 }
@@ -443,10 +391,6 @@ func (ec *executionContext) marshalN__EnumValue2githubᚗcomᚋ99designsᚋgqlge
 	return ec.handleEnumValue(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalN__Field2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx context.Context, sel ast.SelectionSet, v introspection.Field) graphql.Marshaler {
-	return ec.handleField(ctx, sel, &v)
-}
-
 func (ec *executionContext) marshalInputValueSlice(ctx context.Context, sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
@@ -459,7 +403,7 @@ func (ec *executionContext) marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋg
 	return ec.handleType(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx context.Context, sel ast.SelectionSet, v []introspection.Type) graphql.Marshaler {
+func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, sel ast.SelectionSet, v []introspection.Type) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 
 	for i := range v {
@@ -495,30 +439,33 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	return graphql.MarshalString(*v)
 }
 
-func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValue(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {
+func (ec *executionContext) marshalOptionalEnumValueSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	ret := make(graphql.Array, len(v))
 	for i := range v {
-		ret[i] = ec.marshalN__EnumValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValue(ctx, sel, v[i])
+		ret[i] = ec.handleEnumValue(ctx, sel, &v[i])
 	}
 	return ret
 }
 
-func (ec *executionContext) marshalO__Field2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx context.Context, sel ast.SelectionSet, v []introspection.Field) graphql.Marshaler {
+func (ec *executionContext) marshalIntrospectionFieldSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.Field) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	ret := make(graphql.Array, len(v))
 
 	for i := range v {
-		ret[i] = ec.marshalN__Field2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx, sel, v[i])
+		ret[i] = ec.handleField(ctx, sel, &v[i])
 	}
 	return ret
 }
 
-func (ec *executionContext) marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx context.Context, sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
+func (ec *executionContext) marshalOptionalInputValueSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -530,7 +477,8 @@ func (ec *executionContext) marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋg
 	return ret
 }
 
-func (ec *executionContext) marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx context.Context, sel ast.SelectionSet, v []introspection.Type) graphql.Marshaler {
+func (ec *executionContext) marshalOptionalItypeSlice(ctx context.Context, sel ast.SelectionSet,
+	v []introspection.Type) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
