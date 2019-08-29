@@ -165,12 +165,18 @@ func TestIntrospectionQuery(t *testing.T) {
 		require.Nil(t, gqlErr)
 		listErr := validator.Validate(sch, doc)
 		require.Equal(t, 0, len(listErr))
+
 		op := doc.Operations.ForName(doc.Operations[0].Name)
+		oper := &operation{op: op,
+			vars:  map[string]interface{}{},
+			query: string(q),
+			doc:   doc,
+		}
 		require.NotNil(t, op)
 		reqCtx := graphql.NewRequestContext(doc, string(q), map[string]interface{}{})
 		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
-		resp := IntrospectionQuery(ctx, op, sch)
+		resp := IntrospectionQuery(ctx, oper, AsSchema(sch))
 		b, err := json.Marshal(resp)
 		require.NoError(t, err)
 
@@ -204,11 +210,16 @@ func TestIntrospectioNQuery_full(t *testing.T) {
 
 	op := doc.Operations.ForName(doc.Operations[0].Name)
 	require.NotNil(t, op)
+	oper := &operation{op: op,
+		vars:  map[string]interface{}{},
+		query: string(introspectionQuery),
+		doc:   doc,
+	}
 
 	reqCtx := graphql.NewRequestContext(doc, introspectionQuery, map[string]interface{}{})
 	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
-	resp := IntrospectionQuery(ctx, op, sch)
+	resp := IntrospectionQuery(ctx, oper, AsSchema(sch))
 	b, err := json.Marshal(resp)
 	require.NoError(t, err)
 
