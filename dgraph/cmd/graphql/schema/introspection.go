@@ -60,13 +60,15 @@ func (ec *executionContext) querySchema(ctx context.Context,
 	return ec.handleSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeFields(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+func (ec *executionContext) handleTypeFields(ctx context.Context, field graphql.CollectedField,
+	obj *introspection.Type) (ret graphql.Marshaler) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.Fields(args["includeDeprecated"].(bool))
 	return ec.marshalIntrospectionFieldSlice(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeEnumValues(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+func (ec *executionContext) handleTypeEnumValues(ctx context.Context, field graphql.CollectedField,
+	obj *introspection.Type) (ret graphql.Marshaler) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.EnumValues(args["includeDeprecated"].(bool))
 	if res == nil {
@@ -339,7 +341,8 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
-func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
+func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet,
+	v bool) graphql.Marshaler {
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
 		if !ec.HasError(graphql.GetResolverContext(ctx)) {
@@ -349,7 +352,8 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.SelectionSet,
+	v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		// TODO - Check that resolver gets this information.
@@ -369,7 +373,8 @@ func (ec *executionContext) marshalDirectiveSlice(ctx context.Context, sel ast.S
 	return ret
 }
 
-func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Context,
+	sel ast.SelectionSet, v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !ec.HasError(graphql.GetResolverContext(ctx)) {
@@ -379,14 +384,16 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	return res
 }
 
-func (ec *executionContext) marshalN__DirectiveLocation2ᚕstring(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+func (ec *executionContext) marshalN__DirectiveLocation2ᚕstring(ctx context.Context,
+	sel ast.SelectionSet, v []string) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
 		ret[i] = ec.marshalN__DirectiveLocation2string(ctx, sel, v[i])
 	}
 	return ret
 }
-func (ec *executionContext) marshalInputValueSlice(ctx context.Context, sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
+func (ec *executionContext) marshalInputValueSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
 		ret[i] = ec.handleInputValue(ctx, sel, &v[i])
@@ -394,20 +401,18 @@ func (ec *executionContext) marshalInputValueSlice(ctx context.Context, sel ast.
 	return ret
 }
 
-func (ec *executionContext) marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx context.Context, sel ast.SelectionSet, v introspection.Type) graphql.Marshaler {
-	return ec.handleType(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, sel ast.SelectionSet, v []introspection.Type) graphql.Marshaler {
+func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, sel ast.SelectionSet,
+	v []introspection.Type) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 
 	for i := range v {
-		ret[i] = ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
+		ret[i] = ec.handleType(ctx, sel, &v[i])
 	}
 	return ret
 }
 
-func (ec *executionContext) marshalIntrospectionType(ctx context.Context, sel ast.SelectionSet, v *introspection.Type) graphql.Marshaler {
+func (ec *executionContext) marshalIntrospectionType(ctx context.Context, sel ast.SelectionSet,
+	v *introspection.Type) graphql.Marshaler {
 	if v == nil {
 		if !ec.HasError(graphql.GetResolverContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
@@ -417,7 +422,8 @@ func (ec *executionContext) marshalIntrospectionType(ctx context.Context, sel as
 	return ec.handleType(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel ast.SelectionSet,
+	v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !ec.HasError(graphql.GetResolverContext(ctx)) {
@@ -427,7 +433,8 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel ast.SelectionSet, v *string) graphql.Marshaler {
+func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel ast.SelectionSet,
+	v *string) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -480,7 +487,7 @@ func (ec *executionContext) marshalOptionalItypeSlice(ctx context.Context, sel a
 	ret := make(graphql.Array, len(v))
 
 	for i := range v {
-		ret[i] = ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
+		ret[i] = ec.handleType(ctx, sel, &v[i])
 	}
 	return ret
 }

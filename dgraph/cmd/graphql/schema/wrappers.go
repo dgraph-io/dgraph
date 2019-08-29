@@ -130,9 +130,8 @@ type operation struct {
 }
 
 type field struct {
-	field    *ast.Field
-	op       *operation
-	original string
+	field *ast.Field
+	op    *operation
 }
 type mutation field
 type query field

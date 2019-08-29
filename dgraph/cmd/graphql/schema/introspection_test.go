@@ -184,7 +184,7 @@ func TestIntrospectionQuery(t *testing.T) {
 	}
 }
 
-// TODO - Add some tests to check for reading name from graphql parameters.
+// TODO - Add some tests to check for reading name from graphql variables.
 
 func TestIntrospectioNQuery_full(t *testing.T) {
 	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
