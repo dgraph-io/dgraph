@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package rewrite
+package dgraph
 
 import (
 	"encoding/json"
@@ -137,7 +137,7 @@ func TestMutationRewriting(t *testing.T) {
 
 	gqlSchema := schema.AsSchema(test.LoadSchema(t, testGQLSchema))
 
-	builderToTest := NewMutationBuilder()
+	rewritererToTest := NewMutationRewriter()
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestMutationRewriting(t *testing.T) {
 
 			mut := test.GetMutation(t, op)
 
-			jsonMut, err := builderToTest.Build(mut)
+			jsonMut, err := rewritererToTest.Rewrite(mut)
 
 			test.RequireJSONEq(t, tcase.Error, err)
 			if tcase.Error == nil {

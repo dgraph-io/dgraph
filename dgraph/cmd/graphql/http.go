@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/rewrite"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -64,7 +63,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 	rr = resolve.New(
 		schema.AsSchema(gh.schema),
 		dgraph.AsDgraph(gh.dgraphClient),
-		rewrite.NewMutationBuilder())
+		dgraph.NewMutationRewriter())
 
 	switch r.Method {
 	case http.MethodGet:

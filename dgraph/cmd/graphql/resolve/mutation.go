@@ -23,7 +23,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/rewrite"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -56,10 +55,10 @@ import (
 
 // mutationResolver can resolve a single GraphQL mutation field
 type mutationResolver struct {
-	mutation        schema.Mutation
-	schema          schema.Schema
-	mutationBuilder rewrite.MutationBuilder
-	dgraph          dgraph.Client
+	mutation         schema.Mutation
+	schema           schema.Schema
+	mutationRewriter dgraph.MutationRewriter
+	dgraph           dgraph.Client
 }
 
 const (
@@ -143,7 +142,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 	res := &resolved{}
 
-	mut, err := mr.mutationBuilder.Build(mr.mutation)
+	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
@@ -215,7 +214,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved {
 	res := &resolved{}
 
-	mut, err := mr.mutationBuilder.Build(mr.mutation)
+	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
@@ -230,7 +229,7 @@ func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved
 
 	// FIXME: this will go in the next PR that does a refactor of how query
 	// rewriting works.
-	uid, err := mr.mutationBuilder.GetUpdUID(mr.mutation)
+	uid, err := mr.mutationRewriter.GetUpdUID(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't get uid for mutation")
 		return res
