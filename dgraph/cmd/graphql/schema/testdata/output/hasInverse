@@ -1,6 +1,34 @@
 #######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	author: Author! @hasInverse(field: "posts")
+}
+
+type Author {
+	id: ID!
+	posts: [Post!]! @hasInverse(field: "author")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+
+#######################
 # Generated Types
 #######################
+
 type AddAuthorPayload {
 	author: Author
 }
@@ -9,27 +37,12 @@ type AddPostPayload {
 	post: Post
 }
 
-type Author {
-	id: ID!
-	name: String!
-	posts: [Post!]!
-	friends: [Author!]!
-}
-
 type DeleteAuthorPayload {
 	msg: String
 }
 
 type DeletePostPayload {
 	msg: String
-}
-
-type Post {
-	id: ID!
-	title: String!
-	text: String
-	author: Author!
-	postType: PostType!
 }
 
 type UpdateAuthorPayload {
@@ -41,34 +54,15 @@ type UpdatePostPayload {
 }
 
 #######################
-# Scalar Definitions
+# Generated Inputs
 #######################
-scalar Boolean
-scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
-#######################
-# Enum Definitions
-#######################
-enum PostType {
-	Statement
-	Question
-	Answer
-}
 
-#######################
-# Input Definitions
-#######################
 input AuthorFilter {
 	dgraph: String
 }
 
 input AuthorInput {
-	name: String!
 	posts: [PostRef!]!
-	friends: [AuthorRef!]!
 }
 
 input AuthorRef {
@@ -76,16 +70,11 @@ input AuthorRef {
 }
 
 input PatchAuthor {
-	name: String
 	posts: [PostRef!]
-	friends: [AuthorRef!]
 }
 
 input PatchPost {
-	title: String
-	text: String
 	author: AuthorRef
-	postType: PostType
 }
 
 input PostFilter {
@@ -93,10 +82,7 @@ input PostFilter {
 }
 
 input PostInput {
-	title: String!
-	text: String
 	author: AuthorRef!
-	postType: PostType!
 }
 
 input PostRef {
@@ -116,15 +102,18 @@ input UpdatePostInput {
 #######################
 # Generated Query
 #######################
+
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter!): [Post!]
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter!): [Author!]
 }
+
 #######################
 # Generated Mutations
 #######################
+
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload

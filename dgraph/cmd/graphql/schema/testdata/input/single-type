@@ -1,0 +1,6 @@
+type Message {
+    id: ID!
+    content: String!
+    author: String
+    datePosted: DateTime
+}

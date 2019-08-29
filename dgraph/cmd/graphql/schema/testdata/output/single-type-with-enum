@@ -1,0 +1,93 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	title: String!
+	text: String
+	postType: PostType!
+}
+
+enum PostType {
+	Statement
+	Question
+	Answer
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+
+#######################
+# Generated Types
+#######################
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdatePostPayload {
+	post: Post
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input PatchPost {
+	title: String
+	text: String
+	postType: PostType
+}
+
+input PostFilter {
+	dgraph: String
+}
+
+input PostInput {
+	title: String!
+	text: String
+	postType: PostType!
+}
+
+input PostRef {
+	id: ID!
+}
+
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter!): [Post!]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(id: ID!): DeletePostPayload
+}
