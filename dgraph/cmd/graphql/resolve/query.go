@@ -18,8 +18,6 @@ package resolve
 
 import (
 	"context"
-	"encoding/json"
-	"log"
 
 	"github.com/golang/glog"
 
@@ -52,20 +50,15 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	case schema.SchemaQuery:
-		op := qr.operation
-
-		resp := schema.IntrospectionQuery(ctx, op, qr.schema)
-		b, err := json.Marshal(resp)
+		resp, err := schema.Introspect(ctx, qr.operation, qr.schema)
 		if err != nil {
 			res.err = err
-			log.Printf("error while marshaling json: %+v\n", err)
 			return res
 		}
-		// We are doing this because introspectionQuery returns the result inside
-		// `{"data": {}}`
-		// TODO - This isn't nice at all. Modify IntrospectionQuery to not marshal `data`.
-		// Also check if schema queries are allowed along with normal queries.
-		res.data = b[9 : len(b)-2]
+		// This is because Introspect returns an object.
+		if len(resp) >= 2 {
+			res.data = resp[1 : len(resp)-1]
+		}
 		return res
 	default:
 		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))

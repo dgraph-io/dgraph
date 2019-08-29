@@ -124,6 +124,7 @@ type operation struct {
 	op   *ast.OperationDefinition
 	vars map[string]interface{}
 
+	// The fields below are used by schema introspection queries.
 	query string
 	doc   *ast.QueryDocument
 }

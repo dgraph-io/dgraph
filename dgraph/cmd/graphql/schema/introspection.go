@@ -3,7 +3,8 @@ package schema
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -11,22 +12,20 @@ import (
 	"github.com/vektah/gqlparser/ast"
 )
 
-func IntrospectionQuery(ctx context.Context, o Operation,
-	s Schema) *graphql.Response {
+func Introspect(ctx context.Context, o Operation,
+	s Schema) (json.RawMessage, error) {
 	sch, ok := s.(*schema)
 	if !ok {
-		fmt.Printf("sch not ok")
-
-		// TODO - return an error
+		return nil, errors.New("Couldn't convert schema to internal type")
 	}
+
 	op, ok := o.(*operation)
 	if !ok {
-		fmt.Printf("op not ok")
+		return nil, errors.New("Couldn't convert operation to internal type")
 	}
 
-	query := op.query
-	doc := op.doc
-	reqCtx := graphql.NewRequestContext(doc, query, map[string]interface{}{})
+	// TODO - Fill in graphql variables here instead of an empty map.
+	reqCtx := graphql.NewRequestContext(op.doc, op.query, map[string]interface{}{})
 	ctx = graphql.WithRequestContext(ctx, reqCtx)
 
 	ec := executionContext{reqCtx, sch.schema}
@@ -35,11 +34,9 @@ func IntrospectionQuery(ctx context.Context, o Operation,
 	data.MarshalGQL(&buf)
 	d := buf.Bytes()
 
-	return &graphql.Response{
-		Data:       d,
-		Errors:     ec.Errors,
-		Extensions: ec.Extensions,
-	}
+
+
+	return d, nil
 }
 
 type executionContext struct {
