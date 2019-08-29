@@ -1004,27 +1004,27 @@ Result:
 
 ## Conditional Upsert
 
-The Upsert Block also allows specifying a conditional mutation block using a `@if`
+The Upsert Block also allows specifying a conditional mutation block using an `@if`
 directive. The mutation is executed only when the specified condition is true. If the
 condition is false, the mutation is silently ignored. The general structure of
-Conditional Upsert looks like as follows -
+Conditional Upsert looks like as follows:
 
 ```
 upsert {
   query <query block>
   [fragment <fragment block>]
-  mutation @if(...) <mutation block>
+  mutation @if(<condition>) <mutation block>
 }
 ```
 
-`@if` directive accepts conditions on variables defined in the query block and can be
+The `@if` directive accepts a condition on variables defined in the query block and can be
 connected using `AND`, `OR` and `NOT`.
 
 ### Example
 
 Let's say in our previous example, we know the `company1` has less than 100 employees.
 For safety, we want the mutation to execute only when the variable `v` stores less than
-100 UIDs in it. This can be achieved as follows -
+100 but greater than 50 UIDs in it. This can be achieved as follows -
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
@@ -1033,7 +1033,7 @@ upsert {
     v as var(func: regexp(email, /.*@company1.io$/))
   }
 
-  mutation @if(lt(len(v), 100)) {
+  mutation @if(lt(len(v), 100) AND gt(len(v), 50)) {
     delete {
       uid(v) <name> * .
       uid(v) <email> * .
