@@ -2188,9 +2188,9 @@ Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
 functions now require that the types of the nodes to expand have been properly
 set. Refer to that section for more information.
 
-In addition, reverse edges must be specified in the Schema Type. In both directions. The reverse edge can be an Alias ​​or even the same value as the outcoming edge. Also queries with `expand(_all_)` and `expand(_reverse_)` will be expanded normally.
+In addition, reverse edges must be specified in the Schema Type. In both directions. The reverse edge can be an alias ​​or even the same value as the outcoming edge. Also queries with `expand(_all_)` and `expand(_reverse_)` will be expanded normally.
 
-{{% notice "note" %}} Note: You do not have to specify a predicate for "author" inside Article Type. Because this is an Alias.{{% /notice  %}}
+{{% notice "note" %}} Note: You do not have to specify a predicate for "author" inside Article Type because this is an alias.{{% /notice  %}}
 
 E.g.
 ```
@@ -2207,20 +2207,20 @@ type Article {
   author: [Author]
 }
 ```
-In the above example "author" inside "Article" Type represents a reverse edge to be used as Alias. As in the query below.
+In the above example "author" inside "Article" type represents a reverse edge to be used as alias. As in the query below.
 
 ```
 {
-		q(func: type(Article)) {
-			uid
-			points
-			title
-			author : ~articles {
-				name
-				age
-			}
-		}
-	}
+  q(func: type(Article)) {
+    uid
+    points
+    title
+    author : ~articles {
+      name
+      age
+    }
+  }
+}
 ```
 
 ### Predicates i18n
