@@ -113,7 +113,7 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
