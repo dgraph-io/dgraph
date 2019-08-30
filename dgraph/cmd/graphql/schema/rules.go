@@ -32,8 +32,6 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-	// TODO - Check into how to not much around with this validation. Perhaps do it before
-	// appending Prelude schema.
 	if defn.Kind != ast.Object && defn.Kind != ast.Enum &&
 		!strings.HasPrefix(defn.Name, "__") && defn.Kind != ast.Scalar {
 		return gqlerror.ErrorPosf(

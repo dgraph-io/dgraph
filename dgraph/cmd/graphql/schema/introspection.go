@@ -12,6 +12,7 @@ import (
 	"github.com/vektah/gqlparser/ast"
 )
 
+// Introspect performs an introspection query given an operation (contains the query) and a schema.
 func Introspect(ctx context.Context, o Operation,
 	s Schema) (json.RawMessage, error) {
 	sch, ok := s.(*schema)
@@ -72,6 +73,8 @@ func (ec *executionContext) handleTypeEnumValues(ctx context.Context, field grap
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.EnumValues(args["includeDeprecated"].(bool))
 	if res == nil {
+		// TODO - Verify we handle types that can/cannot be null properly. Also add test cases for
+		// them.
 		return graphql.Null
 	}
 	return ec.marshalOptionalEnumValueSlice(ctx, field.Selections, res)
@@ -82,7 +85,6 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"Query"})
 
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
 	for i, field := range fields {
 		switch field.Name {
 		// TODO - Add tests for __typename.
@@ -97,9 +99,6 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 		}
 	}
 	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
 	return out
 }
 
@@ -182,34 +181,30 @@ func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSe
 	obj *introspection.Field) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__Field"})
 
-	out := graphql.NewFieldSet(fields)
 	var invalids uint32
+	checkNull := func(val graphql.Marshaler) graphql.Marshaler {
+		if val == graphql.Null {
+			invalids++
+		}
+		return val
+	}
+
+	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Field")
 		case "name":
-			out.Values[i] = ec.marshalNString2string(ctx, field.Selections, obj.Name)
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
+			out.Values[i] = checkNull(ec.marshalNString2string(ctx, field.Selections, obj.Name))
 		case "description":
 			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "args":
-			out.Values[i] = ec.marshalInputValueSlice(ctx, field.Selections, obj.Args)
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
+			out.Values[i] = checkNull(ec.marshalInputValueSlice(ctx, field.Selections, obj.Args))
 		case "type":
-			out.Values[i] = ec.marshalIntrospectionType(ctx, field.Selections, obj.Type)
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
+			out.Values[i] = checkNull(ec.marshalIntrospectionType(ctx, field.Selections, obj.Type))
 		case "isDeprecated":
-			out.Values[i] = ec.marshalNBoolean2bool(ctx, field.Selections, obj.IsDeprecated())
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
+			out.Values[i] = checkNull(ec.marshalNBoolean2bool(ctx, field.Selections,
+				obj.IsDeprecated()))
 		case "deprecationReason":
 			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
 				obj.DeprecationReason())
