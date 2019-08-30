@@ -410,6 +410,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - Increase max trace logs per span in Alpha. ([#3886][])
 - Include line and column numbers in lexer errors. Fixes [#2900][]. ([#3772][])
+- Release binaries built with Go 1.12.7.
 
 ### Fixed
 
