@@ -33,7 +33,10 @@ const (
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
-	schemaExtras = `directive @hasInverse(field: String!) on FIELD_DEFINITION`
+	schemaExtras = `
+	scalar DateTime
+
+	directive @hasInverse(field: String!) on FIELD_DEFINITION`
 )
 
 type directiveValidator func(
@@ -83,6 +86,10 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range schema.Definitions {
+		if defn.BuiltIn {
+			// prelude definitions are built in and we don't want to validate them.
+			continue
+		}
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
@@ -547,7 +554,7 @@ func generateScalarString(typ *ast.Definition) string {
 
 // Stringify returns entire schema in string format
 func Stringify(schema *ast.Schema) string {
-	var sch, object, scalar, input, query, mutation, enum strings.Builder
+	var sch, object, input, query, mutation, enum strings.Builder
 
 	if schema.Types == nil {
 		return ""
@@ -570,8 +577,6 @@ func Stringify(schema *ast.Schema) string {
 
 		if typ.Kind == ast.Object {
 			object.WriteString(generateObjectString(typ) + "\n")
-		} else if typ.Kind == ast.Scalar {
-			scalar.WriteString(generateScalarString(typ))
 		} else if typ.Kind == ast.InputObject {
 			input.WriteString(generateInputString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
@@ -589,8 +594,6 @@ func Stringify(schema *ast.Schema) string {
 
 	sch.WriteString("#######################\n# Generated Types\n#######################\n")
 	sch.WriteString(object.String())
-	sch.WriteString("#######################\n# Scalar Definitions\n#######################\n")
-	sch.WriteString(scalar.String())
 	sch.WriteString("#######################\n# Enum Definitions\n#######################\n")
 	sch.WriteString(enum.String())
 	sch.WriteString("#######################\n# Input Definitions\n#######################\n")

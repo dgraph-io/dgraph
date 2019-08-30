@@ -32,8 +32,7 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-	if defn.Kind != ast.Object && defn.Kind != ast.Enum &&
-		!strings.HasPrefix(defn.Name, "__") && defn.Kind != ast.Scalar {
+	if defn.Kind != ast.Object && defn.Kind != ast.Enum {
 		return gqlerror.ErrorPosf(
 			defn.Position,
 			"You can't add %s definitions. Only type and enums are allowed in initial schema.",

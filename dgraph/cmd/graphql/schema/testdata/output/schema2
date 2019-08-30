@@ -36,15 +36,6 @@ type UpdatePostPayload {
 }
 
 #######################
-# Scalar Definitions
-#######################
-scalar Boolean
-scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
-#######################
 # Enum Definitions
 #######################
 #######################
