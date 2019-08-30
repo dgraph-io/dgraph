@@ -244,8 +244,9 @@ if [[ :${TEST_SET}: == *:full:* ]]; then
     Info "Running custom test scripts"
     RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
-    Info "Running large load test"
-    RunCmd ./systest/21million/test-21million.sh || TestFailed
+    # TODO add test-21million.sh script to release/v1.0
+    # Info "Running large load test"
+    # RunCmd ./systest/21million/test-21million.sh || TestFailed
 fi
 
 Info "Stopping cluster"

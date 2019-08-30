@@ -3,9 +3,8 @@
 # uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
-readonly SRCROOT=$(readlink -f ${BASH_SOURCE[0]%/*}/../../../..)
+readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
-readonly WAIT_FOR_IT=$SRCROOT/contrib/wait-for-it.sh
 
 declare -ri ZERO_PORT=5080 HTTP_PORT=8180
 
@@ -113,7 +112,7 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec bank-dg1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
