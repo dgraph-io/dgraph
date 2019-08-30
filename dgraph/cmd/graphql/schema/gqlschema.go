@@ -563,7 +563,6 @@ func Stringify(schema *ast.Schema) string {
 		}
 		keys = append(keys, k)
 	}
-	keys = keys[:]
 	sort.Strings(keys)
 
 	for _, key := range keys {

@@ -121,7 +121,7 @@ func run() error {
 		alpha:      GraphQL.Conf.GetString("alpha"),
 	}
 
-	glog.Infof("Bringing up GraphQL API for Dgraph at %s\n", opt.alpha)
+	glog.Infof("Connecting to Dgraph at: %s", opt.alpha)
 
 	dgraphClient, disconnect, err := connect()
 	if err != nil {
@@ -174,6 +174,7 @@ func run() error {
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
+	glog.Infof("Bringing up GraphQL HTTP API at 127.0.0.1:9000/graphql")
 	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
 }
 
