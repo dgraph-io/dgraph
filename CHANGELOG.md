@@ -403,6 +403,36 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#3621]: https://github.com/dgraph-io/dgraph/issues/3621
 [#3635]: https://github.com/dgraph-io/dgraph/issues/3635
 
+## [1.0.17] - 2019-08-30
+[1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
+
+### Changed
+
+- Increase max trace logs per span in Alpha. ([#3886][])
+- Include line and column numbers in lexer errors. Fixes [#2900][]. ([#3772][])
+- Release binaries built with Go 1.12.7.
+
+### Fixed
+
+- Decrease rate of Raft heartbeat messages. ([#3708][], [#3753][])
+- Fix bug when exporting a predicate name to the schema. Fixes [#3699][]. ([#3701][])
+- Return error instead of asserting in handleCompareFunction. ([#3665][])
+- Fix bug where aliases in a query incorrectly alias the response depending on alias order. Fixes [#3814][]. ([#3837][])
+- Fix for panic in fillGroupedVars. Fixes [#3768][]. ([#3781][])
+
+[#3886]: https://github.com/dgraph-io/dgraph/issues/3886
+[#2900]: https://github.com/dgraph-io/dgraph/issues/2900
+[#3772]: https://github.com/dgraph-io/dgraph/issues/3772
+[#3708]: https://github.com/dgraph-io/dgraph/issues/3708
+[#3753]: https://github.com/dgraph-io/dgraph/issues/3753
+[#3699]: https://github.com/dgraph-io/dgraph/issues/3699
+[#3701]: https://github.com/dgraph-io/dgraph/issues/3701
+[#3665]: https://github.com/dgraph-io/dgraph/issues/3665
+[#3814]: https://github.com/dgraph-io/dgraph/issues/3814
+[#3837]: https://github.com/dgraph-io/dgraph/issues/3837
+[#3768]: https://github.com/dgraph-io/dgraph/issues/3768
+[#3781]: https://github.com/dgraph-io/dgraph/issues/3781
+
 ## [1.0.16] - 2019-07-11
 [1.0.16]: https://github.com/dgraph-io/dgraph/compare/v1.0.15...v1.0.16
 
