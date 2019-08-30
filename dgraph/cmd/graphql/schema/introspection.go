@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
@@ -95,7 +94,6 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 		case "__schema":
 			out.Values[i] = ec.querySchema(ctx, field)
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -131,7 +129,6 @@ func (ec *executionContext) handleDirective(ctx context.Context, sel ast.Selecti
 				invalids++
 			}
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -167,7 +164,6 @@ func (ec *executionContext) handleEnumValue(ctx context.Context, sel ast.Selecti
 			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
 				obj.DeprecationReason())
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -209,7 +205,6 @@ func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
 				obj.DeprecationReason())
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -244,7 +239,6 @@ func (ec *executionContext) handleInputValue(ctx context.Context, sel ast.Select
 		case "defaultValue":
 			out.Values[i] = ec.marshalOString2string(ctx, field.Selections, obj.DefaultValue)
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -284,7 +278,6 @@ func (ec *executionContext) handleSchema(ctx context.Context, sel ast.SelectionS
 				invalids++
 			}
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
@@ -328,7 +321,6 @@ func (ec *executionContext) handleType(ctx context.Context, sel ast.SelectionSet
 		case "ofType":
 			out.Values[i] = ec.marshalType(ctx, field.Selections, obj.OfType())
 		default:
-			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
 	out.Dispatch()
