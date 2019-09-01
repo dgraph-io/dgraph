@@ -60,7 +60,10 @@ func (gh *graphqlHandler) isValid() bool {
 }
 
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
-	rr = resolve.New(schema.AsSchema(gh.schema), dgraph.AsDgraph(gh.dgraphClient))
+	rr = resolve.New(
+		schema.AsSchema(gh.schema),
+		dgraph.AsDgraph(gh.dgraphClient),
+		dgraph.NewMutationRewriter())
 
 	switch r.Method {
 	case http.MethodGet:

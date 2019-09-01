@@ -18,17 +18,15 @@ package resolve
 
 import (
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 	"gopkg.in/yaml.v2"
 )
 
@@ -91,7 +89,12 @@ input PostInput {
 	author: AuthorRef!
 }
 
-input PostUpdate {
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
+}
+
+input PatchPost {
 	title: String
 	text: String
 }
@@ -106,7 +109,7 @@ type UpdatePostPayload {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 }
 `
 
@@ -141,14 +144,14 @@ func TestResolver(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			resp := resolve(gqlSchema, tcase.GQLQuery, tcase.Response)
 
-			requireJSONEq(t, test.Errors, resp.Errors)
-			require.JSONEq(t, test.Expected, resp.Data.String(), test.Explanation)
+			test.RequireJSONEq(t, tcase.Errors, resp.Errors)
+			require.JSONEq(t, tcase.Expected, resp.Data.String(), tcase.Explanation)
 		})
 	}
 }
@@ -200,7 +203,7 @@ func TestResponseOrder(t *testing.T) {
 				`{"title": "Another Title", "text": "More Text"}]}}`},
 	}
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -267,22 +270,22 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		},
 	}
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
-	for name, test := range tests {
+	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
-				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
+				&dgraphClient{resp: tcase.queryResponse, assigned: tcase.mutResponse})
 
-			requireJSONEq(t, test.errors, resp.Errors)
-			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
+			test.RequireJSONEq(t, tcase.errors, resp.Errors)
+			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
 		})
 	}
 }
 
 func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		updatePost(id: "0x1", input: {text: "Some more text"}) {
+		updatePost(input: { id: "0x1", patch: { text: "Some more text" } }) {
 			post {
 				title
 				text
@@ -332,42 +335,17 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		},
 	}
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
-	for name, test := range tests {
+	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
-				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
+				&dgraphClient{resp: tcase.queryResponse, assigned: tcase.mutResponse})
 
-			requireJSONEq(t, test.errors, resp.Errors)
-			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
+			test.RequireJSONEq(t, tcase.errors, resp.Errors)
+			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
 		})
 	}
-}
-
-func loadSchema(t *testing.T, gqlSchema string) *ast.Schema {
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
-	require.Nil(t, gqlErr)
-	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
-	// so passing into something that just expects an error, will always be a
-	// non-nil interface.
-
-	gql, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
-
-	return gql
-}
-
-func requireJSONEq(t *testing.T, expected, got gqlerror.List) {
-	// It's easier to understand the diff, when a test fails, with json than
-	// require.Equal on the errors
-	jsonExpected, err := json.Marshal(expected)
-	require.NoError(t, err)
-
-	jsonGot, err := json.Marshal(got)
-	require.NoError(t, err)
-
-	require.JSONEq(t, string(jsonExpected), string(jsonGot))
 }
 
 func resolve(gqlSchema *ast.Schema, gqlQuery string, dgResponse string) *schema.Response {
@@ -378,7 +356,7 @@ func resolveWithClient(
 	gqlSchema *ast.Schema,
 	gqlQuery string,
 	client dgraph.Client) *schema.Response {
-	resolver := New(schema.AsSchema(gqlSchema), client)
+	resolver := New(schema.AsSchema(gqlSchema), client, dgraph.NewMutationRewriter())
 	resolver.GqlReq = &schema.Request{Query: gqlQuery}
 	return resolver.Resolve(context.Background())
 }

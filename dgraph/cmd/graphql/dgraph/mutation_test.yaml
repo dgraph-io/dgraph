@@ -1,0 +1,169 @@
+-
+  name: "Add mutation with variables"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": 
+      { "name": "A.N. Author", 
+        "dob": "2000-01-01",
+        "posts": []
+      }
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":"Author", 
+      "Author.name":"A.N. Author", 
+      "Author.dob":"2000-01-01", 
+      "Author.posts":[]
+    }
+
+-
+  name: "Add Mutation with embedded value"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: { name: "A.N. Author", posts: []}) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input should be used for the mutation, with a uid and type getting 
+    injected and all data transformed to underlying Dgraph edge names"
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":"Author", 
+      "Author.name":"A.N. Author", 
+      "Author.posts":[]
+    }
+
+-
+  name: "Add Mutation with mixed vars and embedded value"
+  gqlmutation: |
+    mutation addAuthor($name: String!) {
+      addAuthor(input: { name: $name, posts: []}) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "name":  "A.N. Author" }
+  explanation: "The input and variables should be used for the mutation, with a uid and type 
+    getting injected and all data transformed to underlying Dgraph edge names"
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":"Author", 
+      "Author.name":"A.N. Author", 
+      "Author.posts":[]
+    }
+
+-
+  name: "Add mutation with reference"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": 
+      { "name": "A.N. Author", 
+        "country": { "id": "0x123" },
+        "posts": []
+      }
+    }
+  explanation: "The reference to country should get transformed to 'uid' for the 
+    Dgraph JSON mutation"
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":"Author", 
+      "Author.name":"A.N. Author", 
+      "Author.country": { "uid": "0x123" }, 
+      "Author.posts":[]
+    }
+
+-
+  name: "Add mutation with invalid reference"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": 
+      { "name": "A.N. Author", 
+        "country": { "id": "HI!" },
+        "posts": []
+      }
+    }
+  explanation: "A reference must be a valid UID"
+  error:
+    { "message": "ID argument (HI!) was not able to be parsed" }
+
+-
+  name: "Add mutation with inverse reference"
+  gqlmutation: |
+    mutation addPost($post: PostInput!) {
+      addPost(input: $post) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "post":
+      { "title": "Exciting post",
+        "text": "A really good post",
+        "author": { "id": "0x2" } 
+      } 
+    }
+  explanation: "The reference to the author node should be transformed to include
+    a new 'posts' edge."
+  dgraphmuation: |
+    { "uid" : "_:newnode",
+      "dgraph.type" : "Post",
+      "Post.title" : "Exciting post",
+      "Post.text" : "A really good post",
+      "Post.author": { 
+        "uid" : "0x2", 
+        "Author.posts" : { "uid": "_:newnode" }
+      } 
+    }
+
+-
+  name: "Update mutation with variables"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "postID": "0x123",
+        "patch": {
+          "text": "updated text"
+        }
+      } 
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphmuation: |
+    { "uid" : "0x123",
+      "Post.text": "updated text"
+    }
+

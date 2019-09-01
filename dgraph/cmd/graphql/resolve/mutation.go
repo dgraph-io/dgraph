@@ -19,7 +19,6 @@ package resolve
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
@@ -56,9 +55,10 @@ import (
 
 // mutationResolver can resolve a single GraphQL mutation field
 type mutationResolver struct {
-	mutation schema.Mutation
-	schema   schema.Schema
-	dgraph   dgraph.Client
+	mutation         schema.Mutation
+	schema           schema.Schema
+	mutationRewriter dgraph.MutationRewriter
+	dgraph           dgraph.Client
 }
 
 const (
@@ -141,9 +141,14 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 	res := &resolved{}
-	val := mr.mutation.ArgValue(schema.InputArgName)
 
-	assigned, err := mr.dgraph.Mutate(ctx, buildMutationJSON(mr.mutation, val))
+	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
+		return res
+	}
+
+	assigned, err := mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
@@ -187,7 +192,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
-	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
+	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedType().Name())
 	if err != nil {
 		return &resolved{
 			err: schema.GQLWrapf(err, "[%s] couldn't complete %s",
@@ -208,22 +213,25 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 
 func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved {
 	res := &resolved{}
-	val := mr.mutation.ArgValue(schema.InputArgName)
 
-	uid, err := mr.mutation.IDArgValue()
+	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
-		res.err = schema.GQLWrapf(err,
-			"[%s] couldn't read id argument in mutation", api.RequestID(ctx))
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
 	}
 
-	// We'll need to do better than this once there's deepper mutations
-	mut := buildMutationJSON(mr.mutation, val)
-	mut["uid"] = fmt.Sprintf("0x%x", uid)
 	_, err = mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] couldn't run mutation mutation", api.RequestID(ctx))
+		return res
+	}
+
+	// FIXME: this will go in the next PR that does a refactor of how query
+	// rewriting works.
+	uid, err := mr.mutationRewriter.GetUpdUID(mr.mutation)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't get uid for mutation")
 		return res
 	}
 
@@ -246,29 +254,4 @@ func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved
 	res.data = completed
 	res.err = err
 	return res
-}
-
-func buildMutationJSON(m schema.Mutation, v interface{}) map[string]interface{} {
-	mut := make(map[string]interface{})
-
-	typeName := m.MutatedTypeName()
-	mut["uid"] = "_:" + createdNode
-	mut["dgraph.type"] = typeName
-
-	switch vv := v.(type) {
-	case map[string]interface{}:
-		for key, val := range vv {
-			mut[typeName+"."+key] = val
-		}
-	default:
-		// when we do bulk mutations, there will be [] in here
-		//
-		// also not sure about mutations that contain raw values yet
-		// ... I think no
-	}
-
-	// When adding references to existing nodes with TRef inputs,
-	// this'll also need to transform those to be 'uid'
-
-	return mut
 }
