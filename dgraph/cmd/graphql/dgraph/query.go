@@ -63,6 +63,7 @@ func NewQueryRewriter() QueryRewriter {
 	return &queryRewriter{}
 }
 
+// Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
 	// currently only handles getT(id: "0x123") queries
@@ -94,8 +95,11 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	}
 }
 
-// FromMutation...
-func (qr *queryRewriter) FromMutationResult(gqlMutation schema.Mutation, uids map[string]string) (*gql.GraphQuery, error) {
+// FromMutation rewrites the query part of aGraphQL mutation into a Dgraph query.
+func (qr *queryRewriter) FromMutationResult(
+	gqlMutation schema.Mutation,
+	uids map[string]string) (*gql.GraphQuery, error) {
+
 	switch gqlMutation.MutationType() {
 	case schema.AddMutation:
 		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
