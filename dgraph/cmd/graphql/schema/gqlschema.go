@@ -635,7 +635,6 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	sch.WriteString("#######################\n# Extended Definitions\n#######################\n")
 	sch.WriteString(schemaExtras)
 	sch.WriteString("\n")
-
 	sch.WriteString("#######################\n# Generated Types\n#######################\n\n")
 	sch.WriteString(object.String())
 	sch.WriteString("#######################\n# Generated Inputs\n#######################\n\n")
