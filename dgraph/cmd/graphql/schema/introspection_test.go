@@ -1,11 +1,9 @@
 package schema
 
 import (
-	"context"
 	"io/ioutil"
 	"testing"
 
-	"github.com/99designs/gqlgen/graphql"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser"
@@ -172,10 +170,8 @@ func TestIntrospectionQuery(t *testing.T) {
 			doc:   doc,
 		}
 		require.NotNil(t, op)
-		reqCtx := graphql.NewRequestContext(doc, string(q), map[string]interface{}{})
-		ctx := graphql.WithRequestContext(context.Background(), reqCtx)
 
-		resp, err := Introspect(ctx, oper, AsSchema(sch))
+		resp, err := Introspect(oper, AsSchema(sch))
 		require.NoError(t, err)
 
 		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
@@ -214,10 +210,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 		doc:   doc,
 	}
 
-	reqCtx := graphql.NewRequestContext(doc, introspectionQuery, map[string]interface{}{})
-	ctx := graphql.WithRequestContext(context.Background(), reqCtx)
-
-	resp, err := Introspect(ctx, oper, AsSchema(sch))
+	resp, err := Introspect(oper, AsSchema(sch))
 	require.NoError(t, err)
 
 	expectedBuf, err := ioutil.ReadFile("testdata/output/introspection_full_query.json")
