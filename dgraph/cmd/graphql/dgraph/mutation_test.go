@@ -19,6 +19,7 @@ package dgraph
 import (
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -77,6 +78,10 @@ type Mutation {
 
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
+}
+
+type Query {
+	getAuthor(id: ID!): Author
 }
 
 input AuthorInput {
@@ -163,5 +168,44 @@ func TestMutationRewriting(t *testing.T) {
 				test.RequireJSONEqStr(t, tcase.DgraphMuation, jsonMut)
 			}
 		})
+	}
+}
+
+func TestMutationQueryRewriting(t *testing.T) {
+	testTypes := map[string]string{
+		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
+		"Update Post ": `updatePost(input: { postID: "0x4", patch: { text: "Updated text" } }) `,
+	}
+
+	b, err := ioutil.ReadFile("mutation_query_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []QueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := schema.AsSchema(test.LoadSchema(t, testGQLSchema))
+
+	testRewriter := NewQueryRewriter()
+
+	for name, mut := range testTypes {
+		for _, tcase := range tests {
+			t.Run(name+tcase.Name, func(t *testing.T) {
+
+				gqlMutationStr := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
+				op, err := gqlSchema.Operation(
+					&schema.Request{
+						Query: gqlMutationStr,
+					})
+				require.NoError(t, err)
+				gqlMutation := test.GetMutation(t, op)
+
+				dgQuery, err := testRewriter.FromMutationResult(
+					gqlMutation, map[string]string{"newnode": "0x4"})
+
+				require.Nil(t, err)
+				require.Equal(t, tcase.DGQuery, asString(dgQuery))
+			})
+		}
 	}
 }

@@ -14,46 +14,55 @@
  * limitations under the License.
  */
 
-package resolve
+package dgraph
 
 import (
 	"io/ioutil"
-	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
 
-// Tests showing that the mutation pipeline produces the expected Dgraph mutations,
-// queries and failure cases.
+// Tests showing that the query rewriter produces the expected Dgraph queries
 
-func TestMutationQueryRewriting(t *testing.T) {
-	testTypes := map[string]string{
-		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-		"Update Post ": `updatePost(input: { id: "0x4", patch: { text: "Updated text" } }) `,
-	}
+type QueryRewritingCase struct {
+	Name     string
+	GQLQuery string
+	DGQuery  string
+}
 
-	b, err := ioutil.ReadFile("resolver_mutation_query_test.yaml")
+func TestQueryRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []QueryRewritingCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := schema.AsSchema(test.LoadSchema(t, testGQLSchema))
 
-	for name, mut := range testTypes {
-		for _, tcase := range tests {
-			t.Run(name+tcase.Name, func(t *testing.T) {
-				client := &queryRecorder{}
-				qry := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
-				resp := resolveWithClient(gqlSchema, qry, client)
+	testRewriter := NewQueryRewriter()
 
-				require.Nil(t, resp.Errors)
-				require.Equal(t, tcase.DGQuery, client.query)
-			})
-		}
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query: tcase.GQLQuery,
+				})
+			require.NoError(t, err)
+			gqlQuery := test.GetQuery(t, op)
+
+			dgQuery, err := testRewriter.Rewrite(gqlQuery)
+
+			require.Nil(t, err)
+			require.Equal(t, tcase.DGQuery, asString(dgQuery))
+		})
 	}
 }
+
+//
+// plus add a case for bad UID

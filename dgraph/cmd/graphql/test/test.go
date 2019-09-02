@@ -56,6 +56,18 @@ func GetMutation(t *testing.T, op schema.Operation) schema.Mutation {
 	return mutations[0]
 }
 
+// GetQuery gets a single schema.Mutation from a schema.Operation.
+// It will fail if op is not a mutation or there's more than one mutation in
+// op.
+func GetQuery(t *testing.T, op schema.Operation) schema.Query {
+	require.NotNil(t, op)
+
+	queries := op.Queries()
+	require.Len(t, queries, 1)
+
+	return queries[0]
+}
+
 // RequireJSONEq converts to JSON and tests JSON equality.
 // It's easier to understand the diff, when a test fails, with json than
 // require.Equal on for example GraphQL error lists.

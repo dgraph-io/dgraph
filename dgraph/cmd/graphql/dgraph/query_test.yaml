@@ -66,7 +66,7 @@
     query {
       getAuthor(id: "0x1") {
         name
-        postsRequired {
+        posts {
           title
           text
         }
@@ -76,7 +76,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
-        postsRequired : Author.postsRequired {
+        posts : Author.posts {
           title : Post.title
           text : Post.text
         }
@@ -89,7 +89,7 @@
     query {
       getAuthor(id: "0x1") {
         name
-        posts : postsRequired {
+        allPosts : posts {
           postTitle : title
           postText : text
         }
@@ -99,7 +99,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
-        posts : Author.postsRequired {
+        allPosts : Author.posts {
           postTitle : Post.title
           postText : Post.text
         }
@@ -112,7 +112,7 @@
     query {
       getAuthor(id: "0x1") {
         name
-        posts : postsRequired {
+        allPosts : posts {
           title
           text
           author {
@@ -126,7 +126,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
-        posts : Author.postsRequired {
+        allPosts : Author.posts {
           title : Post.title
           text : Post.text
           author : Post.author {
