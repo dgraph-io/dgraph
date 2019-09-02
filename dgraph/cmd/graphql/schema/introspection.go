@@ -31,7 +31,7 @@ func Introspect(ctx context.Context, o Operation,
 		Variables: map[string]interface{}{},
 		Doc:       op.doc,
 	}
-	ec := executionContext{reqCtx, sch.schema}
+	ec := executionContext{reqCtx, sch.schema, new(bytes.Buffer)}
 	// TODO - This might not always be correct, get the correct selection set here.
 	data := ec.handleQuery(ctx, op.op.SelectionSet[0])
 
@@ -47,34 +47,34 @@ type RequestContext struct {
 type executionContext struct {
 	*RequestContext
 	*ast.Schema
+	w *bytes.Buffer
 }
 
 func (ec *executionContext) queryType(ctx context.Context,
-	w *bytes.Buffer, field graphql.CollectedField) {
+	field graphql.CollectedField) {
 	args := field.ArgumentMap(ec.Variables)
-	// TODO - What happens if args is nil?
 	name := args["name"].(string)
 	res := introspection.WrapTypeFromDef(ec.Schema, ec.Schema.Types[name])
-	ec.marshalType(ctx, w, field.Selections, res)
+	ec.marshalType(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) querySchema(ctx context.Context,
-	w *bytes.Buffer, field graphql.CollectedField) {
+	field graphql.CollectedField) {
 	res := introspection.WrapSchema(ec.Schema)
 	if res == nil {
 		return
 	}
-	ec.handleSchema(ctx, w, field.Selections, res)
+	ec.handleSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeFields(ctx context.Context, w *bytes.Buffer,
+func (ec *executionContext) handleTypeFields(ctx context.Context,
 	field graphql.CollectedField, obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.Fields(args["includeDeprecated"].(bool))
-	ec.marshalIntrospectionFieldSlice(ctx, w, field.Selections, res)
+	ec.marshalIntrospectionFieldSlice(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeEnumValues(ctx context.Context, w *bytes.Buffer,
+func (ec *executionContext) handleTypeEnumValues(ctx context.Context,
 	field graphql.CollectedField,
 	obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
@@ -84,7 +84,7 @@ func (ec *executionContext) handleTypeEnumValues(ctx context.Context, w *bytes.B
 		// them.
 		return
 	}
-	ec.marshalOptionalEnumValueSlice(ctx, w, field.Selections, res)
+	ec.marshalOptionalEnumValueSlice(ctx, field.Selections, res)
 }
 
 func writeKey(w *bytes.Buffer, k string) {
@@ -102,7 +102,8 @@ func writeBoolValue(w *bytes.Buffer, val bool) {
 	}
 }
 
-func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet, satisfies []string) []graphql.CollectedField {
+func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet,
+	satisfies []string) []graphql.CollectedField {
 	rctx := &graphql.RequestContext{
 		RawQuery:  reqCtx.RawQuery,
 		Variables: reqCtx.Variables,
@@ -113,175 +114,175 @@ func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet, satisfies []
 
 func (ec *executionContext) handleQuery(ctx context.Context,
 	sel ast.Selection) []byte {
-	fields := collectFields(ec.RequestContext, ast.SelectionSet{sel}, []string{"Query"})
-	w := new(bytes.Buffer)
-	w.WriteRune('{')
+	fields := collectFields(ec.RequestContext, ast.SelectionSet{sel},
+		[]string{"Query"})
+	ec.w.WriteRune('{')
 
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
 		// TODO - Make sure alias has the key name when there is no alias.
-		writeKey(w, field.Alias)
+		writeKey(ec.w, field.Alias)
 
 		switch field.Name {
 		// TODO - Add tests for __typename.
 		case "__typename":
-			w.WriteString(`"Query"`)
+			ec.w.WriteString(`"Query"`)
 		case "__type":
-			ec.queryType(ctx, w, field)
+			ec.queryType(ctx, field)
 		case "__schema":
-			ec.querySchema(ctx, w, field)
+			ec.querySchema(ctx, field)
 		default:
 		}
 	}
-	w.WriteRune('}')
-	return w.Bytes()
+	ec.w.WriteRune('}')
+	return ec.w.Bytes()
 }
 
-func (ec *executionContext) handleDirective(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.Directive) {
+func (ec *executionContext) handleDirective(ctx context.Context,
+	sel ast.SelectionSet, obj *introspection.Directive) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Directive"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Alias)
+		writeKey(ec.w, field.Alias)
 		switch field.Name {
 		case "__typename":
-			w.WriteString(`"__Directive"`)
+			ec.w.WriteString(`"__Directive"`)
 		case "name":
-			writeStringValue(w, obj.Name)
+			writeStringValue(ec.w, obj.Name)
 		case "description":
-			writeStringValue(w, obj.Description)
+			writeStringValue(ec.w, obj.Description)
 		case "locations":
-			ec.marshalDirectionLocationSlice(ctx, w, field.Selections,
+			ec.marshalDirectionLocationSlice(ctx, field.Selections,
 				obj.Locations)
 		case "args":
-			ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
+			ec.marshalInputValueSlice(ctx, field.Selections, obj.Args)
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 	return
 }
 
-func (ec *executionContext) handleEnumValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
+func (ec *executionContext) handleEnumValue(ctx context.Context, sel ast.SelectionSet,
 	obj *introspection.EnumValue) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__EnumValue"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Name)
+		writeKey(ec.w, field.Name)
 		switch field.Name {
 		case "__typename":
-			writeStringValue(w, "__EnumValue")
+			writeStringValue(ec.w, "__EnumValue")
 		case "name":
-			writeStringValue(w, obj.Name)
+			writeStringValue(ec.w, obj.Name)
 		case "description":
-			writeStringValue(w, obj.Description)
+			writeStringValue(ec.w, obj.Description)
 		case "isDeprecated":
-			writeBoolValue(w, obj.IsDeprecated())
+			writeBoolValue(ec.w, obj.IsDeprecated())
 		case "deprecationReason":
-			writeOptionalStringValue(w, obj.DeprecationReason())
+			writeOptionalStringValue(ec.w, obj.DeprecationReason())
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 	return
 }
 
-func (ec *executionContext) handleField(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
+func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSet,
 	obj *introspection.Field) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Field"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Name)
+		writeKey(ec.w, field.Name)
 		switch field.Name {
 		case "__typename":
-			writeStringValue(w, "__Field")
+			writeStringValue(ec.w, "__Field")
 		case "name":
-			writeStringValue(w, obj.Name)
+			writeStringValue(ec.w, obj.Name)
 		case "description":
-			writeStringValue(w, obj.Description)
+			writeStringValue(ec.w, obj.Description)
 		case "args":
-			ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
+			ec.marshalInputValueSlice(ctx, field.Selections, obj.Args)
 		case "type":
-			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
+			ec.marshalIntrospectionType(ctx, field.Selections, obj.Type)
 		case "isDeprecated":
-			writeBoolValue(w, obj.IsDeprecated())
+			writeBoolValue(ec.w, obj.IsDeprecated())
 		case "deprecationReason":
-			writeOptionalStringValue(w, obj.DeprecationReason())
+			writeOptionalStringValue(ec.w, obj.DeprecationReason())
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 	return
 }
 
-func (ec *executionContext) handleInputValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.InputValue) {
+func (ec *executionContext) handleInputValue(ctx context.Context,
+	sel ast.SelectionSet, obj *introspection.InputValue) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__InputValue"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Name)
+		writeKey(ec.w, field.Name)
 		switch field.Name {
 		case "__typename":
-			writeStringValue(w, "__InputValue")
+			writeStringValue(ec.w, "__InputValue")
 		case "name":
-			writeStringValue(w, obj.Name)
+			writeStringValue(ec.w, obj.Name)
 		case "description":
-			writeStringValue(w, obj.Description)
+			writeStringValue(ec.w, obj.Description)
 		case "type":
-			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
+			ec.marshalIntrospectionType(ctx, field.Selections, obj.Type)
 		case "defaultValue":
-			writeOptionalStringValue(w, obj.DefaultValue)
+			writeOptionalStringValue(ec.w, obj.DefaultValue)
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 }
 
-func (ec *executionContext) handleSchema(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.Schema) {
+func (ec *executionContext) handleSchema(ctx context.Context,
+	sel ast.SelectionSet, obj *introspection.Schema) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Schema"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Name)
+		writeKey(ec.w, field.Name)
 		switch field.Name {
 		case "__typename":
-			writeStringValue(w, "__Schema")
+			writeStringValue(ec.w, "__Schema")
 		case "types":
-			ec.marshalIntrospectionTypeSlice(ctx, w, field.Selections, obj.Types())
+			ec.marshalIntrospectionTypeSlice(ctx, field.Selections, obj.Types())
 		case "queryType":
-			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.QueryType())
+			ec.marshalIntrospectionType(ctx, field.Selections, obj.QueryType())
 		case "mutationType":
-			ec.marshalType(ctx, w, field.Selections, obj.MutationType())
+			ec.marshalType(ctx, field.Selections, obj.MutationType())
 		case "subscriptionType":
-			ec.marshalType(ctx, w, field.Selections, obj.SubscriptionType())
+			ec.marshalType(ctx, field.Selections, obj.SubscriptionType())
 		case "directives":
-			ec.marshalDirectiveSlice(ctx, w, field.Selections, obj.Directives())
+			ec.marshalDirectiveSlice(ctx, field.Selections, obj.Directives())
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 }
 
 func writeStringValue(w *bytes.Buffer, val string) {
@@ -310,173 +311,174 @@ func writeStringSlice(w *bytes.Buffer, vals []string) {
 	w.WriteRune('"')
 }
 
-func (ec *executionContext) handleType(ctx context.Context, w *bytes.Buffer,
+func (ec *executionContext) handleType(ctx context.Context,
 	sel ast.SelectionSet, obj *introspection.Type) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
 
-	w.WriteRune('{')
+	ec.w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeKey(w, field.Alias)
+		writeKey(ec.w, field.Alias)
 		switch field.Name {
 		case "__typename":
-			w.WriteString(`"__Type`)
+			ec.w.WriteString(`"__Type`)
 		case "kind":
-			writeStringValue(w, obj.Kind())
+			writeStringValue(ec.w, obj.Kind())
 		case "name":
-			writeOptionalStringValue(w, obj.Name())
+			writeOptionalStringValue(ec.w, obj.Name())
 		case "description":
-			writeStringValue(w, obj.Description())
+			writeStringValue(ec.w, obj.Description())
 		case "fields":
-			ec.handleTypeFields(ctx, w, field, obj)
+			ec.handleTypeFields(ctx, field, obj)
 		case "interfaces":
-			ec.marshalOptionalItypeSlice(ctx, w, field.Selections, obj.Interfaces())
+			ec.marshalOptionalItypeSlice(ctx, field.Selections, obj.Interfaces())
 		case "possibleTypes":
-			ec.marshalOptionalItypeSlice(ctx, w, field.Selections,
+			ec.marshalOptionalItypeSlice(ctx, field.Selections,
 				obj.PossibleTypes())
 		case "enumValues":
-			ec.handleTypeEnumValues(ctx, w, field, obj)
+			ec.handleTypeEnumValues(ctx, field, obj)
 		case "inputFields":
-			ec.marshalOptionalInputValueSlice(ctx, w, field.Selections,
+			ec.marshalOptionalInputValueSlice(ctx, field.Selections,
 				obj.InputFields())
 		case "ofType":
-			ec.marshalType(ctx, w, field.Selections, obj.OfType())
+			ec.marshalType(ctx, field.Selections, obj.OfType())
 		default:
 		}
 	}
-	w.WriteRune('}')
+	ec.w.WriteRune('}')
 }
 
-func (ec *executionContext) marshalDirectiveSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Directive) {
-	w.WriteRune('[')
+func (ec *executionContext) marshalDirectiveSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.Directive) {
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleDirective(ctx, w, sel, &v[i])
+		ec.handleDirective(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 	return
 }
 
 func (ec *executionContext) marshalDirectionLocationSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []string) {
-	w.WriteRune('[')
+	sel ast.SelectionSet, v []string) {
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		writeStringValue(w, v[i])
+		writeStringValue(ec.w, v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
-func (ec *executionContext) marshalInputValueSlice(ctx context.Context, w *bytes.Buffer,
+func (ec *executionContext) marshalInputValueSlice(ctx context.Context,
 	sel ast.SelectionSet, v []introspection.InputValue) {
-	w.WriteRune('[')
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleInputValue(ctx, w, sel, &v[i])
+		ec.handleInputValue(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
 
-func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Type) {
-	w.WriteRune('[')
+func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.Type) {
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleType(ctx, w, sel, &v[i])
+		ec.handleType(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
 
-func (ec *executionContext) marshalIntrospectionType(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v *introspection.Type) {
+func (ec *executionContext) marshalIntrospectionType(ctx context.Context,
+	sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
 		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
 		// 	ec.Errorf(ctx, "must not be null")
 		// }
 		// return graphql.Null
 	}
-	ec.handleType(ctx, w, sel, v)
+	ec.handleType(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOptionalEnumValueSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.EnumValue) {
-	// if v == nil {
-	// 	return graphql.Null
-	// }
-	w.WriteRune('[')
+	sel ast.SelectionSet, v []introspection.EnumValue) {
+	if v == nil {
+		ec.w.WriteString("null")
+		return
+	}
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleEnumValue(ctx, w, sel, &v[i])
+		ec.handleEnumValue(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
 
 func (ec *executionContext) marshalIntrospectionFieldSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.Field) {
-	// if v == nil {
-	// 	return graphql.Null
-	// }
-	w.WriteRune('[')
+	sel ast.SelectionSet, v []introspection.Field) {
+	if v == nil {
+		ec.w.WriteString("null")
+		return
+	}
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleField(ctx, w, sel, &v[i])
+		ec.handleField(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
 
 func (ec *executionContext) marshalOptionalInputValueSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.InputValue) {
+	sel ast.SelectionSet, v []introspection.InputValue) {
 	if v == nil {
-		w.WriteString(`null`)
-		return
-		// return graphql.Null
-	}
-	w.WriteRune('[')
-	for i := range v {
-		if i != 0 {
-			w.WriteRune(',')
-		}
-		ec.handleInputValue(ctx, w, sel, &v[i])
-	}
-	w.WriteRune(']')
-}
-
-func (ec *executionContext) marshalOptionalItypeSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Type) {
-	if v == nil {
-		w.WriteString("null")
+		ec.w.WriteString(`null`)
 		return
 	}
-
-	w.WriteRune('[')
+	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
-			w.WriteRune(',')
+			ec.w.WriteRune(',')
 		}
-		ec.handleType(ctx, w, sel, &v[i])
+		ec.handleInputValue(ctx, sel, &v[i])
 	}
-	w.WriteRune(']')
+	ec.w.WriteRune(']')
 }
 
-func (ec *executionContext) marshalType(ctx context.Context, w *bytes.Buffer,
+func (ec *executionContext) marshalOptionalItypeSlice(ctx context.Context,
+	sel ast.SelectionSet, v []introspection.Type) {
+	if v == nil {
+		ec.w.WriteString("null")
+		return
+	}
+
+	ec.w.WriteRune('[')
+	for i := range v {
+		if i != 0 {
+			ec.w.WriteRune(',')
+		}
+		ec.handleType(ctx, sel, &v[i])
+	}
+	ec.w.WriteRune(']')
+}
+
+func (ec *executionContext) marshalType(ctx context.Context,
 	sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
-		w.WriteString(`null`)
+		ec.w.WriteString("null")
 		return
 	}
-	ec.handleType(ctx, w, sel, v)
+	ec.handleType(ctx, sel, v)
 }
