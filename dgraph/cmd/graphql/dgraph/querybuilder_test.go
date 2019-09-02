@@ -171,6 +171,14 @@ func (f *field) SelectionSet() []schema.Field {
 	return f.selSet
 }
 
+func (ft *fieldType) Field(name string) schema.FieldDefinition {
+	return nil
+}
+
+func (ft *fieldType) IDField() schema.FieldDefinition {
+	return nil
+}
+
 func (f *field) ResponseName() string {
 	return ""
 }

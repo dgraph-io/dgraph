@@ -1,0 +1,87 @@
+#######################
+# Input Schema
+#######################
+
+type Message {
+	id: ID!
+	content: String!
+	author: String
+	datePosted: DateTime
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+
+#######################
+# Generated Types
+#######################
+
+type AddMessagePayload {
+	message: Message
+}
+
+type DeleteMessagePayload {
+	msg: String
+}
+
+type UpdateMessagePayload {
+	message: Message
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input MessageFilter {
+	dgraph: String
+}
+
+input MessageInput {
+	content: String!
+	author: String
+	datePosted: DateTime
+}
+
+input MessageRef {
+	id: ID!
+}
+
+input PatchMessage {
+	content: String
+	author: String
+	datePosted: DateTime
+}
+
+input UpdateMessageInput {
+	id: ID!
+	patch: PatchMessage!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getMessage(id: ID!): Message
+	queryMessage(filter: MessageFilter!): [Message!]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addMessage(input: MessageInput!): AddMessagePayload
+	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
+	deleteMessage(id: ID!): DeleteMessagePayload
+}

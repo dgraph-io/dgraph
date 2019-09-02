@@ -1,6 +1,34 @@
 #######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	author: Author! @hasInverse(field: "posts")
+}
+
+type Author {
+	id: ID!
+	posts: [Post!]! @hasInverse(field: "author")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+
+#######################
 # Generated Types
 #######################
+
 type AddAuthorPayload {
 	author: Author
 }
@@ -9,22 +37,12 @@ type AddPostPayload {
 	post: Post
 }
 
-type Author {
-	id: ID!
-	posts: [Post!]! @hasInverse(field: "author")
-}
-
 type DeleteAuthorPayload {
 	msg: String
 }
 
 type DeletePostPayload {
 	msg: String
-}
-
-type Post {
-	id: ID!
-	author: Author! @hasInverse(field: "posts")
 }
 
 type UpdateAuthorPayload {
@@ -36,11 +54,9 @@ type UpdatePostPayload {
 }
 
 #######################
-# Enum Definitions
+# Generated Inputs
 #######################
-#######################
-# Input Definitions
-#######################
+
 input AuthorFilter {
 	dgraph: String
 }
@@ -86,15 +102,18 @@ input UpdatePostInput {
 #######################
 # Generated Query
 #######################
+
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter!): [Post!]
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter!): [Author!]
 }
+
 #######################
 # Generated Mutations
 #######################
+
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload

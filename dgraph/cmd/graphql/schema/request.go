@@ -35,7 +35,7 @@ type Request struct {
 // schema s. If the request is GraphQL valid, it must contain a single valid
 // Operation.  If either the request is malformed or doesn't contain a valid
 // operation, all GraphQL errors encountered are returned.
-func (s schema) Operation(req *Request) (Operation, error) {
+func (s *schema) Operation(req *Request) (Operation, error) {
 	if req == nil || req.Query == "" {
 		return nil, gqlerror.Errorf("no query string supplied in request")
 	}
@@ -61,8 +61,9 @@ func (s schema) Operation(req *Request) (Operation, error) {
 	}
 
 	return &operation{op: op,
-		vars:  vars,
-		query: req.Query,
-		doc:   doc,
+		vars:     vars,
+		query:    req.Query,
+		doc:      doc,
+		inSchema: s.schema,
 	}, nil
 }

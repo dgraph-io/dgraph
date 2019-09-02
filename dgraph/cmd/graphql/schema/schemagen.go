@@ -34,13 +34,14 @@ type Handler interface {
 }
 
 type handler struct {
-	Input          string
+	input          string
+	originalDefs   []string
 	completeSchema *ast.Schema
 	dgraphSchema   string
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema)
+	return Stringify(s.completeSchema, s.originalDefs)
 }
 
 func (s *handler) DGSchema() string {
@@ -92,15 +93,15 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	expandSchema(doc)
-
-	var defns []string
+	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
 		if strings.HasPrefix(defn.Name, "__") {
 			continue
 		}
 		defns = append(defns, defn.Name)
 	}
+
+	expandSchema(doc)
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
@@ -116,9 +117,10 @@ func NewHandler(input string) (Handler, error) {
 	completeSchema(sch, defns)
 
 	return &handler{
-		Input:          input,
+		input:          input,
 		dgraphSchema:   dgSchema,
 		completeSchema: sch,
+		originalDefs:   defns,
 	}, nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
@@ -31,7 +32,7 @@ import (
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]string{
 		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-		"Update Post ": `updatePost(id: "0x4", input: {text: "Updated text"}) `,
+		"Update Post ": `updatePost(input: { id: "0x4", patch: { text: "Updated text" } }) `,
 	}
 
 	b, err := ioutil.ReadFile("resolver_mutation_query_test.yaml")
@@ -41,17 +42,17 @@ func TestMutationQueryRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := loadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchema(t, testGQLSchema)
 
 	for name, mut := range testTypes {
-		for _, test := range tests {
-			t.Run(name+test.Name, func(t *testing.T) {
+		for _, tcase := range tests {
+			t.Run(name+tcase.Name, func(t *testing.T) {
 				client := &queryRecorder{}
-				qry := strings.Replace(test.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
+				qry := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
 				resp := resolveWithClient(gqlSchema, qry, client)
 
 				require.Nil(t, resp.Errors)
-				require.Equal(t, test.DGQuery, client.query)
+				require.Equal(t, tcase.DGQuery, client.query)
 			})
 		}
 	}

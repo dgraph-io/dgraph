@@ -94,7 +94,7 @@ type Location struct {
 type Mutation interface {
 	Field
 	MutationType() MutationType
-	MutatedTypeName() string
+	MutatedType() Type
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -103,17 +103,31 @@ type Query interface {
 	QueryType() QueryType
 }
 
-// A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list,
-// ListType is nil.
+// A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
+// ListType is nil.  If it's an object type then Field gets field definitions by
+// name from the definition of the type; IDField gets the ID field of the type.
 type Type interface {
+	Field(name string) FieldDefinition
+	IDField() FieldDefinition
 	Name() string
 	Nullable() bool
 	ListType() Type
 	fmt.Stringer
 }
 
+// A FieldDefinition is a field as defined in some Type in the schema.  As opposed
+// to a Field, which is an instance of a query or mutation asking for a field
+// (which in turn must have a FieldDefinition of the right type in the schema.)
+type FieldDefinition interface {
+	Name() string
+	Type() Type
+	IsID() bool
+	Inverse() (Type, FieldDefinition)
+}
+
 type astType struct {
-	typ *ast.Type
+	typ      *ast.Type
+	inSchema *ast.Schema
 }
 
 type schema struct {
@@ -125,14 +139,21 @@ type operation struct {
 	vars map[string]interface{}
 
 	// The fields below are used by schema introspection queries.
-	query string
-	doc   *ast.QueryDocument
+	query    string
+	doc      *ast.QueryDocument
+	inSchema *ast.Schema
 }
 
 type field struct {
 	field *ast.Field
 	op    *operation
 }
+
+type fieldDefinition struct {
+	fieldDef *ast.FieldDefinition
+	inSchema *ast.Schema
+}
+
 type mutation field
 type query field
 
@@ -225,7 +246,10 @@ func (f *field) IDArgValue() (uint64, error) {
 }
 
 func (f *field) Type() Type {
-	return &astType{typ: f.field.Definition.Type}
+	return &astType{
+		typ:      f.field.Definition.Type,
+		inSchema: f.op.inSchema,
+	}
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -319,26 +343,15 @@ func (m *mutation) ResponseName() string {
 	return (*field)(m).ResponseName()
 }
 
-// MutatedTypeName returns the actual name of the underlying type that gets
-// mutated by m.
+// MutatedType returns the underlying type that gets mutated by m.
 //
 // It's not the same as the response type of m because mutations don't directly
 // return what they mutate.  Mutations return a payload package that includes
 // the actual node mutated as a field.
-//
-// Currently, everything works by convention, so we know the underlying type
-// by stripping away the prefix and suffix.
-func (m *mutation) MutatedTypeName() string {
-	prefix := strings.TrimSuffix(m.Type().Name(), "Payload")
-	switch {
-	case strings.HasPrefix(prefix, "Add"):
-		return strings.TrimPrefix(prefix, "Add")
-	case strings.HasPrefix(prefix, "Update"):
-		return strings.TrimPrefix(prefix, "Update")
-	case strings.HasPrefix(prefix, "Delete"):
-		return strings.TrimPrefix(prefix, "Delete")
-	}
-	return m.Type().Name()
+func (m *mutation) MutatedType() Type {
+	// ATM there's a single field in the mutation payload.
+	// TODO: Need a better way to get this by convention??
+	return m.SelectionSet()[0].Type()
 }
 
 func (m *mutation) MutationType() MutationType {
@@ -352,6 +365,55 @@ func (m *mutation) MutationType() MutationType {
 	default:
 		return NotSupportedMutation
 	}
+}
+
+func (t *astType) Field(name string) FieldDefinition {
+	return &fieldDefinition{
+		// this ForName lookup is a loop in the underlying schema :-(
+		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
+		inSchema: t.inSchema,
+	}
+}
+
+func (fd *fieldDefinition) Name() string {
+	return fd.fieldDef.Name
+}
+
+func (fd *fieldDefinition) IsID() bool {
+	return isID(fd.fieldDef)
+}
+
+func isID(fd *ast.FieldDefinition) bool {
+	// this will change once we have more types of ID fields
+	return fd.Type.Name() == "ID"
+}
+
+func (fd *fieldDefinition) Type() Type {
+	return &astType{
+		typ:      fd.fieldDef.Type,
+		inSchema: fd.inSchema,
+	}
+}
+
+func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
+
+	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
+	if invDirective == nil {
+		return nil, nil
+	}
+
+	invFieldArg := invDirective.Arguments.ForName(inverseArg)
+	if invFieldArg == nil {
+		return nil, nil // really not possible
+	}
+
+	// typ must exist if the schema passed GQL validation
+	typ := fd.inSchema.Types[fd.Type().Name()]
+
+	// fld must exist if the schema passed our validation
+	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
+
+	return fd.Type(), &fieldDefinition{fieldDef: fld, inSchema: fd.inSchema}
 }
 
 func (t *astType) Name() string {
@@ -398,4 +460,22 @@ func (t *astType) String() string {
 	}
 
 	return sb.String()
+}
+
+func (t *astType) IDField() FieldDefinition {
+	def := t.inSchema.Types[t.Name()]
+	if def.Kind != ast.Object {
+		return nil
+	}
+
+	for _, fd := range def.Fields {
+		if isID(fd) {
+			return &fieldDefinition{
+				fieldDef: fd,
+				inSchema: t.inSchema,
+			}
+		}
+	}
+
+	return nil
 }
