@@ -13,7 +13,6 @@
 package backup
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/binary"
@@ -198,86 +197,61 @@ func (m *Manifest) GoString() string {
 func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
-	// TODO: This for loop doesn't seem right. We should only have one iteration here.
-	for itr.Valid() {
-		item := itr.Item()
-		if !bytes.Equal(item.Key(), key) {
-			return list, nil
+	item := itr.Item()
+	if item.Version() < pr.Request.SinceTs || item.IsDeletedOrExpired() {
+		// Ignore versions less than given timestamp, or skip older versions of
+		// the given key by returning an empty list.
+		return list, nil
+	}
+
+	switch item.UserMeta() {
+	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+		l, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "while reading posting list")
 		}
-		if item.Version() < pr.Request.SinceTs {
-			// Ignore versions less than given timestamp, or skip older versions of
-			// the given key.
-			return list, nil
+		kvs, err := l.Rollup()
+		if err != nil {
+			return nil, errors.Wrapf(err, "while rolling up list")
 		}
 
-		switch item.UserMeta() {
-		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
-			l, err := posting.ReadPostingList(key, itr)
-			if err != nil {
-				return nil, errors.Wrapf(err, "while reading posting list")
-			}
-			kvs, err := l.Rollup()
-			if err != nil {
-				return nil, errors.Wrapf(err, "while rolling up list")
-			}
-
-			for _, kv := range kvs {
-				backupKey, err := toBackupKey(kv.Key)
-				if err != nil {
-					return nil, err
-				}
-				kv.Key = backupKey
-
-				backupPl, err := toBackupPostingList(kv.Value)
-				if err != nil {
-					return nil, err
-				}
-				kv.Value = backupPl
-			}
-			list.Kv = append(list.Kv, kvs...)
-
-		case posting.BitSchemaPosting:
-			var valCopy []byte
-			if !item.IsDeletedOrExpired() {
-				// No need to copy value if item is deleted or expired.
-				var err error
-				valCopy, err = item.ValueCopy(nil)
-				if err != nil {
-					return nil, errors.Wrapf(err, "while copying value")
-				}
-			}
-
-			backupKey, err := toBackupKey(key)
+		for _, kv := range kvs {
+			backupKey, err := toBackupKey(kv.Key)
 			if err != nil {
 				return nil, err
 			}
+			kv.Key = backupKey
 
-			kv := &bpb.KV{
-				Key:       backupKey,
-				Value:     valCopy,
-				UserMeta:  []byte{item.UserMeta()},
-				Version:   item.Version(),
-				ExpiresAt: item.ExpiresAt(),
+			backupPl, err := toBackupPostingList(kv.Value)
+			if err != nil {
+				return nil, err
 			}
-			list.Kv = append(list.Kv, kv)
-
-			if item.DiscardEarlierVersions() || item.IsDeletedOrExpired() {
-				return list, nil
-			}
-
-			// Manually advance the iterator. This cannot be done in the for
-			// statement because ReadPostingList advances the iterator so this
-			// only needs to be done for BitSchemaPosting entries.
-			itr.Next()
-
-		default:
-			return nil, errors.Errorf(
-				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+			kv.Value = backupPl
 		}
-	}
+		list.Kv = append(list.Kv, kvs...)
+	case posting.BitSchemaPosting:
+		valCopy, err := item.ValueCopy(nil)
+		if err != nil {
+			return nil, errors.Wrapf(err, "while copying value")
+		}
 
-	// This shouldn't be reached but it's being added here because the golang
-	// compiler complains about the missing return statement.
+		backupKey, err := toBackupKey(key)
+		if err != nil {
+			return nil, err
+		}
+
+		kv := &bpb.KV{
+			Key:       backupKey,
+			Value:     valCopy,
+			UserMeta:  []byte{item.UserMeta()},
+			Version:   item.Version(),
+			ExpiresAt: item.ExpiresAt(),
+		}
+		list.Kv = append(list.Kv, kv)
+	default:
+		return nil, errors.Errorf(
+			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+	}
 	return list, nil
 }
 
