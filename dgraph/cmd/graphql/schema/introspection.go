@@ -34,11 +34,8 @@ func Introspect(ctx context.Context, o Operation,
 	ec := executionContext{reqCtx, sch.schema}
 	// TODO - This might not always be correct, get the correct selection set here.
 	data := ec.handleQuery(ctx, op.op.SelectionSet[0])
-	var buf bytes.Buffer
-	data.MarshalGQL(&buf)
-	d := buf.Bytes()
 
-	return d, nil
+	return data, nil
 }
 
 type RequestContext struct {
@@ -53,41 +50,41 @@ type executionContext struct {
 }
 
 func (ec *executionContext) queryType(ctx context.Context,
-	w *bytes.Buffer, field graphql.CollectedField) (ret graphql.Marshaler) {
+	w *bytes.Buffer, field graphql.CollectedField) {
 	args := field.ArgumentMap(ec.Variables)
 	// TODO - What happens if args is nil?
 	name := args["name"].(string)
 	res := introspection.WrapTypeFromDef(ec.Schema, ec.Schema.Types[name])
-	return ec.marshalType(ctx, w, field.Selections, res)
+	ec.marshalType(ctx, w, field.Selections, res)
 }
 
 func (ec *executionContext) querySchema(ctx context.Context,
-	w *bytes.Buffer, field graphql.CollectedField) (ret graphql.Marshaler) {
+	w *bytes.Buffer, field graphql.CollectedField) {
 	res := introspection.WrapSchema(ec.Schema)
 	if res == nil {
-		return graphql.Null
+		return
 	}
-	return ec.handleSchema(ctx, w, field.Selections, res)
+	ec.handleSchema(ctx, w, field.Selections, res)
 }
 
 func (ec *executionContext) handleTypeFields(ctx context.Context, w *bytes.Buffer,
-	field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+	field graphql.CollectedField, obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.Fields(args["includeDeprecated"].(bool))
-	return ec.marshalIntrospectionFieldSlice(ctx, w, field.Selections, res)
+	ec.marshalIntrospectionFieldSlice(ctx, w, field.Selections, res)
 }
 
 func (ec *executionContext) handleTypeEnumValues(ctx context.Context, w *bytes.Buffer,
 	field graphql.CollectedField,
-	obj *introspection.Type) (ret graphql.Marshaler) {
+	obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.EnumValues(args["includeDeprecated"].(bool))
 	if res == nil {
 		// TODO - Verify we handle types that can/cannot be null properly. Also add test cases for
 		// them.
-		return graphql.Null
+		return
 	}
-	return ec.marshalOptionalEnumValueSlice(ctx, w, field.Selections, res)
+	ec.marshalOptionalEnumValueSlice(ctx, w, field.Selections, res)
 }
 
 func writeKey(w *bytes.Buffer, k string) {
@@ -115,12 +112,11 @@ func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet, satisfies []
 }
 
 func (ec *executionContext) handleQuery(ctx context.Context,
-	sel ast.Selection) graphql.Marshaler {
+	sel ast.Selection) []byte {
 	fields := collectFields(ec.RequestContext, ast.SelectionSet{sel}, []string{"Query"})
 	w := new(bytes.Buffer)
 	w.WriteRune('{')
 
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -131,37 +127,22 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 		switch field.Name {
 		// TODO - Add tests for __typename.
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("Query")
 			w.WriteString(`"Query"`)
 		case "__type":
-			out.Values[i] = ec.queryType(ctx, w, field)
+			ec.queryType(ctx, w, field)
 		case "__schema":
-			out.Values[i] = ec.querySchema(ctx, w, field)
+			ec.querySchema(ctx, w, field)
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	// var buf bytes.Buffer
-	// out.MarshalGQL(&buf)
-	// original := buf.Bytes()
-	// new := w.String()
-	// fmt.Println(string(original))
-	// fmt.Println(new)
-	// diff := cmp.Diff(string(original), new)
-	// fmt.Printf("diff: %+v\n", diff)
-	// if diff != "" {
-	// 	fmt.Printf("diff: %+v\n", diff)
-	// }
-
-	return out
+	return w.Bytes()
 }
 
 func (ec *executionContext) handleDirective(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.Directive) graphql.Marshaler {
+	obj *introspection.Directive) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Directive"})
 
-	out := graphql.NewFieldSet(fields)
 	w.WriteRune('{')
 	for i, field := range fields {
 		if i != 0 {
@@ -171,32 +152,27 @@ func (ec *executionContext) handleDirective(ctx context.Context, w *bytes.Buffer
 		switch field.Name {
 		case "__typename":
 			w.WriteString(`"__Directive"`)
-			out.Values[i] = graphql.MarshalString("__Directive")
 		case "name":
 			writeStringValue(w, obj.Name)
-			out.Values[i] = ec.marshalNString2string(ctx, field.Selections, obj.Name)
 		case "description":
 			writeStringValue(w, obj.Description)
-			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "locations":
-			out.Values[i] = ec.marshalDirectionLocationSlice(ctx, w, field.Selections,
+			ec.marshalDirectionLocationSlice(ctx, w, field.Selections,
 				obj.Locations)
 		case "args":
-			out.Values[i] = ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
+			ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	return out
+	return
 }
 
 func (ec *executionContext) handleEnumValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.EnumValue) graphql.Marshaler {
+	obj *introspection.EnumValue) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__EnumValue"})
 
 	w.WriteRune('{')
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -204,34 +180,27 @@ func (ec *executionContext) handleEnumValue(ctx context.Context, w *bytes.Buffer
 		writeKey(w, field.Name)
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("__EnumValue")
+			writeStringValue(w, "__EnumValue")
 		case "name":
 			writeStringValue(w, obj.Name)
-			out.Values[i] = ec.marshalNString2string(ctx, field.Selections, obj.Name)
 		case "description":
 			writeStringValue(w, obj.Description)
-			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "isDeprecated":
 			writeBoolValue(w, obj.IsDeprecated())
-			out.Values[i] = ec.marshalNBoolean2bool(ctx, field.Selections, obj.IsDeprecated())
 		case "deprecationReason":
 			writeOptionalStringValue(w, obj.DeprecationReason())
-			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
-				obj.DeprecationReason())
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	return out
+	return
 }
 
 func (ec *executionContext) handleField(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.Field) graphql.Marshaler {
+	obj *introspection.Field) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Field"})
 
 	w.WriteRune('{')
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -240,39 +209,30 @@ func (ec *executionContext) handleField(ctx context.Context, w *bytes.Buffer, se
 		switch field.Name {
 		case "__typename":
 			writeStringValue(w, "__Field")
-			out.Values[i] = graphql.MarshalString("__Field")
 		case "name":
 			writeStringValue(w, obj.Name)
-			out.Values[i] = ec.marshalNString2string(ctx, field.Selections, obj.Name)
 		case "description":
 			writeStringValue(w, obj.Description)
-			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "args":
-			out.Values[i] = ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
+			ec.marshalInputValueSlice(ctx, w, field.Selections, obj.Args)
 		case "type":
-			out.Values[i] = ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
+			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
 		case "isDeprecated":
 			writeBoolValue(w, obj.IsDeprecated())
-			out.Values[i] = ec.marshalNBoolean2bool(ctx, field.Selections,
-				obj.IsDeprecated())
 		case "deprecationReason":
 			writeOptionalStringValue(w, obj.DeprecationReason())
-			out.Values[i] = ec.marshalOString2string(ctx, field.Selections,
-				obj.DeprecationReason())
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	return out
+	return
 }
 
 func (ec *executionContext) handleInputValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.InputValue) graphql.Marshaler {
+	obj *introspection.InputValue) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__InputValue"})
 
 	w.WriteRune('{')
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -281,32 +241,25 @@ func (ec *executionContext) handleInputValue(ctx context.Context, w *bytes.Buffe
 		switch field.Name {
 		case "__typename":
 			writeStringValue(w, "__InputValue")
-			out.Values[i] = graphql.MarshalString("__InputValue")
 		case "name":
 			writeStringValue(w, obj.Name)
-			out.Values[i] = ec.marshalNString2string(ctx, field.Selections, obj.Name)
 		case "description":
 			writeStringValue(w, obj.Description)
-			out.Values[i] = graphql.MarshalString(obj.Description)
 		case "type":
-			out.Values[i] = ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
+			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.Type)
 		case "defaultValue":
 			writeOptionalStringValue(w, obj.DefaultValue)
-			out.Values[i] = ec.marshalOString2string(ctx, field.Selections, obj.DefaultValue)
 		default:
 		}
 	}
-	out.Dispatch()
 	w.WriteRune('}')
-	return out
 }
 
 func (ec *executionContext) handleSchema(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	obj *introspection.Schema) graphql.Marshaler {
+	obj *introspection.Schema) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Schema"})
 
 	w.WriteRune('{')
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -315,23 +268,20 @@ func (ec *executionContext) handleSchema(ctx context.Context, w *bytes.Buffer, s
 		switch field.Name {
 		case "__typename":
 			writeStringValue(w, "__Schema")
-			out.Values[i] = graphql.MarshalString("__Schema")
 		case "types":
-			out.Values[i] = ec.marshalIntrospectionTypeSlice(ctx, w, field.Selections, obj.Types())
+			ec.marshalIntrospectionTypeSlice(ctx, w, field.Selections, obj.Types())
 		case "queryType":
-			out.Values[i] = ec.marshalIntrospectionType(ctx, w, field.Selections, obj.QueryType())
+			ec.marshalIntrospectionType(ctx, w, field.Selections, obj.QueryType())
 		case "mutationType":
-			out.Values[i] = ec.marshalType(ctx, w, field.Selections, obj.MutationType())
+			ec.marshalType(ctx, w, field.Selections, obj.MutationType())
 		case "subscriptionType":
-			out.Values[i] = ec.marshalType(ctx, w, field.Selections, obj.SubscriptionType())
+			ec.marshalType(ctx, w, field.Selections, obj.SubscriptionType())
 		case "directives":
-			out.Values[i] = ec.marshalDirectiveSlice(ctx, w, field.Selections, obj.Directives())
+			ec.marshalDirectiveSlice(ctx, w, field.Selections, obj.Directives())
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	return out
 }
 
 func writeStringValue(w *bytes.Buffer, val string) {
@@ -361,11 +311,10 @@ func writeStringSlice(w *bytes.Buffer, vals []string) {
 }
 
 func (ec *executionContext) handleType(ctx context.Context, w *bytes.Buffer,
-	sel ast.SelectionSet, obj *introspection.Type) graphql.Marshaler {
+	sel ast.SelectionSet, obj *introspection.Type) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
 
 	w.WriteRune('{')
-	out := graphql.NewFieldSet(fields)
 	for i, field := range fields {
 		if i != 0 {
 			w.WriteRune(',')
@@ -374,238 +323,160 @@ func (ec *executionContext) handleType(ctx context.Context, w *bytes.Buffer,
 		switch field.Name {
 		case "__typename":
 			w.WriteString(`"__Type`)
-			out.Values[i] = graphql.MarshalString("__Type")
 		case "kind":
 			writeStringValue(w, obj.Kind())
-			out.Values[i] = ec.marshalNTypeKind2string(ctx, field.Selections, obj.Kind())
-			if out.Values[i] == graphql.Null {
-				return graphql.Null
-			}
 		case "name":
 			writeOptionalStringValue(w, obj.Name())
-			out.Values[i] = ec.marshalOString2string(ctx, field.Selections, obj.Name())
 		case "description":
 			writeStringValue(w, obj.Description())
-			out.Values[i] = graphql.MarshalString(obj.Description())
 		case "fields":
-			out.Values[i] = ec.handleTypeFields(ctx, w, field, obj)
+			ec.handleTypeFields(ctx, w, field, obj)
 		case "interfaces":
-			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, w, field.Selections, obj.Interfaces())
+			ec.marshalOptionalItypeSlice(ctx, w, field.Selections, obj.Interfaces())
 		case "possibleTypes":
-			out.Values[i] = ec.marshalOptionalItypeSlice(ctx, w, field.Selections,
+			ec.marshalOptionalItypeSlice(ctx, w, field.Selections,
 				obj.PossibleTypes())
 		case "enumValues":
-			out.Values[i] = ec.handleTypeEnumValues(ctx, w, field, obj)
+			ec.handleTypeEnumValues(ctx, w, field, obj)
 		case "inputFields":
-			out.Values[i] = ec.marshalOptionalInputValueSlice(ctx, w, field.Selections,
+			ec.marshalOptionalInputValueSlice(ctx, w, field.Selections,
 				obj.InputFields())
 		case "ofType":
-			out.Values[i] = ec.marshalType(ctx, w, field.Selections, obj.OfType())
+			ec.marshalType(ctx, w, field.Selections, obj.OfType())
 		default:
 		}
 	}
 	w.WriteRune('}')
-	out.Dispatch()
-	return out
-}
-
-func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet,
-	v bool) graphql.Marshaler {
-	res := graphql.MarshalBoolean(v)
-	if res == graphql.Null {
-		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
-		// 	ec.Errorf(ctx, "must not be null")
-		// }
-	}
-	return res
-}
-
-func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.SelectionSet,
-	v string) graphql.Marshaler {
-	res := graphql.MarshalString(v)
-	if res == graphql.Null {
-		// TODO - Check that resolver gets this information.
-		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
-		// 	ec.Errorf(ctx, "must not be null")
-		// }
-	}
-	return res
 }
 
 func (ec *executionContext) marshalDirectiveSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Directive) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
+	v []introspection.Directive) {
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleDirective(ctx, w, sel, &v[i])
+		ec.handleDirective(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
-}
-
-func (ec *executionContext) marshalDirectionLocation(ctx context.Context,
-	sel ast.SelectionSet, v string) graphql.Marshaler {
-	res := graphql.MarshalString(v)
-	if res == graphql.Null {
-		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
-		// 	ec.Errorf(ctx, "must not be null")
-		// }
-	}
-	return res
+	return
 }
 
 func (ec *executionContext) marshalDirectionLocationSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []string) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
+	w *bytes.Buffer, sel ast.SelectionSet, v []string) {
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
 		writeStringValue(w, v[i])
-		ret[i] = ec.marshalDirectionLocation(ctx, sel, v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 func (ec *executionContext) marshalInputValueSlice(ctx context.Context, w *bytes.Buffer,
-	sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
+	sel ast.SelectionSet, v []introspection.InputValue) {
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleInputValue(ctx, w, sel, &v[i])
+		ec.handleInputValue(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Type) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-
+	v []introspection.Type) {
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleType(ctx, w, sel, &v[i])
+		ec.handleType(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalIntrospectionType(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v *introspection.Type) graphql.Marshaler {
+	v *introspection.Type) {
 	if v == nil {
 		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
 		// 	ec.Errorf(ctx, "must not be null")
 		// }
-		return graphql.Null
+		// return graphql.Null
 	}
-	return ec.handleType(ctx, w, sel, v)
-}
-
-func (ec *executionContext) marshalNTypeKind2string(ctx context.Context, sel ast.SelectionSet,
-	v string) graphql.Marshaler {
-	res := graphql.MarshalString(v)
-	if res == graphql.Null {
-		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
-		// 	ec.Errorf(ctx, "must not be null")
-		// }
-	}
-	return res
-}
-
-func (ec *executionContext) marshalOString2string(ctx context.Context, sel ast.SelectionSet,
-	v *string) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	return graphql.MarshalString(*v)
+	ec.handleType(ctx, w, sel, v)
 }
 
 func (ec *executionContext) marshalOptionalEnumValueSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	ret := make(graphql.Array, len(v))
+	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.EnumValue) {
+	// if v == nil {
+	// 	return graphql.Null
+	// }
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleEnumValue(ctx, w, sel, &v[i])
+		ec.handleEnumValue(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalIntrospectionFieldSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.Field) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	ret := make(graphql.Array, len(v))
+	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.Field) {
+	// if v == nil {
+	// 	return graphql.Null
+	// }
 	w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleField(ctx, w, sel, &v[i])
+		ec.handleField(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalOptionalInputValueSlice(ctx context.Context,
-	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
+	w *bytes.Buffer, sel ast.SelectionSet, v []introspection.InputValue) {
 	if v == nil {
 		w.WriteString(`null`)
-		return graphql.Null
+		return
+		// return graphql.Null
 	}
 	w.WriteRune('[')
-	ret := make(graphql.Array, len(v))
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleInputValue(ctx, w, sel, &v[i])
+		ec.handleInputValue(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalOptionalItypeSlice(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
-	v []introspection.Type) graphql.Marshaler {
+	v []introspection.Type) {
 	if v == nil {
 		w.WriteString("null")
-		return graphql.Null
+		return
 	}
 
 	w.WriteRune('[')
-	ret := make(graphql.Array, len(v))
 	for i := range v {
 		if i != 0 {
 			w.WriteRune(',')
 		}
-		ret[i] = ec.handleType(ctx, w, sel, &v[i])
+		ec.handleType(ctx, w, sel, &v[i])
 	}
 	w.WriteRune(']')
-	return ret
 }
 
 func (ec *executionContext) marshalType(ctx context.Context, w *bytes.Buffer,
-	sel ast.SelectionSet, v *introspection.Type) graphql.Marshaler {
+	sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
 		w.WriteString(`null`)
-		return graphql.Null
+		return
 	}
-	return ec.handleType(ctx, w, sel, v)
+	ec.handleType(ctx, w, sel, v)
 }
