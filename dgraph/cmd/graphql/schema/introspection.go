@@ -26,11 +26,14 @@ func Introspect(ctx context.Context, o Operation,
 	}
 
 	// TODO - Fill in graphql variables here instead of an empty map.
-	reqCtx := graphql.NewRequestContext(op.doc, op.query, map[string]interface{}{})
-	ctx = graphql.WithRequestContext(ctx, reqCtx)
-
+	reqCtx := &RequestContext{
+		RawQuery:  op.query,
+		Variables: map[string]interface{}{},
+		Doc:       op.doc,
+	}
 	ec := executionContext{reqCtx, sch.schema}
-	data := ec.handleQuery(ctx, op.op.SelectionSet)
+	// TODO - This might not always be correct, get the correct selection set here.
+	data := ec.handleQuery(ctx, op.op.SelectionSet[0])
 	var buf bytes.Buffer
 	data.MarshalGQL(&buf)
 	d := buf.Bytes()
@@ -38,8 +41,14 @@ func Introspect(ctx context.Context, o Operation,
 	return d, nil
 }
 
+type RequestContext struct {
+	RawQuery  string
+	Variables map[string]interface{}
+	Doc       *ast.QueryDocument
+}
+
 type executionContext struct {
-	*graphql.RequestContext
+	*RequestContext
 	*ast.Schema
 }
 
@@ -96,9 +105,18 @@ func writeBoolValue(w *bytes.Buffer, val bool) {
 	}
 }
 
+func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet, satisfies []string) []graphql.CollectedField {
+	rctx := &graphql.RequestContext{
+		RawQuery:  reqCtx.RawQuery,
+		Variables: reqCtx.Variables,
+		Doc:       reqCtx.Doc,
+	}
+	return graphql.CollectFields(rctx, selSet, satisfies)
+}
+
 func (ec *executionContext) handleQuery(ctx context.Context,
-	sel ast.SelectionSet) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"Query"})
+	sel ast.Selection) graphql.Marshaler {
+	fields := collectFields(ec.RequestContext, ast.SelectionSet{sel}, []string{"Query"})
 	w := new(bytes.Buffer)
 	w.WriteRune('{')
 
@@ -141,7 +159,7 @@ func (ec *executionContext) handleQuery(ctx context.Context,
 
 func (ec *executionContext) handleDirective(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	obj *introspection.Directive) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__Directive"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__Directive"})
 
 	out := graphql.NewFieldSet(fields)
 	w.WriteRune('{')
@@ -175,7 +193,7 @@ func (ec *executionContext) handleDirective(ctx context.Context, w *bytes.Buffer
 
 func (ec *executionContext) handleEnumValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	obj *introspection.EnumValue) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__EnumValue"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__EnumValue"})
 
 	w.WriteRune('{')
 	out := graphql.NewFieldSet(fields)
@@ -210,7 +228,7 @@ func (ec *executionContext) handleEnumValue(ctx context.Context, w *bytes.Buffer
 
 func (ec *executionContext) handleField(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	obj *introspection.Field) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__Field"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__Field"})
 
 	w.WriteRune('{')
 	out := graphql.NewFieldSet(fields)
@@ -251,7 +269,7 @@ func (ec *executionContext) handleField(ctx context.Context, w *bytes.Buffer, se
 
 func (ec *executionContext) handleInputValue(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	obj *introspection.InputValue) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__InputValue"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__InputValue"})
 
 	w.WriteRune('{')
 	out := graphql.NewFieldSet(fields)
@@ -285,7 +303,7 @@ func (ec *executionContext) handleInputValue(ctx context.Context, w *bytes.Buffe
 
 func (ec *executionContext) handleSchema(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	obj *introspection.Schema) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__Schema"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__Schema"})
 
 	w.WriteRune('{')
 	out := graphql.NewFieldSet(fields)
@@ -344,7 +362,7 @@ func writeStringSlice(w *bytes.Buffer, vals []string) {
 
 func (ec *executionContext) handleType(ctx context.Context, w *bytes.Buffer,
 	sel ast.SelectionSet, obj *introspection.Type) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.RequestContext, sel, []string{"__Type"})
+	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
 
 	w.WriteRune('{')
 	out := graphql.NewFieldSet(fields)
@@ -395,9 +413,9 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	v bool) graphql.Marshaler {
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
-		if !ec.HasError(graphql.GetResolverContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
+		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
+		// 	ec.Errorf(ctx, "must not be null")
+		// }
 	}
 	return res
 }
@@ -407,9 +425,9 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		// TODO - Check that resolver gets this information.
-		if !ec.HasError(graphql.GetResolverContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
+		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
+		// 	ec.Errorf(ctx, "must not be null")
+		// }
 	}
 	return res
 }
@@ -432,9 +450,9 @@ func (ec *executionContext) marshalDirectionLocation(ctx context.Context,
 	sel ast.SelectionSet, v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
-		if !ec.HasError(graphql.GetResolverContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
+		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
+		// 	ec.Errorf(ctx, "must not be null")
+		// }
 	}
 	return res
 }
@@ -485,9 +503,9 @@ func (ec *executionContext) marshalIntrospectionTypeSlice(ctx context.Context, w
 func (ec *executionContext) marshalIntrospectionType(ctx context.Context, w *bytes.Buffer, sel ast.SelectionSet,
 	v *introspection.Type) graphql.Marshaler {
 	if v == nil {
-		if !ec.HasError(graphql.GetResolverContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
+		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
+		// 	ec.Errorf(ctx, "must not be null")
+		// }
 		return graphql.Null
 	}
 	return ec.handleType(ctx, w, sel, v)
@@ -497,9 +515,9 @@ func (ec *executionContext) marshalNTypeKind2string(ctx context.Context, sel ast
 	v string) graphql.Marshaler {
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
-		if !ec.HasError(graphql.GetResolverContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
+		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
+		// 	ec.Errorf(ctx, "must not be null")
+		// }
 	}
 	return res
 }

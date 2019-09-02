@@ -149,6 +149,15 @@ type field struct {
 	op    *operation
 }
 
+type collectorField struct {
+	field      *ast.Field
+	selections ast.SelectionSet
+}
+
+type selectionSet struct {
+	selections ast.SelectionSet
+}
+
 type fieldDefinition struct {
 	fieldDef *ast.FieldDefinition
 	inSchema *ast.Schema
