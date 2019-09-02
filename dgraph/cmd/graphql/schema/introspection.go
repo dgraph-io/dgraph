@@ -13,16 +13,16 @@ import (
 )
 
 // Introspect performs an introspection query given an operation (contains the query) and a schema.
-func Introspect(ctx context.Context, o Operation,
-	s Schema) (json.RawMessage, error) {
+func Introspect(ctx context.Context, o Operation, s Schema) (json.RawMessage,
+	error) {
 	sch, ok := s.(*schema)
 	if !ok {
-		return nil, errors.New("Couldn't convert schema to internal type")
+		return nil, errors.New("couldn't convert schema to internal type")
 	}
 
 	op, ok := o.(*operation)
 	if !ok {
-		return nil, errors.New("Couldn't convert operation to internal type")
+		return nil, errors.New("couldn't convert operation to internal type")
 	}
 
 	// TODO - Fill in graphql variables here instead of an empty map.
@@ -158,15 +158,13 @@ func (ec *executionContext) handleDirective(ctx context.Context,
 		case "description":
 			writeStringValue(ec.w, obj.Description)
 		case "locations":
-			ec.marshalDirectionLocationSlice(ctx, field.Selections,
-				obj.Locations)
+			ec.marshalDirectionLocationSlice(ctx, obj.Locations)
 		case "args":
 			ec.marshalInputValueSlice(ctx, field.Selections, obj.Args)
 		default:
 		}
 	}
 	ec.w.WriteRune('}')
-	return
 }
 
 func (ec *executionContext) handleEnumValue(ctx context.Context, sel ast.SelectionSet,
@@ -194,7 +192,6 @@ func (ec *executionContext) handleEnumValue(ctx context.Context, sel ast.Selecti
 		}
 	}
 	ec.w.WriteRune('}')
-	return
 }
 
 func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSet,
@@ -226,7 +223,6 @@ func (ec *executionContext) handleField(ctx context.Context, sel ast.SelectionSe
 		}
 	}
 	ec.w.WriteRune('}')
-	return
 }
 
 func (ec *executionContext) handleInputValue(ctx context.Context,
@@ -297,20 +293,6 @@ func writeOptionalStringValue(w *bytes.Buffer, val *string) {
 	}
 }
 
-func writeStringSlice(w *bytes.Buffer, vals []string) {
-	w.WriteRune('[')
-	for i, v := range vals {
-		if i != 0 {
-			w.WriteRune(',')
-		}
-		w.WriteRune('"')
-		w.WriteString(v)
-		w.WriteRune('"')
-	}
-	w.WriteRune(']')
-	w.WriteRune('"')
-}
-
 func (ec *executionContext) handleType(ctx context.Context,
 	sel ast.SelectionSet, obj *introspection.Type) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
@@ -360,11 +342,9 @@ func (ec *executionContext) marshalDirectiveSlice(ctx context.Context,
 		ec.handleDirective(ctx, sel, &v[i])
 	}
 	ec.w.WriteRune(']')
-	return
 }
 
-func (ec *executionContext) marshalDirectionLocationSlice(ctx context.Context,
-	sel ast.SelectionSet, v []string) {
+func (ec *executionContext) marshalDirectionLocationSlice(ctx context.Context, v []string) {
 	ec.w.WriteRune('[')
 	for i := range v {
 		if i != 0 {
