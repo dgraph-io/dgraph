@@ -242,13 +242,14 @@ func searchableMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 			possibleSearchables = append(possibleSearchables, name)
 		}
 	}
-	sort.Strings(possibleSearchables)
 
 	if len(possibleSearchables) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
 		return "searchable by just @searchable"
 	} else if len(possibleSearchables) == 0 {
 		return "not searchable"
 	}
+
+	sort.Strings(possibleSearchables)
 	return fmt.Sprintf(
 		"searchable by %s and %s",
 		strings.Join(possibleSearchables[:len(possibleSearchables)-1], ", "),
