@@ -145,7 +145,7 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 			},
 		},
 		Children: []*gql.GraphQuery{
-			&gql.GraphQuery{
+			{
 				Attr: "uid",
 			},
 		},
