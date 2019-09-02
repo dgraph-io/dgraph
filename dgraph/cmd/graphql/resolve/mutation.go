@@ -157,6 +157,11 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	}
 
 	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
+			mr.mutation.Name())
+		return res
+	}
 
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
