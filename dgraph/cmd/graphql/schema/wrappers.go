@@ -94,6 +94,7 @@ type Mutation interface {
 	Field
 	MutationType() MutationType
 	MutatedType() Type
+	QueryField() Field
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -326,6 +327,12 @@ func (m *mutation) IDArgValue() (uint64, error) {
 
 func (m *mutation) SelectionSet() []Field {
 	return (*field)(m).SelectionSet()
+}
+
+func (m *mutation) QueryField() Field {
+	// TODO: All our mutations currently have exactly 1 field, but that will change
+	// - need a better way to get the right field by convention.
+	return m.SelectionSet()[0]
 }
 
 func (m *mutation) Location() *Location {
