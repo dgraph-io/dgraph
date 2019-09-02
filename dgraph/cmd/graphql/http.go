@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"mime"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -47,10 +49,22 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
+	defer func() {
+		// This function makes sure that we recover from panics during execution of the request
+		// and return appropriate error to the user.
+		if err := recover(); err != nil {
+			glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
+				api.RequestID(r.Context()), string(debug.Stack()))
+			rr := schema.ErrorResponsef("Internal Server Error")
+			if _, err := rr.WriteTo(w); err != nil {
+				glog.Error(err)
+			}
+		}
+	}()
+
 	rh := gh.resolverForRequest(r)
 	res := rh.Resolve(r.Context())
-	_, err := res.WriteTo(w)
-	if err != nil {
+	if _, err := res.WriteTo(w); err != nil {
 		glog.Error(err)
 	}
 }
