@@ -1385,7 +1385,6 @@ amount: float .`))
     _:user3 <amount> "10" .
     _:user3 <age> "30" .
     _:user3 <active> "1" .
-    _:user3 <openDate> "1980-01-01" .
     _:user3 <password> "password" .
     _:user3 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
   }
@@ -1443,6 +1442,8 @@ upsert {
 	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
+	// User3 doesn't have all the fields. This test ensures
+	// that val works when not all records have the values
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	testutil.CompareJSON(t, res, expectedRes)
 }
@@ -1506,18 +1507,22 @@ upsert {
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "Fuller Street, SF")
 
-	// Resetting the val in upsert, to check if the values are not switched
+	// Resetting the val in upsert to check if the
+	// values are not switched and the interest is added
 	m3 := `
 upsert {
   query {
     u as var(func: has(amount)) {
       amt as amount 
     }
+    me () {
+      updated_amt as math(amt+1)
+    }
   }
 
   mutation {
     set {
-      uid(u) <amount> val(amt) .
+      uid(u) <amount> val(updated_amt) .
     }
   }
 }
@@ -1533,15 +1538,15 @@ upsert {
     "q": [{
        "name": "user3",
        "branch": "Fuller Street, SF",
-       "amount": 1000.000000
+       "amount": 1001.000000
      }, {
        "name": "user1",
        "branch": "Fuller Street, SF",
-       "amount": 10.000000
+       "amount": 11.000000
      }, {
        "name": "user2",
        "branch": "Fuller Street, SF",
-       "amount": 100.000000
+       "amount": 101.000000
      }]
    }
 }`
@@ -1596,19 +1601,43 @@ upsert {
     "q": [{
        "name": "user3",
        "branch": "Fuller Street, SF",
-       "amount": 1000.000000
+       "amount": 1001.000000
      }, {
        "name": "user1",
        "branch": "Fuller Street, SF",
-       "amount": 1000.000000
+       "amount": 1001.000000
      }, {
        "name": "user2",
        "branch": "Fuller Street, SF",
-       "amount": 1000.000000
+       "amount": 1001.000000
      }]
    }
 }`
 	testutil.CompareJSON(t, res, expectedRes)
+
+	// Checking Delete in Val
+	m7 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+  
+  mutation {
+    delete {
+      uid(u) <amount> val(amt) .
+    }
+  }
+}
+`
+
+	_, _, _, err = mutationWithTs(m7, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "amount")
 
 	// Bulk Delete: delete everyone's branch
 	m4 := `
