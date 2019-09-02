@@ -19,7 +19,6 @@ package resolve
 import (
 	"bytes"
 	"context"
-	"strconv"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -58,6 +57,7 @@ type mutationResolver struct {
 	mutation         schema.Mutation
 	schema           schema.Schema
 	mutationRewriter dgraph.MutationRewriter
+	queryRewriter    dgraph.QueryRewriter
 	dgraph           dgraph.Client
 }
 
@@ -115,11 +115,12 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 	var res *resolved
 	switch mr.mutation.MutationType() {
 	case schema.AddMutation:
-		res = mr.resolveAddMutation(ctx)
+		res = mr.resolveMutation(ctx)
 	case schema.DeleteMutation:
 		res = mr.resolveDeleteMutation(ctx)
 	case schema.UpdateMutation:
-		res = mr.resolveUpdateMutation(ctx)
+		// TODO: this should typecheck the input before resolving (like delete does)
+		res = mr.resolveMutation(ctx)
 	default:
 		return &resolved{
 			err: gqlerror.Errorf(
@@ -139,7 +140,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 	return res
 }
 
-func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
+func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	res := &resolved{}
 
 	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
@@ -155,31 +156,16 @@ func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 		return res
 	}
 
-	uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
+	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
+
+	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
-		res.err = schema.GQLWrapf(err,
-			"[%s] recieved assigned from Dgraph, but couldn't parse as uint64",
-			api.RequestID(ctx))
+		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+			mr.mutation.Name())
 		return res
 	}
 
-	// All our mutations currently have exactly 1 field
-	f := mr.mutation.SelectionSet()[0]
-	qb := dgraph.NewQueryBuilder().
-		WithAttr(f.ResponseName()).
-		WithUIDRoot(uid).
-		WithSelectionSetFrom(f)
-
-	resp, err := mr.dgraph.Query(ctx, qb)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "[%s] mutation %s created node 0x%x but query failed",
-			api.RequestID(ctx), mr.mutation.Name(), uid)
-		return res
-	}
-
-	completed, err := completeDgraphResult(ctx, f, resp)
-	res.data = completed
-	res.err = err
+	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
 	return res
 }
 
@@ -208,50 +194,5 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 	}
 
 	res.data = []byte(`{ "msg": "Deleted" }`)
-	return res
-}
-
-func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved {
-	res := &resolved{}
-
-	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res
-	}
-
-	_, err = mr.dgraph.Mutate(ctx, mut)
-	if err != nil {
-		res.err = schema.GQLWrapf(err,
-			"[%s] couldn't run mutation mutation", api.RequestID(ctx))
-		return res
-	}
-
-	// FIXME: this will go in the next PR that does a refactor of how query
-	// rewriting works.
-	uid, err := mr.mutationRewriter.GetUpdUID(mr.mutation)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't get uid for mutation")
-		return res
-	}
-
-	// All our mutations currently have exactly 1 field
-	f := mr.mutation.SelectionSet()[0]
-	qb := dgraph.NewQueryBuilder().
-		WithAttr(f.ResponseName()).
-		WithUIDRoot(uid).
-		WithSelectionSetFrom(f)
-
-	resp, err := mr.dgraph.Query(ctx, qb)
-	if err != nil {
-		res.err = schema.GQLWrapf(err,
-			"[%s] mutation %s updated node 0x%x but query failed",
-			api.RequestID(ctx), mr.mutation.Name(), uid)
-		return res
-	}
-
-	completed, err := completeDgraphResult(ctx, f, resp)
-	res.data = completed
-	res.err = err
 	return res
 }

@@ -24,36 +24,27 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // queryResolver can resolve a single GraphQL query field
 type queryResolver struct {
-	query  schema.Query
-	schema schema.Schema
-	dgraph dgraph.Client
+	query         schema.Query
+	schema        schema.Schema
+	dgraph        dgraph.Client
+	queryRewriter dgraph.QueryRewriter
 }
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
-	var qb *dgraph.QueryBuilder
 
-	// currently only handles getT(id: "0x123") queries
-	switch qr.query.QueryType() {
-	case schema.GetQuery:
-		qb = dgraph.NewQueryBuilder().
-			WithAttr(qr.query.ResponseName()).
-			WithIDArgRoot(qr.query).
-			WithTypeFilter(qr.query.Type().Name()).
-			WithSelectionSetFrom(qr.query)
-		// TODO: also builder.withPagination() ... etc ...
-	default:
-		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
+	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite query")
 		return res
 	}
 
-	resp, err := qr.dgraph.Query(ctx, qb)
+	resp, err := qr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
