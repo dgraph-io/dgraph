@@ -33,6 +33,25 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
+func recoveryHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			// This function makes sure that we recover from panics during execution of the request
+			// and return appropriate error to the user.
+			if err := recover(); err != nil {
+				glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
+					api.RequestID(r.Context()), string(debug.Stack()))
+				rr := schema.ErrorResponsef("Internal Server Error")
+				if _, err := rr.WriteTo(w); err != nil {
+					glog.Error(err)
+				}
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
 	schema       *ast.Schema
@@ -48,19 +67,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !gh.isValid() {
 		panic("graphqlHandler not initialised")
 	}
-
-	defer func() {
-		// This function makes sure that we recover from panics during execution of the request
-		// and return appropriate error to the user.
-		if err := recover(); err != nil {
-			glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
-				api.RequestID(r.Context()), string(debug.Stack()))
-			rr := schema.ErrorResponsef("Internal Server Error")
-			if _, err := rr.WriteTo(w); err != nil {
-				glog.Error(err)
-			}
-		}
-	}()
 
 	rh := gh.resolverForRequest(r)
 	res := rh.Resolve(r.Context())
