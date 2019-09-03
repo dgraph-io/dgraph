@@ -147,15 +147,7 @@ type operation struct {
 type field struct {
 	field *ast.Field
 	op    *operation
-}
-
-type collectorField struct {
-	field      *ast.Field
-	selections ast.SelectionSet
-}
-
-type selectionSet struct {
-	selections ast.SelectionSet
+	sel   ast.Selection
 }
 
 type fieldDefinition struct {
@@ -185,7 +177,7 @@ func (o *operation) Queries() (qs []Query) {
 
 	for _, s := range o.op.SelectionSet {
 		if f, ok := s.(*ast.Field); ok {
-			qs = append(qs, &query{field: f, op: o})
+			qs = append(qs, &query{field: f, op: o, sel: s})
 		}
 	}
 

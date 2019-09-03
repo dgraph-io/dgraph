@@ -22,7 +22,7 @@ import (
 // gqlgen instead if they make more sense.
 
 // Introspect performs an introspection query given an operation (contains the query) and a schema.
-func Introspect(o Operation, s Schema) (json.RawMessage, error) {
+func Introspect(o Operation, q Query, s Schema) (json.RawMessage, error) {
 	sch, ok := s.(*schema)
 	if !ok {
 		return nil, errors.New("couldn't convert schema to internal type")
@@ -33,14 +33,18 @@ func Introspect(o Operation, s Schema) (json.RawMessage, error) {
 		return nil, errors.New("couldn't convert operation to internal type")
 	}
 
+	qu, ok := q.(*query)
+	if !ok {
+		return nil, errors.New("couldn't convert query to internal type")
+	}
+
 	reqCtx := &requestContext{
 		RawQuery:  op.query,
 		Variables: op.vars,
 		Doc:       op.doc,
 	}
 	ec := executionContext{reqCtx, sch.schema, new(bytes.Buffer)}
-	// TODO - This might not always be correct, get the correct selection set here.
-	return ec.handleQuery(op.op.SelectionSet[0]), nil
+	return ec.handleQuery(qu.sel), nil
 }
 
 type requestContext struct {
