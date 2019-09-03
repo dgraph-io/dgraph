@@ -1817,13 +1817,13 @@ the following definitions:
 ```
 type Animal {
     name: string
-    species: uid
+    species: Specie
     dob: datetime
 }
 
 type Pet {
-    owner: uid
-    veterinarian: Person
+    owner: Person
+    veterinarian: [Person]
 }
 
 type Person {
@@ -2188,7 +2188,7 @@ Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
 functions now require that the types of the nodes to expand have been properly
 set. Refer to that section for more information.
 
-In addition, reverse edges must be specified in the Schema Type. In both directions. The reverse edge can be an alias ​​or even the same value as the outcoming edge. Also queries with `expand(_all_)` and `expand(_reverse_)` will be expanded normally.
+In addition, reverse edges must be specified in the schema type in both directions. The reverse edge can be an alias ​​or even the same value as the outcoming edge. Also queries with `expand(_all_)` and `expand(_reverse_)` will be expanded normally.
 
 {{% notice "note" %}} Note: You do not have to specify a predicate for "author" inside Article Type because this is an alias.{{% /notice  %}}
 
