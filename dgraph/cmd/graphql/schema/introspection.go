@@ -52,7 +52,7 @@ type RequestContext struct {
 type executionContext struct {
 	*RequestContext
 	*ast.Schema
-	b *bytes.Buffer
+	b *bytes.Buffer // we build the JSON response and write it to b.
 }
 
 func (ec *executionContext) writeKey(k string) {
@@ -82,16 +82,38 @@ func (ec *executionContext) writeOptionalStringValue(val *string) {
 	}
 }
 
-func (ec *executionContext) queryType(
-	field graphql.CollectedField) {
+func (ec *executionContext) writeStringSlice(v []string) {
+	ec.b.WriteRune('[')
+	for i := range v {
+		if i != 0 {
+			ec.b.WriteRune(',')
+		}
+		ec.writeStringValue(v[i])
+	}
+	ec.b.WriteRune(']')
+}
+
+// collectFields is our wrapper around graphql.CollectFields which is able to build a tree (after
+// expanding fragments) represented by []graphql.CollectorField. It requires passing the
+// graphql.RequestContext to work correctly.
+func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet,
+	satisfies []string) []graphql.CollectedField {
+	ctx := &graphql.RequestContext{
+		RawQuery:  reqCtx.RawQuery,
+		Variables: reqCtx.Variables,
+		Doc:       reqCtx.Doc,
+	}
+	return graphql.CollectFields(ctx, selSet, satisfies)
+}
+
+func (ec *executionContext) queryType(field graphql.CollectedField) {
 	args := field.ArgumentMap(ec.Variables)
 	name := args["name"].(string)
 	res := introspection.WrapTypeFromDef(ec.Schema, ec.Schema.Types[name])
 	ec.marshalType(field.Selections, res)
 }
 
-func (ec *executionContext) querySchema(
-	field graphql.CollectedField) {
+func (ec *executionContext) querySchema(field graphql.CollectedField) {
 	res := introspection.WrapSchema(ec.Schema)
 	if res == nil {
 		return
@@ -99,15 +121,14 @@ func (ec *executionContext) querySchema(
 	ec.handleSchema(field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeFields(
-	field graphql.CollectedField, obj *introspection.Type) {
+func (ec *executionContext) handleTypeFields(field graphql.CollectedField,
+	obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.Fields(args["includeDeprecated"].(bool))
 	ec.marshalIntrospectionFieldSlice(field.Selections, res)
 }
 
-func (ec *executionContext) handleTypeEnumValues(
-	field graphql.CollectedField,
+func (ec *executionContext) handleTypeEnumValues(field graphql.CollectedField,
 	obj *introspection.Type) {
 	args := field.ArgumentMap(ec.Variables)
 	res := obj.EnumValues(args["includeDeprecated"].(bool))
@@ -117,16 +138,6 @@ func (ec *executionContext) handleTypeEnumValues(
 		return
 	}
 	ec.marshalOptionalEnumValueSlice(field.Selections, res)
-}
-
-func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet,
-	satisfies []string) []graphql.CollectedField {
-	ctx := &graphql.RequestContext{
-		RawQuery:  reqCtx.RawQuery,
-		Variables: reqCtx.Variables,
-		Doc:       reqCtx.Doc,
-	}
-	return graphql.CollectFields(ctx, selSet, satisfies)
 }
 
 func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
@@ -171,7 +182,7 @@ func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspec
 		case "description":
 			ec.writeStringValue(obj.Description)
 		case "locations":
-			ec.marshalDirectionLocationSlice(obj.Locations)
+			ec.writeStringSlice(obj.Locations)
 		case "args":
 			ec.marshalInputValueSlice(field.Selections, obj.Args)
 		default:
@@ -180,8 +191,7 @@ func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspec
 	ec.b.WriteRune('}')
 }
 
-func (ec *executionContext) handleEnumValue(sel ast.SelectionSet,
-	obj *introspection.EnumValue) {
+func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspection.EnumValue) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__EnumValue"})
 
 	ec.b.WriteRune('{')
@@ -207,8 +217,7 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet,
 	ec.b.WriteRune('}')
 }
 
-func (ec *executionContext) handleField(sel ast.SelectionSet,
-	obj *introspection.Field) {
+func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection.Field) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Field"})
 
 	ec.b.WriteRune('{')
@@ -264,8 +273,7 @@ func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspe
 	ec.b.WriteRune('}')
 }
 
-func (ec *executionContext) handleSchema(
-	sel ast.SelectionSet, obj *introspection.Schema) {
+func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspection.Schema) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Schema"})
 
 	ec.b.WriteRune('{')
@@ -293,8 +301,7 @@ func (ec *executionContext) handleSchema(
 	ec.b.WriteRune('}')
 }
 
-func (ec *executionContext) handleType(
-	sel ast.SelectionSet, obj *introspection.Type) {
+func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.Type) {
 	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
 
 	ec.b.WriteRune('{')
@@ -342,19 +349,8 @@ func (ec *executionContext) marshalDirectiveSlice(sel ast.SelectionSet,
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalDirectionLocationSlice(v []string) {
-	ec.b.WriteRune('[')
-	for i := range v {
-		if i != 0 {
-			ec.b.WriteRune(',')
-		}
-		ec.writeStringValue(v[i])
-	}
-	ec.b.WriteRune(']')
-}
-
-func (ec *executionContext) marshalInputValueSlice(
-	sel ast.SelectionSet, v []introspection.InputValue) {
+func (ec *executionContext) marshalInputValueSlice(sel ast.SelectionSet,
+	v []introspection.InputValue) {
 	ec.b.WriteRune('[')
 	for i := range v {
 		if i != 0 {
@@ -365,8 +361,8 @@ func (ec *executionContext) marshalInputValueSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalIntrospectionTypeSlice(
-	sel ast.SelectionSet, v []introspection.Type) {
+func (ec *executionContext) marshalIntrospectionTypeSlice(sel ast.SelectionSet,
+	v []introspection.Type) {
 	ec.b.WriteRune('[')
 	for i := range v {
 		if i != 0 {
@@ -377,19 +373,17 @@ func (ec *executionContext) marshalIntrospectionTypeSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalIntrospectionType(
-	sel ast.SelectionSet, v *introspection.Type) {
+func (ec *executionContext) marshalIntrospectionType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
-		// if !ec.HasError(graphql.GetResolverContext(ctx)) {
-		// 	ec.Errorf( "must not be null")
-		// }
-		// return graphql.Null
+		// TODO - This should be an error as this field is mandatory.
+		ec.b.WriteString("null")
+		return
 	}
 	ec.handleType(sel, v)
 }
 
-func (ec *executionContext) marshalOptionalEnumValueSlice(
-	sel ast.SelectionSet, v []introspection.EnumValue) {
+func (ec *executionContext) marshalOptionalEnumValueSlice(sel ast.SelectionSet,
+	v []introspection.EnumValue) {
 	if v == nil {
 		ec.b.WriteString("null")
 		return
@@ -404,8 +398,8 @@ func (ec *executionContext) marshalOptionalEnumValueSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalIntrospectionFieldSlice(
-	sel ast.SelectionSet, v []introspection.Field) {
+func (ec *executionContext) marshalIntrospectionFieldSlice(sel ast.SelectionSet,
+	v []introspection.Field) {
 	if v == nil {
 		ec.b.WriteString("null")
 		return
@@ -420,8 +414,8 @@ func (ec *executionContext) marshalIntrospectionFieldSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalOptionalInputValueSlice(
-	sel ast.SelectionSet, v []introspection.InputValue) {
+func (ec *executionContext) marshalOptionalInputValueSlice(sel ast.SelectionSet,
+	v []introspection.InputValue) {
 	if v == nil {
 		ec.b.WriteString(`null`)
 		return
@@ -436,8 +430,8 @@ func (ec *executionContext) marshalOptionalInputValueSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalOptionalItypeSlice(
-	sel ast.SelectionSet, v []introspection.Type) {
+func (ec *executionContext) marshalOptionalItypeSlice(sel ast.SelectionSet,
+	v []introspection.Type) {
 	if v == nil {
 		ec.b.WriteString("null")
 		return
@@ -453,8 +447,7 @@ func (ec *executionContext) marshalOptionalItypeSlice(
 	ec.b.WriteRune(']')
 }
 
-func (ec *executionContext) marshalType(
-	sel ast.SelectionSet, v *introspection.Type) {
+func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
 		ec.b.WriteString("null")
 		return
