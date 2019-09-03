@@ -161,9 +161,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				defer wg.Done()
 
 				allResolved[storeAt] = (&queryResolver{
-					query:  q,
-					schema: r.Schema,
-					dgraph: r.dgraph,
+					query:     q,
+					schema:    r.Schema,
+					dgraph:    r.dgraph,
+					operation: op,
 				}).resolve(ctx)
 			}(q, i)
 		}

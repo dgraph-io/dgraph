@@ -29,9 +29,10 @@ import (
 
 // queryResolver can resolve a single GraphQL query field
 type queryResolver struct {
-	query  schema.Query
-	schema schema.Schema
-	dgraph dgraph.Client
+	query     schema.Query
+	schema    schema.Schema
+	dgraph    dgraph.Client
+	operation schema.Operation
 }
 
 // resolve a query.
@@ -48,6 +49,17 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			WithTypeFilter(qr.query.Type().Name()).
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
+	case schema.SchemaQuery:
+		resp, err := schema.Introspect(qr.operation, qr.query, qr.schema)
+		if err != nil {
+			res.err = err
+			return res
+		}
+		// This is because Introspect returns an object.
+		if len(resp) >= 2 {
+			res.data = resp[1 : len(resp)-1]
+		}
+		return res
 	default:
 		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
 		return res

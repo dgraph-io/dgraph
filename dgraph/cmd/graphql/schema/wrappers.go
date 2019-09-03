@@ -45,6 +45,7 @@ type MutationType string
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
+	SchemaQuery          QueryType    = "schema"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -134,14 +135,19 @@ type schema struct {
 }
 
 type operation struct {
-	op       *ast.OperationDefinition
-	vars     map[string]interface{}
+	op   *ast.OperationDefinition
+	vars map[string]interface{}
+
+	// The fields below are used by schema introspection queries.
+	query    string
+	doc      *ast.QueryDocument
 	inSchema *ast.Schema
 }
 
 type field struct {
 	field *ast.Field
 	op    *operation
+	sel   ast.Selection
 }
 
 type fieldDefinition struct {
@@ -171,7 +177,7 @@ func (o *operation) Queries() (qs []Query) {
 
 	for _, s := range o.op.SelectionSet {
 		if f, ok := s.(*ast.Field); ok {
-			qs = append(qs, &query{field: f, op: o})
+			qs = append(qs, &query{field: f, op: o, sel: s})
 		}
 	}
 
@@ -299,6 +305,8 @@ func (q *query) QueryType() QueryType {
 	switch {
 	case strings.HasPrefix(q.Name(), "get"):
 		return GetQuery
+	case q.Name() == "__schema" || q.Name() == "__type":
+		return SchemaQuery
 	default:
 		return NotSupportedQuery
 	}

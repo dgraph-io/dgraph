@@ -6,25 +6,19 @@ type Post {
 	id: ID!
 	title: String!
 	text: String
-	postType: PostType!
+	author: Author!
 }
 
-enum PostType {
-	Statement
-	Question
-	Answer
+type Author {
+	id: ID!
+	name: String!
 }
 
 #######################
 # Extended Definitions
 #######################
 
-scalar Boolean
 scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 
@@ -32,12 +26,24 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 # Generated Types
 #######################
 
+type AddAuthorPayload {
+	author: Author
+}
+
 type AddPostPayload {
 	post: Post
 }
 
+type DeleteAuthorPayload {
+	msg: String
+}
+
 type DeletePostPayload {
 	msg: String
+}
+
+type UpdateAuthorPayload {
+	author: Author
 }
 
 type UpdatePostPayload {
@@ -48,10 +54,26 @@ type UpdatePostPayload {
 # Generated Inputs
 #######################
 
+input AuthorFilter {
+	dgraph: String
+}
+
+input AuthorInput {
+	name: String!
+}
+
+input AuthorRef {
+	id: ID!
+}
+
+input PatchAuthor {
+	name: String
+}
+
 input PatchPost {
 	title: String
 	text: String
-	postType: PostType
+	author: AuthorRef
 }
 
 input PostFilter {
@@ -61,11 +83,16 @@ input PostFilter {
 input PostInput {
 	title: String!
 	text: String
-	postType: PostType!
+	author: AuthorRef!
 }
 
 input PostRef {
 	id: ID!
+}
+
+input UpdateAuthorInput {
+	id: ID!
+	patch: PatchAuthor!
 }
 
 input UpdatePostInput {
@@ -80,6 +107,8 @@ input UpdatePostInput {
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter!): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter!): [Author]
 }
 
 #######################
@@ -90,4 +119,7 @@ type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(id: ID!): DeletePostPayload
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(id: ID!): DeleteAuthorPayload
 }
