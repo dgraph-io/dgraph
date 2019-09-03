@@ -16,12 +16,13 @@ import (
 // a) they define some useful types like introspection.Type, introspection.InputValue,
 // introspection.Directive etc.
 // b) CollectFields function which can recursively expand fragments and convert them to fields
-// and selection sets. We might be able to get rid of this dependency in the future as we support
-// fragments in other queries.
+// and selection sets.
+// We might be able to get rid of this dependency in the future as we support fragments in other
+// queries or we might get rid of the types defined in wrappers.go and use the types defined in
+// gqlgen instead if they make more sense.
 
 // Introspect performs an introspection query given an operation (contains the query) and a schema.
-func Introspect(o Operation, s Schema) (json.RawMessage,
-	error) {
+func Introspect(o Operation, s Schema) (json.RawMessage, error) {
 	sch, ok := s.(*schema)
 	if !ok {
 		return nil, errors.New("couldn't convert schema to internal type")
@@ -33,9 +34,9 @@ func Introspect(o Operation, s Schema) (json.RawMessage,
 	}
 
 	// TODO - Fill in graphql variables here instead of an empty map.
-	reqCtx := &RequestContext{
+	reqCtx := &requestContext{
 		RawQuery:  op.query,
-		Variables: map[string]interface{}{},
+		Variables: op.vars,
 		Doc:       op.doc,
 	}
 	ec := executionContext{reqCtx, sch.schema, new(bytes.Buffer)}
@@ -43,14 +44,14 @@ func Introspect(o Operation, s Schema) (json.RawMessage,
 	return ec.handleQuery(op.op.SelectionSet[0]), nil
 }
 
-type RequestContext struct {
+type requestContext struct {
 	RawQuery  string
 	Variables map[string]interface{}
 	Doc       *ast.QueryDocument
 }
 
 type executionContext struct {
-	*RequestContext
+	*requestContext
 	*ast.Schema
 	b *bytes.Buffer // we build the JSON response and write it to b.
 }
@@ -95,8 +96,8 @@ func (ec *executionContext) writeStringSlice(v []string) {
 
 // collectFields is our wrapper around graphql.CollectFields which is able to build a tree (after
 // expanding fragments) represented by []graphql.CollectorField. It requires passing the
-// graphql.RequestContext to work correctly.
-func collectFields(reqCtx *RequestContext, selSet ast.SelectionSet,
+// graphql.requestContext to work correctly.
+func collectFields(reqCtx *requestContext, selSet ast.SelectionSet,
 	satisfies []string) []graphql.CollectedField {
 	ctx := &graphql.RequestContext{
 		RawQuery:  reqCtx.RawQuery,
@@ -141,7 +142,7 @@ func (ec *executionContext) handleTypeEnumValues(field graphql.CollectedField,
 }
 
 func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
-	fields := collectFields(ec.RequestContext, ast.SelectionSet{sel}, []string{"Query"})
+	fields := collectFields(ec.requestContext, ast.SelectionSet{sel}, []string{"Query"})
 
 	ec.b.WriteRune('{')
 	// TODO - Should we write {} even if fields is empty?
@@ -166,7 +167,7 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 }
 
 func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspection.Directive) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__Directive"})
+	fields := collectFields(ec.requestContext, sel, []string{"__Directive"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
@@ -192,7 +193,7 @@ func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspec
 }
 
 func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspection.EnumValue) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__EnumValue"})
+	fields := collectFields(ec.requestContext, sel, []string{"__EnumValue"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
@@ -218,7 +219,7 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspec
 }
 
 func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection.Field) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__Field"})
+	fields := collectFields(ec.requestContext, sel, []string{"__Field"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
@@ -248,7 +249,7 @@ func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection
 }
 
 func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspection.InputValue) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__InputValue"})
+	fields := collectFields(ec.requestContext, sel, []string{"__InputValue"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
@@ -274,7 +275,7 @@ func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspe
 }
 
 func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspection.Schema) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__Schema"})
+	fields := collectFields(ec.requestContext, sel, []string{"__Schema"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
@@ -302,7 +303,7 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 }
 
 func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.Type) {
-	fields := collectFields(ec.RequestContext, sel, []string{"__Type"})
+	fields := collectFields(ec.requestContext, sel, []string{"__Type"})
 
 	ec.b.WriteRune('{')
 	for i, field := range fields {
