@@ -165,7 +165,7 @@ Query Example: Robin Wright by external ID.
 
 ## External IDs and Upsert Block
 
-The Upsert Block makes managing external IDs easy.
+The upsert block makes managing external IDs easy.
 
 Set the schema.
 ```
@@ -183,7 +183,7 @@ Set the type first of all.
 }
 ```
 
-Now you can create a new person and attach its type using the Upsert Block.
+Now you can create a new person and attach its type using the upsert block.
 ```
    upsert {
       query {
@@ -851,10 +851,12 @@ cat data.json | jq '{set: .}'
 
 ## Upsert Block
 
-The Upsert Block allows performing queries and mutations in a single request. The Upsert
+The upsert block allows performing queries and mutations in a single request. The upsert
 block contains one query block and one mutation block. Variables defined in the query
 block can be used in the mutation block using the `uid` function.
-In general, the structure of the Upsert block is as follows:
+Support for `val` function is coming soon.
+
+In general, the structure of the upsert block is as follows:
 
 ```
 upsert {
@@ -884,13 +886,13 @@ curl localhost:8080/alter -X POST -d $'
 ```
 
 Now, let's say we want to create a new user with `email` and `name` information.
-We also want to make sure that one email id has exactly one corresponding user in
+We also want to make sure that one email has exactly one corresponding user in
 the database. To achieve this, we need to first query whether a user exists
-in the database with the given email id. If a user exists, we use the returned UID
-of the user to update the `name` information. If the user doesn't exist, we create
+in the database with the given email. If a user exists, we use its UID
+to update the `name` information. If the user doesn't exist, we create
 a new user and update the `email` and `name` information.
 
-We can do this using the Upsert Block as follows:
+We can do this using the upsert block as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
@@ -925,13 +927,27 @@ Result:
 ```
 
 The query part of the upsert block stores the UID of the user with the provided email
-id in the variable `v`. The mutation part then extracts the UID from variable `v` and
-stores the `name` and `email` information in the database. In case the user exists,
-the information is updated whereas if the user doesn't exist, `uid(v)` is treated
+in the variable `v`. The mutation part then extracts the UID from variable `v` and
+stores the `name` and `email` information in the database. If the user exists,
+the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
-Now, we want to add the `age` information for the same user having the same email ID
-`user@company1.io`. We can use the Upsert block to do the same as follows:
+If we run the same mutation again, the data would just be overwritten and no new uid is
+created. Note that the `uids` map is empty in the response when the mutation is executed again:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+Now, we want to add the `age` information for the same user having the same email
+`user@company1.io`. We can use the upsert block to do the same as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
@@ -966,10 +982,13 @@ Here, the query block queries for a user with `email` as `user@company1.io`. It 
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
 user by extracting the uid from the variable `v` using `uid` function.
 
+If we want to execute the mutation only when the user exists, we could use
+[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+
 ### Bulk Delete Example
 
 Let's say we want to delete all the users of `company1` from the database. This can be
-achieved in just one query using the Upsert Block -
+achieved in just one query using the upsert block:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
@@ -1004,7 +1023,7 @@ Result:
 
 ## Conditional Upsert
 
-The Upsert Block also allows specifying a conditional mutation block using an `@if`
+The upsert block also allows specifying a conditional mutation block using an `@if`
 directive. The mutation is executed only when the specified condition is true. If the
 condition is false, the mutation is silently ignored. The general structure of
 Conditional Upsert looks like as follows:
@@ -1024,7 +1043,7 @@ connected using `AND`, `OR` and `NOT`.
 
 Let's say in our previous example, we know the `company1` has less than 100 employees.
 For safety, we want the mutation to execute only when the variable `v` stores less than
-100 but greater than 50 UIDs in it. This can be achieved as follows -
+100 but greater than 50 UIDs in it. This can be achieved as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
