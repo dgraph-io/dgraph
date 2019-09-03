@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
@@ -55,11 +56,15 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest,
 				"Found invalid value for the enable parameter")
+			return
 		}
 
 		x.UpdateDrainingMode(enable)
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
-			`"message": "draining mode has been set to %v"}`, enable))))
+		_, err = w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
+			`"message": "draining mode has been set to %v"}`, enable)))
+		if err != nil {
+			glog.Errorf("Failed to write response: %v", err)
+		}
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}

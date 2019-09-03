@@ -686,7 +686,6 @@ func setDrainingMode(t *testing.T, enable bool) {
 }
 
 func TestDrainingMode(t *testing.T) {
-
 	runRequests := func(expectErr bool) {
 		q1 := `
 	{
