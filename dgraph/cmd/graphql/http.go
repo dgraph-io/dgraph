@@ -20,16 +20,38 @@ import (
 	"encoding/json"
 	"mime"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
+
+func recoveryHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			// This function makes sure that we recover from panics during execution of the request
+			// and return appropriate error to the user.
+			if err := recover(); err != nil {
+				glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
+					api.RequestID(r.Context()), string(debug.Stack()))
+				rr := schema.ErrorResponsef("Internal Server Error")
+				w.Header().Set("Content-Type", "application/json")
+				if _, err := rr.WriteTo(w); err != nil {
+					glog.Error(err)
+				}
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
@@ -49,8 +71,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rh := gh.resolverForRequest(r)
 	res := rh.Resolve(r.Context())
-	_, err := res.WriteTo(w)
-	if err != nil {
+	if _, err := res.WriteTo(w); err != nil {
 		glog.Error(err)
 	}
 }

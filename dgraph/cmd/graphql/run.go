@@ -170,7 +170,7 @@ func run() error {
 		schema:       gqlschema,
 	}
 
-	http.Handle("/graphql", api.WithRequestID(handler))
+	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
