@@ -42,6 +42,7 @@ func recoveryHandler(next http.Handler) http.Handler {
 				glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
 					api.RequestID(r.Context()), string(debug.Stack()))
 				rr := schema.ErrorResponsef("Internal Server Error")
+				w.Header().Set("Content-Type", "application/json")
 				if _, err := rr.WriteTo(w); err != nil {
 					glog.Error(err)
 				}
