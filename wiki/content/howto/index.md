@@ -662,8 +662,8 @@ whichever way you wish.
 
 ### Upsert Block
 
-You can also use the `Upsert Block` to achieve the upsert procedure in a single mutation.
-The request will contain both the query and the mutation as explained
+You can also use the `Upsert Block` to achieve the upsert procedure in a single
+ mutation. The request will contain both the query and the mutation as explained
 [here]({{< relref "mutations/index.md#upsert-block" >}}).
 
 ### Conflicts
