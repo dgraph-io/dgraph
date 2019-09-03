@@ -22,11 +22,11 @@ func KeyToHash(key interface{}) uint64 {
 	case uint64:
 		return key.(uint64)
 	case string:
-		return AESHashString(key.(string))
+		return MemHashString(key.(string))
 	case []byte:
-		return AESHash(key.([]byte))
+		return MemHash(key.([]byte))
 	case byte:
-		return AESHash([]byte{key.(byte)})
+		return MemHash([]byte{key.(byte)})
 	case int:
 		return uint64(key.(int))
 	case int32:

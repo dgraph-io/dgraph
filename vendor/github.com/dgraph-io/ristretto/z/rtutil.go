@@ -40,21 +40,23 @@ type stringStruct struct {
 }
 
 //go:noescape
-//go:linkname aeshash runtime.aeshash
-func aeshash(p unsafe.Pointer, h, s uintptr) uintptr
+//go:linkname memhash runtime.memhash
+func memhash(p unsafe.Pointer, h, s uintptr) uintptr
 
-// AESHash is the hash function used by map, it utilizes available hardware instructions.
+// MemHash is the hash function used by go map, it utilizes available hardware instructions(behaves
+// as aeshash if aes instruction is available).
 // NOTE: The hash seed changes for every process. So, this cannot be used as a persistent hash.
-func AESHash(data []byte) uint64 {
+func MemHash(data []byte) uint64 {
 	ss := (*stringStruct)(unsafe.Pointer(&data))
-	return uint64(aeshash(ss.str, 0, uintptr(ss.len)))
+	return uint64(memhash(ss.str, 0, uintptr(ss.len)))
 }
 
-// AESHashString is the hash function used by map, it utilizes available hardware instructions.
+// MemHashString is the hash function used by go map, it utilizes available hardware instructions
+// (behaves as aeshash if aes instruction is available).
 // NOTE: The hash seed changes for every process. So, this cannot be used as a persistent hash.
-func AESHashString(str string) uint64 {
+func MemHashString(str string) uint64 {
 	ss := (*stringStruct)(unsafe.Pointer(&str))
-	return uint64(aeshash(ss.str, 0, uintptr(ss.len)))
+	return uint64(memhash(ss.str, 0, uintptr(ss.len)))
 }
 
 // FastRand is a fast thread local random function.
