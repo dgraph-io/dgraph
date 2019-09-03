@@ -18,9 +18,10 @@ package edgraph
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
@@ -102,10 +103,11 @@ func (opt *Options) validate() {
 		bytes := C.sysconf(C._SC_PHYS_PAGES) * C.sysconf(C._SC_PAGE_SIZE)
 		mb := bytes / 1024 / 1024
 		if mb > MinAllottedMemory {
-			opt.AllottedMemory = float64(mb / 2)
-			fmt.Fprintf(os.Stderr,
-				"LRU memory (--lru_mb) set to %vMB, 50%% of the total RAM found (%vMB)\n"+
-					"For more information on --lru_mb please read https://docs.dgraph.io/deploy/#config\n",
+			opt.AllottedMemory = 0.25 * float64(mb)
+			glog.Infof(
+				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
+					"For more information on --lru_mb please read "+
+					"https://docs.dgraph.io/deploy/#config\n",
 				opt.AllottedMemory, mb)
 		}
 	}
