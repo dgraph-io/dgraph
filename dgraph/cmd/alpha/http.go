@@ -277,6 +277,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	out.WriteRune('}')
 
 	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+		// If client crashes before server could write response, writeResponse will error out,
+		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
 	}
 }
