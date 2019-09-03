@@ -332,7 +332,7 @@ func (txn *Txn) modify(e *Entry) error {
 	if err := txn.checkSize(e); err != nil {
 		return err
 	}
-	fp := z.AESHash(e.Key) // Avoid dealing with byte arrays.
+	fp := z.MemHash(e.Key) // Avoid dealing with byte arrays.
 	txn.writes = append(txn.writes, fp)
 	txn.pendingWrites[string(e.Key)] = e
 	return nil
@@ -428,7 +428,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 
 func (txn *Txn) addReadKey(key []byte) {
 	if txn.update {
-		fp := z.AESHash(key)
+		fp := z.MemHash(key)
 		txn.reads = append(txn.reads, fp)
 	}
 }
