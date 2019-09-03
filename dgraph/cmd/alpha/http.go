@@ -276,7 +276,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	out.WriteRune('}')
 
-	x.Check2(writeResponse(w, r, out.Bytes()))
+	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+		// If client crashes before server could write response, writeResponse will error out,
+		// Check2 will fatal and shut the server down in such scenario. We don't want that.
+		glog.Errorln("Unable to write response: ", err)
+	}
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
