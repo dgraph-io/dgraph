@@ -148,7 +148,6 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 	fields := collectFields(ec.requestContext, ast.SelectionSet{sel}, []string{"Query"})
 
 	ec.b.WriteRune('{')
-	// TODO - Should we write {} even if fields is empty?
 	for i, field := range fields {
 		if i != 0 {
 			ec.b.WriteRune(',')
