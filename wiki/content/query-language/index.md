@@ -2086,6 +2086,10 @@ home_address: string .
 year: int .
 ```
 
+If a predicate contains a reverse index, you can assume that both the predicate and
+the reverse predicate are part of any type definition that contains that predicate.
+Expand queries will follow that convention.
+
 To use the same attribute in multiple types, make sure the type and indexes
 required for both are the same. Otherwise, use separate attribute and predicate
 names for each type. Below there is a small example.
