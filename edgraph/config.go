@@ -21,9 +21,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+// #include <unistd.h>
+import "C"
 
 const (
 	// AllowMutations is the mode allowing all mutations.
@@ -94,9 +99,20 @@ func (opt *Options) validate() {
 	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
-	x.AssertTruefNoTrace(opt.AllottedMemory != -1,
-		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
+	if opt.AllottedMemory < 0 {
+		bytes := C.sysconf(C._SC_PHYS_PAGES) * C.sysconf(C._SC_PAGE_SIZE)
+		mb := bytes / 1024 / 1024
+		if mb > MinAllottedMemory {
+			opt.AllottedMemory = 0.25 * float64(mb)
+			glog.Infof(
+				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
+					"For more information on --lru_mb please read "+
+					"https://docs.dgraph.io/deploy/#config\n",
+				opt.AllottedMemory, mb)
+		}
+	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
-		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
+		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
+			"For more information on --lru_mb please read https://docs.dgraph.io/deploy/#config",
 		MinAllottedMemory, opt.AllottedMemory)
 }
