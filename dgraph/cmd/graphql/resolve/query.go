@@ -50,7 +50,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	case schema.SchemaQuery:
-		resp, err := schema.Introspect(ctx, qr.operation, qr.schema)
+		resp, err := schema.Introspect(qr.operation, qr.schema)
 		if err != nil {
 			res.err = err
 			return res

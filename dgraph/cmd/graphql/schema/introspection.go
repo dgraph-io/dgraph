@@ -33,7 +33,6 @@ func Introspect(o Operation, s Schema) (json.RawMessage, error) {
 		return nil, errors.New("couldn't convert operation to internal type")
 	}
 
-	// TODO - Fill in graphql variables here instead of an empty map.
 	reqCtx := &requestContext{
 		RawQuery:  op.query,
 		Variables: op.vars,

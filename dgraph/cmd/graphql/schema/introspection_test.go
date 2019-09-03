@@ -12,7 +12,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 )
 
-var introspectionQuery = `
+const introspectionQuery = `
   query {
     __schema {
       queryType { name }
@@ -98,6 +98,22 @@ var introspectionQuery = `
   }
 `
 
+const complexSchema = `schema {
+	query: TestType
+  }
+
+  input TestInputObject {
+	a: String = test
+	b: [String]
+	c: String = null
+  }
+
+
+  input TestType {
+	complex: TestInputObject
+  }
+  `
+
 func TestIntrospectionQuery(t *testing.T) {
 	simpleSchema := `schema {
 		query: QueryRoot
@@ -130,22 +146,7 @@ func TestIntrospectionQuery(t *testing.T) {
 			"testdata/output/introspection_type_object_name_filter.json",
 		},
 		{"Filter complex object type __type",
-			`
-    schema {
-      query: TestType
-    }
-
-    input TestInputObject {
-      a: String = test
-      b: [String]
-      c: String = null
-    }
-
-
-    input TestType {
-      complex: TestInputObject
-    }
-    `,
+			complexSchema,
 			"testdata/input/introspection_type_complex_object_name_filter.txt",
 			"testdata/output/introspection_type_complex_object_name_filter.json",
 		},
@@ -180,7 +181,60 @@ func TestIntrospectionQuery(t *testing.T) {
 	}
 }
 
-// TODO - Add some tests to check for reading name from graphql variables.
+func TestIntrospectionQueryWithVars(t *testing.T) {
+	sch := gqlparser.MustLoadSchema(
+		&ast.Source{Name: "schema.graphql", Input: complexSchema})
+
+	q := `query filterNameOnType($name: String!) {
+			__type(name: $name) {
+				kind
+				name
+				inputFields {
+					name
+					type { ...TypeRef }
+					defaultValue
+				}
+			}
+		}
+
+		fragment TypeRef on __Type {
+			kind
+			name
+			ofType {
+				kind
+				name
+				ofType {
+					kind
+					name
+					ofType {
+						kind
+						name
+					}
+				}
+			}
+		}`
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: q})
+	require.Nil(t, gqlErr)
+	listErr := validator.Validate(sch, doc)
+	require.Equal(t, 0, len(listErr))
+
+	op := doc.Operations.ForName(doc.Operations[0].Name)
+	oper := &operation{op: op,
+		vars:  map[string]interface{}{"name": "TestInputObject"},
+		query: q,
+		doc:   doc,
+	}
+	require.NotNil(t, op)
+
+	resp, err := Introspect(oper, AsSchema(sch))
+	require.NoError(t, err)
+
+	fname := "testdata/output/introspection_type_complex_object_name_filter.json"
+	expectedBuf, err := ioutil.ReadFile(fname)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, string(expectedBuf), string(resp))
+}
 
 func TestFullIntrospectionQuery(t *testing.T) {
 	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
