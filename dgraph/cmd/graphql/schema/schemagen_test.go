@@ -59,8 +59,8 @@ func TestDGSchemaGen(t *testing.T) {
 }
 
 func TestSchemaString(t *testing.T) {
-	inputDir := "testdata/input/"
-	outputDir := "testdata/output/"
+	inputDir := "testdata/schemagen/input/"
+	outputDir := "testdata/schemagen/output/"
 
 	files, err := ioutil.ReadDir(inputDir)
 	require.NoError(t, err)
