@@ -180,8 +180,6 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
-	x.CheckfNoTrace(ck.Begin(rd))
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	nqbuf := ck.NQuads()
@@ -224,7 +222,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			x.Check(err)
 		}
 	}
-	x.CheckfNoTrace(ck.End(rd))
 	nqbuf.Flush()
 	wg.Wait()
 

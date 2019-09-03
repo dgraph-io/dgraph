@@ -128,7 +128,9 @@ function DoExport
 function BulkLoadExportedData
 {
   INFO "bulk loading exported data"
-  dgraph bulk -z localhost:$ZERO_PORT \
+  # using a random HTTP port for pprof to avoid collisions with other processes
+  HTTPPORT=$(( ( RANDOM % 1000 )  + 8080 ))
+  dgraph bulk -z localhost:$ZERO_PORT --http "localhost:$HTTPPORT"\
               -s ../dir1/export/*/g01.schema.gz \
               -f ../dir1/export/*/g01.rdf.gz \
      >$LOGFILE 2>&1 </dev/null
