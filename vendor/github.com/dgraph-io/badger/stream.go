@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/golang/protobuf/proto"
 )
 
 const pageSize = 4 << 20 // 4MB
@@ -195,7 +196,7 @@ func (st *Stream) produceKVs(ctx context.Context) error {
 				continue
 			}
 			outList.Kv = append(outList.Kv, list.Kv...)
-			size += list.Size()
+			size += proto.Size(list)
 			if size >= pageSize {
 				for _, kv := range outList.Kv {
 					kv.StreamId = streamId
@@ -260,7 +261,7 @@ func (st *Stream) streamKVs(ctx context.Context) error {
 				break loop
 			}
 		}
-		sz := uint64(batch.Size())
+		sz := uint64(proto.Size(batch))
 		bytesSent += sz
 		count += len(batch.Kv)
 		t := time.Now()

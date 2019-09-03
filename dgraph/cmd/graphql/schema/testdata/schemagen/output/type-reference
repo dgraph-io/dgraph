@@ -106,9 +106,9 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(filter: PostFilter!): [Post!]
+	queryPost(filter: PostFilter!): [Post]
 	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter!): [Author!]
+	queryAuthor(filter: AuthorFilter!): [Author]
 }
 
 #######################
