@@ -34,9 +34,10 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
-	scalar DateTime
+scalar DateTime
 
-	directive @hasInverse(field: String!) on FIELD_DEFINITION`
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+`
 )
 
 type directiveValidator func(
@@ -566,18 +567,6 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		return ""
 	}
 
-	keys := make([]string, 0, len(schema.Types))
-	for k, v := range schema.Types {
-		// Skip types like __Schema, __Type, __Field which are used for schema introspection.
-		// Also skip scalar types like Boolean, Float etc. since we add them after fetching the
-		// schema from Dgraph.
-		if strings.HasPrefix(k, "__") || v.Kind == ast.Scalar {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
 	printed := make(map[string]bool)
 
 	// original defs can only be types and enums, print those in the same order
@@ -585,7 +574,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
 		if typ.Kind == ast.Object {
-			object.WriteString(generateObjectString(typ) + "\n")
+			original.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
 			original.WriteString(generateEnumString(typ) + "\n")
 		}

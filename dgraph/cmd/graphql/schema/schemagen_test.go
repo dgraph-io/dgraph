@@ -65,12 +65,7 @@ func TestSchemaString(t *testing.T) {
 	files, err := ioutil.ReadDir(inputDir)
 	require.NoError(t, err)
 
-	filesToTest := map[string]bool{"schema1": true, "schema2": true}
-
 	for _, testFile := range files {
-		if _, ok := filesToTest[testFile.Name()]; !ok {
-			continue
-		}
 		t.Run(testFile.Name(), func(t *testing.T) {
 			inputFileName := inputDir + testFile.Name()
 			str1, err := ioutil.ReadFile(inputFileName)

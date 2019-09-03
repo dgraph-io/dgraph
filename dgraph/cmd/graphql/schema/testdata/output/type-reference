@@ -18,12 +18,7 @@ type Author {
 # Extended Definitions
 #######################
 
-scalar Boolean
 scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 

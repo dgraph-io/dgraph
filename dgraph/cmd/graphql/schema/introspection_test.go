@@ -2,6 +2,7 @@ package schema
 
 import (
 	"io/ioutil"
+	"path/filepath"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -123,6 +124,9 @@ func TestIntrospectionQuery(t *testing.T) {
 		onlyField: String
 	}`
 
+	iprefix := "testdata/introspection/input"
+	oprefix := "testdata/introspection/output"
+
 	var tests = []struct {
 		name       string
 		schema     string
@@ -132,23 +136,23 @@ func TestIntrospectionQuery(t *testing.T) {
 		{
 			"Filter on __type",
 			simpleSchema,
-			"testdata/input/introspection_type_filter.txt",
-			"testdata/output/introspection_type_filter.json",
+			filepath.Join(iprefix, "type_filter.txt"),
+			filepath.Join(oprefix, "type_filter.json"),
 		},
 		{"Filter __Schema on __type",
 			simpleSchema,
-			"testdata/input/introspection_type_schema_filter.txt",
-			"testdata/output/introspection_type_schema_filter.json",
+			filepath.Join(iprefix, "type_schema_filter.txt"),
+			filepath.Join(oprefix, "type_schema_filter.json"),
 		},
 		{"Filter object type __type",
 			simpleSchema,
-			"testdata/input/introspection_type_object_name_filter.txt",
-			"testdata/output/introspection_type_object_name_filter.json",
+			filepath.Join(iprefix, "type_object_name_filter.txt"),
+			filepath.Join(oprefix, "type_object_name_filter.json"),
 		},
 		{"Filter complex object type __type",
 			complexSchema,
-			"testdata/input/introspection_type_complex_object_name_filter.txt",
-			"testdata/output/introspection_type_complex_object_name_filter.json",
+			filepath.Join(iprefix, "type_complex_object_name_filter.txt"),
+			filepath.Join(oprefix, "type_complex_object_name_filter.json"),
 		},
 	}
 
@@ -164,7 +168,7 @@ func TestIntrospectionQuery(t *testing.T) {
 		listErr := validator.Validate(sch, doc)
 		require.Equal(t, 0, len(listErr))
 
-		op := doc.Operations.ForName(doc.Operations[0].Name)
+		op := doc.Operations.ForName("")
 		oper := &operation{op: op,
 			vars:  map[string]interface{}{},
 			query: string(q),
@@ -172,7 +176,8 @@ func TestIntrospectionQuery(t *testing.T) {
 		}
 		require.NotNil(t, op)
 
-		resp, err := Introspect(oper, AsSchema(sch))
+		queries := oper.Queries()
+		resp, err := Introspect(oper, queries[0], AsSchema(sch))
 		require.NoError(t, err)
 
 		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
@@ -219,7 +224,7 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 	listErr := validator.Validate(sch, doc)
 	require.Equal(t, 0, len(listErr))
 
-	op := doc.Operations.ForName(doc.Operations[0].Name)
+	op := doc.Operations.ForName("")
 	oper := &operation{op: op,
 		vars:  map[string]interface{}{"name": "TestInputObject"},
 		query: q,
@@ -227,10 +232,11 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 	}
 	require.NotNil(t, op)
 
-	resp, err := Introspect(oper, AsSchema(sch))
+	queries := oper.Queries()
+	resp, err := Introspect(oper, queries[0], AsSchema(sch))
 	require.NoError(t, err)
 
-	fname := "testdata/output/introspection_type_complex_object_name_filter.json"
+	fname := "testdata/introspection/output/type_complex_object_name_filter.json"
 	expectedBuf, err := ioutil.ReadFile(fname)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, string(expectedBuf), string(resp))
@@ -256,7 +262,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	listErr := validator.Validate(sch, doc)
 	require.Equal(t, 0, len(listErr))
 
-	op := doc.Operations.ForName(doc.Operations[0].Name)
+	op := doc.Operations.ForName("")
 	require.NotNil(t, op)
 	oper := &operation{op: op,
 		vars:  map[string]interface{}{},
@@ -264,10 +270,11 @@ func TestFullIntrospectionQuery(t *testing.T) {
 		doc:   doc,
 	}
 
-	resp, err := Introspect(oper, AsSchema(sch))
+	queries := oper.Queries()
+	resp, err := Introspect(oper, queries[0], AsSchema(sch))
 	require.NoError(t, err)
 
-	expectedBuf, err := ioutil.ReadFile("testdata/output/introspection_full_query.json")
+	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")
 	require.NoError(t, err)
 	testutil.CompareJSON(t, string(expectedBuf), string(resp))
 }
