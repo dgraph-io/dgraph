@@ -703,12 +703,12 @@ func findVars(gmu *gql.Mutation) []string {
 // Assumption is that Subject should contain UID, whereas Object should contain Val
 // If val(variable) exists in a query, but the values are not there for the variable,
 // it will delete the mutation itself, and ignore the mutation silently
-func updateValInMutations(gmu *gql.Mutation, varToVal query.Request) {
+func updateValInMutations(gmu *gql.Mutation, req query.Request) {
 	getNewVals := func(s string) (map[uint64]types.Val, bool) {
 		const valString = "val("
 		if strings.HasPrefix(s, valString) {
 			varName := s[len(valString) : len(s)-1]
-			if vals, ok := varToVal.Vars[varName]; ok {
+			if vals, ok := req.Vars[varName]; ok {
 				return vals.Vals, true
 			}
 			return nil, true
@@ -724,11 +724,15 @@ func updateValInMutations(gmu *gql.Mutation, varToVal query.Request) {
 				nquadsReplacement = append(nquadsReplacement, nq)
 				continue
 			}
-			key, err := strconv.ParseInt(nq.Subject, 10, 64)
+			key, err := strconv.ParseUint(nq.Subject, 10, 64)
 			if err != nil {
+				// Conversion failed, ignoring the nquad. Ideally,
+				// it shouldn't happen as it query return value.
+
+				glog.Errorf("Conversion of subject %s failed", nq.Subject)
 				continue
 			}
-			val, ok := uidToVariableValue[uint64(key)]
+			val, ok := uidToVariableValue[key]
 			if !ok {
 				// Check if the variable is aggregate variable
 				// 0 key would exist only for aggregate variable
@@ -741,7 +745,10 @@ func updateValInMutations(gmu *gql.Mutation, varToVal query.Request) {
 			nq.ObjectId = ""
 			objectValue, err := types.ObjectValue(val.Tid, val.Value)
 			if err != nil {
-				// Conversion failed, deleting the element
+				// Conversion failed, ignoring the nquad. Ideally,
+				// it shouldn't happen as it query return value.
+
+				glog.Errorf("Conversion of %s failed for %d subject", nq.ObjectId, key)
 				continue
 			}
 			nq.ObjectValue = objectValue

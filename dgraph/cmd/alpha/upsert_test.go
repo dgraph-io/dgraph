@@ -1446,6 +1446,24 @@ upsert {
 	// that val works when not all records have the values
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	testutil.CompareJSON(t, res, expectedRes)
+
+	m4 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+  mutation {
+    set {
+      val(amt) <amount> 1 .
+    }
+  }
+}
+`
+
+	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "while lexing val(amt) <amount> 1")
 }
 
 func TestUpsertBulkUpdateBranch(t *testing.T) {
@@ -1566,8 +1584,7 @@ upsert {
       uid(u) <amount> val(amt) .
     }
   }
-}
-  `
+}`
 
 	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, 0)
 	require.NoError(t, err)
@@ -1589,8 +1606,7 @@ upsert {
       uid(u) <amount> val(max_amt) .
     }
   }
-}
-  `
+}`
 	_, _, _, err = mutationWithTs(m6, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
@@ -1615,8 +1631,33 @@ upsert {
 }`
 	testutil.CompareJSON(t, res, expectedRes)
 
-	// Checking Delete in Val
+	// Checking that delete only works for correct val
 	m7 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+    me() {
+      updated_amt as  math(amt+1)
+    }
+  }
+  mutation {
+    delete {
+      uid(u) <amount> val(updated_amt) .
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m7, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	// There should be no change
+	testutil.CompareJSON(t, res, expectedRes)
+
+	// Checking Delete in Val
+	m8 := `
 upsert {
   query {
     u as var(func: has(amount)) {
@@ -1632,7 +1673,7 @@ upsert {
 }
 `
 
-	_, _, _, err = mutationWithTs(m7, "application/rdf", false, true, 0)
+	_, _, _, err = mutationWithTs(m8, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
