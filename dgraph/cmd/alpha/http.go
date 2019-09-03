@@ -276,7 +276,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	out.WriteRune('}')
 
-	x.Check2(writeResponse(w, r, out.Bytes()))
+	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+		glog.Errorln("Unable to write response: ", err)
+	}
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
