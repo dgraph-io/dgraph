@@ -673,3 +673,60 @@ func TestHealth(t *testing.T) {
 	require.Equal(t, "alpha", info.Instance)
 	require.True(t, info.Uptime > time.Duration(1))
 }
+
+func setDrainingMode(t *testing.T, enable bool) {
+	url := fmt.Sprintf("%s/admin/draining?enable=%v", addr, enable)
+	req, err := http.NewRequest("POST", url, nil)
+	require.NoError(t, err, "Error while creating post request for %s", url)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err, "Error while sending post request to %s", url)
+	status := resp.StatusCode
+	require.Equal(t, http.StatusOK, status, "Unexpected status code: %v", status)
+}
+
+func TestDrainingMode(t *testing.T) {
+	runRequests := func(expectErr bool) {
+		q1 := `
+	{
+	  alice(func: has(name)) {
+	    name
+	  }
+	}
+	`
+		_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+		if expectErr {
+			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
+		} else {
+			require.NoError(t, err, "Got error while running query: %v", err)
+		}
+
+		m1 := `
+    {
+	  set {
+		_:alice <name> "Alice" .
+	  }
+	}
+	`
+		_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, ts)
+		if expectErr {
+			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
+		} else {
+			require.NoError(t, err, "Got error while running mutation: %v", err)
+		}
+
+		err = alterSchema(`name: string @index(term) .`)
+		if expectErr {
+			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
+		} else {
+			require.NoError(t, err, "Got error while running alter: %v", err)
+		}
+
+	}
+
+	setDrainingMode(t, true)
+	runRequests(true)
+
+	setDrainingMode(t, false)
+	runRequests(false)
+}
