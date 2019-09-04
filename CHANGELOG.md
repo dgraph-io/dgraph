@@ -15,9 +15,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
     **not** a one-to-many relation as in Dgraph v1.1. To specify a one-to-many
     relation in Dgraph v1.0, use the `[uid]` schema type. ([#2895][], [#3173][], [#2921][])
 
-  - **\_predicate\_** is removed from the query language. To determine the edges
-    coming out from a node, the node must have a specified type using the type
-    system. ([#3262][])
+  - **\_predicate\_** is removed from the query language.
 
   - **expand(\_all\_)** only works for nodes with attached type information via
     the type system. The type system is used to determine the predicates to expand
@@ -25,7 +23,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
   - **S \* \* deletion** only works for nodes with attached type information via
     the type system. The type system is used to determine the predicates to
-    expand out from a node.
+    delete from a node. For `S * *` deletions, only the predicates specified by
+    the type are deleted.
 
   - **HTTP API**: The HTTP API has been updated to replace the custom HTTP headers
     with standard headers.
@@ -99,7 +98,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Optimization: Reuse lexer for parsing RDF. ([#3762][])
 - Reuse postings and avoid fmt.Sprintf to reduce mem allocations ([#3767][])
 - Various optimizations for Geo queries. ([#3805][])
-- Use one atomic variable to generate blank node ids for json objects. This changes the format of automatically generated blank node names in JSON muattions. ([#3795][])
+- **Breaking change**: Use one atomic variable to generate blank node ids for
+  json objects. This changes the format of automatically generated blank node
+  names in JSON mutations. ([#3795][])
 - Speed up JSON chunker. ([#3825][])
 - Add additional logs to show progress of reindexing operation. ([#3746][])
 - Print commit SHA256 when invoking "make install". ([#3786][])
