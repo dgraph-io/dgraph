@@ -100,16 +100,16 @@ the Alphas are running on the same filesystems as a normal process, not a Docker
 container). However, a NFS is recommended so that backups work seamlessly across
 multiple machines and/or containers.
 
-#### Forcing a full backup
+#### Forcing a Full Backup
 
 By default, an incremental backup will be created if there's another full backup
-in the specified location. An user can force a full backup to be created, they
-can set the `force_full` parameter to "true". Each series of backups can be
+in the specified location. To create a full backup, set the `force_full` parameter
+to `true`. Each series of backups can be
 identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
 
-### Restore from backup
+### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
 created backup. Restore is intended to restore a backup to a new Dgraph cluster.
@@ -148,12 +148,12 @@ $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/<bucketnam
 $ dgraph restore -p /var/db/dgraph -l minio://127.0.0.1:9000/<bucketname>
 ```
 
-#### Restore from local directory or NFS
+#### Restore from Local Directory or NFS
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
 ```
 
-#### Restore and update timestamp
+#### Restore and Update Timestamp
 
 Specify the Zero address and port for the new cluster with `--zero`/`-z` to update the timestamp.
 ```sh
@@ -172,6 +172,7 @@ needed for setting up ACL; then we will explain how to use a client to access
 the data protected by ACL rules.
 
 ### Turn on ACLs
+
 The ACL Feature can be turned on by following these steps
 
 1. Since ACL is an enterprise feature, make sure your use case is covered under a contract with Dgraph Labs Inc.
@@ -205,20 +206,20 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 Now that your cluster is running with the ACL feature turned on, let's set up the ACL rules. A typical workflow is the following:
 
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:9180` as a demo, make sure to choose the correct one for your environment:
+1. Reset the root password. The example below uses the dgraph endpoint `localhost:9080` as a demo, make sure to choose the correct one for your environment:
 ```bash
-dgraph acl -a localhost:9180 mod -u groot --new_password
+dgraph acl -a localhost:9080 mod -u groot --new_password
 ```
 Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
 
 2. Create a regular user
 ```bash
-dgraph acl -a localhost:9180 add -u alice
+dgraph acl -a localhost:9080 add -u alice
 ```
 Now you should see the following output
 ```bash
 Current password for groot:
-Running transaction with dgraph endpoint: localhost:9180
+Running transaction with dgraph endpoint: localhost:9080
 Login successful.
 New password for alice:
 Retype new password for alice:
@@ -227,43 +228,43 @@ Created new user with id alice
 
 3. Create a group
 ```bash
-dgraph acl -a localhost:9180 add -g dev
+dgraph acl -a localhost:9080 add -g dev
 ```
 Again type in the groot password, and you should see the following output
 ```bash
 Current password for groot:
-Running transaction with dgraph endpoint: localhost:9180
+Running transaction with dgraph endpoint: localhost:9080
 Login successful.
 Created new group with id dev
 ```
 4. Assign the user to the group
 ```bash
-dgraph acl -a localhost:9180 mod -u alice -l dev
+dgraph acl -a localhost:9080 mod -u alice -l dev
 ```
 The command above will add `alice` to the `dev` group. A user can be assigned to multiple groups.
 The multiple groups should be formated as a single string separated by `,`.
 For example, to assign the user `alice` to both the group `dev` and the group `sre`, the command should be
 ```bash
-dgraph acl -a localhost:9180 mod -u alice -l dev,sre
+dgraph acl -a localhost:9080 mod -u alice -l dev,sre
 ```
 5. Assign predicate permissions to the group
 ```bash
-dgraph acl mod -a localhost:9180 -g dev -p friend -m 7
+dgraph acl mod -a localhost:9080 -g dev -p friend -m 7
 ```
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the `friend` predicate. Permissions are represented by a number following the UNIX file permission convention.
 That is, 4 (binary 100) represents `READ`, 2 (binary 010) represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to change a predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to represent multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and `MODIFY`.
 In order for the example in the next section to work, we also need to grant full permissions on another predicate `name` to the group `dev`
 ```bash
-dgraph acl mod -a localhost:9180 -g dev -p name -m 7
+dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 ```
 
 6. Check information about a user
 ```bash
-dgraph acl info -a localhost:9180 -u alice
+dgraph acl info -a localhost:9080 -u alice
 ```
 and the output should show the groups that the user has been added to, e.g.
 ```bash
-Running transaction with dgraph endpoint: localhost:9180
+Running transaction with dgraph endpoint: localhost:9080
 Login successful.
 User  : alice
 UID   : 0x3
@@ -273,12 +274,12 @@ Group : sre
 
 7. Check information about a group
 ```bash
-dgraph acl info -a localhost:9180 -g dev
+dgraph acl info -a localhost:9080 -g dev
 ```
 and the output should include the users in the group, as well as the permissions the group's ACL rules, e.g.
 ```bash
 Current password for groot:
-Running transaction with dgraph endpoint: localhost:9180
+Running transaction with dgraph endpoint: localhost:9080
 Login successful.
 Group: dev
 UID  : 0x4
