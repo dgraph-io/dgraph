@@ -73,20 +73,18 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Always parse language tag. ([#3243][])
 - Populate the StartTs for the commit gRPC call so that clients can double check the startTs still matches. ([#3228][])
 - Replace MD5 with SHA-256 in `dgraph cert ls`. ([#3254][])
-- Reduce required memory. ([#3274][])
 - Fix use of deprecated function `grpc.WithTimeout()`. ([#3253][])
 - Introduce multi-part posting lists. ([#3105][])
 - Fix format of the keys to support startUid for multi-part posting lists. ([#3310][])
 - Access groupi.gid atomically. ([#3402][])
 - Use Stream Writer for full snapshot transfer. ([#3442][])
 
-- Add field to backup requests to force a full backup. ([#3387][])
 - Move Raft checkpoint key to w directory. ([#3444][])
 - Remove list.SetForDeletion method, remnant of the global LRU cache. ([#3481][])
 - Whitelist by hostname. ([#2953][])
 - Use CIDR format for whitelists instead of the previous range format.
 - Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. ([#3060][])
-- Replace integer compression in UID Pack with groupvariant algorithm. ([#3527][], [#3650][])
+- Replace integer compression in UID Pack with groupvarint algorithm. ([#3527][], [#3650][])
 - Replace fmt.Errorf with errors.Errorf ([#3627][])
 - Use the stream framework to rebuild indices. ([#3686][])
 - Rebuild reverse index before count reverse. ([#3688][])
@@ -262,6 +260,7 @@ backend.
 - Use backwards-compatible formats during backup ([#3629][])
 - Use manifest to only restore preds assigned to each group. ([#3648][])
 - Fixes the toBackupList function by removing the loop. ([#3869][])
+- Add field to backup requests to force a full backup. ([#3387][])
 
 #### Dgraph Zero
 
