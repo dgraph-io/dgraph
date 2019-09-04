@@ -27,9 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// #include <unistd.h>
-import "C"
-
 const (
 	// AllowMutations is the mode allowing all mutations.
 	AllowMutations int = iota
@@ -93,6 +90,9 @@ func SetConfiguration(newConfig Options) {
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
 const MinAllottedMemory = 1024.0
 
+// availableMemory is the total size of the memory we were able to identify.
+var availableMemory int64
+
 func (opt *Options) validate() {
 	pd, err := filepath.Abs(opt.PostingDir)
 	x.Check(err)
@@ -100,15 +100,13 @@ func (opt *Options) validate() {
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
 	if opt.AllottedMemory < 0 {
-		bytes := C.sysconf(C._SC_PHYS_PAGES) * C.sysconf(C._SC_PAGE_SIZE)
-		mb := bytes / 1024 / 1024
-		if mb > MinAllottedMemory {
-			opt.AllottedMemory = 0.25 * float64(mb)
+		if availableMemory > MinAllottedMemory {
+			opt.AllottedMemory = 0.25 * float64(availableMemory)
 			glog.Infof(
 				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
 					"For more information on --lru_mb please read "+
 					"https://docs.dgraph.io/deploy/#config\n",
-				opt.AllottedMemory, mb)
+				opt.AllottedMemory, availableMemory)
 		}
 	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
