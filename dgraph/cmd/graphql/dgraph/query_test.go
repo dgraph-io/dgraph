@@ -63,6 +63,3 @@ func TestQueryRewriting(t *testing.T) {
 		})
 	}
 }
-
-//
-// plus add a case for bad UID

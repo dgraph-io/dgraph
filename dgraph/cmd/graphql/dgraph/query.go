@@ -78,8 +78,8 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 		//
 		// But that's not a rewriting error!  It should be caught by validation
 		// way up when the query first comes in.  All other possible problems with
-		// the query are.  ATM, I'm not sure how to hook into the GraphQL validator
-		// to get that to happen
+		// the query are caught by validation.
+		// ATM, I'm not sure how to hook into the GraphQL validator to get that to happen
 		uid, err := gqlQuery.IDArgValue()
 		if err != nil {
 			return nil, err
