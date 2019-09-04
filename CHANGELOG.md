@@ -9,21 +9,33 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Changed
 
 
-**Breaking changes for datetime queries**
+- **Breaking changes**
 
-- Use UTC Hour, Day, Month, Year for datetime comparison. **Backwards incompatible with v1.0.x** ([#3251][])
+  - **Datetime index**: Use UTC Hour, Day, Month, Year for datetime comparison.
+    This is a bug fix that may result in different query results for existing
+    queries involving the datetime index. ([#3251][])
 
-**Breaking changes for users using the HTTP API**
+  - **`_predicate_`** is removed from the query language. To determine the edges
+    coming out from a node, the node must have a specified type using the type
+    sytem.
 
-- Change `/commit` endpoint to accept a list of preds for conflict detection. ([#3020][])
-- Remove custom HTTP Headers, cleanup API. ([#3365][])
-  - The startTs path parameter is now a query parameter `startTs` for the `/query`, `/mutate`, and `/commit` endpoints.
-  - Dgraph custom HTTP Headers `X-Dgraph-CommitNow`, `X-Dgraph-MutationType`, and `X-Dgraph-Vars` are now ignored and no longer necessary.
-- Update HTTP API Content-Type headers. ([#3550][]) ([#3532][])
-  - Queries over HTTP must have the Content-Type header `application/graphql+-`.
-  - Queries over HTTP with GraphQL Variables (e.g., `query queryName($a: string) { ... }`) must use the query format via `application/json` to pass query variables.
-  - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
-- Update /health endpoint to return alpha version. ([#3526][])
+  - **`expand(_all_)`** only works for nodes with attached type information via
+    the type system. The type system is used to determine the predicates to expand
+    out from a node.
+
+  - **HTTP API**. The HTTP API has been updated to replace the custom HTTP headers
+    with standard headers.
+    - Change `/commit` endpoint to accept a list of preds for conflict detection. ([#3020][])
+    - Remove custom HTTP Headers, cleanup API. ([#3365][])
+      - The startTs path parameter is now a query parameter `startTs` for the
+        `/query`, `/mutate`, and `/commit` endpoints.
+      - Dgraph custom HTTP Headers `X-Dgraph-CommitNow`,
+        `X-Dgraph-MutationType`, and `X-Dgraph-Vars` are now ignored.
+    - Update HTTP API Content-Type headers. ([#3550][]) ([#3532][])
+      - Queries over HTTP must have the Content-Type header `application/graphql+-` or `application/json`.
+      - Queries over HTTP with GraphQL Variables (e.g., `query queryName($a: string) { ... }`) must use the query format via `application/json` to pass query variables.
+      - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
+      - Commits over HTTP must have the `startTs` query parameter along with the JSON map of conflict keys and predicates.
 
 - Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes [#3528][]. ([#3565][])
 - reports line-column numbers for lexer/parser errors. ([#2914][])
