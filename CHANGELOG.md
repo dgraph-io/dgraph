@@ -23,6 +23,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
     the type system. The type system is used to determine the predicates to expand
     out from a node. ([#3262][])
 
+  - **`S * *` deletion** only works for nodes with attached type information via
+    the type system. The type system is used to determine the predicates to
+    expand out from a node.
+
   - **HTTP API**. The HTTP API has been updated to replace the custom HTTP headers
     with standard headers.
     - Change `/commit` endpoint to accept a list of preds for conflict detection. ([#3020][])
