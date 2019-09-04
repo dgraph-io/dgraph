@@ -207,6 +207,10 @@ type CarModel {
 	previous_model: CarModel
 }
 
+type Object {
+	name: string
+}
+
 type SchoolInfo {
 	name: string
 	abbr: string
@@ -543,11 +547,13 @@ func populateCluster() {
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
 
+		<202> <name> "Car" .
 		<202> <make> "Toyota" .
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
 		<202> <dgraph.type> "CarModel" .
+		<202> <dgraph.type> "Object" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

@@ -164,6 +164,34 @@ func TestParseQueryExpandReverse(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseQueryExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryExpandMultipleTypes(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person, Relative)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func TestParseQueryAliasListPred(t *testing.T) {
 	query := `
 	{

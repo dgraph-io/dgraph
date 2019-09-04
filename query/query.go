@@ -1788,9 +1788,19 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			preds = append(preds, rpreds...)
 		default:
-			span.Annotate(nil, "expand default")
-			// We already have the predicates populated from the var.
-			preds = getPredsFromVals(child.ExpandPreds)
+			if len(child.ExpandPreds) > 0 {
+				span.Annotate(nil, "expand default")
+				// We already have the predicates populated from the var.
+				preds = getPredsFromVals(child.ExpandPreds)
+			} else {
+				types := strings.Split(child.Params.Expand, ",")
+				preds = getPredicatesFromTypes(types)
+				rpreds, err := getReversePredicates(ctx, preds)
+				if err != nil {
+					return out, err
+				}
+				preds = append(preds, rpreds...)
+			}
 		}
 		preds = uniquePreds(preds)
 

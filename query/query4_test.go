@@ -339,5 +339,27 @@ func TestTypeExpandLang(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+}
+
+func TestTypeExpandExplicitType(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(Object)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name":"Car"}]}}`, js)
+}
+
+func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(CarModel, Object)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name": "Car", "make":"Toyota","model":"Prius", "year":2009}]}}`, js)
 }
