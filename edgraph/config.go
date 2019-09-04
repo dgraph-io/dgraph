@@ -100,8 +100,8 @@ func (opt *Options) validate() {
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
 	if opt.AllottedMemory < 0 {
-		if availableMemory > MinAllottedMemory {
-			opt.AllottedMemory = 0.25 * float64(availableMemory)
+		if allottedMemory := 0.25 * float64(availableMemory); allottedMemory > MinAllottedMemory {
+			opt.AllottedMemory = allottedMemory
 			glog.Infof(
 				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
 					"For more information on --lru_mb please read "+
