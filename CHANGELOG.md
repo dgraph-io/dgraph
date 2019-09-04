@@ -4,10 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## 1.1.0 - [Unreleased]
+## [1.1.0] - 2019-09-03
+[1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
 
 ### Changed
-
 
 - **Breaking changes**
 
@@ -50,24 +50,14 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
     objects within a single mutation are assigned the same blank node.
     ([#3795][])
 
-- Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes [#3528][]. ([#3565][])
 - Improve hash index. ([#2887][])
 - Use a stream connection for internal connection health checking. ([#2956][])
 - Use defer statements to release locks. ([#2962][])
-- Suppress logging before `flag.Parse` from glog. ([#2970][])
 - VerifyUid should wait for membership information. ([#2974][])
 - Switching to perfect use case of sync.Map and remove the locks. ([#2976][])
-
-- Error messages
-  - Output the line and column number in schema parsing error messages. ([#2986][])
-  - Improve error of empty block queries. ([#3015][])
-  - Update flag description and error messaging related to `--query_edge_limit` flag. ([#2979][])
-  - Reports line-column numbers for lexer/parser errors. ([#2914][])
-
 - Tablet move and group removal. ([#2880][])
 - Delete tablets which don't belong after tablet move. ([#3051][])
 - Alphas inform Zero about tablets in its postings directory when Alpha starts. ([3271f64e0][])
-- Move glog of missing value warning to verbosity level 3. ([#3092][])
 - Prevent alphas from asking zero to serve tablets during queries. ([#3091][])
 - Put data before extensions in JSON response. ([#3194][])
 - Always parse language tag. ([#3243][])
@@ -77,37 +67,47 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Introduce multi-part posting lists. ([#3105][])
 - Fix format of the keys to support startUid for multi-part posting lists. ([#3310][])
 - Access groupi.gid atomically. ([#3402][])
-- Use Stream Writer for full snapshot transfer. ([#3442][])
-
 - Move Raft checkpoint key to w directory. ([#3444][])
 - Remove list.SetForDeletion method, remnant of the global LRU cache. ([#3481][])
 - Whitelist by hostname. ([#2953][])
 - Use CIDR format for whitelists instead of the previous range format.
 - Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. ([#3060][])
 - Replace integer compression in UID Pack with groupvarint algorithm. ([#3527][], [#3650][])
-- Replace fmt.Errorf with errors.Errorf ([#3627][])
-- Use the stream framework to rebuild indices. ([#3686][])
 - Rebuild reverse index before count reverse. ([#3688][])
-- Add log prefix to stream used to rebuild indices. ([#3696][])
-- Fixing issues in export. ([#3682][])
-- Optimization: Don't read posting lists from disk when mutating indices. ([#3695][], [#3713][])
-- Reduce memory consumption in bulk loader. ([#3724][])
-- Vendor in badger, dgo and regenerate protobufs. ([#3747][])
-- Optimization: Reuse lexer for parsing RDF. ([#3762][])
-- Reuse postings and avoid fmt.Sprintf to reduce mem allocations ([#3767][])
-- Various optimizations for Geo queries. ([#3805][])
 - **Breaking change**: Use one atomic variable to generate blank node ids for
   json objects. This changes the format of automatically generated blank node
   names in JSON mutations. ([#3795][])
-- Speed up JSON chunker. ([#3825][])
-- Add additional logs to show progress of reindexing operation. ([#3746][])
 - Print commit SHA256 when invoking "make install". ([#3786][])
-- Optimization: Avoid preallocating uid slice. It was slowing down unpackBlock.
 - Print SHA-256 checksum of Dgraph binary in the version section logs. ([#3828][])
 - Change anonynmous telemetry endpoint. ([#3872][])
-- Add support for *API* required for Multiple Mutation. ([#3839][])
+- Add support for API required for multiple mutations within a single call. ([#3839][])
 - Make `lru_mb` optional. ([#3898][])
-- Change time threshold for Raft.Ready warning logs. ([#3901][])
+
+- Logging
+  - Suppress logging before `flag.Parse` from glog. ([#2970][])
+  - Move glog of missing value warning to verbosity level 3. ([#3092][])
+  - Change time threshold for Raft.Ready warning logs. ([#3901][])
+  - Add log prefix to stream used to rebuild indices. ([#3696][])
+  - Add additional logs to show progress of reindexing operation. ([#3746][])
+
+- Error messages
+  - Output the line and column number in schema parsing error messages. ([#2986][])
+  - Improve error of empty block queries. ([#3015][])
+  - Update flag description and error messaging related to `--query_edge_limit` flag. ([#2979][])
+  - Reports line-column numbers for lexer/parser errors. ([#2914][])
+  - Replace fmt.Errorf with errors.Errorf ([#3627][])
+  - Return GraphQL compliant `"errors"` field for HTTP requests. ([#3728][])
+
+- Optimizations
+  - Don't read posting lists from disk when mutating indices. ([#3695][], [#3713][])
+  - Avoid preallocating uid slice. It was slowing down unpackBlock.
+  - Reduce memory consumption in bulk loader. ([#3724][])
+  - Reduce memory consumptino by reusing lexer for parsing RDF. ([#3762][])
+  - Use the stream framework to rebuild indices. ([#3686][])
+  - Use Stream Writer for full snapshot transfer. ([#3442][])
+  - Reuse postings and avoid fmt.Sprintf to reduce mem allocations ([#3767][])
+  - Speed up JSON chunker. ([#3825][])
+  - Various optimizations for Geo queries. ([#3805][])
 
 - Update various govendor dependencies
   - Add OpenCensus deps to vendor using govendor. ([#2989][])
@@ -118,37 +118,35 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Update vendored dependencies. ([#3357][])
   - Bring in latest changes from badger and fix broken API calls. ([#3502][])
   - Vendor badger with the latest changes. ([#3606][])
+  - Vendor in badger, dgo and regenerate protobufs. ([#3747][])
   - Vendor latest badger. ([#3784][])
   - **Breaking change**: Vendor in latest Badger with data-format changes. ([#3906][])
 
-#### Dgraph Debug Tool
+Dgraph Debug Tool
 
 - When looking up a key, print if it's a multi-part list and its splits. ([#3311][])
 - Diagnose Raft WAL via debug tool. ([#3319][])
 - Allow truncating Raft logs via debug tool. ([#3345][])
 - Allow modifying Raft snapshot and hardstate in debug tool. ([#3364][])
 
-#### Dgraph Live Loader / Dgraph Bulk Loader
+Dgraph Live Loader / Dgraph Bulk Loader
 
 - Add `--format` flag to Dgraph Live Loader and Dgraph Bulk Loader to specify input data format type. ([#2991][])
 - Update live loader flag help text. ([#3278][])
 - Improve reporting of aborts and retries during live load. ([#3313][])
-- Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
-- Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. ([#2998][])
-- Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. ([#3004][], [#3045][]) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
+- Remove xidmap storage on disk from bulk loader.
+- Optimize XidtoUID map used by live and bulk loader.
+- Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. ([#3004][], [#3045][]) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. ([18277872f][])
 - Use StreamWriter in bulk loader. ([#3542][]) ([#3635][], [#3649][])
 - Add timestamps during bulk/live load. ([#3287][])
 - Use initial schema during bulk load. ([#3333][])
- Adding the verbose flag to suppress excessive logging in live loader ([#3560][])
-** SKIPPED a9d0554bf Fix golint warnings in the migrate package. ([#3613][])
 - Adding the verbose flag to suppress excessive logging in live loader. ([#3560][])
 - Fix user meta of schema and type entries in bulk loader. ([#3628][])
 - Check that all data files passed to bulk loader exist. ([#3681][])
 - Handle non-list UIDs predicates in bulk loader. [#3659][]
 - Use sync.Pool for MapEntries in bulk loader. ([#3763][], 802ec4c39)
-- Return GraphQL compliant `"errors"` field for HTTP requests. ([#3728][])
 
-#### Dgraph Increment Tool
+Dgraph Increment Tool
 
 - Add server-side and client-side latency numbers to increment tool. ([#3422][])
 - Add `--retries` flag to specify number of retry requests to set up a gRPC connection. ([#3584][])
@@ -166,7 +164,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Support applying a license using /enterpriseLicense endpoint in Zero. ([#3824][])
   - Don't apply license state for oss builds. ([#3847][])
 
-#### Query
+Query
 
 - Type system
   - Add `type` function to query types. ([#2933][])
@@ -179,13 +177,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Include types in results of export operation. ([#3493][])
   - Support types in the bulk loader. ([#3506][])
 
-- Add the `upsert` query block to send "query-mutate-commit" updates as a single
+- Add the `upsert` block to send "query-mutate-commit" updates as a single
   call to Dgraph. This is especially helpful to do upserts with the `@upsert`
   schema directive. Addresses [#3059][]. ([#3412][])
   - Add support for conditional mutation in Upsert Block. ([#3612][])
 
 - Allow querying all lang values of a predicate. ([#2910][])
-- `regexp()` is valid in `@filter` even for predicates without the trigram index. ([#2913][])
+- Allow `regexp()` in `@filter` even for predicates without the trigram index. ([#2913][])
 - Add `minweight` and `maxweight` arguments to k-shortest path algorithm. ([#2915][])
 - Allow variable assignment of `count(uid)`. ([#2947][])
 - Reserved predicates
@@ -201,24 +199,24 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   only used in the `@if` directive for upsert blocks. `len(v)` It returns the
   length of a variable `v`. ([#3756][], [#3769][])
 
-#### Mutation
+Mutation
 
 - Add ability to delete triples of scalar non-list predicates. ([#2899][], [#3843][])
 - Allow deletion of specific language. ([#3242][])
 
-#### Alter
+Alter
 
 - Add DropData operation to delete data without deleting schema. ([#3271][])
 
-#### Schema
+Schema
 
 - **Breaking change**: Add ability to set schema to a single UID schema. Fixes [#2511][]. ([#2895][], [#3173][], [#2921][])
-  - If you wish to create one-to-one edges, use the schema type `uid`. The `uid` schema type in v1.0.x must be changed to `[uid]` to denote a one-to-many uid edge. 
+  - If you wish to create one-to-one edges, use the schema type `uid`. The `uid` schema type in v1.0.x must be changed to `[uid]` to denote a one-to-many uid edge.
 - Prevent dropping or altering reserved predicates. ([#2967][]) ([#2997][])
   - Reserved predicate names start with `dgraph.` .
 - Support comments in schema. ([#3133][])
 
-#### Enterprise feature: Access Control Lists (ACLs)
+Enterprise feature: Access Control Lists (ACLs)
 
 Enterprise ACLs provide read/write/admin permissions to defined users and groups
 at the predicate-level.
@@ -237,7 +235,7 @@ at the predicate-level.
 - Refactor: avoid double parsing of mutation string in ACL. ([#3494][])
 - Security fix: prevent the HmacSecret from being logged. ([#3734][])
 
-#### Enterprise feature: Backups
+Enterprise feature: Backups
 
 Enterprise backups are Dgraph backups in a binary format designed to be restored
 to a cluster of the same version and configuration. Backups can be stored on
@@ -262,20 +260,20 @@ backend.
 - Fixes the toBackupList function by removing the loop. ([#3869][])
 - Add field to backup requests to force a full backup. ([#3387][])
 
-#### Dgraph Zero
+Dgraph Zero
 
 - Zero server shutdown endpoint `/shutdown` at Zero's HTTP port. ([#2928][])
 
-#### Dgraph Live Loader
+Dgraph Live Loader
 
 - Support live loading JSON files or stdin streams. ([#2961][]) ([#3106][])
 - Support live loading N-Quads from stdin streams. ([#3266][])
 
-#### Dgraph Bulk Loader
+Dgraph Bulk Loader
 
 - Add `--replace_out` option to bulk command. ([#3089][])
 
-#### Tracing
+Tracing
 
 - Support exporting tracing data to oc_agent, then to datadog agent. ([#3398][])
 - Measure latency of Alpha's Raft loop. (63f545568)
@@ -308,24 +306,22 @@ backend.
 - Fix race condition in numShutDownSig in Alpha. ([#3402][])
 - Fix race condition in oracle.go. ([#3417][])
 - Fix tautological condition in zero.go ([#3516][])
+- Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes [#3528][]. ([#3565][])
 
 - Reject requests with predicates larger than the max size allowed (longer than 65,535 characters). ([#3052][])
-
 - Allow glog flags to be set via config file. ([#3062][], [#3077][])
 - Upgrade raft lib and fix group checksum. ([#3085][])
-
 - Check that uid is not used as function attribute. ([#3112][])
 - Do not retrieve facets when max recurse depth has been reached. ([#3190][])
-
 - Remove obsolete error message. ([#3172][])
 - Remove an unnecessary warning log. ([#3216][])
 - Fix bug triggered by nested expand predicates. ([#3205][])
 - Empty datetime will fail when returning results. ([#3169][])
-
 - Fix bug with pagination using `after`. ([#3149][])
 - Fix tablet error handling. ([#3323][])
 
 - Reserved predicates
+  - Reserved predicates are prefixed with "dgraph.", e.g., `dgraph.type`.
   - Ensure reserved predicates cannot be moved. ([#3137][])
   - Allow schema updates to reserved preds if the update is the same. ([#3143][])
 
@@ -335,6 +331,7 @@ backend.
 - Add `assign_timestamp_ns` latency field to fix encoding_ns calculation. Fixes [#3668][]. ([#3692][], [#3711][])
 - Fix data races in queries. Fixes [#3685][]. ([#3749][])
 - Bulk Loader: Fix memory usage by JSON parser. ([#3794][])
+- Fixing issues in export. Fixes #3610. ([#3682][])
 
 - Bug Fix: Use txn.Get in addReverseMutation if needed for count index ([#3874][])
 - Bug Fix: Remove Check2 at writeResponse. ([#3900][])
@@ -564,6 +561,7 @@ backend.
 [#3900]: https://github.com/dgraph-io/dgraph/issues/3900
 [3271f64e0]: https://github.com/dgraph-io/dgraph/commit/3271f64e0
 [63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
+[18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
 
 ## [1.0.17] - 2019-08-30
 [1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
