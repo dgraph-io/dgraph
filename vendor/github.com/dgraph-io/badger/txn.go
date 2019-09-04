@@ -54,6 +54,9 @@ type oracle struct {
 	// commits stores a key fingerprint and latest commit counter for it.
 	// refCount is used to clear out commits map to avoid a memory blowup.
 	commits map[uint64]uint64
+
+	// closer is used to stop watermarks.
+	closer *y.Closer
 }
 
 func newOracle(opt Options) *oracle {
@@ -66,10 +69,15 @@ func newOracle(opt Options) *oracle {
 		// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
 		readMark: &y.WaterMark{Name: "badger.PendingReads"},
 		txnMark:  &y.WaterMark{Name: "badger.TxnTimestamp"},
+		closer:   y.NewCloser(2),
 	}
-	orc.readMark.Init()
-	orc.txnMark.Init()
+	orc.readMark.Init(orc.closer)
+	orc.txnMark.Init(orc.closer)
 	return orc
+}
+
+func (o *oracle) Stop() {
+	o.closer.SignalAndWait()
 }
 
 func (o *oracle) addRef() {
@@ -608,13 +616,13 @@ func runTxnCallback(cb *txnCb) {
 	switch {
 	case cb == nil:
 		panic("txn callback is nil")
+	case cb.user == nil:
+		panic("Must have caught a nil callback for txn.CommitWith")
 	case cb.err != nil:
 		cb.user(cb.err)
 	case cb.commit != nil:
 		err := cb.commit()
 		cb.user(err)
-	case cb.user == nil:
-		panic("Must have caught a nil callback for txn.CommitWith")
 	default:
 		cb.user(nil)
 	}

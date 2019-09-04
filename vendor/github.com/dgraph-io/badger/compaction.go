@@ -65,7 +65,9 @@ func (r keyRange) overlapsWith(dst keyRange) bool {
 }
 
 func getKeyRange(tables []*table.Table) keyRange {
-	y.AssertTrue(len(tables) > 0)
+	if len(tables) == 0 {
+		return keyRange{}
+	}
 	smallest := tables[0].Smallest()
 	biggest := tables[0].Biggest()
 	for i := 1; i < len(tables); i++ {
@@ -129,7 +131,7 @@ func (cs *compactStatus) toLog(tr trace.Trace) {
 
 	tr.LazyPrintf("Compaction status:")
 	for i, l := range cs.levels {
-		if len(l.debug()) == 0 {
+		if l.debug() == "" {
 			continue
 		}
 		tr.LazyPrintf("[%d] %s", i, l.debug())
