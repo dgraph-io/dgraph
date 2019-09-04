@@ -29,6 +29,7 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/gql"
 )
 
 // Client is the GraphQL API's view of the database.  Rather than relying on
@@ -40,7 +41,7 @@ import (
 // allows exercising some of the particulars around GraphQL error processing
 // without needing a Dgraph instance the reproduces the exact error conditions.
 type Client interface {
-	Query(ctx context.Context, query *QueryBuilder) ([]byte, error)
+	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
 	DeleteNode(ctx context.Context, uid uint64) error
 	AssertType(ctx context.Context, uid uint64, typ string) error
@@ -56,15 +57,12 @@ func AsDgraph(dgo *dgo.Dgraph) Client {
 	return &dgraph{client: dgo}
 }
 
-func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
+func (dg *dgraph) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 
-	q, err := qb.AsQueryString()
-	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't build Dgraph query")
-	}
+	queryStr := asString(query)
 
 	if glog.V(3) {
-		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), q)
+		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
 	}
 
 	// Always use debug mode so that UID is inserted for every node that we touch
@@ -78,9 +76,16 @@ func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
 	// But, for GraphQL, we want to know about those missing values.
 	md := metadata.Pairs("debug", "true")
 	resp, err := dg.client.NewTxn().
-		Query(metadata.NewOutgoingContext(ctx, md), q)
+		Query(metadata.NewOutgoingContext(ctx, md), queryStr)
 
-	return resp.Json, schema.GQLWrapf(err, "Dgraph query failed")
+	return responseBytes(resp), schema.GQLWrapf(err, "Dgraph query failed")
+}
+
+func responseBytes(resp *dgoapi.Response) []byte {
+	if resp == nil {
+		return nil
+	}
+	return resp.Json
 }
 
 func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
@@ -127,13 +132,26 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 // holds, and an error if something goes wrong.
 func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error {
 
-	qb := NewQueryBuilder().
-		WithAttr("checkID").
-		WithUIDRoot(uid).
-		WithTypeFilter(typ).
-		WithField("uid")
+	q := &gql.GraphQuery{
+		Attr: "checkID",
+		Func: &gql.Function{
+			Name: "uid",
+			UID:  []uint64{uid},
+		},
+		Filter: &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "type",
+				Args: []gql.Arg{{Value: typ}},
+			},
+		},
+		Children: []*gql.GraphQuery{
+			{
+				Attr: "uid",
+			},
+		},
+	}
 
-	resp, err := dg.Query(ctx, qb)
+	resp, err := dg.Query(ctx, q)
 	if err != nil {
 		return schema.GQLWrapf(err, "unable to type check id")
 	}

@@ -4,7 +4,7 @@
     mutation {
       ADD_UPDATE_MUTATION {
         post {
-          id
+          postID
           title
         }
       }
@@ -12,7 +12,7 @@
   dgquery: |-
     query {
       post(func: uid(0x4)) {
-        id : uid
+        postID : uid
         title : Post.title
       }
     }
@@ -23,7 +23,7 @@
     mutation {
       ADD_UPDATE_MUTATION {
         result : post {
-          id
+          postID
           title
         }
       }
@@ -31,7 +31,7 @@
   dgquery: |-
     query {
       result(func: uid(0x4)) {
-        id : uid
+        postID : uid
         title : Post.title
       }
     }
@@ -42,7 +42,7 @@
     mutation {
       ADD_UPDATE_MUTATION {
         post {
-          postID : id
+          id : postID
           postTitle : title
         }
       }
@@ -50,7 +50,7 @@
   dgquery: |-
     query {
       post(func: uid(0x4)) {
-        postID : uid
+        id : uid
         postTitle : Post.title
       }
     }
@@ -61,7 +61,7 @@
     mutation {
       ADD_UPDATE_MUTATION {
         post {
-          id
+          postID
           title
           author {
             name
@@ -72,7 +72,7 @@
   dgquery: |-
     query {
       post(func: uid(0x4)) {
-        id : uid
+        postID : uid
         title : Post.title
         author : Post.author {
           name : Author.name
@@ -86,7 +86,7 @@
     mutation {
       ADD_UPDATE_MUTATION {
         post {
-          id
+          postID
           title
           postAuthor: author {
             authorID: id
@@ -98,7 +98,7 @@
   dgquery: |-
     query {
       post(func: uid(0x4)) {
-        id : uid
+        postID : uid
         title : Post.title
         postAuthor : Post.author {
           authorID : uid

@@ -84,6 +84,7 @@ type RequestResolver struct {
 	GqlReq           *schema.Request
 	Schema           schema.Schema
 	dgraph           dgraph.Client
+	queryRewriter    dgraph.QueryRewriter
 	mutationRewriter dgraph.MutationRewriter
 	resp             *schema.Response
 }
@@ -98,11 +99,16 @@ type resolved struct {
 }
 
 // New creates a new RequestResolver
-func New(s schema.Schema, dg dgraph.Client, mutRewriter dgraph.MutationRewriter) *RequestResolver {
+func New(
+	s schema.Schema,
+	dg dgraph.Client,
+	queryRewriter dgraph.QueryRewriter,
+	mutRewriter dgraph.MutationRewriter) *RequestResolver {
 	return &RequestResolver{
 		Schema:           s,
 		dgraph:           dg,
 		resp:             &schema.Response{},
+		queryRewriter:    queryRewriter,
 		mutationRewriter: mutRewriter,
 	}
 }
@@ -161,10 +167,11 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				defer wg.Done()
 
 				allResolved[storeAt] = (&queryResolver{
-					query:     q,
-					schema:    r.Schema,
-					dgraph:    r.dgraph,
-					operation: op,
+					query:         q,
+					schema:        r.Schema,
+					dgraph:        r.dgraph,
+					queryRewriter: r.queryRewriter,
+					operation:     op,
 				}).resolve(ctx)
 			}(q, i)
 		}
@@ -195,6 +202,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				schema:           r.Schema,
 				dgraph:           r.dgraph,
 				mutationRewriter: r.mutationRewriter,
+				queryRewriter:    r.queryRewriter,
 			}
 			res := mr.resolve(ctx)
 			r.WithError(res.err)

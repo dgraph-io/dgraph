@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -113,7 +114,7 @@ type Mutation {
 }
 `
 
-func (dg *dgraphClient) Query(ctx context.Context, query *dgraph.QueryBuilder) ([]byte, error) {
+func (dg *dgraphClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return []byte(dg.resp), nil
 }
 
@@ -356,7 +357,11 @@ func resolveWithClient(
 	gqlSchema *ast.Schema,
 	gqlQuery string,
 	client dgraph.Client) *schema.Response {
-	resolver := New(schema.AsSchema(gqlSchema), client, dgraph.NewMutationRewriter())
+	resolver := New(
+		schema.AsSchema(gqlSchema),
+		client,
+		dgraph.NewQueryRewriter(),
+		dgraph.NewMutationRewriter())
 	resolver.GqlReq = &schema.Request{Query: gqlQuery}
 	return resolver.Resolve(context.Background())
 }

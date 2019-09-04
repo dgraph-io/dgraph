@@ -17,229 +17,168 @@
 package dgraph
 
 import (
-	"errors"
 	"fmt"
-	"strings"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// QueryBuilder is an implementation of the builder pattern that can construct
-// a gql.GraphQuery.
-type QueryBuilder struct {
-	graphQuery *gql.GraphQuery
-	err        error
+// QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query, and
+// can build a Dgraph gql.GraphQuery to follow a GraphQL mutation.
+//
+// GraphQL queries come in like:
+//
+// query {
+// 	 getAuthor(id: "0x1") {
+// 	  name
+// 	 }
+// }
+//
+// and get rewritten straight to Dgraph.  But mutations come in like:
+//
+// mutation addAuthor($auth: AuthorInput!) {
+//   addAuthor(input: $auth) {
+// 	   author {
+// 	     id
+// 	     name
+// 	   }
+//   }
+// }
+//
+// Where `addAuthor(input: $auth)` implies a mutation that must get run, and the
+// remainder implies a query to run and return the newly created author, so the
+// mutation query rewriting is dependent on the context set up by the result of
+// the mutation.
+type QueryRewriter interface {
+	Rewrite(q schema.Query) (*gql.GraphQuery, error)
+	FromMutationResult(m schema.Mutation, uids map[string]string) (*gql.GraphQuery, error)
 }
 
-// NewQueryBuilder returns a fresh QueryBuilder
-func NewQueryBuilder() *QueryBuilder {
-	return &QueryBuilder{
-		graphQuery: &gql.GraphQuery{},
+type queryRewriter struct{}
+
+// NewQueryRewriter returns a new query rewriter.
+func NewQueryRewriter() QueryRewriter {
+	return &queryRewriter{}
+}
+
+// Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
+func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
+
+	// currently only handles getT(id: "0x123") queries
+
+	switch gqlQuery.QueryType() {
+	case schema.GetQuery:
+
+		// TODO: The only error that can occur in query rewriting is if an ID argument
+		// can't be parsed as a uid: e.g. the query was something like:
+		//
+		// getT(id: "HI") { ... }
+		//
+		// But that's not a rewriting error!  It should be caught by validation
+		// way up when the query first comes in.  All other possible problems with
+		// the query are caught by validation.
+		// ATM, I'm not sure how to hook into the GraphQL validator to get that to happen
+		uid, err := gqlQuery.IDArgValue()
+		if err != nil {
+			return nil, err
+		}
+
+		dgQuery := rewriteAsGetQuery(gqlQuery, uid)
+		addTypeFilter(dgQuery, gqlQuery.Type())
+
+		return dgQuery, nil
+
+	default:
+		return nil, gqlerror.Errorf("only get queries are implemented")
 	}
 }
 
-// HasErrors returns true if qb contains errors and false otherwise.
-func (qb *QueryBuilder) HasErrors() bool {
-	return qb.err != nil
+// FromMutation rewrites the query part of aGraphQL mutation into a Dgraph query.
+func (qr *queryRewriter) FromMutationResult(
+	gqlMutation schema.Mutation,
+	uids map[string]string) (*gql.GraphQuery, error) {
+
+	switch gqlMutation.MutationType() {
+	case schema.AddMutation:
+		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
+		if err != nil {
+			return nil, schema.GQLWrapf(err,
+				"recieved %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+				uids[createdNode])
+		}
+
+		return rewriteAsGetQuery(gqlMutation.QueryField(), uid), nil
+
+	case schema.UpdateMutation:
+		uid, err := getUpdUID(gqlMutation)
+		if err != nil {
+			return nil, err
+		}
+
+		return rewriteAsGetQuery(gqlMutation.QueryField(), uid), nil
+
+	default:
+		return nil, gqlerror.Errorf("can't rewrite %s mutations to Dgraph query",
+			gqlMutation.MutationType())
+	}
 }
 
-// WithAttr sets the root query name.
-func (qb *QueryBuilder) WithAttr(attr string) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
-
-	qb.graphQuery.Attr = attr
-	return qb
-}
-
-// WithAlias sets the root query alias
-func (qb *QueryBuilder) WithAlias(alias string) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
-
-	qb.graphQuery.Alias = alias
-	return qb
-}
-
-// WithIDArgRoot sets the query root func to a query for the ID argument in q.
-// qb will contain an error if there's no ID argument in q.
-func (qb *QueryBuilder) WithIDArgRoot(q schema.Query) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
-
-	uid, err := q.IDArgValue()
-	if err != nil {
-		qb.err = err
-		return qb
-	}
-
-	return qb.WithUIDRoot(uid)
-}
-
-// WithUIDRoot sets the root func as a uid() function for uid.
-func (qb *QueryBuilder) WithUIDRoot(uid uint64) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
-
-	qb.graphQuery.Func = &gql.Function{
-		Name: "uid",
-		UID:  []uint64{uid},
-	}
-
-	return qb
-}
-
-// WithTypeFilter sets the root filter as requiring a type named as per typ.
-func (qb *QueryBuilder) WithTypeFilter(typ string) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
-
-	qb.graphQuery.Filter = &gql.FilterTree{
+func rewriteAsGetQuery(field schema.Field, uid uint64) *gql.GraphQuery {
+	dgQuery := &gql.GraphQuery{
+		Attr: field.ResponseName(),
 		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: typ}},
+			Name: "uid",
+			UID:  []uint64{uid},
 		},
 	}
 
-	return qb
+	addSelectionSetFrom(dgQuery, field)
+
+	// TODO: also builder.withPagination() ... etc ...
+
+	return dgQuery
 }
 
-// WithField adds a child query for the given field name.
-func (qb *QueryBuilder) WithField(field string) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
+func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
+	thisFilter := &gql.FilterTree{
+		Func: &gql.Function{
+			Name: "type",
+			Args: []gql.Arg{{Value: typ.Name()}},
+		},
 	}
 
-	qb.graphQuery.Children = append(qb.graphQuery.Children,
-		&gql.GraphQuery{
-			Attr: field,
-		})
-
-	return qb
+	if q.Filter == nil {
+		q.Filter = thisFilter
+	} else {
+		q.Filter = &gql.FilterTree{
+			Op:    "and",
+			Child: []*gql.FilterTree{q.Filter, thisFilter},
+		}
+	}
 }
 
-// WithSelectionSetFrom adds child queries for all fields in the selection set
-// of fld, and recursively so for all fields in the selection set of those fields.
-func (qb *QueryBuilder) WithSelectionSetFrom(fld schema.Field) *QueryBuilder {
-	if qb.HasErrors() {
-		return qb
-	}
+func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
+	for _, f := range field.SelectionSet() {
+		child := &gql.GraphQuery{}
 
-	for _, f := range fld.SelectionSet() {
-		qbld := NewQueryBuilder()
 		if f.Alias() != "" {
-			qbld.WithAlias(f.Alias())
+			child.Alias = f.Alias()
 		} else {
-			qbld.WithAlias(f.Name())
+			child.Alias = f.Name()
 		}
 
 		if f.Type().Name() == schema.IDType {
-			qbld.WithAttr("uid")
+			child.Attr = "uid"
 		} else {
-			qbld.WithAttr(fld.Type().Name() + "." + f.Name())
+			child.Attr = fmt.Sprintf("%s.%s", field.Type().Name(), f.Name())
 		}
 
 		// TODO: filters, pagination, etc in here
-		qbld.WithSelectionSetFrom(f)
 
-		q, err := qbld.query()
-		if err != nil {
-			qb.err = err
-			return qb
-		}
+		addSelectionSetFrom(child, f)
 
-		qb.graphQuery.Children = append(qb.graphQuery.Children, q)
-	}
-
-	return qb
-}
-
-// query builds QueryBuilder's query.  If qb.hasErrors(), then the returned
-// error is non-nil.
-func (qb *QueryBuilder) query() (*gql.GraphQuery, error) {
-	if qb == nil || qb.graphQuery == nil {
-		return nil, errors.New("nil query builder")
-	}
-
-	return qb.graphQuery, qb.err
-}
-
-// AsQueryString renders a QueryBuilder as the string that a user would recognise as
-// a Dgraph query.
-func (qb *QueryBuilder) AsQueryString() (string, error) {
-	gq, err := qb.query()
-	if err != nil {
-		return "", err
-	}
-
-	return asString(gq), nil
-}
-
-func asString(query *gql.GraphQuery) string {
-	if query == nil {
-		return ""
-	}
-
-	var b strings.Builder
-
-	b.WriteString("query {\n")
-	writeQuery(&b, query, "  ")
-	b.WriteString("}")
-
-	return b.String()
-}
-
-func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
-	b.WriteString(prefix)
-	if query.Alias != "" {
-		b.WriteString(query.Alias)
-		b.WriteString(" : ")
-	}
-	b.WriteString(query.Attr)
-
-	writeFunction(b, query.Func)
-	writeFilter(b, query.Filter)
-
-	if len(query.Children) > 0 {
-		b.WriteString(" {\n")
-		for _, c := range query.Children {
-			writeQuery(b, c, prefix+"  ")
-		}
-		b.WriteString(prefix)
-		b.WriteString("}")
-	}
-	b.WriteString("\n")
-}
-
-func writeFunction(b *strings.Builder, f *gql.Function) {
-	if f != nil {
-		b.WriteString(fmt.Sprintf("(func: %s(0x%x))", f.Name, f.UID[0]))
-		// there's only uid(...) functions so far
-	}
-}
-
-func writeFilterFunction(b *strings.Builder, f *gql.Function) {
-	if f != nil {
-		b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value))
-	}
-}
-
-func writeFilter(b *strings.Builder, f *gql.FilterTree) {
-	if f == nil {
-		return
-	}
-
-	if f.Func.Name == "type" {
-		b.WriteString(fmt.Sprintf(" @filter(type(%s))", f.Func.Args[0].Value))
-	} else {
-		b.WriteString(" @filter(")
-		writeFilterFunction(b, f.Func)
-		b.WriteString(")")
+		q.Children = append(q.Children, child)
 	}
 }

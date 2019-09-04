@@ -31,7 +31,6 @@ const (
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
 type MutationRewriter interface {
 	Rewrite(m schema.Mutation) (interface{}, error)
-	GetUpdUID(m schema.Mutation) (uint64, error)
 }
 
 type mutationRewriter struct{}
@@ -119,7 +118,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 			// If patch were nil, validation would have failed.
 			val = val["patch"].(map[string]interface{})
 
-			uid, err := mrw.GetUpdUID(m)
+			uid, err := getUpdUID(m)
 			if err != nil {
 				return nil, err
 			}
@@ -159,9 +158,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 				"this indicates a GraphQL validation error.")
 }
 
-// FIXME: this will go once query is also refactored.  ATM it's just required so that
-// the resolved mutation can get back the id it needs to rewrite the query.
-func (mrw *mutationRewriter) GetUpdUID(m schema.Mutation) (uint64, error) {
+func getUpdUID(m schema.Mutation) (uint64, error) {
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	idArg := val[m.MutatedType().IDField().Name()]
 
