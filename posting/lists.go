@@ -114,7 +114,7 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func updateMemoryMetrics(lc *y.Closer) {
+func updateMetrics(lc *y.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -124,25 +124,38 @@ func updateMemoryMetrics(lc *y.Closer) {
 		case <-lc.HasBeenClosed():
 			return
 		case <-ticker.C:
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-
-			inUse := ms.HeapInuse + ms.StackInuse
-			// From runtime/mstats.go:
-			// HeapIdle minus HeapReleased estimates the amount of memory
-			// that could be returned to the OS, but is being retained by
-			// the runtime so it can grow the heap without requesting more
-			// memory from the OS. If this difference is significantly
-			// larger than the heap size, it indicates there was a recent
-			// transient spike in live heap size.
-			idle := ms.HeapIdle - ms.HeapReleased
-
-			ostats.Record(context.Background(),
-				x.MemoryInUse.M(int64(inUse)),
-				x.MemoryIdle.M(int64(idle)),
-				x.MemoryProc.M(int64(getMemUsage())))
+			updateMemoryMetrics()
+			updateBadgerMetrics()
 		}
 	}
+}
+
+func updateBadgerMetrics() {
+	ostats.Record(context.Background(), x.BadgerDiskReadsTotal.M(y.NumReads.Value()),
+		x.BadgerDiskWritesTotal.M(y.NumWrites.Value()),
+		x.BadgerGetsTotal.M(y.NumGets.Value()),
+		x.BadgerMemtableGetsTotal.M(y.NumMemtableGets.Value()),
+		x.BadgerPutsTotal.M(y.NumPuts.Value()),
+		x.BadgerReadBytes.M(y.NumBytesRead.Value()),
+		x.BadgerWrittenBytes.M(y.NumBytesWritten.Value()))
+}
+
+func updateMemoryMetrics() {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	inUse := ms.HeapInuse + ms.StackInuse
+	// From runtime/mstats.go:
+	// HeapIdle minus HeapReleased estimates the amount of memory
+	// that could be returned to the OS, but is being retained by
+	// the runtime so it can grow the heap without requesting more
+	// memory from the OS. If this difference is significantly
+	// larger than the heap size, it indicates there was a recent
+	// transient spike in live heap size.
+	idle := ms.HeapIdle - ms.HeapReleased
+	ostats.Record(context.Background(),
+		x.MemoryInUse.M(int64(inUse)),
+		x.MemoryIdle.M(int64(idle)),
+		x.MemoryProc.M(int64(getMemUsage())))
 }
 
 var (
@@ -154,7 +167,7 @@ var (
 func Init(ps *badger.DB) {
 	pstore = ps
 	closer = y.NewCloser(1)
-	go updateMemoryMetrics(closer)
+	go updateMetrics(closer)
 }
 
 // Cleanup waits until the closer has finished processing.

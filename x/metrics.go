@@ -82,6 +82,22 @@ var (
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 
+	// Badger stats
+	BadgerDiskReadsTotal = stats.Int64("badger_disk_reads_total",
+		"Total count of disk reads in Badger", stats.UnitDimensionless)
+	BadgerDiskWritesTotal = stats.Int64("badger_disk_writes_total",
+		"Total count of disk writes in Badger", stats.UnitDimensionless)
+	BadgerGetsTotal = stats.Int64("badger_gets_total",
+		"Total count of calls to Badger’s get.", stats.UnitDimensionless)
+	BadgerMemtableGetsTotal = stats.Int64("badger_memtable_gets_total",
+		"Total count of memtable accesses to Badger’s get.'", stats.UnitDimensionless)
+	BadgerPutsTotal = stats.Int64("badger_puts_total",
+		"Total count of calls to Badger’s put.", stats.UnitDimensionless)
+	BadgerReadBytes = stats.Int64("badger_read_bytes",
+		"Total bytes read from Badger.'", stats.UnitBytes)
+	BadgerWrittenBytes = stats.Int64("badger_written_bytes",
+		"Total bytes written to Badger.", stats.UnitBytes)
+
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
@@ -109,91 +125,17 @@ var (
 		KeyStatus, KeyMethod,
 	}
 
+	countStats     = []stats.Measure{NumQueries, NumEdges, RaftAppliedIndex, MaxAssignedTs}
+	lastValueStats = []stats.Measure{PendingQueries, PendingProposals, MemoryInUse, MemoryIdle, MemoryProc,
+		ActiveMutations, AlphaHealth, BadgerDiskReadsTotal, BadgerDiskWritesTotal, BadgerGetsTotal,
+		BadgerMemtableGetsTotal, BadgerPutsTotal, BadgerReadBytes, BadgerWrittenBytes}
+
 	allViews = []*view.View{
 		{
 			Name:        LatencyMs.Name(),
 			Measure:     LatencyMs,
 			Description: LatencyMs.Description(),
 			Aggregation: defaultLatencyMsDistribution,
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        NumQueries.Name(),
-			Measure:     NumQueries,
-			Description: NumQueries.Description(),
-			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        NumEdges.Name(),
-			Measure:     NumEdges,
-			Description: NumEdges.Description(),
-			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        RaftAppliedIndex.Name(),
-			Measure:     RaftAppliedIndex,
-			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MaxAssignedTs.Name(),
-			Measure:     MaxAssignedTs,
-			Description: MaxAssignedTs.Description(),
-			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
-		},
-
-		// Last value aggregations
-		{
-			Name:        PendingQueries.Name(),
-			Measure:     PendingQueries,
-			Description: PendingQueries.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        PendingProposals.Name(),
-			Measure:     PendingProposals,
-			Description: PendingProposals.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MemoryInUse.Name(),
-			Measure:     MemoryInUse,
-			Description: MemoryInUse.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MemoryIdle.Name(),
-			Measure:     MemoryIdle,
-			Description: MemoryIdle.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MemoryProc.Name(),
-			Measure:     MemoryProc,
-			Description: MemoryProc.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        ActiveMutations.Name(),
-			Measure:     ActiveMutations,
-			Description: ActiveMutations.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        AlphaHealth.Name(),
-			Measure:     AlphaHealth,
-			Description: AlphaHealth.Description(),
-			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 	}
@@ -218,7 +160,25 @@ func init() {
 			stats.Record(cctx, AlphaHealth.M(1))
 		}
 	}()
+	for _, s := range countStats {
+		allViews = append(allViews, &view.View{
+			Name:        s.Name(),
+			Measure:     s,
+			Description: s.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		})
+	}
 
+	for _, s := range lastValueStats {
+		allViews = append(allViews, &view.View{
+			Name:        s.Name(),
+			Measure:     s,
+			Description: s.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		})
+	}
 	CheckfNoTrace(view.Register(allViews...))
 
 	pe, err := oc_prom.NewExporter(oc_prom.Options{

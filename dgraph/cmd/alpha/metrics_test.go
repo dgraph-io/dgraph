@@ -35,22 +35,30 @@ func TestMetrics(t *testing.T) {
 
 	requiredMetrics := []string{
 		// Go Runtime Metrics
-		"go_goroutines", "go_memstats_gc_cpu_fraction", "go_memstats_heap_alloc_bytes",
-		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
-		// TODO: add support for the following Badger metrics, which is currently only available
-		// through /debug/vars. Consider manually add them as OpenCensus metrics, and then
-		// test them here
-
-		// "badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
-		// "badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
-		// "badger_written_bytes",
-
+		"go_goroutines",
+		"go_memstats_gc_cpu_fraction",
+		"go_memstats_heap_alloc_bytes",
+		"go_memstats_heap_idle_bytes",
+		"go_memstats_heap_inuse_bytes",
+		"dgraph_latency_bucket",
+		// Badger Mertics
+		"dgraph_badger_disk_reads_total",
+		"dgraph_badger_disk_writes_total",
+		"dgraph_badger_gets_total",
+		"dgraph_badger_memtable_gets_total",
+		"dgraph_badger_puts_total",
+		"dgraph_badger_read_bytes",
+		"dgraph_badger_written_bytes",
 		// Dgraph Memory Metrics
-		"dgraph_memory_idle_bytes", "dgraph_memory_inuse_bytes", "dgraph_memory_proc_bytes",
+		"dgraph_memory_idle_bytes",
+		"dgraph_memory_inuse_bytes",
+		"dgraph_memory_proc_bytes",
 		// Dgraph Activity Metrics
-		"dgraph_active_mutations_total", "dgraph_pending_proposals_total",
+		"dgraph_active_mutations_total",
+		"dgraph_pending_proposals_total",
 		"dgraph_pending_queries_total",
-		"dgraph_num_queries_total", "dgraph_alpha_health_status",
+		"dgraph_num_queries_total",
+		"dgraph_alpha_health_status",
 	}
 	for _, requiredM := range requiredMetrics {
 		_, ok := metricsMap[requiredM]
