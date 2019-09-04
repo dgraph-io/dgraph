@@ -11,23 +11,23 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - **Breaking changes**
 
-  - `uid` schema type: The `uid` schema type now means a one-to-one relation,
+  - **uid schema type**: The `uid` schema type now means a one-to-one relation,
     **not** a one-to-many relation as in Dgraph v1.1. To specify a one-to-many
     relation in Dgraph v1.0, use the `[uid]` schema type. ([#2895][], [#3173][], [#2921][])
 
-  - **`_predicate_`** is removed from the query language. To determine the edges
+  - **\_predicate\_** is removed from the query language. To determine the edges
     coming out from a node, the node must have a specified type using the type
     system. ([#3262][])
 
-  - **`expand(_all_)`** only works for nodes with attached type information via
+  - **expand(\_all\_)** only works for nodes with attached type information via
     the type system. The type system is used to determine the predicates to expand
     out from a node. ([#3262][])
 
-  - **`S * *` deletion** only works for nodes with attached type information via
+  - **S \* \* deletion** only works for nodes with attached type information via
     the type system. The type system is used to determine the predicates to
     expand out from a node.
 
-  - **HTTP API**. The HTTP API has been updated to replace the custom HTTP headers
+  - **HTTP API**: The HTTP API has been updated to replace the custom HTTP headers
     with standard headers.
     - Change `/commit` endpoint to accept a list of preds for conflict detection. ([#3020][])
     - Remove custom HTTP Headers, cleanup API. ([#3365][])
@@ -120,7 +120,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Bring in latest changes from badger and fix broken API calls. ([#3502][])
   - Vendor badger with the latest changes. ([#3606][])
   - Vendor latest badger. ([#3784][])
-  - Breaking change: Vendor in latest Badger with data-format changes. ([#3906][])
+  - **Breaking change**: Vendor in latest Badger with data-format changes. ([#3906][])
 
 #### Dgraph Debug Tool
 
@@ -213,7 +213,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 #### Schema
 
-- **Breaking change** Add ability to set schema to a single UID schema. Fixes [#2511][]. ([#2895][], [#3173][], [#2921][])
+- **Breaking change**: Add ability to set schema to a single UID schema. Fixes [#2511][]. ([#2895][], [#3173][], [#2921][])
   - If you wish to create one-to-one edges, use the schema type `uid`. The `uid` schema type in v1.0.x must be changed to `[uid]` to denote a one-to-many uid edge. 
 - Prevent dropping or altering reserved predicates. ([#2967][]) ([#2997][])
   - Reserved predicate names start with `dgraph.` .
@@ -282,7 +282,7 @@ backend.
 
 ### Removed
 
-- **Breaking change** Remove `_predicate_` predicate within queries. ([#3262][])
+- **Breaking change**: Remove `_predicate_` predicate within queries. ([#3262][])
 - Remove `--debug_mode` option. ([#3441][])
 
 - Remove deprecated and unused IgnoreIndexConflict field in mutations. This functionality is superceded by the `@upsert` schema directive since v1.0.4. ([#3854][])
