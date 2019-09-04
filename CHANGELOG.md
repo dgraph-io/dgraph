@@ -11,17 +11,17 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - **Breaking changes**
 
-  - **Datetime index**: Use UTC Hour, Day, Month, Year for datetime comparison.
-    This is a bug fix that may result in different query results for existing
-    queries involving the datetime index. ([#3251][])
+  - `uid` schema type: The `uid` schema type now means a one-to-one relation,
+    **not** a one-to-many relation as in Dgraph v1.1. To specify a one-to-many
+    relation in Dgraph v1.0, use the `[uid]` schema type. ([#2895][], [#3173][], [#2921][])
 
   - **`_predicate_`** is removed from the query language. To determine the edges
     coming out from a node, the node must have a specified type using the type
-    sytem.
+    system. ([#3262][])
 
   - **`expand(_all_)`** only works for nodes with attached type information via
     the type system. The type system is used to determine the predicates to expand
-    out from a node.
+    out from a node. ([#3262][])
 
   - **HTTP API**. The HTTP API has been updated to replace the custom HTTP headers
     with standard headers.
@@ -37,8 +37,17 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
       - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
       - Commits over HTTP must have the `startTs` query parameter along with the JSON map of conflict keys and predicates.
 
+  - **Datetime index**: Use UTC Hour, Day, Month, Year for datetime
+    comparison. This is a bug fix that may result in different query results for
+    existing queries involving the datetime index. ([#3251][])
+
+  - **Blank node name generation for JSON mutations.** For JSON mutations that
+    do not explicitly set the `"uid"` field, the blank name format has changed
+    to contain randomly generated identifiers. This fixes a bug where two JSON
+    objects within a single mutation are assigned the same blank node.
+    ([#3795][])
+
 - Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes [#3528][]. ([#3565][])
-- reports line-column numbers for lexer/parser errors. ([#2914][])
 - Improve hash index. ([#2887][])
 - Use a stream connection for internal connection health checking. ([#2956][])
 - Use defer statements to release locks. ([#2962][])
@@ -46,22 +55,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - VerifyUid should wait for membership information. ([#2974][])
 - Switching to perfect use case of sync.Map and remove the locks. ([#2976][])
 
-- Update govendor dependencies.
-  - Add OpenCensus deps to vendor using govendor. ([#2989][])
-  - Govendor in latest dgo. ([#3078][])
-  - Vendor in the Jaeger and prometheus exporters from their own repos ([#3322][])
-  - Vendor in Shopify/sarama to use its Kafka clients. ([#3523][])
-  - Update dgo dependency in vendor. ([#3412][])
-  - Update vendored dependencies. ([#3357][])
-  - Bring in latest changes from badger and fix broken API calls. ([#3502][])
-  - Vendor badger with the latest changes. ([#3606][])
-  - Vendor latest badger. ([#3784][])
-  - Breaking change: Vendor in latest Badger with data-format changes. ([#3906][])
-
 - Error messages
   - Output the line and column number in schema parsing error messages. ([#2986][])
   - Improve error of empty block queries. ([#3015][])
   - Update flag description and error messaging related to `--query_edge_limit` flag. ([#2979][])
+  - Reports line-column numbers for lexer/parser errors. ([#2914][])
 
 - Tablet move and group removal. ([#2880][])
 - Delete tablets which don't belong after tablet move. ([#3051][])
@@ -108,6 +106,18 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Make `lru_mb` optional. ([#3898][])
 - Change time threshold for Raft.Ready warning logs. ([#3901][])
 
+- Update various govendor dependencies
+  - Add OpenCensus deps to vendor using govendor. ([#2989][])
+  - Govendor in latest dgo. ([#3078][])
+  - Vendor in the Jaeger and prometheus exporters from their own repos ([#3322][])
+  - Vendor in Shopify/sarama to use its Kafka clients. ([#3523][])
+  - Update dgo dependency in vendor. ([#3412][])
+  - Update vendored dependencies. ([#3357][])
+  - Bring in latest changes from badger and fix broken API calls. ([#3502][])
+  - Vendor badger with the latest changes. ([#3606][])
+  - Vendor latest badger. ([#3784][])
+  - Breaking change: Vendor in latest Badger with data-format changes. ([#3906][])
+
 #### Dgraph Debug Tool
 
 - When looking up a key, print if it's a multi-part list and its splits. ([#3311][])
@@ -139,24 +149,23 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - Add server-side and client-side latency numbers to increment tool. ([#3422][])
 - Add `--retries` flag to specify number of retry requests to set up a gRPC connection. ([#3584][])
+- Add TLS support to `dgraph increment` command. ([#3257][])
 
 ### Added
 
 - Add bash and zsh shell completion. See `dgraph completion bash --help` or `dgraph completion zsh --help` for usage instructions. ([#3084][])
-- Add TLS support to `dgraph increment` command. ([#3257][])
 - Add support for ECDSA in dgraph cert. ([#3269][])
-- Add support for JSON export. ([#3309][])
+- Add support for JSON export via `/admin/export?format=json`. ([#3309][])
 - Add the SQL-to-Dgraph migration tool `dgraph migrate`. ([#3295][])
-- Support exporting tracing data to oc_agent, then to datadog agent. ([#3398][])
+- Adding draining mode to Alpha. ([#3880][])
 
 - Enterprise features
   - Support applying a license using /enterpriseLicense endpoint in Zero. ([#3824][])
   - Don't apply license state for oss builds. ([#3847][])
-- Adding the draining mode. ([#3880][])
 
 #### Query
 
-- Type system.
+- Type system
   - Add `type` function to query types. ([#2933][])
   - Parser for type declaration. ([#2950][])
   - Add `@type` directive to enforce type constraints. ([#3003][])
@@ -179,7 +188,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Reserved predicates
   - During startup, don't upsert initial schema if it already exists. ([#3374][])
   - Use all reserved predicates in IsReservedPredicateChanged. ([#3531][])
-- Fuzzy match support. ([#2916][])
+- Fuzzy match support via the `match()` function using the trigram index. ([#2916][])
 - Support for GraphQL variables in arrays. ([#2981][])
 - Show total weight of path in shortest path algorithm. ([#2954][])
 - Rename dgraph `--dgraph` option to `--alpha`. ([#3273][])
@@ -196,7 +205,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 #### Alter
 
-- Implement DropData operation to delete data without deleting schema. ([#3271][])
+- Add DropData operation to delete data without deleting schema. ([#3271][])
 
 #### Schema
 
@@ -206,7 +215,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Reserved predicate names start with `dgraph.` .
 - Support comments in schema. ([#3133][])
 
-#### Enterprise feature: Access Control Lists
+#### Enterprise feature: Access Control Lists (ACLs)
+
+Enterprise ACLs provide read/write/admin permissions to defined users and groups
+at the predicate-level.
 
 - Enforcing ACLs for query, mutation and alter requests. ([#2862][])
 - Don't create ACL predicates when the ACL feature is not turned on. ([#2924][])
@@ -223,6 +235,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Security fix: prevent the HmacSecret from being logged. ([#3734][])
 
 #### Enterprise feature: Backups
+
+Enterprise backups are Dgraph backups in a binary format designed to be restored
+to a cluster of the same version and configuration. Backups can be stored on
+local disk or stored directly to the cloud via AWS S3 or any Minio-compatible
+backend.
 
 - Fixed bug with backup fan-out code. ([#2973][])
 - Incremental backups / partial restore. ([#2963][])
@@ -256,12 +273,14 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 #### Tracing
 
+- Support exporting tracing data to oc_agent, then to datadog agent. ([#3398][])
 - Measure latency of Alpha's Raft loop. (63f545568)
 
 ### Removed
 
-- **Breaking change** Remove `_predicate_` predicate and `expand()` in queries. ([#3262][])
+- **Breaking change** Remove `_predicate_` predicate within queries. ([#3262][])
 - Remove `--debug_mode` option. ([#3441][])
+
 - Remove deprecated and unused IgnoreIndexConflict field in mutations. This functionality is superceded by the `@upsert` schema directive since v1.0.4. ([#3854][])
 
 - Enterprise features
@@ -275,7 +294,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Handling of empty string to datetime conversion. ([#2891][])
 - Export schema with special chars. Fixes [#2925][]. ([#2929][])
 
-<!-- TODO: Check if these issues are already fixed in release/v1.0 -->
 - Default value should not be nil. ([#2995][])
 - Sanity check for empty variables. ([#3021][])
 - Panic due to nil maps. ([#3042][])
