@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -185,6 +186,72 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	}
 
 	return true
+}
+
+func searchableValidation(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	arg := dir.Arguments.ForName(searchableArg)
+	if arg == nil {
+		// If there's no arg, then it can be an enum or has to be a scalar that's
+		// not ID. The schema generation will add the default searchable
+		// for that type.
+		if sch.Types[field.Type.Name()].Kind == ast.Enum ||
+			(sch.Types[field.Type.Name()].Kind == ast.Scalar && !isIDField(typ, field)) {
+			return nil
+		}
+
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: has the @searchable directive but fields of type %s "+
+				"are not searchable.",
+			typ.Name, field.Name, field.Type.Name())
+	}
+
+	if searchable, ok := supportedSearchables[arg.Value.Raw]; !ok {
+		// This check can be removed once gqlparser bug
+		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: the argument to @searchable %s isn't valid."+
+				"Fields of type %s are %s.",
+			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchableMessage(sch, field))
+
+	} else if searchable != field.Type.Name() {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: has the @searchable directive but the argument %s "+
+				"doesn't apply to field type %s.  Searchable %[3]s applies to fields of type %[5]s. "+
+				"Fields of type %[4]s are %[6]s.",
+			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
+			supportedSearchables[arg.Value.Raw], searchableMessage(sch, field))
+	}
+
+	return nil
+}
+
+func searchableMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
+	var possibleSearchables []string
+	for name, typ := range supportedSearchables {
+		if typ == field.Type.Name() {
+			possibleSearchables = append(possibleSearchables, name)
+		}
+	}
+
+	if len(possibleSearchables) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
+		return "searchable by just @searchable"
+	} else if len(possibleSearchables) == 0 {
+		return "not searchable"
+	}
+
+	sort.Strings(possibleSearchables)
+	return fmt.Sprintf(
+		"searchable by %s and %s",
+		strings.Join(possibleSearchables[:len(possibleSearchables)-1], ", "),
+		possibleSearchables[len(possibleSearchables)-1])
 }
 
 func isScalar(s string) bool {

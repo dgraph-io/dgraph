@@ -30,13 +30,32 @@ const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
 
+	searchableDirective = "searchable"
+	searchableArg       = "by"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
 scalar DateTime
 
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	year
+	month
+	day
+	hour
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
 `
 )
 
@@ -45,6 +64,33 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error
+
+// searchable arg -> supported GraphQL type
+// == supported Dgraph index -> GraphQL type it applies to
+var supportedSearchables = map[string]string{
+	"int":      "Int",
+	"float":    "Float",
+	"bool":     "Boolean",
+	"hash":     "String",
+	"exact":    "String",
+	"term":     "String",
+	"fulltext": "String",
+	"trigram":  "String",
+	"year":     "DateTime",
+	"month":    "DateTime",
+	"day":      "DateTime",
+	"hour":     "DateTime",
+}
+
+// GraphQL scalar type -> default Dgraph index (/searchable)
+// used if the schema specifies @searchable without an arg
+var defaultSearchables = map[string]string{
+	"Boolean":  "bool",
+	"Int":      "int",
+	"Float":    "float",
+	"String":   "term",
+	"DateTime": "year",
+}
 
 // GraphQL scalar -> Dgraph scalar
 var scalarToDgraph = map[string]string{
@@ -57,7 +103,8 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective: hasInverseValidation,
+	inverseDirective:    hasInverseValidation,
+	searchableDirective: searchableValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error

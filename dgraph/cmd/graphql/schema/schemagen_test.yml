@@ -71,3 +71,81 @@ schemas:
       X.r: string .
       X.s: dateTime .
       X.t: float .
+
+  -
+    name: "enum - always gets an index"
+    input: |
+      type X {
+        e: E
+      }
+      enum E { A }
+    output: |
+      type X {
+        X.e: string
+      }
+      X.e: string @index(exact) .
+
+  -
+    name: "Searchable indexes are correct"
+    input: |
+      type X {
+        i1: Int @searchable
+        i2: Int @searchable(by: int)
+        f1: Float @searchable
+        f2: Float @searchable(by: float)
+        b1: Boolean @searchable
+        b2: Boolean @searchable(by: bool)
+        s1: String @searchable
+        s2: String @searchable(by: hash)
+        s3: String @searchable(by: exact)
+        s4: String @searchable(by: term)
+        s5: String @searchable(by: fulltext)
+        s6: String @searchable(by: trigram)
+        dt1: DateTime @searchable
+        dt2: DateTime @searchable(by: year)
+        dt3: DateTime @searchable(by: month)
+        dt4: DateTime @searchable(by: day)
+        dt5: DateTime @searchable(by: hour)
+        e: E @searchable
+      }
+      enum E { A }
+    output: |
+      type X {
+        X.i1: int
+        X.i2: int
+        X.f1: float
+        X.f2: float
+        X.b1: bool
+        X.b2: bool
+        X.s1: string
+        X.s2: string
+        X.s3: string
+        X.s4: string
+        X.s5: string
+        X.s6: string
+        X.dt1: dateTime
+        X.dt2: dateTime
+        X.dt3: dateTime
+        X.dt4: dateTime
+        X.dt5: dateTime
+        X.e: string
+      }
+      X.i1: int @index(int) .
+      X.i2: int @index(int) .
+      X.f1: float @index(float) .
+      X.f2: float @index(float) .
+      X.b1: bool @index(bool) .
+      X.b2: bool @index(bool) .
+      X.s1: string @index(term) .
+      X.s2: string @index(hash) .
+      X.s3: string @index(exact) .
+      X.s4: string @index(term) .
+      X.s5: string @index(fulltext) .
+      X.s6: string @index(trigram) .
+      X.dt1: dateTime @index(year) .
+      X.dt2: dateTime @index(year) .
+      X.dt3: dateTime @index(month) .
+      X.dt4: dateTime @index(day) .
+      X.dt5: dateTime @index(hour) .
+      X.e: string @index(exact) .
+      

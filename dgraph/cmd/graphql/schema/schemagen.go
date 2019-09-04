@@ -157,11 +157,22 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						"%s%s%s",
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
-					// TODO: indexes needed here
+
+					indexStr := ""
+					searchable := f.Directives.ForName(searchableDirective)
+					if searchable != nil {
+						arg := searchable.Arguments.ForName(searchableArg)
+						if arg != nil {
+							indexStr = fmt.Sprintf(" @index(%s)", arg.Value.Raw)
+						} else {
+							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchables[f.Type.Name()])
+						}
+					}
+
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
 						def.Name, f.Name, typStr)
-					fmt.Fprintf(&preds, "%s.%s: %s .\n",
-						def.Name, f.Name, typStr)
+					fmt.Fprintf(&preds, "%s.%s: %s%s .\n",
+						def.Name, f.Name, typStr, indexStr)
 				case ast.Enum:
 					fmt.Fprintf(&typeDef, "  %s.%s: string\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
