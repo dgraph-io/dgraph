@@ -13,12 +13,7 @@ type Message {
 # Extended Definitions
 #######################
 
-scalar Boolean
 scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
 
 enum DgraphIndex {
 	int
@@ -89,7 +84,7 @@ input UpdateMessageInput {
 
 type Query {
 	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter!): [Message!]
+	queryMessage(filter: MessageFilter!): [Message]
 }
 
 #######################

@@ -33,7 +33,6 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-
 	if defn.Kind != ast.Object && defn.Kind != ast.Enum {
 		return gqlerror.ErrorPosf(
 			defn.Position,

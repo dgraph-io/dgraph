@@ -18,12 +18,7 @@ type Author {
 # Extended Definitions
 #######################
 
-scalar Boolean
 scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
 
 enum DgraphIndex {
 	int
@@ -127,9 +122,9 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(filter: PostFilter!): [Post!]
+	queryPost(filter: PostFilter!): [Post]
 	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter!): [Author!]
+	queryAuthor(filter: AuthorFilter!): [Author]
 }
 
 #######################

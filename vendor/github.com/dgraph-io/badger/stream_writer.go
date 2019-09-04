@@ -79,7 +79,7 @@ func (sw *StreamWriter) Prepare() error {
 }
 
 // Write writes KVList to DB. Each KV within the list contains the stream id which StreamWriter
-// would use to demux the writes. Write is thread safe and can be called concurrently by mulitple
+// would use to demux the writes. Write is thread safe and can be called concurrently by multiple
 // goroutines.
 func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 	if len(kvs.GetKv()) == 0 {
@@ -208,8 +208,8 @@ type sortedWriter struct {
 
 func (sw *StreamWriter) newWriter(streamId uint32) *sortedWriter {
 	bopts := table.Options{
-		BlockSize:         sw.db.opt.BlockSize,
-		BloomFalsePostive: sw.db.opt.BloomFalsePositive,
+		BlockSize:          sw.db.opt.BlockSize,
+		BloomFalsePositive: sw.db.opt.BloomFalsePositive,
 	}
 	w := &sortedWriter{
 		db:       sw.db,
@@ -303,8 +303,8 @@ func (w *sortedWriter) send() error {
 	}(w.builder)
 
 	bopts := table.Options{
-		BlockSize:         w.db.opt.BlockSize,
-		BloomFalsePostive: w.db.opt.BloomFalsePositive,
+		BlockSize:          w.db.opt.BlockSize,
+		BloomFalsePositive: w.db.opt.BloomFalsePositive,
 	}
 	w.builder = table.NewTableBuilder(bopts)
 	return nil

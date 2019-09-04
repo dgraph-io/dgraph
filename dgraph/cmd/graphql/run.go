@@ -121,7 +121,7 @@ func run() error {
 		alpha:      GraphQL.Conf.GetString("alpha"),
 	}
 
-	glog.Infof("Bringing up GraphQL API for Dgraph at %s\n", opt.alpha)
+	glog.Infof("Connecting to Dgraph at: %s", opt.alpha)
 
 	dgraphClient, disconnect, err := connect()
 	if err != nil {
@@ -152,7 +152,10 @@ func run() error {
 		return fmt.Errorf("No GraphQL schema was found")
 	}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
+	// validator.Prelude includes a bunch of predefined types which help with schema introspection
+	// queries, hence we include it as part of the schema.
+	doc, gqlErr := parser.ParseSchemas(validator.Prelude,
+		&ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
@@ -167,10 +170,11 @@ func run() error {
 		schema:       gqlschema,
 	}
 
-	http.Handle("/graphql", api.WithRequestID(handler))
+	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
+	glog.Infof("Bringing up GraphQL HTTP API at 127.0.0.1:9000/graphql")
 	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
 }
 
