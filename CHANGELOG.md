@@ -82,6 +82,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Change anonynmous telemetry endpoint. ([#3872][])
 - Add support for API required for multiple mutations within a single call. ([#3839][])
 - Make `lru_mb` optional. ([#3898][])
+- Allow glog flags to be set via config file. ([#3062][], [#3077][])
 
 - Logging
   - Suppress logging before `flag.Parse` from glog. ([#2970][])
@@ -158,7 +159,9 @@ Dgraph Increment Tool
 - Add support for ECDSA in dgraph cert. ([#3269][])
 - Add support for JSON export via `/admin/export?format=json`. ([#3309][])
 - Add the SQL-to-Dgraph migration tool `dgraph migrate`. ([#3295][])
+- Add `assign_timestamp_ns` latency field to fix encoding_ns calculation. Fixes [#3668][]. ([#3692][], [#3711][])
 - Adding draining mode to Alpha. ([#3880][])
+
 
 - Enterprise features
   - Support applying a license using /enterpriseLicense endpoint in Zero. ([#3824][])
@@ -215,6 +218,10 @@ Schema
 - Prevent dropping or altering reserved predicates. ([#2967][]) ([#2997][])
   - Reserved predicate names start with `dgraph.` .
 - Support comments in schema. ([#3133][])
+- Reserved predicates
+  - Reserved predicates are prefixed with "dgraph.", e.g., `dgraph.type`.
+  - Ensure reserved predicates cannot be moved. ([#3137][])
+  - Allow schema updates to reserved preds if the update is the same. ([#3143][])
 
 Enterprise feature: Access Control Lists (ACLs)
 
@@ -294,7 +301,7 @@ Tracing
 - Fixes error found by gofuzz. ([#2914][])
 - Fix int/float conversion to bool. ([#2893][])
 - Handling of empty string to datetime conversion. ([#2891][])
-- Export schema with special chars. Fixes [#2925][]. ([#2929][])
+- Fix schema export with special chars. Fixes [#2925][]. ([#2929][])
 
 - Default value should not be nil. ([#2995][])
 - Sanity check for empty variables. ([#3021][])
@@ -305,11 +312,10 @@ Tracing
 
 - Fix race condition in numShutDownSig in Alpha. ([#3402][])
 - Fix race condition in oracle.go. ([#3417][])
-- Fix tautological condition in zero.go ([#3516][])
+- Fix tautological condition in zero.go. ([#3516][])
 - Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes [#3528][]. ([#3565][])
 
 - Reject requests with predicates larger than the max size allowed (longer than 65,535 characters). ([#3052][])
-- Allow glog flags to be set via config file. ([#3062][], [#3077][])
 - Upgrade raft lib and fix group checksum. ([#3085][])
 - Check that uid is not used as function attribute. ([#3112][])
 - Do not retrieve facets when max recurse depth has been reached. ([#3190][])
@@ -320,15 +326,9 @@ Tracing
 - Fix bug with pagination using `after`. ([#3149][])
 - Fix tablet error handling. ([#3323][])
 
-- Reserved predicates
-  - Reserved predicates are prefixed with "dgraph.", e.g., `dgraph.type`.
-  - Ensure reserved predicates cannot be moved. ([#3137][])
-  - Allow schema updates to reserved preds if the update is the same. ([#3143][])
-
 - Fix crash when trying to use shortest path with a password predicate. Fixes [#3657][]. ([#3662][])
 - Fix crash for `@groupby` queries. Fixes [#3642][]. ([#3670][])
 - Fix crash when calling drop all during a query. Fixes [#3645][]. ([#3664][])
-- Add `assign_timestamp_ns` latency field to fix encoding_ns calculation. Fixes [#3668][]. ([#3692][], [#3711][])
 - Fix data races in queries. Fixes [#3685][]. ([#3749][])
 - Bulk Loader: Fix memory usage by JSON parser. ([#3794][])
 - Fixing issues in export. Fixes #3610. ([#3682][])
