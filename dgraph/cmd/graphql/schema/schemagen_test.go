@@ -52,7 +52,9 @@ func TestDGSchemaGen(t *testing.T) {
 				require.NoError(t, errs)
 
 				dgSchema := schHandler.DGSchema()
-				require.Equal(t, sch.Output, dgSchema, sch.Name)
+				if diff := cmp.Diff(sch.Output, dgSchema); diff != "" {
+					t.Errorf("schema mismatch (-want +got):\n%s", diff)
+				}
 			})
 		}
 	}

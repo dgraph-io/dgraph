@@ -94,7 +94,7 @@ var defaultSearchables = map[string]string{
 	"Int":      "int",
 	"Float":    "float",
 	"String":   "term",
-	"DateTime": "day",
+	"DateTime": "year",
 }
 
 // GraphQL scalar -> Dgraph scalar

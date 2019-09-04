@@ -142,7 +142,7 @@ schemas:
       X.s4: string @index(term) .
       X.s5: string @index(fulltext) .
       X.s6: string @index(trigram) .
-      X.dt1: dateTime @index(day) .
+      X.dt1: dateTime @index(year) .
       X.dt2: dateTime @index(year) .
       X.dt3: dateTime @index(month) .
       X.dt4: dateTime @index(day) .

@@ -212,7 +212,7 @@ func searchableValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if _, ok := supportedSearchables[arg.Value.Raw]; !ok {
+	if searchable, ok := supportedSearchables[arg.Value.Raw]; !ok {
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
@@ -220,9 +220,8 @@ func searchableValidation(
 			"Type %s; Field %s: the argument to @searchable %s isn't valid."+
 				"Fields of type %s are %s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchableMessage(sch, field))
-	}
 
-	if supportedSearchables[arg.Value.Raw] != field.Type.Name() {
+	} else if searchable != field.Type.Name() {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @searchable directive but the argument %s "+
