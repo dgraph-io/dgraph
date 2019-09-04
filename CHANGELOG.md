@@ -8,6 +8,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
+
 **Breaking changes for datetime queries**
 
 - Use UTC Hour, Day, Month, Year for datetime comparison. **Backwards incompatible with v1.0.x** ([#3251][])
@@ -20,6 +21,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Dgraph custom HTTP Headers `X-Dgraph-CommitNow`, `X-Dgraph-MutationType`, and `X-Dgraph-Vars` are now ignored and no longer necessary.
 - Update HTTP API Content-Type headers. ([#3550][]) ([#3532][])
   - Queries over HTTP must have the Content-Type header `application/graphql+-`.
+  - Queries over HTTP with GraphQL Variables (e.g., `query queryName($a: string) { ... }`) must use the query format via `application/json` to pass query variables.
   - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
 - Update /health endpoint to return alpha version. ([#3526][])
 
@@ -41,6 +43,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Update vendored dependencies. ([#3357][])
   - Bring in latest changes from badger and fix broken API calls. ([#3502][])
   - Vendor badger with the latest changes. ([#3606][])
+  - Vendor latest badger. ([#3784][])
+  - Breaking change: Vendor in latest Badger with data-format changes. ([#3906][])
 
 - Error messages
   - Output the line and column number in schema parsing error messages. ([#2986][])
@@ -49,7 +53,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - Tablet move and group removal. ([#2880][])
 - Delete tablets which don't belong after tablet move. ([#3051][])
-- Alphas inform Zero about tablets in its postings directory when Alpha starts. (3271f64e0)
+- Alphas inform Zero about tablets in its postings directory when Alpha starts. ([3271f64e0][])
 - Move glog of missing value warning to verbosity level 3. ([#3092][])
 - Prevent alphas from asking zero to serve tablets during queries. ([#3091][])
 - Put data before extensions in JSON response. ([#3194][])
@@ -62,13 +66,35 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix format of the keys to support startUid for multi-part posting lists. ([#3310][])
 - Access groupi.gid atomically. ([#3402][])
 - Use Stream Writer for full snapshot transfer. ([#3442][])
+
 - Add field to backup requests to force a full backup. ([#3387][])
 - Move Raft checkpoint key to w directory. ([#3444][])
 - Remove list.SetForDeletion method, remnant of the global LRU cache. ([#3481][])
 - Whitelist by hostname. ([#2953][])
 - Use CIDR format for whitelists instead of the previous range format.
 - Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. ([#3060][])
-- Replace integer compression in UID Pack with groupvariant algorithm. ([#3527][])
+- Replace integer compression in UID Pack with groupvariant algorithm. ([#3527][], [#3650][])
+- Replace fmt.Errorf with errors.Errorf ([#3627][])
+- Use the stream framework to rebuild indices. ([#3686][])
+- Rebuild reverse index before count reverse. ([#3688][])
+- Add log prefix to stream used to rebuild indices. ([#3696][])
+- Fixing issues in export. ([#3682][])
+- Optimization: Don't read posting lists from disk when mutating indices. ([#3695][], [#3713][])
+- Reduce memory consumption in bulk loader. ([#3724][])
+- Vendor in badger, dgo and regenerate protobufs. ([#3747][])
+- Optimization: Reuse lexer for parsing RDF. ([#3762][])
+- Reuse postings and avoid fmt.Sprintf to reduce mem allocations ([#3767][])
+- Various optimizations for Geo queries. ([#3805][])
+- Use one atomic variable to generate blank node ids for json objects. This changes the format of automatically generated blank node names in JSON muattions. ([#3795][])
+- Speed up JSON chunker. ([#3825][])
+- Add additional logs to show progress of reindexing operation. ([#3746][])
+- Print commit SHA256 when invoking "make install". ([#3786][])
+- Optimization: Avoid preallocating uid slice. It was slowing down unpackBlock.
+- Print SHA-256 checksum of Dgraph binary in the version section logs. ([#3828][])
+- Change anonynmous telemetry endpoint. ([#3872][])
+- Add support for *API* required for Multiple Mutation. ([#3839][])
+- Make `lru_mb` optional. ([#3898][])
+- Change time threshold for Raft.Ready warning logs. ([#3901][])
 
 #### Dgraph Debug Tool
 
@@ -85,12 +111,17 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
 - Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. ([#2998][])
 - Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. ([#3004][], [#3045][]) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
-- Use StreamWriter in bulk loader. ([#3542][]) ([#3635][])
+- Use StreamWriter in bulk loader. ([#3542][]) ([#3635][], [#3649][])
 - Add timestamps during bulk/live load. ([#3287][])
 - Use initial schema during bulk load. ([#3333][])
  Adding the verbose flag to suppress excessive logging in live loader ([#3560][])
 ** SKIPPED a9d0554bf Fix golint warnings in the migrate package. ([#3613][])
 - Adding the verbose flag to suppress excessive logging in live loader. ([#3560][])
+- Fix user meta of schema and type entries in bulk loader. ([#3628][])
+- Check that all data files passed to bulk loader exist. ([#3681][])
+- Handle non-list UIDs predicates in bulk loader. [#3659][]
+- Use sync.Pool for MapEntries in bulk loader. ([#3763][], 802ec4c39)
+- Return GraphQL compliant `"errors"` field for HTTP requests. ([#3728][])
 
 #### Dgraph Increment Tool
 
@@ -105,6 +136,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Add support for JSON export. ([#3309][])
 - Add the SQL-to-Dgraph migration tool `dgraph migrate`. ([#3295][])
 - Support exporting tracing data to oc_agent, then to datadog agent. ([#3398][])
+
+- Enterprise features
+  - Support applying a license using /enterpriseLicense endpoint in Zero. ([#3824][])
+  - Don't apply license state for oss builds. ([#3847][])
+- Adding the draining mode. ([#3880][])
 
 #### Query
 
@@ -122,6 +158,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Add the `upsert` query block to send "query-mutate-commit" updates as a single
   call to Dgraph. This is especially helpful to do upserts with the `@upsert`
   schema directive. Addresses [#3059][]. ([#3412][])
+  - Add support for conditional mutation in Upsert Block. ([#3612][])
 
 - Allow querying all lang values of a predicate. ([#2910][])
 - `regexp()` is valid in `@filter` even for predicates without the trigram index. ([#2913][])
@@ -134,10 +171,15 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Support for GraphQL variables in arrays. ([#2981][])
 - Show total weight of path in shortest path algorithm. ([#2954][])
 - Rename dgraph `--dgraph` option to `--alpha`. ([#3273][])
+- Support uid variables in `from` and `to` arguments for shortest path query. Fixes [#1243][]. ([#3710][])
+
+- Add support for `len()` function in query language. The `len()` function is
+  only used in the `@if` directive for upsert blocks. `len(v)` It returns the
+  length of a variable `v`. ([#3756][], [#3769][])
 
 #### Mutation
 
-- Add ability to delete triples of scalar non-list predicates. ([#2899][])
+- Add ability to delete triples of scalar non-list predicates. ([#2899][], [#3843][])
 - Allow deletion of specific language. ([#3242][])
 
 #### Alter
@@ -166,6 +208,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Using read-only queries for ACL refreshes. ([#3256][])
 - When HttpLogin response context error, unmarshal and return the response context. ([#3275][])
 - Refactor: avoid double parsing of mutation string in ACL. ([#3494][])
+- Security fix: prevent the HmacSecret from being logged. ([#3734][])
 
 #### Enterprise feature: Backups
 
@@ -182,6 +225,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Only backup the predicates belonging to a group. ([#3621][])
 - Introduce backup data formats for cross-version compatibility. ([#3575][])
 -  Add series and backup number information to manifest. ([#3559][])
+- Use backwards-compatible formats during backup ([#3629][])
+- Use manifest to only restore preds assigned to each group. ([#3648][])
+- Fixes the toBackupList function by removing the loop. ([#3869][])
 
 #### Dgraph Zero
 
@@ -204,6 +250,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - **Breaking change** Remove `_predicate_` predicate and `expand()` in queries. ([#3262][])
 - Remove `--debug_mode` option. ([#3441][])
+- Remove deprecated and unused IgnoreIndexConflict field in mutations. This functionality is superceded by the `@upsert` schema directive since v1.0.4. ([#3854][])
+
+- Enterprise features
+  - Remove `--enterprise_feature` flag. Enterprise license can be applied via /enterpriseLicense endpoint in Zero. ([#3824][])
 
 ### Fixed
 
@@ -245,163 +295,241 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Ensure reserved predicates cannot be moved. ([#3137][])
   - Allow schema updates to reserved preds if the update is the same. ([#3143][])
 
-[#2511]: https://github.com/dgraph-io/dgraph/issues/2511
-[#2862]: https://github.com/dgraph-io/dgraph/issues/2862
-[#2867]: https://github.com/dgraph-io/dgraph/issues/2867
-[#2880]: https://github.com/dgraph-io/dgraph/issues/2880
-[#2885]: https://github.com/dgraph-io/dgraph/issues/2885
-[#2887]: https://github.com/dgraph-io/dgraph/issues/2887
-[#2891]: https://github.com/dgraph-io/dgraph/issues/2891
-[#2893]: https://github.com/dgraph-io/dgraph/issues/2893
-[#2895]: https://github.com/dgraph-io/dgraph/issues/2895
-[#2899]: https://github.com/dgraph-io/dgraph/issues/2899
-[#2910]: https://github.com/dgraph-io/dgraph/issues/2910
-[#2913]: https://github.com/dgraph-io/dgraph/issues/2913
+- Fix crash when trying to use shortest path with a password predicate. Fixes [#3657][]. ([#3662][])
+- Fix crash for `@groupby` queries. Fixes [#3642][]. ([#3670][])
+- Fix crash when calling drop all during a query. Fixes [#3645][]. ([#3664][])
+- Add `assign_timestamp_ns` latency field to fix encoding_ns calculation. Fixes [#3668][]. ([#3692][], [#3711][])
+- Fix data races in queries. Fixes [#3685][]. ([#3749][])
+- Bulk Loader: Fix memory usage by JSON parser. ([#3794][])
+
+- Bug Fix: Use txn.Get in addReverseMutation if needed for count index ([#3874][])
+- Bug Fix: Remove Check2 at writeResponse. ([#3900][])
+- Bug Fix: Do not call posting.List.release.
+
+[#3251]: https://github.com/dgraph-io/dgraph/issues/3251
+[#3020]: https://github.com/dgraph-io/dgraph/issues/3020
+[#3365]: https://github.com/dgraph-io/dgraph/issues/3365
+[#3550]: https://github.com/dgraph-io/dgraph/issues/3550
+[#3532]: https://github.com/dgraph-io/dgraph/issues/3532
+[#3526]: https://github.com/dgraph-io/dgraph/issues/3526
+[#3528]: https://github.com/dgraph-io/dgraph/issues/3528
+[#3565]: https://github.com/dgraph-io/dgraph/issues/3565
 [#2914]: https://github.com/dgraph-io/dgraph/issues/2914
-[#2915]: https://github.com/dgraph-io/dgraph/issues/2915
-[#2916]: https://github.com/dgraph-io/dgraph/issues/2916
-[#2921]: https://github.com/dgraph-io/dgraph/issues/2921
-[#2924]: https://github.com/dgraph-io/dgraph/issues/2924
-[#2925]: https://github.com/dgraph-io/dgraph/issues/2925
-[#2928]: https://github.com/dgraph-io/dgraph/issues/2928
-[#2929]: https://github.com/dgraph-io/dgraph/issues/2929
-[#2933]: https://github.com/dgraph-io/dgraph/issues/2933
-[#2947]: https://github.com/dgraph-io/dgraph/issues/2947
-[#2950]: https://github.com/dgraph-io/dgraph/issues/2950
-[#2951]: https://github.com/dgraph-io/dgraph/issues/2951
-[#2953]: https://github.com/dgraph-io/dgraph/issues/2953
-[#2954]: https://github.com/dgraph-io/dgraph/issues/2954
+[#2887]: https://github.com/dgraph-io/dgraph/issues/2887
 [#2956]: https://github.com/dgraph-io/dgraph/issues/2956
-[#2961]: https://github.com/dgraph-io/dgraph/issues/2961
 [#2962]: https://github.com/dgraph-io/dgraph/issues/2962
-[#2963]: https://github.com/dgraph-io/dgraph/issues/2963
-[#2967]: https://github.com/dgraph-io/dgraph/issues/2967
 [#2970]: https://github.com/dgraph-io/dgraph/issues/2970
-[#2973]: https://github.com/dgraph-io/dgraph/issues/2973
 [#2974]: https://github.com/dgraph-io/dgraph/issues/2974
 [#2976]: https://github.com/dgraph-io/dgraph/issues/2976
-[#2979]: https://github.com/dgraph-io/dgraph/issues/2979
-[#2981]: https://github.com/dgraph-io/dgraph/issues/2981
-[#2986]: https://github.com/dgraph-io/dgraph/issues/2986
 [#2989]: https://github.com/dgraph-io/dgraph/issues/2989
-[#2991]: https://github.com/dgraph-io/dgraph/issues/2991
-[#2995]: https://github.com/dgraph-io/dgraph/issues/2995
-[#2997]: https://github.com/dgraph-io/dgraph/issues/2997
-[#2998]: https://github.com/dgraph-io/dgraph/issues/2998
-[#3003]: https://github.com/dgraph-io/dgraph/issues/3003
-[#3004]: https://github.com/dgraph-io/dgraph/issues/3004
-[#3015]: https://github.com/dgraph-io/dgraph/issues/3015
-[#3018]: https://github.com/dgraph-io/dgraph/issues/3018
-[#3020]: https://github.com/dgraph-io/dgraph/issues/3020
-[#3021]: https://github.com/dgraph-io/dgraph/issues/3021
-[#3027]: https://github.com/dgraph-io/dgraph/issues/3027
-[#3042]: https://github.com/dgraph-io/dgraph/issues/3042
-[#3045]: https://github.com/dgraph-io/dgraph/issues/3045
-[#3051]: https://github.com/dgraph-io/dgraph/issues/3051
-[#3052]: https://github.com/dgraph-io/dgraph/issues/3052
-[#3059]: https://github.com/dgraph-io/dgraph/issues/3059
-[#3060]: https://github.com/dgraph-io/dgraph/issues/3060
-[#3062]: https://github.com/dgraph-io/dgraph/issues/3062
-[#3077]: https://github.com/dgraph-io/dgraph/issues/3077
 [#3078]: https://github.com/dgraph-io/dgraph/issues/3078
-[#3084]: https://github.com/dgraph-io/dgraph/issues/3084
-[#3085]: https://github.com/dgraph-io/dgraph/issues/3085
-[#3089]: https://github.com/dgraph-io/dgraph/issues/3089
-[#3091]: https://github.com/dgraph-io/dgraph/issues/3091
-[#3092]: https://github.com/dgraph-io/dgraph/issues/3092
-[#3105]: https://github.com/dgraph-io/dgraph/issues/3105
-[#3106]: https://github.com/dgraph-io/dgraph/issues/3106
-[#3112]: https://github.com/dgraph-io/dgraph/issues/3112
-[#3124]: https://github.com/dgraph-io/dgraph/issues/3124
-[#3133]: https://github.com/dgraph-io/dgraph/issues/3133
-[#3137]: https://github.com/dgraph-io/dgraph/issues/3137
-[#3141]: https://github.com/dgraph-io/dgraph/issues/3141
-[#3143]: https://github.com/dgraph-io/dgraph/issues/3143
-[#3149]: https://github.com/dgraph-io/dgraph/issues/3149
-[#3164]: https://github.com/dgraph-io/dgraph/issues/3164
-[#3169]: https://github.com/dgraph-io/dgraph/issues/3169
-[#3172]: https://github.com/dgraph-io/dgraph/issues/3172
-[#3173]: https://github.com/dgraph-io/dgraph/issues/3173
-[#3182]: https://github.com/dgraph-io/dgraph/issues/3182
-[#3190]: https://github.com/dgraph-io/dgraph/issues/3190
-[#3194]: https://github.com/dgraph-io/dgraph/issues/3194
-[#3204]: https://github.com/dgraph-io/dgraph/issues/3204
-[#3205]: https://github.com/dgraph-io/dgraph/issues/3205
-[#3207]: https://github.com/dgraph-io/dgraph/issues/3207
-[#3214]: https://github.com/dgraph-io/dgraph/issues/3214
-[#3216]: https://github.com/dgraph-io/dgraph/issues/3216
-[#3218]: https://github.com/dgraph-io/dgraph/issues/3218
-[#3219]: https://github.com/dgraph-io/dgraph/issues/3219
-[#3227]: https://github.com/dgraph-io/dgraph/issues/3227
-[#3228]: https://github.com/dgraph-io/dgraph/issues/3228
-[#3235]: https://github.com/dgraph-io/dgraph/issues/3235
-[#3242]: https://github.com/dgraph-io/dgraph/issues/3242
-[#3243]: https://github.com/dgraph-io/dgraph/issues/3243
-[#3251]: https://github.com/dgraph-io/dgraph/issues/3251
-[#3253]: https://github.com/dgraph-io/dgraph/issues/3253
-[#3254]: https://github.com/dgraph-io/dgraph/issues/3254
-[#3256]: https://github.com/dgraph-io/dgraph/issues/3256
-[#3257]: https://github.com/dgraph-io/dgraph/issues/3257
-[#3262]: https://github.com/dgraph-io/dgraph/issues/3262
-[#3266]: https://github.com/dgraph-io/dgraph/issues/3266
-[#3269]: https://github.com/dgraph-io/dgraph/issues/3269
-[#3271]: https://github.com/dgraph-io/dgraph/issues/3271
-[#3273]: https://github.com/dgraph-io/dgraph/issues/3273
-[#3274]: https://github.com/dgraph-io/dgraph/issues/3274
-[#3275]: https://github.com/dgraph-io/dgraph/issues/3275
-[#3278]: https://github.com/dgraph-io/dgraph/issues/3278
-[#3287]: https://github.com/dgraph-io/dgraph/issues/3287
-[#3295]: https://github.com/dgraph-io/dgraph/issues/3295
-[#3309]: https://github.com/dgraph-io/dgraph/issues/3309
-[#3310]: https://github.com/dgraph-io/dgraph/issues/3310
-[#3311]: https://github.com/dgraph-io/dgraph/issues/3311
-[#3313]: https://github.com/dgraph-io/dgraph/issues/3313
-[#3319]: https://github.com/dgraph-io/dgraph/issues/3319
 [#3322]: https://github.com/dgraph-io/dgraph/issues/3322
-[#3323]: https://github.com/dgraph-io/dgraph/issues/3323
-[#3333]: https://github.com/dgraph-io/dgraph/issues/3333
-[#3345]: https://github.com/dgraph-io/dgraph/issues/3345
-[#3357]: https://github.com/dgraph-io/dgraph/issues/3357
-[#3364]: https://github.com/dgraph-io/dgraph/issues/3364
-[#3365]: https://github.com/dgraph-io/dgraph/issues/3365
-[#3374]: https://github.com/dgraph-io/dgraph/issues/3374
-[#3387]: https://github.com/dgraph-io/dgraph/issues/3387
-[#3398]: https://github.com/dgraph-io/dgraph/issues/3398
-[#3402]: https://github.com/dgraph-io/dgraph/issues/3402
+[#3523]: https://github.com/dgraph-io/dgraph/issues/3523
 [#3412]: https://github.com/dgraph-io/dgraph/issues/3412
-[#3417]: https://github.com/dgraph-io/dgraph/issues/3417
-[#3422]: https://github.com/dgraph-io/dgraph/issues/3422
-[#3441]: https://github.com/dgraph-io/dgraph/issues/3441
+[#3357]: https://github.com/dgraph-io/dgraph/issues/3357
+[#3502]: https://github.com/dgraph-io/dgraph/issues/3502
+[#3606]: https://github.com/dgraph-io/dgraph/issues/3606
+[#3784]: https://github.com/dgraph-io/dgraph/issues/3784
+[#3906]: https://github.com/dgraph-io/dgraph/issues/3906
+[#2986]: https://github.com/dgraph-io/dgraph/issues/2986
+[#3015]: https://github.com/dgraph-io/dgraph/issues/3015
+[#2979]: https://github.com/dgraph-io/dgraph/issues/2979
+[#2880]: https://github.com/dgraph-io/dgraph/issues/2880
+[#3051]: https://github.com/dgraph-io/dgraph/issues/3051
+[#3092]: https://github.com/dgraph-io/dgraph/issues/3092
+[#3091]: https://github.com/dgraph-io/dgraph/issues/3091
+[#3194]: https://github.com/dgraph-io/dgraph/issues/3194
+[#3243]: https://github.com/dgraph-io/dgraph/issues/3243
+[#3228]: https://github.com/dgraph-io/dgraph/issues/3228
+[#3254]: https://github.com/dgraph-io/dgraph/issues/3254
+[#3274]: https://github.com/dgraph-io/dgraph/issues/3274
+[#3253]: https://github.com/dgraph-io/dgraph/issues/3253
+[#3105]: https://github.com/dgraph-io/dgraph/issues/3105
+[#3310]: https://github.com/dgraph-io/dgraph/issues/3310
+[#3402]: https://github.com/dgraph-io/dgraph/issues/3402
 [#3442]: https://github.com/dgraph-io/dgraph/issues/3442
+[#3387]: https://github.com/dgraph-io/dgraph/issues/3387
 [#3444]: https://github.com/dgraph-io/dgraph/issues/3444
 [#3481]: https://github.com/dgraph-io/dgraph/issues/3481
-[#3493]: https://github.com/dgraph-io/dgraph/issues/3493
-[#3494]: https://github.com/dgraph-io/dgraph/issues/3494
-[#3502]: https://github.com/dgraph-io/dgraph/issues/3502
-[#3505]: https://github.com/dgraph-io/dgraph/issues/3505
-[#3506]: https://github.com/dgraph-io/dgraph/issues/3506
-[#3515]: https://github.com/dgraph-io/dgraph/issues/3515
-[#3516]: https://github.com/dgraph-io/dgraph/issues/3516
-[#3523]: https://github.com/dgraph-io/dgraph/issues/3523
-[#3526]: https://github.com/dgraph-io/dgraph/issues/3526
+[#2953]: https://github.com/dgraph-io/dgraph/issues/2953
+[#3060]: https://github.com/dgraph-io/dgraph/issues/3060
 [#3527]: https://github.com/dgraph-io/dgraph/issues/3527
-[#3528]: https://github.com/dgraph-io/dgraph/issues/3528
-[#3531]: https://github.com/dgraph-io/dgraph/issues/3531
-[#3532]: https://github.com/dgraph-io/dgraph/issues/3532
-[#3536]: https://github.com/dgraph-io/dgraph/issues/3536
+[#3650]: https://github.com/dgraph-io/dgraph/issues/3650
+[#3627]: https://github.com/dgraph-io/dgraph/issues/3627
+[#3686]: https://github.com/dgraph-io/dgraph/issues/3686
+[#3688]: https://github.com/dgraph-io/dgraph/issues/3688
+[#3696]: https://github.com/dgraph-io/dgraph/issues/3696
+[#3682]: https://github.com/dgraph-io/dgraph/issues/3682
+[#3695]: https://github.com/dgraph-io/dgraph/issues/3695
+[#3713]: https://github.com/dgraph-io/dgraph/issues/3713
+[#3724]: https://github.com/dgraph-io/dgraph/issues/3724
+[#3747]: https://github.com/dgraph-io/dgraph/issues/3747
+[#3762]: https://github.com/dgraph-io/dgraph/issues/3762
+[#3767]: https://github.com/dgraph-io/dgraph/issues/3767
+[#3805]: https://github.com/dgraph-io/dgraph/issues/3805
+[#3795]: https://github.com/dgraph-io/dgraph/issues/3795
+[#3825]: https://github.com/dgraph-io/dgraph/issues/3825
+[#3746]: https://github.com/dgraph-io/dgraph/issues/3746
+[#3786]: https://github.com/dgraph-io/dgraph/issues/3786
+[#3828]: https://github.com/dgraph-io/dgraph/issues/3828
+[#3872]: https://github.com/dgraph-io/dgraph/issues/3872
+[#3839]: https://github.com/dgraph-io/dgraph/issues/3839
+[#3898]: https://github.com/dgraph-io/dgraph/issues/3898
+[#3901]: https://github.com/dgraph-io/dgraph/issues/3901
+[#3311]: https://github.com/dgraph-io/dgraph/issues/3311
+[#3319]: https://github.com/dgraph-io/dgraph/issues/3319
+[#3345]: https://github.com/dgraph-io/dgraph/issues/3345
+[#3364]: https://github.com/dgraph-io/dgraph/issues/3364
+[#2991]: https://github.com/dgraph-io/dgraph/issues/2991
+[#3278]: https://github.com/dgraph-io/dgraph/issues/3278
+[#3313]: https://github.com/dgraph-io/dgraph/issues/3313
+[#2998]: https://github.com/dgraph-io/dgraph/issues/2998
+[#3004]: https://github.com/dgraph-io/dgraph/issues/3004
+[#3045]: https://github.com/dgraph-io/dgraph/issues/3045
 [#3542]: https://github.com/dgraph-io/dgraph/issues/3542
-[#3547]: https://github.com/dgraph-io/dgraph/issues/3547
-[#3550]: https://github.com/dgraph-io/dgraph/issues/3550
-[#3559]: https://github.com/dgraph-io/dgraph/issues/3559
-[#3560]: https://github.com/dgraph-io/dgraph/issues/3560
-[#3565]: https://github.com/dgraph-io/dgraph/issues/3565
-[#3570]: https://github.com/dgraph-io/dgraph/issues/3570
-[#3575]: https://github.com/dgraph-io/dgraph/issues/3575
-[#3584]: https://github.com/dgraph-io/dgraph/issues/3584
-[#3606]: https://github.com/dgraph-io/dgraph/issues/3606
-[#3613]: https://github.com/dgraph-io/dgraph/issues/3613
-[#3621]: https://github.com/dgraph-io/dgraph/issues/3621
 [#3635]: https://github.com/dgraph-io/dgraph/issues/3635
+[#3649]: https://github.com/dgraph-io/dgraph/issues/3649
+[#3287]: https://github.com/dgraph-io/dgraph/issues/3287
+[#3333]: https://github.com/dgraph-io/dgraph/issues/3333
+[#3560]: https://github.com/dgraph-io/dgraph/issues/3560
+[#3613]: https://github.com/dgraph-io/dgraph/issues/3613
+[#3560]: https://github.com/dgraph-io/dgraph/issues/3560
+[#3628]: https://github.com/dgraph-io/dgraph/issues/3628
+[#3681]: https://github.com/dgraph-io/dgraph/issues/3681
+[#3659]: https://github.com/dgraph-io/dgraph/issues/3659
+[#3763]: https://github.com/dgraph-io/dgraph/issues/3763
+[#3728]: https://github.com/dgraph-io/dgraph/issues/3728
+[#3422]: https://github.com/dgraph-io/dgraph/issues/3422
+[#3584]: https://github.com/dgraph-io/dgraph/issues/3584
+[#3084]: https://github.com/dgraph-io/dgraph/issues/3084
+[#3257]: https://github.com/dgraph-io/dgraph/issues/3257
+[#3269]: https://github.com/dgraph-io/dgraph/issues/3269
+[#3309]: https://github.com/dgraph-io/dgraph/issues/3309
+[#3295]: https://github.com/dgraph-io/dgraph/issues/3295
+[#3398]: https://github.com/dgraph-io/dgraph/issues/3398
+[#3824]: https://github.com/dgraph-io/dgraph/issues/3824
+[#3847]: https://github.com/dgraph-io/dgraph/issues/3847
+[#3880]: https://github.com/dgraph-io/dgraph/issues/3880
+[#2933]: https://github.com/dgraph-io/dgraph/issues/2933
+[#2950]: https://github.com/dgraph-io/dgraph/issues/2950
+[#3003]: https://github.com/dgraph-io/dgraph/issues/3003
+[#3018]: https://github.com/dgraph-io/dgraph/issues/3018
+[#3204]: https://github.com/dgraph-io/dgraph/issues/3204
+[#3235]: https://github.com/dgraph-io/dgraph/issues/3235
+[#3214]: https://github.com/dgraph-io/dgraph/issues/3214
+[#3493]: https://github.com/dgraph-io/dgraph/issues/3493
+[#3506]: https://github.com/dgraph-io/dgraph/issues/3506
+[#3059]: https://github.com/dgraph-io/dgraph/issues/3059
+[#3412]: https://github.com/dgraph-io/dgraph/issues/3412
+[#3612]: https://github.com/dgraph-io/dgraph/issues/3612
+[#2910]: https://github.com/dgraph-io/dgraph/issues/2910
+[#2913]: https://github.com/dgraph-io/dgraph/issues/2913
+[#2915]: https://github.com/dgraph-io/dgraph/issues/2915
+[#2947]: https://github.com/dgraph-io/dgraph/issues/2947
+[#3374]: https://github.com/dgraph-io/dgraph/issues/3374
+[#3531]: https://github.com/dgraph-io/dgraph/issues/3531
+[#2916]: https://github.com/dgraph-io/dgraph/issues/2916
+[#2981]: https://github.com/dgraph-io/dgraph/issues/2981
+[#2954]: https://github.com/dgraph-io/dgraph/issues/2954
+[#3273]: https://github.com/dgraph-io/dgraph/issues/3273
+[#1243]: https://github.com/dgraph-io/dgraph/issues/1243
+[#3710]: https://github.com/dgraph-io/dgraph/issues/3710
+[#3756]: https://github.com/dgraph-io/dgraph/issues/3756
+[#3769]: https://github.com/dgraph-io/dgraph/issues/3769
+[#2899]: https://github.com/dgraph-io/dgraph/issues/2899
+[#3843]: https://github.com/dgraph-io/dgraph/issues/3843
+[#3242]: https://github.com/dgraph-io/dgraph/issues/3242
+[#3271]: https://github.com/dgraph-io/dgraph/issues/3271
+[#2511]: https://github.com/dgraph-io/dgraph/issues/2511
+[#2895]: https://github.com/dgraph-io/dgraph/issues/2895
+[#3173]: https://github.com/dgraph-io/dgraph/issues/3173
+[#2921]: https://github.com/dgraph-io/dgraph/issues/2921
+[#2967]: https://github.com/dgraph-io/dgraph/issues/2967
+[#2997]: https://github.com/dgraph-io/dgraph/issues/2997
+[#3133]: https://github.com/dgraph-io/dgraph/issues/3133
+[#2862]: https://github.com/dgraph-io/dgraph/issues/2862
+[#2924]: https://github.com/dgraph-io/dgraph/issues/2924
+[#2951]: https://github.com/dgraph-io/dgraph/issues/2951
+[#3124]: https://github.com/dgraph-io/dgraph/issues/3124
+[#3141]: https://github.com/dgraph-io/dgraph/issues/3141
+[#3164]: https://github.com/dgraph-io/dgraph/issues/3164
+[#3218]: https://github.com/dgraph-io/dgraph/issues/3218
+[#3207]: https://github.com/dgraph-io/dgraph/issues/3207
+[#3256]: https://github.com/dgraph-io/dgraph/issues/3256
+[#3275]: https://github.com/dgraph-io/dgraph/issues/3275
+[#3494]: https://github.com/dgraph-io/dgraph/issues/3494
+[#3734]: https://github.com/dgraph-io/dgraph/issues/3734
+[#2973]: https://github.com/dgraph-io/dgraph/issues/2973
+[#2963]: https://github.com/dgraph-io/dgraph/issues/2963
+[#3172]: https://github.com/dgraph-io/dgraph/issues/3172
+[#3219]: https://github.com/dgraph-io/dgraph/issues/3219
+[#3227]: https://github.com/dgraph-io/dgraph/issues/3227
+[#3387]: https://github.com/dgraph-io/dgraph/issues/3387
+[#3515]: https://github.com/dgraph-io/dgraph/issues/3515
+[#3536]: https://github.com/dgraph-io/dgraph/issues/3536
+[#3547]: https://github.com/dgraph-io/dgraph/issues/3547
+[#3570]: https://github.com/dgraph-io/dgraph/issues/3570
+[#3621]: https://github.com/dgraph-io/dgraph/issues/3621
+[#3575]: https://github.com/dgraph-io/dgraph/issues/3575
+[#3559]: https://github.com/dgraph-io/dgraph/issues/3559
+[#3629]: https://github.com/dgraph-io/dgraph/issues/3629
+[#3648]: https://github.com/dgraph-io/dgraph/issues/3648
+[#3869]: https://github.com/dgraph-io/dgraph/issues/3869
+[#2928]: https://github.com/dgraph-io/dgraph/issues/2928
+[#2961]: https://github.com/dgraph-io/dgraph/issues/2961
+[#3106]: https://github.com/dgraph-io/dgraph/issues/3106
+[#3266]: https://github.com/dgraph-io/dgraph/issues/3266
+[#3089]: https://github.com/dgraph-io/dgraph/issues/3089
+[#3262]: https://github.com/dgraph-io/dgraph/issues/3262
+[#3441]: https://github.com/dgraph-io/dgraph/issues/3441
+[#3854]: https://github.com/dgraph-io/dgraph/issues/3854
+[#3824]: https://github.com/dgraph-io/dgraph/issues/3824
+[#2867]: https://github.com/dgraph-io/dgraph/issues/2867
+[#2885]: https://github.com/dgraph-io/dgraph/issues/2885
+[#2914]: https://github.com/dgraph-io/dgraph/issues/2914
+[#2893]: https://github.com/dgraph-io/dgraph/issues/2893
+[#2891]: https://github.com/dgraph-io/dgraph/issues/2891
+[#2925]: https://github.com/dgraph-io/dgraph/issues/2925
+[#2929]: https://github.com/dgraph-io/dgraph/issues/2929
+[#2995]: https://github.com/dgraph-io/dgraph/issues/2995
+[#3021]: https://github.com/dgraph-io/dgraph/issues/3021
+[#3042]: https://github.com/dgraph-io/dgraph/issues/3042
+[#3027]: https://github.com/dgraph-io/dgraph/issues/3027
+[#3182]: https://github.com/dgraph-io/dgraph/issues/3182
+[#3505]: https://github.com/dgraph-io/dgraph/issues/3505
+[#3402]: https://github.com/dgraph-io/dgraph/issues/3402
+[#3417]: https://github.com/dgraph-io/dgraph/issues/3417
+[#3516]: https://github.com/dgraph-io/dgraph/issues/3516
+[#3052]: https://github.com/dgraph-io/dgraph/issues/3052
+[#3062]: https://github.com/dgraph-io/dgraph/issues/3062
+[#3077]: https://github.com/dgraph-io/dgraph/issues/3077
+[#3085]: https://github.com/dgraph-io/dgraph/issues/3085
+[#3112]: https://github.com/dgraph-io/dgraph/issues/3112
+[#3190]: https://github.com/dgraph-io/dgraph/issues/3190
+[#3172]: https://github.com/dgraph-io/dgraph/issues/3172
+[#3216]: https://github.com/dgraph-io/dgraph/issues/3216
+[#3205]: https://github.com/dgraph-io/dgraph/issues/3205
+[#3169]: https://github.com/dgraph-io/dgraph/issues/3169
+[#3149]: https://github.com/dgraph-io/dgraph/issues/3149
+[#3323]: https://github.com/dgraph-io/dgraph/issues/3323
+[#3137]: https://github.com/dgraph-io/dgraph/issues/3137
+[#3143]: https://github.com/dgraph-io/dgraph/issues/3143
+[#3657]: https://github.com/dgraph-io/dgraph/issues/3657
+[#3662]: https://github.com/dgraph-io/dgraph/issues/3662
+[#3642]: https://github.com/dgraph-io/dgraph/issues/3642
+[#3670]: https://github.com/dgraph-io/dgraph/issues/3670
+[#3645]: https://github.com/dgraph-io/dgraph/issues/3645
+[#3664]: https://github.com/dgraph-io/dgraph/issues/3664
+[#3668]: https://github.com/dgraph-io/dgraph/issues/3668
+[#3692]: https://github.com/dgraph-io/dgraph/issues/3692
+[#3711]: https://github.com/dgraph-io/dgraph/issues/3711
+[#3685]: https://github.com/dgraph-io/dgraph/issues/3685
+[#3749]: https://github.com/dgraph-io/dgraph/issues/3749
+[#3794]: https://github.com/dgraph-io/dgraph/issues/3794
+[#3874]: https://github.com/dgraph-io/dgraph/issues/3874
+[#3900]: https://github.com/dgraph-io/dgraph/issues/3900
+[3271f64e0]: https://github.com/dgraph-io/dgraph/commit/3271f64e0
+[63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
 
 ## [1.0.17] - 2019-08-30
 [1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
