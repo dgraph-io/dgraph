@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -186,7 +187,7 @@ func (mf *manifestFile) close() error {
 // the wrong time.)
 func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 	changes := pb.ManifestChangeSet{Changes: changesParam}
-	buf, err := changes.Marshal()
+	buf, err := proto.Marshal(&changes)
 	if err != nil {
 		return err
 	}
@@ -241,7 +242,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	changes := m.asChanges()
 	set := pb.ManifestChangeSet{Changes: changes}
 
-	changeBuf, err := set.Marshal()
+	changeBuf, err := proto.Marshal(&set)
 	if err != nil {
 		fp.Close()
 		return nil, 0, err
@@ -371,7 +372,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 		}
 
 		var changeSet pb.ManifestChangeSet
-		if err := changeSet.Unmarshal(buf); err != nil {
+		if err := proto.Unmarshal(buf, &changeSet); err != nil {
 			return Manifest{}, 0, err
 		}
 

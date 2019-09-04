@@ -171,6 +171,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					schema:        r.Schema,
 					dgraph:        r.dgraph,
 					queryRewriter: r.queryRewriter,
+					operation:     op,
 				}).resolve(ctx)
 			}(q, i)
 		}

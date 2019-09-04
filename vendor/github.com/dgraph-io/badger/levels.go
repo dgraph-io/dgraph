@@ -496,8 +496,8 @@ func (s *levelsController) compactBuildTables(
 	for it.Valid() {
 		timeStart := time.Now()
 		bopts := table.Options{
-			BlockSize:         s.kv.opt.BlockSize,
-			BloomFalsePostive: s.kv.opt.BloomFalsePositive,
+			BlockSize:          s.kv.opt.BlockSize,
+			BloomFalsePositive: s.kv.opt.BloomFalsePositive,
 		}
 		builder := table.NewTableBuilder(bopts)
 		var numKeys, numSkips uint64

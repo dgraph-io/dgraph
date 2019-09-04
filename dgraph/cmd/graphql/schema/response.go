@@ -94,16 +94,13 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 		return int64(i), err
 	}
 
-	var js []byte
-	var err error
-
-		js, err = json.Marshal(struct {
-			Errors gqlerror.List   `json:"errors,omitempty"`
-			Data   json.RawMessage `json:"data,omitempty"`
-		}{
-			Errors: r.Errors,
-			Data:   r.Data.Bytes(),
-		})
+	js, err := json.Marshal(struct {
+		Errors gqlerror.List   `json:"errors,omitempty"`
+		Data   json.RawMessage `json:"data,omitempty"`
+	}{
+		Errors: r.Errors,
+		Data:   r.Data.Bytes(),
+	})
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"

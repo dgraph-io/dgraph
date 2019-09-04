@@ -60,5 +60,10 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, gqlErr
 	}
 
-	return &operation{op: op, vars: vars, inSchema: s.schema}, nil
+	return &operation{op: op,
+		vars:     vars,
+		query:    req.Query,
+		doc:      doc,
+		inSchema: s.schema,
+	}, nil
 }

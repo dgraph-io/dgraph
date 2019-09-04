@@ -32,11 +32,25 @@ type queryResolver struct {
 	schema        schema.Schema
 	dgraph        dgraph.Client
 	queryRewriter dgraph.QueryRewriter
+	operation     schema.Operation
 }
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
+
+	if qr.query.QueryType() == schema.SchemaQuery {
+		resp, err := schema.Introspect(qr.operation, qr.query, qr.schema)
+		if err != nil {
+			res.err = err
+			return res
+		}
+		// This is because Introspect returns an object.
+		if len(resp) >= 2 {
+			res.data = resp[1 : len(resp)-1]
+		}
+		return res
+	}
 
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
 	if err != nil {

@@ -1,0 +1,28 @@
+{
+    __type(name: "TestInputObject") {
+        kind
+        name
+        inputFields {
+            name
+            type { ...TypeRef }
+            defaultValue
+        }
+    }
+}
+
+fragment TypeRef on __Type {
+    kind
+    name
+    ofType {
+        kind
+        name
+        ofType {
+            kind
+            name
+            ofType {
+                kind
+                name
+            }
+        }
+    }
+}

@@ -34,12 +34,7 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
-scalar Boolean
 scalar DateTime
-scalar Float
-scalar ID
-scalar Int
-scalar String
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 `
@@ -92,6 +87,10 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range schema.Definitions {
+		if defn.BuiltIn {
+			// prelude definitions are built in and we don't want to validate them.
+			continue
+		}
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
@@ -597,7 +596,11 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// schemaExtras is marked as printed.  So build typeNames as anything
 	// left to be printed.
 	typeNames := make([]string, 0, len(schema.Types)-len(printed))
-	for typName := range schema.Types {
+	for typName, typDef := range schema.Types {
+		if typDef.BuiltIn {
+			// These are the types that are coming from ast.Prelude
+			continue
+		}
 		if !printed[typName] {
 			typeNames = append(typeNames, typName)
 		}
