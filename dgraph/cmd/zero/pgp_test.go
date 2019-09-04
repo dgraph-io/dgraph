@@ -40,6 +40,7 @@ func signAndWriteMessage(t *testing.T, entity *openpgp.Entity, json string) *byt
 	// armor encode the message
 	abuf := new(bytes.Buffer)
 	w, err = armor.Encode(abuf, "PGP MESSAGE", nil)
+	require.NoError(t, err)
 	_, err = w.Write(b.Bytes())
 	require.NoError(t, err)
 
