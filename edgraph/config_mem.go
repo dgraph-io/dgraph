@@ -1,5 +1,5 @@
-// +build: linux darwin
-// +build: cgo
+// +build linux darwin
+// +build cgo
 
 // This file is compiled on linux and darwin when cgo is enabled.
 
