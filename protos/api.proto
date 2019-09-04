@@ -1,0 +1,177 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Style guide for Protocol Buffer 3.
+// Use CamelCase (with an initial capital) for message names – for example,
+// SongServerRequest. Use underscore_separated_names for field names – for
+// example, song_name.
+
+syntax = "proto3";
+
+package api;
+
+/* import "gogoproto/gogo.proto"; */
+
+/* option (gogoproto.marshaler_all) = true; */
+/* option (gogoproto.sizer_all) = true; */
+/* option (gogoproto.unmarshaler_all) = true; */
+/* option (gogoproto.goproto_getters_all) = true; */
+
+option java_package = "io.dgraph";
+option java_outer_classname = "DgraphProto";
+
+// Graph response.
+service Dgraph {
+	rpc Login (LoginRequest)       returns (Response) {}
+	rpc Query (Request)            returns (Response) {}
+	rpc Alter (Operation)          returns (Payload) {}
+	rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
+	rpc CheckVersion(Check)        returns (Version) {}
+}
+
+message Request {
+	uint64 start_ts = 1;
+
+	string query = 4;
+	map<string, string> vars = 5; // Support for GraphQL like variables.
+	bool read_only = 6;
+	bool best_effort = 7;
+
+	repeated Mutation mutations = 12;
+	bool commit_now = 13;
+}
+
+message Response {
+	bytes json = 1;
+	TxnContext txn = 2;
+	Latency latency = 3;
+	map<string, string> uids = 12;
+}
+
+message Mutation {
+	bytes set_json = 1;
+	bytes delete_json = 2;
+	bytes set_nquads = 3;
+	bytes del_nquads = 4;
+	repeated NQuad set = 5;
+	repeated NQuad del = 6;
+
+	// This is being used for upserts.
+	string cond = 9;
+
+	// This field is a duplicate of the one in Request and placed here for convenience.
+	bool commit_now = 14;
+}
+
+message Operation {
+	string schema = 1;
+	string drop_attr = 2;
+	bool drop_all = 3;
+
+	enum DropOp {
+		NONE = 0;
+		ALL = 1;
+		DATA = 2;
+		ATTR = 3;
+		TYPE = 4;
+	}
+	DropOp drop_op = 4;
+
+	// If drop_op is ATTR or TYPE, drop_value holds the name of the predicate or
+	// type to delete.
+	string drop_value = 5;
+}
+
+// Worker services.
+message Payload {
+	bytes Data = 1;
+}
+
+message TxnContext {
+	uint64 start_ts = 1;
+	uint64 commit_ts = 2;
+	bool aborted = 3;
+	repeated string keys = 4;  // List of keys to be used for conflict detection.
+	repeated string preds = 5; // List of predicates involved in this transaction.
+}
+
+message Check {}
+
+message Version {
+	string tag = 1;
+}
+
+message Latency {
+	uint64 parsing_ns = 1;
+	uint64 processing_ns = 2;
+	uint64 encoding_ns = 3;
+	uint64 assign_timestamp_ns = 4;
+}
+
+message NQuad {
+	string subject = 1;
+	string predicate = 2;
+	string object_id = 3;
+	Value object_value = 4;
+	string label = 5;
+	string lang = 6;
+	repeated Facet facets = 7;
+}
+
+message Value {
+	oneof val {
+		string default_val = 1;
+		bytes bytes_val = 2;
+		int64 int_val = 3;
+		bool bool_val = 4;
+		string str_val = 5;
+		double double_val = 6;
+		bytes geo_val = 7;  // Geo data in WKB format
+		bytes date_val = 8;
+		bytes datetime_val = 9;
+		string password_val = 10;
+		uint64 uid_val=11;
+	}
+}
+
+message Facet {
+	enum ValType {
+		STRING = 0;
+		INT = 1;
+		FLOAT = 2;
+		BOOL = 3;
+		DATETIME = 4;
+	}
+
+	string key = 1;
+	bytes value = 2;
+	ValType val_type = 3;
+	repeated string tokens = 4; // tokens of value.
+	string alias = 5; // not stored, only used for query.
+}
+
+message LoginRequest {
+	string userid = 1;
+	string password = 2;
+	string refresh_token = 3;
+}
+
+message Jwt {
+	string access_jwt = 1;
+	string refresh_jwt = 2;
+}
+
+// vim: noexpandtab sw=2 ts=2

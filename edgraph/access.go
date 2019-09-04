@@ -22,8 +22,8 @@ import (
 	"context"
 
 	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )

@@ -16,8 +16,8 @@
 
 PROTO_PATH := ${GOPATH}/src:.
 PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgraph
-PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgo/protos
 PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/badger/pb
+PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/gogo/protobuf
 
 .PHONY: help
 help:
@@ -25,6 +25,7 @@ help:
 
 .PHONY: clean
 clean:
+	@mkdir -p api && rm -f api/api.pb.go
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
 .PHONY: check
@@ -38,6 +39,10 @@ check:
 regenerate: check clean
 	@protoc \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:pb \
+		--gofast_out=plugins=grpc:api \
+		api.proto
+	@protoc \
+		--proto_path=${PROTO_PATH} \
+		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgraph/protos/api:pb \
 		pb.proto
 	@echo Done.

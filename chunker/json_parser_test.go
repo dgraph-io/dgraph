@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )

@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"

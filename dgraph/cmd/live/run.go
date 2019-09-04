@@ -39,7 +39,7 @@ import (
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
