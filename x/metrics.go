@@ -126,9 +126,10 @@ var (
 	}
 
 	countStats     = []stats.Measure{NumQueries, NumEdges, RaftAppliedIndex, MaxAssignedTs}
-	lastValueStats = []stats.Measure{PendingQueries, PendingProposals, MemoryInUse, MemoryIdle, MemoryProc,
-		ActiveMutations, AlphaHealth, BadgerDiskReadsTotal, BadgerDiskWritesTotal, BadgerGetsTotal,
-		BadgerMemtableGetsTotal, BadgerPutsTotal, BadgerReadBytes, BadgerWrittenBytes}
+	lastValueStats = []stats.Measure{PendingQueries, PendingProposals, MemoryInUse, MemoryIdle,
+		MemoryProc, ActiveMutations, AlphaHealth, BadgerDiskReadsTotal, BadgerDiskWritesTotal,
+		BadgerGetsTotal, BadgerMemtableGetsTotal, BadgerPutsTotal, BadgerReadBytes,
+		BadgerWrittenBytes}
 
 	allViews = []*view.View{
 		{
