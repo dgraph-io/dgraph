@@ -144,7 +144,7 @@ func updateMemoryMetrics() {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	inUse := ms.HeapInuse + ms.StackInuse
-	// From runtime/mstats.go:
+	// From https://golang.org/src/runtime/mstats.go
 	// HeapIdle minus HeapReleased estimates the amount of memory
 	// that could be returned to the OS, but is being retained by
 	// the runtime so it can grow the heap without requesting more

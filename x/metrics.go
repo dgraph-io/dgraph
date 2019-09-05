@@ -82,19 +82,25 @@ var (
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 
-	// Badger stats
+	// BadgerDiskReadsTotal records the number of disk reads in Badger
 	BadgerDiskReadsTotal = stats.Int64("badger_disk_reads_total",
 		"Total count of disk reads in Badger", stats.UnitDimensionless)
+	// BadgerDiskWritesTotal records the number of disk writes in Badger
 	BadgerDiskWritesTotal = stats.Int64("badger_disk_writes_total",
 		"Total count of disk writes in Badger", stats.UnitDimensionless)
+	// BadgerGetsTotal records the number of call's to Badger's get
 	BadgerGetsTotal = stats.Int64("badger_gets_total",
 		"Total count of calls to Badger’s get.", stats.UnitDimensionless)
+	// BadgerMemtableGetsTotal records the number of memtable accesses to Badger's get
 	BadgerMemtableGetsTotal = stats.Int64("badger_memtable_gets_total",
 		"Total count of memtable accesses to Badger’s get.'", stats.UnitDimensionless)
+	// BadgerPutsTotal records the number of calls to Badger's put
 	BadgerPutsTotal = stats.Int64("badger_puts_total",
 		"Total count of calls to Badger’s put.", stats.UnitDimensionless)
+	// BadgerReadBytes records the number of bytes read from Badger
 	BadgerReadBytes = stats.Int64("badger_read_bytes",
 		"Total bytes read from Badger.'", stats.UnitBytes)
+	// BadgerWrittenBytes records the number of bytes written to Badger
 	BadgerWrittenBytes = stats.Int64("badger_written_bytes",
 		"Total bytes written to Badger.", stats.UnitBytes)
 
