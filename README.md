@@ -94,7 +94,7 @@ makes it easy to build applications with it.
   play.dgraph.io](http://play.dgraph.io/).
 - Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
   find the latest release and corresponding release notes.
-- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of
+- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/2894) for list of
   working and planned features.
 - Read about the latest updates from Dgraph team [on our
   blog](https://open.dgraph.io/).
