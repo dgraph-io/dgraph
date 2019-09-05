@@ -316,10 +316,11 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 		switch item.Typ {
 		case itemRightCurl:
 			it.Next()
-			if it.Item().Typ != itemNewLine {
-				return nil, it.Item().Errorf("Expected new line after type declaration. Got %v",
-					it.Item().Val)
+			if it.Item().Typ != itemNewLine && it.Item().Typ != lex.ItemEOF {
+				return nil, it.Item().Errorf(
+					"Expected new line or EOF after type declaration. Got %v", it.Item())
 			}
+			it.Prev()
 
 			typeUpdate.Fields = fields
 			return typeUpdate, nil
