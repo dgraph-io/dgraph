@@ -19,6 +19,7 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,8 @@ import (
 	"github.com/dgraph-io/dgo"
 	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"go.opencensus.io/trace"
+	"go.opencensus.io/zpages"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -87,6 +90,9 @@ func init() {
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flags.StringP("schema", "s", "schema.graphql",
 		"Location of GraphQL schema file")
+
+	// OpenCensus flags.
+	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flags)
@@ -171,6 +177,15 @@ func run() error {
 	}
 
 	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))
+
+	trace.ApplyConfig(trace.Config{
+		DefaultSampler:             trace.ProbabilitySampler(GraphQL.Conf.GetFloat64("trace")),
+		MaxAnnotationEventsPerSpan: 256,
+	})
+	x.RegisterExporters(GraphQL.Conf, "dgraph.graphql")
+
+	// Add OpenCensus z-pages.
+	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options

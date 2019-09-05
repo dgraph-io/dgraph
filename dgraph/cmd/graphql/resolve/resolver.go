@@ -26,11 +26,16 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
+)
+
+const (
+	methodResolve = "RequestResolver.Resolve"
 )
 
 // GraphQL spec:
@@ -141,6 +146,9 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
+
+	ctx, span := trace.StartSpan(ctx, methodResolve)
+	defer span.End()
 
 	if glog.V(3) {
 		glog.Infof("[%s] Resolving GQL request: \n%s\n",
