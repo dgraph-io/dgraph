@@ -548,6 +548,8 @@ func populateCluster() {
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
 		<202> <dgraph.type> "CarModel" .
+
+		<3> <favorite_music> "Country" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

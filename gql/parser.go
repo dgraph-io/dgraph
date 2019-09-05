@@ -85,6 +85,11 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
+
+	// If the graph contains a @type directive, the type information will be used
+	// to enforce the results. For example, child subgraphs with an attribute that does
+	// not belong to the type will be ignored.
+	EnforcedType string
 }
 
 // RecurseArgs stores the arguments needed to process the @recurse directive.
@@ -2045,6 +2050,7 @@ func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
 			},
 		},
 	}
+	gq.EnforcedType = typeName
 
 	return nil
 }

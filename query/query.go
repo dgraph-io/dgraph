@@ -176,6 +176,8 @@ type params struct {
 	IsEmpty       bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll     bool     // expand all languages
 	shortest      bool
+
+	EnforcedType string
 }
 
 type pathMetadata struct {
@@ -486,6 +488,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		args := params{
 			Alias:          gchild.Alias,
 			Cascade:        sg.Params.Cascade,
+			EnforcedType:   gchild.EnforcedType,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
@@ -713,6 +716,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		Alias:            gq.Alias,
 		Cascade:          gq.Cascade,
+		EnforcedType:     gq.EnforcedType,
 		GetUid:           isDebug(ctx),
 		IgnoreReflex:     gq.IgnoreReflex,
 		IsEmpty:          gq.IsEmpty,
@@ -2342,6 +2346,36 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	return nil
 }
 
+func (sg *SubGraph) enforceTypeConstraints() {
+	if sg.Params.EnforcedType == "" {
+		for _, child := range sg.Children {
+			child.enforceTypeConstraints()
+		}
+		return
+	}
+
+	allowedPreds := make(map[string]struct{})
+	allowedPreds["uid"] = struct{}{}
+	allowedPreds["dgraph.type"] = struct{}{}
+	typePreds := getPredicatesFromTypes([]string{sg.Params.EnforcedType})
+	for _, pred := range typePreds {
+		allowedPreds[pred] = struct{}{}
+	}
+
+	children := make([]*SubGraph, 0)
+	for _, child := range sg.Children {
+		if _, ok := allowedPreds[child.Attr]; !ok {
+			continue
+		}
+		children = append(children, child)
+	}
+	sg.Children = children
+
+	for _, child := range sg.Children {
+		child.enforceTypeConstraints()
+	}
+}
+
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
@@ -2635,6 +2669,11 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		if !it {
 			return errors.Errorf("Query couldn't be executed")
 		}
+	}
+
+	// Type system post-processing.
+	for _, sg := range req.Subgraphs {
+		sg.enforceTypeConstraints()
 	}
 	req.Latency.Processing += time.Since(execStart)
 

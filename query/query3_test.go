@@ -2121,6 +2121,36 @@ func TestMultipleTypeDirectivesInPredicate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret", "pet":[{"name":"Bear"}]}, {"name":"Leonard"}]}]}}`, js)
 }
 
+func TestBasicTypeEnforcement(t *testing.T) {
+	q1 := `
+		{
+			me(func: uid(0x2)) {
+				enemy { 
+					name
+					favorite_music
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret", "favorite_music":"Country"},
+		{"name":"Leonard"}]}]}}`, js)
+
+	q2 := `
+		{
+			me(func: uid(0x2)) {
+				enemy @type(Person) {
+					name
+					favorite_music
+				}
+			}
+		}
+	`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret"}, {"name":"Leonard"}]}]}}`, js)
+
+}
+
 func TestMaxPredicateSize(t *testing.T) {
 	// Create a string that has more than than 2^16 chars.
 	var b strings.Builder
