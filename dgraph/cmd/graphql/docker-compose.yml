@@ -15,45 +15,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
-
-  zero2:
-    image: dgraph/dgraph:latest
-    container_name: zero2
-    working_dir: /data/zero2
-    depends_on:
-      - zero1
-    ports:
-      - 5182:5182
-      - 6182:6182
-    labels:
-      cluster: test
-      service: zero
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph zero -o 102 --my=zero2:5182 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5180
-
-  zero3:
-    image: dgraph/dgraph:latest
-    container_name: zero3
-    working_dir: /data/zero3
-    depends_on:
-      - zero2
-    ports:
-      - 5183:5183
-      - 6183:6183
-    labels:
-      cluster: test
-      service: zero
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph zero -o 103 --my=zero3:5183 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5180
+    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 --jaeger.collector=http://jaeger:14268
 
   alpha1:
     image: dgraph/dgraph:latest
@@ -74,134 +36,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  alpha2:
-    image: dgraph/dgraph:latest
-    container_name: alpha2
-    working_dir: /data/alpha2
-    depends_on:
-      - alpha1
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-    ports:
-      - 8182:8182
-      - 9182:9182
-    labels:
-      cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  alpha3:
-    image: dgraph/dgraph:latest
-    container_name: alpha3
-    working_dir: /data/alpha3
-    depends_on:
-      - alpha2
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-    ports:
-      - 8183:8183
-      - 9183:9183
-    labels:
-      cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  alpha4:
-    image: dgraph/dgraph:latest
-    container_name: alpha4
-    working_dir: /data/alpha4
-    depends_on:
-      - alpha3
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-    ports:
-      - 8184:8184
-      - 9184:9184
-    labels:
-      cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  alpha5:
-    image: dgraph/dgraph:latest
-    container_name: alpha5
-    working_dir: /data/alpha5
-    depends_on:
-      - alpha4
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-    ports:
-      - 8185:8185
-      - 9185:9185
-    labels:
-      cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  alpha6:
-    image: dgraph/dgraph:latest
-    container_name: alpha6
-    working_dir: /data/alpha6
-    depends_on:
-      - alpha5
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-    ports:
-      - 8186:8186
-      - 9186:9186
-    labels:
-      cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
-
-  minio1:
-    image: minio/minio:latest
-    container_name: minio1
-    env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/minio.env
-    working_dir: /data/minio1
-    ports:
-      - 9001:9001
-    labels:
-      cluster: test
-    command: minio server /data/minio --address :9001
+    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s --jaeger.collector=http://jaeger:14268
 
   graphql-init:
     image: dgraph/dgraph:latest
@@ -222,10 +57,10 @@ services:
     labels:
       cluster: test
     command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 -v3
- 
+
   graphql:
     image: dgraph/dgraph:latest
-    container_name: graphql 
+    container_name: graphql
     working_dir: /data/graphql
     volumes:
       - type: bind
@@ -235,10 +70,20 @@ services:
     ports:
       - 9000:9000
     depends_on:
-      - graphql-init 
+      - graphql-init
     restart: always
     labels:
       cluster: test
-      service: graphql 
-    command: /gobin/dgraph graphql --alpha alpha1:9180 
+      service: graphql
+    command: /gobin/dgraph graphql --alpha alpha1:9180 --jaeger.collector=http://jaeger:14268
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    working_dir: /working/jaeger
+    environment:
+    - SPAN_STORAGE_TYPE=badger
+    ports:
+    - 14268:14268
+    - 16686:16686
+    command: --badger.ephemeral=false --badger.directory-key /working/jaeger --badger.directory-value /working/jaeger
 

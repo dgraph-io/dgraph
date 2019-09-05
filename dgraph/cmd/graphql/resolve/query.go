@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/golang/glog"
+	"go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -58,12 +59,15 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		return res
 	}
 
+	ctx, span := trace.StartSpan(ctx, "dgraph.Query")
 	resp, err := qr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
+		span.End()
 		return res
 	}
+	span.End()
 
 	completed, err := completeDgraphResult(ctx, qr.query, resp)
 	res.err = err

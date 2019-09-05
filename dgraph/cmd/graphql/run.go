@@ -19,7 +19,6 @@ package graphql
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -92,7 +91,8 @@ func init() {
 		"Location of GraphQL schema file")
 
 	// OpenCensus flags.
-	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
+	flags.Float64("trace", 1.0, "The ratio of queries to trace.")
+	flags.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flags)
@@ -118,6 +118,7 @@ func init() {
 
 	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("alpha"))
 	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("schema"))
+	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("jaeger.collector"))
 }
 
 func run() error {
