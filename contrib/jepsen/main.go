@@ -15,15 +15,15 @@
  */
 
 // Runs Dgraph Jepsen tests with a local Dgraph binary.
-// Set the --jepsen-root flag or the JEPSEN_ROOT environment variable before running.
+// Set the --jepsen-root flag to the path of the Jepsen repo directory.
 //
 // Example usage:
 //
 // Runs all test and nemesis combinations (36 total)
-//     ./jepsen --test-all
+//     ./jepsen --jepsen-root $JEPSEN_ROOT --test-all
 //
 // Runs bank test with partition-ring nemesis for 10 minutes
-//     ./jepsen --jepsen.workload bank --jepsen.nemesis partition-ring
+//     ./jepsen --jepsen-root $JEPSEN_ROOT --workload bank --nemesis partition-ring
 
 package main
 
