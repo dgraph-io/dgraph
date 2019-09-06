@@ -30,6 +30,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -293,7 +294,17 @@ func tcStart(testName string) func(pass int) {
 }
 
 func main() {
-	pflag.Usage = func() {}
+	pflag.ErrHelp = errors.New("")
+	pflag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		pflag.PrintDefaults()
+
+		fmt.Printf("\nExample usage:\n")
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT -w bank -n none\n", os.Args[0])
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT -w 'bank delete' "+
+			"-n 'none kill-alpha,kill-zero move-tablet'\n", os.Args[0])
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
+	}
 	pflag.Parse()
 
 	if *jepsenRoot == "" {
@@ -318,20 +329,8 @@ func main() {
 	}
 
 	if *workload == "" || *nemesis == "" {
-		fmt.Printf("You must specify at least one workload and at least one nemesis.\n")
-
-		fmt.Printf("Available workloads:\n")
-		for _, w := range availableWorkloads {
-			fmt.Printf("\t%v\n", w)
-		}
-		fmt.Printf("Available nemeses:\n")
-		for _, n := range availableNemeses {
-			fmt.Printf("\t%v\n", n)
-		}
-		fmt.Printf("Example commands:\n")
-		fmt.Printf("$ %v -w bank -n none\n", os.Args[0])
-		fmt.Printf("$ %v -w 'bank delete' -n 'none kill-alpha,kill-zero move-tablet'\n", os.Args[0])
-		fmt.Printf("$ %v --test-all\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "You must specify at least one workload and at least one nemesis.\n")
+		fmt.Fprintf(os.Stderr, "See --help for example usage.\n")
 		os.Exit(1)
 	}
 
