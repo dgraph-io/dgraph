@@ -1347,23 +1347,460 @@ upsert {
 	require.NotContains(t, res, "post4")
 }
 
-func TestUpsertBulkUpdateBranch(t *testing.T) {
+func TestUpsertMultiTypeUpdate(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
 name: string @index(exact) .
-branch: string .`))
+branch: string .
+age: int .
+active: bool .
+openDate: dateTime .
+password: password .
+loc: geo .
+amount: float .`))
 
 	m1 := `
 {
   set {
     _:user1 <name> "user1" .
     _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
+    _:user1 <age> "30" .
+    _:user1 <active> "1" .
+    _:user1 <openDate> "1980-01-01" .
+    _:user1 <password> "password" .
+    _:user1 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
 
     _:user2 <name> "user2" .
     _:user2 <branch> "Fuller Street, San Francisco" .
+    _:user2 <amount> "10" .
+    _:user2 <age> "30" .
+    _:user2 <active> "1" .
+    _:user2 <openDate> "1980-01-01" .
+    _:user2 <password> "password" .
+    _:user2 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
 
     _:user3 <name> "user3" .
     _:user3 <branch> "Fuller Street, San Francisco" .
+    _:user3 <amount> "10" .
+    _:user3 <age> "30" .
+    _:user3 <active> "1" .
+    _:user3 <password> "password" .
+    _:user3 <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(branch)) {
+    name
+    branch
+    amount
+    age
+    active
+    openDate
+    password
+    loc
+  }
+}`
+	expectedRes, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+      n as name
+      b as branch
+      a as age
+      ac as active
+      open as openDate
+      pass as password
+      l as loc
+    }
+  }
+
+  mutation {
+    set {
+      uid(u ) <amount> val(amt) .
+      uid(u) <name> val (n) .
+      uid(u) <branch> val( b) .
+      uid(u) <age> val(a) .
+      uid(u) <active> val(ac) .
+      uid(u) <openDate> val(open) .
+      uid(u) <password> val(pass) .
+      uid(u) <loc> val(l) .
+    }
+  }
+}
+  `
+
+	// This test is to ensure that all the types are being
+	// parsed correctly by the val function.
+	// User3 doesn't have all the fields. This test also ensures
+	// that val works when not all records have the values
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestValInSubject(t *testing.T) {
+	m3 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+  mutation {
+    set {
+      val(amt) <amount> 1 .
+    }
+  }
+}
+`
+
+	_, _, _, err := mutationWithTs(m3, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "while lexing val(amt) <amount> 1")
+}
+
+func TestUpperCaseFunctionErrorMsg(t *testing.T) {
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+  mutation {
+    set {
+      uid(u) <amount> VAL(amt) .
+    }
+  }
+}
+`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "Invalid input: V at lexText")
+
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+  mutation {
+    set {
+      UID(u) <amount> val(amt) .
+    }
+  }
+}
+`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "Invalid input: U at lexText")
+}
+
+func SetupBankExample(t *testing.T) string {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: float .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <amount> "10" .
+
+    _:user2 <name> "user2" .
+    _:user2 <amount> "100" .
+
+    _:user3 <name> "user3" .
+    _:user3 <amount> "1000" .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	expectedRes, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	return expectedRes
+}
+
+func TestUpsertSanityCheck(t *testing.T) {
+	expectedRes := SetupBankExample(t)
+
+	// Checking for error when some wrong field is being used
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as nofield
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(amt) .
+    }
+  }
+}`
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestUpsertDeleteWrongValue(t *testing.T) {
+	expectedRes := SetupBankExample(t)
+
+	// Checking that delete and val should only
+	// delete if the value of variable matches
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+    me() {
+      updated_amt as  math(amt+1)
+    }
+  }
+  mutation {
+    delete {
+      uid(u) <amount> val(updated_amt) .
+    }
+  }
+}`
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	// There should be no change
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestUpsertDeleteRightValue(t *testing.T) {
+	SetupBankExample(t)
+	// Checking Bulk Delete in Val
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+  }
+
+  mutation {
+    delete {
+      uid(u) <amount> val(amt) .
+    }
+  }
+}
+`
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "amount")
+}
+
+func TestUpsertBuldUpdateValue(t *testing.T) {
+	SetupBankExample(t)
+
+	// Resetting the val in upsert to check if the
+	// values are not switched and the interest is added
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+    me () {
+      updated_amt as math(amt+1)
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(updated_amt) .
+    }
+  }
+}
+  `
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "user3",
+       "amount": 1001.000000
+     }, {
+       "name": "user1",
+       "amount": 11.000000
+     }, {
+       "name": "user2",
+       "amount": 101.000000
+     }]
+   }
+}`
+	testutil.CompareJSON(t, res, expectedRes)
+
+}
+
+func TestAggregateValBuldUpdate(t *testing.T) {
+	SetupBankExample(t)
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+
+	// Checking support for bulk update values
+	// to aggregate variable in upsert
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+    me() {
+      max_amt as max(val(amt))
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(max_amt) .
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "user3",
+       "amount": 1000.000000
+     }, {
+       "name": "user1",
+       "amount": 1000.000000
+     }, {
+       "name": "user2",
+       "amount": 1000.000000
+     }]
+   }
+}`
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestUpsertEmptyUID(t *testing.T) {
+	SetupBankExample(t)
+	m1 := `
+upsert {
+  query {
+    var(func: has(amount)) {
+      amt as amount
+    }
+    me() {
+      max_amt as max(val(amt))
+    }
+    v as var(func: eq(name, "Michael")) {
+      amount
+    }
+  }
+
+  mutation {
+    set {
+      uid(v) <amount> val(max_amt) .
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+}
+
+func TestUpsertBulkUpdateBranch(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: float .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
+
+    _:user2 <name> "user2" .
+    _:user2 <branch> "Fuller Street, San Francisco" .
+    _:user2 <amount> "100" .
+
+    _:user3 <name> "user3" .
+    _:user3 <branch> "Fuller Street, San Francisco" .
+    _:user3 <amount> "1000" .
   }
 }`
 
@@ -1391,6 +1828,7 @@ upsert {
   q(func: has(branch)) {
     name
     branch
+    amount
   }
 }`
 	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
@@ -1400,20 +1838,19 @@ upsert {
 	require.Contains(t, res, "user2")
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "Fuller Street, SF")
-
 	// Bulk Delete: delete everyone's branch
 	m3 := `
-  upsert {
-    query {
-      u as var(func: has(branch))
-    }
+upsert {
+  query {
+    u as var(func: has(branch))
+  }
 
-    mutation {
-      delete {
-        uid(u) <branch> * .
-      }
+  mutation {
+    delete {
+      uid(u) <branch> * .
     }
-  }`
+  }
+}`
 	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
@@ -1447,15 +1884,15 @@ set {
 
 	m2 := `
 upsert {
-query {
-  u3 as var(func: eq(name, "3"))
-  u2 as var(func: eq(name, "2"))
-}
-mutation {
-  delete {
-      uid(u2) <game_answer> uid(u3) .
+  query {
+    u3 as var(func: eq(name, "3"))
+    u2 as var(func: eq(name, "2"))
   }
-}
+  mutation {
+    delete {
+        uid(u2) <game_answer> uid(u3) .
+    }
+  }
 }`
 	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
@@ -1466,7 +1903,7 @@ mutation {
       name
       count(~game_answer)
     }
-  }`
+}`
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "count(~game_answer)")
