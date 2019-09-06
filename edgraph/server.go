@@ -747,7 +747,7 @@ func updateValInNQuads(nquads []*api.NQuad, req query.Request) []*api.NQuad {
 			continue
 		}
 
-		key, err := strconv.ParseUint(nq.Subject, 10, 64)
+		key, err := strconv.ParseUint(nq.Subject, 0, 64)
 		if err != nil {
 			// Key conversion failed, ignoring the nquad. Ideally,
 			// it shouldn't happen as this is the result of a query.
