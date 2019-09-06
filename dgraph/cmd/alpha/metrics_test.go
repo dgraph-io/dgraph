@@ -30,6 +30,7 @@ func TestMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	_, body, err := runRequest(req)
+	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err, "Unable to get the metrics map: %v", err)
 

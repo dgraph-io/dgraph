@@ -1447,6 +1447,7 @@ upsert {
 	require.NoError(t, err)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
@@ -1699,6 +1700,7 @@ upsert {
      }]
    }
 }`
+	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 
 }
@@ -1751,6 +1753,7 @@ upsert {
      }]
    }
 }`
+	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
