@@ -75,6 +75,15 @@ var (
 	}
 	availableNemeses = []string{
 		"none",
+		"kill-alpha",
+		"kill-zero",
+		"partition-ring",
+		"move-tablet",
+	}
+	// testAllWorkloads configures
+	testAllWorkloads = availableWorkloads
+	testAllNemeses   = []string{
+		"none",
 		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
@@ -86,11 +95,12 @@ var (
 
 	// Jepsen test flags
 	workload = pflag.StringP("workload", "w", "",
-		"Test workload to run. Specify a space-separated list of workloads. "+
+		"Test workload to run. Specify a space-separated list of workloads. Available workloads: "+
 			fmt.Sprintf("%q", availableWorkloads))
 	nemesis = pflag.StringP("nemesis", "n", "",
 		"A space-separated, comma-separated list of nemesis types. "+
-			"Specify a space-separated list of nemeses."+
+			"Combinations of nemeses can be specified by combining them with commas, "+
+			"e.g., kill-alpha,kill-zero. Available nemeses: "+
 			fmt.Sprintf("%q", availableNemeses))
 	timeLimit = pflag.IntP("time-limit", "l", 600,
 		"Time limit per Jepsen test in seconds.")
@@ -117,11 +127,12 @@ var (
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
-	jepsenRoot = pflag.StringP("jepsen-root", "r", os.Getenv("JEPSEN_ROOT"),
-		"Directory path to jepsen repo. Also settable with JEPSEN_ROOT env var.")
+	jepsenRoot = pflag.StringP("jepsen-root", "r", "",
+		"Directory path to jepsen repo. This sets the JEPSEN_ROOT env var for Jepsen ./up.sh.")
 	ciOutput = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
-	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
+	testAll = pflag.Bool("test-all", false, "Run the following workload and nemesis combinations: "+
+		fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -282,6 +293,7 @@ func tcStart(testName string) func(pass int) {
 }
 
 func main() {
+	pflag.Usage = func() {}
 	pflag.Parse()
 
 	if *jepsenRoot == "" {
@@ -301,12 +313,12 @@ func main() {
 	}
 
 	if *testAll {
-		*workload = strings.Join(availableWorkloads, " ")
-		*nemesis = strings.Join(availableNemeses, " ")
+		*workload = strings.Join(testAllWorkloads, " ")
+		*nemesis = strings.Join(testAllNemeses, " ")
 	}
 
 	if *workload == "" || *nemesis == "" {
-		fmt.Printf("You must specify a workload and a nemesis.\n")
+		fmt.Printf("You must specify at least one workload and at least one nemesis.\n")
 
 		fmt.Printf("Available workloads:\n")
 		for _, w := range availableWorkloads {
