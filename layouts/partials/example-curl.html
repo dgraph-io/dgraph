@@ -1,14 +1,11 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
-{{ $versionGe11 := true }}
-
-{{ if ne $currentBranch "master" }}
-    {{ $version := split (slicestr $currentBranch 1) "." }}
-    {{ $majorVersion := int (index $version 0) }}
-    {{ $minorVersion := int (index $version 1) }}
-    {{ $patchVersion := int (index $version 2) }}
-    {{ $versionGe11 = or (gt $majorVersion 1) (and (eq $majorVersion 1) (ge $minorVersion 1)) }}
-{{ end }}
+{{ $version := replaceRE "[a-zA-Z]+" "" $currentBranch }}
+{{ $versionMap := split (replace (printf "%-10s" $version) " " "0") "." }}
+{{ $majorVersion := int (index $versionMap 0) }}
+{{ $minorVersion := int (index $versionMap 1) }}
+{{ $patchVersion := int (index $versionMap 2) }}
+{{ $versionGe11 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (ge $minorVersion 1)) }}
 
 {{ if $versionGe11 }}
     {{ if eq ( .Vars ) nil }}
