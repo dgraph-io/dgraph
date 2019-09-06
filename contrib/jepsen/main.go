@@ -81,10 +81,11 @@ var (
 		"partition-ring",
 		"move-tablet",
 	}
-	// testAllWorkloads configures
+
 	testAllWorkloads = availableWorkloads
 	testAllNemeses   = []string{
 		"none",
+		// the kill nemeses run together
 		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
