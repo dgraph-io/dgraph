@@ -408,6 +408,7 @@ func (n *node) processRollups() {
 			return
 		case readTs = <-n.rollupCh:
 		case <-tick.C:
+			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
 			if readTs <= last {
 				break // Break out of the select case.
 			}
@@ -696,6 +697,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
 						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+							"snapshotAfter:%d snap:%v", first, chk, chk-first,
+							x.WorkerConfig.SnapshotAfter, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
