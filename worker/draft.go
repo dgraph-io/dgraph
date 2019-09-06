@@ -242,7 +242,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
-	sort.Slice(m.Edges, func(i, j int) bool {
+	// It is possible that the user gives us multiple versions of the same edge, one with no facets
+	// and another with facets. In that case, use stable sort to maintain the ordering given to us
+	// by the user.
+	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
+	// different goroutines.
+	sort.SliceStable(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
 		if ei.GetAttr() != ej.GetAttr() {

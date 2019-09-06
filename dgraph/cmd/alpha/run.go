@@ -476,6 +476,11 @@ func run() {
 	}
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(worker.Config.Tracing),
+		// MaxAnnotationEventsPerSpan is 32 by default. Increasing the limit to
+		// 256 is a good middle-ground between having enough to store the spans
+		// for most query traces and for memory usage of spans. Queries that
+		// generate more annotations than this limit will get truncated traces.
+		MaxAnnotationEventsPerSpan: 256,
 	})
 
 	// Posting will initialize index which requires schema. Hence, initialize

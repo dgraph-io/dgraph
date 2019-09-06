@@ -23,6 +23,7 @@ A GraphQL+- query finds nodes based on search criteria, matches patterns in a gr
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
+{{% notice "note" %}}See more about Queries in [Queries design concept]({{< relref "design-concepts/index.md#queries" >}}) {{% /notice %}}
 
 ### Returning Values
 
@@ -43,15 +44,15 @@ Query Example: In the example dataset, edges that link movies to directors and a
 }
 {{< /runnable >}}
 
-The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
+The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equaling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
+Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x107b2c)) {
+  bladerunner(func: uid(0x579683)) {
     uid
     name@en
     initial_release_date
@@ -80,15 +81,11 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x107b2c, 0x85f961)) {
+  movies(func: uid(0x579683, 0x5af1c7)) {
     uid
     name@en
     initial_release_date
     netflix_id
-    ~director.film {
-      uid
-      name@en
-    }
   }
 }
 {{< /runnable >}}
@@ -101,7 +98,7 @@ brackets while asking for it in the query. E.g. `<first:name>`{{% /notice %}}
 
 A query expands edges from node to node by nesting query blocks with `{ }`.
 
-Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
+Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance.character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
   brCharacters(func: eq(name@en, "Blade Runner")) {
@@ -183,9 +180,11 @@ For example:
 - `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
 
 
-{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.
 
-{{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
+---
+
+In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -234,7 +233,7 @@ Matches strings that have all specified terms in any order; case insensitive.
 
 ##### Usage at root
 
-Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
+Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the English name and genre in English.
 
 {{< runnable >}}
 {
@@ -351,7 +350,7 @@ Keep the following in mind when designing regular expression queries.
 - If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
 
 
-### Full Text Search
+### Full-Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
@@ -360,9 +359,9 @@ Schema Types: `string`
 Index Required: `fulltext`
 
 
-Apply full text search with stemming and stop words to find strings matching all or any of the given text.
+Apply full-text search with stemming and stop words to find strings matching all or any of the given text.
 
-The following steps are applied during index generation and to process full text search arguments:
+The following steps are applied during index generation and to process full-text search arguments:
 
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
@@ -370,7 +369,7 @@ The following steps are applied during index generation and to process full text
 1. Stemming using language-specific stemmer (if supported by language).
 1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full-text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
 Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
@@ -587,12 +586,13 @@ Filters nodes at the current query level to only nodes in the given set of UIDs.
 
 For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
 
+`uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
 Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
 
 {{< runnable >}}
 {
-  films(func: uid(0x878110)) {
+  films(func: uid(0x7de2ec)) {
     name@hi
     actor.film {
       performance.film {
@@ -627,7 +627,7 @@ Query Example: The films of Taraji Henson by genre.
 
 
 
-Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
+Query Example: Taraji Henson films ordered by number of genres, with genres listed in order of how many films Taraji has made in each genre.
 {{< runnable >}}
 {
   var(func: allofterms(name@en, "Taraji Henson")) {
@@ -656,8 +656,8 @@ Query Example: Taraji Henson films ordered by numer of genres, with genres liste
 
 Syntax Examples:
 
-* `q(func: ...) @filter(uid_in(predicate, <uid>)`
-* `predicate1 @filter(uid_in(predicate2, <uid>)`
+* `q(func: ...) @filter(uid_in(predicate, <uid>))`
+* `predicate1 @filter(uid_in(predicate2, <uid>))`
 
 Schema Types: UID
 
@@ -668,12 +668,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x6777ba).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x679de1).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x6777ba)){
+    director.film @filter(uid_in(~director.film, 0x679de1)){
       name@en
     }
   }
@@ -704,7 +704,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 ### Geolocation
 
-{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
+{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types). However, Dgraph can store other types of gelocation data. {{% /notice %}}
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
@@ -749,9 +749,9 @@ Schema Types: `geo`
 
 Index Required: `geo`
 
-Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
+Matches all entities where the location given by `predicate` is within `distance` meters of geojson coordinate `[long, lat]`.
 
-Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within 1000 meters (1 kilometer) of a point in Golden Gate Park in San Francisco.
 
 {{< runnable >}}
 {
@@ -772,7 +772,7 @@ Index Required: `geo`
 
 Matches all entities where the location given by `predicate` lies within the polygon specified by the geojson coordinate array.
 
-Query Example: Tourist destinations within the specified area of Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within the specified area of Golden Gate Park, San Francisco.
 
 {{< runnable >}}
 {
@@ -793,7 +793,7 @@ Index Required: `geo`
 
 Matches all entities where the polygon describing the location given by `predicate` contains geojson coordinate `[long, lat]` or given geojson polygon.
 
-Query Example : All entities that contain a point in the flamingo enclosure of San Fransico Zoo.
+Query Example : All entities that contain a point in the flamingo enclosure of San Francisco Zoo.
 {{< runnable >}}
 {
   tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
@@ -861,7 +861,7 @@ An alias provides an alternate name in results.  Predicates, variables and aggre
 
 
 
-Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film in english and french.
+Query Example: Directors with `name` matching term `Steven`, their UID, English name, average number of actors per movie, total number of films, and the name of each film in English and French.
 {{< runnable >}}
 {
   ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
@@ -908,7 +908,7 @@ For positive `N`, `first: N` retrieves the first `N` results, by sorted or UID o
 For negative `N`, `first: N` retrieves the last `N` results, by sorted or UID order.  Currently, negative is only supported when no order is applied.  To achieve the effect of a negative with a sort, reverse the order of the sort and use a positive `N`.
 
 
-Query Example: Last two films, by UID order, directed by Steven Spielberg and the first 3 genres, sorted alphabetically by English name, of those movies.
+Query Example: Last two films, by UID order, directed by Steven Spielberg and the first three genres of those movies, sorted alphabetically by English name.
 
 {{< runnable >}}
 {
@@ -926,7 +926,7 @@ Query Example: Last two films, by UID order, directed by Steven Spielberg and th
 
 
 
-Query Example: The three directors with name Steven who have directed the most actors of all directors named Steven.
+Query Example: The three directors named Steven who have directed the most actors of all directors named Steven.
 
 {{< runnable >}}
 {
@@ -1003,13 +1003,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x264ce8`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x8116e4`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x264ce8) {
+    director.film (first:5, after: 0x8116e4) {
       uid
       name@en
     }
@@ -1088,7 +1088,7 @@ Syntax Examples:
 
 Sortable Types: `int`, `float`, `String`, `dateTime`, `default`
 
-Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
+Results can be sorted in ascending order (`orderasc`) or descending order (`orderdesc`) by a predicate or variable.
 
 For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
 
@@ -1181,7 +1181,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
 {{< /runnable >}}
 
 
-If queries contain some overlap in answers, the result sets are still independent
+If queries contain some overlap in answers, the result sets are still independent.
 
 Query Example: The movies Mackenzie Crook has acted in and the movies Jack Davenport has acted in.  The results sets overlap because both have acted in the Pirates of the Caribbean movies, but the results are independent and both contain the full answers sets.
 
@@ -1254,7 +1254,7 @@ Syntax Examples:
 
 Types : `uid`
 
-Nodes (UID's) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
+Nodes (UIDs) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
 
 Query variables do not affect the semantics of the query at the point of definition.  Query variables are evaluated to all nodes matched by the defining block.
 
@@ -1316,7 +1316,7 @@ Value variables are used by extracting the values with `val(var-name)`, or by ex
 
 [Facet]({{< relref "#facets-edge-attributes">}}) values can be stored in value variables.
 
-Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
+Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
 
 {{< runnable >}}
 {
@@ -1609,7 +1609,7 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
 ## Math on value variables
 
-Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then be used to order or perform other operations, such as might be used in building newsfeeds, simple recommendation systems and the likes.
+Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then used to order or perform other operations, such as might be used in building news feeds, simple recommendation systems, and so on.
 
 Math statements must be enclosed within `math( <exp> )` and must be stored to a value variable.
 
@@ -1672,7 +1672,7 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 {{< /runnable >}}
 
 
-Values calculated with math operations are stored to value variables and so can be aggreated.
+Values calculated with math operations are stored to value variables and so can be aggregated.
 
 Query Example: Compute a score for each Steven Spielberg movie and then aggregate the score.
 
@@ -1777,7 +1777,7 @@ Query Example: All predicates from actor Geoffrey Rush and the count of such pre
 
 Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
 
-If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
+If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specified in a nested fashion under `expand()`.
 If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
 If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
@@ -1855,7 +1855,7 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
-Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
+Query Example: All the co-actors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
 
 {{< runnable >}}
 {
@@ -1875,7 +1875,12 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 ## Debug
 
-For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` information.
+For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` and `start_ts` information under the `extensions` key of the response.
+
+- `parsing_ns`: Latency in nanoseconds to parse the query.
+- `processing_ns`: Latency in nanoseconds to process the query.
+- `encoding_ns`: Latency in nanoseconds to encode the JSON response.
+- `start_ts`: The logical start timestamp of the transaction.
 
 Query with debug as a query parameter
 ```
@@ -1908,11 +1913,15 @@ Returns `uid` and `server_latency`
         "name@en": "The Big Lebowski"
       }
     ],
-    "server_latency": {
-      "parsing": "101µs",
-      "processing": "802ms",
-      "json": "115µs",
-      "total": "802ms"
+    "extensions": {
+      "server_latency": {
+        "parsing_ns": 18559,
+        "processing_ns": 802990982,
+        "encoding_ns": 1177565
+      },
+      "txn": {
+        "start_ts": 40010
+      }
     }
   }
 }
@@ -1931,7 +1940,7 @@ If a schema type isn't specified before a mutation adds triples for a predicate,
 
 * type `uid`, if the first mutation for the predicate has nodes for the subject and object, or
 
-* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the object is a literal and an rdf type is present in the first mutation, or
+* derived from the [RDF type]({{< relref "#rdf-types" >}}), if the object is a literal and an RDF type is present in the first mutation, or
 
 * `default` type, otherwise.
 
@@ -2024,33 +2033,37 @@ Mutation:
 ```
 {
   set {
-    _:a <公司> "Dgraph Labs Inc"@en
-    _:b <公司> "夏新科技有限责任公司"@zh
+    _:a <公司> "Dgraph Labs Inc"@en .
+    _:b <公司> "夏新科技有限责任公司"@zh .
   }
 }
 ```
 Query:
 ```
 {
-  query {
-    q (func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
-      _predicate_
-    }
+  q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
+    _predicate_
   }
 }
 ```
 
 ### Upsert directive
 
-Predicates can specify the `@upsert` directive if you want to do upsert operations against it.
-If the `@upsert` directive is specified then the index key for the predicate would be checked for
-conflict while committing a transaction, which would allow upserts.
+To use [upsert operations]({{< relref "howto/index.md#upserts">}}) on a
+predicate, specify the `@upsert` directive in the schema. When committing
+transactions involving predicates with the `@upsert` directive, Dgraph checks
+index keys for conflicts, helping to enforce uniqueness constraints when running
+concurrent upserts.
 
-This is how you specify the upsert directive for a predicate. This replaces the `IgnoreIndexConflict`
-field which was part of the mutation object in previous releases.
+This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
 ```
+
+{{% notice "note" %}}
+This replaces the `IgnoreIndexConflict` field which was part of the mutation
+object in previous releases.
+{{% /notice %}}
 
 ### RDF Types
 
@@ -2086,6 +2099,7 @@ The following types are also accepted.
 #### Password type
 
 A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
 
 For example: to set a password, first set schema, then the password:
 ```
@@ -2095,7 +2109,7 @@ pass: password .
 ```
 {
   set {
-    <0x123> <name> "Password Example"
+    <0x123> <name> "Password Example" .
     <0x123> <pass> "ThePassword" .
   }
 }
@@ -2114,16 +2128,39 @@ to check a password:
 output:
 ```
 {
-  "check": [
-    {
-      "name": "Password Example",
-      "pass": [
-        {
-          "checkpwd": true
-        }
-      ]
-    }
-  ]
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "checkpwd(pass)": true
+      }
+    ]
+  }
+}
+```
+
+You can also use alias with password type.
+
+```
+{
+  check(func: uid(0x123)) {
+    name
+    secret: checkpwd(pass, "ThePassword")
+  }
+}
+```
+
+output:
+```
+{
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "secret": true
+      }
+    ]
+  }
 }
 ```
 
@@ -2144,7 +2181,7 @@ The indices available for strings are as follows.
 
 | Dgraph function            | Required index / tokenizer             | Notes |
 | :-----------------------   | :------------                          | :---  |
-| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full-text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
 | `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                   |
 | `allofterms`, `anyofterms` | `term`                                 | Allows searching by a term in a sentence.                |
 | `alloftext`, `anyoftext`   | `fulltext`                             | Matching with language specific stemming and stopwords.  |
@@ -2654,7 +2691,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -2813,6 +2850,12 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
+Some points to keep in mind for shortest path queries:
+
+- Weights must be non-negative. Dijkstra's algorithm is used to calculate the shortest paths.
+- Only one facet per predicate in the shortest query block is allowed.
+- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result.
+- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path. All k paths are returned in `_path_`.
 
 ## Recurse Query
 
@@ -2834,8 +2877,9 @@ Some points to keep in mind while using recurse queries are:
 - You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filters, limit results using pagination, or provide a depth parameter at root as shown in the example above.
-- Loop parameter can be set to false, in which case paths which lead to a loops would be ignored
+- The `loop` parameter can be set to false, in which case paths which lead to a loop would be ignored
   while traversing.
+- If not specified, the value of the `loop` parameter defaults to false.
 
 
 ## Fragments
@@ -2917,7 +2961,7 @@ This brings some restrictions to how plugins can be used.
 - Plugins must be written in Go.
 
 - As of Go 1.9, `pkg/plugin` only works on Linux. Therefore, plugins will only
-  work on dgraph instances deployed in a Linux environment.
+  work on Dgraph instances deployed in a Linux environment.
 
 - The version of Go used to compile the plugin should be the same as the version
   of Go used to compile Dgraph itself. Dgraph always uses the latest version of
@@ -2953,7 +2997,7 @@ type PluginTokenizer interface {
 
     // Type is a string representing the type of data that is to be
     // tokenized. This must match the schema type of the predicate
-    // being indexde. Allowable values are shown in the table below.
+    // being indexed. Allowable values are shown in the table below.
     Type() string
 
     // Tokens should implement the tokenization logic. The input is
@@ -2986,7 +3030,7 @@ go build -buildmode=plugin -o myplugin.so ~/go/src/myplugin/main.go
 
 ### Running Dgraph with plugins
 
-When starting Dgraph, use the `--custom_tokenizers` flag to tell dgraph which
+When starting Dgraph, use the `--custom_tokenizers` flag to tell Dgraph which
 tokenizers to load. It accepts a comma separated list of plugins. E.g.
 
 ```sh
@@ -3032,14 +3076,14 @@ more concrete.
 #### Unicode Characters
 
 This example shows the type of tokenization that is similar to term
-tokenization of full text search. Instead of being broken down into terms or
+tokenization of full-text search. Instead of being broken down into terms or
 stem words, the text is instead broken down into its constituent unicode
 codepoints (in Go terminology these are called *runes*).
 
 {{% notice "note" %}}
 This tokenizer would create a very large index that would be expensive to
 manage and store. That's one of the reasons that text indexing usually occurs
-at a higher level; stem words for full text search or terms for term search.
+at a higher level; stem words for full-text search or terms for term search.
 {{% /notice %}}
 
 The implementation of the plugin looks like this:
@@ -3338,7 +3382,7 @@ Since a single token is only ever generated, it doesn't matter if `anyof` or
 
 #### Integer prime factors
 
-All all of the custom tokenizers shown previously have worked with strings.
+All of the custom tokenizers shown previously have worked with strings.
 However, other data types can be used as well. This example is contrived, but
 nonetheless shows some advanced usages of custom tokenizers.
 
@@ -3389,7 +3433,7 @@ Notice that the return of `Type()` is `"int"`, corresponding to the concrete
 type of the input to `Tokens` (which is `int64`).
 {{% /notice %}}
 
-This allows you do do things like search for all numbers that share prime
+This allows you do things like search for all numbers that share prime
 factors with a particular number.
 
 In particular, we search for numbers that contain any of the prime factors of
@@ -3463,3 +3507,4 @@ num: int @index(factor) .
   }
 }
 ```
+

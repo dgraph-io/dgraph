@@ -1236,6 +1236,30 @@ func TestGroupByFriendsMultipleParentsVar(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"uid":"0x18","name":"Glenn Rhee","val(f)":2},{"uid":"0x1","name":"Michonne","val(f)":1},{"uid":"0x17","name":"Rick Grimes","val(f)":1},{"uid":"0x19","name":"Daryl Dixon","val(f)":1},{"uid":"0x1f","name":"Andrea","val(f)":1},{"uid":"0x65","val(f)":1}]}}`, js)
 }
 
+func TestGroupBy_FixPanicForNilDestUIDs(t *testing.T) {
+	// This a fix for GitHub issue #3768.
+	query := `
+		{
+			var(func: eq(name, "abcdef")) @ignorereflex {
+				random_nonexistent {
+					f as uid
+				}
+			}
+
+			me(func: uid(f)) @groupby(uid) {
+				a as count(uid)
+			}
+
+			me2(func: uid(f)) {
+				val(a)
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me2": []}}`, js)
+
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 
 	query := `
@@ -1657,6 +1681,20 @@ func TestDefaultValueVar2(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data": {"data":[]}}`, js)
 }
+
+func TestCountUidWithAlias(t *testing.T) {
+	query := `{
+		me(func: uid(1, 23, 24, 25, 31)) {
+			countUid: count(uid)
+			name
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,`{"data":{"me":[{"countUid":5},{"name":"Michonne"},{"name":"Rick Grimes"},`+
+	`{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`,js)
+}
+
 
 var maxPendingCh chan uint64
 

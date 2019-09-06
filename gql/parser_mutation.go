@@ -25,7 +25,7 @@ import (
 )
 
 func ParseMutation(mutation string) (*api.Mutation, error) {
-	lexer := lex.Lexer{Input: mutation}
+	lexer := lex.NewLexer(mutation)
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
 	var mu api.Mutation
@@ -35,7 +35,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
-		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+		return nil, it.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
 	}
 
 	for it.Next() {
@@ -46,11 +46,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
 			if it.Next() && it.Item().Typ != lex.ItemEOF {
-				if it.Item().Typ == lex.ItemError {
-					return nil, x.Errorf("Unexpected error after end of block: %s",
-						it.Item().String())
-				}
-				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
+				return nil, it.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}
 			return &mu, nil
 		}
@@ -73,29 +69,29 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 		}
 		if item.Typ == itemLeftCurl {
 			if parse {
-				return x.Errorf("Too many left curls in set mutation.")
+				return it.Errorf("Too many left curls in set mutation.")
 			}
 			parse = true
 		}
 		if item.Typ == itemMutationContent {
 			if !parse {
-				return x.Errorf("Mutation syntax invalid.")
+				return it.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
 				mu.SetNquads = []byte(item.Val)
 			} else if op == "delete" {
 				mu.DelNquads = []byte(item.Val)
 			} else if op == "schema" {
-				return x.Errorf("Altering schema not supported through http client.")
+				return it.Errorf("Altering schema not supported through http client.")
 			} else if op == "dropall" {
-				return x.Errorf("Dropall not supported through http client.")
+				return it.Errorf("Dropall not supported through http client.")
 			} else {
-				return x.Errorf("Invalid mutation operation.")
+				return it.Errorf("Invalid mutation operation.")
 			}
 		}
 		if item.Typ == itemRightCurl {
 			return nil
 		}
 	}
-	return x.Errorf("Invalid mutation formatting.")
+	return it.Errorf("Invalid mutation formatting.")
 }

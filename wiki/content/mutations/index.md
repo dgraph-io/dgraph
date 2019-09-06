@@ -173,7 +173,7 @@ RDF N-Quad allows specifying a language for string values and an RDF type.  Lang
 <0x01> <name> "Аделаида"@ru .
 <0x01> <name> "Adélaïde"@fr .
 ```
-See also [how language is handled in query]({{< relref "#language-support" >}}).
+See also [how language strings are handled in queries]({{< relref "query-language/index.md#language-support" >}}).
 
 RDF types are attached to literals with the standard `^^` separator.  For example
 ```
@@ -215,7 +215,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```
 dgraph live --help
 ```
-See also [Bulk Data Loading](/deploy#bulk-data-loading).
+See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
 
@@ -263,12 +263,12 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 ## Mutations using cURL
 
-Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl.
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the HTTP header `X-DgraphCommitNow: true`.
 
 To run a `set` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate -d $'
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -279,10 +279,11 @@ curl -X POST localhost:8080/mutate -d $'
 To run a `delete` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate -d $'
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 {
   delete {
-    _:alice <name> "Alice" .
+    # Example: Alice's UID is 0x56f33
+    <0x56f33> <name> * .
   }
 }'
 ```
@@ -290,7 +291,7 @@ curl -X POST localhost:8080/mutate -d $'
 To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
 
 ```
-curl -X POST localhost:8080/mutate --data-binary @mutation.txt
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate --data-binary @mutation.txt
 ```
 
 ## JSON Mutation Format
@@ -343,6 +344,48 @@ to the key `blank-0`. You could specify your own key like
 
 In this case, the assigned uids map would have a key called `diggy` with the value being the uid
 assigned to it.
+
+### Language support
+
+An important difference between RDF and JSON mutations is in regards to specifying a string value's
+language. In JSON, the language tag is appended to the edge _name_, not the value like in RDF.
+
+For example, the JSON mutation
+```json
+{
+  "food": "taco",
+  "rating@en": "tastes good",
+  "rating@es": "sabe bien",
+  "rating@fr": "c'est bon",
+  "rating@it": "è buono"
+}
+```
+
+is equivalent to the following RDF:
+```
+_:blank-0 <food> "taco" .
+_:blank-0 <rating> "tastes good"@en .
+_:blank-0 <rating> "sabe bien"@es .
+_:blank-0 <rating> "c'est bon"@fr .
+_:blank-0 <rating> "è buono"@it .
+```
+
+### Geolocation support
+
+Support for geolocation data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support indexing on the Point, Polygon, and MultiPolygon types, but we can store
+other types of geolocation data. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
+```
 
 ### Referencing existing nodes
 
@@ -647,4 +690,56 @@ Mutation with a JSON file:
 
 ```
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
+```
+
+where the contents of data.json looks like the following:
+
+```json
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+The JSON file must follow the same format for mutations over HTTP: a single JSON
+object with the `"set"` or `"delete"` key and an array of JSON objects for the
+mutation. If you already have a file with an array of data, you can use `jq` to
+transform your data to the proper format. For example, if your data.json file
+looks like this:
+
+```json
+[
+  {
+    "name": "Alice"
+  },
+  {
+    "name": "Bob"
+  }
+]
+```
+
+then you can transform your data to the proper format with the following `jq`
+command, where the `.` in the `jq` string represents the contents of data.json:
+
+```sh
+cat data.json | jq '{set: .}'
+```
+
+```
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
 ```

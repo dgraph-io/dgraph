@@ -159,19 +159,22 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-ARGS=$(getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,oss,verbose,no-cache" -- "$@") \
+ARGS=$(getopt -n$ME -o"hucCfFvn" \
+              -l"help,unit,cluster,cluster-only,full,full-only,oss,verbose,no-cache" -- "$@") \
     || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -h|--help)      Usage; exit 0                 ;;
-        -u|--unit)      TEST_SET="unit"               ;;
-        -c|--cluster)   TEST_SET="unit:cluster"       ;;
-        -f|--full)      TEST_SET="unit:cluster:full"  ;;
-        -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
-        -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
-           --oss)       GO_TEST_OPTS+=( "-tags=oss" ) ;;
-        --)             shift; break                  ;;
+        -h|--help)         Usage; exit 0                 ;;
+        -u|--unit)         TEST_SET="unit"               ;;
+        -c|--cluster)      TEST_SET="unit:cluster"       ;;
+        -C|--cluster-only) TEST_SET="cluster"            ;;
+        -f|--full)         TEST_SET="unit:cluster:full"  ;;
+        -F|--full-only)    TEST_SET="full"               ;;
+        -v|--verbose)      GO_TEST_OPTS+=( "-v" )        ;;
+        -n|--no-cache)     GO_TEST_OPTS+=( "-count=1" )  ;;
+           --oss)          GO_TEST_OPTS+=( "-tags=oss" ) ;;
+        --)                shift; break                  ;;
     esac
     shift
 done
@@ -241,8 +244,9 @@ if [[ :${TEST_SET}: == *:full:* ]]; then
     Info "Running custom test scripts"
     RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
-    Info "Running large load test"
-    RunCmd ./systest/21million/test-21million.sh || TestFailed
+    # TODO add test-21million.sh script to release/v1.0
+    # Info "Running large load test"
+    # RunCmd ./systest/21million/test-21million.sh || TestFailed
 fi
 
 Info "Stopping cluster"

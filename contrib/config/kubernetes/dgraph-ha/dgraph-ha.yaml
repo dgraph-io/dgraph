@@ -216,6 +216,47 @@ spec:
                   values:
                   - dgraph-alpha
               topologyKey: kubernetes.io/hostname
+      # Initializing the Alphas:
+      #
+      # You may want to initialize the Alphas with data before starting, e.g.
+      # with data from the Dgraph Bulk Loader: https://docs.dgraph.io/deploy/#bulk-loader.
+      # You can accomplish by uncommenting this initContainers config. This
+      # starts a container with the same /dgraph volume used by Alpha and runs
+      # before Alpha starts.
+      #
+      # You can copy your local p directory to the pod's /dgraph/p directory
+      # with this command:
+      #
+      #    kubectl cp path/to/p dgraph-alpha-0:/dgraph/ -c init-alpha
+      #    (repeat for each alpha pod)
+      #
+      # When you're finished initializing each Alpha data directory, you can signal
+      # it to terminate successfully by creating a /dgraph/doneinit file:
+      #
+      #    kubectl exec dgraph-alpha-0 -c init-alpha touch /dgraph/doneinit
+      #
+      # Note that pod restarts cause re-execution of Init Containers. Since
+      # /dgraph is persisted across pod restarts, the Init Container will exit
+      # automatically when /dgraph/doneinit is present and proceed with starting
+      # the Alpha process.
+      #
+      # Tip: StatefulSet pods can start in parallel by configuring
+      # .spec.podManagementPolicy to Parallel:
+      #
+      #     https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#deployment-and-scaling-guarantees
+      #
+      # initContainers:
+      #   - name: init-alpha
+      #     image: dgraph/dgraph:latest
+      #     command:
+      #       - bash
+      #       - "-c"
+      #       - |
+      #         echo "Write to /dgraph/doneinit when ready."
+      #         until [ -f /dgraph/doneinit ]; do sleep 2; done
+      #     volumeMounts:
+      #       - name: datadir
+      #         mountPath: /dgraph
       containers:
       - name: alpha
         image: dgraph/dgraph:latest
