@@ -2346,10 +2346,10 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	return nil
 }
 
-func (sg *SubGraph) enforceTypeConstraints() {
+func (sg *SubGraph) enforceTypePredicates() {
 	if sg.Params.EnforcedType == "" {
 		for _, child := range sg.Children {
-			child.enforceTypeConstraints()
+			child.enforceTypePredicates()
 		}
 		return
 	}
@@ -2372,7 +2372,7 @@ func (sg *SubGraph) enforceTypeConstraints() {
 	sg.Children = children
 
 	for _, child := range sg.Children {
-		child.enforceTypeConstraints()
+		child.enforceTypePredicates()
 	}
 }
 
@@ -2562,6 +2562,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		span.Annotate(nil, "Query parsed")
 		req.Subgraphs = append(req.Subgraphs, sg)
 	}
+	// Type system pre-processing.
+	for _, sg := range req.Subgraphs {
+		sg.enforceTypePredicates()
+	}
 	req.Latency.Parsing += time.Since(loopStart)
 
 	execStart := time.Now()
@@ -2669,11 +2673,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		if !it {
 			return errors.Errorf("Query couldn't be executed")
 		}
-	}
-
-	// Type system post-processing.
-	for _, sg := range req.Subgraphs {
-		sg.enforceTypeConstraints()
 	}
 	req.Latency.Processing += time.Since(execStart)
 

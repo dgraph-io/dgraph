@@ -2136,6 +2136,8 @@ func TestBasicTypeEnforcement(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret", "favorite_music":"Country"},
 		{"name":"Leonard"}]}]}}`, js)
 
+	// The predicate favorite_music is not in the Person type so results for this predicate
+	// should be discarded.
 	q2 := `
 		{
 			me(func: uid(0x2)) {
