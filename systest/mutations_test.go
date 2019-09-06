@@ -1599,6 +1599,8 @@ func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
 }
 
 func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
+	// This test checks that we consider reverse count index keys while doing conflict detection
+	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
 	op := &api.Operation{}
 	op.Schema = `friend: [uid] @count @reverse .`
 
