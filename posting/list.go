@@ -478,7 +478,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	case pk.IsData(): // NOT a list. This case must happen after the above case.
 		conflictKey = getKey(l.key, 0)
 
-	case pk.IsIndex() || pk.IsCount():
+	case pk.IsIndex() || pk.IsCountOrCountRev():
 		// Index keys are by default of type [uid].
 		conflictKey = getKey(l.key, t.ValueId)
 
