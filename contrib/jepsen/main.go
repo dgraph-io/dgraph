@@ -132,8 +132,9 @@ var (
 		"Directory path to jepsen repo. This sets the JEPSEN_ROOT env var for Jepsen ./up.sh.")
 	ciOutput = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
-	testAll = pflag.Bool("test-all", false, "Run the following workload and nemesis combinations: "+
-		fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
+	testAll = pflag.Bool("test-all", false,
+		"Run the following workload and nemesis combinations: "+
+			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
 )
 
 func command(cmd ...string) *exec.Cmd {
