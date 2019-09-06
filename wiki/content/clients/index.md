@@ -60,7 +60,7 @@ The Go client communicates with the server on the gRPC port (default value 9080)
 The client can be obtained in the usual way via `go get`:
 
 ```sh
-go get -u -v github.com/dgraph-io/dgo
+go get -u -v github.com/dgraph-io/dgo/v2
 ```
 
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgo) contains
@@ -277,6 +277,7 @@ This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgo).
 ```go
 type School struct {
 	Name string `json:"name,omitempty"`
+	DType []string `json:"dgraph.type,omitempty"`
 }
 
 type loc struct {
@@ -297,6 +298,7 @@ type Person struct {
 		Friends  []Person   `json:"friend,omitempty"`
 		Location loc        `json:"loc,omitempty"`
 		School   []School   `json:"school,omitempty"`
+		DType    []string   `json:"dgraph.type,omitempty"`
 }
 
 conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -315,6 +317,27 @@ op.Schema = `
 	married: bool .
 	loc: geo .
 	dob: datetime .
+
+type Person {
+  name: string
+  age: int
+  dob: string
+  married: bool
+  raw: string
+  friends: [Person]
+  loc: [Loc]
+  school: [Institution]
+ }
+
+type Loc {
+  type: string
+  coords: float
+ }
+
+type Institution {
+  name: string
+ }
+
 `
 
 ctx := context.Background()
@@ -374,12 +397,15 @@ q := `query Me($id: string){
 		loc
 		raw_bytes
 		married
+		dgraph.type
 		friend @filter(eq(name, "Bob")){
 			name
 			age
+			dgraph.type
 		}
 		school {
 			name
+			dgraph.type
 		}
 	}
 }`
@@ -402,7 +428,7 @@ if err != nil {
 // R.Me would be same as the person that we set above.
 
 fmt.Println(string(resp.Json))
-// Output: {"me":[{"name":"Alice","dob":"1980-01-01T23:00:00Z","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
+// Output: {"me":[{"name":"Alice","dob":"1980-01-01T23:00:00Z","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"dgraph.type":["Person"],"friend":[{"name":"Bob","age":24,"dgraph.type":["Person"]}],"school":[{"name":"Crown Public School","dgraph.type":["Institution"]}]}]}
 
 
 ```
