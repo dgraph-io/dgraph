@@ -2037,9 +2037,6 @@ func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
 		return it.Item().Errorf("Expected ) after the type name in type directive")
 	}
 
-	// For now @type(TypeName) is equivalent of filtering using the type function.
-	// Later the type declarations will be used to ensure that the fields inside
-	// each block correspond to the specified type.
 	gq.Filter = &FilterTree{
 		Func: &Function{
 			Name: "type",

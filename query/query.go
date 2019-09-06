@@ -2347,29 +2347,24 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 }
 
 func (sg *SubGraph) enforceTypePredicates() {
-	if sg.Params.EnforcedType == "" {
+	if len(sg.Params.EnforcedType) > 0 {
+		allowedPreds := make(map[string]struct{})
+		allowedPreds["uid"] = struct{}{}
+		allowedPreds["dgraph.type"] = struct{}{}
+		typePreds := getPredicatesFromTypes([]string{sg.Params.EnforcedType})
+		for _, pred := range typePreds {
+			allowedPreds[pred] = struct{}{}
+		}
+
+		children := make([]*SubGraph, 0)
 		for _, child := range sg.Children {
-			child.enforceTypePredicates()
+			if _, ok := allowedPreds[child.Attr]; !ok {
+				continue
+			}
+			children = append(children, child)
 		}
-		return
+		sg.Children = children
 	}
-
-	allowedPreds := make(map[string]struct{})
-	allowedPreds["uid"] = struct{}{}
-	allowedPreds["dgraph.type"] = struct{}{}
-	typePreds := getPredicatesFromTypes([]string{sg.Params.EnforcedType})
-	for _, pred := range typePreds {
-		allowedPreds[pred] = struct{}{}
-	}
-
-	children := make([]*SubGraph, 0)
-	for _, child := range sg.Children {
-		if _, ok := allowedPreds[child.Attr]; !ok {
-			continue
-		}
-		children = append(children, child)
-	}
-	sg.Children = children
 
 	for _, child := range sg.Children {
 		child.enforceTypePredicates()
