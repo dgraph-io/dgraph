@@ -1,0 +1,29 @@
+{{ $currentBranch := getenv "CURRENT_BRANCH" }}
+
+{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
+{{ $majorVersion := int (index $version 0) }}
+{{ $minorVersion := int (index $version 1) }}
+{{ $patchVersion := int (index $version 2) }}
+{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+
+<pre><code class="no-copy" tabindex="-1">const dgraph = require("dgraph-js");
+const grpc = require("grpc");
+
+async function main() {
+  const clientStub = new dgraph.DgraphClientStub("localhost:9080", grpc.credentials.createInsecure());
+  const dgraphClient = new dgraph.DgraphClient(clientStub);
+  const query = `<span class="query-content">{{ .Code }}</span>`;
+{{ if eq .Vars nil }}
+  const response = await dgraphClient.newTxn().query(query);
+{{ else }}
+  const vars = {{ .Vars }};
+  const response = await dgraphClient.newTxn().queryWithVars(query, vars);
+{{ end }}
+  console.log("Response: ", JSON.stringify(response.getJson()));
+  clientStub.close();
+}
+
+main().then().catch((e) => {
+  console.log("ERROR: ", e);
+});
+</code></pre>

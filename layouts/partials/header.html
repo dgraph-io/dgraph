@@ -41,9 +41,10 @@
 
     <script>
       {{ $currentBranch := getenv "CURRENT_BRANCH" }}
+      {{ $dgraphEndpoint := getenv "DGRAPH_ENDPOINT" }}
 
-      {{/* Set dgraph endpoint depending on version to ensure that runnables work fine */}}
-      window.DGRAPH_ENDPOINT = {{ if eq $currentBranch "master" }}"https://play-master.dgraph.io/query?latency=true"{{ else }}"https://play.dgraph.io/query?latency=true"{{ end }}
+      {{/* Set dgraph endpoint depending on the DGRAPH_ENDPOINT environment variable in the script local.sh to ensure that runnables work fine */}}
+      window.DGRAPH_ENDPOINT = {{ if (eq $dgraphEndpoint "" ) }}"https://play.dgraph.io/query?latency=true"{{ else }}{{ $dgraphEndpoint }}{{ end }}
     </script>
 
     <title>

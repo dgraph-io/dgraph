@@ -1,0 +1,39 @@
+{{ $currentBranch := getenv "CURRENT_BRANCH" }}
+
+{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
+{{ $majorVersion := int (index $version 0) }}
+{{ $minorVersion := int (index $version 1) }}
+{{ $patchVersion := int (index $version 2) }}
+{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+
+<pre><code class="no-copy" tabindex="-1">{{ if .Vars }}import com.google.common.collect.ImmutableMap;
+{{ end }}import io.dgraph.DgraphClient;
+import io.dgraph.DgraphGrpc;
+import io.dgraph.DgraphGrpc.DgraphStub;
+import io.dgraph.DgraphProto.Response;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+
+import java.util.Map;
+
+public class App {
+
+    public static void main(final String[] args) {
+        ManagedChannel channel =
+            ManagedChannelBuilder.forAddress("localhost", 9080).usePlaintext(true).build();
+        DgraphStub stub = DgraphGrpc.newStub(channel);
+        DgraphClient dgraphClient = new DgraphClient(stub);
+
+        String query = "<span class="java-query">{{ .Code }}</span>";
+
+    {{ if eq .Vars nil }}
+        Response res = dgraphClient.newTransaction().query(query);
+    {{ else }}
+        Map{{ "<String, String>" }} vars = ImmutableMap.of({{ replace (trim .Vars "{}") ":" "," }});
+        Response res = dgraphClient.newTransaction().queryWithVars(query, vars);
+    {{ end }}
+        System.out.printf("Response: %s", res.getJson().toStringUtf8());
+    }
+}
+
+</code></pre>
