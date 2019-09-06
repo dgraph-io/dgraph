@@ -381,6 +381,19 @@ func TestParseEmptyType(t *testing.T) {
 
 }
 
+func TestParseTypeEOF(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+		}`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+	}, result.Types[0])
+
+}
+
 func TestParseSingleType(t *testing.T) {
 	reset()
 	result, err := Parse(`
@@ -666,7 +679,7 @@ func TestParseTypeErrMissingNewLine(t *testing.T) {
 		}type Animal {}
 	`)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected new line after type declaration")
+	require.Contains(t, err.Error(), "Expected new line or EOF after type declaration")
 }
 
 func TestParseTypeErrMissingColon(t *testing.T) {
