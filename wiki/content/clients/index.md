@@ -460,6 +460,10 @@ These third-party clients are contributed by the community and are not officiall
 - https://github.com/liveforeverx/dlex
 - https://github.com/ospaarmann/exdgraph
 
+### Rust
+
+- https://github.com/Swoorup/dgraph-rs
+
 ## Raw HTTP
 
 {{% notice "warning" %}}
