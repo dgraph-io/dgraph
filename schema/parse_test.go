@@ -672,6 +672,18 @@ func TestParseNonNullableScalarAndList(t *testing.T) {
 	}, result.Types[0])
 }
 
+func TestParseTypeDuplicateFields(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		type Person {
+			Name: string!
+			Name: string
+		}
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate fields with name: Name")
+}
+
 func TestParseTypeErrMissingNewLine(t *testing.T) {
 	reset()
 	_, err := Parse(`
