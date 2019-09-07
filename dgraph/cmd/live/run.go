@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -65,8 +64,7 @@ type options struct {
 }
 
 var (
-	opt    options
-	tlsCfg *tls.Config
+	opt options
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
 )
@@ -180,8 +178,6 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
-	x.CheckfNoTrace(ck.Begin(rd))
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	nqbuf := ck.NQuads()
@@ -224,7 +220,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			x.Check(err)
 		}
 	}
-	x.CheckfNoTrace(ck.End(rd))
 	nqbuf.Flush()
 	wg.Wait()
 
@@ -244,7 +239,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	}
 
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, tlsCfg, false)
+	connzero, err := x.SetupConnection(opt.zero, nil, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)

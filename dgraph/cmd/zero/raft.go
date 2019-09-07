@@ -725,7 +725,7 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			span.End()
-			if timer.Total() > 100*time.Millisecond {
+			if timer.Total() > 200*time.Millisecond {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
