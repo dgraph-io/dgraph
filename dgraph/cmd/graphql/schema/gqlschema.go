@@ -56,8 +56,70 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
 `
 )
+
+// Filters for Boolean and enum aren't needed in here schemaExtras because they are
+// generated directly for the bool field / enum.  E.g. if
+// `type T { b: Boolean @searchable }`,
+// then the filter allows `filter: {b: true}`.  That's better than having
+// `input BooleanFilter { eq: Boolean }`, which would require writing
+// `filter: {b: {eq: true}}`.
+//
+// It'd be nice to be able to just write `filter: isPublished` for say a Post
+// with a Boolean isPublished field, but there's no way to get that in GraphQL
+// because input union types aren't yet sorted out in GraphQL.  So it's gotta
+// be `filter: {isPublished: true}`
 
 type directiveValidator func(
 	sch *ast.Schema,
@@ -90,6 +152,30 @@ var defaultSearchables = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+}
+
+// GraphQL types that can be used for ordering in orderasc and orderdesc.
+var orderable = map[string]bool{
+	"Int":      true,
+	"Float":    true,
+	"String":   true,
+	"DateTime": true,
+}
+
+// index name -> GraphQL input filter for that index
+var builtInFilters = map[string]string{
+	"bool":     "Boolean",
+	"int":      "IntFilter",
+	"float":    "FloatFilter",
+	"year":     "DateTimeFilter",
+	"month":    "DateTimeFilter",
+	"day":      "DateTimeFilter",
+	"hour":     "DateTimeFilter",
+	"term":     "StringTermFilter",
+	"trigram":  "StringRegExpFilter",
+	"fulltext": "StringFullTextFilter",
+	"exact":    "StringExactFilter",
+	"hash":     "StringHashFilter",
 }
 
 // GraphQL scalar -> Dgraph scalar
@@ -224,6 +310,8 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 			// types and inputs needed for query and search
 			addFilterType(sch, defn)
+			addTypeOrderable(sch, defn)
+			addFieldFilters(sch, defn)
 			addQueries(sch, defn)
 		}
 	}
@@ -275,11 +363,196 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+// addFieldFilters adds field arguments that allow filtering to all fields of
+// defn that are searchable.  For example, if there's another type
+// `type R { ... f: String @searchable(by: term) ... }`
+// and defn has a field of type R, e.g. if defn is like
+// `type T { ... g: R ... }`
+// then a query should be able to filter on g by term search on f, like
+// query {
+//   getT(id: 0x123) {
+//     ...
+//     g(filter: { f: { anyofterms: "something" } }, first: 10) { ... }
+//     ...
+//   }
+// }
+func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
+	for _, fld := range defn.Fields {
+		// Filtering makes sense both for lists (= return only items that match
+		// this filter) and for singletons (= only have this value in the result
+		// if it satisfies this filter)
+		addFilterArgument(schema, fld)
+
+		// Ordering and pagination, however, only makes sense for fields of
+		// list types.
+		if fld.Type.Elem != nil {
+			addOrderArgument(schema, fld)
+
+			// Pagination even makes sense when there's no orderables because
+			// Dgraph will do UID order by default.
+			addPaginationArguments(fld)
+		}
+	}
+}
+
+func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
+	fldType := fld.Type.Name()
+	if hasSearchables(schema.Types[fldType]) {
+		fld.Arguments = append(fld.Arguments,
+			&ast.ArgumentDefinition{
+				Name: "filter",
+				Type: &ast.Type{NamedType: fldType + "Filter"},
+			})
+	}
+}
+
+func addOrderArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
+	fldType := fld.Type.Name()
+	if hasOrderables(schema.Types[fldType]) {
+		fld.Arguments = append(fld.Arguments,
+			&ast.ArgumentDefinition{
+				Name: "order",
+				Type: &ast.Type{NamedType: fldType + "Order"},
+			})
+	}
+}
+
+func addPaginationArguments(fld *ast.FieldDefinition) {
+	fld.Arguments = append(fld.Arguments,
+		&ast.ArgumentDefinition{Name: "first", Type: &ast.Type{NamedType: "Int"}},
+		&ast.ArgumentDefinition{Name: "offset", Type: &ast.Type{NamedType: "Int"}},
+	)
+}
+
+// addFilterType add a `input TFilter { ... }` type to the schema, if defn
+// is a type that has fields that can be filtered on.  This type filter is used
+// in constructing the corresponding query
+// queryT(filter: TFilter, ... )
+// and in adding search to any fields of this type, like:
+// type R {
+//   f(filter: TFilter, ... ): T
+//   ...
+// }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types[defn.Name+"Filter"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   defn.Name + "Filter",
-		Fields: getFilterField(),
+	if hasSearchables(defn) {
+		filterName := defn.Name + "Filter"
+		filter := &ast.Definition{
+			Kind: ast.InputObject,
+			Name: filterName,
+		}
+
+		for _, fld := range defn.Fields {
+			if searchable := getSearchable(fld); searchable != "" {
+				filterTypeName := builtInFilters[searchable]
+				if schema.Types[fld.Type.Name()].Kind == ast.Enum {
+					// If the field is an enum type, we don't generate a filter type.
+					// Instead we allow to write `fieldName: enumValue` in the filter.
+					// So, for example : `filter: { postType: Answer }`
+					// rather than : `filter: { postType: { eq: Answer } }`
+					//
+					// Booleans are the same, allowing:
+					// `filter: { isPublished: true }
+					// but that case is aready handled by builtInFilters
+					filterTypeName = fld.Type.Name()
+				}
+
+				filter.Fields = append(filter.Fields,
+					&ast.FieldDefinition{
+						Name: fld.Name,
+						Type: &ast.Type{
+							NamedType: filterTypeName,
+						},
+					})
+			}
+		}
+
+		filter.Fields = append(filter.Fields,
+			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
+		)
+
+		schema.Types[filterName] = filter
+	}
+}
+
+func hasSearchables(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" })
+}
+
+func hasOrderables(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
+}
+
+// fieldAny returns true if any field in fields satisfies pred
+func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
+	for _, fld := range fields {
+		if pred(fld) {
+			return true
+		}
+	}
+	return false
+}
+
+// getSearchable returns the name of the searchable applied to fld, or ""
+// if fld doesn't have a searchable directive.
+func getSearchable(fld *ast.FieldDefinition) string {
+	search := fld.Directives.ForName(searchableDirective)
+	if search == nil {
+		return ""
+	}
+	if len(search.Arguments) == 0 {
+		if searchable, ok := defaultSearchables[fld.Type.Name()]; ok {
+			return searchable
+		}
+		// it's an enum - always has exact index
+		return "exact"
+	}
+	return search.Arguments.ForName(searchableArg).Value.Raw
+}
+
+// addTypeOrderable adds an input type that allows ordering in query.
+// Two things are added: an enum with the names of all the orderable fields,
+// that's called TOrderable; and an input type that allows saying order asc
+// or desc, that's called TOrder.  TOrder's fileds are TOrderable's.  So you
+// might get:
+// enum PostOrderable { datePublished, numLikes, ... }, and
+// input PostOrder { asc : PostOrderable, desc: PostOrderable ...}
+// Together they allow things like
+// order: { asc: datePublished }
+// and
+// order: { asc: datePublished, then: { desc: title } }
+func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
+	if hasOrderables(defn) {
+		orderName := defn.Name + "Order"
+		orderableName := defn.Name + "Orderable"
+
+		schema.Types[orderName] =
+			&ast.Definition{
+				Kind: ast.InputObject,
+				Name: orderName,
+				Fields: ast.FieldList{
+					&ast.FieldDefinition{Name: "asc", Type: &ast.Type{NamedType: orderableName}},
+					&ast.FieldDefinition{Name: "desc", Type: &ast.Type{NamedType: orderableName}},
+					&ast.FieldDefinition{Name: "then", Type: &ast.Type{NamedType: orderName}},
+				},
+			}
+
+		order := &ast.Definition{
+			Kind: ast.Enum,
+			Name: orderableName,
+		}
+
+		for _, fld := range defn.Fields {
+			if orderable[fld.Type.Name()] {
+				order.EnumValues = append(order.EnumValues,
+					&ast.EnumValueDefinition{Name: fld.Name})
+			}
+		}
+
+		schema.Types[orderableName] = order
 	}
 }
 
@@ -357,16 +630,11 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 				NamedType: defn.Name,
 			},
 		},
-		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
-				Name: "filter",
-				Type: &ast.Type{
-					NamedType: defn.Name + "Filter",
-					NonNull:   true,
-				},
-			},
-		},
 	}
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
@@ -441,17 +709,6 @@ func addMutations(schema *ast.Schema, defn *ast.Definition) {
 	addDeleteMutation(schema, defn)
 }
 
-func getFilterField() ast.FieldList {
-	return []*ast.FieldDefinition{
-		&ast.FieldDefinition{
-			Name: "dgraph",
-			Type: &ast.Type{
-				NamedType: "String",
-			},
-		},
-	}
-}
-
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
@@ -479,6 +736,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
+			newFld.Directives = nil
 			fldList = append(fldList, &newFld)
 		}
 	}
@@ -607,7 +865,7 @@ func generateScalarString(typ *ast.Definition) string {
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
 func Stringify(schema *ast.Schema, originalTypes []string) string {
-	var sch, original, object, input strings.Builder
+	var sch, original, object, input, enum strings.Builder
 
 	if schema.Types == nil {
 		return ""
@@ -655,13 +913,15 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	sort.Strings(typeNames)
 
 	// Now consider the types generated by completeSchema, which can only be
-	// types and inputs
+	// types, inputs and enums
 	for _, typName := range typeNames {
 		typ := schema.Types[typName]
 		if typ.Kind == ast.Object {
 			object.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.InputObject {
 			input.WriteString(generateInputString(typ) + "\n")
+		} else if typ.Kind == ast.Enum {
+			enum.WriteString(generateEnumString(typ) + "\n")
 		}
 	}
 
@@ -672,6 +932,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	sch.WriteString("\n")
 	sch.WriteString("#######################\n# Generated Types\n#######################\n\n")
 	sch.WriteString(object.String())
+	sch.WriteString("#######################\n# Generated Enums\n#######################\n\n")
+	sch.WriteString(enum.String())
 	sch.WriteString("#######################\n# Generated Inputs\n#######################\n\n")
 	sch.WriteString(input.String())
 	sch.WriteString("#######################\n# Generated Query\n#######################\n\n")
