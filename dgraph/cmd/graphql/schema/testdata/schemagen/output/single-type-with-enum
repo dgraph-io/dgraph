@@ -39,6 +39,56 @@ enum DgraphIndex {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
 
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
 #######################
 # Generated Types
 #######################
@@ -56,6 +106,15 @@ type UpdatePostPayload {
 }
 
 #######################
+# Generated Enums
+#######################
+
+enum PostOrderable {
+	title
+	text
+}
+
+#######################
 # Generated Inputs
 #######################
 
@@ -65,14 +124,16 @@ input PatchPost {
 	postType: PostType
 }
 
-input PostFilter {
-	dgraph: String
-}
-
 input PostInput {
 	title: String!
 	text: String
 	postType: PostType!
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
 }
 
 input PostRef {
@@ -90,7 +151,7 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(filter: PostFilter!): [Post]
+	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################
