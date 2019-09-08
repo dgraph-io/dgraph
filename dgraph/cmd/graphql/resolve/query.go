@@ -53,14 +53,17 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		return res
 	}
 
+	_, span := trace.StartSpan(ctx, "queryRewriter")
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite query")
+		span.End()
 		return res
 	}
+	span.End()
 
-	ctx, span := trace.StartSpan(ctx, "dgraph.Query")
-	resp, err := qr.dgraph.Query(ctx, dgQuery)
+	sctx, span := trace.StartSpan(ctx, "dgraph.Query")
+	resp, err := qr.dgraph.Query(sctx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
@@ -69,7 +72,9 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	}
 	span.End()
 
-	completed, err := completeDgraphResult(ctx, qr.query, resp)
+	sctx, span = trace.StartSpan(ctx, "completDgraphResult")
+	completed, err := completeDgraphResult(sctx, qr.query, resp)
+	span.End()
 	res.err = err
 
 	// chop leading '{' and trailing '}' from JSON object
