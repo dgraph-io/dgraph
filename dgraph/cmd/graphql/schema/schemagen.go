@@ -132,7 +132,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object:
-			var prefix, suffix string
 			var typeDef, preds strings.Builder
 			fmt.Fprintf(&typeDef, "type %s {\n", def.Name)
 			for _, f := range def.Fields {
@@ -140,6 +139,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					continue
 				}
 
+				var prefix, suffix string
 				if f.Type.Elem != nil {
 					prefix = "["
 					suffix = "]"

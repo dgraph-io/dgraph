@@ -52,25 +52,40 @@ schemas:
     input: |
       type X {
         p: Int
+        pList: [Int]
         q: Boolean
+        qList: [Boolean]
         r: String
+        rList: [String]
         s: DateTime
+        sList: [DateTime]
         t: Float
+        tList: [Float]
         u: ID
       }
     output: |
       type X {
         X.p: int
+        X.pList: [int]
         X.q: bool
+        X.qList: [bool]
         X.r: string
+        X.rList: [string]
         X.s: dateTime
+        X.sList: [dateTime]
         X.t: float
+        X.tList: [float]
       }
       X.p: int .
+      X.pList: [int] .
       X.q: bool .
+      X.qList: [bool] .
       X.r: string .
+      X.rList: [string] .
       X.s: dateTime .
+      X.sList: [dateTime] .
       X.t: float .
+      X.tList: [float] .
 
   -
     name: "enum - always gets an index"
