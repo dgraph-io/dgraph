@@ -596,6 +596,12 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 	require.Equal(t, expected, nq[0])
 }
 
+func TestValInUpsert(t *testing.T) {
+	json := `{"uid":1000, "name": "val(name)"}`
+	_, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+}
+
 func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 	json := `{"uid":1000,"name@es": null}`
 

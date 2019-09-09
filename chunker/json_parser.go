@@ -152,6 +152,11 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		if strings.HasPrefix(s, "val(") {
+			nq.ObjectId = s
+			return nil
+		}
+
 		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
 		// (StringID). But this value will be checked against the schema so we don't overshadow a
 		// password value (types.PasswordID) - Issue#2623
