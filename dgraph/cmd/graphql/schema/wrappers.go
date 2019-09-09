@@ -95,6 +95,7 @@ type Mutation interface {
 	Field
 	MutationType() MutationType
 	MutatedType() Type
+	MutatedTypeName() string
 	QueryField() Field
 }
 
@@ -360,6 +361,14 @@ func (m *mutation) MutatedType() Type {
 	// ATM there's a single field in the mutation payload.
 	// TODO: Need a better way to get this by convention??
 	return m.SelectionSet()[0].Type()
+}
+
+func (m *mutation) MutatedTypeName() string {
+	if m.MutationType() == DeleteMutation {
+		prefix := strings.TrimSuffix(m.Type().Name(), "Payload")
+		return strings.TrimPrefix(prefix, "Delete")
+	}
+	return m.MutatedType().Name()
 }
 
 func (m *mutation) MutationType() MutationType {
