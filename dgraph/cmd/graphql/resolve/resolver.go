@@ -174,7 +174,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
 
-				ctx, span := trace.StartSpan(ctx, q.Alias())
+				ctx, qspan := trace.StartSpan(ctx, q.Alias())
 				allResolved[storeAt] = (&queryResolver{
 					query:         q,
 					schema:        r.Schema,
@@ -182,7 +182,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					queryRewriter: r.queryRewriter,
 					operation:     op,
 				}).resolve(ctx)
-				span.End()
+				qspan.End()
 			}(q, i)
 		}
 		wg.Wait()
