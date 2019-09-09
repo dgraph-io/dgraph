@@ -62,4 +62,6 @@ func TestDot_Start(t *testing.T) {
 	}
 
 	dot.Stop()
+	// Wait for everything to finish
+	<-dot.stop
 }

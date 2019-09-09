@@ -70,7 +70,7 @@ func (d *Dot) Start() {
 	}()
 
 	//Move on when routine catches SIGINT or SIGTERM calls
-	d.IsStarted <- struct{}{}
+	close(d.IsStarted)
 	d.Wait()
 }
 
@@ -82,5 +82,5 @@ func (d *Dot) Wait() {
 //Stop all services first, then send stop signal for test
 func (d *Dot) Stop() {
 	d.Services.StopAll()
-	d.stop <- struct{}{}
+	close(d.stop)
 }
