@@ -434,46 +434,48 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if hasSearchables(defn) {
-		filterName := defn.Name + "Filter"
-		filter := &ast.Definition{
-			Kind: ast.InputObject,
-			Name: filterName,
-		}
-
-		for _, fld := range defn.Fields {
-			if searchable := getSearchable(fld); searchable != "" {
-				filterTypeName := builtInFilters[searchable]
-				if schema.Types[fld.Type.Name()].Kind == ast.Enum {
-					// If the field is an enum type, we don't generate a filter type.
-					// Instead we allow to write `fieldName: enumValue` in the filter.
-					// So, for example : `filter: { postType: Answer }`
-					// rather than : `filter: { postType: { eq: Answer } }`
-					//
-					// Booleans are the same, allowing:
-					// `filter: { isPublished: true }
-					// but that case is aready handled by builtInFilters
-					filterTypeName = fld.Type.Name()
-				}
-
-				filter.Fields = append(filter.Fields,
-					&ast.FieldDefinition{
-						Name: fld.Name,
-						Type: &ast.Type{
-							NamedType: filterTypeName,
-						},
-					})
-			}
-		}
-
-		filter.Fields = append(filter.Fields,
-			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
-			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
-			&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
-		)
-
-		schema.Types[filterName] = filter
+	if !hasSearchables(defn) {
+		return
 	}
+
+	filterName := defn.Name + "Filter"
+	filter := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: filterName,
+	}
+
+	for _, fld := range defn.Fields {
+		if searchable := getSearchable(fld); searchable != "" {
+			filterTypeName := builtInFilters[searchable]
+			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
+				// If the field is an enum type, we don't generate a filter type.
+				// Instead we allow to write `fieldName: enumValue` in the filter.
+				// So, for example : `filter: { postType: Answer }`
+				// rather than : `filter: { postType: { eq: Answer } }`
+				//
+				// Booleans are the same, allowing:
+				// `filter: { isPublished: true }
+				// but that case is already handled by builtInFilters
+				filterTypeName = fld.Type.Name()
+			}
+
+			filter.Fields = append(filter.Fields,
+				&ast.FieldDefinition{
+					Name: fld.Name,
+					Type: &ast.Type{
+						NamedType: filterTypeName,
+					},
+				})
+		}
+	}
+
+	filter.Fields = append(filter.Fields,
+		&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
+		&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
+	)
+
+	schema.Types[filterName] = filter
 }
 
 func hasSearchables(defn *ast.Definition) bool {
@@ -515,8 +517,9 @@ func getSearchable(fld *ast.FieldDefinition) string {
 
 // addTypeOrderable adds an input type that allows ordering in query.
 // Two things are added: an enum with the names of all the orderable fields,
-// that's called TOrderable; and an input type that allows saying order asc
-// or desc, that's called TOrder.  TOrder's fileds are TOrderable's.  So you
+// for a type T that's called TOrderable; and an input type that allows saying
+// order asc or desc, for type T that's called TOrder.
+// TOrder's fields are TOrderable's.  So you
 // might get:
 // enum PostOrderable { datePublished, numLikes, ... }, and
 // input PostOrder { asc : PostOrderable, desc: PostOrderable ...}
@@ -524,36 +527,45 @@ func getSearchable(fld *ast.FieldDefinition) string {
 // order: { asc: datePublished }
 // and
 // order: { asc: datePublished, then: { desc: title } }
+//
+// Dgraph allows multiple orderings `orderasc: datePublished, orderasc: title`
+// to order by datePublished and then by title when dataPublished is the same.
+// GraphQL doesn't allow the same field to be repeated, so
+// `orderasc: datePublished, orderasc: title` wouldn't be valid.  Instead, our
+// GraphQL orderings are given by the structure
+// `order: { asc: datePublished, then: { asc: title } }`.
+// a further `then` would be a third ordering, etc.
 func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
-	if hasOrderables(defn) {
-		orderName := defn.Name + "Order"
-		orderableName := defn.Name + "Orderable"
-
-		schema.Types[orderName] =
-			&ast.Definition{
-				Kind: ast.InputObject,
-				Name: orderName,
-				Fields: ast.FieldList{
-					&ast.FieldDefinition{Name: "asc", Type: &ast.Type{NamedType: orderableName}},
-					&ast.FieldDefinition{Name: "desc", Type: &ast.Type{NamedType: orderableName}},
-					&ast.FieldDefinition{Name: "then", Type: &ast.Type{NamedType: orderName}},
-				},
-			}
-
-		order := &ast.Definition{
-			Kind: ast.Enum,
-			Name: orderableName,
-		}
-
-		for _, fld := range defn.Fields {
-			if orderable[fld.Type.Name()] {
-				order.EnumValues = append(order.EnumValues,
-					&ast.EnumValueDefinition{Name: fld.Name})
-			}
-		}
-
-		schema.Types[orderableName] = order
+	if !hasOrderables(defn) {
+		return
 	}
+
+	orderName := defn.Name + "Order"
+	orderableName := defn.Name + "Orderable"
+
+	schema.Types[orderName] = &ast.Definition{
+		Kind: ast.InputObject,
+		Name: orderName,
+		Fields: ast.FieldList{
+			&ast.FieldDefinition{Name: "asc", Type: &ast.Type{NamedType: orderableName}},
+			&ast.FieldDefinition{Name: "desc", Type: &ast.Type{NamedType: orderableName}},
+			&ast.FieldDefinition{Name: "then", Type: &ast.Type{NamedType: orderName}},
+		},
+	}
+
+	order := &ast.Definition{
+		Kind: ast.Enum,
+		Name: orderableName,
+	}
+
+	for _, fld := range defn.Fields {
+		if orderable[fld.Type.Name()] {
+			order.EnumValues = append(order.EnumValues,
+				&ast.EnumValueDefinition{Name: fld.Name})
+		}
+	}
+
+	schema.Types[orderableName] = order
 }
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
