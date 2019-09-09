@@ -215,6 +215,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				queryRewriter:    r.queryRewriter,
 			}
 			ctx, qspan := trace.StartSpan(ctx, m.Alias())
+			qspan.Annotate(nil, "mutation type: "+string(m.MutationType()))
 			res := mr.resolve(ctx)
 			qspan.End()
 			r.WithError(res.err)
