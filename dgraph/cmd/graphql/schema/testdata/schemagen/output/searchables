@@ -1,0 +1,223 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	postID: ID!
+	title: String! @searchable(by: term)
+	text: String @searchable(by: fulltext)
+	tags(first: Int, offset: Int): [String] @searchable(by: trigram)
+	tagsHash(first: Int, offset: Int): [String] @searchable(by: hash)
+	exactHash(first: Int, offset: Int): [String] @searchable(by: exact)
+	publishByYear: DateTime @searchable(by: year)
+	publishByMonth: DateTime @searchable(by: month)
+	publishByDay: DateTime @searchable(by: day)
+	publishByHour: DateTime @searchable(by: hour)
+	numLikes: Int @searchable
+	score: Float @searchable
+	isPublished: Boolean @searchable
+	postType: PostType @searchable
+}
+
+enum PostType {
+	Fact
+	Question
+	Opinion
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdatePostPayload {
+	post: Post
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum PostOrderable {
+	title
+	text
+	tags
+	tagsHash
+	exactHash
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	numLikes
+	score
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input PatchPost {
+	title: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	exactHash: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+}
+
+input PostFilter {
+	title: StringTermFilter
+	text: StringFullTextFilter
+	tags: StringRegExpFilter
+	tagsHash: StringHashFilter
+	exactHash: StringExactFilter
+	publishByYear: DateTimeFilter
+	publishByMonth: DateTimeFilter
+	publishByDay: DateTimeFilter
+	publishByHour: DateTimeFilter
+	numLikes: IntFilter
+	score: FloatFilter
+	isPublished: Boolean
+	postType: PostType
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
+input PostInput {
+	title: String!
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	exactHash: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostRef {
+	postID: ID!
+}
+
+input UpdatePostInput {
+	postID: ID!
+	patch: PatchPost!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(id: ID!): DeletePostPayload
+}
