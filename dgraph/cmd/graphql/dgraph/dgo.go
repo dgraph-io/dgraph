@@ -78,14 +78,7 @@ func (dg *dgraph) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, err
 	resp, err := dg.client.NewTxn().
 		Query(metadata.NewOutgoingContext(ctx, md), queryStr)
 
-	return responseBytes(resp), schema.GQLWrapf(err, "Dgraph query failed")
-}
-
-func responseBytes(resp *dgoapi.Response) []byte {
-	if resp == nil {
-		return nil
-	}
-	return resp.Json
+	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
 func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
@@ -104,8 +97,8 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 		SetJson:   jsonMu,
 	}
 
-	assigned, err := dg.client.NewTxn().Mutate(ctx, mu)
-	return assigned.Uids, schema.GQLWrapf(err, "couldn't execute mutation")
+	resp, err := dg.client.NewTxn().Mutate(ctx, mu)
+	return resp.GetUids(), schema.GQLWrapf(err, "couldn't execute mutation")
 }
 
 // DeleteNode deletes a single node from the graph.
@@ -158,7 +151,7 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 
 	var decode struct {
 		CheckID []struct {
-			Uid string
+			UID string
 		}
 	}
 	if err := json.Unmarshal(resp, &decode); err != nil {
