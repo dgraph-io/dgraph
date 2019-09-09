@@ -17,12 +17,12 @@
 package p2p
 
 import (
-	"fmt"
 	"testing"
+	"time"
 )
 
-// list of IPFS peers, eventually change this to polkadot bootstrap nodes
-var IPFS_PEERS = []string{
+// list of IPFS peers, for testing only
+var TestPeers = []string{
 	"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
 	"/ip4/104.236.179.241/tcp/4001/ipfs/QmSoLPppuBtQSGwKDZT2M73ULpjvfd3aZ6ha4oFGL1KrGM",
 	"/ip4/128.199.219.111/tcp/4001/ipfs/QmSoLSafTMBsPKadTEgaXctDQVcqN88CNLHXMkTNwMKPnu",
@@ -35,7 +35,7 @@ var IPFS_PEERS = []string{
 }
 
 func TestStringToPeerInfo(t *testing.T) {
-	for _, str := range IPFS_PEERS {
+	for _, str := range TestPeers {
 		pi, err := stringToPeerInfo(str)
 		if err != nil {
 			t.Error(err)
@@ -48,41 +48,67 @@ func TestStringToPeerInfo(t *testing.T) {
 }
 
 func TestStringsToPeerInfos(t *testing.T) {
-	pi, err := stringsToPeerInfos(IPFS_PEERS)
+	pi, err := stringsToPeerInfos(TestPeers)
 	if err != nil {
 		t.Error(err)
 	}
 	for k, pi := range pi {
-		if pi.ID.Pretty() != IPFS_PEERS[k][len(IPFS_PEERS[k])-46:] {
-			t.Errorf("StringToPeerInfo error: got %s expected %s", pi.ID.Pretty(), IPFS_PEERS[k])
+		if pi.ID.Pretty() != TestPeers[k][len(TestPeers[k])-46:] {
+			t.Errorf("StringToPeerInfo error: got %s expected %s", pi.ID.Pretty(), TestPeers[k])
 		}
 	}
 }
 
 func TestBootstrapConnect(t *testing.T) {
-	ipfsNode, err := StartIpfsNode()
-	if err != nil {
-		t.Fatalf("Could not start IPFS node: %s", err)
+	bootnodeCfg := &Config{
+		BootstrapNodes: nil,
+		Port:           7000,
+		RandSeed:       0,
+		NoBootstrap:    true,
+		NoMdns:         true,
 	}
 
-	defer ipfsNode.Close()
+	bootnode := startNewService(t, bootnodeCfg)
 
-	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
+	bootnodeAddr := bootnode.FullAddrs()[0]
 
-	testServiceConfig := &Config{
-		BootstrapNodes: []string{
-			ipfsAddr,
-		},
-		Port: 7001,
+	nodeCfg := &Config{
+		BootstrapNodes: []string{bootnodeAddr.String()},
+		Port:           7001,
+		RandSeed:       1,
+		NoBootstrap:    false,
+		NoMdns:         true,
 	}
 
-	s, err := NewService(testServiceConfig)
+	node := startNewService(t, nodeCfg)
+
+	// Allow everything to finish connecting
+	time.Sleep(1 * time.Second)
+
+	if bootnode.PeerCount() != 1 {
+		t.Errorf("expected peer count: %d got: %d", 1, bootnode.PeerCount())
+	}
+
+	node.Stop()
+	bootnode.Stop()
+}
+
+func TestNoBootstrap(t *testing.T) {
+	testServiceConfigA := &Config{
+		NoBootstrap: true,
+		Port:        7006,
+	}
+
+	sa, err := NewService(testServiceConfigA)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
 
-	err = s.bootstrapConnect()
+	defer sa.Stop()
+
+	e := sa.Start()
+	err = <-e
 	if err != nil {
-		t.Errorf("Start error :%s", err)
+		t.Errorf("Start error: %s", err)
 	}
 }

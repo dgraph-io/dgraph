@@ -26,6 +26,21 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+func startNewService(t *testing.T, cfg *Config) *Service {
+	node, err := NewService(cfg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	e := node.Start()
+	err = <-e
+	if err != nil {
+		t.Error(err)
+	}
+
+	return node
+}
+
 func TestBuildOpts(t *testing.T) {
 	testServiceConfig := &Config{
 		BootstrapNodes: []string{},
@@ -51,39 +66,6 @@ func TestGenerateKey(t *testing.T) {
 
 	if crypto.KeyEqual(privA, privC) {
 		t.Fatal("GenerateKey error: created same key for different seed")
-	}
-}
-
-func TestStart(t *testing.T) {
-	ipfsNode, err := StartIpfsNode()
-	if err != nil {
-		t.Fatalf("Could not start IPFS node: %s", err)
-	}
-
-	defer ipfsNode.Close()
-
-	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
-
-	t.Log("ipfsAddr:", ipfsAddr)
-
-	testServiceConfig := &Config{
-		BootstrapNodes: []string{
-			ipfsAddr,
-		},
-		Port: 7001,
-	}
-
-	s, err := NewService(testServiceConfig)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
-	defer s.Stop()
-
-	e := s.Start()
-	err = <-e
-	if err != nil {
-		t.Errorf("Start error: %s", err)
 	}
 }
 
@@ -119,7 +101,7 @@ func TestService_PeerCount(t *testing.T) {
 	defer sb.Stop()
 
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +154,7 @@ func TestSend(t *testing.T) {
 	defer sb.Stop()
 
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", sa.Host().Addrs()[0].String(), sa.Host().ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,25 +184,5 @@ func TestSend(t *testing.T) {
 	err = sa.Send(p, msg)
 	if err != nil {
 		t.Errorf("Send error: %s", err)
-	}
-}
-
-func TestNoBootstrap(t *testing.T) {
-	testServiceConfigA := &Config{
-		NoBootstrap: true,
-		Port:        7006,
-	}
-
-	sa, err := NewService(testServiceConfigA)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
-	defer sa.Stop()
-
-	e := sa.Start()
-	err = <-e
-	if err != nil {
-		t.Errorf("Start error: %s", err)
 	}
 }

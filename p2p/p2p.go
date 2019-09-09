@@ -230,6 +230,19 @@ func (s *Service) Host() host.Host {
 	return s.host
 }
 
+// FullAddrs returns all the hosts addresses with their ID append as multiaddrs
+func (s *Service) FullAddrs() (maddrs []ma.Multiaddr) {
+	addrs := s.host.Addrs()
+	for _, a := range addrs {
+		maddr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", a, s.host.ID().Pretty()))
+		if err != nil {
+			continue
+		}
+		maddrs = append(maddrs, maddr)
+	}
+	return maddrs
+}
+
 // DHT returns the service's dht
 func (s *Service) DHT() *kaddht.IpfsDHT {
 	return s.dht

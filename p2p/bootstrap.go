@@ -22,31 +22,9 @@ import (
 	"sync"
 
 	log "github.com/ChainSafe/log15"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	ps "github.com/libp2p/go-libp2p-core/peerstore"
-	ma "github.com/multiformats/go-multiaddr"
 )
-
-func stringToPeerInfo(peerString string) (peer.AddrInfo, error) {
-	maddr, err := ma.NewMultiaddr(peerString)
-	if err != nil {
-		return peer.AddrInfo{}, err
-	}
-	p, err := peer.AddrInfoFromP2pAddr(maddr)
-	return *p, err
-}
-
-func stringsToPeerInfos(peers []string) ([]peer.AddrInfo, error) {
-	pinfos := make([]peer.AddrInfo, len(peers))
-	for i, peer := range peers {
-		p, err := stringToPeerInfo(peer)
-		if err != nil {
-			return nil, err
-		}
-		pinfos[i] = p
-	}
-	return pinfos, nil
-}
 
 // this code is borrowed from the go-ipfs bootstrap process
 func (s *Service) bootstrapConnect() error {

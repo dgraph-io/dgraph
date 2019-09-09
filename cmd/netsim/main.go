@@ -61,17 +61,18 @@ func main() {
 		log.Crit("main", "error", err)
 	}
 
-	sim, err := p2p.NewSimulator(num)
+	sim, err := NewSimulator(num)
 	if err != nil {
 		log.Crit("NewSimulator", "error", err)
 	}
 
-	defer func() {
-		err = sim.IpfsNode.Close()
-		if err != nil {
-			log.Warn("main", "warn", err.Error())
-		}
-	}()
+	// TODO: Since we removed IPFS this needs to handle error channel from sim.Bootnode.Stop()
+	//defer func() {
+	//	err = sim.IPFSNode.Close()
+	//	if err != nil {
+	//		log.Warn("main", "warn", err.Error())
+	//	}
+	//}()
 
 	for _, node := range sim.Nodes {
 		e := node.Start()
