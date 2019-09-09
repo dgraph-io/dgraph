@@ -2831,15 +2831,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = ListVar
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
-				case "_all_":
-					child.Expand = "_all_"
-				case "_forward_":
-					child.Expand = "_forward_"
-				case "_reverse_":
-					child.Expand = "_reverse_"
 				default:
-					return item.Errorf("Invalid argument %v in expand()", item.Val)
+					child.Expand = item.Val
 				}
+
 				it.Next() // Consume ')'
 				gq.Children = append(gq.Children, child)
 				// Note: curp is not set to nil. So it can have children, filters, etc.

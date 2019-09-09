@@ -1703,6 +1703,18 @@ func getPredsFromVals(vl []*pb.ValueList) []string {
 	return preds
 }
 
+func getPredMapFromVals(vl []*pb.ValueList) map[string]struct{} {
+	preds := make(map[string]struct{}, len(vl))
+	for _, l := range vl {
+		for _, v := range l.Values {
+			if len(v.Val) > 0 {
+				preds[string(v.Val)] = struct{}{}
+			}
+		}
+	}
+	return preds
+}
+
 func uniquePreds(list []string) []string {
 	predMap := make(map[string]struct{})
 	for _, item := range list {
@@ -1788,9 +1800,21 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			preds = append(preds, rpreds...)
 		default:
-			span.Annotate(nil, "expand default")
-			// We already have the predicates populated from the var.
-			preds = getPredsFromVals(child.ExpandPreds)
+			// If type exist in expand function, check whether that type exist for the node or not.
+			// If not then thorow error. If exist obtain all the predicate for the type and expand
+			// from there.
+			if len(child.Params.Expand) > 0 {
+				span.Annotate(nil, fmt.Sprintf("expand(%s)", child.Params.Expand))
+				_, ok := types[child.Params.Expand]
+				if !ok {
+					return out, errors.Errorf("Invalid expand type %d", child.Params.Expand)
+				}
+				preds = getPredicatesFromTypes(map[string]struct{}{child.Params.Expand: struct{}{}})
+			} else {
+				span.Annotate(nil, "expand default")
+				// We already have the predicates populated from the var.
+				preds = getPredsFromVals(child.ExpandPreds)
+			}
 		}
 		preds = uniquePreds(preds)
 
@@ -2382,7 +2406,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
+func getNodeTypes(ctx context.Context, sg *SubGraph) (map[string]struct{}, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
 		SrcUIDs: sg.DestUIDs,
@@ -2396,14 +2420,14 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getPredsFromVals(result.ValueMatrix), nil
+	return getPredMapFromVals(result.ValueMatrix), nil
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
-func getPredicatesFromTypes(types []string) []string {
+func getPredicatesFromTypes(types map[string]struct{}) []string {
 	var preds []string
 
-	for _, typeName := range types {
+	for typeName := range types {
 		typeDef, ok := schema.State().GetType(typeName)
 		if !ok {
 			continue
