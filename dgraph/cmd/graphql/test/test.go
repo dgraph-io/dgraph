@@ -18,6 +18,7 @@ package test
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -31,8 +32,9 @@ import (
 
 // LoadSchema parses and validates the given schema string and requires
 // no errors.
-func LoadSchema(t *testing.T, gqlSchema string) *ast.Schema {
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
+func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
+
+	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: gqlSchema})
 	require.Nil(t, gqlErr)
 	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
 	// so passing into something that just expects an error, will always be a
@@ -41,7 +43,20 @@ func LoadSchema(t *testing.T, gqlSchema string) *ast.Schema {
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
 	require.Nil(t, gqlErr)
 
-	return gql
+	return schema.AsSchema(gql)
+}
+
+// LoadSchemaFromFile reads a graphql schema file as would be the initial schema
+// definition.  It runs all validation, generates the completed schema and
+// returns that.
+func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
+	gql, err := ioutil.ReadFile(gqlFile)
+	require.NoError(t, err, "Unable to read schema file")
+
+	handler, err := schema.NewHandler(string(gql))
+	require.NoError(t, err, "input schema contained errors")
+
+	return LoadSchema(t, handler.GQLSchema())
 }
 
 // GetMutation gets a single schema.Mutation from a schema.Operation.

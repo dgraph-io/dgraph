@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 	"gopkg.in/yaml.v2"
 )
@@ -55,8 +54,6 @@ type QueryCase struct {
 }
 
 var testGQLSchema = `
-scalar ID
-scalar String
 scalar DateTime
 
 type Author {
@@ -349,16 +346,16 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	}
 }
 
-func resolve(gqlSchema *ast.Schema, gqlQuery string, dgResponse string) *schema.Response {
+func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
 	return resolveWithClient(gqlSchema, gqlQuery, &dgraphClient{resp: dgResponse})
 }
 
 func resolveWithClient(
-	gqlSchema *ast.Schema,
+	gqlSchema schema.Schema,
 	gqlQuery string,
 	client dgraph.Client) *schema.Response {
 	resolver := New(
-		schema.AsSchema(gqlSchema),
+		gqlSchema,
 		client,
 		dgraph.NewQueryRewriter(),
 		dgraph.NewMutationRewriter())
