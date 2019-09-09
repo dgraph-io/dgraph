@@ -147,14 +147,15 @@ func (m *XidMap) shardFor(xid string) *shard {
 	return m.shards[idx]
 }
 
-// AssignUid creates new or looks up existing XID to UID mappings.
-func (m *XidMap) AssignUid(xid string) uint64 {
+// AssignUid creates new or looks up existing XID to UID mappings. It also returns if
+// UID was created.
+func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	uid := sh.uidMap[xid]
 	sh.RUnlock()
 	if uid > 0 {
-		return uid
+		return uid, false
 	}
 
 	sh.Lock()
@@ -162,7 +163,7 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 
 	uid = sh.uidMap[xid]
 	if uid > 0 {
-		return uid
+		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
@@ -175,7 +176,7 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 			panic(err)
 		}
 	}
-	return newUid
+	return newUid, true
 }
 
 func (sh *shard) Current() uint64 {

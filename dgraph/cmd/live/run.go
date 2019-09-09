@@ -152,7 +152,7 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
-	uid := l.alloc.AssignUid(val)
+	uid, _ := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
