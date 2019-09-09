@@ -6,9 +6,9 @@ type Post {
 	postID: ID!
 	title: String! @searchable(by: term)
 	text: String @searchable(by: fulltext)
-	tags(first: Int, offset: Int): [String] @searchable(by: trigram)
-	tagsHash(first: Int, offset: Int): [String] @searchable(by: hash)
-	exactHash(first: Int, offset: Int): [String] @searchable(by: exact)
+	tags: [String] @searchable(by: trigram)
+	tagsHash: [String] @searchable(by: hash)
+	tagsExact: [String] @searchable(by: exact)
 	publishByYear: DateTime @searchable(by: year)
 	publishByMonth: DateTime @searchable(by: month)
 	publishByDay: DateTime @searchable(by: day)
@@ -124,7 +124,7 @@ enum PostOrderable {
 	text
 	tags
 	tagsHash
-	exactHash
+	tagsExact
 	publishByYear
 	publishByMonth
 	publishByDay
@@ -142,7 +142,7 @@ input PatchPost {
 	text: String
 	tags: [String]
 	tagsHash: [String]
-	exactHash: [String]
+	tagsExact: [String]
 	publishByYear: DateTime
 	publishByMonth: DateTime
 	publishByDay: DateTime
@@ -158,7 +158,7 @@ input PostFilter {
 	text: StringFullTextFilter
 	tags: StringRegExpFilter
 	tagsHash: StringHashFilter
-	exactHash: StringExactFilter
+	tagsExact: StringExactFilter
 	publishByYear: DateTimeFilter
 	publishByMonth: DateTimeFilter
 	publishByDay: DateTimeFilter
@@ -177,7 +177,7 @@ input PostInput {
 	text: String
 	tags: [String]
 	tagsHash: [String]
-	exactHash: [String]
+	tagsExact: [String]
 	publishByYear: DateTime
 	publishByMonth: DateTime
 	publishByDay: DateTime

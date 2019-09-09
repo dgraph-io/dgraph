@@ -384,8 +384,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 		addFilterArgument(schema, fld)
 
 		// Ordering and pagination, however, only makes sense for fields of
-		// list types.
-		if fld.Type.Elem != nil {
+		// list types (not scalar lists).
+		if _, scalar := scalarToDgraph[fld.Type.Name()]; !scalar && fld.Type.Elem != nil {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because

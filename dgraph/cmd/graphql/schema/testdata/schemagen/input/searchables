@@ -5,7 +5,7 @@ type Post {
 
     tags: [String] @searchable(by: trigram)
     tagsHash: [String] @searchable(by: hash)
-    exactHash: [String] @searchable(by: exact)
+    tagsExact: [String] @searchable(by: exact)
 
     publishByYear: DateTime @searchable(by: year)
     publishByMonth: DateTime @searchable(by: month)
