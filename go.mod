@@ -23,6 +23,6 @@ require (
 	github.com/naoina/toml v0.1.1
 	github.com/pkg/errors v0.8.1
 	github.com/urfave/cli v1.20.0
-	github.com/wasmerio/go-ext-wasm v0.0.0-20190612094245-722faa9f1b90
+	github.com/wasmerio/go-ext-wasm v0.0.0-20190716093451-605a12aad995
 	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
 )

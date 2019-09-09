@@ -71,7 +71,6 @@ github.com/dgryski/go-farm v0.0.0-20190104051053-3adb47b1fb0f/go.mod h1:SqUrOPUn
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 h1:tdlZCpZ/P9DhczCTSixgIKmwPv6+wP5DGjqLYw5SUiA=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
-github.com/disiqueira/gotree v1.0.0 h1:en5wk87n7/Jyk6gVME3cx3xN9KmUCstJ1IjHr4Se4To=
 github.com/disiqueira/gotree v1.0.0/go.mod h1:7CwL+VWsWAU95DovkdRZAtA7YbtHwGk+tLV/kNi8niU=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
@@ -620,7 +619,10 @@ github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljT
 github.com/urfave/cli v1.20.0 h1:fDqGv3UG/4jbVl/QkFwEdddtEDjh/5Ov6X+0B/3bPaw=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/warpfork/go-wish v0.0.0-20180510122957-5ad1f5abf436/go.mod h1:x6AKhvSSexNrVSrViXSHUEbICjmGXhtgABaHIySUSGw=
+github.com/wasmerio/go-ext-wasm v0.0.0-20190612094245-722faa9f1b90 h1:N4I8Nyk7eXEiLFwZBUoXRH4SWBD4u4eu+6Cy0UF6Joc=
 github.com/wasmerio/go-ext-wasm v0.0.0-20190612094245-722faa9f1b90/go.mod h1:B0C/D0a2vNos7Y3IxQhMpGOY9PCuCKfLvfry33a1cKA=
+github.com/wasmerio/go-ext-wasm v0.0.0-20190716093451-605a12aad995 h1:hH06i5qSlTVs6oVdC3oBUFa5PsNnZM1VkDAz0xvuZxo=
+github.com/wasmerio/go-ext-wasm v0.0.0-20190716093451-605a12aad995/go.mod h1:B0C/D0a2vNos7Y3IxQhMpGOY9PCuCKfLvfry33a1cKA=
 github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc h1:BCPnHtcboadS0DvysUuJXZ4lWVv5Bh5i7+tbIyi+ck4=
 github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc/go.mod h1:r45hJU7yEoA81k6MWNhpMj/kms0n14dkzkxYHoB96UM=
 github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f h1:jQa4QT2UP9WYv2nzyawpKMOCl+Z/jW7djv2/J50lj9E=

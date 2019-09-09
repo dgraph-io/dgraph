@@ -1,3 +1,19 @@
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
 package runtime
 
 import (
@@ -649,5 +665,62 @@ func TestExt_twox_128(t *testing.T) {
 	t.Logf("Ext_twox_128 data: %s, result: %s", data, hex.EncodeToString(mem[out:out+16]))
 	if "b27dfd7f223f177f2a13647b533599af" != hex.EncodeToString(mem[out:out+16]) {
 		t.Error("hash saved in memory does not equal calculated hash")
+	}
+}
+
+// test ext_malloc returns expected pointer value of 8
+func TestExt_malloc(t *testing.T) {
+	// given
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFunc, ok := runtime.vm.Exports["test_ext_malloc"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+	// when
+	res, err := testFunc(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("[TestExt_malloc]", "pointer", res)
+	if res.ToI64() != 8 {
+		t.Errorf("malloc did not return expected pointer value, expected 8, got %v", res)
+	}
+}
+
+// test ext_free, confirm ext_free frees memory without error
+func TestExt_free(t *testing.T) {
+	// given
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initFunc, ok := runtime.vm.Exports["test_ext_malloc"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	ptr, err := initFunc(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ptr.ToI64() != 8 {
+		t.Errorf("malloc did not return expected pointer value, expected 8, got %v", ptr)
+	}
+
+	// when
+	testFunc, ok := runtime.vm.Exports["test_ext_free"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+	_, err = testFunc(ptr)
+
+	// then
+	if err != nil {
+		t.Fatal(err)
 	}
 }

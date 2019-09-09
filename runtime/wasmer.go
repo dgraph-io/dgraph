@@ -1,3 +1,19 @@
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
 package runtime
 
 // #include <stdlib.h>
@@ -26,16 +42,22 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 	"unsafe"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	common "github.com/ChainSafe/gossamer/common"
+	allocator "github.com/ChainSafe/gossamer/runtime/allocator"
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	xxhash "github.com/OneOfOne/xxhash"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 	ed25519 "golang.org/x/crypto/ed25519"
 )
+
+var registry map[int]RuntimeCtx
+var handlers int
+var mutex = sync.Mutex{}
 
 //export ext_print_num
 func ext_print_num(context unsafe.Pointer, data C.int64_t) {
@@ -44,16 +66,44 @@ func ext_print_num(context unsafe.Pointer, data C.int64_t) {
 }
 
 //export ext_malloc
-func ext_malloc(context unsafe.Pointer, size C.int32_t) C.int32_t {
+func ext_malloc(context unsafe.Pointer, size int32) int32 {
 	log.Debug("[ext_malloc] executing...")
-	log.Debug("[ext_malloc]", "size", size)
-	return 1
+	instanceContext := wasm.IntoInstanceContext(context)
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	log.Debug("[ext_malloc]", "context", *(*int)(instanceContext.Data()))
+	log.Debug("[ext_malloc]", "runtimeCtx.allocator", runtimeCtx.allocator)
+
+	// Allocate memory
+	res, err := runtimeCtx.allocator.Allocate(uint32(size))
+	if err != nil {
+		log.Error("[ext_malloc]", "Error:", err)
+	}
+	log.Debug("[ext_malloc]", "pointer", res)
+	log.Debug("[ext_malloc]", "heap_size after allocation", runtimeCtx.allocator.TotalSize)
+	return int32(res)
 }
 
 //export ext_free
-func ext_free(context unsafe.Pointer, addr C.int32_t) {
+func ext_free(context unsafe.Pointer, addr int32) {
 	log.Debug("[ext_free] executing...")
 	log.Debug("[ext_free]", "addr", addr)
+	instanceContext := wasm.IntoInstanceContext(context)
+
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+
+	log.Debug("[ext_free]", "runtimeCtx.allocator", runtimeCtx.allocator)
+
+	// Deallocate memory
+	err := runtimeCtx.allocator.Deallocate(uint32(addr))
+	if err != nil {
+		log.Error("[ext_free] Error:", "Error", err)
+		panic(err)
+	}
+
 }
 
 // prints string located in memory at location `offset` with length `size`
@@ -82,7 +132,11 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
 	val, err := t.Get(key)
@@ -107,7 +161,12 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	log.Debug("[ext_set_storage] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
 	val := memory[valueData : valueData+valueLen]
@@ -124,7 +183,12 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	log.Debug("[ext_storage_root] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	root, err := t.Hash()
 	if err != nil {
@@ -147,7 +211,12 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	log.Debug("[ext_get_allocated_storage] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
 	val, err := t.Get(key)
@@ -187,7 +256,12 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	log.Debug("[ext_sr25519_verify] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
 	err := t.Delete(key)
@@ -202,7 +276,12 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	log.Debug("[ext_clear_prefix] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := (*trie.Trie)(instanceContext.Data())
+
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.Unlock()
+	t := runtimeCtx.trie
 
 	prefix := memory[prefixData : prefixData+prefixLen]
 	entries := t.Entries()
@@ -320,6 +399,11 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 	return 1
 }
 
+type RuntimeCtx struct {
+	trie      *trie.Trie
+	allocator *allocator.FreeingBumpHeapAllocator
+}
+
 type Runtime struct {
 	vm   wasm.Instance
 	trie *trie.Trie
@@ -407,7 +491,26 @@ func NewRuntime(fp string, t *trie.Trie) (*Runtime, error) {
 		return nil, err
 	}
 
-	data := unsafe.Pointer(t)
+	memAllocator := allocator.NewAllocator(&instance.Memory, 0)
+
+	runtimeCtx := &RuntimeCtx{
+		trie:      t,
+		allocator: memAllocator,
+	}
+	// add runtimeCtx to registry
+	// lock access to registry to avoid possible concurrent access
+	mutex.Lock()
+	index := handlers
+	handlers++
+	if registry == nil {
+		registry = make(map[int]RuntimeCtx)
+	}
+	registry[index] = *runtimeCtx
+	mutex.Unlock()
+
+	log.Debug("[NewRuntime]", "index", index)
+	log.Debug("[NewRuntime]", "runtimeCtx", runtimeCtx)
+	data := unsafe.Pointer(&index)
 	instance.SetContextData(data)
 
 	return &Runtime{
@@ -425,7 +528,6 @@ func (r *Runtime) Exec(function string, data, len int32) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("could not find exported function")
 	}
-
 	res, err := runtimeFunc(data, len)
 	if err != nil {
 		return nil, err
