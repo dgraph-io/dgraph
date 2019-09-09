@@ -309,6 +309,8 @@ func (q *query) QueryType() QueryType {
 		return GetQuery
 	case q.Name() == "__schema" || q.Name() == "__type":
 		return SchemaQuery
+	case strings.HasPrefix(q.Name(), "query"):
+		return FilterQuery
 	default:
 		return NotSupportedQuery
 	}
