@@ -214,7 +214,9 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
 			}
+			ctx, qspan := trace.StartSpan(ctx, m.Alias())
 			res := mr.resolve(ctx)
+			qspan.End()
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
 		}
