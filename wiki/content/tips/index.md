@@ -58,13 +58,13 @@ Use the `has` function among the value variables to search on non-indexed predic
 
 ## Sort edge by value of a nested node
 
-Make use of variables to bring nested values up to the level of the edge to be sorted.
+Use [query variables]({{ relref "query-language/index.md#query-variables" }}) to bring nested values up to the level of the edge to be sorted.
 
 {{< runnable >}}
 {
-  movies as var(func: gt(count(~genre), 30000), orderasc: name@en) {
+  spielbergMovies as var(func: allofterms(name@en, "steven spielberg")) {
     name@en
-    ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+    director.film (orderasc: name@en, first: 2) {
       starring {
         performance.actor {
           ActorName as name@en
@@ -76,9 +76,9 @@ Make use of variables to bring nested values up to the level of the edge to be s
     }
   }
 
-  movies(func: uid(movies)) {
+  movies(func: uid(spielbergMovies)) @cascade {
     name@en
-    director.film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+    director.film (orderasc: name@en, first: 2) {
       name@en
       starring (orderasc: val(Stars), first: 2) {
         performance.actor {
@@ -88,4 +88,5 @@ Make use of variables to bring nested values up to the level of the edge to be s
     }
   }
 }
+
 {{< /runnable >}}
