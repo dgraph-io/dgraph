@@ -1,11 +1,16 @@
 package common
 
 import (
+	"fmt"
 	"math/big"
 )
 
 // Hash used to store a blake2b hash
 type Hash [32]byte
+
+func (h *Hash) String() string {
+	return fmt.Sprintf("0x%x", h[:])
+}
 
 // BlockHeader is the header of a Polkadot block
 type BlockHeader struct {

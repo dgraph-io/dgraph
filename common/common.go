@@ -27,6 +27,10 @@ func HexToBytes(in string) ([]byte, error) {
 	if strings.Compare(in[:2], "0x") != 0 {
 		return nil, errors.New("could not byteify non 0x prefixed string")
 	}
+	// Ensure we have an even length, otherwise hex.DecodeString will fail and return zero hash
+	if len(in)%2 != 0 {
+		return nil, errors.New("cannot decode a odd length string")
+	}
 	in = in[2:]
 	out, err := hex.DecodeString(in)
 	return out, err
@@ -39,6 +43,9 @@ func HexToHash(in string) (Hash, error) {
 	}
 	in = in[2:]
 	out, err := hex.DecodeString(in)
+	if err != nil {
+		return [32]byte{}, err
+	}
 	var buf = [32]byte{}
 	copy(buf[:], out)
 	return buf, err
