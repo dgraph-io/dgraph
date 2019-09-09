@@ -56,6 +56,7 @@ func recoveryHandler(next http.Handler) http.Handler {
 type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
 	schema       *ast.Schema
+	exporter     *resolve.Exporter
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved
@@ -70,6 +71,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rh := gh.resolverForRequest(r)
+	rh.Exporter = gh.exporter
 	res := rh.Resolve(r.Context())
 	if _, err := res.WriteTo(w); err != nil {
 		glog.Error(err)

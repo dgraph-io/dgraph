@@ -38,6 +38,11 @@ type queryResolver struct {
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
+	ctx, qspan := trace.StartSpan(ctx, qr.query.Alias())
+	defer func() {
+		qspan.End()
+	}()
+
 	res := &resolved{}
 
 	if qr.query.QueryType() == schema.SchemaQuery {

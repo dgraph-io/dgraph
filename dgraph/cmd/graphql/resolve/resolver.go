@@ -22,11 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/golang/glog"
 
@@ -92,6 +93,8 @@ type RequestResolver struct {
 	queryRewriter    dgraph.QueryRewriter
 	mutationRewriter dgraph.MutationRewriter
 	resp             *schema.Response
+
+	Exporter *Exporter
 }
 
 // A resolved is the result of resolving a single query or mutation.
@@ -142,13 +145,33 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
-	op, err := r.Schema.Operation(r.GqlReq)
+	trace := &schema.Trace{
+		Version:   1,
+		StartTime: time.Now(),
+	}
+	r.resp.Extensions = &schema.Extensions{
+		RequestID: api.RequestID(ctx),
+		Tracing:   trace,
+	}
+
+	ctx, span := otrace.StartSpan(ctx, methodResolve)
+	defer func(span *otrace.Span) {
+		span.End()
+		sid := span.SpanContext().SpanID
+		sd := r.Exporter.Span(sid)
+		if sd == nil {
+			glog.Errorf("Expected to find span for id: %s but got nil", sid)
+		}
+		trace.EndTime = sd.EndTime
+		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+	}(span)
+
+	timers := schema.NewOffsetTimerFactory(trace.StartTime)
+	op, err := r.Schema.Operation(r.GqlReq, timers.NewOffsetTimer(&trace.Parsing),
+		timers.NewOffsetTimer(&trace.Validation))
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
-
-	ctx, span := trace.StartSpan(ctx, methodResolve)
-	defer span.End()
 
 	if glog.V(3) {
 		glog.Infof("[%s] Resolving GQL request: \n%s\n",
@@ -174,7 +197,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
 
-				ctx, qspan := trace.StartSpan(ctx, q.Alias())
 				allResolved[storeAt] = (&queryResolver{
 					query:         q,
 					schema:        r.Schema,
@@ -182,7 +204,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					queryRewriter: r.queryRewriter,
 					operation:     op,
 				}).resolve(ctx)
-				qspan.End()
 			}(q, i)
 		}
 		wg.Wait()
@@ -214,7 +235,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
 			}
-			ctx, qspan := trace.StartSpan(ctx, m.Alias())
+			ctx, qspan := otrace.StartSpan(ctx, m.Alias())
 			qspan.Annotate(nil, "mutation type: "+string(m.MutationType()))
 			res := mr.resolve(ctx)
 			qspan.End()
