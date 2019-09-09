@@ -42,6 +42,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -527,7 +528,8 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 
-	dialOpts := append([]grpc.DialOption{},
+	dialOpts := append([]grpc.DialOption{
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{})},
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
 
