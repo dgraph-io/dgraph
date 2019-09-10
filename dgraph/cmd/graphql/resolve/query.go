@@ -88,6 +88,8 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	span.End()
 
 	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	tnow := time.Now()
+	dgraphDuration.StartOffset = tnow.Sub(qr.resolveStart).Nanoseconds()
 	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 
 	sctx, span := otrace.StartSpan(ctx, "dgraph.Query")
@@ -98,6 +100,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		span.End()
 		return res
 	}
+	dgraphDuration.Duration = time.Now().Sub(tnow).Nanoseconds()
 	span.End()
 
 	sctx, span = otrace.StartSpan(ctx, "completDgraphResult")
