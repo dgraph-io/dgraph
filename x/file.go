@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/v2/x"
 	"github.com/golang/glog"
 )
 
