@@ -144,10 +144,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
-	tnow := time.Now().UTC()
+	start := time.Now().UTC()
 	trace := &schema.Trace{
 		Version:   1,
-		StartTime: tnow,
+		StartTime: start,
 	}
 	r.resp.Extensions = &schema.Extensions{
 		RequestID: api.RequestID(ctx),
@@ -199,7 +199,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					dgraph:        r.dgraph,
 					queryRewriter: r.queryRewriter,
 					operation:     op,
-					resolveStart:  tnow,
+					resolveStart:  start,
 				}).resolve(ctx)
 			}(q, i)
 		}

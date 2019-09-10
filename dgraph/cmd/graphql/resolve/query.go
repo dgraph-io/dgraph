@@ -56,7 +56,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	defer func() {
 		qspan.End()
 		trace.StartOffset = start.Sub(qr.resolveStart).Nanoseconds()
-		trace.Duration = time.Now().UTC().Sub(start).Nanoseconds()
+		trace.Duration = time.Since(start).Nanoseconds()
 	}()
 
 	if qr.query.QueryType() == schema.SchemaQuery {
@@ -94,7 +94,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		span.End()
 		return res
 	}
-	dgraphDuration.Duration = time.Now().UTC().Sub(executionStart).Nanoseconds()
+	dgraphDuration.Duration = time.Since(executionStart).Nanoseconds()
 	span.End()
 
 	sctx, span = otrace.StartSpan(ctx, "completDgraphResult")
