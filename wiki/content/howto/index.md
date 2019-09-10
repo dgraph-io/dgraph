@@ -726,7 +726,7 @@ root@control:/jepsen/dgraph# lein run test -w upsert
 root@control:/jepsen/dgraph# lein run test --force-download --package-url https://github.com/dgraph-io/dgraph/releases/download/nightly/dgraph-linux-amd64.tar.gz -w upsert
 ```
 
-## Migrate from Dgraph v1.0 to Dgraph v1.1
+## Migrate to Dgraph v1.1
 
 ### Schema types: scalar `uid` and list `[uid]`
 
