@@ -106,3 +106,30 @@
         }
       }
     }
+
+-
+  name: "can do deep filter"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        post {
+          postID
+          title
+          author {
+            name
+            posts(filter: { title: { anyofterms: "GraphQL" } })
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        postID : uid
+        title : Post.title
+        author : Post.author {
+          name : Author.name
+          posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+        }
+      }
+    }
