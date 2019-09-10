@@ -326,6 +326,10 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	schema.Types[defn.Name+"Ref"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Ref",
@@ -334,6 +338,10 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	updType := &ast.Definition{
 		Kind: ast.InputObject,
 		Name: "Update" + defn.Name + "Input",
@@ -351,6 +359,10 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addPatchType(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   "Patch" + defn.Name,
@@ -488,6 +500,11 @@ func hasOrderables(defn *ast.Definition) bool {
 		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
 }
 
+func hasID(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return isID(fld) })
+}
+
 // fieldAny returns true if any field in fields satisfies pred
 func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	for _, fld := range fields {
@@ -584,6 +601,10 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
@@ -599,6 +620,10 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
@@ -614,6 +639,10 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	qry := &ast.FieldDefinition{
 		Description: "Get " + defn.Name + " by ID",
 		Name:        "get" + defn.Name,
@@ -676,6 +705,10 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	upd := &ast.FieldDefinition{
 		Description: "Update a " + defn.Name,
 		Name:        "update" + defn.Name,
@@ -696,6 +729,10 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
+	if !hasID(defn) {
+		return
+	}
+
 	del := &ast.FieldDefinition{
 		Description: "Delete a " + defn.Name,
 		Name:        "delete" + defn.Name,
@@ -727,6 +764,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 		if isIDField(defn, fld) {
 			continue
 		}
+
+		if schema.Types[fld.Type.Name()].Kind == ast.Object &&
+			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
+			continue
+		}
+
 		if schema.Types[fld.Type.Name()].Kind == ast.Object {
 			newDefn := &ast.FieldDefinition{
 				Name: fld.Name,

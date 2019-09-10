@@ -1,0 +1,204 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	content: String!
+	author: Author!
+	genre: Genre
+}
+
+type Author {
+	id: ID
+	name: String
+	posts(order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type Genre {
+	name: String!
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAuthorPayload {
+	author: Author
+}
+
+type AddGenrePayload {
+	genre: Genre
+}
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeleteAuthorPayload {
+	msg: String
+}
+
+type UpdateAuthorPayload {
+	author: Author
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum AuthorOrderable {
+	name
+}
+
+enum GenreOrderable {
+	name
+}
+
+enum PostOrderable {
+	content
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AuthorInput {
+	name: String
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
+}
+
+input AuthorRef {
+	id: ID
+}
+
+input GenreInput {
+	name: String!
+}
+
+input GenreOrder {
+	asc: GenreOrderable
+	desc: GenreOrderable
+	then: GenreOrder
+}
+
+input PatchAuthor {
+	name: String
+}
+
+input PostInput {
+	content: String!
+	author: AuthorRef!
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input UpdateAuthorInput {
+	id: ID
+	patch: PatchAuthor!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(id: ID!): DeleteAuthorPayload
+	addGenre(input: GenreInput!): AddGenrePayload
+}
