@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
+	otrace "go.opencensus.io/trace"
 )
 
 // Mutations come in like this with variables:
@@ -178,7 +179,7 @@ func (mr *mutationResolver) resolveQuery(ctx context.Context,
 
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
-		err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
 			mr.mutation.Name())
 		return res
 	}
@@ -192,6 +193,12 @@ func (mr *mutationResolver) resolveQuery(ctx context.Context,
 
 func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	ctx, span := otrace.StartSpan(ctx, "resolveMutation")
+	span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
+		string(mr.mutation.MutationType()))
+	defer func() {
+		span.End()
+	}()
 
 	mutationStart := time.Now().UTC()
 	trace := traceFromField(mr.mutation, "Mutation")
@@ -226,6 +233,13 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	ctx, span := otrace.StartSpan(ctx, "resolveDeleteMutation")
+	span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
+		string(mr.mutation.MutationType()))
+	defer func() {
+		span.End()
+	}()
+
 	trace := traceFromField(mr.mutation, "Mutation")
 	res.trace = []*schema.ResolverTrace{trace}
 	trace.Path = []interface{}{mr.mutation.ResponseName()}

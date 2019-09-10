@@ -235,10 +235,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				queryRewriter:    r.queryRewriter,
 				resolveStart:     start,
 			}
-			ctx, qspan := otrace.StartSpan(ctx, m.Alias())
-			qspan.Annotate(nil, "mutation type: "+string(m.MutationType()))
 			res := mr.resolve(ctx)
-			qspan.End()
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
 			r.resp.Extensions.Tracing.Execution =

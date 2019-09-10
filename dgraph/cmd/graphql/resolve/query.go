@@ -86,8 +86,8 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	dgraphDuration.StartOffset = executionStart.Sub(qr.resolveStart).Nanoseconds()
 	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 
-	sctx, span := otrace.StartSpan(ctx, "dgraph.Query")
-	resp, err := qr.dgraph.Query(sctx, dgQuery)
+	spanCtx, span := otrace.StartSpan(ctx, "dgraph.Query")
+	resp, err := qr.dgraph.Query(spanCtx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
@@ -97,8 +97,8 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	dgraphDuration.Duration = time.Since(executionStart).Nanoseconds()
 	span.End()
 
-	sctx, span = otrace.StartSpan(ctx, "completDgraphResult")
-	completed, err := completeDgraphResult(sctx, qr.query, resp)
+	spanCtx, span = otrace.StartSpan(ctx, "completeDgraphResult")
+	completed, err := completeDgraphResult(spanCtx, qr.query, resp)
 	span.End()
 	res.err = err
 
