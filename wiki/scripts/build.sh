@@ -16,12 +16,13 @@ HOST=https://docs.dgraph.io
 # those which have docs.
 
 # Place the latest version at the beginning so that version selector can
-# append '(latest)' to the version string, and build script can place the
-# artifact in an appropriate location
+# append '(latest)' to the version string, followed by the master version,
+# and then the older versions in descending order, such that the
+# build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
 'v1.1.0'
-'v1.0.17'
 'master'
+'v1.0.17'
 'v1.0.16'
 'v1.0.15'
 'v1.0.14'
