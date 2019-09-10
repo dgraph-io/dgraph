@@ -1,13 +1,13 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
-{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
-{{ $majorVersion := int (index $version 0) }}
-{{ $minorVersion := int (index $version 1) }}
-{{ $patchVersion := int (index $version 2) }}
+{{ $version := replaceRE "[a-zA-Z/]+" "" $currentBranch }}
+{{ $versionMap := split (replace (printf "%-10s" $version) " " "0") "." }}
+{{ $majorVersion := int (index $versionMap 0) }}
+{{ $minorVersion := int (index $versionMap 1) }}
 
-{{ $versionGe11 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 1)) }}
+{{ $useOldHttpApi := or (lt $majorVersion 1) (and (eq $majorVersion 1) (le $minorVersion 0)) }}
 
-{{ if $versionGe11 }}
+{{ if not $useOldHttpApi }}
     {{ if eq ( .Vars ) nil }}
         <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d '<br/><span class="query-content">{{ .Code }}</span>' | python -m json.tool | less
         </code></pre>
