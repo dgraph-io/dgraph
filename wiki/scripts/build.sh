@@ -20,35 +20,20 @@ HOST=https://docs.dgraph.io
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
-'v1.1.0'
-'master'
-'v1.0.17'
-'v1.0.16'
-'v1.0.15'
-'v1.0.14'
-'v1.0.13'
-'v1.0.12'
-'v1.0.11'
-'v1.0.10'
-'v1.0.9'
-'v1.0.8'
-'v1.0.7'
-'v1.0.6'
-'v1.0.5'
-'v1.0.4'
-'v1.0.3'
-'v1.0.2'
-'v1.0.1'
-'v1.0.0'
-'v0.9.4'
-'v0.9.3'
-'v0.9.2'
-'v0.9.1'
-'v0.9.0'
-'v0.8.3'
-'v0.8.2'
-'v0.8.1'
-'v0.8.0'
+	'v1.1.0'
+	'master'
+	'v1.0.17'
+	'v1.0.16'
+	'v1.0.15'
+	'v1.0.14'
+	'v1.0.13'
+	'v1.0.12'
+	'v1.0.11'
+	'v1.0.10'
+	'v1.0.9'
+	'v1.0.8'
+	'v1.0.7'
+	'v1.0.6'
 )
 
 joinVersions() {
@@ -75,18 +60,10 @@ rebuild() {
 	export VERSIONS=${VERSION_STRING}
 	export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
 
-	cmd=hugo_0.19
-	# Hugo broke backward compatibility, so files for version > 1.0.5 can use newer hugo (v0.38 onwards) but files in
-	# older versions have to use hugo v0.19
-	# If branch is master or version is >= 1.0.5 then use newer hugo
-	if [ "$CURRENT_VERSION" = "master" ] || [ "$(version "${CURRENT_VERSION:1}")" -ge "$(version "1.0.5")" ]; then
-		cmd=hugo
-	fi
-
 	HUGO_TITLE="Dgraph Doc ${2}"\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
-		CURRENT_VERSION=${2} $cmd\
+		CURRENT_VERSION=${2} hugo \
 		--destination=public/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
