@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -88,15 +90,27 @@ func SetConfiguration(newConfig Options) {
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
 const MinAllottedMemory = 1024.0
 
+// availableMemory is the total size of the memory we were able to identify.
+var availableMemory int64
+
 func (opt *Options) validate() {
 	pd, err := filepath.Abs(opt.PostingDir)
 	x.Check(err)
 	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
-	x.AssertTruefNoTrace(opt.AllottedMemory != -1,
-		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
+	if opt.AllottedMemory < 0 {
+		if allottedMemory := 0.25 * float64(availableMemory); allottedMemory > MinAllottedMemory {
+			opt.AllottedMemory = allottedMemory
+			glog.Infof(
+				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
+					"For more information on --lru_mb please read "+
+					"https://docs.dgraph.io/deploy/#config\n",
+				opt.AllottedMemory, availableMemory)
+		}
+	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
-		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
+		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
+			"For more information on --lru_mb please read https://docs.dgraph.io/deploy/#config",
 		MinAllottedMemory, opt.AllottedMemory)
 }

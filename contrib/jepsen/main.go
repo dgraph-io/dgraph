@@ -15,21 +15,22 @@
  */
 
 // Runs Dgraph Jepsen tests with a local Dgraph binary.
-// Set JEPSEN_ROOT environment variable before running.
+// Set the --jepsen-root flag to the path of the Jepsen repo directory.
 //
 // Example usage:
 //
 // Runs all test and nemesis combinations (36 total)
-//     ./jepsen --test-all
+//     ./jepsen --jepsen-root $JEPSEN_ROOT --test-all
 //
 // Runs bank test with partition-ring nemesis for 10 minutes
-//     ./jepsen --jepsen.workload bank --jepsen.nemesis partition-ring
+//     ./jepsen --jepsen-root $JEPSEN_ROOT --workload bank --nemesis partition-ring
 
 package main
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -75,6 +76,16 @@ var (
 	}
 	availableNemeses = []string{
 		"none",
+		"kill-alpha",
+		"kill-zero",
+		"partition-ring",
+		"move-tablet",
+	}
+
+	testAllWorkloads = availableWorkloads
+	testAllNemeses   = []string{
+		"none",
+		// the kill nemeses run together
 		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
@@ -86,13 +97,17 @@ var (
 
 	// Jepsen test flags
 	workload = pflag.StringP("workload", "w", "",
-		"Test workload to run.")
+		"Test workload to run. Specify a space-separated list of workloads. Available workloads: "+
+			fmt.Sprintf("%q", availableWorkloads))
 	nemesis = pflag.StringP("nemesis", "n", "",
-		"A space-separated, comma-separated list of nemesis types.")
+		"A space-separated, comma-separated list of nemesis types. "+
+			"Combinations of nemeses can be specified by combining them with commas, "+
+			"e.g., kill-alpha,kill-zero. Available nemeses: "+
+			fmt.Sprintf("%q", availableNemeses))
 	timeLimit = pflag.IntP("time-limit", "l", 600,
 		"Time limit per Jepsen test in seconds.")
 	concurrency = pflag.String("concurrency", "6n",
-		"Number of concurrent workers. \"6n\" means 6 workers per node.")
+		"Number of concurrent workers per test. \"6n\" means 6 workers per node.")
 	rebalanceInterval = pflag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
 	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
@@ -114,9 +129,13 @@ var (
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
+	jepsenRoot = pflag.StringP("jepsen-root", "r", "",
+		"Directory path to jepsen repo. This sets the JEPSEN_ROOT env var for Jepsen ./up.sh.")
 	ciOutput = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
-	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
+	testAll = pflag.Bool("test-all", false,
+		"Run the following workload and nemesis combinations: "+
+			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -143,9 +162,11 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 func jepsenUp() {
 	cmd := command("./up.sh",
 		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
-	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
+	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	env := os.Environ()
+	cmd.Env = append(env, fmt.Sprintf("JEPSEN_ROOT=%s", *jepsenRoot))
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -156,7 +177,7 @@ func jepsenDown() {
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
 		"down")
-	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
+	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -275,10 +296,21 @@ func tcStart(testName string) func(pass int) {
 }
 
 func main() {
+	pflag.ErrHelp = errors.New("")
+	pflag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		pflag.PrintDefaults()
+
+		fmt.Printf("\nExample usage:\n")
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT -w bank -n none\n", os.Args[0])
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT -w 'bank delete' "+
+			"-n 'none kill-alpha,kill-zero move-tablet'\n", os.Args[0])
+		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
+	}
 	pflag.Parse()
 
-	if os.Getenv("JEPSEN_ROOT") == "" {
-		log.Fatal("JEPSEN_ROOT must be set.")
+	if *jepsenRoot == "" {
+		log.Fatal("--jepsen-root must be set.")
 	}
 	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH must be set.")
@@ -294,25 +326,13 @@ func main() {
 	}
 
 	if *testAll {
-		*workload = strings.Join(availableWorkloads, " ")
-		*nemesis = strings.Join(availableNemeses, " ")
+		*workload = strings.Join(testAllWorkloads, " ")
+		*nemesis = strings.Join(testAllNemeses, " ")
 	}
 
 	if *workload == "" || *nemesis == "" {
-		fmt.Printf("You must specify a workload and a nemesis.\n")
-
-		fmt.Printf("Available workloads:\n")
-		for _, w := range availableWorkloads {
-			fmt.Printf("\t%v\n", w)
-		}
-		fmt.Printf("Available nemeses:\n")
-		for _, n := range availableNemeses {
-			fmt.Printf("\t%v\n", n)
-		}
-		fmt.Printf("Example commands:\n")
-		fmt.Printf("$ %v -w bank -n none\n", os.Args[0])
-		fmt.Printf("$ %v -w 'bank delete' -n 'none kill-alpha,kill-zero move-tablet'\n", os.Args[0])
-		fmt.Printf("$ %v --test-all\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "You must specify at least one workload and at least one nemesis.\n")
+		fmt.Fprintf(os.Stderr, "See --help for example usage.\n")
 		os.Exit(1)
 	}
 

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
@@ -40,6 +41,16 @@ import (
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+
+	if err := x.HealthCheck(); err != nil {
+		return nil, err
+	}
+
+	if !worker.EnterpriseEnabled() {
+		return nil, errors.New("Enterprise features are disabled. You can enable them by " +
+			"supplying the appropriate license file to Dgraph Zero uing the HTTP endpoint.")
+	}
+
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
 	defer span.End()
 
@@ -259,8 +270,9 @@ const queryUser = `
 
 // authorizeUser queries the user with the given user id, and returns the associated uid,
 // acl groups, and whether the password stored in DB matches the supplied password
-func authorizeUser(ctx context.Context, userid string, password string) (*acl.User,
-	error) {
+func authorizeUser(ctx context.Context, userid string, password string) (
+	*acl.User, error) {
+
 	queryVars := map[string]string{
 		"$userid":   userid,
 		"$password": password,
@@ -270,7 +282,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 		Vars:  queryVars,
 	}
 
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -304,7 +316,7 @@ func RefreshAcls(closer *y.Closer) {
 
 		ctx := context.Background()
 		var err error
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -356,7 +368,7 @@ func ResetAcl() {
 			Vars:  queryVars,
 		}
 
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
 		}
@@ -373,13 +385,18 @@ func ResetAcl() {
 
 		// Insert Groot.
 		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
-		mu := &api.Mutation{
+		req := &api.Request{
 			StartTs:   startTs,
 			CommitNow: true,
-			Set:       createUserNQuads,
+			Mutations: []*api.Mutation{
+				{
+					Set: createUserNQuads,
+				},
+			},
 		}
 
-		if _, err := (&Server{}).doMutate(context.Background(), mu, false); err != nil {
+		_, err = (&Server{}).doMutate(context.Background(), req, NoAuthorize)
+		if err != nil {
 			return err
 		}
 		glog.Infof("Successfully upserted the groot account")
@@ -652,23 +669,15 @@ func logAccess(log *accessEntry) {
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr
-func authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	parsedReq, err := gql.Parse(gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-	})
-	if err != nil {
-		return err
-	}
-	preds := parsePredsFromQuery(parsedReq.Query)
-
 	var userId string
 	var groupIds []string
+	preds := parsePredsFromQuery(parsedReq.Query)
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		if err == nil {
@@ -704,7 +713,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		return nil
 	}
 
-	err = doAuthorizeQuery()
+	err := doAuthorizeQuery()
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,

@@ -16,11 +16,14 @@ HOST=https://docs.dgraph.io
 # those which have docs.
 
 # Place the latest version at the beginning so that version selector can
-# append '(latest)' to the version string, and build script can place the
-# artifact in an appropriate location
+# append '(latest)' to the version string, followed by the master version,
+# and then the older versions in descending order, such that the
+# build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
-'v1.0.16'
+'v1.1.0'
 'master'
+'v1.0.17'
+'v1.0.16'
 'v1.0.15'
 'v1.0.14'
 'v1.0.13'
@@ -50,7 +53,7 @@ VERSIONS_ARRAY=(
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
-	echo ${versions:1}
+	echo "${versions:1}"
 }
 
 function version { echo "$@" | gawk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'; }
@@ -129,8 +132,8 @@ checkAndUpdate()
 		rebuild "$branch" "$version"
 	fi
 
-	folder=$(publicFolder $version)
-	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
+	folder=$(publicFolder "$version")
+	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d "$folder" ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
@@ -139,7 +142,7 @@ checkAndUpdate()
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
-	pushd $(dirname "$0")/.. > /dev/null
+	pushd "$(dirname "$0")/.." > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 

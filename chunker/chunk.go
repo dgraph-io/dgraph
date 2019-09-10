@@ -36,9 +36,7 @@ import (
 
 // Chunker describes the interface to parse and process the input to the live and bulk loaders.
 type Chunker interface {
-	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
-	End(r *bufio.Reader) error
 	Parse(chunkBuf *bytes.Buffer) error
 	NQuads() *NQuadBuffer
 }
@@ -53,7 +51,8 @@ func (rc *rdfChunker) NQuads() *NQuadBuffer {
 }
 
 type jsonChunker struct {
-	nqs *NQuadBuffer
+	nqs    *NQuadBuffer
+	inList bool
 }
 
 func (jc *jsonChunker) NQuads() *NQuadBuffer {
@@ -87,11 +86,6 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 	default:
 		panic("unknown input format")
 	}
-}
-
-// RDF files don't require any special processing at the beginning of the file.
-func (*rdfChunker) Begin(r *bufio.Reader) error {
-	return nil
 }
 
 // Chunk reads the input line by line until one of the following 3 conditions happens
@@ -153,62 +147,101 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 	return nil
 }
 
-// RDF files don't require any special processing at the end of the file.
-func (*rdfChunker) End(r *bufio.Reader) error {
-	return nil
-}
-
-func (*jsonChunker) Begin(r *bufio.Reader) error {
-	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
-	// This function must be called before calling readJSONChunk for the first time to advance
-	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
-	// one array element at a time instead of having to read the entire array into memory.
-	if err := slurpSpace(r); err != nil {
-		return err
-	}
-	ch, _, err := r.ReadRune()
+// Chunk tries to consume multiple top-level maps from the reader until a size threshold is
+// reached, or the end of file is reached.
+func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+	ch, err := jc.nextRune(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if ch != '[' {
-		return errors.Errorf("JSON file must contain array. Found: %v", ch)
+	// If the file starts with a list rune [, we set the inList flag, and keep consuming maps
+	// until we reach the threshold.
+	if ch == '[' {
+		jc.inList = true
+	} else if ch == '{' {
+		// put the rune back for it to be consumed in the consumeMap function
+		if err := r.UnreadRune(); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, errors.Errorf("file is not JSON")
 	}
-	return nil
-}
 
-func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
-	// We used to grow the buffer here just like in the RDF chunker, but
-	// this caused a lot of allocations and GC cycles and impacted live loader throughput.
+	out.WriteRune('[')
+	hasMapsBefore := false
+	for out.Len() < 1e5 {
+		if hasMapsBefore {
+			out.WriteRune(',')
+		}
+		if err := jc.consumeMap(r, out); err != nil {
+			return nil, err
+		}
+		hasMapsBefore = true
 
-	// For RDF, the loader just reads the input and the mapper parses it into nquads,
-	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
-	// more complicated to ensure a complete JSON structure is read.
-	if err := slurpSpace(r); err != nil {
-		return out, err
-	}
-	ch, _, err := r.ReadRune()
-	if err != nil {
-		return out, err
-	}
-	if ch == ']' {
-		// Handle loading an empty JSON array ("[]") without error.
-		return nil, io.EOF
-	} else if ch != '{' {
-		return nil, errors.Errorf("Expected JSON map start. Found: %v", string(ch))
-	}
-	x.Check2(out.WriteRune(ch))
+		// handle the legal termination cases, by checking the next rune after the map
+		ch, err := jc.nextRune(r)
+		if err == io.EOF {
+			// handles the EOF case, return the buffer which represents the top level map
+			if jc.inList {
+				return nil, errors.Errorf("JSON file ends abruptly, expecting ]")
+			}
 
+			out.WriteRune(']')
+			return out, io.EOF
+		} else if err != nil {
+			return nil, err
+		}
+
+		if ch == ']' {
+			if !jc.inList {
+				return nil, errors.Errorf("JSON map is followed by an extraneous ]")
+			}
+
+			// validate that there are no more non-space chars after the ]
+			if slurpSpace(r) != io.EOF {
+				return nil, errors.New("Not all of JSON file consumed")
+			}
+
+			out.WriteRune(']')
+			return out, io.EOF
+		}
+
+		// In the non termination cases, ensure at least one map has been consumed, and
+		// the only allowed char after the map is ",".
+		if out.Len() == 1 { // 1 represents the [ inserted before the for loop
+			return nil, errors.Errorf("Illegal rune found \"%c\", expecting {", ch)
+		}
+		if ch != ',' {
+			return nil, errors.Errorf("JSON map is followed by illegal rune \"%c\"", ch)
+		}
+	}
+	out.WriteRune(']')
+	return out, nil
+}
+
+// consumeMap consumes the next map from the reader, and stores the result into the buffer out.
+// After ignoring spaces, if the reader does not begin with {, no rune will be consumed
+// from the reader.
+func (jc *jsonChunker) consumeMap(r *bufio.Reader, out *bytes.Buffer) error {
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
-	depth := 1 // We already consumed one `{`, so our depth starts at one.
-	for depth > 0 {
-		ch, _, err = r.ReadRune()
+	depth := 0
+	for {
+		ch, err := jc.nextRune(r)
 		if err != nil {
-			return nil, errors.New("Malformed JSON")
+			return errors.New("Malformed JSON")
 		}
-		x.Check2(out.WriteRune(ch))
+		if depth == 0 && ch != '{' {
+			// We encountered a beginning rune that's not {,
+			// unread the char and return without consuming anything.
+			if err := r.UnreadRune(); err != nil {
+				return err
+			}
+			return nil
+		}
 
+		x.Check2(out.WriteRune(ch))
 		switch ch {
 		case '{':
 			depth++
@@ -216,32 +249,28 @@ func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 			depth--
 		case '"':
 			if err := slurpQuoted(r, out); err != nil {
-				return nil, err
+				return err
 			}
 		default:
 			// We just write the rune to out, and let the Go JSON parser do its job.
 		}
+		if depth <= 0 {
+			break
+		}
 	}
+	return nil
+}
 
-	// The map should be followed by either the ',' between array elements, or the ']'
-	// at the end of the array.
+// nextRune ignores any number of spaces that may precede a rune
+func (*jsonChunker) nextRune(r *bufio.Reader) (rune, error) {
 	if err := slurpSpace(r); err != nil {
-		return nil, err
+		return ' ', err
 	}
-	ch, _, err = r.ReadRune()
+	ch, _, err := r.ReadRune()
 	if err != nil {
-		return nil, err
+		return ' ', err
 	}
-	switch ch {
-	case ']':
-		return out, io.EOF
-	case ',':
-		// pass
-	default:
-		// Let next call to this function report the error.
-		x.Check(r.UnreadRune())
-	}
-	return out, nil
+	return ch, nil
 }
 
 func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
@@ -250,17 +279,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 	}
 
 	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	if err != nil {
-		x.Check(err)
-	}
 	return err
-}
-
-func (*jsonChunker) End(r *bufio.Reader) error {
-	if slurpSpace(r) == io.EOF {
-		return nil
-	}
-	return errors.New("Not all of JSON file consumed")
 }
 
 func slurpSpace(r *bufio.Reader) error {

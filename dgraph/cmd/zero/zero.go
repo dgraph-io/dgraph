@@ -17,7 +17,9 @@
 package zero
 
 import (
+	"io"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +40,12 @@ var (
 	emptyConnectionState pb.ConnectionState
 	errServerShutDown    = errors.New("Server is being shut down")
 )
+
+type license struct {
+	User     string    `json:"user"`
+	MaxNodes uint64    `json:"max_nodes"`
+	Expiry   time.Time `json:"expiry"`
+}
 
 // Server implements the zero server.
 type Server struct {
@@ -81,6 +89,7 @@ func (s *Server) Init() {
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+
 	go s.rebalanceTablets()
 }
 
@@ -397,7 +406,7 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	return s.Node.proposeAndWait(ctx, zp)
 }
 
-// Connect is used to connect the very first time with group zero.
+// Connect is used by Alpha nodes to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *pb.Member) (resp *pb.ConnectionState, err error) {
 	// Ensures that connect requests are always serialized
@@ -435,6 +444,7 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 
+	numberOfNodes := len(ms.Zeros)
 	for _, group := range ms.Groups {
 		for _, member := range group.Members {
 			switch {
@@ -460,6 +470,7 @@ func (s *Server) Connect(ctx context.Context,
 						" with same ID: %+v", member)
 				}
 			}
+			numberOfNodes++
 		}
 	}
 
@@ -521,10 +532,20 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	proposal := createProposal()
-	if proposal != nil {
-		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
-			return &emptyConnectionState, err
-		}
+	if proposal == nil {
+		return &pb.ConnectionState{
+			State: ms, Member: m,
+		}, nil
+	}
+
+	maxNodes := s.state.GetLicense().GetMaxNodes()
+	if s.state.GetLicense().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
+		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
+			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
+	}
+
+	if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
+		return &emptyConnectionState, err
 	}
 	resp = &pb.ConnectionState{
 		State:  s.membershipState(),
@@ -722,4 +743,35 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 		return &pb.MembershipState{}, nil
 	}
 	return ms, nil
+}
+
+func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
+	var l license
+	if err := verifySignature(signedData, strings.NewReader(publicKey), &l); err != nil {
+		return errors.Wrapf(err, "while extracting enterprise details from the license")
+	}
+
+	numNodes := len(s.state.GetZeros())
+	for _, group := range s.state.GetGroups() {
+		numNodes += len(group.GetMembers())
+	}
+	if uint64(numNodes) > l.MaxNodes {
+		return errors.Errorf("Your license only allows [%v] (Alpha + Zero) nodes. You have: [%v].",
+			l.MaxNodes, numNodes)
+	}
+
+	proposal := &pb.ZeroProposal{
+		License: &pb.License{
+			User:     l.User,
+			MaxNodes: l.MaxNodes,
+			ExpiryTs: l.Expiry.Unix(),
+		},
+	}
+
+	err := s.Node.proposeAndWait(ctx, proposal)
+	if err != nil {
+		return errors.Wrapf(err, "while proposing enterprise license state to cluster")
+	}
+	glog.Infof("Enterprise license state proposed to the cluster")
+	return nil
 }

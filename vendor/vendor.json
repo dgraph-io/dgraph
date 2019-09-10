@@ -465,76 +465,76 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "4JtWm1bK1Xyw1Iz1Ir3Dq38Ce9o=",
+			"checksumSHA1": "O8YSP9f+dH/BlJMH5yK5hff0VG8=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
 			"checksumSHA1": "On87ObyZ4RLZWWmDtW2M5gY997I=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
 			"checksumSHA1": "SHnr7a5ZSRsyrAT8Nw1AxDs1UXw=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
 			"checksumSHA1": "zWLyKFwJcRNWzpvE+QDrsqi9UlE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
-			"checksumSHA1": "/hYHtgAA2VVZ+4sdbplyOLGRiEM=",
+			"checksumSHA1": "X0uJEOHMIiJ/jUiGqhl62o+f0z0=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
 			"checksumSHA1": "JxUxrgSrNNTqbX3tqzh3dQIG+uU=",
 			"path": "github.com/dgraph-io/badger/trie",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
 			"checksumSHA1": "pfK0K0RIzPJ4NZ+B27kgq6as/ew=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
-			"revisionTime": "2019-08-09T12:18:31Z"
+			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
+			"revisionTime": "2019-09-03T19:46:48Z"
 		},
 		{
-			"checksumSHA1": "kKrPMMzl8wnZ8Ml1WGHcNO2X0cI=",
+			"checksumSHA1": "gM1B8ixG+lBNstwPe0UDzOA2gcA=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
-			"revisionTime": "2019-08-09T19:03:27Z"
+			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
+			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"checksumSHA1": "bxFCBtuL7q+0CwOV93Ujp/IiMtk=",
+			"checksumSHA1": "uqaDtfgqoIrGWhQXY6ROB2IeumU=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
-			"revisionTime": "2019-08-09T19:03:27Z"
+			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
+			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
 			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
 			"path": "github.com/dgraph-io/dgo/x",
-			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
-			"revisionTime": "2019-08-09T19:03:27Z"
+			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
+			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
+			"checksumSHA1": "fbUFVBBiWFs0vdtTSmNkf5xpdDk=",
 			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
-			"revisionTime": "2019-08-09T19:03:27Z"
+			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
+			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"checksumSHA1": "vXF9AIdgl4GPyn8/zU6L22dVNHo=",
+			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",
 			"path": "github.com/dgraph-io/ristretto/z",
-			"revision": "1146b50c9e72b13c85a96ed4429384321d3f7382",
-			"revisionTime": "2019-08-02T09:02:28Z"
+			"revision": "eb48d2f7ca30f7560340ff99eccf24c756d42c2b",
+			"revisionTime": "2019-09-03T06:43:22Z"
 		},
 		{
 			"checksumSHA1": "blOHP3HPYU+IeV6yWCalQuuM+zE=",
@@ -1295,10 +1295,52 @@
 			"revisionTime": "2017-02-07T22:51:51Z"
 		},
 		{
+			"checksumSHA1": "zJybXQZcPAht+soLp/ozc9q5teE=",
+			"path": "golang.org/x/crypto/cast5",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
+		},
+		{
 			"checksumSHA1": "UDvj5huw3BaGehfVRCB1UGQAtP4=",
 			"path": "golang.org/x/crypto/md4",
 			"revision": "22d7a77e9e5f409e934ed268692e56707cd169e5",
 			"revisionTime": "2019-04-19T16:04:53Z"
+		},
+		{
+			"checksumSHA1": "dQG5zjp8kTNBcgGUkNsrXdacRjg=",
+			"path": "golang.org/x/crypto/openpgp",
+			"revision": "4def268fd1a49955bfb3dda92fe3db4f924f2285",
+			"revisionTime": "2019-07-01T08:59:26Z"
+		},
+		{
+			"checksumSHA1": "olOKkhrdkYQHZ0lf1orrFQPQrv4=",
+			"path": "golang.org/x/crypto/openpgp/armor",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
+		},
+		{
+			"checksumSHA1": "eo/KtdjieJQXH7Qy+faXFcF70ME=",
+			"path": "golang.org/x/crypto/openpgp/elgamal",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
+		},
+		{
+			"checksumSHA1": "rlxVSaGgqdAgwblsErxTxIfuGfg=",
+			"path": "golang.org/x/crypto/openpgp/errors",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
+		},
+		{
+			"checksumSHA1": "lGbjBcUoV7OfI7FZ5/DCXhCMoIM=",
+			"path": "golang.org/x/crypto/openpgp/packet",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
+		},
+		{
+			"checksumSHA1": "s2qT4UwvzBSkzXuiuMkowif1Olw=",
+			"path": "golang.org/x/crypto/openpgp/s2k",
+			"revision": "60c769a6c58655dab1b9adac0d58967dd517cfba",
+			"revisionTime": "2019-08-20T16:16:47Z"
 		},
 		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",

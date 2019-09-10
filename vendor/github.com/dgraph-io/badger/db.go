@@ -320,7 +320,7 @@ func Open(opt Options) (db *DB, err error) {
 	go db.doWrites(replayCloser)
 
 	if err = db.vlog.open(db, vptr, db.replayFunction()); err != nil {
-		return db, err
+		return db, y.Wrapf(err, "During db.vlog.open")
 	}
 	replayCloser.SignalAndWait() // Wait for replay to be applied first.
 
@@ -897,8 +897,8 @@ func (db *DB) handleFlushTask(ft flushTask) error {
 	go func() { dirSyncCh <- syncDir(db.opt.Dir) }()
 
 	bopts := table.Options{
-		BlockSize:         db.opt.BlockSize,
-		BloomFalsePostive: db.opt.BloomFalsePositive,
+		BlockSize:          db.opt.BlockSize,
+		BloomFalsePositive: db.opt.BloomFalsePositive,
 	}
 	err = writeLevel0Table(ft, fd, bopts)
 	dirSyncErr := <-dirSyncCh

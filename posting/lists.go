@@ -281,7 +281,9 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 			lc.deltas[key] = data
 		}
 		lc.maxVersions[key] = pl.maxVersion()
-		pl.release()
+		// We can't run pl.release() here because LocalCache is still being used by other callers
+		// for the same transaction, who might be holding references to posting lists.
+		// TODO: Find another way to reuse postings via postingPool.
 	}
 	lc.plists = make(map[string]*List)
 }

@@ -57,6 +57,12 @@ func TestParseNQuads(t *testing.T) {
 	}, nqs)
 }
 
+func TestValNquads(t *testing.T) {
+	nquads := `uid(m) <name> val(f) .`
+	_, err := chunker.ParseRDFs([]byte(nquads))
+	require.NoError(t, err)
+}
+
 func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
 	nqs, err := chunker.ParseRDFs([]byte(nquads))

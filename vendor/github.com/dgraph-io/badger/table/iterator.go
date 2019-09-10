@@ -26,48 +26,71 @@ import (
 )
 
 type blockIterator struct {
-	data              []byte
-	pos               uint32
-	err               error
-	baseKey           []byte
-	numEntries        int
-	entryOffsets      []uint32
-	entriesIndexStart int
-	currentIdx        int
+	data         []byte
+	idx          int // Idx of the entry inside a block
+	err          error
+	baseKey      []byte
+	key          []byte
+	val          []byte
+	entryOffsets []uint32
 
-	key  []byte
-	val  []byte
-	init bool
+	// prevOverlap stores the overlap of the previous key with the base key.
+	// This avoids unnecessary copy of base key when the overlap is same for multiple keys.
+	prevOverlap uint16
 }
 
-func (itr *blockIterator) Reset() {
-	itr.pos = 0
+func (itr *blockIterator) setBlock(b *block) {
 	itr.err = nil
+	itr.idx = 0
 	itr.baseKey = itr.baseKey[:0]
+	itr.prevOverlap = 0
 	itr.key = itr.key[:0]
 	itr.val = itr.val[:0]
-	itr.init = false
-	itr.currentIdx = -1
+	// Drop the index from the block. We don't need it anymore.
+	itr.data = b.data[:b.entriesIndexStart]
+	itr.entryOffsets = b.entryOffsets
 }
 
-// invalidatePointer detaches block iterator from current block.
-func (itr *blockIterator) invalidatePointer() {
-	itr.data = nil
-	itr.numEntries = -1
-	itr.entriesIndexStart = -1
-}
-
-// isInvalidPointer returns if block iterator is attachted with any block or not.
-func (itr *blockIterator) isInvalidPointer() bool {
-	return itr.data == nil && itr.numEntries == -1 && itr.entriesIndexStart == -1
-}
-
-func (itr *blockIterator) Init() {
-	if !itr.init {
-		itr.currentIdx = -1
-
-		itr.Next()
+// setIdx sets the iterator to the entry at index i and set it's key and value.
+func (itr *blockIterator) setIdx(i int) {
+	itr.idx = i
+	if i >= len(itr.entryOffsets) || i < 0 {
+		itr.err = io.EOF
+		return
 	}
+	itr.err = nil
+	startOffset := int(itr.entryOffsets[i])
+
+	// Set base key.
+	if len(itr.baseKey) == 0 {
+		var baseHeader header
+		baseHeader.Decode(itr.data)
+		itr.baseKey = itr.data[headerSize : headerSize+baseHeader.diff]
+	}
+	var endOffset int
+	// idx points to the last entry in the block.
+	if itr.idx+1 == len(itr.entryOffsets) {
+		endOffset = len(itr.data)
+	} else {
+		// idx point to some entry other than the last one in the block.
+		// EndOffset of the current entry is the start offset of the next entry.
+		endOffset = int(itr.entryOffsets[itr.idx+1])
+	}
+
+	entryData := itr.data[startOffset:endOffset]
+	var h header
+	h.Decode(entryData)
+	// Header contains the length of key overlap and difference compared to the base key. If the key
+	// before this one had the same or better key overlap, we can avoid copying that part into
+	// itr.key. But, if the overlap was lesser, we could copy over just that portion.
+	if h.overlap > itr.prevOverlap {
+		itr.key = append(itr.key[:itr.prevOverlap], itr.baseKey[itr.prevOverlap:h.overlap]...)
+	}
+	itr.prevOverlap = h.overlap
+	valueOff := headerSize + int(h.diff)
+	diffKey := entryData[headerSize:valueOff]
+	itr.key = append(itr.key[:h.overlap], diffKey...)
+	itr.val = entryData[valueOff:]
 }
 
 func (itr *blockIterator) Valid() bool {
@@ -85,169 +108,52 @@ var (
 	current = 1
 )
 
-func (itr *blockIterator) getKey(idx int) []byte {
-	y.AssertTrue(idx >= 0 && idx < itr.numEntries)
-
-	idxPos := itr.entryOffsets[idx]
-	var h header
-	idxPos += uint32(h.Decode(itr.data[idxPos:]))
-
-	// Convert to int before adding to avoid uint16 overflow.
-	idxKey := make([]byte, int(h.plen)+int(h.klen))
-	copy(idxKey, itr.baseKey[:h.plen])
-	copy(idxKey[h.plen:], itr.data[idxPos:idxPos+uint32(h.klen)])
-
-	return idxKey
-}
-
-// Seek brings us to the first block element that is >= input key.
-func (itr *blockIterator) Seek(key []byte, whence int) {
+// seek brings us to the first block element that is >= input key.
+func (itr *blockIterator) seek(key []byte, whence int) {
 	itr.err = nil
 	startIndex := 0 // This tells from which index we should start binary search.
 
 	switch whence {
 	case origin:
-		itr.Reset()
+		// We don't need to do anything. startIndex is already at 0
 	case current:
-		startIndex = itr.currentIdx
+		startIndex = itr.idx
 	}
 
-	itr.Init() // If iterator is not initialized or has been reset.
-
-	idx := sort.Search(itr.numEntries, func(idx int) bool {
+	foundEntryIdx := sort.Search(len(itr.entryOffsets), func(idx int) bool {
 		// If idx is less than start index then just return false.
 		if idx < startIndex {
 			return false
 		}
-
-		idxKey := itr.getKey(idx)
-		return y.CompareKeys(idxKey, key) >= 0
+		itr.setIdx(idx)
+		return y.CompareKeys(itr.key, key) >= 0
 	})
-
-	// All keys in the block are less than the key to be sought.
-	if idx >= itr.numEntries {
-		itr.err = io.EOF
-		// Update currentIdx to len of entryOffsets, so that if Prev() is
-		// called just after Seek, it will return correct result.
-		itr.currentIdx = itr.numEntries
-		return
-	}
-
-	// Found first idx for which key is >= key to be sought.
-	itr.currentIdx = idx
-	itr.pos = itr.entryOffsets[itr.currentIdx]
-	var h header
-	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
-	itr.parseKV(h)
+	itr.setIdx(foundEntryIdx)
 }
 
-func (itr *blockIterator) SeekToFirst() {
-	itr.err = nil
-	itr.Init()
+// seekToFirst brings us to the first element.
+func (itr *blockIterator) seekToFirst() {
+	itr.setIdx(0)
 }
 
-// SeekToLast brings us to the last element. Valid should return true.
-func (itr *blockIterator) SeekToLast() {
-	itr.err = nil
-
-	itr.Init()
-	itr.currentIdx = itr.numEntries
-	itr.Prev()
+// seekToLast brings us to the last element.
+func (itr *blockIterator) seekToLast() {
+	itr.setIdx(len(itr.entryOffsets) - 1)
 }
 
-// parseKV would allocate a new byte slice for key and for value.
-func (itr *blockIterator) parseKV(h header) {
-	if cap(itr.key) < int(h.plen+h.klen) {
-		sz := int(h.plen) + int(h.klen) // Convert to int before adding to avoid uint16 overflow.
-		itr.key = make([]byte, 2*sz)
-	}
-	itr.key = itr.key[:h.plen+h.klen]
-	copy(itr.key, itr.baseKey[:h.plen])
-	copy(itr.key[h.plen:], itr.data[itr.pos:itr.pos+uint32(h.klen)])
-	itr.pos += uint32(h.klen)
-
-	var valEndOffset uint32
-	// We're at the last entry in the block.
-	if itr.currentIdx == itr.numEntries-1 {
-		valEndOffset = uint32(itr.entriesIndexStart)
-	} else {
-		// Get starting offset of the next entry which is the end of the current entry.
-		valEndOffset = itr.entryOffsets[itr.currentIdx+1]
-	}
-
-	if valEndOffset > uint32(len(itr.data)) {
-		itr.err = errors.Errorf("Value endoffset exceeded size of block. "+
-			"Pos:%d Len:%d EndOffset:%d Header:%v", itr.pos, len(itr.data), valEndOffset, h)
-		return
-	}
-	// TODO (ibrahim): Can we avoid this copy?
-	itr.val = y.SafeCopy(itr.val, itr.data[itr.pos:valEndOffset])
-	// Set pos to the end of current entry.
-	itr.pos = valEndOffset
+func (itr *blockIterator) next() {
+	itr.setIdx(itr.idx + 1)
 }
 
-func (itr *blockIterator) Next() {
-	itr.init = true
-	itr.err = nil
-
-	itr.currentIdx++
-	if itr.currentIdx >= itr.numEntries {
-		itr.err = io.EOF
-		return
-	}
-
-	var h header
-	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
-
-	// Populate baseKey if it isn't set yet. This would only happen for the first Next.
-	if len(itr.baseKey) == 0 {
-		// This should be the first Next() for this block. Hence, prefix length should be zero.
-		y.AssertTrue(h.plen == 0)
-		itr.baseKey = itr.data[itr.pos : itr.pos+uint32(h.klen)]
-	}
-	itr.parseKV(h)
-}
-
-func (itr *blockIterator) Prev() {
-	if !itr.init {
-		return
-	}
-	itr.err = nil
-
-	itr.currentIdx--
-	y.AssertTrue(itr.currentIdx < itr.numEntries)
-	if itr.currentIdx < 0 {
-		itr.err = io.EOF
-		return
-	}
-
-	itr.pos = itr.entryOffsets[itr.currentIdx]
-
-	var h header
-	y.AssertTruef(itr.pos < uint32(len(itr.data)), "%d %d", itr.pos, len(itr.data))
-	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
-	itr.parseKV(h)
-}
-
-func (itr *blockIterator) Key() []byte {
-	if itr.err != nil {
-		return nil
-	}
-	return itr.key
-}
-
-func (itr *blockIterator) Value() []byte {
-	if itr.err != nil {
-		return nil
-	}
-	return itr.val
+func (itr *blockIterator) prev() {
+	itr.setIdx(itr.idx - 1)
 }
 
 // Iterator is an iterator for a Table.
 type Iterator struct {
 	t    *Table
 	bpos int
-	bi   *blockIterator
+	bi   blockIterator
 	err  error
 
 	// Internally, Iterator is bidirectional. However, we only expose the
@@ -258,9 +164,7 @@ type Iterator struct {
 // NewIterator returns a new iterator of the Table
 func (t *Table) NewIterator(reversed bool) *Iterator {
 	t.IncrRef() // Important.
-	bi := &blockIterator{}
-	bi.invalidatePointer()
-	ti := &Iterator{t: t, reversed: reversed, bi: bi}
+	ti := &Iterator{t: t, reversed: reversed}
 	ti.next()
 	return ti
 }
@@ -272,7 +176,6 @@ func (itr *Iterator) Close() error {
 
 func (itr *Iterator) reset() {
 	itr.bpos = 0
-	itr.bi.invalidatePointer()
 	itr.err = nil
 }
 
@@ -293,9 +196,8 @@ func (itr *Iterator) seekToFirst() {
 		itr.err = err
 		return
 	}
-
-	block.resetIterator(itr.bi)
-	itr.bi.SeekToFirst()
+	itr.bi.setBlock(block)
+	itr.bi.seekToFirst()
 	itr.err = itr.bi.Error()
 }
 
@@ -311,9 +213,8 @@ func (itr *Iterator) seekToLast() {
 		itr.err = err
 		return
 	}
-
-	block.resetIterator(itr.bi)
-	itr.bi.SeekToLast()
+	itr.bi.setBlock(block)
+	itr.bi.seekToLast()
 	itr.err = itr.bi.Error()
 }
 
@@ -324,9 +225,8 @@ func (itr *Iterator) seekHelper(blockIdx int, key []byte) {
 		itr.err = err
 		return
 	}
-
-	block.resetIterator(itr.bi)
-	itr.bi.Seek(key, origin)
+	itr.bi.setBlock(block)
+	itr.bi.seek(key, origin)
 	itr.err = itr.bi.Error()
 }
 
@@ -392,23 +292,22 @@ func (itr *Iterator) next() {
 		return
 	}
 
-	if itr.bi.isInvalidPointer() {
+	if len(itr.bi.data) == 0 {
 		block, err := itr.t.block(itr.bpos)
 		if err != nil {
 			itr.err = err
 			return
 		}
-
-		block.resetIterator(itr.bi)
-		itr.bi.SeekToFirst()
+		itr.bi.setBlock(block)
+		itr.bi.seekToFirst()
 		itr.err = itr.bi.Error()
 		return
 	}
 
-	itr.bi.Next()
+	itr.bi.next()
 	if !itr.bi.Valid() {
-		itr.bi.invalidatePointer()
 		itr.bpos++
+		itr.bi.data = nil
 		itr.next()
 		return
 	}
@@ -421,36 +320,44 @@ func (itr *Iterator) prev() {
 		return
 	}
 
-	if itr.bi.isInvalidPointer() {
+	if len(itr.bi.data) == 0 {
 		block, err := itr.t.block(itr.bpos)
 		if err != nil {
 			itr.err = err
 			return
 		}
-
-		block.resetIterator(itr.bi)
-		itr.bi.SeekToLast()
+		itr.bi.setBlock(block)
+		itr.bi.seekToLast()
 		itr.err = itr.bi.Error()
 		return
 	}
 
-	itr.bi.Prev()
+	itr.bi.prev()
 	if !itr.bi.Valid() {
-		itr.bi.invalidatePointer()
 		itr.bpos--
+		itr.bi.data = nil
 		itr.prev()
 		return
 	}
 }
 
-// Key follows the y.Iterator interface
+// Key follows the y.Iterator interface.
+// Returns the key with timestamp.
 func (itr *Iterator) Key() []byte {
-	return itr.bi.Key()
+	return itr.bi.key
 }
 
 // Value follows the y.Iterator interface
 func (itr *Iterator) Value() (ret y.ValueStruct) {
-	ret.Decode(itr.bi.Value())
+	ret.Decode(itr.bi.val)
+	return
+}
+
+// ValueCopy copies the current value and returns it as decoded
+// ValueStruct.
+func (itr *Iterator) ValueCopy() (ret y.ValueStruct) {
+	dst := y.Copy(itr.bi.val)
+	ret.Decode(dst)
 	return
 }
 
@@ -495,7 +402,12 @@ type ConcatIterator struct {
 func NewConcatIterator(tbls []*Table, reversed bool) *ConcatIterator {
 	iters := make([]*Iterator, len(tbls))
 	for i := 0; i < len(tbls); i++ {
-		iters[i] = tbls[i].NewIterator(reversed)
+		// Increment the reference count. Since, we're not creating the iterator right now.
+		// Here, We'll hold the reference of the tables, till the lifecycle of the iterator.
+		tbls[i].IncrRef()
+
+		// Save cycles by not initializing the iterators until needed.
+		// iters[i] = tbls[i].NewIterator(reversed)
 	}
 	return &ConcatIterator{
 		reversed: reversed,
@@ -509,9 +421,12 @@ func (s *ConcatIterator) setIdx(idx int) {
 	s.idx = idx
 	if idx < 0 || idx >= len(s.iters) {
 		s.cur = nil
-	} else {
-		s.cur = s.iters[s.idx]
+		return
 	}
+	if s.iters[idx] == nil {
+		s.iters[idx] = s.tables[idx].NewIterator(s.reversed)
+	}
+	s.cur = s.iters[s.idx]
 }
 
 // Rewind implements y.Interface
@@ -591,7 +506,16 @@ func (s *ConcatIterator) Next() {
 
 // Close implements y.Interface.
 func (s *ConcatIterator) Close() error {
+	for _, t := range s.tables {
+		// DeReference the tables while closing the iterator.
+		if err := t.DecrRef(); err != nil {
+			return err
+		}
+	}
 	for _, it := range s.iters {
+		if it == nil {
+			continue
+		}
 		if err := it.Close(); err != nil {
 			return errors.Wrap(err, "ConcatIterator")
 		}

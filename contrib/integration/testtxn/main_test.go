@@ -25,7 +25,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -232,12 +234,15 @@ func TestTxnRead5(t *testing.T) {
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
-	mu.CommitNow = true
-	res, err := dc.Mutate(context.Background(), mu)
+	muReq := api.Request{
+		Mutations: []*api.Mutation{mu},
+		CommitNow: true,
+	}
+	res, err := dc.Query(context.Background(), &muReq)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	x.AssertTrue(res.Context.StartTs > 0)
+	x.AssertTrue(res.Txn.StartTs > 0)
 	resp, err = dc.Query(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
@@ -882,6 +887,42 @@ func TestCountIndexSameTxn(t *testing.T) {
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
 		js)
+}
+
+func TestConcurrentQueryMutate(t *testing.T) {
+	testutil.DropAll(t, s.dg)
+	alterSchema(s.dg, "name: string .")
+
+	txn := s.dg.NewTxn()
+	defer txn.Discard(context.Background())
+
+	// Do one query, so a new timestamp is assigned to the txn.
+	q := `{me(func: uid(0x01)) { name }}`
+	_, err := txn.Query(context.Background(), q)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	start := time.Now()
+	go func() {
+		defer wg.Done()
+		for time.Since(start) < 5*time.Second {
+			mu := &api.Mutation{}
+			mu.SetJson = []byte(`{"uid": "0x01", "name": "manish"}`)
+			_, err := txn.Mutate(context.Background(), mu)
+			assert.Nil(t, err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for time.Since(start) < 5*time.Second {
+			_, err := txn.Query(context.Background(), q)
+			require.NoError(t, err)
+		}
+	}()
+	wg.Wait()
+	t.Logf("Done\n")
 }
 
 func alterSchema(dg *dgo.Dgraph, schema string) {

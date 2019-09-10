@@ -32,7 +32,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph alpha --cwd=/data/alpha1 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --cwd=/data/alpha1 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   alpha2:
     image: dgraph/dgraph:latest
@@ -52,7 +52,7 @@ services:
     ports:
       - 8182:8182
       - 9182:9182
-    command: /gobin/dgraph alpha --cwd=/data/alpha2 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --cwd=/data/alpha2 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   alpha3:
     image: dgraph/dgraph:latest
@@ -72,7 +72,7 @@ services:
     ports:
       - 8183:8183
       - 9183:9183
-    command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   minio1:
     image: minio/minio:latest

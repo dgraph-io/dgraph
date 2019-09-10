@@ -169,7 +169,18 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.cache.GetFromDelta(key)
+	hasCountIndex := schema.State().HasCount(t.Attr)
+
+	var getFn func(key []byte) (*List, error)
+	if hasCountIndex {
+		// We need to retrieve the full posting list from disk, to allow us to get the length of the
+		// posting list for the counts.
+		getFn = txn.Get
+	} else {
+		// We are just adding a reverse edge. No need to read the list from disk.
+		getFn = txn.GetFromDelta
+	}
+	plist, err := getFn(key)
 	if err != nil {
 		return err
 	}
@@ -184,7 +195,6 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Facets:  t.Facets,
 	}
 
-	hasCountIndex := schema.State().HasCount(t.Attr)
 	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
 		return err
@@ -329,9 +339,15 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, err
 		}
 
+		// This is a scalar value of non-list type and a delete edge mutation, so if the value
+		// given by the user doesn't match the value we have, we return found to be false, to avoid
+		// deleting the uid from index posting list.
+		// This second check is required because we fingerprint the scalar values as math.MaxUint64,
+		// so even though they might be different the check in the doUpdateIndex block above would
+		// return found to be true.
 		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
-			return val, found, emptyCountParams, err
+			return val, false, emptyCountParams, nil
 		}
 	}
 
