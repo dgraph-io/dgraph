@@ -851,6 +851,7 @@ dgraph live -a 127.0.0.1:9080
 ### HTTP API
 
 For HTTP API users (e.g., Curl, Postman), the custom Dgraph headers have been removed in favor of standard HTTP headers and query parameters.
+
 #### Queries
 
 There are two accepted `Content-Type` headers for queries over HTTP: `application/graphql+-` or `application/json`.
@@ -893,10 +894,11 @@ Now (in Dgraph v1.1):
 
 ```sh
 curl -H 'Content-Type: application/json' localhost:8080/query -d '{
-  "query": "query qWithVars($name: string) { q(func: eq(name, $name)) {    name } }",
+  "query": "query qWithVars($name: string) { q(func: eq(name, $name)) { name } }",
   "variables": {"$name": "Alice"}
 }'
 ```
+
 #### Mutations
 
 There are two accepted Content-Type headers for mutations over HTTP: `Content-Type: application/rdf` or `Content-Type: application/json`.
