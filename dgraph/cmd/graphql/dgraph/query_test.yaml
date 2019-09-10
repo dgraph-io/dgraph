@@ -545,7 +545,7 @@
     }
   dgquery: |-
     query {
-      queryCountry(func: type(Country)) @filter(regexp(Country.name, "/.*ust.*/")) {
+      queryCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
         name : Country.name
       }
     }

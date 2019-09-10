@@ -338,7 +338,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						Name: fn,
 						Args: []gql.Arg{
 							{Value: fmt.Sprintf("%s.%s", typ.Name(), field)},
-							{Value: maybeQuoteArg(val)},
+							{Value: maybeQuoteArg(fn, val)},
 						},
 					},
 				})
@@ -346,12 +346,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// isPublished: true -> eq(isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(postType, "Question")
+				fn := "eq"
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
-						Name: "eq",
+						Name: fn,
 						Args: []gql.Arg{
 							{Value: fmt.Sprintf("%s.%s", typ.Name(), field)},
-							{Value: maybeQuoteArg(dgFunc)},
+							{Value: maybeQuoteArg(fn, dgFunc)},
 						},
 					},
 				})
@@ -379,9 +380,12 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 }
 
-func maybeQuoteArg(arg interface{}) string {
+func maybeQuoteArg(fn string, arg interface{}) string {
 	switch arg := arg.(type) {
 	case string: // dateTime also parsed as string
+		if fn == "regexp" {
+			return fmt.Sprintf("%v", arg)
+		}
 		return fmt.Sprintf("%q", arg)
 	default:
 		return fmt.Sprintf("%v", arg)
