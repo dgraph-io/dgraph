@@ -161,7 +161,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
 	}(span)
 
-	// TODO - See if we really need this offset factory.
 	timers := schema.NewOffsetTimerFactory(trace.StartTime)
 	op, err := r.Schema.Operation(r.GqlReq, timers.NewOffsetTimer(&trace.Parsing),
 		timers.NewOffsetTimer(&trace.Validation))
