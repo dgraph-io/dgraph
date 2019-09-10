@@ -122,13 +122,13 @@ type ResolverTrace struct {
 	FieldName  string        `json:"fieldName"`
 	ReturnType string        `json:"returnType"`
 
-	// Offset relative to request start and total duration or resolving
+	// Offset relative to request start and total duration for resolving
 	OffsetDuration
 
 	// Dgraph isn't in Apollo tracing.  It records the offsets and times
 	// of Dgraph operations for the query/mutation (including network latency)
 	// in nanoseconds.
-	Dgraph []*LabeledOffsetDuration `json:"dgraph"`
+	Dgraph []*LabeledOffsetDuration `json:"dgraph,omitempty"`
 }
 
 // A TimerFactory makes offset timers that can be used to fill out an OffsetDuration.

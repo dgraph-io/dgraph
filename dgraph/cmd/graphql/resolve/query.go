@@ -18,9 +18,10 @@ package resolve
 
 import (
 	"context"
+	"time"
 
 	"github.com/golang/glog"
-	"go.opencensus.io/trace"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -34,16 +35,35 @@ type queryResolver struct {
 	dgraph        dgraph.Client
 	queryRewriter dgraph.QueryRewriter
 	operation     schema.Operation
+	exporter      *Exporter
+	// start time for the initial Resolve operation. Used to calculate offsets for other
+	// sub operations.
+	resolveStart time.Time
 }
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
-	ctx, qspan := trace.StartSpan(ctx, qr.query.Alias())
+	res := &resolved{}
+
+	trace := &schema.ResolverTrace{
+		ParentType: "Query",
+		FieldName:  qr.query.ResponseName(),
+		ReturnType: qr.query.Type().String(),
+		Path:       []interface{}{qr.query.ResponseName()},
+	}
+	res.trace = []*schema.ResolverTrace{trace}
+	ctx, qspan := otrace.StartSpan(ctx, qr.query.Alias())
 	defer func() {
 		qspan.End()
+		sid := qspan.SpanContext().SpanID
+		sd := qr.exporter.Span(sid)
+		if sd == nil {
+			glog.Errorf("Expected to find span for id: %s but got nil", sid)
+			return
+		}
+		trace.StartOffset = sd.StartTime.Sub(qr.resolveStart).Nanoseconds()
+		trace.Duration = sd.EndTime.Sub(sd.StartTime).Nanoseconds()
 	}()
-
-	res := &resolved{}
 
 	if qr.query.QueryType() == schema.SchemaQuery {
 		resp, err := schema.Introspect(qr.operation, qr.query, qr.schema)
@@ -58,7 +78,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		return res
 	}
 
-	_, span := trace.StartSpan(ctx, "queryRewriter")
+	_, span := otrace.StartSpan(ctx, "queryRewriter")
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite query")
@@ -67,7 +87,10 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	}
 	span.End()
 
-	sctx, span := trace.StartSpan(ctx, "dgraph.Query")
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	sctx, span := otrace.StartSpan(ctx, "dgraph.Query")
 	resp, err := qr.dgraph.Query(sctx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
@@ -77,7 +100,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	}
 	span.End()
 
-	sctx, span = trace.StartSpan(ctx, "completDgraphResult")
+	sctx, span = otrace.StartSpan(ctx, "completDgraphResult")
 	completed, err := completeDgraphResult(sctx, qr.query, resp)
 	span.End()
 	res.err = err

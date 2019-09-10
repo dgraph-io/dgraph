@@ -94,6 +94,8 @@ type RequestResolver struct {
 	mutationRewriter dgraph.MutationRewriter
 	resp             *schema.Response
 
+	// Exporter is required to be able to access a span after calling span.End()
+	// TODO - Delete this entry after fetching it.
 	Exporter *Exporter
 }
 
@@ -102,8 +104,9 @@ type RequestResolver struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type resolved struct {
-	data []byte
-	err  error
+	data  []byte
+	err   error
+	trace []*schema.ResolverTrace
 }
 
 // New creates a new RequestResolver
@@ -145,9 +148,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
+	tnow := time.Now()
 	trace := &schema.Trace{
 		Version:   1,
-		StartTime: time.Now(),
+		StartTime: tnow,
 	}
 	r.resp.Extensions = &schema.Extensions{
 		RequestID: api.RequestID(ctx),
@@ -161,6 +165,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		sd := r.Exporter.Span(sid)
 		if sd == nil {
 			glog.Errorf("Expected to find span for id: %s but got nil", sid)
+			return
 		}
 		trace.EndTime = sd.EndTime
 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
@@ -203,6 +208,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					dgraph:        r.dgraph,
 					queryRewriter: r.queryRewriter,
 					operation:     op,
+					exporter:      r.Exporter,
+					resolveStart:  tnow,
 				}).resolve(ctx)
 			}(q, i)
 		}
@@ -215,6 +222,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// AddData handle nil cases.
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
+			r.resp.Extensions.Tracing.Execution =
+				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
