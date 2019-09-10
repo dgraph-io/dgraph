@@ -35,7 +35,6 @@ type queryResolver struct {
 	dgraph        dgraph.Client
 	queryRewriter dgraph.QueryRewriter
 	operation     schema.Operation
-	exporter      *Exporter
 	// start time for the initial Resolve operation. Used to calculate offsets for other
 	// sub operations.
 	resolveStart time.Time
@@ -53,16 +52,11 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	}
 	res.trace = []*schema.ResolverTrace{trace}
 	ctx, qspan := otrace.StartSpan(ctx, qr.query.Alias())
+	start := time.Now().UTC()
 	defer func() {
 		qspan.End()
-		sid := qspan.SpanContext().SpanID
-		sd := qr.exporter.Span(sid)
-		if sd == nil {
-			glog.Errorf("Expected to find span for id: %s but got nil", sid)
-			return
-		}
-		trace.StartOffset = sd.StartTime.Sub(qr.resolveStart).Nanoseconds()
-		trace.Duration = sd.EndTime.Sub(sd.StartTime).Nanoseconds()
+		trace.StartOffset = start.Sub(qr.resolveStart).Nanoseconds()
+		trace.Duration = time.Now().UTC().Sub(start).Nanoseconds()
 	}()
 
 	if qr.query.QueryType() == schema.SchemaQuery {
@@ -88,8 +82,8 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	span.End()
 
 	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-	tnow := time.Now()
-	dgraphDuration.StartOffset = tnow.Sub(qr.resolveStart).Nanoseconds()
+	executionStart := time.Now().UTC()
+	dgraphDuration.StartOffset = executionStart.Sub(qr.resolveStart).Nanoseconds()
 	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 
 	sctx, span := otrace.StartSpan(ctx, "dgraph.Query")
@@ -100,7 +94,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		span.End()
 		return res
 	}
-	dgraphDuration.Duration = time.Now().Sub(tnow).Nanoseconds()
+	dgraphDuration.Duration = time.Now().UTC().Sub(executionStart).Nanoseconds()
 	span.End()
 
 	sctx, span = otrace.StartSpan(ctx, "completDgraphResult")

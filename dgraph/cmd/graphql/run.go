@@ -42,7 +42,6 @@ import (
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -173,12 +172,9 @@ func run() error {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	e := resolve.NewExporter()
-	trace.RegisterExporter(e)
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
 		schema:       gqlschema,
-		exporter:     e,
 	}
 
 	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))

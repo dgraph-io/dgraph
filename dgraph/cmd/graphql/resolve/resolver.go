@@ -93,10 +93,6 @@ type RequestResolver struct {
 	queryRewriter    dgraph.QueryRewriter
 	mutationRewriter dgraph.MutationRewriter
 	resp             *schema.Response
-
-	// Exporter is required to be able to access a span after calling span.End()
-	// TODO - Delete this entry after fetching it.
-	Exporter *Exporter
 }
 
 // A resolved is the result of resolving a single query or mutation.
@@ -148,7 +144,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
-	tnow := time.Now()
+	tnow := time.Now().UTC()
 	trace := &schema.Trace{
 		Version:   1,
 		StartTime: tnow,
@@ -161,16 +157,11 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	ctx, span := otrace.StartSpan(ctx, methodResolve)
 	defer func(span *otrace.Span) {
 		span.End()
-		sid := span.SpanContext().SpanID
-		sd := r.Exporter.Span(sid)
-		if sd == nil {
-			glog.Errorf("Expected to find span for id: %s but got nil", sid)
-			return
-		}
-		trace.EndTime = sd.EndTime
+		trace.EndTime = time.Now().UTC()
 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
 	}(span)
 
+	// TODO - See if we really need this offset factory.
 	timers := schema.NewOffsetTimerFactory(trace.StartTime)
 	op, err := r.Schema.Operation(r.GqlReq, timers.NewOffsetTimer(&trace.Parsing),
 		timers.NewOffsetTimer(&trace.Validation))
@@ -208,7 +199,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					dgraph:        r.dgraph,
 					queryRewriter: r.queryRewriter,
 					operation:     op,
-					exporter:      r.Exporter,
 					resolveStart:  tnow,
 				}).resolve(ctx)
 			}(q, i)
