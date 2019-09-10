@@ -106,7 +106,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Wait()
 
 	if ld.foundError == 0 {
-		glog.Infof("No Errors found. All inputs files are valid.\n")
+		glog.Infof("No errors found. All inputs files are valid.\n")
 	}
 
 	for i := range ld.mappers {

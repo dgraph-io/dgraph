@@ -27,13 +27,14 @@ func (m *mapper) run(inputFormat chunker.InputFormat, wg *sync.WaitGroup) {
 		for chunkBuf := range m.readerChunkCh {
 			if err := chunker.Parse(chunkBuf.chunk); err != nil {
 				atomic.CompareAndSwapUint32(&m.foundError, 0, 1)
-				glog.Errorf("Error Found in file %s: %s\n", chunkBuf.filename, err)
+				glog.Errorf("Error found in file %s: %s\n", chunkBuf.filename, err)
 			}
-
 		}
 	}()
 
 	go func() {
+		// chunker.Parse puts chunks into channel. Just drain the channel
+		// so that it doesn't block.
 		for range chunker.NQuads().Ch() {
 		}
 	}()
