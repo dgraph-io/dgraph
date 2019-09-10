@@ -4,7 +4,7 @@ Thanks for checking out our Polkadot Runtime Implementation! We're excited to he
 
 We've put together the following guidelines to help you figure out where you can best be helpful. The Web3 foundation has a comprehensive collection of [Polkadot Resources](https://github.com/w3f/web3/blob/537a2518c24e96b05ceadd9f31348669e72b8841/docs/layer_1/platforms/polkadot.md) for both part-time and core contributors to the project in order to get up to speed.
 
-Additionally, the [Polkadot Specification Doc](https://github.com/w3f/polkadot-spec/blob/master/spec.md) serves as the primary specification, however it is currently in its final draft status so things may be subject to change.
+Additionally, the [Polkadot Runtime Specification](https://research.web3.foundation/en/latest/web/viewer.html?file=../pdf/polkadot_re_spec.pdf) serves as the primary specification, however it is currently in its draft status so things may be subject to change.
 
 Feel free to fork our repo and start creating PR’s after assigning yourself to an issue of interest.
 
