@@ -7,7 +7,7 @@
 
 {{ $useOldHttpApi := or (lt $majorVersion 1) (and (eq $majorVersion 1) (le $minorVersion 0)) }}
 
-{{ if not $useOldHttpApi }}
+{{ if or (eq $currentBranch "master") (not $useOldHttpApi) }}
     {{ if eq ( .Vars ) nil }}
         <pre><code class="no-copy" tabindex="-1">curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d '<br/><span class="query-content">{{ .Code }}</span>' | python -m json.tool | less
         </code></pre>
