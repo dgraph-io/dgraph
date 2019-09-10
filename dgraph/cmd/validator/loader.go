@@ -13,7 +13,6 @@ import (
 
 type options struct {
 	DataFiles     string
-	SchemaFile    string
 	TmpDir        string
 	NumGoroutines int
 	CleanupTmp    bool
