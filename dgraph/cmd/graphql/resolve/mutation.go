@@ -19,6 +19,7 @@ package resolve
 import (
 	"bytes"
 	"context"
+	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -59,6 +60,9 @@ type mutationResolver struct {
 	mutationRewriter dgraph.MutationRewriter
 	queryRewriter    dgraph.QueryRewriter
 	dgraph           dgraph.Client
+	// start time for the initial Resolve operation. Used to calculate offsets for other
+	// sub operations.
+	resolveStart time.Time
 }
 
 const (
@@ -140,21 +144,25 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 	return res
 }
 
-func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
+func traceFromField(field schema.Field, parent string) *schema.ResolverTrace {
+	trace := &schema.ResolverTrace{
+		ParentType: parent,
+		FieldName:  field.ResponseName(),
+		ReturnType: field.Type().String(),
+	}
+
+	return trace
+}
+
+func (mr *mutationResolver) resolveQuery(ctx context.Context,
+	assigned map[string]string) *resolved {
 	res := &resolved{}
 
-	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res
-	}
-
-	assigned, err := mr.dgraph.Mutate(ctx, mut)
-	if err != nil {
-		res.err = schema.GQLWrapf(err,
-			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
-		return res
-	}
+	trace := traceFromField(mr.mutation.SelectionSet()[0], mr.mutation.ResponseName())
+	trace.Path = []interface{}{mr.mutation.ResponseName(),
+		mr.mutation.SelectionSet()[0].ResponseName()}
+	opStart := time.Now().UTC()
+	trace.StartOffset = opStart.Sub(mr.resolveStart).Nanoseconds()
 
 	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
 	if err != nil {
@@ -163,15 +171,57 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 		return res
 	}
 
+	dgraphQueryStart := time.Now().UTC()
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	dgraphDuration.StartOffset = dgraphQueryStart.Sub(mr.resolveStart).Nanoseconds()
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+		err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
 			mr.mutation.Name())
 		return res
 	}
 
 	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
+	dgraphDuration.Duration = time.Since(dgraphQueryStart).Nanoseconds()
+	trace.Duration = time.Since(opStart).Nanoseconds()
+	res.trace = append(res.trace, trace)
 	return res
+}
+
+func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
+	res := &resolved{}
+
+	mutationStart := time.Now().UTC()
+	trace := traceFromField(mr.mutation, "Mutation")
+	trace.Path = []interface{}{mr.mutation.ResponseName()}
+	trace.StartOffset = mutationStart.Sub(mr.resolveStart).Nanoseconds()
+	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
+		return res
+	}
+
+	dgraphMutStart := time.Now().UTC()
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	dgraphDuration.StartOffset = dgraphMutStart.Sub(mr.resolveStart).Nanoseconds()
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	assigned, err := mr.dgraph.Mutate(ctx, mut)
+	if err != nil {
+		res.err = schema.GQLWrapf(err,
+			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
+		return res
+	}
+
+	dgraphDuration.Duration = time.Since(dgraphMutStart).Nanoseconds()
+	res.trace = append(res.trace, trace)
+
+	queryRes := mr.resolveQuery(ctx, assigned)
+	queryRes.trace = append(res.trace, queryRes.trace...)
+	trace.Duration = time.Since(mutationStart).Nanoseconds()
+	return queryRes
 }
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {

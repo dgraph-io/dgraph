@@ -233,6 +233,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				dgraph:           r.dgraph,
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
+				resolveStart:     start,
 			}
 			ctx, qspan := otrace.StartSpan(ctx, m.Alias())
 			qspan.Annotate(nil, "mutation type: "+string(m.MutationType()))
@@ -240,6 +241,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			qspan.End()
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
+			r.resp.Extensions.Tracing.Execution =
+				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
