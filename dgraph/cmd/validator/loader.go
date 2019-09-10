@@ -7,9 +7,8 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/prometheus/common/log"
-
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type options struct {
@@ -29,7 +28,7 @@ type readerChunk struct {
 type state struct {
 	opt           options
 	readerChunkCh chan readerChunk
-	foundError    bool
+	foundError    uint32
 }
 
 type loader struct {
@@ -78,7 +77,7 @@ func (ld *loader) mapStage() {
 
 		go func(file string) {
 			defer thr.Done(nil)
-			log.Infof("Processing file %s\n", file)
+			glog.Infof("Processing file %s\n", file)
 
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
@@ -107,8 +106,8 @@ func (ld *loader) mapStage() {
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
-	if !ld.foundError {
-		log.Infof("No Errors found. All inputs files are valid.\n")
+	if ld.foundError == 0 {
+		glog.Infof("No Errors found. All inputs files are valid.\n")
 	}
 
 	for i := range ld.mappers {

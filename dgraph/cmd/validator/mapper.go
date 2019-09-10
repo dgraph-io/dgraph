@@ -2,9 +2,10 @@ package validator
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/prometheus/common/log"
+	"github.com/golang/glog"
 )
 
 type mapper struct {
@@ -25,8 +26,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat, wg *sync.WaitGroup) {
 
 		for chunkBuf := range m.readerChunkCh {
 			if err := chunker.Parse(chunkBuf.chunk); err != nil {
-				m.foundError = true
-				log.Errorf("Error Found in file %s: %s\n", chunkBuf.filename, err)
+				atomic.CompareAndSwapUint32(&m.foundError, 0, 1)
+				glog.Errorf("Error Found in file %s: %s\n", chunkBuf.filename, err)
 			}
 
 		}
