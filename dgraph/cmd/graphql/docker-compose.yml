@@ -75,7 +75,7 @@ services:
     labels:
       cluster: test
       service: graphql
-    command: /gobin/dgraph graphql --alpha alpha1:9180 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph graphql --alpha alpha1:9180 --jaeger.collector=http://jaeger:14268 --v 3
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger

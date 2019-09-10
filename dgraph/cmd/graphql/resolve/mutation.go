@@ -226,6 +226,15 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	trace := traceFromField(mr.mutation, "Mutation")
+	res.trace = []*schema.ResolverTrace{trace}
+	trace.Path = []interface{}{mr.mutation.ResponseName()}
+	opStart := time.Now().UTC()
+	trace.StartOffset = opStart.Sub(mr.resolveStart).Nanoseconds()
+	defer func() {
+		trace.Duration = time.Since(opStart).Nanoseconds()
+	}()
+
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
@@ -233,6 +242,10 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
+	dgraphDelStart := time.Now().UTC()
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "delete"}
+	dgraphDuration.StartOffset = dgraphDelStart.Sub(mr.resolveStart).Nanoseconds()
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedType().Name())
 	if err != nil {
 		return &resolved{
@@ -248,6 +261,8 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
+	dgraphDuration.Duration = time.Since(dgraphDelStart).Nanoseconds()
+	res.trace = append(res.trace, trace)
 	res.data = []byte(`{ "msg": "Deleted" }`)
 	return res
 }
