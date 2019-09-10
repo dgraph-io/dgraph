@@ -226,6 +226,29 @@ type Node {
 	name: string
 }
 
+type Student {
+	legal_name: string!
+	preferred_name: string
+	dob: dateTime!
+	class: [Class!]
+}
+
+type Class {
+	full_name: string!
+	description: string
+}
+
+type Profesor {
+	legal_name: string!
+	title: string
+	department: [uid]!
+}
+
+type Department {
+	full_name: string!
+	founded: int
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -264,6 +287,10 @@ previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
 number                         : int @index(int) .
+classmate                      : [uid] .
+class                          : [uid] .
+department                     : [uid] .
+founded                        : int .
 `
 
 func populateCluster() {
@@ -548,6 +575,43 @@ func populateCluster() {
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
 		<202> <dgraph.type> "CarModel" .
+
+		<300> <legal_name> "Student 1" .
+		<300> <preferred_name> "Micheal" .
+		<300> <dob> "2010-01-01" .
+		<300> <class> <310> .
+		<300> <class> <311> .
+		<300> <dgraph.type> "Student" .
+
+		<301> <legal_name> "Student 2" .
+		<301> <preferred_name> "Albert" .
+		<301> <class> <310> .
+		<301> <class> <311> .
+		<301> <dgraph.type> "Student" .
+
+		<302> <classmate> <300> .
+		<302> <classmate> <301> .
+
+		<310> <full_name> "Algebra 1" .
+		<310> <description> "First course of introductory algebra" .
+		<310> <professor> <320> .
+		<310> <professor> <321> .
+		<310> <dgraph.type> "Class" .
+
+		<311> <description> "Second course of introductory algebra" .
+		<311> <dgraph.type> "Class" .
+
+		<320> <full_name> "Algebra 1 professor" .
+		<320> <title> "Tenured professor" .
+		<320> <department> <330> .
+		<320> <dgraph.type> "Professor" .
+
+		<321> <title> "Teaching assistant" .
+		<321> <department> <330> .
+		<321> <dgraph.type> "Profesor" .
+
+		<330> <founded> "1947" .
+		<330> <dgraph.type> "Department" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

@@ -85,6 +85,10 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
+
+	// EnforcedType is the name of the type inside the @type directive. It will be used for
+	// type processing. For example, it will be used to enforce non-nullable fields in types.
+	EnforcedType string
 }
 
 // RecurseArgs stores the arguments needed to process the @recurse directive.
@@ -2045,6 +2049,7 @@ func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
 			},
 		},
 	}
+	gq.EnforcedType = typeName
 
 	return nil
 }

@@ -341,3 +341,179 @@ func TestTypeExpandLang(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[
 		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
 }
+
+func TestRequiredTypeFieldsBasic(t *testing.T) {
+	q1 := `{
+		q(func: uid(302)) {
+			classmate {
+				legal_name
+				preferred_name
+				dob
+			}
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal"},
+			{"legal_name":"Student 2", "preferred_name":"Albert"}]}]}}`, js)
+
+	q2 := `{
+		q(func: uid(302)) {
+			classmate @type(Student) {
+				legal_name
+				preferred_name
+				dob
+			}
+		}
+	}`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal"}]}]}}`, js)
+}
+
+func TestRequiredTypeFieldsRecursive(t *testing.T) {
+	q1 := `{
+		q(func: uid(302)) {
+			classmate {
+				legal_name
+				preferred_name
+				dob
+				class {
+					description
+					full_name
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1"},
+				{"description":"Second course of introductory algebra"}]},
+			{"legal_name":"Student 2", "preferred_name":"Albert",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1"},
+				{"description":"Second course of introductory algebra"}]}]}]}}`, js)
+
+	q2 := `{
+		q(func: uid(302)) {
+			classmate @type(Student) {
+				legal_name
+				preferred_name
+				dob
+				class {
+					description
+					full_name
+				}
+			}
+		}
+	}`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1"}]}]}]}}`, js)
+}
+
+func TestRequiredTypeMultiple(t *testing.T) {
+	q1 := `{
+		q(func: uid(302)) {
+			classmate {
+				legal_name
+				preferred_name
+				dob
+				class {
+					description
+					full_name
+					professor {
+						full_name
+						title
+					}
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1",
+				"professor":[{"full_name":"Algebra 1 professor", "title":"Tenured professor"},
+					{"title":"Teaching assistant"}]},
+				{"description":"Second course of introductory algebra"}]},
+			{"legal_name":"Student 2", "preferred_name":"Albert",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1",
+				"professor":[{"full_name":"Algebra 1 professor", "title":"Tenured professor"},
+					{"title":"Teaching assistant"}]},
+				{"description":"Second course of introductory algebra"}]}]}]}}`, js)
+
+	q2 := `{
+		q(func: uid(302)) {
+			classmate @type(Student) {
+				legal_name
+				preferred_name
+				dob
+				class {
+					description
+					full_name
+					professor @type(Professor) {
+						full_name
+						title
+					}
+				}
+			}
+		}
+	}`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"q":[
+		{"classmate":[
+			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal",
+			"class":[
+				{"description":"First course of introductory algebra", "full_name":"Algebra 1",
+				"professor":[{"full_name":"Algebra 1 professor", "title":"Tenured professor"}]}]}]}]}}`, js)
+}
+
+func TestTypeRequiredUid(t *testing.T) {
+	q1 := `{
+		q(func: uid(310)) {
+			professor {
+				full_name
+				title
+				department {
+					full_name
+					founded
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"q":[
+		{"professor":[
+			{"full_name":"Algebra 1 professor", "title":"Tenured professor", "department":[{"founded":1947}]},
+			{"title": "Teaching assistant", "department":[{"founded":1947}]}]}]}}`, js)
+
+	q2 := `{
+		q(func: uid(310)) {
+			professor @type(Professor) {
+				full_name
+				title
+				department {
+					full_name
+					founded
+				}
+			}
+		}
+	}`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"q":[
+		{"professor":[
+			{"full_name":"Algebra 1 professor", "title":"Tenured professor",
+			"department":[{"founded":1947}]}]}]}}`, js)
+}

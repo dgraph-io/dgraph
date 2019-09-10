@@ -176,6 +176,8 @@ type params struct {
 	IsEmpty       bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll     bool     // expand all languages
 	shortest      bool
+
+	EnforcedType string // Name of the type to enforce.
 }
 
 type pathMetadata struct {
@@ -486,6 +488,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		args := params{
 			Alias:          gchild.Alias,
 			Cascade:        sg.Params.Cascade,
+			EnforcedType:   gchild.EnforcedType,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
@@ -713,6 +716,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		Alias:            gq.Alias,
 		Cascade:          gq.Cascade,
+		EnforcedType:     gq.EnforcedType,
 		GetUid:           isDebug(ctx),
 		IgnoreReflex:     gq.IgnoreReflex,
 		IsEmpty:          gq.IsEmpty,
@@ -2342,6 +2346,78 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	return nil
 }
 
+// enforcedRequiredFields enforces that blocks with a @type directive enforce the non-nullable
+// fields of type definitions.
+// See https://graphql.org/learn/schema/#object-types-and-fields for the definition of
+// non-nullable fields.
+func (sg *SubGraph) enforcedRequiredFields() {
+	if len(sg.Params.EnforcedType) > 0 {
+		sg.enforceTypeFields(sg.Params.EnforcedType)
+	}
+
+	for _, child := range sg.Children {
+		child.enforcedRequiredFields()
+	}
+}
+
+func (sg *SubGraph) enforceTypeFields(typeName string) {
+	typeDef, ok := schema.State().GetType(typeName)
+	if !ok {
+		// Cannot find a matching type definition so return existing query results.
+		return
+	}
+
+	childSubgraphs := make(map[string]*SubGraph)
+	for _, child := range sg.Children {
+		childSubgraphs[child.Attr] = child
+	}
+	toRemove := make(map[uint64]struct{})
+
+	for _, field := range typeDef.Fields {
+		child, ok := childSubgraphs[field.Predicate]
+		if !ok {
+			// Predicate is not part of the type so it can be ignored.
+			continue
+		}
+
+		if !field.NonNullable {
+			// Field exists but is not required.
+			continue
+		}
+
+		if field.GetValueType() != pb.Posting_UID && field.GetValueType() != pb.Posting_OBJECT {
+			// This is a scalar field. Look at the valueMatrix to find what source uids
+			// do not contain data for this predicate.
+			for i, uid := range child.SrcUIDs.GetUids() {
+				valueList := child.valueMatrix[i]
+
+				if len(valueList.GetValues()) == 0 {
+					toRemove[uid] = struct{}{}
+				}
+			}
+		} else if field.GetValueType() == pb.Posting_UID {
+			// This is a UID field but it's not referencing another type. Therefore,
+			// there's no need to recursively validate types and all the UIDs at
+			// this level can be considered valid.
+			continue
+		} else {
+			// This is an UID field that is referencing another type. We must recurse
+			// on this level with the new type.
+			child.enforceTypeFields(field.GetObjectTypeName())
+		}
+	}
+
+	// Remove invalid uids from destUIDs and uidMatrix.
+	out := pb.List{}
+	for _, uid := range sg.DestUIDs.GetUids() {
+		if _, ok := toRemove[uid]; !ok {
+			out.Uids = append(out.Uids, uid)
+		}
+	}
+	sg.DestUIDs = &out
+	sg.updateUidMatrix()
+}
+
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
@@ -2635,6 +2711,11 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		if !it {
 			return errors.Errorf("Query couldn't be executed")
 		}
+	}
+
+	// Type system post-processing.
+	for _, sg := range req.Subgraphs {
+		sg.enforcedRequiredFields()
 	}
 	req.Latency.Processing += time.Since(execStart)
 
