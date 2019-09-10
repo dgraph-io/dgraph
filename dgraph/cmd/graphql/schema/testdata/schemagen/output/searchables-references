@@ -2,14 +2,18 @@
 # Input Schema
 #######################
 
-type Post {
-	id: ID!
-	author: Author! @hasInverse(field: "posts")
-}
-
 type Author {
 	id: ID!
-	posts(first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
+	name: String! @searchable(by: hash)
+	dob: DateTime
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type Post {
+	postID: ID!
+	title: String! @searchable(by: term)
+	text: String @searchable(by: fulltext)
+	datePublished: DateTime
 }
 
 #######################
@@ -118,12 +122,38 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum AuthorOrderable {
+	name
+	dob
+}
+
+enum PostOrderable {
+	title
+	text
+	datePublished
+}
+
 #######################
 # Generated Inputs
 #######################
 
+input AuthorFilter {
+	name: StringHashFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
+}
+
 input AuthorInput {
-	posts: [PostRef!]!
+	name: String!
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
 }
 
 input AuthorRef {
@@ -131,19 +161,39 @@ input AuthorRef {
 }
 
 input PatchAuthor {
-	posts: [PostRef!]
+	name: String
+	dob: DateTime
+	posts: [PostRef]
 }
 
 input PatchPost {
-	author: AuthorRef
+	title: String
+	text: String
+	datePublished: DateTime
+}
+
+input PostFilter {
+	title: StringTermFilter
+	text: StringFullTextFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostInput {
-	author: AuthorRef!
+	title: String!
+	text: String
+	datePublished: DateTime
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
 }
 
 input PostRef {
-	id: ID!
+	postID: ID!
 }
 
 input UpdateAuthorInput {
@@ -152,7 +202,7 @@ input UpdateAuthorInput {
 }
 
 input UpdatePostInput {
-	id: ID!
+	postID: ID!
 	patch: PatchPost!
 }
 
@@ -161,10 +211,10 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(first: Int, offset: Int): [Post]
 	getAuthor(id: ID!): Author
-	queryAuthor(first: Int, offset: Int): [Author]
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################
@@ -172,10 +222,10 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(id: ID!): DeletePostPayload
 	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(id: ID!): DeleteAuthorPayload
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(id: ID!): DeletePostPayload
 }

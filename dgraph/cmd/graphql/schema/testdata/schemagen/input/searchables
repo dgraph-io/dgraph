@@ -1,0 +1,25 @@
+type Post {
+	postID: ID!
+	title: String! @searchable(by: term)
+	text: String @searchable(by: fulltext)
+
+	tags: [String] @searchable(by: trigram)
+	tagsHash: [String] @searchable(by: hash)
+	tagsExact: [String] @searchable(by: exact)
+
+	publishByYear: DateTime @searchable(by: year)
+	publishByMonth: DateTime @searchable(by: month)
+	publishByDay: DateTime @searchable(by: day)
+	publishByHour: DateTime @searchable(by: hour)
+
+	numLikes: Int @searchable
+	score: Float @searchable
+	isPublished: Boolean @searchable
+	postType: PostType @searchable
+}
+
+enum PostType {
+	Fact
+	Question
+	Opinion
+}

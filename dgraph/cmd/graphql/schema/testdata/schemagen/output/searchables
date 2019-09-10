@@ -3,16 +3,26 @@
 #######################
 
 type Post {
-	id: ID!
-	title: String!
-	text: String
-	postType: PostType!
+	postID: ID!
+	title: String! @searchable(by: term)
+	text: String @searchable(by: fulltext)
+	tags: [String] @searchable(by: trigram)
+	tagsHash: [String] @searchable(by: hash)
+	tagsExact: [String] @searchable(by: exact)
+	publishByYear: DateTime @searchable(by: year)
+	publishByMonth: DateTime @searchable(by: month)
+	publishByDay: DateTime @searchable(by: day)
+	publishByHour: DateTime @searchable(by: hour)
+	numLikes: Int @searchable
+	score: Float @searchable
+	isPublished: Boolean @searchable
+	postType: PostType @searchable
 }
 
 enum PostType {
-	Statement
+	Fact
 	Question
-	Answer
+	Opinion
 }
 
 #######################
@@ -112,6 +122,15 @@ type UpdatePostPayload {
 enum PostOrderable {
 	title
 	text
+	tags
+	tagsHash
+	tagsExact
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	numLikes
+	score
 }
 
 #######################
@@ -121,13 +140,52 @@ enum PostOrderable {
 input PatchPost {
 	title: String
 	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
 	postType: PostType
+}
+
+input PostFilter {
+	title: StringTermFilter
+	text: StringFullTextFilter
+	tags: StringRegExpFilter
+	tagsHash: StringHashFilter
+	tagsExact: StringExactFilter
+	publishByYear: DateTimeFilter
+	publishByMonth: DateTimeFilter
+	publishByDay: DateTimeFilter
+	publishByHour: DateTimeFilter
+	numLikes: IntFilter
+	score: FloatFilter
+	isPublished: Boolean
+	postType: PostType
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostInput {
 	title: String!
 	text: String
-	postType: PostType!
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
 }
 
 input PostOrder {
@@ -137,11 +195,11 @@ input PostOrder {
 }
 
 input PostRef {
-	id: ID!
+	postID: ID!
 }
 
 input UpdatePostInput {
-	id: ID!
+	postID: ID!
 	patch: PatchPost!
 }
 
@@ -151,7 +209,7 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################
