@@ -196,7 +196,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
 		} else {
-			child.Attr = fmt.Sprintf("%s.%s", field.Type().Name(), f.Name())
+			child.Attr = field.Type().DgraphPredicate(f.Name())
 		}
 
 		addFilter(child, f)
@@ -219,10 +219,10 @@ func addOrder(q *gql.GraphQuery, field schema.Field) {
 
 		if asc, ok := ascArg.(string); ok {
 			q.Order = append(q.Order,
-				&pb.Order{Attr: fmt.Sprintf("%s.%s", field.Type().Name(), asc)})
+				&pb.Order{Attr: field.Type().DgraphPredicate(asc)})
 		} else if desc, ok := descArg.(string); ok {
 			q.Order = append(q.Order,
-				&pb.Order{Attr: fmt.Sprintf("%s.%s", field.Type().Name(), desc), Desc: true})
+				&pb.Order{Attr: field.Type().DgraphPredicate(desc), Desc: true})
 		}
 
 		order, ok = thenArg.(map[string]interface{})
@@ -269,7 +269,7 @@ func addFilter(q *gql.GraphQuery, field schema.Field) {
 // eg:
 // filter: { title: { anyofterms: "GraphQL" }, isPublished: true }
 // into:
-// @filter(anyofterms(Post.title, "GraphQL") AND eq(isPublished, true))
+// @filter(anyofterms(Post.title, "GraphQL") AND eq(Post.isPublished, true))
 //
 // Filters with `or:` and `not:` get translated to Dgraph OR and NOT.
 //
@@ -316,7 +316,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			// title: { anyofterms: "GraphQL" }, not: { isPublished: true}
 			//                       we are here ^^
 			// ->
-			// @filter(anyofterms(Post.title, "GraphQL") AND NOT eq(isPublished, true))
+			// @filter(anyofterms(Post.title, "GraphQL") AND NOT eq(Post.isPublished, true))
 			not := buildFilter(typ, filter[field].(map[string]interface{}))
 			ands = append(ands,
 				&gql.FilterTree{
@@ -325,34 +325,34 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				})
 		default:
 			// It's a base case like:
-			// title: { anyofterms: "GraphQL" } ->  anyofterms(title: "GraphQL")
+			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
 
 			switch dgFunc := filter[field].(type) {
 			case map[string]interface{}:
-				// title: { anyofterms: "GraphQL" } ->  anyofterms(title, "GraphQL")
+				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
-				// numLikes: { le: 10 } -> le(numLikes, 10)
-				fn, val := fst(dgFunc)
+				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
+				fn, val := first(dgFunc)
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: fmt.Sprintf("%s.%s", typ.Name(), field)},
+							{Value: typ.DgraphPredicate(field)},
 							{Value: maybeQuoteArg(fn, val)},
 						},
 					},
 				})
 			case interface{}:
-				// isPublished: true -> eq(isPublished, true)
+				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
-				// postType: Question -> eq(postType, "Question")
+				// postType: Question -> eq(Post.postType, "Question")
 				fn := "eq"
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: fmt.Sprintf("%s.%s", typ.Name(), field)},
-							{Value: maybeQuoteArg(fn, dgFunc)},
+							{Value: typ.DgraphPredicate(field)},
+							{Value: fmt.Sprintf("%v", dgFunc)},
 						},
 					},
 				})
@@ -384,7 +384,7 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 	switch arg := arg.(type) {
 	case string: // dateTime also parsed as string
 		if fn == "regexp" {
-			return fmt.Sprintf("%v", arg)
+			return arg
 		}
 		return fmt.Sprintf("%q", arg)
 	default:
@@ -394,7 +394,7 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 
 // fst returns the first element it finds in a map - we bump into lots of one-element
 // maps like { "anyofterms": "GraphQL" }.  fst helps extract that single mapping.
-func fst(aMap map[string]interface{}) (string, interface{}) {
+func first(aMap map[string]interface{}) (string, interface{}) {
 	for key, val := range aMap {
 		return key, val
 	}

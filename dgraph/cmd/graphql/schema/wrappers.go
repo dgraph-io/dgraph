@@ -112,6 +112,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	IDField() FieldDefinition
 	Name() string
+	DgraphPredicate(fld string) string
 	Nullable() bool
 	ListType() Type
 	fmt.Stringer
@@ -451,6 +452,12 @@ func (t *astType) ListType() Type {
 		return nil
 	}
 	return &astType{typ: t.typ.Elem}
+}
+
+// DgraphPredicate returns the name of the predicate in Dgraph that represents this
+// type's field fld.  Mostly this will be type_name.field_name,.
+func (t *astType) DgraphPredicate(fld string) string {
+	return fmt.Sprintf("%s.%s", t.Name(), fld)
 }
 
 func (t *astType) String() string {

@@ -45,7 +45,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	b.WriteString(query.Attr)
 
 	if root {
-		writeFunction(b, query)
+		writeRoot(b, query)
 	}
 
 	if query.Filter != nil {
@@ -71,19 +71,22 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	b.WriteString("\n")
 }
 
-func writeFunction(b *strings.Builder, q *gql.GraphQuery) {
+// writeRoot writes the root function as well as any ordering and paging
+// specified in q.
+//
+// Only uid(0x123) and type(...) functions are supported at root.
+func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	if q.Func == nil {
 		return
 	}
 
 	if q.Func.Name == "uid" && len(q.Func.UID) == 1 {
-		b.WriteString(fmt.Sprintf("(func: %s(0x%x))", q.Func.Name, q.Func.UID[0]))
+		b.WriteString(fmt.Sprintf("(func: uid(0x%x))", q.Func.UID[0]))
 	} else if q.Func.Name == "type" && len(q.Func.Args) == 1 {
-		b.WriteString(fmt.Sprintf("(func: %s(%s)", q.Func.Name, q.Func.Args[0].Value))
+		b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value))
 		writeOrderAndPage(b, q, true)
 		b.WriteRune(')')
 	}
-	// there's only uid(...) and type(...) functions at root level
 }
 
 func writeFilterFunction(b *strings.Builder, f *gql.Function) {
