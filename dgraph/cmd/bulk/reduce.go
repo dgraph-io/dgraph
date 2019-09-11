@@ -45,7 +45,7 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	dirs := shardDirs(r.opt.TmpDir)
+	dirs := shardDirs(r.opt.TmpDir + "/shards")
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
