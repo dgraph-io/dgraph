@@ -103,6 +103,91 @@ upsert {
 	require.Contains(t, res, "Ashish")
 }
 
+func TestUpsertNoCloseBracketRDF(t *testing.T) {
+	SetupBankExample(t)
+
+	m1 := `
+upsert {
+  query {
+    u as var(func: has(amount)) {
+      amt as amount
+    }
+    me() {
+      max_amt as max(val(amt))
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <amount> val(max_amt .
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "Expected ')' while reading function found: '.'")
+}
+
+func TestUpsertNoCloseBracketJSON(t *testing.T) {
+	SetupBankExample(t)
+
+	m1 := `
+{
+  "query": "{ u as var(func: has(amount)) { amt as amount} me () {  updated_amt as math(amt+1)}}",
+  "set": [
+    {
+      "uid": "uid(u)",
+      "amount": "val(updated_amt"
+    }
+  ]
+}
+`
+	_, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	require.Contains(t, err.Error(), "brackets are not closed properly")
+}
+
+func TestUpsertExampleJSON(t *testing.T) {
+	SetupBankExample(t)
+
+	m1 := `
+{
+  "query": "{ u as var(func: has(amount)) { amt as amount} me () {  updated_amt as math(amt+1)}}",
+  "set": [
+    {
+      "uid": "uid(u)",
+      "amount": "val(updated_amt)"
+    }
+  ]
+}
+`
+	_, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "user3",
+       "amount": 1001.000000
+     }, {
+       "name": "user1",
+       "amount": 11.000000
+     }, {
+       "name": "user2",
+       "amount": 101.000000
+     }]
+   }
+}`
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
 func TestUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
