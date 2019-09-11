@@ -142,7 +142,7 @@ func TestUpsertNoCloseBracketJSON(t *testing.T) {
 }
 `
 	_, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
-	require.Contains(t, err.Error(), "Brackets not closed properly")
+	require.Contains(t, err.Error(), "brackets are not closed properly")
 }
 
 func TestUpsertExampleJSON(t *testing.T) {
