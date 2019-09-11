@@ -46,92 +46,6 @@ type TestCase struct {
 	Error         *gqlerror.Error
 }
 
-var testGQLSchema = `
-scalar ID
-scalar String
-scalar DateTime
-
-directive @hasInverse(field: String!) on FIELD_DEFINITION
-
-type Country {
-	id: ID!
-	name: String!	
-}
-
-type Author {
-	id: ID!
-	name: String!
-	dob: DateTime
-	country: Country
-	posts: [Post!] @hasInverse(field: "author")
-}
-
-type Post {
-	postID: ID!
-	title: String!
-	text: String
-	author: Author! @hasInverse(field: "posts")
-}
-
-type Mutation {
-	addAuthor(input: AuthorInput!): AddAuthorPayload
-
-	addPost(input: PostInput!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-}
-
-type Query {
-	getAuthor(id: ID!): Author
-}
-
-input AuthorInput {
-	name: String!
-	dob: DateTime
-	country: CountryRef
-	posts: [PostRef!]
-}
-
-type AddAuthorPayload {
-    author: Author
-}
-
-input AuthorRef {
-    id: ID!
-}
-
-input CountryRef {
-    id: ID!
-}
-
-input PostInput {
-	title: String!
-	text: String
-	author: AuthorRef!
-}
-
-input PostRef {
-    postID: ID!
-}
-
-type AddPostPayload {
-    post: Post
-}
-
-input PatchPost {
-	title: String
-	text: String
-}
-
-input UpdatePostInput {
-	postID: ID!
-	patch: PatchPost!
-}
-
-type UpdatePostPayload {
-    post: Post
-}
-`
-
 func TestMutationRewriting(t *testing.T) {
 	b, err := ioutil.ReadFile("mutation_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
@@ -140,7 +54,7 @@ func TestMutationRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := schema.AsSchema(test.LoadSchema(t, testGQLSchema))
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
 	rewritererToTest := NewMutationRewriter()
 
@@ -184,7 +98,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := schema.AsSchema(test.LoadSchema(t, testGQLSchema))
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
 	testRewriter := NewQueryRewriter()
 
