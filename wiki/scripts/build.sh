@@ -53,7 +53,7 @@ VERSIONS_ARRAY=(
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
-	echo ${versions:1}
+	echo "${versions:1}"
 }
 
 function version { echo "$@" | gawk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'; }
@@ -132,8 +132,8 @@ checkAndUpdate()
 		rebuild "$branch" "$version"
 	fi
 
-	folder=$(publicFolder $version)
-	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
+	folder=$(publicFolder "$version")
+	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d "$folder" ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
@@ -142,7 +142,7 @@ checkAndUpdate()
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
-	pushd $(dirname "$0")/.. > /dev/null
+	pushd "$(dirname "$0")/.." > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 

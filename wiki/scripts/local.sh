@@ -8,7 +8,7 @@ VERSIONS_ARRAY=(
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
-	echo ${versions:1}
+	echo "${versions:1}"
 }
 
 VERSION_STRING=$(joinVersions)
