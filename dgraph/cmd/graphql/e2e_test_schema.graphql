@@ -1,0 +1,30 @@
+type Country {
+        id: ID!
+        name: String! @searchable(by: "trigram")
+}
+
+type Author {
+        id: ID!
+        name: String! @searchable(by: "hash")
+        dob: DateTime @searchable
+        reputation: Float @searchable
+        country: Country
+        posts: [Post!] @hasInverse(field: "author")
+}
+
+type Post {
+        postID: ID!
+        title: String! @searchable(by: "term")
+        text: String @searchable(by: "fulltext")
+        tags: [String] @searchable(by: "exact")
+        numLikes: Int @searchable
+        isPublished: Boolean @searchable
+        postType: PostType @searchable
+        author: Author! @hasInverse(field: "posts")
+}
+
+enum PostType {
+        Fact
+        Question
+        Opinion
+}
