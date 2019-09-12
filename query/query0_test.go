@@ -2284,7 +2284,7 @@ func TestCountUidWithAlias(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = testutil.DgraphClient(testutil.SockAddr)
+	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	populateCluster()
 	os.Exit(m.Run())
