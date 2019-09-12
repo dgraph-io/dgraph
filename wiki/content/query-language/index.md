@@ -1789,7 +1789,7 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 ## Expand Predicates
 
 The `expand()` function can be used to expand the predicates out of a node. To
- use `expand()`, the the [type system]({{< relref "#type-system" >}}) is required.
+ use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
 Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
@@ -1805,7 +1805,7 @@ There are four ways to use the `expand` function.
 * If `_reverse_` is passed as an argument to `expand()`, only the reverse
   predicates at each node in that level are retrieved.
 
-The last three keywords require that the node's have types. Dgraph will look 
+The last three keywords require that the nodes have types. Dgraph will look 
 for all the types that have been assigned to a node,
 query the types to check which attributes they have, and use those to compute
 the list of predicates to expand.
@@ -2084,7 +2084,7 @@ friends: [uid] .
 ```
 
 If a `uid` predicate contains a reverse index, both the predicate and the reverse 
-predicate are part of any type definition that contains that predicate.
+predicate are part of any type definition which contain that predicate.
 Expand queries will follow that convention.
 
 Edges can be used in multiple types: for example, `name` might be used for both a person
