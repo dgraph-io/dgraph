@@ -911,7 +911,8 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 
 	return langForFunc(langs) != "." &&
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
-			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn)
+			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
+			srcFn.fnType == customIndexFn)
 }
 
 func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
@@ -1388,9 +1389,20 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	case hasFn:
 		// Dont do anything, as filtering based on lang is already
 		// done above.
-	case fullTextSearchFn, standardFn:
+	case fullTextSearchFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
+		filter.tokName = "fulltext"
+		filtered = matchStrings(filtered, values, filter)
+	case standardFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "term"
+		filtered = matchStrings(filtered, values, filter)
+	case customIndexFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = arg.q.SrcFunc.Args[0]
 		filtered = matchStrings(filtered, values, filter)
 	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
