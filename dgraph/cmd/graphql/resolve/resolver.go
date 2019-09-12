@@ -142,6 +142,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
+	r.resp.Extensions = &schema.Extensions{
+		RequestID: api.RequestID(ctx),
+	}
+
 	ctx, span := otrace.StartSpan(ctx, methodResolve)
 	defer func(span *otrace.Span) {
 		span.End()
