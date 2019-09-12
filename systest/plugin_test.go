@@ -136,6 +136,24 @@ func TestPlugins(t *testing.T) {
 	)
 
 	suite(
+		"word: string @index(anagram) @lang .",
+		`[
+			{ "word@en": "airmen", "word@fr": "no match" },
+			{ "word@en": "no match", "word@fr": "marine" }
+		]`,
+		[]testCase{
+			{`
+				{ q(func: allof(word@en, anagram, "remain")) {
+					word: word@en
+				}}`, `
+				{ "q": [
+					{ "word": "marine" }
+				]}`,
+			},
+		},
+	)
+
+	suite(
 		"ip: string @index(cidr) .",
 		`[
 			{ "ip": "100.55.22.11/32" },
