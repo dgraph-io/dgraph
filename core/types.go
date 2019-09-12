@@ -41,3 +41,13 @@ type BlockHeader struct {
 
 // BlockBody is the extrinsics inside a state block
 type BlockBody []byte
+
+/// BlockData is stored within the BlockDB
+type BlockData struct {
+	Hash   common.Hash
+	Header BlockHeader
+	Body   BlockBody
+	// Receipt
+	// MessageQueue
+	// Justification
+}

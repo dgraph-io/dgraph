@@ -68,7 +68,7 @@ var (
 )
 
 func newEmpty() *Trie {
-	db := &Database{
+	db := &StateDB{
 		Db: polkadb.NewMemDatabase(),
 	}
 	t := NewEmptyTrie(db)
@@ -83,7 +83,7 @@ func TestNewEmptyTrie(t *testing.T) {
 }
 
 func TestNewTrie(t *testing.T) {
-	db := &Database{
+	db := &StateDB{
 		Db: polkadb.NewMemDatabase(),
 	}
 	trie := NewTrie(db, &leaf{key: []byte{0}, value: []byte{17}})

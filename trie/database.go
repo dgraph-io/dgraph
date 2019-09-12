@@ -22,8 +22,8 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 )
 
-// Database is a wrapper around a polkadb
-type Database struct {
+// StateDB is a wrapper around a polkadb
+type StateDB struct {
 	Db     polkadb.Database
 	Batch  polkadb.Batch
 	Lock   sync.RWMutex

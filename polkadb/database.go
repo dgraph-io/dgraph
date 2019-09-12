@@ -17,18 +17,24 @@
 package polkadb
 
 import (
-	"log"
+	"os"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/snappy"
-	"github.com/pkg/errors"
 )
 
 // BadgerService contains directory path to data and db instance
 type BadgerService struct {
 	config Config
 	db     *badger.DB
-	err    <-chan error
+}
+
+// ChainDB contains both databases for service registry
+type ChainDB struct {
+	StateDB *BadgerService
+	BlockDB *BadgerService
+	err     <-chan error
 }
 
 //Config defines configurations for BadgerService instance
@@ -61,15 +67,19 @@ type tableBatch struct {
 	prefix string
 }
 
-func (b *BadgerService) Start() <-chan error {
-	b.err = make(<-chan error)
-	return b.err
+func (chainDB *ChainDB) Start() <-chan error {
+	chainDB.err = make(<-chan error)
+	return chainDB.err
 }
 
-func (db *BadgerService) Stop() <-chan error {
+func (chainDB *ChainDB) Stop() <-chan error {
 	e := make(chan error)
 	// Closing Badger Database
-	err := db.db.Close()
+	err := chainDB.StateDB.db.Close()
+	if err != nil {
+		e <- err
+	}
+	err = chainDB.BlockDB.db.Close()
 	if err != nil {
 		e <- err
 	}
@@ -79,10 +89,12 @@ func (db *BadgerService) Stop() <-chan error {
 // NewBadgerService opens and returns a new DB object
 func NewBadgerService(file string) (*BadgerService, error) {
 	opts := badger.DefaultOptions(file)
-
+	if err := os.MkdirAll(file, os.ModePerm); err != nil {
+		log.Crit("err creating directory for DB ", err)
+	}
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Fatal(err)
+		log.Crit("err opening DB directory", err)
 		return nil, err
 	}
 
@@ -163,9 +175,9 @@ func (db *BadgerService) Del(key []byte) error {
 func (db *BadgerService) Close() {
 	err := db.db.Close()
 	if err == nil {
-		log.Println("Database closed")
+		log.Info("Database closed")
 	} else {
-		log.Fatal("Failed to close database", "err", err)
+		log.Crit("Failed to close database", "err", err)
 	}
 }
 
@@ -215,7 +227,7 @@ func (i *Iterable) Seek(key []byte) {
 func (i *Iterable) Key() []byte {
 	ret, err := snappy.Decode(nil, i.iter.Item().Key())
 	if err != nil {
-		log.Printf("%+v", errors.Wrap(err, "key retrieval error"))
+		log.Warn("key retrieval error ", "error", err)
 	}
 	return ret
 }
@@ -224,11 +236,11 @@ func (i *Iterable) Key() []byte {
 func (i *Iterable) Value() []byte {
 	val, err := i.iter.Item().ValueCopy(nil)
 	if err != nil {
-		log.Printf("%+v", errors.Wrap(err, "value retrieval error"))
+		log.Warn("value retrieval error ", "error", err)
 	}
 	ret, err := snappy.Decode(nil, val)
 	if err != nil {
-		log.Printf("%+v", errors.Wrap(err, "value decoding error"))
+		log.Warn("value decoding error ", "error", err)
 	}
 	return ret
 }
@@ -250,11 +262,11 @@ func (b *batchWriter) Write() error {
 	for k, v := range b.b {
 		err := wb.Set([]byte(k), v)
 		if err != nil {
-			log.Printf("%+v", errors.Wrap(err, "error writing batch txs"))
+			log.Warn("error writing batch txs ", "error", err)
 		}
 	}
 	if err := wb.Flush(); err != nil {
-		log.Printf("%+v", errors.Wrap(err, "error stored by writeBatch"))
+		log.Warn("error stored by write batch ", "error", err)
 	}
 	return nil
 }
@@ -268,7 +280,7 @@ func (b *batchWriter) ValueSize() int {
 func (b *batchWriter) Delete(key []byte) error {
 	err := b.db.db.NewWriteBatch().Delete(key)
 	if err != nil {
-		log.Printf("%+v", errors.Wrap(err, "error batch deleting key"))
+		log.Warn("error batch deleting key ", "error", err)
 	}
 	b.size++
 	return nil

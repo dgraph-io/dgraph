@@ -18,13 +18,31 @@ package blocktree
 
 import (
 	"math/big"
+	"os"
 	"strconv"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core"
+	db "github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
 )
+
+var blockDB *db.BadgerService
+
+func TestMain(m *testing.M) {
+	dbSrv, err := db.NewBadgerService("./test_data/block")
+	if err != nil {
+		log.Crit("database was not created ", "error ", err)
+	}
+	blockDB = dbSrv
+	exitVal := m.Run()
+	dbSrv.Close()
+	if err := os.RemoveAll("./test_data/"); err != nil {
+		log.Warn("removal of temp directory badger-test failed", "error", err)
+	}
+	os.Exit(exitVal)
+}
 
 var zeroHash, _ = common.HexToHash("0x00")
 
@@ -52,7 +70,7 @@ func intToHashable(in int) string {
 }
 
 func createFlatTree(t *testing.T, depth int) *BlockTree {
-	bt := NewBlockTreeFromGenesis(createGenesisBlock())
+	bt := NewBlockTreeFromGenesis(createGenesisBlock(), blockDB)
 
 	previousHash := bt.head.hash
 

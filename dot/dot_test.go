@@ -17,6 +17,7 @@
 package dot
 
 import (
+	"os"
 	"testing"
 
 	cfg "github.com/ChainSafe/gossamer/config"
@@ -37,12 +38,21 @@ func createTestDot(t *testing.T) *Dot {
 	}
 
 	// DB
-	dataDir := "../test_data"
-	dbSrvc, err := polkadb.NewBadgerService(dataDir)
-	services = append(services, dbSrvc)
+	stateDataDir := "../test_data/state"
+	stateDB, err := polkadb.NewBadgerService(stateDataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockDataDir := "../test_data/block"
+	blockDB, err := polkadb.NewBadgerService(blockDataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbSrv := &polkadb.ChainDB{
+		StateDB: stateDB,
+		BlockDB: blockDB,
+	}
+	services = append(services, dbSrv)
 
 	// API
 	apiSrvc := api.NewApiService(p2pSrvc, nil)
@@ -55,7 +65,7 @@ func TestDot_Start(t *testing.T) {
 	var availableServices = [...]services.Service{
 		&p2p.Service{},
 		&api.Service{},
-		&polkadb.BadgerService{},
+		&polkadb.ChainDB{},
 	}
 
 	dot := createTestDot(t)
@@ -80,4 +90,10 @@ func TestDot_Start(t *testing.T) {
 	dot.Stop()
 	// Wait for everything to finish
 	<-dot.stop
+
+	defer func() {
+		if err := os.RemoveAll("../test_data"); err != nil {
+			t.Log("removal of temp directory test_data failed", "error", err)
+		}
+	}()
 }

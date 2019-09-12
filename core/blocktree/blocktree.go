@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ChainSafe/gossamer/polkadb"
+
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core"
 	log "github.com/ChainSafe/log15"
@@ -33,10 +35,11 @@ type BlockTree struct {
 	head            *node
 	leaves          leafMap
 	finalizedBlocks []*node
+	BlockDB         *polkadb.BadgerService
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
-func NewBlockTreeFromGenesis(genesis core.Block) *BlockTree {
+func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BadgerService) *BlockTree {
 	head := &node{
 		hash:     genesis.Header.Hash,
 		number:   genesis.Header.Number,
@@ -48,6 +51,7 @@ func NewBlockTreeFromGenesis(genesis core.Block) *BlockTree {
 		head:            head,
 		finalizedBlocks: []*node{},
 		leaves:          leafMap{head.hash: head},
+		BlockDB:         db,
 	}
 }
 
@@ -57,6 +61,9 @@ func (bt *BlockTree) AddBlock(block core.Block) {
 	parent := bt.GetNode(block.Header.ParentHash)
 	// Check if it already exists
 	// TODO: Can shortcut this by checking DB
+	// TODO: Write blockData to db
+	// TODO: Create getter functions to check if blockNum is greater than best block stored
+
 	n := bt.GetNode(block.Header.Hash)
 	if n != nil {
 		log.Debug("Attempted to add block to tree that already exists", "hash", n.hash)

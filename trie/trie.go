@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"errors"
+
 	"github.com/ChainSafe/gossamer/common"
 )
 
@@ -26,12 +27,12 @@ import (
 // The zero value is an empty trie with no database.
 // Use NewTrie to create a trie that sits on top of a database.
 type Trie struct {
-	db   *Database
+	db   *StateDB
 	root node
 }
 
 // NewEmptyTrie creates a trie with a nil root and merkleRoot
-func NewEmptyTrie(db *Database) *Trie {
+func NewEmptyTrie(db *StateDB) *Trie {
 	return &Trie{
 		db:   db,
 		root: nil,
@@ -39,7 +40,7 @@ func NewEmptyTrie(db *Database) *Trie {
 }
 
 // NewTrie creates a trie with an existing root node from db
-func NewTrie(db *Database, root node) *Trie {
+func NewTrie(db *StateDB, root node) *Trie {
 	return &Trie{
 		db:   db,
 		root: root,
@@ -52,7 +53,7 @@ func (t *Trie) Root() node {
 }
 
 // Db returns the trie's underlying database
-func (t *Trie) Db() *Database {
+func (t *Trie) Db() *StateDB {
 	return t.db
 }
 
