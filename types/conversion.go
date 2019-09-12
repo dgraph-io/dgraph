@@ -30,6 +30,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"math/big"
 )
 
 // Convert converts the value to given scalar type.
@@ -66,6 +67,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
+			case BigIntID:
+				val := new(big.Float).SetPrec(200)
+				if err := val.UnmarshalText(data); err != nil {
+					return to, err
+				}
+				*res = val
 			case BoolID:
 				if len(data) == 0 || data[0] == 0 {
 					*res = false
@@ -112,6 +119,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				if math.IsNaN(val) {
 					return to, errors.Errorf("Got invalid value: NaN")
+				}
+				*res = val
+			case BigIntID:
+				val := new(big.Float).SetPrec(200)
+				if err := val.UnmarshalText(data); err != nil {
+					return to, err
 				}
 				*res = val
 			case StringID, DefaultID:
@@ -161,6 +174,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bs[:]
 			case FloatID:
 				*res = float64(vc)
+			case BigIntID:
+				*res = new(big.Float).SetPrec(200).SetInt64(vc)
 			case BoolID:
 				*res = vc != 0
 			case StringID, DefaultID:
@@ -170,6 +185,42 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			default:
 				return to, cantConvert(fromID, toID)
 			}
+		}
+	case BigIntID:
+		{
+			var t big.Float
+			t.SetPrec(200)
+			if err := t.UnmarshalText(data); err != nil {
+				return to, err
+			}
+
+			switch toID {
+			case BigIntID:
+				*res = t
+			case FloatID:
+				*res, _ = t.Float64()
+			case BinaryID:
+				val, err := t.MarshalText()
+				if err != nil {
+					return to, errors.Errorf("Error while parsing %s", err.Error())
+				}
+				*res = val
+			case IntID:
+				*res, _ = t.Int64()
+			case BoolID:
+				*res = t.Cmp(new(big.Float).SetFloat64(0)) != 0
+			case StringID, DefaultID:
+				*res = t.String()
+			case DateTimeID:
+				secs, _ := t.Int64()
+				floatSecs, _ := t.Float64()
+				fracSecs := floatSecs - float64(secs)
+				nsecs := int64(fracSecs * nanoSecondsInSec)
+				*res = time.Unix(secs, nsecs).UTC()
+			default:
+				return to, cantConvert(fromID, toID)
+			}
+
 		}
 	case FloatID:
 		{
@@ -181,6 +232,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			switch toID {
 			case FloatID:
 				*res = vc
+			case BigIntID:
+				*res = new(big.Float).SetPrec(200).SetFloat64(vc)
 			case BinaryID:
 				var bs [8]byte
 				u := math.Float64bits(vc)
@@ -230,6 +283,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				if vc {
 					*res = float64(1)
 				}
+			case BigIntID:
+				*res = new(big.Float).SetPrec(200).SetInt64(0)
+				if vc {
+					*res = new(big.Float).SetPrec(200).SetInt64(1)
+				}
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:
@@ -261,6 +319,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = t.Unix()
 			case FloatID:
 				*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
+			case BigIntID:
+				x, y := big.NewFloat(nanoSecondsInSec), big.NewFloat(float64(t.UnixNano()))
+				*res = new(big.Float).Quo(y, x)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -371,6 +432,20 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
+	case BigIntID:
+		vc := val.(big.Float)
+		switch toID {
+		case StringID, DefaultID:
+			*res = vc.String()
+		case BinaryID:
+			val, err := vc.MarshalText()
+			if err != nil {
+				return errors.Errorf("Error while parsing %s", err.Error())
+			}
+			*res = val
+		default:
+			return cantConvert(fromID, toID)
+		}
 	case BoolID:
 		vc := val.(bool)
 		switch toID {
@@ -463,6 +538,12 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 			return def, errors.Errorf("Expected value of type int64. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_IntVal{IntVal: v}}, nil
+	case BigIntID:
+		var b big.Float
+		if b, ok = value.(big.Float); !ok {
+			return def, errors.Errorf("Expected value of type big.Float. Got: %v", value)
+		}
+		return &api.Value{Val: &api.Value_BigIntVal{BigIntVal: b}}, nil
 	case FloatID:
 		var v float64
 		if v, ok = value.(float64); !ok {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	geom "github.com/twpayne/go-geom"
+	"math/big"
 )
 
 const nanoSecondsInSec = 1000000000
@@ -52,6 +53,8 @@ const (
 	StringID = TypeID(pb.Posting_STRING)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
+	// BigIntID represents the arbitrary precision type
+	BigIntID = TypeID(pb.Posting_BIGINT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -65,6 +68,7 @@ var typeNameMap = map[string]TypeID{
 	"uid":      UidID,
 	"string":   StringID,
 	"password": PasswordID,
+	"bigint":   BigIntID,
 }
 
 // TypeID represents the type of the data.
@@ -98,6 +102,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
+	case BigIntID:
+		return "bigint"
 	}
 	return ""
 }
@@ -161,6 +167,11 @@ func ValueForType(id TypeID) Val {
 	case DateTimeID:
 		var t time.Time
 		return Val{DateTimeID, &t}
+
+	case BigIntID:
+		var b big.Float
+		b.SetPrec(200)
+		return Val{BigIntID, &b}
 
 	case StringID:
 		var s string
