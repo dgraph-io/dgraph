@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -100,9 +99,8 @@ type RequestResolver struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type resolved struct {
-	data  []byte
-	err   error
-	trace []*schema.ResolverTrace
+	data []byte
+	err  error
 }
 
 // New creates a new RequestResolver
@@ -144,26 +142,12 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
-	start := time.Now().UTC()
-	trace := &schema.Trace{
-		Version:   1,
-		StartTime: start,
-	}
-	r.resp.Extensions = &schema.Extensions{
-		RequestID: api.RequestID(ctx),
-		Tracing:   trace,
-	}
-
 	ctx, span := otrace.StartSpan(ctx, methodResolve)
 	defer func(span *otrace.Span) {
 		span.End()
-		trace.EndTime = time.Now().UTC()
-		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
 	}(span)
 
-	timers := schema.NewOffsetTimerFactory(trace.StartTime)
-	op, err := r.Schema.Operation(r.GqlReq, timers.NewOffsetTimer(&trace.Parsing),
-		timers.NewOffsetTimer(&trace.Validation))
+	op, err := r.Schema.Operation(r.GqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
@@ -198,7 +182,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					dgraph:        r.dgraph,
 					queryRewriter: r.queryRewriter,
 					operation:     op,
-					resolveStart:  start,
 				}).resolve(ctx)
 			}(q, i)
 		}
@@ -211,8 +194,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// AddData handle nil cases.
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
-			r.resp.Extensions.Tracing.Execution =
-				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
@@ -232,13 +213,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				dgraph:           r.dgraph,
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
-				resolveStart:     start,
 			}
 			res := mr.resolve(ctx)
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
-			r.resp.Extensions.Tracing.Execution =
-				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))

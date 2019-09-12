@@ -58,7 +58,7 @@ const (
 
 // Schema represents a valid GraphQL schema
 type Schema interface {
-	Operation(r *Request, parsingTimer OffsetTimer, validationTimer OffsetTimer) (Operation, error)
+	Operation(r *Request) (Operation, error)
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either

@@ -145,25 +145,9 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 	return res
 }
 
-func traceFromField(field schema.Field, parent string) *schema.ResolverTrace {
-	trace := &schema.ResolverTrace{
-		ParentType: parent,
-		FieldName:  field.ResponseName(),
-		ReturnType: field.Type().String(),
-	}
-
-	return trace
-}
-
 func (mr *mutationResolver) resolveQuery(ctx context.Context,
 	assigned map[string]string) *resolved {
 	res := &resolved{}
-
-	trace := traceFromField(mr.mutation.SelectionSet()[0], mr.mutation.ResponseName())
-	trace.Path = []interface{}{mr.mutation.ResponseName(),
-		mr.mutation.SelectionSet()[0].ResponseName()}
-	opStart := time.Now().UTC()
-	trace.StartOffset = opStart.Sub(mr.resolveStart).Nanoseconds()
 
 	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
 	if err != nil {
@@ -171,12 +155,6 @@ func (mr *mutationResolver) resolveQuery(ctx context.Context,
 			mr.mutation.Name())
 		return res
 	}
-
-	dgraphQueryStart := time.Now().UTC()
-	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-	dgraphDuration.StartOffset = dgraphQueryStart.Sub(mr.resolveStart).Nanoseconds()
-	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
-
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
@@ -185,9 +163,6 @@ func (mr *mutationResolver) resolveQuery(ctx context.Context,
 	}
 
 	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
-	dgraphDuration.Duration = time.Since(dgraphQueryStart).Nanoseconds()
-	trace.Duration = time.Since(opStart).Nanoseconds()
-	res.trace = append(res.trace, trace)
 	return res
 }
 
@@ -199,21 +174,11 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	defer func() {
 		span.End()
 	}()
-
-	mutationStart := time.Now().UTC()
-	trace := traceFromField(mr.mutation, "Mutation")
-	trace.Path = []interface{}{mr.mutation.ResponseName()}
-	trace.StartOffset = mutationStart.Sub(mr.resolveStart).Nanoseconds()
 	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
 	}
-
-	dgraphMutStart := time.Now().UTC()
-	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
-	dgraphDuration.StartOffset = dgraphMutStart.Sub(mr.resolveStart).Nanoseconds()
-	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 
 	assigned, err := mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
@@ -222,12 +187,7 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 		return res
 	}
 
-	dgraphDuration.Duration = time.Since(dgraphMutStart).Nanoseconds()
-	res.trace = append(res.trace, trace)
-
 	queryRes := mr.resolveQuery(ctx, assigned)
-	queryRes.trace = append(res.trace, queryRes.trace...)
-	trace.Duration = time.Since(mutationStart).Nanoseconds()
 	return queryRes
 }
 
@@ -240,15 +200,6 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		span.End()
 	}()
 
-	trace := traceFromField(mr.mutation, "Mutation")
-	res.trace = []*schema.ResolverTrace{trace}
-	trace.Path = []interface{}{mr.mutation.ResponseName()}
-	opStart := time.Now().UTC()
-	trace.StartOffset = opStart.Sub(mr.resolveStart).Nanoseconds()
-	defer func() {
-		trace.Duration = time.Since(opStart).Nanoseconds()
-	}()
-
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
@@ -256,10 +207,6 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
-	dgraphDelStart := time.Now().UTC()
-	dgraphDuration := &schema.LabeledOffsetDuration{Label: "delete"}
-	dgraphDuration.StartOffset = dgraphDelStart.Sub(mr.resolveStart).Nanoseconds()
-	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedType().Name())
 	if err != nil {
 		return &resolved{
@@ -275,8 +222,6 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
-	dgraphDuration.Duration = time.Since(dgraphDelStart).Nanoseconds()
-	res.trace = append(res.trace, trace)
 	res.data = []byte(`{ "msg": "Deleted" }`)
 	return res
 }

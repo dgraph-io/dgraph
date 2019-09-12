@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"context"
-	"time"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -35,28 +34,15 @@ type queryResolver struct {
 	dgraph        dgraph.Client
 	queryRewriter dgraph.QueryRewriter
 	operation     schema.Operation
-	// start time for the initial Resolve operation. Used to calculate offsets for other
-	// sub operations.
-	resolveStart time.Time
 }
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
 
-	trace := &schema.ResolverTrace{
-		ParentType: "Query",
-		FieldName:  qr.query.ResponseName(),
-		ReturnType: qr.query.Type().String(),
-		Path:       []interface{}{qr.query.ResponseName()},
-	}
-	res.trace = []*schema.ResolverTrace{trace}
 	ctx, qspan := otrace.StartSpan(ctx, qr.query.Alias())
-	start := time.Now().UTC()
 	defer func() {
 		qspan.End()
-		trace.StartOffset = start.Sub(qr.resolveStart).Nanoseconds()
-		trace.Duration = time.Since(start).Nanoseconds()
 	}()
 
 	if qr.query.QueryType() == schema.SchemaQuery {
@@ -81,11 +67,6 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	}
 	span.End()
 
-	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-	executionStart := time.Now().UTC()
-	dgraphDuration.StartOffset = executionStart.Sub(qr.resolveStart).Nanoseconds()
-	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
-
 	spanCtx, span := otrace.StartSpan(ctx, "dgraph.Query")
 	resp, err := qr.dgraph.Query(spanCtx, dgQuery)
 	if err != nil {
@@ -94,7 +75,6 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		span.End()
 		return res
 	}
-	dgraphDuration.Duration = time.Since(executionStart).Nanoseconds()
 	span.End()
 
 	spanCtx, span = otrace.StartSpan(ctx, "completeDgraphResult")
