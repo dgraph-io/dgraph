@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
+	"math/big"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -49,6 +50,7 @@ const (
 	IdentBool     = 0x9
 	IdentTrigram  = 0xA
 	IdentHash     = 0xB
+	IdentBigInt   = 0xC
 	IdentCustom   = 0x80
 )
 
@@ -82,6 +84,7 @@ type Tokenizer interface {
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
+	registerTokenizer(BigIntTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -168,6 +171,18 @@ func registerTokenizer(t Tokenizer) {
 	x.AssertTruef(ok, "Invalid type %q for tokenizer %s", t.Type(), t.Name())
 	tokenizers[t.Name()] = t
 }
+
+// BigIntTokenizer generates tokens from big float data.
+type BigIntTokenizer struct{}
+
+func (t BigIntTokenizer) Name() string { return "bigint" }
+func (t BigIntTokenizer) Type() string { return "bigint" }
+func (t BigIntTokenizer) Tokens(v interface{}) ([]string, error) {
+	return []string{(v.(*big.Float)).String()}, nil
+}
+func (t BigIntTokenizer) Identifier() byte { return IdentBigInt }
+func (t BigIntTokenizer) IsSortable() bool { return true }
+func (t BigIntTokenizer) IsLossy() bool    { return true }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}
