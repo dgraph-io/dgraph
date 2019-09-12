@@ -19,7 +19,6 @@ package resolve
 import (
 	"bytes"
 	"context"
-	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -61,9 +60,6 @@ type mutationResolver struct {
 	mutationRewriter dgraph.MutationRewriter
 	queryRewriter    dgraph.QueryRewriter
 	dgraph           dgraph.Client
-	// start time for the initial Resolve operation. Used to calculate offsets for other
-	// sub operations.
-	resolveStart time.Time
 }
 
 const (
@@ -145,27 +141,6 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 	return res
 }
 
-func (mr *mutationResolver) resolveQuery(ctx context.Context,
-	assigned map[string]string) *resolved {
-	res := &resolved{}
-
-	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
-			mr.mutation.Name())
-		return res
-	}
-	resp, err := mr.dgraph.Query(ctx, dgQuery)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
-			mr.mutation.Name())
-		return res
-	}
-
-	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
-	return res
-}
-
 func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	res := &resolved{}
 	ctx, span := otrace.StartSpan(ctx, "resolveMutation")
@@ -187,8 +162,21 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 		return res
 	}
 
-	queryRes := mr.resolveQuery(ctx, assigned)
-	return queryRes
+	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
+			mr.mutation.Name())
+		return res
+	}
+	resp, err := mr.dgraph.Query(ctx, dgQuery)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+			mr.mutation.Name())
+		return res
+	}
+
+	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
+	return res
 }
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {
