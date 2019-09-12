@@ -75,7 +75,7 @@ func TestAddMutation(t *testing.T) {
 }
 
 func addCountry(t *testing.T) string {
-	addCountryParams := &test.GraphQLParams{
+	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($name: String!) {
 			addCountry(input: { name: $name }) {
 				country {
@@ -108,7 +108,7 @@ func addCountry(t *testing.T) string {
 }
 
 func getCountry(t *testing.T, uid string) {
-	getCountryParams := &test.GraphQLParams{
+	getCountryParams := &GraphQLParams{
 		Query: `query getCountry($createdID: ID!) {
 			getCountry(id: $createdID) {
 				id
@@ -128,7 +128,7 @@ func getCountry(t *testing.T, uid string) {
 }
 
 func addAuthor(t *testing.T, countryUID string) string {
-	addAuthorParams := &test.GraphQLParams{
+	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AuthorInput!) {
 			addAuthor(input: $author) {
 			  	author {
@@ -183,7 +183,7 @@ func addAuthor(t *testing.T, countryUID string) string {
 }
 
 func getAuthor(t *testing.T, authorUID, countryUID string) {
-	getAuthorParams := &test.GraphQLParams{
+	getAuthorParams := &GraphQLParams{
 		Query: `query getAuthor($createdID: ID!) {
 			getAuthor(id: $createdID) {
 				id
@@ -218,7 +218,7 @@ func getAuthor(t *testing.T, authorUID, countryUID string) {
 }
 
 func addPost(t *testing.T, authorUID string) string {
-	addPostParams := &test.GraphQLParams{
+	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: PostInput!) {
 			addPost(input: $post) {
 			  post {
@@ -275,7 +275,7 @@ func addPost(t *testing.T, authorUID string) string {
 }
 
 func getPost(t *testing.T, postUID, authorUID, countryUID string) {
-	getPostParams := &test.GraphQLParams{
+	getPostParams := &GraphQLParams{
 		Query: `query getPost($createdID: ID!)  {
 			getPost(id: $createdID) {
 				postID
