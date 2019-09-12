@@ -168,6 +168,7 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 			mr.mutation.Name())
 		return res
 	}
+
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
