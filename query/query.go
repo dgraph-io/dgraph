@@ -850,6 +850,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.expandAll,
+		Count:        int32(sg.Params.Count),
 	}
 
 	if sg.SrcUIDs != nil {

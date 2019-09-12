@@ -70,6 +70,7 @@ message Query {
 
 	uint64 read_ts = 13;
 	int32 cache = 14;
+	int32 count = 15; // used to limit the number of result. Typically, the count is value of first
 }
 
 message ValueList {
