@@ -106,10 +106,7 @@ func RequireJSONEqStr(t *testing.T, expected string, got interface{}) {
 	require.JSONEq(t, expected, string(jsonGot))
 }
 
-// replaceWith replaces a given key with a new value in a map.  Often in GraphQL
-// e2e testing there are values we don't care about for correctness comparisions:
-// e.g. uids (which will be different for each test run) and requestIDs (which
-// will be different for every GraphQL request).
+// replaceWith replaces a given key with a new value in a map.
 func replaceWith(vars map[string]interface{}, key string, newVal interface{}) {
 	for k, val := range vars {
 		if k == key {
@@ -126,8 +123,12 @@ func replaceWith(vars map[string]interface{}, key string, newVal interface{}) {
 	}
 }
 
-// ReplaceJSON takes a []byte slice (expected to be json data) and does replacement
-// on all keys in toReplace and re-marshals to a []byte.
+// ReplaceJSON takes a []byte slice (expected to be json data), replaces all keys
+// in toReplace with the corresponding values, and then re-marshals to a []byte.
+// Often in GraphQL e2e testing there are values we don't care about for correctness
+// comparisions and which we can't predict before the test is run: e.g. uids (which
+// will be different for each test run) and requestIDs (which will be different for
+// every GraphQL request).
 func ReplaceJSON(input []byte, toReplace map[string]interface{}) ([]byte, error) {
 	var inputJSON map[string]interface{}
 	err := json.Unmarshal(input, &inputJSON)
