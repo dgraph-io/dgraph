@@ -555,6 +555,7 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
+
 	if len(qc.gmuList) == 0 {
 		return nil
 	}

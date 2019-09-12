@@ -16,7 +16,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/blevesearch/bleve/v2 v2.3.10
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dgraph-io/dgo/v230 v230.0.2-0.20240314155021-7b8d289e37f3
+	github.com/dgraph-io/dgo/v230 v230.0.2-0.20240808090644-31c0382ae95d
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
@@ -32,7 +32,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/golang/geo v0.0.0-20210211234256-740aa86cb551
-	github.com/golang/glog v1.2.0
+	github.com/golang/glog v1.2.1
 	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/codesearch v1.0.0
@@ -59,16 +59,16 @@ require (
 	go.etcd.io/etcd/raft/v3 v3.5.9
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.16.0
-	golang.org/x/crypto v0.24.0
+	golang.org/x/crypto v0.25.0
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/mod v0.18.0
-	golang.org/x/net v0.26.0
+	golang.org/x/net v0.27.0
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.22.0
-	golang.org/x/term v0.21.0
+	golang.org/x/term v0.22.0
 	golang.org/x/text v0.16.0
 	golang.org/x/tools v0.22.0
-	google.golang.org/grpc v1.62.1
+	google.golang.org/grpc v1.65.0
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -85,7 +85,7 @@ require (
 	github.com/blevesearch/segment v0.9.1 // indirect
 	github.com/blevesearch/snowballstem v0.9.0 // indirect
 	github.com/blevesearch/upsidedown_store_api v1.0.2 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chewxy/math32 v1.10.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
@@ -148,9 +148,9 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/api v0.122.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240311173647-c811ad7063a7 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/grpc/examples v0.0.0-20230821201920-d51b3f41716d // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.22.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
