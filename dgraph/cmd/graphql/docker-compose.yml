@@ -218,10 +218,11 @@ services:
         read_only: true
     depends_on:
       - alpha1
-    restart: on-failure
+    restart: never
     labels:
       cluster: test
-    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 -v3
+    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.graphql --alpha alpha1:9180 -v3
+
  
   graphql:
     image: dgraph/dgraph:latest
