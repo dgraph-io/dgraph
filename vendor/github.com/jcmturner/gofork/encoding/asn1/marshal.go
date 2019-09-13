@@ -127,7 +127,7 @@ func int64Length(i int64) (numBytes int) {
 	return
 }
 
-func marshalBigInt(out *forkableWriter, n *big.Int) (err error) {
+func marshalBigFloat(out *forkableWriter, n *big.Int) (err error) {
 	if n.Sign() < 0 {
 		// A negative number has to be converted to two's-complement
 		// form. So we'll subtract 1 and invert. If the
@@ -424,7 +424,7 @@ func marshalBody(out *forkableWriter, value reflect.Value, params fieldParameter
 	case objectIdentifierType:
 		return marshalObjectIdentifier(out, value.Interface().(ObjectIdentifier))
 	case bigIntType:
-		return marshalBigInt(out, value.Interface().(*big.Int))
+		return marshalBigFloat(out, value.Interface().(*big.Int))
 	}
 
 	switch v := value; v.Kind() {
