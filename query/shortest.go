@@ -274,7 +274,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
 
-	numPaths := sg.Params.numPaths
+	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
@@ -433,7 +433,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.From == 0 || sg.Params.To == 0 {
 		return nil, nil
 	}
-	numPaths := sg.Params.numPaths
+	numPaths := sg.Params.NumPaths
 	if numPaths == 0 {
 		// Return 1 path by default.
 		numPaths = 1

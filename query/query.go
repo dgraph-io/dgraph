@@ -132,7 +132,8 @@ type params struct {
 	// false, the facets will be ordered in ascending order.
 	FacetOrderDesc bool
 
-	// The name of the variable defined in this SubGraph (e.g. in x as name, this would be x).
+	// Var is the name of the variable defined in this SubGraph
+	// (e.g. in "x as name", this would be x).
 	Var string
 	// FacetVar is a map of predicate to the facet variable alias
 	// for e.g. @facets(L1 as weight) the map would be { "weight": "L1" }
@@ -147,8 +148,8 @@ type params struct {
 	// of varValue.
 	ParentVars map[string]varValue
 
-	// uidToVal is the mapping of uid to values. This is populated into a SubGraph from a value
-	// variable that is part of req.Vars. This value variable variable would have been defined
+	// UidToVal is the mapping of uid to values. This is populated into a SubGraph from a value
+	// variable that is part of req.Vars. This value variable would have been defined
 	// in some other query.
 	UidToVal map[uint64]types.Val
 
@@ -169,8 +170,8 @@ type params struct {
 	From uint64
 	// To is the destination node of the shortest path algorithm
 	To uint64
-	// numPaths is used for k-shortest path query to specify number of paths to return.
-	numPaths int
+	// NumPaths is used for k-shortest path query to specify number of paths to return.
+	NumPaths int
 	// MaxWeight is the max weight allowed in a path returned by the shortest path algorithm.
 	MaxWeight float64
 	// MinWeight is the min weight allowed in a path returned by the shortest path algorithm.
@@ -641,7 +642,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			args.numPaths = int(numPaths)
+			args.NumPaths = int(numPaths)
 		}
 
 		if v, ok := gq.Args["maxweight"]; ok {
