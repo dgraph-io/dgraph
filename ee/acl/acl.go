@@ -663,10 +663,10 @@ func info(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return errors.Wrapf(err, "unable to get admin context")
 	}
+	defer cancel()
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer ctxCancel()
