@@ -837,6 +837,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		sg.Params.expandAll = true
 		sg.Params.Langs = nil
 	}
+	// count is to limit how many results we want.
+	count := calculateCountResult(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -850,13 +852,73 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.expandAll,
-		Count:        int32(sg.Params.Count),
+		Count:        int32(count),
 	}
 
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
 	return out, nil
+}
+
+// calculateCountResult returns the count of result we need to proceed query further down.
+func calculateCountResult(sg *SubGraph) int {
+	// by default count is zero. (zero will retrive all the results)
+	count := 0
+	// In order to limit we have to make sure that the this level met the following conditions
+	// - No Filter (We can't filter until we have all the uids)
+	// {
+	//   q(func: has(name), first:1)@filter(eq(father, "schoolboy")) {
+	//     name
+	//     father
+	//   }
+	// }
+	// - No Ordering (We need all the results to do the sorting)
+	// {
+	//   q(func: has(name), first:1, orderasc: name) {
+	//     name
+	//   }
+	// }
+	// - No Count (count can't be calculated with out retriving all the details)
+	// {
+	//   q(func: has(name), first:1) {
+	//     count(name)
+	//   }
+	// }
+	// - should be has function (Right now, I'm doing it for has, later it can be extended)
+	// {
+	//   q(func: has(name), first:1) {
+	//     name
+	//   }
+	// }
+	// - No facet ordering
+	// {
+	//   q(func: has(mobile), first:1) {
+	//     mobile@facets(orderdesc: rating)
+	//   }
+	// }
+	// - subgraph should not be a filter, which has connective operations like (and, or , not)
+	// {
+	//   me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
+	//     name@en
+	//     director.film @filter(allofterms(name@en, "jones indiana")
+	//                                        OR allofterms(name@en, "jurassic park"), first:10)  {
+	//       uid
+	//       name@en
+	//     }
+	//   }
+	// }
+	// here one case is missing how to differentiate that this not the subgraph of
+	// allofterms(name@en, "jurassic park") filter. This will fail the connective filter.
+	// One idea I can think of is populate some meta variable to diffrentiate before passing into
+	// the createTaskQuery. need @pawanrawal suggestion.
+
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !sg.Params.DoCount &&
+		sg.SrcFunc.Name == "has" && len(sg.Params.FacetOrder) == 0 && len(sg.FilterOp) == 0 {
+		// Offset also added because, we need n results to trim the offset.
+		count = sg.Params.Offset + sg.Params.Count
+	}
+	return count
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
