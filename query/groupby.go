@@ -205,7 +205,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 	res := new(groupResults)
 
 	for _, child := range sg.Children {
-		if !child.Params.ignoreResult {
+		if !child.Params.IgnoreResult {
 			continue
 		}
 
@@ -248,7 +248,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {
-		if child.Params.ignoreResult {
+		if child.Params.IgnoreResult {
 			continue
 		}
 		// This is a aggregation node.
@@ -287,7 +287,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 	var dedupMap dedup
 
 	for _, child := range sg.Children {
-		if !child.Params.ignoreResult {
+		if !child.Params.IgnoreResult {
 			continue
 		}
 
@@ -327,7 +327,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {
-		if child.Params.ignoreResult {
+		if child.Params.IgnoreResult {
 			continue
 		}
 		// This is a aggregation node.
