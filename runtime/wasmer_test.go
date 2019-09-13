@@ -130,7 +130,7 @@ func TestExecVersion(t *testing.T) {
 }
 
 const TESTS_FP string = "./test_wasm.wasm"
-const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/raw/master/target/wasm32-unknown-unknown/release/test_wasm.wasm"
+const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/09d34b04fff635e92eaecfb192d42aae4f58ba54/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
 
 // getTestBlob checks if the test wasm file exists and if not, it fetches it from github
 func getTestBlob() (n int64, err error) {
