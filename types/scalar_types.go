@@ -53,8 +53,8 @@ const (
 	StringID = TypeID(pb.Posting_STRING)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
-	// BigIntID represents the arbitrary precision type
-	BigIntID = TypeID(pb.Posting_BIGINT)
+	// BigFloatID represents the arbitrary precision type
+	BigFloatID = TypeID(pb.Posting_BIGINT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -68,7 +68,7 @@ var typeNameMap = map[string]TypeID{
 	"uid":      UidID,
 	"string":   StringID,
 	"password": PasswordID,
-	"bigint":   BigIntID,
+	"bigfloat":   BigFloatID,
 }
 
 // TypeID represents the type of the data.
@@ -102,8 +102,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
-	case BigIntID:
-		return "bigint"
+	case BigFloatID:
+		return "bigfloat"
 	}
 	return ""
 }
@@ -168,10 +168,10 @@ func ValueForType(id TypeID) Val {
 		var t time.Time
 		return Val{DateTimeID, &t}
 
-	case BigIntID:
+	case BigFloatID:
 		var b big.Float
 		b.SetPrec(200)
-		return Val{BigIntID, &b}
+		return Val{BigFloatID, &b}
 
 	case StringID:
 		var s string

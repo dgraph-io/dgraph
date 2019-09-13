@@ -50,7 +50,7 @@ const (
 	IdentBool     = 0x9
 	IdentTrigram  = 0xA
 	IdentHash     = 0xB
-	IdentBigInt   = 0xC
+	IdentBigFloat   = 0xC
 	IdentCustom   = 0x80
 )
 
@@ -84,7 +84,7 @@ type Tokenizer interface {
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
-	registerTokenizer(BigIntTokenizer{})
+	registerTokenizer(BigFloatTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -172,17 +172,17 @@ func registerTokenizer(t Tokenizer) {
 	tokenizers[t.Name()] = t
 }
 
-// BigIntTokenizer generates tokens from big float data.
-type BigIntTokenizer struct{}
+// BigFloatTokenizer generates tokens from big float data.
+type BigFloatTokenizer struct{}
 
-func (t BigIntTokenizer) Name() string { return "bigint" }
-func (t BigIntTokenizer) Type() string { return "bigint" }
-func (t BigIntTokenizer) Tokens(v interface{}) ([]string, error) {
+func (t BigFloatTokenizer) Name() string { return "bigfloat" }
+func (t BigFloatTokenizer) Type() string { return "bigfloat" }
+func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
 	return []string{(v.(*big.Float)).String()}, nil
 }
-func (t BigIntTokenizer) Identifier() byte { return IdentBigInt }
-func (t BigIntTokenizer) IsSortable() bool { return true }
-func (t BigIntTokenizer) IsLossy() bool    { return true }
+func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
+func (t BigFloatTokenizer) IsSortable() bool { return true }
+func (t BigFloatTokenizer) IsLossy() bool    { return true }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

@@ -1592,6 +1592,48 @@ upsert {
 	require.Contains(t, err.Error(), "Invalid input: U at lexText")
 }
 
+func TestBigFloat(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: bigfloat .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <amount> "10.00000000000000000001" .
+
+    _:user2 <name> "user2" .
+    _:user2 <amount> "100.000000000000000000002" .
+
+    _:user3 <name> "user3" .
+    _:user3 <amount> "1000.00000000000000000001" .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	expectedRes := `
+{"data":
+{"q":[{"name":"user1","amount":10.00000000000000000001},{"name":"user2","amount":100.000000000000000000002},{"name":"user3","amount":1000.00000000000000000001}]}
+}
+`
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
 func SetupBankExample(t *testing.T) string {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
