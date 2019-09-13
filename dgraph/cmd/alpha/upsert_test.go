@@ -1604,12 +1604,6 @@ amount: bigfloat .`))
   set {
     _:user1 <name> "user1" .
     _:user1 <amount> "10.00000000000000000001" .
-
-    _:user2 <name> "user2" .
-    _:user2 <amount> "100.000000000000000000002" .
-
-    _:user3 <name> "user3" .
-    _:user3 <amount> "1000.00000000000000000001" .
   }
 }`
 
@@ -1626,12 +1620,8 @@ amount: bigfloat .`))
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 
-	expectedRes := `
-{"data":
-{"q":[{"name":"user1","amount":10.00000000000000000001},{"name":"user2","amount":100.000000000000000000002},{"name":"user3","amount":1000.00000000000000000001}]}
-}
-`
-	testutil.CompareJSON(t, res, expectedRes)
+	expectedRes := `{"data":{"q":[{"name":"user1","amount":10.00000000000000000001}]}}`
+	require.EqualValues(t, expectedRes, res)
 }
 
 func SetupBankExample(t *testing.T) string {
