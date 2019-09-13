@@ -2137,8 +2137,9 @@ types. Here's an example of how to set the types of a node:
 
 #### Using types during queries
 
-The type system can be used as a top level function in the query language. Here's an example:
+Right now, there are a couple ways in which the type system can be enforced during queries.
 
+The `type` function is a top level function in the query language. Here's an example:
 ```
 {
   q(func: type(Animal)) {
@@ -2148,9 +2149,11 @@ The type system can be used as a top level function in the query language. Here'
 }
 ```
 
-This query will only return nodes whose type has been previously set to `Animal`.
+This query will only return nodes whose type has been previously set to
+`Animal`.
 
-The types can also be used to filter results inside the queries. For example:
+The `@type` directive can be similarly used to enforce the type system, even in
+specific parts of the query. For example, take the following query:
 
 ```
 {
@@ -2166,6 +2169,14 @@ The types can also be used to filter results inside the queries. For example:
 
 This query will return the nodes that have a parent predicate but only if the
 type of the parent node has been previously set to `Person`.
+
+Because the type system is very simple at the moment, the `type` top level
+function and the `@type` directive are just aliases of existing features of the
+query language. However, as the type system is expanded, this will not remain
+the case. These methods are intended to explicitly signal that the nodes
+affected by them should be enforced to be of the specified type. As the type
+system gains new features, the types of checks performed on the query results
+will change with it.
 
 #### Deleting a type
 
