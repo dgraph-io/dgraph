@@ -912,9 +912,11 @@ func calculateCountResult(sg *SubGraph) int {
 	// allofterms(name@en, "jurassic park") filter. This will fail the connective filter.
 	// One idea I can think of is populate some meta variable to diffrentiate before passing into
 	// the createTaskQuery. need @pawanrawal suggestion.
-
+	isSupportedFunction := func() bool {
+		return sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	}
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !sg.Params.DoCount &&
-		sg.SrcFunc.Name == "has" && len(sg.Params.FacetOrder) == 0 && len(sg.FilterOp) == 0 {
+		isSupportedFunction() && len(sg.Params.FacetOrder) == 0 && len(sg.FilterOp) == 0 {
 		// Offset also added because, we need n results to trim the offset.
 		count = sg.Params.Offset + sg.Params.Count
 	}
