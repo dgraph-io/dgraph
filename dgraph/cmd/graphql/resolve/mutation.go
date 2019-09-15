@@ -203,8 +203,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
 	if err != nil {
 		return &resolved{
-			err: schema.GQLWrapf(err, "[%s] couldn't complete %s",
-				api.RequestID(ctx), mr.mutation.Name())}
+			err: schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())}
 	}
 
 	err = mr.dgraph.DeleteNode(ctx, uid)
