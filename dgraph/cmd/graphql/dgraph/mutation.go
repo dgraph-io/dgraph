@@ -122,7 +122,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			srcUID = fmt.Sprintf("0x%x", uid)
+			srcUID = fmt.Sprintf("%#x", uid)
 		}
 
 		res, err := rewriteObject(mutatedType, nil, srcUID, val)
