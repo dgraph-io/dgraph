@@ -129,16 +129,17 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 				"[%s] Only add, delete and update mutations are implemented", api.RequestID(ctx))}
 	}
 
+	var b bytes.Buffer
+	b.WriteRune('"')
+	b.WriteString(mr.mutation.ResponseName())
+	b.WriteString(`": `)
 	if len(res.data) > 0 {
-		var b bytes.Buffer
-		b.WriteRune('"')
-		b.WriteString(mr.mutation.ResponseName())
-		b.WriteString(`": `)
 		b.Write(res.data)
-
-		res.data = b.Bytes()
+	} else {
+		b.WriteString("null")
 	}
 
+	res.data = b.Bytes()
 	return res
 }
 
