@@ -879,12 +879,6 @@ func calculateCountResult(sg *SubGraph) int {
 	//     name
 	//   }
 	// }
-	// - No Count (count can't be calculated with out retriving all the details)
-	// {
-	//   q(func: has(name), first:1) {
-	//     count(name)
-	//   }
-	// }
 	// - should be has function (Right now, I'm doing it for has, later it can be extended)
 	// {
 	//   q(func: has(name), first:1) {
@@ -894,7 +888,7 @@ func calculateCountResult(sg *SubGraph) int {
 	isSupportedFunction := func() bool {
 		return sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
 	}
-	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !sg.Params.DoCount &&
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
 		isSupportedFunction() {
 		// Offset also added because, we need n results to trim the offset.
 		count = sg.Params.Offset + sg.Params.Count
