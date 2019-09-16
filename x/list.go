@@ -20,7 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
-// IsListFull check wheather the posting list is full or not based on the limit.
+// IsListFull check whether the posting List is full based on the limit
 // by default it return false, if the limit is set to zero.
 func IsListFull(l *pb.List, limit int32) bool {
 	return limit != 0 && len(l.Uids) == int(limit)
