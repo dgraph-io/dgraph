@@ -891,32 +891,11 @@ func calculateCountResult(sg *SubGraph) int {
 	//     name
 	//   }
 	// }
-	// - No facet ordering
-	// {
-	//   q(func: has(mobile), first:1) {
-	//     mobile@facets(orderdesc: rating)
-	//   }
-	// }
-	// - subgraph should not be a filter, which has connective operations like (and, or , not)
-	// {
-	//   me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
-	//     name@en
-	//     director.film @filter(allofterms(name@en, "jones indiana")
-	//                                        OR allofterms(name@en, "jurassic park"), first:10)  {
-	//       uid
-	//       name@en
-	//     }
-	//   }
-	// }
-	// here one case is missing how to differentiate that this not the subgraph of
-	// allofterms(name@en, "jurassic park") filter. This will fail the connective filter.
-	// One idea I can think of is populate some meta variable to diffrentiate before passing into
-	// the createTaskQuery. need @pawanrawal suggestion.
 	isSupportedFunction := func() bool {
 		return sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
 	}
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !sg.Params.DoCount &&
-		isSupportedFunction() && len(sg.Params.FacetOrder) == 0 && len(sg.FilterOp) == 0 {
+		isSupportedFunction() {
 		// Offset also added because, we need n results to trim the offset.
 		count = sg.Params.Offset + sg.Params.Count
 	}
