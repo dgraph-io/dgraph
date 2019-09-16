@@ -1629,7 +1629,7 @@ func SetupBankExample(t *testing.T) string {
 	require.NoError(t, alterSchema(`
 name: string @index(exact) .
 branch: string .
-amount: float .`))
+amount: bigfloat .`))
 
 	m1 := `
 {
@@ -1779,7 +1779,7 @@ upsert {
       amt as amount
     }
     me () {
-      updated_amt as math(amt+1)
+      updated_amt as math(amt+1.123456789101112)
     }
   }
 
@@ -1807,13 +1807,13 @@ upsert {
   "data": {
     "q": [{
        "name": "user3",
-       "amount": 1001.000000
+       "amount": 1001.123456789101112
      }, {
        "name": "user1",
-       "amount": 11.000000
+       "amount": 11.123456789101112
      }, {
        "name": "user2",
-       "amount": 101.000000
+       "amount": 101.123456789101112
      }]
    }
 }`

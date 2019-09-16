@@ -19,6 +19,7 @@ package query
 import (
 	"bytes"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,6 +120,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	var isIntOrFloat bool
+	var isBigFloat bool
 	var l float64
 	if v.Tid == types.IntID {
 		l = float64(v.Value.(int64))
@@ -128,6 +130,8 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	} else if v.Tid == types.FloatID {
 		l = v.Value.(float64)
 		isIntOrFloat = true
+	} else if v.Tid == types.BigFloatID {
+		isBigFloat = true
 	}
 	// If its not int or float, keep the type.
 
@@ -153,19 +157,34 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			v.Value = -l
 			res = v
 		case "sqrt":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			if isBigFloat {
+				v.Tid = types.BigFloatID
+				var sqrtResult big.Float
+				sqrtResult.SetPrec(200)
+				value := v.Value.(big.Float)
+				sqrtResult.Sqrt(&value)
+				v.Value = sqrtResult
+			} else {
+				if !isIntOrFloat {
+					return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				}
+				v.Value = math.Sqrt(l)
 			}
-			v.Value = math.Sqrt(l)
 			res = v
 		case "floor":
-			if !isIntOrFloat {
+			if isBigFloat {
+				value := v.Value.(big.Float)
+				l, _ = value.Float64()
+			} else if !isIntOrFloat {
 				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
-			if !isIntOrFloat {
+			if isBigFloat {
+				value := v.Value.(big.Float)
+				l, _ = value.Float64()
+			} else if !isIntOrFloat {
 				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Ceil(l)
@@ -189,45 +208,87 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	va := ag.result
+	var prevValue big.Float
 	if va.Tid != types.IntID && va.Tid != types.FloatID {
 		isIntOrFloat = false
 	}
+	if va.Tid == types.BigFloatID {
+		isBigFloat = true
+		prevValue.SetPrec(200)
+		prevValue.SetFloat64(l)
+	}
 	switch ag.name {
 	case "+":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		if isBigFloat {
+			value := va.Value.(big.Float)
+			value.Add(&value, &prevValue)
+			va.Value = value
+		} else {
+			if !isIntOrFloat {
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			}
+			va.Value = va.Value.(float64) + l
 		}
-		va.Value = va.Value.(float64) + l
 		res = va
 	case "-":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		if isBigFloat {
+			value := va.Value.(big.Float)
+			value.Sub(&value, &prevValue)
+			va.Value = value
+		} else {
+			if !isIntOrFloat {
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			}
+			va.Value = va.Value.(float64) - l
 		}
-		va.Value = va.Value.(float64) - l
 		res = va
 	case "*":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		if isBigFloat {
+			value := va.Value.(big.Float)
+			value.Mul(&value, &prevValue)
+			va.Value = value
+		} else {
+			if !isIntOrFloat {
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			}
+			va.Value = va.Value.(float64) * l
 		}
-		va.Value = va.Value.(float64) * l
 		res = va
 	case "/":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q %q %q", ag.name, va.Tid, v.Tid)
+		if isBigFloat {
+			if prevValue.Cmp(new(big.Float)) == 0 {
+				return errors.Errorf("Division by zero")
+			}
+			value := va.Value.(big.Float)
+			value.Quo(&value, &prevValue)
+			va.Value = value
+		} else {
+			if !isIntOrFloat {
+				return errors.Errorf("Wrong type encountered for func %q %q %q", ag.name, va.Tid, v.Tid)
+			}
+			if l == 0 {
+				return errors.Errorf("Division by zero")
+			}
+			va.Value = va.Value.(float64) / l
 		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
-		}
-		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		if isBigFloat {
+			if prevValue.Cmp(new(big.Float)) == 0 {
+				return errors.Errorf("Division by zero")
+			}
+			value := va.Value.(big.Float)
+			value.Quo(&value, &prevValue)
+			va.Value = value
+		} else {
+			if !isIntOrFloat {
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			}
+			if l == 0 {
+				return errors.Errorf("Division by zero")
+			}
+			va.Value = math.Mod(va.Value.(float64), l)
 		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
-		}
-		va.Value = math.Mod(va.Value.(float64), l)
 		res = va
 	case "pow":
 		if !isIntOrFloat {
