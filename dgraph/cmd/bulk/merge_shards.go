@@ -68,7 +68,7 @@ func filenamesInTree(dir string) []string {
 		if err != nil {
 			return err
 		}
-		if strings.HasSuffix(path, ".map") {
+		if strings.HasSuffix(path, ".gz") {
 			fnames = append(fnames, path)
 		}
 		return nil

@@ -58,10 +58,6 @@ func TestSchema(t *testing.T) {
 			Predicate: "name",
 			ValueType: pb.Posting_STRING,
 		}},
-		{"_predicate_", &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		}},
 		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
 			ValueType: pb.Posting_STRING,
@@ -173,10 +169,6 @@ friend  : [uid] @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"_predicate_", &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		}},
 		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
 			ValueType: pb.Posting_STRING,
@@ -220,7 +212,7 @@ func TestParse2(t *testing.T) {
 	reset()
 	result, err := Parse("")
 	require.NoError(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result.Preds)
 }
 
 func TestParse3_Error(t *testing.T) {
@@ -281,26 +273,26 @@ func TestParseScalarList(t *testing.T) {
 		graduation: [dateTime] .
 	`)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(result.Schemas))
+	require.Equal(t, 3, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "jobs",
 		ValueType: 9,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
-	}, result.Schemas[0])
+	}, result.Preds[0])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
-	}, result.Schemas[1])
+	}, result.Preds[1])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,
-	}, result.Schemas[2])
+	}, result.Preds[2])
 }
 
 func TestParseScalarListError1(t *testing.T) {
@@ -338,12 +330,12 @@ func TestParseUidList(t *testing.T) {
 		friend: [uid] .
 	`)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(result.Schemas))
+	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "friend",
 		ValueType: 7,
 		List:      true,
-	}, result.Schemas[0])
+	}, result.Preds[0])
 }
 
 func TestParseUidSingleValue(t *testing.T) {
@@ -352,12 +344,12 @@ func TestParseUidSingleValue(t *testing.T) {
 		friend: uid .
 	`)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(result.Schemas))
+	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "friend",
 		ValueType: 7,
 		List:      false,
-	}, result.Schemas[0])
+	}, result.Preds[0])
 }
 func TestParseUnderscore(t *testing.T) {
 	reset()
@@ -381,6 +373,19 @@ func TestParseEmptyType(t *testing.T) {
 
 		}
 	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+	}, result.Types[0])
+
+}
+
+func TestParseTypeEOF(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+		}`)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -443,11 +448,11 @@ func TestParseCombinedSchemasAndTypes(t *testing.T) {
         name: string .
 	`)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(result.Schemas))
+	require.Equal(t, 1, len(result.Preds))
 	require.Equal(t, &pb.SchemaUpdate{
 		Predicate: "name",
 		ValueType: 9,
-	}, result.Schemas[0])
+	}, result.Preds[0])
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
@@ -667,6 +672,18 @@ func TestParseNonNullableScalarAndList(t *testing.T) {
 	}, result.Types[0])
 }
 
+func TestParseTypeDuplicateFields(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		type Person {
+			Name: string!
+			Name: string
+		}
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate fields with name: Name")
+}
+
 func TestParseTypeErrMissingNewLine(t *testing.T) {
 	reset()
 	_, err := Parse(`
@@ -674,7 +691,7 @@ func TestParseTypeErrMissingNewLine(t *testing.T) {
 		}type Animal {}
 	`)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected new line after type declaration")
+	require.Contains(t, err.Error(), "Expected new line or EOF after type declaration")
 }
 
 func TestParseTypeErrMissingColon(t *testing.T) {
@@ -810,9 +827,7 @@ func TestMain(m *testing.M) {
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
-	kvOpt := badger.DefaultOptions
-	kvOpt.Dir = dir
-	kvOpt.ValueDir = dir
+	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)
 	x.Check(err)
 	Init(ps)

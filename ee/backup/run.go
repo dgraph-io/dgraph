@@ -15,26 +15,24 @@ package backup
 import (
 	"context"
 	"fmt"
-	"io"
-	"math"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
 
+// Restore is the sub-command used to restore a backup.
 var Restore x.SubCommand
+
+// LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
 var opt struct {
-	location, pdir, zero string
+	backupId, location, pdir, zero string
 }
 
 func init() {
@@ -104,6 +102,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
+	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
+		"restore. If empty, it will restore the latest series.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -178,22 +178,20 @@ func runRestoreCmd() error {
 			grpc.WithBlock(),
 			grpc.WithInsecure())
 		if err != nil {
-			return x.Wrapf(err, "Unable to connect to %s", opt.zero)
+			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
 	}
 
 	start = time.Now()
-	version, err := runRestore(opt.pdir, opt.location)
+	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
 	if err != nil {
 		return err
 	}
 	if version == 0 {
-		return x.Errorf("Failed to obtain a restore version")
+		return errors.Errorf("Failed to obtain a restore version")
 	}
-	if glog.V(2) {
-		fmt.Printf("Restore version: %d\n", version)
-	}
+	fmt.Printf("Restore version: %d\n", version)
 
 	if zc != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -201,7 +199,6 @@ func runRestoreCmd() error {
 
 		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
 		if err != nil {
-			// Let the user know so they can do this manually.
 			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
 		}
 	}
@@ -210,52 +207,16 @@ func runRestoreCmd() error {
 	return nil
 }
 
-// runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string) (uint64, error) {
-	bo := badger.DefaultOptions
-	bo.SyncWrites = true
-	bo.TableLoadingMode = options.MemoryMap
-	bo.ValueThreshold = 1 << 10
-	bo.NumVersionsToKeep = math.MaxInt32
-	if !glog.V(2) {
-		bo.Logger = nil
-	}
-
-	// Scan location for backup files and load them. Each file represents a node group,
-	// and we create a new p dir for each.
-	return Load(location, func(r io.Reader, groupId int) error {
-		bo := bo
-		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		bo.ValueDir = bo.Dir
-		db, err := badger.OpenManaged(bo)
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		if glog.V(2) {
-			fmt.Printf("Restoring groupId: %d\n", groupId)
-			if !pathExist(bo.Dir) {
-				fmt.Println("Creating new db:", bo.Dir)
-			}
-		}
-		return db.Load(r)
-	})
-}
-
 func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
 	manifests, err := ListManifests(opt.location)
 	if err != nil {
-		return x.Errorf("Error while listing manifests: %v", err.Error())
+		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tVersion\tReadTs\tGroups\n")
-	for _, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\t%v\n",
-			manifest.FileName,
-			manifest.Version,
-			manifest.ReadTs,
-			manifest.Groups)
+	fmt.Printf("Name\tSince\tGroups\n")
+	for path, manifest := range manifests {
+		fmt.Printf("%v\t%v\t%v\n", path, manifest.Since, manifest.Groups)
 	}
 
 	return nil

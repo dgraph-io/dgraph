@@ -52,7 +52,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x579683)) {
+  bladerunner(func: uid(0x2066e)) {
     uid
     name@en
     initial_release_date
@@ -81,7 +81,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x579683, 0x5af1c7)) {
+  movies(func: uid(0x25280, 0x707f9)) {
     uid
     name@en
     initial_release_date
@@ -98,7 +98,7 @@ brackets while asking for it in the query. E.g. `<first:name>`{{% /notice %}}
 
 A query expands edges from node to node by nesting query blocks with `{ }`.
 
-Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
+Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance.character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
   brCharacters(func: eq(name@en, "Blade Runner")) {
@@ -447,7 +447,7 @@ Query Example: All names that have `dog`, `dogs`, `bark`, `barks`, `barking`, et
 {{< runnable >}}
 {
   movie(func:alloftext(name@en, "the dog which barks")) {
-	 name@en
+    name@en
   }
 }
 {{< /runnable >}}
@@ -489,7 +489,7 @@ Query Example: Movies with exactly thirteen genres.
   me(func: eq(count(genre), 13)) {
     name@en
     genre {
-    	name@en
+      name@en
     }
   }
 }
@@ -628,7 +628,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x7de2ec)) {
+  films(func: uid(0x1daf5)) {
     name@hi
     actor.film {
       performance.film {
@@ -704,12 +704,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x679de1).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x99706).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x679de1)){
+    director.film @filter(uid_in(~director.film, 0x99706)) {
       name@en
     }
   }
@@ -740,7 +740,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 ### Geolocation
 
-{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
+{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types). However, Dgraph can store other types of gelocation data. {{% /notice %}}
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
@@ -1039,13 +1039,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x8116e4`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x99e44`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x8116e4) {
+    director.film (first:5, after: 0x99e44) {
       uid
       name@en
     }
@@ -1095,7 +1095,7 @@ Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the numb
 
 {{< runnable >}}
 {
-	var(func: allofterms(name@en, "eat drink man woman")) {
+  var(func: allofterms(name@en, "eat drink man woman")) {
     starring {
       actors as performance.actor {
         totalRoles as count(actor.film)
@@ -1162,7 +1162,7 @@ Query Example: All genres sorted alphabetically and the five movies in each genr
     name@en
     ~genre (orderdesc: val(numGenres), first: 5) {
       name@en
-    	genres : val(numGenres)
+      genres : val(numGenres)
     }
   }
 }
@@ -1420,7 +1420,7 @@ This propagation is useful, for example, in normalizing a sum across users, find
 Query Example: For each Harry Potter movie, the number of roles played by actor Warwick Davis.
 {{< runnable >}}
 {
-	num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
+    num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
 
     paths as math(1)  # records number of paths to each character
 
@@ -1440,7 +1440,7 @@ Query Example: For each Harry Potter movie, the number of roles played by actor 
 Query Example: Each actor who has been in a Peter Jackson movie and the fraction of Peter Jackson movies they have appeared in.
 {{< runnable >}}
 {
-	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
+    movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
 
     paths as math(1)
     total_films : num_films as count(director.film)
@@ -1513,7 +1513,7 @@ The release date is assigned to a variable, then it is aggregated and fetched in
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example:  Directors called Steven and the date of release of their first movie, in ascending order of first movie.
 
@@ -1553,7 +1553,7 @@ The release date is assigned to a variable, then it is aggregated and fetched in
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example: Quentin Tarantino's movies and date of release of the most recent movie.
 
@@ -1589,7 +1589,7 @@ Steven or Tom in their name.
 }
 {{< /runnable >}}
 
-#### Usage at other levels.
+#### Usage at other levels
 
 Query Example: Steven Spielberg's movies, with the number of recorded genres per movie, and the total number of genres and average genres per movie.
 
@@ -1633,10 +1633,10 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
   PJmovies(func: uid(PJ)) {
     name@en
-  	director.film (orderdesc: val(movie_total), first: 5) {
-    	name@en
-    	totalRoles : val(movie_total)
-  	}
+    director.film (orderdesc: val(movie_total), first: 5) {
+      name@en
+      totalRoles : val(movie_total)
+    }
     grandTotal : val(gt)
   }
 }
@@ -1788,10 +1788,9 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 
 ## Expand Predicates
 
-The `expand()` function can be used to expand the predicates in a node. Starting
-with version 1.1, the keyword `_predicate_` has been deprecated. Instead, to
-properly use the `expand()` function, the use of the type system is required.
-Refer to the section on the type system to check how to set the types of a given
+The `expand()` function can be used to expand the predicates out of a node. To
+ use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
 There are four ways to use the `expand` function.
@@ -1806,29 +1805,30 @@ There are four ways to use the `expand` function.
 * If `_reverse_` is passed as an argument to `expand()`, only the reverse
   predicates at each node in that level are retrieved.
 
-The last three keywords require that the node's types have been set to properly
-work. Dgraph will look for all the types that have been assigned to this node,
+The last three keywords require that the nodes have types. Dgraph will look 
+for all the types that have been assigned to a node,
 query the types to check which attributes they have, and use those to compute
 the list of predicates to expand.
 
-For example, consider a node that has the following types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have 
 the following definitions:
 
 ```
 type Animal {
-	name: string
+    name: string
     species: uid
     dob: datetime
 }
 
 type Pet {
-	owner: uid
+    owner: uid
     veterinarian: uid
 }
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
-the node has. Then it will query the definitions of the types and build a list.
+the node has (`Animal` and `Pet`). Then it will get the definitions of 
+`Animal` and `Pet` and build a list of predicates.
 Finally, it will query the schema to check if any of those predicates have a
 reverse node. If, for example, there's a reverse node in the `owner` predicate,
 the final list of predicates to expand will be:
@@ -1842,10 +1842,9 @@ owner
 veterinarian
 ```
 
-If the predicate has no string without a language tag, `expand()` won't expand
-it (see [language preference]({{< relref "#language-support" >}})). For example,
-above `name` generally doesn't have strings without tags in the dataset, so
-`name@.` is required.
+For `string` predicates, `expand` only returns values not tagged with a language
+(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+required to add `name@fr` or `name@.` as well as expand to a query.
 
 ## Cascade Directive
 
@@ -1930,8 +1929,8 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 - `start_ts`: The logical start timestamp of the transaction.
 
 Query with debug as a query parameter
-```
-curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" http://localhost:8080/query?debug=true -XPOST -d $'{
   tbl(func: allofterms(name@en, "The Big Lebowski")) {
     name@en
   }
@@ -2053,136 +2052,6 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
-### Type System
-
-Starting in version 1.1, Dgraph has support for a type system. At the moment,
-the type system is basic but can be used already to categorize nodes and query
-them based on their type. The type system is also used during expand queries.
-
-Keep in mind that the type system is a work in progress and more features will
-be added in coming versions.
-
-#### Type definition.
-
-Types are defined using the GraphQL standard. Here's an example of a basic type.
-
-```
-type Student {
-	name: string
-    dob: datetime
-    home_address: string
-    year: int
-}
-```
-
-Types are declared along with the schema using the Alter endpoint. In order to
-properly support the above type, we need a predicate for each of the attributes
-in the type as shown below:
-
-```
-name: string .
-dob: datetime .
-home_address: string .
-year: int .
-```
-
-To use the same attribute in multiple types, make sure the type and indexes
-required for both are the same. Otherwise, use separate attribute and predicate
-names for each type. Below there is a small example.
-
-```
-type Student {
-	student_name: string
-}
-
-type Textbook {
-	textbook_name: string
-}
-
-student_name: string @index(exact) .
-textbook_name: string @lang @index(fulltext) .
-```
-
-Types also support list attributes (i.e `friends: [uid]`) and non-nullable types
-(i.e `friends: [uid]!`). However, the type of the attributes are not being used
-right now, as the type system is still a work in progress. It's a good idea to
-properly think about how they should be setup to avoid any issues once the type
-system starts using them.
-
-If you send a type definition through the Alter endpoint for a type that already
-exists, the current definition will be overwritten.
-
-#### Setting the type of a node.
-
-Scalar nodes cannot have types since they only have one attribute and its type
-is the type of the node. UID nodes can have a type. The type is set by setting
-the value of the `dgraph.type` predicate for that node. A node can have multiple
-types. Here's an example of how to set the types of a node:
-
-```
-{
-	set {
-    	_:a <name> "Garfield" .
-    	_:a <dgraph.type> "Pet" .
-    	_:a <dgraph.type> "Animal" .
-    }
-}
-```
-
-`dgraph.type` is a reserved predicate and cannot be removed or modified.
-
-#### Using types during queries.
-
-The type system can be used as a top level function in the query language. Here's an example:
-
-```
-{
-	q(func: type(Animal)) {
-    	uid
-    	name
-    }
-}
-```
-
-This query will only return nodes whose type has been previously set to `Animal`.
-
-The types can also be used to filter results inside the queries. For example:
-
-```
-{
-	q(func: has(parent)) {
-    	uid
-    	parent @type(Person) {
-        	uid
-            name
-        }
-    }
-}
-```
-
-This query will return the nodes that have a parent predicate but only if the
-type of the parent node has been previously set to `Person`.
-
-#### Deleting a type
-
-Type definitions can be deleted using the Alter endpoint. All that is needed is
-to send an operation object with the field `DropOp` (or `drop_op` depending on
-the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
-to the type that is meant to be deleted.
-
-Below is an example deleting the type `Person` using the go client:
-```go
-	err := c.Alter(context.Background(), &api.Operation{
-			DropOp: api.Operation_TYPE,
-			DropValue: "Person"})
-```
-
-#### Expand queries and types
-
-Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
-functions now require that the types of the nodes to expand have been properly
-set. Refer to that section for more information.
-
 ### Predicates i18n
 
 If your predicate is a URI or has language-specific characters, then enclose
@@ -2219,28 +2088,24 @@ Query:
 ```
 {
   q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
-    _predicate_
+    uid
+    <公司>@.
   }
 }
 ```
 
 ### Upsert directive
 
-Predicates can specify the `@upsert` directive in the schema if you want to do
-upsert operations against it. If the `@upsert` directive is specified then the
-index key for the predicate would be checked for conflict while committing a
-transaction. The `@upsert` directive helps enforce uniqueness constraints when
-running concurrent upserts.
+To use [upsert operations]({{< relref "howto/index.md#upserts">}}) on a
+predicate, specify the `@upsert` directive in the schema. When committing
+transactions involving predicates with the `@upsert` directive, Dgraph checks
+index keys for conflicts, helping to enforce uniqueness constraints when running
+concurrent upserts.
 
 This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
 ```
-
-{{% notice "note" %}}
-This replaces the `IgnoreIndexConflict` field which was part of the mutation
-object in previous releases.
-{{% /notice %}}
 
 ### RDF Types
 
@@ -2489,6 +2354,146 @@ schema(pred: [name, friend]) {
 }
 ```
 
+Types can also be queried. Below are some example queries.
+
+```
+schema(type: Movie) {}
+schema(type: [Person, Animal]) {}
+```
+
+Note that type queries do not contain anything between the curly braces. The
+output will be the entire definition of the requested types.
+
+## Type System
+
+Dgraph supports a type system that can be used to categorize nodes and query
+them based on their type. The type system is also used during expand queries.
+
+### Type definition
+
+Types are defined using a GraphQL-like syntax. For example:
+
+```
+type Student {
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
+  friends: [uid]
+}
+```
+
+Types are declared along with the schema using the Alter endpoint. In order to
+properly support the above type, a predicate for each of the attributes
+in the type is also needed, such as:
+
+```
+name: string @index(term) .
+dob: datetime .
+home_address: string .
+year: int .
+friends: [uid] .
+```
+
+If a `uid` predicate contains a reverse index, both the predicate and the
+reverse predicate are part of any type definition which contain that predicate.
+Expand queries will follow that convention.
+
+Edges can be used in multiple types: for example, `name` might be used for both
+a person and a pet. Sometimes, however, it's required to use a different
+predicate for each type to represent a similar concept. For example, if student
+names and book names required different indexes, then the predicates must be
+different.
+
+```
+type Student {
+  student_name: string
+}
+
+type Textbook {
+  textbook_name: string
+}
+
+student_name: string @index(exact) .
+textbook_name: string @lang @index(fulltext) .
+```
+
+Types also support lists like `friends: [uid]` or `tags: [string]`.
+
+Altering the schema for a type that already exists, overwrites the existing
+definition.
+
+### Setting the type of a node
+
+Scalar nodes cannot have types since they only have one attribute and its type
+is the type of the node. UID nodes can have a type. The type is set by setting
+the value of the `dgraph.type` predicate for that node. A node can have multiple
+types. Here's an example of how to set the types of a node:
+
+```
+{
+  set {
+    _:a <name> "Garfield" .
+    _:a <dgraph.type> "Pet" .
+    _:a <dgraph.type> "Animal" .
+  }
+}
+```
+
+`dgraph.type` is a reserved predicate and cannot be removed or modified.
+
+### Using types during queries
+
+Types can be used as a top level function in the query language. For example:
+
+```
+{
+  q(func: type(Animal)) {
+    uid
+    name
+  }
+}
+```
+
+This query will only return nodes whose type is set to `Animal`.
+
+Types can also be used to filter results inside a query. For example:
+
+```
+{
+  q(func: has(parent)) {
+    uid
+    parent @filter(type(Person)) {
+      uid
+      name
+    }
+  }
+}
+```
+
+This query will return the nodes that have a parent predicate and only the
+`parent`'s of type `Person`.
+
+### Deleting a type
+
+Type definitions can be deleted using the Alter endpoint. All that is needed is
+to send an operation object with the field `DropOp` (or `drop_op` depending on
+the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
+to the type that is meant to be deleted.
+
+Below is an example deleting the type `Person` using the Go client:
+```go
+err := c.Alter(context.Background(), &api.Operation{
+                DropOp: api.Operation_TYPE,
+                DropValue: "Person"})
+```
+
+### Expand queries and types
+
+Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
+`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
+nodes to expand have types.
+
 ## Facets : Edge attributes
 
 Dgraph supports facets --- **key value pairs on edges** --- as an extension to RDF triples. That is, facets add properties to edges, rather than to nodes.
@@ -2512,7 +2517,7 @@ curl localhost:8080/alter -XPOST -d $'
 ```
 
 ```sh
-curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
 
@@ -2607,9 +2612,9 @@ Example:
 ```
 {
   set {
-		_:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
-		_:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
-		_:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
+    _:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
+    _:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
+    _:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
   }
 }
 ```
@@ -2868,7 +2873,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -2885,7 +2890,7 @@ curl localhost:8080/alter -XPOST -d $'
 ```
 
 ```sh
-curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
     _:a <friend> _:b (weight=0.1) .
@@ -2901,8 +2906,8 @@ curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
 ```
 
 The shortest path between Alice and Mallory (assuming UIDs 0x2 and 0x5 respectively) can be found with query:
-```
-curl localhost:8080/query -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5) {
   friend
  }
@@ -2939,8 +2944,8 @@ Which returns the following results. (Note, without considering the `weight` fac
 ```
 
 The shortest two paths are returned with:
-```
-curl localhost:8080/query -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5, numpaths: 2) {
   friend
  }
@@ -2953,8 +2958,8 @@ curl localhost:8080/query -XPOST -d $'{
 Edges weights are included by using facets on the edges as follows.
 
 {{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
-```
-curl localhost:8080/query -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5) {
   friend @facets(weight)
  }
@@ -3012,8 +3017,8 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 Constraints can be applied to the intermediate nodes as follows.
-```
-curl localhost:8080/query -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
   path as shortest(from: 0x2, to: 0x5) {
     friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
@@ -3025,10 +3030,10 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
+The k-shortest path algorithm (used when `numpaths` > 1) also accepts the arguments `minweight` and `maxweight`, which take a float as their value. When they are passed, only paths within the weight range `[minweight, maxweight]` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5, numpaths: 2, minweight: 2, maxweight: 4) {
   friend
  }
@@ -3037,6 +3042,13 @@ curl localhost:8080/query -XPOST -d $'{
  }
 }' | python -m json.tool | less
 ```
+
+Some points to keep in mind for shortest path queries:
+
+- Weights must be non-negative. Dijkstra's algorithm is used to calculate the shortest paths.
+- Only one facet per predicate in the shortest query block is allowed.
+- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result.
+- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path. All k paths are returned in `_path_`.
 
 ## Recurse Query
 
@@ -3061,14 +3073,15 @@ Some points to keep in mind while using recurse queries are:
 - The `loop` parameter can be set to false, in which case paths which lead to a loop would be ignored
   while traversing.
 - If not specified, the value of the `loop` parameter defaults to false.
+- If the value of the `loop` parameter is false and depth is not specified, `depth` will default to `math.MaxUint64`, which means that the entire graph might be traversed until all the leaf nodes are reached.
 
 
 ## Fragments
 
 `fragment` keyword allows you to define new fragments that can be referenced in a query, as per [GraphQL specification](https://facebook.github.io/graphql/#sec-Language.Fragments). The point is that if there are multiple parts which query the same set of fields, you can define a fragment and refer to it multiple times instead. Fragments can be nested inside fragments, but no cycles are allowed. Here is one contrived example.
 
-```
-curl localhost:8080/query -XPOST -d $'
+```sh
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
 query {
   debug(func: uid(1)) {
     name@en
@@ -3087,6 +3100,14 @@ fragment TestFragB {
 ## GraphQL Variables
 
 `Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
+For **HTTP requests** with GraphQL Variables, we must use `Content-Type: application/json` header and pass data with a JSON object containing `query` and `variables`.
+
+```sh
+curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d $'{
+  "query": "query test($a: string) { test(func: eq(name, $a)) { \n uid \n name \n } }",
+  "variables": { "$a": "Alice" }
+}' | python -m json.tool | less
+```
 
 {{< runnable vars="{\"$a\": \"5\", \"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
 query test($a: int, $b: int, $name: string) {
@@ -3702,4 +3723,3 @@ num: int @index(factor) .
   }
 }
 ```
-

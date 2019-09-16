@@ -32,8 +32,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -42,38 +50,57 @@ import (
 
 // Error constants representing different types of errors.
 var (
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
+	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
+	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
-	Success             = "Success"
-	ErrorUnauthorized   = "ErrorUnauthorized"
-	ErrorInvalidMethod  = "ErrorInvalidMethod"
+	// Success is equivalent to the HTTP 200 error code.
+	Success = "Success"
+	// ErrorUnauthorized is equivalent to the HTTP 401 error code.
+	ErrorUnauthorized = "ErrorUnauthorized"
+	// ErrorInvalidMethod is equivalent to the HTTP 405 error code.
+	ErrorInvalidMethod = "ErrorInvalidMethod"
+	// ErrorInvalidRequest is equivalent to the HTTP 400 error code.
 	ErrorInvalidRequest = "ErrorInvalidRequest"
-	Error               = "Error"
-	ErrorNoData         = "ErrorNoData"
-	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	// Error is a general error code.
+	Error = "Error"
+	// ErrorNoData is an error returned when the requested data cannot be returned.
+	ErrorNoData = "ErrorNoData"
+	// ValidHostnameRegex is a regex that accepts our expected hostname format.
+	ValidHostnameRegex = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
+		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	// Star is equivalent to using * in a mutation.
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
-	// Use the max possible grpc msg size for the most flexibility (4GB - equal
+	// GrpcMaxSize is the maximum possible size for a gRPC message.
+	// Dgraph uses the maximum size for the most flexibility (4GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
 	GrpcMaxSize = 4 << 30
 
-	// The attr used to store list of predicates for a node.
-	PredicateListAttr = "_predicate_"
-
+	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
+	// PortZeroHTTP is the default HTTP port for zero.
 	PortZeroHTTP = 6080
+	// PortInternal is the default port for internal use.
 	PortInternal = 7080
-	PortHTTP     = 8080
-	PortGrpc     = 9080
-	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
-	// start aborting old transactions.
+	// PortHTTP is the default HTTP port for alpha.
+	PortHTTP = 8080
+	// PortGrpc is the default gRPC port for alpha.
+	PortGrpc = 9080
+	// ForceAbortDifference is the maximum allowed difference between
+	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
-	GrootId       = "groot"
+	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
+	FacetDelimeter = "|"
+
+	// GrootId is the ID of the admin user for ACLs.
+	GrootId = "groot"
+	// AclPredicates is the JSON representation of the predicates reserved for use
+	// by the ACL system.
 	AclPredicates = `
 {"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
 {"predicate":"dgraph.password","type":"password"},
@@ -85,9 +112,11 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	Nilbyte        []byte
+	// Nilbyte is a nil byte slice. Used
+	Nilbyte []byte
 )
 
+// ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {
 	if err == nil {
 		return false
@@ -95,28 +124,54 @@ func ShouldCrash(err error) bool {
 	errStr := grpc.ErrorDesc(err)
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
-		strings.Contains(errStr, "NO_ADDR")
+		strings.Contains(errStr, "NO_ADDR") ||
+		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
-type errRes struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+// GqlError is a GraphQL spec compliant error structure.  See GraphQL spec on
+// errors here: https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+//
+// Note: "Every error must contain an entry with the key message with a string
+// description of the error intended for the developer as a guide to understand
+// and correct the error."
+//
+// "If an error can be associated to a particular point in the request [the error]
+// should contain an entry with the key locations with a list of locations"
+//
+// Path is about GraphQL results and Errors for GraphQL layer.
+//
+// Extensions is for everything else.
+type GqlError struct {
+	Message    string                 `json:"message"`
+	Locations  []Location             `json:"locations,omitempty"`
+	Path       []interface{}          `json:"path,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+// A Location is the Line+Column index of an error in a request.
+type Location struct {
+	Line   int `json:"line,omitempty"`
+	Column int `json:"column,omitempty"`
 }
 
 type queryRes struct {
-	Errors []errRes `json:"errors"`
+	Errors []GqlError `json:"errors"`
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -129,35 +184,43 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 	SetStatus(w, "error", msg)
 }
 
+// AddCorsHeaders adds the CORS headers to an HTTP response.
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-Vars, "+
-			"X-Dgraph-MutationType, X-Dgraph-IgnoreIndexConflict")
+	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
+		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, "+
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
 
+// QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
-	Errors []errRes `json:"errors"`
-	Data   *string  `json:"data"`
+	Errors []GqlError `json:"errors"`
+	Data   *string    `json:"data"`
 }
 
+// SetStatusWithData sets the errors in the response and ensures that the data key
+// in the data is present with value nil.
 // In case an error was encountered after the query execution started, we have to return data
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr QueryResWithData
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
 }
 
+// Reply sets the body of an HTTP response to the JSON representation of the given reply.
 func Reply(w http.ResponseWriter, rep interface{}) {
 	if js, err := json.Marshal(rep); err == nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -167,6 +230,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 	}
 }
 
+// ParseRequest parses the body of the given request.
 func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
@@ -177,6 +241,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+// Min returns the minimum of the two given numbers.
 func Min(a, b uint64) uint64 {
 	if a < b {
 		return a
@@ -184,6 +249,7 @@ func Min(a, b uint64) uint64 {
 	return b
 }
 
+// Max returns the maximum of the two given numbers.
 func Max(a, b uint64) uint64 {
 	if a > b {
 		return a
@@ -191,20 +257,22 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
-func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
+// RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
+func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
-		if sleepDurationOnFailure > 0 {
-			time.Sleep(sleepDurationOnFailure)
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
 		}
 	}
 	return err
 }
 
+// HasString returns whether the slice contains the given string.
 func HasString(a []string, b string) bool {
 	for _, k := range a {
 		if k == b {
@@ -214,7 +282,7 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
-// Reads a single line from a buffered reader. The line is read into the
+// ReadLine reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
 // method for loading long lines which could be longer than the buffer
 // size of bufio.Scanner.
@@ -235,6 +303,7 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	return err
 }
 
+// FixedDuration returns the given duration as a string of fixed length.
 func FixedDuration(d time.Duration) string {
 	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
 	if d >= time.Minute {
@@ -298,8 +367,8 @@ func ValidateAddress(addr string) bool {
 	return regExpHostName.MatchString(host)
 }
 
-// sorts the slice of strings and removes duplicates. changes the input slice.
-// this function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+// RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
+// This function should be called like: someSlice = RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]
@@ -312,6 +381,7 @@ func RemoveDuplicates(s []string) (out []string) {
 	return
 }
 
+// BytesBuffer provides a buffer backed by byte slices.
 type BytesBuffer struct {
 	data [][]byte
 	off  int
@@ -323,7 +393,7 @@ func (b *BytesBuffer) grow(n int) {
 		n = 128
 	}
 	if len(b.data) == 0 {
-		b.data = append(b.data, make([]byte, n, n))
+		b.data = append(b.data, make([]byte, n))
 	}
 
 	last := len(b.data) - 1
@@ -340,11 +410,11 @@ func (b *BytesBuffer) grow(n int) {
 	}
 	b.data[last] = b.data[last][:b.off]
 	b.sz += len(b.data[last])
-	b.data = append(b.data, make([]byte, sz, sz))
+	b.data = append(b.data, make([]byte, sz))
 	b.off = 0
 }
 
-// returns a slice of length n to be used to writing
+// Slice returns a slice of length n to be used for writing.
 func (b *BytesBuffer) Slice(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1
@@ -353,11 +423,13 @@ func (b *BytesBuffer) Slice(n int) []byte {
 	return b.data[last][b.off-n : b.off]
 }
 
+// Length returns the size of the buffer.
 func (b *BytesBuffer) Length() int {
 	return b.sz
 }
 
-// Caller should ensure that o is of appropriate length
+// CopyTo copies the contents of the buffer to the given byte slice.
+// Caller should ensure that o is of appropriate length.
 func (b *BytesBuffer) CopyTo(o []byte) int {
 	offset := 0
 	for i, d := range b.data {
@@ -372,37 +444,53 @@ func (b *BytesBuffer) CopyTo(o []byte) int {
 	return offset
 }
 
-// Always give back <= touched bytes
+// TruncateBy reduces the size of the bugger by the given amount.
+// Always give back <= touched bytes.
 func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
 	AssertTrue(b.off >= 0 && b.sz >= 0)
 }
 
+type record struct {
+	Name string
+	Dur  time.Duration
+}
+
+// Timer implements a timer that supports recording the duration of events.
 type Timer struct {
 	start   time.Time
 	last    time.Time
-	records []time.Duration
+	records []record
 }
 
+// Start starts the timer and clears the list of records.
 func (t *Timer) Start() {
 	t.start = time.Now()
 	t.last = t.start
 	t.records = t.records[:0]
 }
 
-func (t *Timer) Record() {
+// Record records an event and assigns it the given name.
+func (t *Timer) Record(name string) {
 	now := time.Now()
-	t.records = append(t.records, now.Sub(t.last))
+	t.records = append(t.records, record{
+		Name: name,
+		Dur:  now.Sub(t.last).Round(time.Millisecond),
+	})
 	t.last = now
 }
 
+// Total returns the duration since the timer was started.
 func (t *Timer) Total() time.Duration {
-	return time.Since(t.start)
+	return time.Since(t.start).Round(time.Millisecond)
 }
 
-func (t *Timer) All() []time.Duration {
-	return t.records
+func (t *Timer) String() string {
+	sort.Slice(t.records, func(i, j int) bool {
+		return t.records[i].Dur > t.records[j].Dur
+	})
+	return fmt.Sprintf("Timer Total: %s. Breakdown: %v", t.Total(), t.records)
 }
 
 // PredicateLang extracts the language from a predicate (or facet) name.
@@ -415,6 +503,7 @@ func PredicateLang(s string) (string, string) {
 	return s[0:i], s[i+1:]
 }
 
+// DivideAndRule is used to divide a number of tasks among multiple go routines.
 func DivideAndRule(num int) (numGo, width int) {
 	numGo, width = 64, 0
 	for ; numGo >= 1; numGo /= 2 {
@@ -427,6 +516,7 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
+// SetupConnection starts a secure gRPC connection to the given host.
 func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
@@ -453,6 +543,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 	return grpc.DialContext(ctx, host, dialOpts...)
 }
 
+// Diff computes the difference between the keys of the two given maps.
 func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string) {
 	var add []string
 	var del []string
@@ -471,6 +562,7 @@ func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string)
 	return add, del
 }
 
+// SpanTimer returns a function used to record the duration of the given span.
 func SpanTimer(span *trace.Span, name string) func() {
 	if span == nil {
 		return func() {}
@@ -487,4 +579,128 @@ func SpanTimer(span *trace.Span, name string) func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
 		// TODO: We can look into doing a latency record here.
 	}
+}
+
+// CloseFunc needs to be called to close all the client connections.
+type CloseFunc func()
+
+// CredOpt stores the options for logging in, including the password and user.
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
+
+// GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --alpha specifies a comma separated list of endpoints to connect to
+// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --retries specifies how many times we should retry the connection to each endpoint upon failures
+// --user and --password specify the credentials we should use to login with the server
+func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
+	alphas := conf.GetString("alpha")
+	if len(alphas) == 0 {
+		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
+	}
+
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", alphas)
+	tlsCfg, err := LoadClientTLSConfig(conf)
+	Checkf(err, "While loading TLS configuration")
+
+	ds := strings.Split(alphas, ",")
+	var conns []*grpc.ClientConn
+	var clients []api.DgraphClient
+
+	retries := 1
+	if conf.IsSet("retries") {
+		retries = conf.GetInt("retries")
+		if retries < 1 {
+			retries = 1
+		}
+	}
+
+	for _, d := range ds {
+		var conn *grpc.ClientConn
+		for i := 0; i < retries; retries++ {
+			conn, err = SetupConnection(d, tlsCfg, false)
+			if err == nil {
+				break
+			}
+			fmt.Printf("While trying to setup connection: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
+		if conn == nil {
+			Fatalf("Could not setup connection after %d retries", retries)
+		}
+
+		conns = append(conns, conn)
+		dc := api.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+
+	dg := dgo.NewDgraphClient(clients...)
+	user := conf.GetString("user")
+	if login && len(user) > 0 {
+		err = GetPassAndLogin(dg, &CredOpt{
+			Conf:        conf,
+			UserID:      user,
+			PasswordOpt: "password",
+		})
+		Checkf(err, "While retrieving password and logging in")
+	}
+
+	closeFunc := func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}
+	return dg, closeFunc
+}
+
+// AskUserPassword prompts the user to enter the password for the given user ID.
+func AskUserPassword(userid string, pwdType string, times int) (string, error) {
+	AssertTrue(times == 1 || times == 2)
+	AssertTrue(pwdType == "Current" || pwdType == "New")
+	// ask for the user's password
+	fmt.Printf("%s password for %v:", pwdType, userid)
+	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", errors.Wrapf(err, "while reading password")
+	}
+	fmt.Println()
+	password := string(pd)
+
+	if times == 2 {
+		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
+		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", errors.Wrapf(err, "while reading password")
+		}
+		fmt.Println()
+
+		password2 := string(pd2)
+		if password2 != password {
+			return "", errors.Errorf("the two typed passwords do not match")
+		}
+	}
+	return password, nil
+}
+
+// GetPassAndLogin uses the given credentials and client to perform the login operation.
+func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
+	password := opt.Conf.GetString(opt.PasswordOpt)
+	if len(password) == 0 {
+		var err error
+		password, err = AskUserPassword(opt.UserID, "Current", 1)
+		if err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
+	}
+	fmt.Println("Login successful.")
+	// update the context so that it has the admin jwt token
+	return nil
 }

@@ -54,7 +54,7 @@ func main() {
 	// schema items.
 	resp, err := c.NewTxn().Query(ctx, "schema {}")
 	x.Check(err)
-	if len(resp.Schema) < 5 {
+	if len(resp.Json) < 5 {
 		// Run each schema alter separately so that there is an even
 		// distribution among all groups.
 		for _, s := range schema() {
@@ -152,7 +152,7 @@ func mutate(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(ctx)
+	defer func() { _ = r.txn.Discard(ctx) }()
 
 	char := 'a' + rune(rand.Intn(26))
 
@@ -204,7 +204,7 @@ func showNode(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(ctx)
+	defer func() { _ = r.txn.Discard(ctx) }()
 
 	char := 'a' + rune(rand.Intn(26))
 	var result struct {

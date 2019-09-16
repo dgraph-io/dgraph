@@ -53,7 +53,7 @@ type node struct {
 	// Multiple parts of the value are encoded as a single uint64 so that it
 	// can be atomically loaded and stored:
 	//   value offset: uint32 (bits 0-31)
-	//   value size  : uint16 (bits 32-47)
+	//   value size  : uint16 (bits 32-63)
 	value uint64
 
 	// A byte slice is 24 bytes. We are trying to save space here.
@@ -97,9 +97,10 @@ func (s *Skiplist) DecrRef() {
 	// Indicate we are closed. Good for testing.  Also, lets GC reclaim memory. Race condition
 	// here would suggest we are accessing skiplist when we are supposed to have no reference!
 	s.arena = nil
+	// Since the head references the arena's buf, as long as the head is kept around
+	// GC can't release the buf.
+	s.head = nil
 }
-
-func (s *Skiplist) valid() bool { return s.arena != nil }
 
 func newNode(arena *Arena, key []byte, v y.ValueStruct, height int) *node {
 	// The base level is already allocated in the node struct.
@@ -112,13 +113,13 @@ func newNode(arena *Arena, key []byte, v y.ValueStruct, height int) *node {
 	return node
 }
 
-func encodeValue(valOffset uint32, valSize uint16) uint64 {
+func encodeValue(valOffset uint32, valSize uint32) uint64 {
 	return uint64(valSize)<<32 | uint64(valOffset)
 }
 
-func decodeValue(value uint64) (valOffset uint32, valSize uint16) {
+func decodeValue(value uint64) (valOffset uint32, valSize uint32) {
 	valOffset = uint32(value)
-	valSize = uint16(value >> 32)
+	valSize = uint32(value >> 32)
 	return
 }
 
@@ -134,7 +135,7 @@ func NewSkiplist(arenaSize int64) *Skiplist {
 	}
 }
 
-func (s *node) getValueOffset() (uint32, uint16) {
+func (s *node) getValueOffset() (uint32, uint32) {
 	value := atomic.LoadUint64(&s.value)
 	return decodeValue(value)
 }

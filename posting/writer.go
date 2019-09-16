@@ -21,16 +21,18 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 )
 
+// TxnWriter is in charge or writing transactions to badger.
 type TxnWriter struct {
 	db  *badger.DB
 	wg  sync.WaitGroup
 	che chan error
 }
 
+// NewTxnWriter returns a new TxnWriter instance.
 func NewTxnWriter(db *badger.DB) *TxnWriter {
 	return &TxnWriter{
 		db:  db,
@@ -51,7 +53,8 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
-func (w *TxnWriter) Send(kvs *pb.KVS) error {
+// Write stores the given key-value pairs in badger.
+func (w *TxnWriter) Write(kvs *pb.KVList) error {
 	for _, kv := range kvs.Kv {
 		var meta byte
 		if len(kv.UserMeta) > 0 {
@@ -64,7 +67,7 @@ func (w *TxnWriter) Send(kvs *pb.KVS) error {
 	return nil
 }
 
-func (w *TxnWriter) Update(commitTs uint64, f func(txn *badger.Txn) error) error {
+func (w *TxnWriter) update(commitTs uint64, f func(txn *badger.Txn) error) error {
 	if commitTs == 0 {
 		return nil
 	}
@@ -81,21 +84,26 @@ func (w *TxnWriter) Update(commitTs uint64, f func(txn *badger.Txn) error) error
 	return txn.CommitAt(commitTs, w.cb)
 }
 
-func (w *TxnWriter) Delete(key []byte, ts uint64) error {
-	return w.Update(ts, func(txn *badger.Txn) error {
-		return txn.Delete(key)
-	})
-}
-
+// SetAt writes a key-value pair at the given timestamp.
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
-	return w.Update(ts, func(txn *badger.Txn) error {
+	return w.update(ts, func(txn *badger.Txn) error {
 		switch meta {
 		case BitCompletePosting, BitEmptyPosting:
-			if err := txn.SetWithDiscard(key, val, meta); err != nil {
+			err := txn.SetEntry((&badger.Entry{
+				Key:      key,
+				Value:    val,
+				UserMeta: meta,
+			}).WithDiscard())
+			if err != nil {
 				return err
 			}
 		default:
-			if err := txn.SetWithMeta(key, val, meta); err != nil {
+			err := txn.SetEntry(&badger.Entry{
+				Key:      key,
+				Value:    val,
+				UserMeta: meta,
+			})
+			if err != nil {
 				return err
 			}
 		}
@@ -103,7 +111,13 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	})
 }
 
+// Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
+	defer func() {
+		if err := w.db.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
+		}
+	}()
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

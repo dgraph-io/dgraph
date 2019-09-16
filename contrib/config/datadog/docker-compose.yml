@@ -1,0 +1,65 @@
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8180:8180
+    - 9180:9180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5080 --logtostderr -v=2 --datadog.collector=datadog:8126 --jaeger.collector=http://jaeger:14268
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5080:5080
+    - 6080:6080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 0 --idx=1 --my=zero1:5080 --replicas=3 --logtostderr --datadog.collector=datadog:8126 -v=2 --bindall --jaeger.collector=http://jaeger:14268
+  datadog:
+    image: datadog/agent:latest
+    container_name: datadog
+    working_dir: /working/datadog
+    volumes:
+    - type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+      read_only: true
+    - type: bind
+      source: /proc/
+      target: /proc/
+      read_only: true
+    - type: bind
+      source: /sys/fs/cgroup/
+      target: /host/sys/fs/cgroup
+      read_only: true
+    environment:
+    - DD_API_KEY
+    - DD_APM_ENABLED=true
+    - DD_APM_NON_LOCAL_TRAFFIC=true
+    ports:
+    - 8126:8126
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    working_dir: /working/jaeger
+    environment:
+    - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+    ports:
+    - 16686:16686
+    command: --memory.max-traces=1000000
+volumes: {}

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -34,7 +34,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 	src.Value = []byte(geoData)
 	gc, err := Convert(src, GeoID)
 	if err != nil {
-		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
+		return nil, nil, errors.Wrapf(err, "Cannot decode given geoJson input")
 	}
 	g := gc.Value.(geom.T)
 

@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,14 +29,14 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := z.DgraphClientWithGroot("localhost:9180")
+	dg1 := testutil.DgraphClient("localhost:9180")
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
@@ -43,75 +44,71 @@ func TestSnapshot(t *testing.T) {
 		Schema: "value: int .",
 	}))
 
-	for i := 1; i <= 10; i++ {
-		_, err := dg1.NewTxn().Mutate(context.Background(),
-			&api.Mutation{
-				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
-				CommitNow: true,
-			})
-		require.NoError(t, err)
-	}
-	doQuery(t, dg1, 11*10/2)
-
-	err := z.DockerStop("alpha2")
+	err := testutil.DockerStop("alpha2")
 	require.NoError(t, err)
 
-	for i := 11; i <= 600; i++ {
-		_, err := dg1.NewTxn().Mutate(context.Background(),
-			&api.Mutation{
-				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
-				CommitNow: true,
-			})
+	for i := 1; i <= 200; i++ {
+		err := testutil.RetryMutation(dg1, &api.Mutation{
+			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
+			CommitNow: true,
+		})
 		require.NoError(t, err)
 	}
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
-	err = z.DockerStart("alpha2")
+	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 := z.DgraphClientWithGroot("localhost:9182")
-	doQuery(t, dg2, 601*600/2)
+	dg2 := testutil.DgraphClient("localhost:9182")
+	verifySnapshot(t, dg2, 200)
 
-	err = z.DockerStop("alpha2")
+	err = testutil.DockerStop("alpha2")
 	require.NoError(t, err)
 
-	for i := 601; i <= 1200; i++ {
-		_, err := dg1.NewTxn().Mutate(context.Background(),
-			&api.Mutation{
-				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
-				CommitNow: true,
-			})
+	for i := 201; i <= 400; i++ {
+		err := testutil.RetryMutation(dg1, &api.Mutation{
+			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
+			CommitNow: true,
+		})
 		require.NoError(t, err)
 	}
-	snapshotTs = waitForSnapshot(t, snapshotTs)
+	_ = waitForSnapshot(t, snapshotTs)
 
-	err = z.DockerStart("alpha2")
+	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 = z.DgraphClientWithGroot("localhost:9182")
-	doQuery(t, dg2, 1201*1200/2)
+	dg2 = testutil.DgraphClient("localhost:9182")
+	verifySnapshot(t, dg2, 400)
 }
 
-func doQuery(t *testing.T, dg *dgo.Dgraph, total int) {
-	q := `
-	{
-		var(func: has(value)) {
-			v as value
-		}
+func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
+	expectedSum := (num * (num + 1)) / 2
 
-		total() {
-			sum(val(v))
+	q1 := `
+	{
+		values(func: has(value)) {
+			value
 		}
 	}`
-	resp, err := z.RetryQuery(dg, q)
+
+	resMap := make(map[string][]map[string]int)
+	resp, err := testutil.RetryQuery(dg, q1)
 	require.NoError(t, err)
-	z.CompareJSON(t, fmt.Sprintf(`{"total": [{"sum(val(v))": %d}]}`, total), string(resp.Json))
+	err = json.Unmarshal(resp.Json, &resMap)
+	require.NoError(t, err)
+
+	sum := 0
+	require.Equal(t, num, len(resMap["values"]))
+	for _, item := range resMap["values"] {
+		sum += item["value"]
+	}
+	require.Equal(t, expectedSum, sum)
 }
 
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
-		res, err := http.Get("http://localhost:6080/state")
+		res, err := http.Get("http://localhost:6180/state")
 		require.NoError(t, err)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()

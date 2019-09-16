@@ -18,8 +18,8 @@ package query
 
 import (
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 type mathTree struct {
@@ -160,7 +160,7 @@ func processBinaryBoolean(mNode *mathTree) error {
 		}
 		res, err := compareValues(aggName, val, curVal)
 		if err != nil {
-			return x.Wrapf(err, "Wrong values in comparison function.")
+			return errors.Wrapf(err, "Wrong values in comparison function.")
 		}
 		destMap[k] = types.Val{
 			Tid:   types.BoolID,
@@ -177,7 +177,7 @@ func processTernary(mNode *mathTree) error {
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
 	if len(condMap) == 0 {
-		return x.Errorf("Expected a value variable in %v but missing.", aggName)
+		return errors.Errorf("Expected a value variable in %v but missing.", aggName)
 	}
 	varOne := mNode.Child[1].Val
 	varTwo := mNode.Child[2].Val
@@ -187,7 +187,7 @@ func processTernary(mNode *mathTree) error {
 		var res types.Val
 		v, ok := val.Value.(bool)
 		if !ok {
-			return x.Errorf("First variable of conditional function not a bool value")
+			return errors.Errorf("First variable of conditional function not a bool value")
 		}
 		if v {
 			// Pick the value of first map.
@@ -233,7 +233,7 @@ func evalMathTree(mNode *mathTree) error {
 	aggName := mNode.Fn
 	if isUnary(aggName) {
 		if len(mNode.Child) != 1 {
-			return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 1 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processUnary(mNode)
@@ -241,7 +241,7 @@ func evalMathTree(mNode *mathTree) error {
 
 	if isBinary(aggName) {
 		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processBinary(mNode)
@@ -249,7 +249,7 @@ func evalMathTree(mNode *mathTree) error {
 
 	if isBinaryBoolean(aggName) {
 		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processBinaryBoolean(mNode)
@@ -257,11 +257,11 @@ func evalMathTree(mNode *mathTree) error {
 
 	if isTernary(aggName) {
 		if len(mNode.Child) != 3 {
-			return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 3 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processTernary(mNode)
 	}
 
-	return x.Errorf("Unhandled Math operator: %v", aggName)
+	return errors.Errorf("Unhandled Math operator: %v", aggName)
 }

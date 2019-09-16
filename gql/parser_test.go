@@ -23,7 +23,8 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,28 +168,28 @@ func TestParseQueryAliasListPred(t *testing.T) {
 	query := `
 	{
 		me(func: uid(0x0a)) {
-			pred: _predicate_
+			pred: some_pred
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, "pred", res.Query[0].Children[0].Alias)
-	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+	require.Equal(t, "some_pred", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryCountListPred(t *testing.T) {
 	query := `
 	{
 		me(func: uid(0x0a)) {
-			count(_predicate_)
+			count(some_pred)
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, true, res.Query[0].Children[0].IsCount)
-	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+	require.Equal(t, "some_pred", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryListPred2(t *testing.T) {
@@ -199,7 +200,7 @@ func TestParseQueryListPred2(t *testing.T) {
 		}
 
 		var(func: uid(f)) {
-			l as _predicate_
+			l as some_pred
 		}
 
 		var(func: uid( 0x0a)) {
@@ -221,9 +222,9 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 		}
 
 		var(func: uid(f)) {
-			l as _predicate_
+			l as some_pred
 			friend {
-				g as _predicate_
+				g as some_pred
 			}
 		}
 
@@ -974,6 +975,103 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 	require.Contains(t, err.Error(), "Multiple variables not allowed in a function")
 }
 
+func TestLenFunctionWithMultipleVariableError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(gt(len(a, b), 10)) {
+		 name
+		}
+	}
+`
+	// Multiple vars not allowed.
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple variables not allowed in len function")
+}
+
+func TestLenFunctionInsideUidError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(uid(len(a), 10)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "len function only allowed inside inequality")
+}
+
+func TestLenFunctionWithNoVariable(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(len(), 10) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got empty attr for function")
+}
+
+func TestLenAsSecondArgumentError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(10, len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved. We should validate function names from a
+	// whitelist.
+	require.Error(t, err)
+}
+
+func TestCountWithLenFunctionError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(count(name), len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved.
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarInIneq(t *testing.T) {
 	query := `
 	{
@@ -1071,11 +1169,45 @@ func TestParseShortestPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "0x0a", res.Query[0].Args["from"])
-	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+	require.Equal(t, uint64(0xa), res.Query[0].ShortestPathArgs.From.UID[0])
+	require.Equal(t, uint64(0xb), res.Query[0].ShortestPathArgs.To.UID[0])
 	require.Equal(t, "3", res.Query[0].Args["numpaths"])
 	require.Equal(t, "3", res.Query[0].Args["minweight"])
 	require.Equal(t, "6", res.Query[0].Args["maxweight"])
+}
+
+func TestParseShortestPathWithUidVars(t *testing.T) {
+	query := `{
+		a as var(func: uid(0x01))
+		b as var(func: uid(0x02))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	q := res.Query[2]
+	require.NotNil(t, q.ShortestPathArgs.From)
+	require.Equal(t, 1, len(q.ShortestPathArgs.From.NeedsVar))
+	require.Equal(t, "a", q.ShortestPathArgs.From.NeedsVar[0].Name)
+	require.Equal(t, "uid", q.ShortestPathArgs.From.Name)
+	require.NotNil(t, q.ShortestPathArgs.To)
+	require.Equal(t, 1, len(q.ShortestPathArgs.To.NeedsVar))
+}
+
+func TestParseShortestPathInvalidFnError(t *testing.T) {
+	query := `{
+		shortest(from: eq(a), to: uid(b)) {
+			password
+			friend
+		}
+
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
 }
 
 func TestParseMultipleQueries(t *testing.T) {
@@ -1641,7 +1773,7 @@ func TestParseMutationError(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
+	require.Contains(t, err.Error(), `Invalid block: [mutation]`)
 }
 
 func TestParseMutationError2(t *testing.T) {
@@ -1656,7 +1788,7 @@ func TestParseMutationError2(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
+	require.Contains(t, err.Error(), `Invalid block: [set]`)
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {
@@ -4008,7 +4140,7 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
 }
 
 func TestAggRoot1(t *testing.T) {
@@ -4307,10 +4439,11 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 }
 
 func parseNquads(b []byte) ([]*api.NQuad, error) {
+	var lexer lex.Lexer
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
-		if err == rdf.ErrEmpty {
+		nq, err := chunker.ParseRDF(string(line), &lexer)
+		if err == chunker.ErrEmpty {
 			continue
 		}
 		if err != nil {
@@ -4333,8 +4466,9 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	mu, err := ParseMutation(m)
+	req, err := ParseMutation(m)
 	require.NoError(t, err)
+	mu := req.Mutations[0]
 	require.NotNil(t, mu)
 	sets, err := parseNquads(mu.SetNquads)
 	require.NoError(t, err)
@@ -4362,10 +4496,10 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
          }{
 		   set { _:b2 <reg> "b2 content" . }
 		 }`,
-			errStr: "Unexpected { after the end of the block.",
+			errStr: "Unrecognized character in lexText",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
-			errStr: "Invalid operation type: something after the end of the block",
+			errStr: "Invalid operation type: something",
 		},
 		{m: `
           # comments are ok

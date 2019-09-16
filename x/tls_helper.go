@@ -19,20 +19,13 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-)
-
-type tlsConfigType int8
-
-const (
-	TLSClientConfig tlsConfigType = iota
-	TLSServerConfig
 )
 
 const (
@@ -41,7 +34,6 @@ const (
 
 // TLSHelperConfig define params used to create a tls.Config
 type TLSHelperConfig struct {
-	ConfigType       tlsConfigType
 	CertDir          string
 	CertRequired     bool
 	Cert             string
@@ -52,6 +44,7 @@ type TLSHelperConfig struct {
 	UseSystemCACerts bool
 }
 
+// RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cacert", "",
 		"The CA Cert file used to verify server certificates. Required for enabling TLS.")
@@ -62,6 +55,7 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
+// LoadServerTLSConfig loads the TLS config into the server with the given parameters.
 func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
 	error) {
 	conf := TLSHelperConfig{}
@@ -78,6 +72,7 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 	return GenerateServerTLSConfig(&conf)
 }
 
+// LoadClientTLSConfig loads the TLS config into the client with the given parameters.
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
 	// plaintext. However the client cert files are optional, depending on whether the server
@@ -115,7 +110,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	if v.GetString("tls_server_name") != "" ||
 		v.GetString("tls_cert") != "" ||
 		v.GetString("tls_key") != "" {
-		return nil, fmt.Errorf("--tls_cacert is required for enabling TLS")
+		return nil, errors.Errorf("--tls_cacert is required for enabling TLS")
 	}
 	return nil, nil
 }
@@ -137,7 +132,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("error reading CA file %q", certPath)
+			return nil, errors.Errorf("error reading CA file %q", certPath)
 		}
 	}
 
@@ -156,7 +151,8 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 		if v, has := auth[strings.ToUpper(authType)]; has {
 			return v, nil
 		}
-		return tls.NoClientCert, fmt.Errorf("Invalid client auth. Valid values [REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
+		return tls.NoClientCert, errors.Errorf("Invalid client auth. Valid values " +
+			"[REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
 	}
 
 	return tls.NoClientCert, nil

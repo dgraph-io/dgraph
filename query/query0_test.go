@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestGetUID(t *testing.T) {
@@ -152,9 +152,9 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
 		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":45}]}}`},
+			out: `{"data":{"q": [{"count":46}]}}`},
 		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":47}]}}`},
+			out: `{"data":{"q": [{"count":48}]}}`},
 		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
@@ -165,12 +165,12 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":2}]}}`},
 		// NOTE: match with empty string filters values greater than the max distance.
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":27}]}}`},
+			out: `{"data":{"q": [{"count":28}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
 			failure: `Value "" in uid_in is not a number`},
 	}
 	for _, tc := range tests {
-		js, err := processQuery(t, context.Background(), tc.in)
+		js, err := processQuery(context.Background(), t, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -358,7 +358,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, DebugKey, "true")
-	js, err := processQuery(t, ctx, query)
+	js, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
@@ -986,7 +986,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
 }
@@ -1325,6 +1325,30 @@ func TestGroupByFriendsMultipleParentsVar(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"uid":"0x18","name":"Glenn Rhee","val(f)":2},{"uid":"0x1","name":"Michonne","val(f)":1},{"uid":"0x17","name":"Rick Grimes","val(f)":1},{"uid":"0x19","name":"Daryl Dixon","val(f)":1},{"uid":"0x1f","name":"Andrea","val(f)":1},{"uid":"0x65","val(f)":1}]}}`, js)
 }
 
+func TestGroupBy_FixPanicForNilDestUIDs(t *testing.T) {
+	// This a fix for GitHub issue #3768.
+	query := `
+		{
+			var(func: eq(name, "abcdef")) @ignorereflex {
+				random_nonexistent {
+					f as uid
+				}
+			}
+
+			me(func: uid(f)) @groupby(uid) {
+				a as count(uid)
+			}
+
+			me2(func: uid(f)) {
+				val(a)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me2": []}}`, js)
+
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 
 	query := `
@@ -1505,7 +1529,7 @@ func TestDoubleOrder(t *testing.T) {
 		}
 	}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1545,7 +1569,7 @@ func TestVarInIneqError(t *testing.T) {
 			}
 		}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1732,6 +1756,168 @@ func TestCountUidToVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
 }
 
+func TestFilterUsingLenFunction(t *testing.T) {
+	tests := []struct {
+		name, in, out string
+	}{
+		{
+			"Eq length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(eq(len(f), 3)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Eq length should return empty results",
+			`{
+				var(func: has(school), first: 3) {
+					f as uid
+				}
+				me(func: uid(f)) @filter(eq(len(f), 0)) {
+					uid
+					name
+				}
+			}`,
+			`{"data": {"me":[]}}`,
+		},
+		{
+			"Eq length with uid(0) should return results",
+			`{
+				f as var(func: eq(name, "random"))
+				me(func: uid(0)) @filter(eq(len(f), 0)) {
+					uid
+				}
+			}`,
+			`{"data": {"me":[{"uid": "0x0"}]}}`,
+		},
+		{
+			"Ge length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(ge(len(f), 0)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Lt length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(lt(len(f), 100)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Multiple length conditions",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    f2 as var(func: has(name), first: 5)
+
+			    me(func: uid(f2)) @filter(lt(len(f), 100) AND lt(len(f2), 10)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 5}]}}`,
+		},
+		{
+			"Filter in child with true result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(lt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+			`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},
+			 {"name":"Rick Grimes","friend":[{"name":"Michonne"}]},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
+		{
+			"Filter in child with false result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(gt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+
+			`{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Log("Running: ", tc.name)
+		js := processQueryNoErr(t, tc.in)
+		require.JSONEq(t, tc.out, js)
+	}
+}
+
+func TestCountOnVarAtRootErr(t *testing.T) {
+	query := `
+	       {
+	               var(func: has(school), first: 3) {
+	                       f as count(uid)
+	               }
+
+	               me(func: len(f)) {
+	                       score: math(f)
+	               }
+	       }
+	    `
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: len is not valid")
+}
+
+func TestFilterUsingLenFunctionWithMath(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		me(func: uid(f)) @filter(lt(len(f), 100)) {
+			score: math(f)
+		}
+	}
+    `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
+}
+
 func TestCountUidToVarMultiple(t *testing.T) {
 	query := `
 	{
@@ -1777,7 +1963,7 @@ func TestDefaultValueVar1(t *testing.T) {
 	{
 		var(func: has(pred)) {
 			n as uid
-			cnt as count(_predicate_)
+			cnt as count(nonexistent_pred)
 		}
 
 		data(func: uid(n)) @filter(gt(val(cnt), 4)) {
@@ -1792,7 +1978,7 @@ func TestDefaultValueVar2(t *testing.T) {
 	query := `
 	{
 		var(func: uid(0x1)) {
-			cnt as _predicate_
+			cnt as nonexistent_pred
 		}
 
 		data(func: uid(0x1)) {
@@ -1809,7 +1995,7 @@ func TestNonFlattenedResponse(t *testing.T) {
 		me(func: eq(name@en, "Baz Luhrmann")) {
 			uid
 			director.film {
-				name@en	
+				name@en
 			}
 		}
 	}`
@@ -2080,10 +2266,25 @@ func TestDateTimeQuery(t *testing.T) {
 		processQueryNoErr(t, query))
 }
 
+func TestCountUidWithAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23, 24, 25, 31)) {
+				countUid: count(uid)
+				name
+			}
+		}
+		`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"me":[{"countUid":5},{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`,
+		js)
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = z.DgraphClientWithGroot(z.SockAddr)
+	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	populateCluster()
 	os.Exit(m.Run())

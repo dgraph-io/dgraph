@@ -23,21 +23,29 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
+// Login handles login requests from clients. This version rejects all requests
+// since ACL is only supported in the enterprise version.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+	if err := x.HealthCheck(); err != nil {
+		return nil, err
+	}
 
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
 }
 
+// ResetAcl is an empty method since ACL is only supported in the enterprise version.
 func ResetAcl() {
 	// do nothing
 }
 
+// ResetAcls is an empty method since ACL is only supported in the enterprise version.
 func RefreshAcls(closer *y.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
@@ -48,11 +56,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
-func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	// always allow access
 	return nil
 }

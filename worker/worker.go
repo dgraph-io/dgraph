@@ -50,6 +50,7 @@ func workerPort() int {
 	return x.Config.PortOffset + x.PortInternal
 }
 
+// Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
@@ -73,7 +74,6 @@ func RunServer(bindall bool) {
 	if bindall {
 		laddr = "0.0.0.0"
 	}
-	var err error
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
@@ -82,7 +82,9 @@ func RunServer(bindall bool) {
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
-	workerServer.Serve(ln)
+	if err := workerServer.Serve(ln); err != nil {
+		glog.Errorf("Error while calling Serve: %+v", err)
+	}
 }
 
 // StoreStats returns stats for data store.

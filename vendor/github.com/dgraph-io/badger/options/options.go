@@ -28,3 +28,18 @@ const (
 	// MemoryMap indicates that that the file must be memory-mapped
 	MemoryMap
 )
+
+// ChecksumVerificationMode tells when should DB verify checksum for SSTable blocks.
+type ChecksumVerificationMode int
+
+const (
+	// NoVerification indicates DB should not verify checksum for SSTable blocks.
+	NoVerification ChecksumVerificationMode = iota
+	// OnTableRead indicates checksum should be verified while opening SSTtable.
+	OnTableRead
+	// OnBlockRead indicates checksum should be verified on every SSTable block read.
+	OnBlockRead
+	// OnTableAndBlockRead indicates checksum should be verified
+	// on SSTable opening and on every block read.
+	OnTableAndBlockRead
+)

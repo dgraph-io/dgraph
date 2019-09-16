@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
@@ -27,12 +28,15 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
 
+// Bulk is the sub-command invoked when running "dgraph bulk".
 var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
@@ -62,20 +66,17 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.IntP("num_go_routines", "j", runtime.NumCPU(),
-		"Number of worker threads to use (defaults to the number of logical CPUs).")
+	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
+		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
 	flag.Int64("mapoutput_mb", 64,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
-	flag.Bool("expand_edges", true,
-		"Generate edges that allow nodes to be expanded using _predicate_ or expand(...). "+
-			"Disable to increase loading speed.")
 	flag.Bool("skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist).")
 	flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
 			" bulk loader can be re-run while skipping the map phase.")
-	flag.Int("shufflers", 1,
-		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
+	flag.Int("reducers", 1,
+		"Number of reducers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
@@ -107,11 +108,10 @@ func run() {
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
-		ExpandEdges:      Bulk.Conf.GetBool("expand_edges"),
+		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumShufflers:     Bulk.Conf.GetInt("shufflers"),
+		NumReducers:      Bulk.Conf.GetInt("reducers"),
 		Version:          Bulk.Conf.GetBool("version"),
 		StoreXids:        Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:         Bulk.Conf.GetString("zero"),
@@ -137,18 +137,24 @@ func run() {
 	if opt.DataFiles == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.DataFiles); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.DataFiles)
-		os.Exit(1)
+	} else {
+		fileList := strings.Split(opt.DataFiles, ",")
+		for _, file := range fileList {
+			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
+				os.Exit(1)
+			}
+		}
 	}
+
 	if opt.ReduceShards > opt.MapShards {
 		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
 			opt.ReduceShards, opt.MapShards)
 		os.Exit(1)
 	}
-	if opt.NumShufflers > opt.ReduceShards {
+	if opt.NumReducers > opt.ReduceShards {
 		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
-			opt.NumShufflers, opt.ReduceShards)
+			opt.NumReducers, opt.ReduceShards)
 		os.Exit(1)
 	}
 	if opt.CustomTokenizers != "" {
@@ -197,6 +203,27 @@ func run() {
 	if opt.CleanupTmp {
 		defer os.RemoveAll(opt.TmpDir)
 	}
+
+	// Bulk loader can take up a lot of RAM. So, run GC often.
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		var lastNum uint32
+		var ms runtime.MemStats
+		for range ticker.C {
+			runtime.ReadMemStats(&ms)
+			fmt.Printf("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse),
+				humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
+			if ms.NumGC > lastNum {
+				// GC was already run by the Go runtime. No need to run it again.
+				lastNum = ms.NumGC
+			} else {
+				runtime.GC()
+				lastNum = ms.NumGC + 1
+			}
+		}
+	}()
 
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {

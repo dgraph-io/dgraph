@@ -2,9 +2,97 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+and this project adheres to [Serialization Versioning](VERSIONING.md).
 
 ## [Unreleased]
+
+## [1.6.0] - 2019-07-01
+
+This is a release including almost 200 commits, so expect many changes - some of them
+not backward compatible.
+
+Regarding backward compatibility in Badger versions, you might be interested on reading
+[VERSIONING.md](VERSIONING.md).
+
+_Note_: The hashes in parentheses correspond to the commits that impacted the given feature.
+
+### New APIs
+
+- badger.DB
+  - DropPrefix (291295e)
+  - Flatten (7e41bba)
+  - KeySplits (4751ef1)
+  - MaxBatchCount (b65e2a3)
+  - MaxBatchSize (b65e2a3)
+  - PrintKeyValueHistogram (fd59907)
+  - Subscribe (26128a7)
+  - Sync (851e462)
+
+- badger.DefaultOptions() and badger.LSMOnlyOptions() (91ce687)
+  - badger.Options.WithX methods
+
+- badger.Entry (e9447c9)
+  - NewEntry
+  - WithMeta
+  - WithDiscard
+  - WithTTL 
+
+- badger.Item
+  - KeySize (fd59907)
+  - ValueSize (5242a99)
+
+- badger.IteratorOptions
+  - PickTable (7d46029, 49a49e3)
+  - Prefix (7d46029)
+
+- badger.Logger (fbb2778)
+
+- badger.Options
+  - CompactL0OnClose (7e41bba)
+  - Logger (3f66663)
+  - LogRotatesToFlush (2237832)
+
+- badger.Stream (14cbd89, 3258067)
+- badger.StreamWriter (7116e16)
+- badger.TableInfo.KeyCount (fd59907)
+- badger.TableManifest (2017987)
+- badger.Tx.NewKeyIterator (49a49e3)
+- badger.WriteBatch (6daccf9, 7e78e80)
+
+### Modified APIs
+
+#### Breaking changes:
+
+- badger.DefaultOptions and badger.LSMOnlyOptions are now functions rather than variables (91ce687)
+- badger.Item.Value now receives a function that returns an error (439fd46)
+- badger.Txn.Commit doesn't receive any params now (6daccf9)
+- badger.DB.Tables now receives a boolean (76b5341)
+
+#### Not breaking changes:
+
+- badger.LSMOptions changed values (799c33f)
+- badger.DB.NewIterator now allows multiple iterators per RO txn (41d9656)
+- badger.Options.TableLoadingMode's new default is options.MemoryMap (6b97bac)
+
+### Removed APIs
+
+- badger.ManagedDB (d22c0e8)
+- badger.Options.DoNotCompact (7e41bba)
+- badger.Txn.SetWithX (e9447c9)
+
+### Tools:
+
+- badger bank disect (13db058)
+- badger bank test (13db058) --mmap (03870e3)
+- badger fill (7e41bba)
+- badger flatten (7e41bba)
+- badger info --histogram (fd59907) --history --lookup --show-keys --show-meta --with-prefix (09e9b63) --show-internal (fb2eed9)
+- badger benchmark read (239041e)
+- badger benchmark write (6d3b67d)
+
+## [1.5.5] - 2019-06-20
+
+* Introduce support for Go Modules
 
 ## [1.5.3] - 2018-07-11
 Bug Fixes:
@@ -87,7 +175,9 @@ Bug fix:
 ## [1.0.1] - 2017-11-06
 * Fix an uint16 overflow when resizing key slice
 
-[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.5.3...HEAD
+[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/dgraph-io/badger/compare/v1.5.5...v1.6.0
+[1.5.5]: https://github.com/dgraph-io/badger/compare/v1.5.3...v1.5.5
 [1.5.3]: https://github.com/dgraph-io/badger/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/dgraph-io/badger/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/dgraph-io/badger/compare/v1.5.0...v1.5.1

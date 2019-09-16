@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
@@ -130,17 +131,52 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	return intersects(l1, l2)
 }
 
-func closed(coords []geom.Coord) bool {
-	l := len(coords)
-	return coords[0][0] == coords[l-1][0] && coords[0][1] == coords[l-1][1]
-}
-
 func convertToGeom(str string) (geom.T, error) {
+	// validate would ensure that we have a closed loop for all the polygons. We don't support open
+	// loop polygons.
+	closed := func(p *geom.Polygon) error {
+		coords := p.Coords()
+		if len(coords) == 0 {
+			return errors.Errorf("Got empty polygon.")
+		}
+		// Check that first ring is closed.
+		c := coords[0]
+		l := len(c)
+		if c[0][0] == c[l-1][0] && c[0][1] == c[l-1][1] {
+			return nil
+		}
+		return errors.Errorf("Last coord not same as first")
+	}
+
+	validate := func(g geom.T) (geom.T, error) {
+		switch v := g.(type) {
+		case *geom.MultiPolygon:
+			for i := 0; i < v.NumPolygons(); i++ {
+				if err := closed(v.Polygon(i)); err != nil {
+					return nil, err
+				}
+			}
+		case *geom.Polygon:
+			if err := closed(v); err != nil {
+				return nil, err
+			}
+		}
+		return g, nil
+	}
+
+	var g geojson.Geometry
+	if err := json.Unmarshal([]byte(str), &g); err == nil {
+		t, err := g.Decode()
+		if err != nil {
+			return nil, err
+		}
+		return validate(t)
+	}
+
 	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
-		return nil, x.Errorf("Invalid coordinates")
+		return nil, errors.Errorf("Invalid coordinates")
 	}
-	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
 
@@ -148,57 +184,38 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Type = "MultiPolygon"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
-		mp := g1.(*geom.MultiPolygon)
-		for i := 0; i < mp.NumPolygons(); i++ {
-			coords := mp.Polygon(i).Coords()
-			if len(coords) == 0 {
-				return nil, x.Errorf("Got empty polygon inside multi-polygon.")
-			}
-			// Check that first ring is closed.
-			if !closed(mp.Polygon(i).Coords()[0]) {
-				return nil, x.Errorf("Last coord not same as first")
-			}
-		}
-		return g1, nil
+		return validate(g1)
 	}
 
 	if s[0:3] == "[[[" {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
-		coords := g1.(*geom.Polygon).Coords()
-		if len(coords) == 0 {
-			return nil, x.Errorf("Got empty polygon.")
-		}
-		// Check that first ring is closed.
-		if !closed(coords[0]) {
-			return nil, x.Errorf("Last coord not same as first")
-		}
-		return g1, nil
+		return validate(g1)
 	}
 
 	if s[0] == '[' {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		return g.Decode()
 	}
-	return nil, x.Errorf("Invalid coordinates")
+	return nil, errors.Errorf("Invalid coordinates")
 }

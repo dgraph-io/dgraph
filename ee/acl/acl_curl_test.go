@@ -17,24 +17,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
-var loginEndpoint = "http://" + z.SockAddrHttp + "/login"
+var loginEndpoint = "http://" + testutil.SockAddrHttp + "/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
 
-	glog.Infof("testing with port %s", z.SockAddr)
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	glog.Infof("testing with port %s", testutil.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	createAccountAndData(t, dg)
 
 	// test query through curl
-	accessJwt, refreshJwt, err := z.HttpLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: loginEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
@@ -44,21 +44,23 @@ func TestCurlAuthorization(t *testing.T) {
 	// test fail open with the accessJwt
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
+			"-H", "Content-Type: application/graphql+-",
 			"-d", query, curlQueryEndpoint}
 	}
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 
 	mutateArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
+			"-H", "Content-Type: application/rdf",
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
 	   }}`, predicateToWrite), curlMutateEndpoint}
 
 	}
 
-	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 
@@ -66,7 +68,7 @@ func TestCurlAuthorization(t *testing.T) {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
 	}
-	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 
@@ -75,26 +77,26 @@ func TestCurlAuthorization(t *testing.T) {
 	// JWT
 	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
 	time.Sleep(4 * time.Second)
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// login again using the refreshJwt
-	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the query works again with the new access jwt
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 
@@ -102,27 +104,27 @@ func TestCurlAuthorization(t *testing.T) {
 	// wait for 6 seconds to ensure the new acl have reached all acl caches
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// refresh the jwts again
-	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that with an ACL rule defined, all the operations should be denied when the acsess JWT
 	// does not have the required permissions
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
@@ -131,19 +133,19 @@ func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
 	// refresh the jwts again
-	accessJwt, _, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the operations should be allowed again through the dev group
-	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
-	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
-	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
+	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
 }

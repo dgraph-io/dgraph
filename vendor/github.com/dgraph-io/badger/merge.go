@@ -37,10 +37,8 @@ type MergeOperator struct {
 // another representing a new value that needs to be ‘merged’ into it. MergeFunc
 // contains the logic to perform the ‘merge’ and return an updated value.
 // MergeFunc could perform operations like integer addition, list appends etc.
-// Note that the ordering of the operands is unspecified, so the merge func
-// should either be agnostic to ordering or do additional handling if ordering
-// is required.
-type MergeFunc func(existing, val []byte) []byte
+// Note that the ordering of the operands is maintained.
+type MergeFunc func(existingVal, newVal []byte) []byte
 
 // GetMergeOperator creates a new MergeOperator for a given key and returns a
 // pointer to it. It also fires off a goroutine that performs a compaction using
@@ -60,27 +58,33 @@ func (db *DB) GetMergeOperator(key []byte,
 
 var errNoMerge = errors.New("No need for merge")
 
-func (op *MergeOperator) iterateAndMerge(txn *Txn) (val []byte, err error) {
+func (op *MergeOperator) iterateAndMerge() (newVal []byte, latest uint64, err error) {
+	txn := op.db.NewTransaction(false)
+	defer txn.Discard()
 	opt := DefaultIteratorOptions
 	opt.AllVersions = true
-	it := txn.NewIterator(opt)
+	it := txn.NewKeyIterator(op.key, opt)
 	defer it.Close()
 
 	var numVersions int
-	for it.Rewind(); it.ValidForPrefix(op.key); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
 		numVersions++
 		if numVersions == 1 {
-			val, err = item.ValueCopy(val)
+			// This should be the newVal, considering this is the latest version.
+			newVal, err = item.ValueCopy(newVal)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
+			latest = item.Version()
 		} else {
-			if err := item.Value(func(newVal []byte) error {
-				val = op.f(val, newVal)
+			if err := item.Value(func(oldVal []byte) error {
+				// The merge should always be on the newVal considering it has the merge result of
+				// the latest version. The value read should be the oldVal.
+				newVal = op.f(oldVal, newVal)
 				return nil
 			}); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 		}
 		if item.DiscardEarlierVersions() {
@@ -88,36 +92,36 @@ func (op *MergeOperator) iterateAndMerge(txn *Txn) (val []byte, err error) {
 		}
 	}
 	if numVersions == 0 {
-		return nil, ErrKeyNotFound
+		return nil, latest, ErrKeyNotFound
 	} else if numVersions == 1 {
-		return val, errNoMerge
+		return newVal, latest, errNoMerge
 	}
-	return val, nil
+	return newVal, latest, nil
 }
 
 func (op *MergeOperator) compact() error {
 	op.Lock()
 	defer op.Unlock()
-	err := op.db.Update(func(txn *Txn) error {
-		var (
-			val []byte
-			err error
-		)
-		val, err = op.iterateAndMerge(txn)
-		if err != nil {
-			return err
-		}
-
-		// Write value back to db
-		return txn.SetWithDiscard(op.key, val, 0)
-	})
-
+	val, version, err := op.iterateAndMerge()
 	if err == ErrKeyNotFound || err == errNoMerge {
-		// pass.
+		return nil
 	} else if err != nil {
 		return err
 	}
-	return nil
+	entries := []*Entry{
+		{
+			Key:   y.KeyWithTs(op.key, version),
+			Value: val,
+			meta:  bitDiscardEarlierVersions,
+		},
+	}
+	// Write value back to the DB. It is important that we do not set the bitMergeEntry bit
+	// here. When compaction happens, all the older merged entries will be removed.
+	return op.db.batchSetAsync(entries, func(err error) {
+		if err != nil {
+			op.db.opt.Errorf("failed to insert the result of merge compaction: %s", err)
+		}
+	})
 }
 
 func (op *MergeOperator) runCompactions(dur time.Duration) {
@@ -144,7 +148,7 @@ func (op *MergeOperator) runCompactions(dur time.Duration) {
 // routine into the values that were recorded by previous invocations to Add().
 func (op *MergeOperator) Add(val []byte) error {
 	return op.db.Update(func(txn *Txn) error {
-		return txn.Set(op.key, val)
+		return txn.SetEntry(NewEntry(op.key, val).withMergeBit())
 	})
 }
 
@@ -157,7 +161,7 @@ func (op *MergeOperator) Get() ([]byte, error) {
 	defer op.RUnlock()
 	var existing []byte
 	err := op.db.View(func(txn *Txn) (err error) {
-		existing, err = op.iterateAndMerge(txn)
+		existing, _, err = op.iterateAndMerge()
 		return err
 	})
 	if err == errNoMerge {

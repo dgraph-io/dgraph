@@ -26,11 +26,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -49,11 +49,10 @@ type options struct {
 	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
-	MapBufSize       int64
-	ExpandEdges      bool
+	MapBufSize       uint64
 	SkipMapPhase     bool
 	CleanupTmp       bool
-	NumShufflers     int
+	NumReducers      int
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
@@ -131,7 +130,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string) []*pb.SchemaUpdate {
+func readSchema(filename string) *schema.ParsedSchema {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
@@ -146,7 +145,7 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 
 	result, err := schema.Parse(string(buf))
 	x.Check(err)
-	return result.Schemas
+	return result
 }
 
 func (ld *loader) mapStage() {
@@ -179,19 +178,18 @@ func (ld *loader) mapStage() {
 	}
 
 	// This is the main map loop.
-	thr := x.NewThrottle(ld.opt.NumGoroutines)
+	thr := y.NewThrottle(ld.opt.NumGoroutines)
 	for i, file := range files {
-		thr.Start()
+		x.Check(thr.Do())
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 
 		go func(file string) {
-			defer thr.Done()
+			defer thr.Done(nil)
 
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType)
-			x.Check(chunker.Begin(r))
+			chunker := chunker.NewChunker(loadType, 1000)
 			for {
 				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
@@ -203,10 +201,9 @@ func (ld *loader) mapStage() {
 					x.Check(err)
 				}
 			}
-			x.Check(chunker.End(r))
 		}(file)
 	}
-	thr.Wait()
+	x.Check(thr.Finish())
 
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
@@ -217,29 +214,13 @@ func (ld *loader) mapStage() {
 	}
 	x.Check(ld.xids.Flush())
 	ld.xids = nil
-	runtime.GC()
-}
-
-type shuffleOutput struct {
-	db         *badger.DB
-	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 100)
-	go func() {
-		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
-		shuf.run()
-	}()
-
-	redu := reducer{
-		state:     ld.state,
-		input:     shuffleOutputCh,
-		writesThr: x.NewThrottle(100),
-	}
-	redu.run()
+	r := reducer{state: ld.state}
+	x.Check(r.run())
 }
 
 func (ld *loader) writeSchema() {
@@ -257,7 +238,7 @@ func (ld *loader) writeSchema() {
 
 	// Find any predicates that don't have data in any DB
 	// and distribute them among all the DBs.
-	for p := range ld.schema.m {
+	for p := range ld.schema.schemaMap {
 		if _, ok := m[p]; !ok {
 			i := adler32.Checksum([]byte(p)) % numDBs
 			preds[i] = append(preds[i], p)

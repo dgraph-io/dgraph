@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -31,6 +30,7 @@ import (
 	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -124,7 +124,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	}()
 
 	if n.Raft() == nil {
-		return x.Errorf("Raft isn't initialized yet")
+		return errors.Errorf("Raft isn't initialized yet")
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -189,10 +189,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		che := make(chan error, 1)
+		errCh := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
-			Ch:  che,
-			Ctx: cctx,
+			ErrCh: errCh,
+			Ctx:   cctx,
 		}
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
@@ -203,7 +203,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			return err
 		}
 		if err = n.Raft().Propose(cctx, data); err != nil {
-			return x.Wrapf(err, "While proposing")
+			return errors.Wrapf(err, "While proposing")
 		}
 
 		timer := time.NewTimer(timeout)
@@ -211,7 +211,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 		for {
 			select {
-			case err = <-che:
+			case err = <-errCh:
 				// We arrived here by a call to n.Proposals.Done().
 				return err
 			case <-ctx.Done():

@@ -20,16 +20,16 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// DefaultExportFormat stores the name of the default format for exports.
 const DefaultExportFormat = "rdf"
 
 type exportFormat struct {
@@ -53,12 +54,12 @@ type exportFormat struct {
 }
 
 var exportFormats = map[string]exportFormat{
-	"json": exportFormat{
+	"json": {
 		ext:  ".json",
 		pre:  "[\n",
 		post: "\n]\n",
 	},
-	"rdf": exportFormat{
+	"rdf": {
 		ext:  ".rdf",
 		pre:  "",
 		post: "",
@@ -66,11 +67,10 @@ var exportFormats = map[string]exportFormat{
 }
 
 type exporter struct {
-	pl      *posting.List
-	uid     uint64
-	attr    string
-	readTs  uint64
-	counter int
+	pl     *posting.List
+	uid    uint64
+	attr   string
+	readTs uint64
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -87,20 +87,6 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:password",
 }
 
-// Having '<' and '>' around all predicates makes the exported schema harder
-// for humans to look at, so only put them on predicates containing "exotic"
-// characters (i.e. ones not in this list).
-var predNonSpecialChars = unicode.RangeTable{
-	R16: []unicode.Range16{
-		// Ranges must be in order.
-		{'.', '.', 1},
-		{'0', '9', 1},
-		{'A', 'Z', 1},
-		{'_', '_', 1},
-		{'a', 'z', 1},
-	},
-}
-
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
@@ -109,7 +95,7 @@ var uidFmtStrJson = "\"0x%x\""
 func valToStr(v types.Val) (string, error) {
 	v2, err := types.Convert(v, types.StringID)
 	if err != nil {
-		return "", fmt.Errorf("converting %v to string: %v\n", v2.Value, err)
+		return "", errors.Wrapf(err, "while converting %v to string", v2.Value)
 	}
 
 	// Strip terminating null, if any.
@@ -120,24 +106,33 @@ func valToStr(v types.Val) (string, error) {
 func facetToString(fct *api.Facet) (string, error) {
 	v1, err := facets.ValFor(fct)
 	if err != nil {
-		return "", fmt.Errorf("getting value from facet %#v: %v", fct, err)
+		return "", errors.Wrapf(err, "getting value from facet %#v", fct)
 	}
 
 	v2 := &types.Val{Tid: types.StringID}
 	if err = types.Marshal(v1, v2); err != nil {
-		return "", fmt.Errorf("marshaling facet value %v to string: %v", v1, err)
+		return "", errors.Wrapf(err, "marshaling facet value %v to string", v1)
 	}
 
 	return v2.Value.(string), nil
 }
 
+// escapedString converts a string into an escaped string for exports.
+func escapedString(str string) string {
+	// We use the Marshal function in the JSON package for all export formats
+	// because it properly escapes strings.
+	byt, err := json.Marshal(str)
+	if err != nil {
+		// All valid stings should be able to be escaped to a JSON string so
+		// it's safe to panic here. Marshal has to return an error because it
+		// accepts an interface.
+		panic("Could not marshal string to JSON string")
+	}
+	return string(byt)
+}
+
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
-
-	if e.counter != 1 {
-		fmt.Fprint(bp, ",\n")
-	}
-
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
 
@@ -173,7 +168,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !val.Tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -195,7 +190,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -227,7 +222,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
-			fmt.Fprintf(bp, "%q", str)
+			fmt.Fprintf(bp, "%s", escapedString(str))
 
 			tid := types.TypeID(p.ValType)
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -262,7 +257,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if tid == types.StringID {
-					str = strconv.Quote(str)
+					str = escapedString(str)
 				}
 				fmt.Fprint(bp, str)
 			}
@@ -283,16 +278,9 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	isSpecial := func(r rune) bool {
-		return !(unicode.In(r, &predNonSpecialChars))
-	}
-	if strings.IndexFunc(attr, isSpecial) >= 0 {
-		buf.WriteRune('<')
-		buf.WriteString(attr)
-		buf.WriteRune('>')
-	} else {
-		buf.WriteString(attr)
-	}
+	buf.WriteRune('<')
+	buf.WriteString(attr)
+	buf.WriteRune('>')
 	buf.WriteByte(':')
 	if update.List {
 		buf.WriteRune('[')
@@ -323,6 +311,55 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 		Version: 2, // Schema value
 	}
 	return listWrap(kv), nil
+}
+
+func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	for _, field := range update.Fields {
+		buf.WriteString(fieldToString(field))
+	}
+
+	buf.WriteString("}\n")
+
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
+		Version: 2, // Type value
+	}
+	return listWrap(kv), nil
+}
+
+func fieldToString(update *pb.SchemaUpdate) string {
+	var builder strings.Builder
+	builder.WriteString("\t")
+	builder.WriteString(update.Predicate)
+	builder.WriteString(": ")
+
+	if update.List {
+		builder.WriteString("[")
+	}
+
+	if update.ValueType == pb.Posting_OBJECT {
+		builder.WriteString(update.ObjectTypeName)
+	} else {
+		tid := types.TypeID(update.ValueType)
+		builder.WriteString(tid.Name())
+	}
+
+	if update.NonNullable {
+		builder.WriteString("!")
+	}
+
+	if update.List {
+		builder.WriteString("]")
+	}
+
+	if update.NonNullableList {
+		builder.WriteString("!")
+	}
+
+	builder.WriteString("\n")
+	return builder.String()
 }
 
 type fileWriter struct {
@@ -362,7 +399,7 @@ func (writer *fileWriter) Close() error {
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId != groups().groupId() {
-		return x.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
+		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
@@ -409,36 +446,47 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	e := &exporter{
-		readTs:  in.ReadTs,
-		counter: 0,
-	}
-
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return false
+		}
+
+		// _predicate_ is deprecated but leaving this here so that users with a
+		// binary with version >= 1.1 can export data from a version < 1.1 without
+		// this internal data showing up.
 		if pk.Attr == "_predicate_" {
 			return false
 		}
-		if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
-			return false
+
+		if !pk.IsType() {
+			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
+				return false
+			}
 		}
+
 		// We need to ensure that schema keys are separately identifiable, so they can be
 		// written to a different file.
-		return pk.IsData() || pk.IsSchema()
+		return pk.IsData() || pk.IsSchema() || pk.IsType()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
-
-		e.counter += 1
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return nil, err
+		}
+		e := &exporter{
+			readTs: in.ReadTs,
+		}
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
+		// Schema and type keys should be handled first because schema keys are also
+		// considered data keys.
 		switch {
 		case pk.IsSchema():
-			// Schema should be handled first. Because schema keys are also considered data keys.
 			var update pb.SchemaUpdate
 			err := item.Value(func(val []byte) error {
 				return update.Unmarshal(val)
@@ -449,6 +497,18 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				return nil, nil
 			}
 			return toSchema(pk.Attr, update)
+
+		case pk.IsType():
+			var update pb.TypeUpdate
+			err := item.Value(func(val []byte) error {
+				return update.Unmarshal(val)
+			})
+			if err != nil {
+				// Let's not propagate this error. We just log this and continue onwards.
+				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
+				return nil, nil
+			}
+			return toType(pk.Attr, update)
 
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)
@@ -470,16 +530,39 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil, nil
 	}
 
+	hasDataBefore := false
+	var separator []byte
+	switch in.Format {
+	case "json":
+		separator = []byte(",\n")
+	case "rdf":
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
+	default:
+		glog.Fatalf("Invalid export format found: %s", in.Format)
+	}
+
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
 			var writer *fileWriter
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
-			case 2: // schema
+			case 2: // schema and types
 				writer = schemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
+			}
+
+			if kv.Version == 1 { // only insert separator for data
+				if hasDataBefore {
+					if _, err := writer.gw.Write(separator); err != nil {
+						return err
+					}
+				}
+				// change the hasDataBefore flag so that the next data entry will have a separator
+				// prepended
+				hasDataBefore = true
 			}
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
@@ -535,7 +618,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 
 	pl := groups().Leader(in.GroupId)
 	if pl == nil {
-		return x.Errorf("Unable to find leader of group: %d\n", in.GroupId)
+		return errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
 	}
 
 	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)
@@ -547,6 +630,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	return err
 }
 
+// ExportOverNetwork sends export requests to all the known groups.
 func ExportOverNetwork(ctx context.Context, format string) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
@@ -582,7 +666,7 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 	for i := 0; i < len(gids); i++ {
 		err := <-ch
 		if err != nil {
-			rerr := fmt.Errorf("Export failed at readTs %d. Err=%v", readTs, err)
+			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
 			return rerr
 		}

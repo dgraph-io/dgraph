@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -39,13 +40,9 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		return err
 	}
 
-	for _, update := range result.Schemas {
+	for _, update := range result.Preds {
 		State().Set(update.Predicate, *update)
 	}
-	State().Set("_predicate_", pb.SchemaUpdate{
-		ValueType: pb.Posting_STRING,
-		List:      true,
-	})
 	return nil
 }
 
@@ -250,7 +247,7 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 
 		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
 			schema.Directive == pb.SchemaUpdate_INDEX {
-			return x.Errorf("Indexing not allowed on predicate %s of type %s",
+			return errors.Errorf("Indexing not allowed on predicate %s of type %s",
 				schema.Predicate, typ.Name())
 		}
 
@@ -259,10 +256,10 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 		}
 
 		if len(schema.Tokenizer) == 0 && schema.Directive == pb.SchemaUpdate_INDEX {
-			return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
+			return errors.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
 				schema.Predicate, typ.Name())
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != pb.SchemaUpdate_INDEX {
-			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+			return errors.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
@@ -270,22 +267,22 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 		for _, t := range schema.Tokenizer {
 			tokenizer, has := tok.GetTokenizer(t)
 			if !has {
-				return x.Errorf("Invalid tokenizer %s", t)
+				return errors.Errorf("Invalid tokenizer %s", t)
 			}
 			tokenizerType, ok := types.TypeForName(tokenizer.Type())
 			x.AssertTrue(ok) // Type is validated during tokenizer loading.
 			if tokenizerType != typ {
-				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+				return errors.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
 					tokenizer.Name(), schema.Predicate, typ.Name())
 			}
 			if _, ok := seen[tokenizer.Name()]; !ok {
 				seen[tokenizer.Name()] = true
 			} else {
-				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+				return errors.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
 			}
 			if tokenizer.IsSortable() {
 				if seenSortableTok {
-					return x.Errorf("More than one sortable index encountered for: %v",
+					return errors.Errorf("More than one sortable index encountered for: %v",
 						schema.Predicate)
 				}
 				seenSortableTok = true
@@ -319,9 +316,20 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 		switch item.Typ {
 		case itemRightCurl:
 			it.Next()
-			if it.Item().Typ != itemNewLine {
-				return nil, it.Item().Errorf("Expected new line after type declaration. Got %v",
-					it.Item().Val)
+			if it.Item().Typ != itemNewLine && it.Item().Typ != lex.ItemEOF {
+				return nil, it.Item().Errorf(
+					"Expected new line or EOF after type declaration. Got %v", it.Item())
+			}
+			it.Prev()
+
+			fieldSet := make(map[string]struct{})
+			for _, field := range fields {
+				if _, ok := fieldSet[field.GetPredicate()]; ok {
+					return nil, it.Item().Errorf("Duplicate fields with name: %s",
+						field.GetPredicate())
+				}
+
+				fieldSet[field.GetPredicate()] = struct{}{}
 			}
 
 			typeUpdate.Fields = fields
@@ -338,7 +346,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 			return nil, it.Item().Errorf("Unexpected token. Got %v", it.Item().Val)
 		}
 	}
-	return nil, x.Errorf("Shouldn't reach here.")
+	return nil, errors.Errorf("Shouldn't reach here.")
 }
 
 func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
@@ -400,10 +408,10 @@ func getType(typeName string) pb.Posting_ValType {
 	return pb.Posting_OBJECT
 }
 
-// SchemasAndTypes represents the parsed schema and type updates.
-type SchemasAndTypes struct {
-	Schemas []*pb.SchemaUpdate
-	Types   []*pb.TypeUpdate
+// ParsedSchema represents the parsed schema and type updates.
+type ParsedSchema struct {
+	Preds []*pb.SchemaUpdate
+	Types []*pb.TypeUpdate
 }
 
 func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
@@ -427,10 +435,11 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) (*SchemasAndTypes, error) {
-	var result SchemasAndTypes
+func Parse(s string) (*ParsedSchema, error) {
+	var result ParsedSchema
 
-	l := lex.NewLexer(s)
+	var l lex.Lexer
+	l.Reset(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
 		return nil, err
@@ -440,8 +449,8 @@ func Parse(s string) (*SchemasAndTypes, error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
-			if err := resolveTokenizers(result.Schemas); err != nil {
-				return nil, x.Wrapf(err, "failed to enrich schema")
+			if err := resolveTokenizers(result.Preds); err != nil {
+				return nil, errors.Wrapf(err, "failed to enrich schema")
 			}
 			return &result, nil
 
@@ -459,7 +468,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 			if err != nil {
 				return nil, err
 			}
-			result.Schemas = append(result.Schemas, schema)
+			result.Preds = append(result.Preds, schema)
 		case itemNewLine:
 			// pass empty line
 
@@ -467,5 +476,5 @@ func Parse(s string) (*SchemasAndTypes, error) {
 			return nil, it.Item().Errorf("Unexpected token: %v while parsing schema", item)
 		}
 	}
-	return nil, x.Errorf("Shouldn't reach here")
+	return nil, errors.Errorf("Shouldn't reach here")
 }

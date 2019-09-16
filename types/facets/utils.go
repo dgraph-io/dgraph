@@ -17,7 +17,6 @@
 package facets
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -27,10 +26,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
-// Sorts And validates the facets.
+// SortAndValidate sorts And validates the facets.
 func SortAndValidate(fs []*api.Facet) error {
 	if len(fs) == 0 {
 		return nil
@@ -40,7 +39,7 @@ func SortAndValidate(fs []*api.Facet) error {
 	})
 	for i := 1; i < len(fs); i++ {
 		if fs[i-1].Key == fs[i].Key {
-			return x.Errorf("Repeated keys are not allowed in facets. But got %s",
+			return errors.Errorf("Repeated keys are not allowed in facets. But got %s",
 				fs[i].Key)
 		}
 	}
@@ -89,7 +88,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	// strings should be in quotes.
 	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
 		uq, err := strconv.Unquote(val)
-		return uq, api.Facet_STRING, x.Wrapf(err, "could not unquote %q:", val)
+		return uq, api.Facet_STRING, errors.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
 		return int64(intVal), api.Facet_INT, nil
@@ -110,7 +109,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
 		// We can't store NaN as it is because it serializes into invalid JSON.
 		if math.IsNaN(floatVal) {
-			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN")
+			return nil, api.Facet_FLOAT, errors.Errorf("Got invalid value: NaN")
 		}
 
 		return floatVal, api.Facet_FLOAT, nil
@@ -123,7 +122,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if t, err := types.ParseTime(val); err == nil {
 		return t, api.Facet_DATETIME, nil
 	}
-	return nil, api.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
+	return nil, api.Facet_STRING, errors.Errorf("Could not parse the facet value : [%s]", val)
 }
 
 // FacetFor returns Facet for given key and val.
@@ -148,6 +147,7 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	return facet, err
 }
 
+// ToBinary converts the given value into a binary value.
 func ToBinary(key string, value interface{}, sourceType api.Facet_ValType) (
 	*api.Facet, error) {
 	// convert facet val interface{} to binary
@@ -178,7 +178,7 @@ func TypeIDFor(f *api.Facet) (types.TypeID, error) {
 	case api.Facet_STRING:
 		return types.StringID, nil
 	default:
-		return types.DefaultID, fmt.Errorf("Unrecognized facet type: %v", f.ValType)
+		return types.DefaultID, errors.Errorf("Unrecognized facet type: %v", f.ValType)
 	}
 }
 

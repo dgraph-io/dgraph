@@ -22,14 +22,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-type options struct {
-	alpha string
-}
-
 var (
-	opt     options
-	tlsConf x.TLSHelperConfig
-	CmdAcl  x.SubCommand
+	// CmdAcl is the sub-command used to manage the ACL system.
+	CmdAcl x.SubCommand
 )
 
 const gPassword = "gpassword"

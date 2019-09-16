@@ -1,0 +1,162 @@
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: "{{ template "dgraph.alpha.fullname" . }}"
+  labels:
+    app: {{ template "dgraph.name" . }}
+    chart: {{ template "dgraph.chart" . }}
+    component: {{ .Values.alpha.name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  serviceName: {{ template "dgraph.alpha.fullname" . }}-headless
+  replicas: {{ .Values.alpha.replicaCount }}
+  podManagementPolicy: {{ .Values.alpha.podManagementPolicy | quote }}
+  updateStrategy:
+    type: {{ .Values.alpha.updateStrategy | quote }}
+    {{- if (eq "Recreate" .Values.alpha.updateStrategy) }}
+    rollingUpdate: null
+    {{- else if .Values.alpha.rollingUpdatePartition }}
+    rollingUpdate:
+      partition: {{ .Values.alpha.rollingUpdatePartition }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      chart: {{ template "dgraph.chart" . }}
+      release: {{ .Release.Name }}
+      component: {{ .Values.alpha.name }}
+  template:
+    metadata:
+      name: "{{ template "dgraph.alpha.fullname" . }}"
+      labels:
+        app: {{ template "dgraph.name" . }}
+        chart: {{ template "dgraph.chart" . }}
+        release: {{ .Release.Name }}
+        component: {{ .Values.alpha.name }}
+    spec:
+      {{- if or (eq .Values.alpha.antiAffinity "hard") (eq .Values.alpha.antiAffinity "soft") .Values.alpha.nodeAffinity }}
+      affinity:
+      {{- end }}
+      {{- if eq .Values.alpha.antiAffinity "hard" }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - {{ .Values.alpha.name }}
+            topologyKey: {{ .Values.alpha.podAntiAffinitytopologyKey }}
+      {{- else if eq .Values.alpha.antiAffinity "soft" }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - {{ .Values.alpha.name }}
+              topologyKey: {{ .Values.alpha.podAntiAffinitytopologyKey }}
+      {{- end }}
+      {{- with .Values.alpha.nodeAffinity }}
+        nodeAffinity:
+{{ toYaml . | indent 10 }}
+      {{- end }}
+{{- include "dgraph.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.alpha.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.alpha.securityContext.fsGroup }}
+        runAsUser: {{ .Values.alpha.securityContext.runAsUser }}
+      {{- end }}
+      {{- if .Values.alpha.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.alpha.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.alpha.tolerations }}
+      tolerations:
+{{ toYaml .Values.alpha.tolerations | indent 8 }}
+      {{- end }}
+      containers:
+      - name: "{{ template "dgraph.alpha.fullname" . }}"
+        image: "{{ template "dgraph.image" . }}"
+        ports:
+        - containerPort: 7080
+          name: alpha-grpc-int
+        - containerPort: 8080
+          name: alpha-http
+        - containerPort: 9080
+          name: alpha-grpc
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+         - bash
+         - "-c"
+         - |
+            set -ex
+            dgraph alpha --my=$(hostname -f):7080 --lru_mb {{ .Values.alpha.lru_mb }} --zero {{ template "dgraph.zero.fullname" . }}-0.{{ template "dgraph.zero.fullname" . }}-headless.${POD_NAMESPACE}.svc.cluster.local:5080
+        resources:
+{{ toYaml .Values.alpha.resources | indent 10 }}
+        {{- if .Values.alpha.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            port: {{ .Values.alpha.livenessProbe.port }}
+            path: {{ .Values.alpha.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.alpha.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.alpha.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.alpha.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.alpha.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.alpha.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.alpha.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            port: {{ .Values.alpha.livenessProbe.port }}
+            path: {{ .Values.alpha.livenessProbe.path }}          
+          initialDelaySeconds: {{ .Values.alpha.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.alpha.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.alpha.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.alpha.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.alpha.readinessProbe.failureThreshold }}
+        {{- end }}
+        volumeMounts:
+        {{- if .Values.alpha.persistence.enabled }}
+        - name: datadir
+          mountPath: /dgraph
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.alpha.terminationGracePeriodSeconds }}
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+{{- if .Values.alpha.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+        annotations:
+          volume.alpha.kubernetes.io/storage-class: anything
+      spec:
+        accessModes:
+        {{- range .Values.alpha.persistence.accessModes }}
+          - {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.alpha.persistence.size | quote }}
+      {{- if .Values.alpha.persistence.storageClass }}
+      {{- if (eq "-" .Values.alpha.persistence.storageClass) }}
+        storageClassName: ""
+      {{- else }}
+        storageClassName: {{ .Values.alpha.persistence.storageClass | quote }}
+      {{- end -}}
+      {{- end -}}
+{{- else }}
+        - name: datadir
+          emptyDir: {}
+{{- end }}

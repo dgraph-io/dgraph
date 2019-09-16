@@ -21,6 +21,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
+
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -31,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -70,7 +73,7 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &counter.Increment,
+	&debug.Debug, &counter.Increment, &migrate.Migrate,
 }
 
 func initCmds() {
@@ -87,7 +90,7 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	_ = rootConf.BindPFlags(RootCmd.PersistentFlags())
+	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
 	RootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
@@ -100,8 +103,8 @@ func initCmds() {
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
-		sc.Conf.BindPFlags(sc.Cmd.Flags())
-		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
+		x.Check(sc.Conf.BindPFlags(sc.Cmd.Flags()))
+		x.Check(sc.Conf.BindPFlags(RootCmd.PersistentFlags()))
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 		// Options that contain a "." should use "_" in its place when provided as an
@@ -130,7 +133,7 @@ func initCmds() {
 		}
 		for _, sc := range subcommands {
 			sc.Conf.SetConfigFile(cfg)
-			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
 			setGlogFlags(sc.Conf)
 		}
 	})

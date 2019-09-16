@@ -17,10 +17,11 @@
 package bulk
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -41,25 +42,31 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"github.com/gogo/protobuf/proto"
 )
 
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
+	mePool *sync.Pool
 }
 
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	entriesBuf []byte
-	mu         sync.Mutex // Allow only 1 write per shard at a time.
+	entries     []*pb.MapEntry
+	encodedSize uint64
+	mu          sync.Mutex // Allow only 1 write per shard at a time.
 }
 
 func newMapper(st *state) *mapper {
 	return &mapper{
 		state:  st,
 		shards: make([]shardState, st.opt.MapShards),
+		mePool: &sync.Pool{
+			New: func() interface{} {
+				return &pb.MapEntry{}
+			},
+		},
 	}
 }
 
@@ -78,89 +85,101 @@ func less(lhs, rhs *pb.MapEntry) bool {
 	return lhsUID < rhsUID
 }
 
-func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
-	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
-
-	buf := entriesBuf
-	var entries []*pb.MapEntry
-	for len(buf) > 0 {
-		sz, n := binary.Uvarint(buf)
-		x.AssertTrue(n > 0)
-		buf = buf[n:]
-		me := new(pb.MapEntry)
-		x.Check(proto.Unmarshal(buf[:sz], me))
-		buf = buf[sz:]
-		entries = append(entries, me)
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return less(entries[i], entries[j])
-	})
-
-	buf = entriesBuf
-	for _, me := range entries {
-		n := binary.PutUvarint(buf, uint64(me.Size()))
-		buf = buf[n:]
-		n, err := me.MarshalTo(buf)
-		x.Check(err)
-		buf = buf[n:]
-	}
-	x.AssertTrue(len(buf) == 0)
-
+func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
 		"shards",
 		fmt.Sprintf("%03d", shardIdx),
-		fmt.Sprintf("%06d.map", fileNum),
+		fmt.Sprintf("%06d.map.gz", fileNum),
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
+	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 }
 
-func (m *mapper) run(inputFormat int) {
-	chunker := chunker.NewChunker(inputFormat)
-	for chunkBuf := range m.readerChunkCh {
-		done := false
-		for !done {
-			nqs, err := chunker.Parse(chunkBuf)
-			if err == io.EOF {
-				done = true
-			} else if err != nil {
+func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
+	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
+
+	sort.Slice(entries, func(i, j int) bool {
+		return less(entries[i], entries[j])
+	})
+
+	f, err := m.openOutputFile(shardIdx)
+	x.Check(err)
+
+	defer func() {
+		x.Check(f.Sync())
+		x.Check(f.Close())
+	}()
+
+	gzWriter := gzip.NewWriter(f)
+	w := bufio.NewWriter(gzWriter)
+	defer func() {
+		x.Check(w.Flush())
+		x.Check(gzWriter.Flush())
+		x.Check(gzWriter.Close())
+	}()
+
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	for _, me := range entries {
+		n := binary.PutUvarint(sizeBuf, uint64(me.Size()))
+		_, err := w.Write(sizeBuf[:n])
+		x.Check(err)
+
+		meBuf, err := me.Marshal()
+		x.Check(err)
+		_, err = w.Write(meBuf)
+		x.Check(err)
+		m.mePool.Put(me)
+	}
+}
+
+func (m *mapper) run(inputFormat chunker.InputFormat) {
+	chunker := chunker.NewChunker(inputFormat, 1000)
+	nquads := chunker.NQuads()
+	go func() {
+		for chunkBuf := range m.readerChunkCh {
+			if err := chunker.Parse(chunkBuf); err != nil {
+				atomic.AddInt64(&m.prog.errCount, 1)
+				if !m.opt.IgnoreErrors {
+					x.Check(err)
+				}
+			}
+		}
+		nquads.Flush()
+	}()
+
+	for nqs := range nquads.Ch() {
+		for _, nq := range nqs {
+			if err := facets.SortAndValidate(nq.Facets); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
 			}
 
-			for _, nq := range nqs {
-				if err := facets.SortAndValidate(nq.Facets); err != nil {
-					atomic.AddInt64(&m.prog.errCount, 1)
-					if !m.opt.IgnoreErrors {
-						x.Check(err)
-					}
-				}
+			m.processNQuad(gql.NQuad{NQuad: nq})
+			atomic.AddInt64(&m.prog.nquadCount, 1)
+		}
 
-				m.processNQuad(gql.NQuad{NQuad: nq})
-				atomic.AddInt64(&m.prog.nquadCount, 1)
-			}
-
-			for i := range m.shards {
-				sh := &m.shards[i]
-				if len(sh.entriesBuf) >= int(m.opt.MapBufSize) {
-					sh.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(sh.entriesBuf, i)
-					sh.entriesBuf = make([]byte, 0, m.opt.MapBufSize*11/10)
-				}
+		for i := range m.shards {
+			sh := &m.shards[i]
+			if sh.encodedSize >= m.opt.MapBufSize {
+				sh.mu.Lock() // One write at a time.
+				go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
+				// Clear the entries and encodedSize for the next batch.
+				// Proactively allocate 32 slots to bootstrap the entries slice.
+				sh.entries = make([]*pb.MapEntry, 0, 32)
+				sh.encodedSize = 0
 			}
 		}
 	}
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if len(sh.entriesBuf) > 0 {
+		if len(sh.entries) > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.entriesBuf, i)
+			m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
@@ -169,9 +188,9 @@ func (m *mapper) run(inputFormat int) {
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	me := &pb.MapEntry{
-		Key: key,
-	}
+	me := m.mePool.Get().(*pb.MapEntry)
+	*me = pb.MapEntry{Key: key}
+
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
 		me.Posting = p
 	} else {
@@ -180,8 +199,8 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh := &m.shards[shard]
 
 	var err error
-	sh.entriesBuf = x.AppendUvarint(sh.entriesBuf, uint64(me.Size()))
-	sh.entriesBuf, err = x.AppendProtoMsg(sh.entriesBuf, me)
+	sh.entries = append(sh.entries, me)
+	sh.encodedSize += uint64(me.Size())
 	x.Check(err)
 }
 
@@ -208,13 +227,6 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
-
-	if m.opt.ExpandEdges {
-		shard := m.state.shards.shardFor("_predicate_")
-		key = x.DataKey("_predicate_", sid)
-		pp := m.createPredicatePosting(nq.Predicate)
-		m.addMapEntry(key, pp, shard)
-	}
 }
 
 func (m *mapper) uid(xid string) uint64 {
@@ -229,8 +241,8 @@ func (m *mapper) uid(xid string) uint64 {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid := m.xids.AssignUid(xid)
-	if !m.opt.StoreXids {
+	uid, isNew := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {
@@ -246,16 +258,6 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	}}
 	m.processNQuad(nq)
 	return uid
-}
-
-func (m *mapper) createPredicatePosting(predicate string) *pb.Posting {
-	fp := farm.Fingerprint64([]byte(predicate))
-	return &pb.Posting{
-		Uid:         fp,
-		Value:       []byte(predicate),
-		ValType:     pb.Posting_DEFAULT,
-		PostingType: pb.Posting_VALUE,
-	}
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,

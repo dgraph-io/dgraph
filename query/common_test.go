@@ -20,27 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"google.golang.org/grpc"
 )
 
-func assignUids(num uint64) {
-	_, err := http.Get(fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
-	if err != nil {
-		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
-	}
-}
-
 func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
 }
@@ -63,7 +55,7 @@ func dropPredicate(pred string) {
 	}
 }
 
-func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -81,7 +73,7 @@ func processQuery(t *testing.T, ctx context.Context, query string) (string, erro
 }
 
 func processQueryNoErr(t *testing.T, query string) string {
-	res, err := processQuery(t, context.Background(), query)
+	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
 	return res
 }
@@ -215,6 +207,25 @@ type CarModel {
 	previous_model: CarModel
 }
 
+type SchoolInfo {
+	name: string
+	abbr: string
+	school: [uid]
+	district: [uid]
+	state: [uid]
+	county: [uid]
+}
+
+type User {
+	name: string
+	password: password
+}
+
+type Node {
+	node: uid
+	name: string
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -246,12 +257,13 @@ office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
 node                           : [uid] .
-model                          : string @index(term) .
+model                          : string @index(term) @lang .
 make                           : string @index(term) .
 year                           : int .
 previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
+number                         : int @index(int) .
 `
 
 func populateCluster() {
@@ -261,7 +273,7 @@ func populateCluster() {
 	}
 
 	setSchema(testSchema)
-	assignUids(100000)
+	testutil.AssignUids(100000)
 
 	addTriplesToCluster(`
 		<1> <name> "Michonne" .
@@ -271,6 +283,7 @@ func populateCluster() {
 		<5> <name> "Garfield" .
 		<6> <name> "Bear" .
 		<7> <name> "Nemo" .
+		<11> <name> "name" .
 		<23> <name> "Rick Grimes" .
 		<24> <name> "Glenn Rhee" .
 		<25> <name> "Daryl Dixon" .
@@ -491,6 +504,7 @@ func populateCluster() {
 		<23> <shadow_deep> "4" .
 		<24> <shadow_deep> "14" .
 
+		<1> <dgraph.type> "User" .
 		<2> <dgraph.type> "Person" .
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .
@@ -498,6 +512,12 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<32> <dgraph.type> "SchoolInfo" .
+		<33> <dgraph.type> "SchoolInfo" .
+		<34> <dgraph.type> "SchoolInfo" .
+		<35> <dgraph.type> "SchoolInfo" .
+		<36> <dgraph.type> "SchoolInfo" .
+		<11100> <dgraph.type> "Node" .
 
 		<2> <pet> <5> .
 		<3> <pet> <6> .
@@ -522,6 +542,12 @@ func populateCluster() {
 		<201> <year> "2009" .
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
+
+		<202> <make> "Toyota" .
+		<202> <year> "2009" .
+		<202> <model> "Prius" .
+		<202> <model> "プリウス"@jp .
+		<202> <dgraph.type> "CarModel" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

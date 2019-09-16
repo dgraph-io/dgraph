@@ -18,7 +18,7 @@ package worker
 
 import "github.com/dgraph-io/dgraph/types"
 
-func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
+func couldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 	if !typ.IsScalar() {
 		return false
 	}

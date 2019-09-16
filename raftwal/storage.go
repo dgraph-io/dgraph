@@ -19,20 +19,21 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
-	pb "go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
+// DiskStorage handles disk access and writing for the RAFT write-ahead log.
 type DiskStorage struct {
 	db   *badger.DB
 	id   uint64
@@ -42,6 +43,7 @@ type DiskStorage struct {
 	cache *sync.Map
 }
 
+// Init initializes returns a properly initialized instance of DiskStorage.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
 	if prev, err := RaftId(db); err != nil || prev != id {
@@ -57,7 +59,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 
 	_, err = w.FirstIndex()
 	if err == errNotFound {
-		ents := make([]pb.Entry, 1)
+		ents := make([]raftpb.Entry, 1)
 		x.Check(w.reset(ents))
 	} else {
 		x.Check(err)
@@ -67,6 +69,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 
 var idKey = []byte("raftid")
 
+// RaftId reads the given badger store and returns the stored RAFT ID.
 func RaftId(db *badger.DB) (uint64, error) {
 	var id uint64
 	err := db.View(func(txn *badger.Txn) error {
@@ -93,7 +96,8 @@ func (w *DiskStorage) snapshotKey() []byte {
 	return b
 }
 
-func (w *DiskStorage) hardStateKey() []byte {
+// HardStateKey generates the key where the hard state is stored.
+func (w *DiskStorage) HardStateKey() []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	copy(b[8:10], []byte("hs"))
@@ -101,6 +105,16 @@ func (w *DiskStorage) hardStateKey() []byte {
 	return b
 }
 
+// CheckpointKey generates the key where the checkpoint is stored.
+func (w *DiskStorage) CheckpointKey() []byte {
+	b := make([]byte, 14)
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("ck"))
+	binary.BigEndian.PutUint32(b[10:14], w.gid)
+	return b
+}
+
+// EntryKey returns the key where the entry with the given ID is stored.
 func (w *DiskStorage) EntryKey(idx uint64) []byte {
 	b := make([]byte, 20)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -121,12 +135,47 @@ func (w *DiskStorage) entryPrefix() []byte {
 	return b
 }
 
+// StoreRaftId stores the given RAFT ID in disk.
 func (w *DiskStorage) StoreRaftId(id uint64) error {
 	return w.db.Update(func(txn *badger.Txn) error {
 		var b [8]byte
 		binary.BigEndian.PutUint64(b[:], id)
 		return txn.Set(idKey, b[:])
 	})
+}
+
+// UpdateCheckpoint writes the given snapshot to disk.
+func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
+	return w.db.Update(func(txn *badger.Txn) error {
+		data, err := snap.Marshal()
+		if err != nil {
+			return err
+		}
+		return txn.Set(w.CheckpointKey(), data)
+	})
+}
+
+// Checkpoint reads the checkpoint stored in disk and returns index stored in it.
+func (w *DiskStorage) Checkpoint() (uint64, error) {
+	var applied uint64
+	err := w.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(w.CheckpointKey())
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var snap pb.Snapshot
+			if err := snap.Unmarshal(val); err != nil {
+				return err
+			}
+			applied = snap.Index
+			return nil
+		})
+	})
+	return applied, err
 }
 
 // Term returns the term of entry i, which must be in the range
@@ -144,7 +193,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 		return 0, raft.ErrCompacted
 	}
 
-	var e pb.Entry
+	var e raftpb.Entry
 	if _, err := w.seekEntry(&e, idx, false); err == errNotFound {
 		return 0, raft.ErrUnavailable
 	} else if err != nil {
@@ -158,7 +207,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 
 var errNotFound = errors.New("Unable to find raft entry")
 
-func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint64, error) {
+func (w *DiskStorage) seekEntry(e *raftpb.Entry, seekTo uint64, reverse bool) (uint64, error) {
 	var index uint64
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -195,7 +244,7 @@ var (
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
 	if val, ok := w.cache.Load(snapshotKey); ok {
-		snap, ok := val.(*pb.Snapshot)
+		snap, ok := val.(*raftpb.Snapshot)
 		if ok && !raft.IsEmptySnap(*snap) {
 			return snap.Metadata.Index + 1, nil
 		}
@@ -269,9 +318,9 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 // If snapshot is temporarily unavailable, it should return ErrSnapshotTemporarilyUnavailable,
 // so raft state machine could know that Storage needs some time to prepare
 // snapshot and call Snapshot later.
-func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
+func (w *DiskStorage) Snapshot() (snap raftpb.Snapshot, rerr error) {
 	if val, ok := w.cache.Load(snapshotKey); ok {
-		snap, ok := val.(*pb.Snapshot)
+		snap, ok := val.(*raftpb.Snapshot)
 		if ok && !raft.IsEmptySnap(*snap) {
 			return *snap, nil
 		}
@@ -294,24 +343,24 @@ func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
 // setSnapshot would store the snapshot. We can delete all the entries up until the snapshot
 // index. But, keep the raft entry at the snapshot index, to make it easier to build the logic; like
 // the dummy entry in MemoryStorage.
-func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s pb.Snapshot) error {
+func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) error {
 	if raft.IsEmptySnap(s) {
 		return nil
 	}
 	data, err := s.Marshal()
 	if err != nil {
-		return x.Wrapf(err, "wal.Store: While marshal snapshot")
+		return errors.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	if err := batch.Set(w.snapshotKey(), data, 0); err != nil {
+	if err := batch.Set(w.snapshotKey(), data); err != nil {
 		return err
 	}
 
-	e := pb.Entry{Term: s.Metadata.Term, Index: s.Metadata.Index}
+	e := raftpb.Entry{Term: s.Metadata.Term, Index: s.Metadata.Index}
 	data, err = e.Marshal()
 	if err != nil {
 		return err
 	}
-	if err := batch.Set(w.EntryKey(e.Index), data, 0); err != nil {
+	if err := batch.Set(w.EntryKey(e.Index), data); err != nil {
 		return err
 	}
 
@@ -330,19 +379,19 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s pb.Snapshot) error
 }
 
 // SetHardState saves the current HardState.
-func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st pb.HardState) error {
+func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st raftpb.HardState) error {
 	if raft.IsEmptyHardState(st) {
 		return nil
 	}
 	data, err := st.Marshal()
 	if err != nil {
-		return x.Wrapf(err, "wal.Store: While marshal hardstate")
+		return errors.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
-	return batch.Set(w.hardStateKey(), data, 0)
+	return batch.Set(w.HardStateKey(), data)
 }
 
 // reset resets the entries. Used for testing.
-func (w *DiskStorage) reset(es []pb.Entry) error {
+func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	w.cache = new(sync.Map) // reset cache.
 
 	// Clean out the state.
@@ -356,10 +405,10 @@ func (w *DiskStorage) reset(es []pb.Entry) error {
 	for _, e := range es {
 		data, err := e.Marshal()
 		if err != nil {
-			return x.Wrapf(err, "wal.Store: While marshal entry")
+			return errors.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.EntryKey(e.Index)
-		if err := batch.Set(k, data, 0); err != nil {
+		if err := batch.Set(k, data); err != nil {
 			return err
 		}
 	}
@@ -402,11 +451,12 @@ func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	return w.deleteKeys(batch, keys)
 }
 
-func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
+// HardState reads the RAFT hard state from disk and returns it.
+func (w *DiskStorage) HardState() (hd raftpb.HardState, rerr error) {
 	w.elog.Printf("HardState")
 	defer w.elog.Printf("Done")
 	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.hardStateKey())
+		item, err := txn.Get(w.HardStateKey())
 		if err != nil {
 			return err
 		}
@@ -421,14 +471,14 @@ func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
 }
 
 // InitialState returns the saved HardState and ConfState information.
-func (w *DiskStorage) InitialState() (hs pb.HardState, cs pb.ConfState, err error) {
+func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err error) {
 	w.elog.Printf("InitialState")
 	defer w.elog.Printf("Done")
 	hs, err = w.HardState()
 	if err != nil {
 		return
 	}
-	var snap pb.Snapshot
+	var snap raftpb.Snapshot
 	snap, err = w.Snapshot()
 	if err != nil {
 		return
@@ -436,6 +486,7 @@ func (w *DiskStorage) InitialState() (hs pb.HardState, cs pb.ConfState, err erro
 	return hs, snap.Metadata.ConfState, nil
 }
 
+// NumEntries returns the number of entries in the write-ahead log.
 func (w *DiskStorage) NumEntries() (int, error) {
 	var count int
 	err := w.db.View(func(txn *badger.Txn) error {
@@ -454,7 +505,7 @@ func (w *DiskStorage) NumEntries() (int, error) {
 	return count, err
 }
 
-func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
+func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
 			item, err := txn.Get(w.EntryKey(lo))
@@ -462,7 +513,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 				return err
 			}
 			return item.Value(func(val []byte) error {
-				var e pb.Entry
+				var e raftpb.Entry
 				if err = e.Unmarshal(val); err != nil {
 					return err
 				}
@@ -483,7 +534,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 		first := true
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			item := itr.Item()
-			var e pb.Entry
+			var e raftpb.Entry
 			if err := item.Value(func(val []byte) error {
 				return e.Unmarshal(val)
 			}); err != nil {
@@ -511,7 +562,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 // Entries returns a slice of log entries in the range [lo,hi).
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
-func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
+func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
@@ -533,7 +584,8 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 	return w.allEntries(lo, hi, maxSize)
 }
 
-func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
+// CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
+func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
 	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
 	if err != nil {
@@ -544,7 +596,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 		return raft.ErrSnapOutOfDate
 	}
 
-	var e pb.Entry
+	var e raftpb.Entry
 	if _, err := w.seekEntry(&e, i, false); err != nil {
 		return err
 	}
@@ -552,7 +604,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 		return errNotFound
 	}
 
-	var snap pb.Snapshot
+	var snap raftpb.Snapshot
 	snap.Metadata.Index = i
 	snap.Metadata.Term = e.Term
 	x.AssertTrue(cs != nil)
@@ -574,7 +626,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 // first, then HardState and Snapshot if they are not empty. If persistent storage supports atomic
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
-func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
+func (w *DiskStorage) Save(h raftpb.HardState, es []raftpb.Entry, snap raftpb.Snapshot) error {
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
 
@@ -591,7 +643,7 @@ func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) erro
 }
 
 // Append the new entries to storage.
-func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) error {
+func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -620,9 +672,9 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 		k := w.EntryKey(e.Index)
 		data, err := e.Marshal()
 		if err != nil {
-			return x.Wrapf(err, "wal.Append: While marshal entry")
+			return errors.Wrapf(err, "wal.Append: While marshal entry")
 		}
-		if err := batch.Set(k, data, 0); err != nil {
+		if err := batch.Set(k, data); err != nil {
 			return err
 		}
 	}
@@ -632,4 +684,9 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 		return w.deleteFrom(batch, laste+1)
 	}
 	return nil
+}
+
+// Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
+func (w *DiskStorage) Sync() error {
+	return w.db.Sync()
 }

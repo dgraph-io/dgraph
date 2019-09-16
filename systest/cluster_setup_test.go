@@ -76,11 +76,7 @@ func (d *DgraphCluster) StartZeroOnly() error {
 	return nil
 }
 
-func (d *DgraphCluster) Start() error {
-	if err := d.StartZeroOnly(); err != nil {
-		return err
-	}
-
+func (d *DgraphCluster) StartAlphaOnly() error {
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"alpha",
 		"--lru_mb=4096",
@@ -107,6 +103,14 @@ func (d *DgraphCluster) Start() error {
 	d.client = dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 
 	return nil
+}
+
+func (d *DgraphCluster) Start() error {
+	if err := d.StartZeroOnly(); err != nil {
+		return err
+	}
+
+	return d.StartAlphaOnly()
 }
 
 type Node struct {
@@ -136,6 +140,9 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 
 func (d *DgraphCluster) Close() {
 	// Ignore errors
+	if d == nil {
+		return
+	}
 	if d.zero != nil && d.zero.Process != nil {
 		d.zero.Process.Kill()
 	}

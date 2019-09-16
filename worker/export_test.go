@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"io/ioutil"
@@ -29,21 +30,47 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/protos/api"
 
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/z"
 
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+var personType = &pb.TypeUpdate{
+	TypeName: "Person",
+	Fields: []*pb.SchemaUpdate{
+		{
+			Predicate:   "name",
+			ValueType:   pb.Posting_STRING,
+			NonNullable: true,
+		},
+		{
+			Predicate:       "friend",
+			ValueType:       pb.Posting_UID,
+			List:            true,
+			NonNullable:     true,
+			NonNullableList: true,
+		},
+		{
+			Predicate:      "friend_not_served",
+			ValueType:      pb.Posting_OBJECT,
+			List:           true,
+			ObjectTypeName: "Person",
+		},
+	},
+}
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
@@ -57,6 +84,7 @@ func populateGraphExport(t *testing.T) {
 		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
+		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -64,10 +92,12 @@ func populateGraphExport(t *testing.T) {
 		"3": 3,
 		"4": 4,
 		"5": 5,
+		"6": 6,
 	}
 
+	l := &lex.Lexer{}
 	for _, edge := range rdfEdges {
-		nq, err := rdf.Parse(edge)
+		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
@@ -100,6 +130,16 @@ func initTestExport(t *testing.T, schemaStr string) {
 	txn.Set(x.SchemaKey("friend_not_served"), val)
 	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
+
+	val, err = personType.Marshal()
+	require.NoError(t, err)
+
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	txn.Set(x.TypeKey("Person"), val)
+	require.NoError(t, err)
+	require.NoError(t, txn.CommitAt(1, nil))
+	txn.Discard()
+
 	populateGraphExport(t)
 }
 
@@ -132,32 +172,26 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
 
-	scanner := bufio.NewScanner(r)
-	count := 0
-	for scanner.Scan() {
-		result, err := schema.Parse(scanner.Text())
-		require.NoError(t, err)
-		require.Equal(t, 1, len(result.Schemas))
-		// We wrote schema for only two predicates
-		if result.Schemas[0].Predicate == "friend" {
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		} else {
-			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
-				result.Schemas[0].Predicate)
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		}
-		count = len(result.Schemas)
-	}
-	require.NoError(t, scanner.Err())
-	// This order will be preserved due to file naming
-	require.Equal(t, 1, count)
+	result, err := schema.Parse(buf.String())
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(result.Preds))
+	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
+	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+		result.Preds[1].Predicate)
+	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
+
+	require.Equal(t, 1, len(result.Types))
+	require.True(t, proto.Equal(result.Types[0], personType))
 }
 
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, "name:string @index .")
-	// Remove already existing export folders is any.
+
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
@@ -183,10 +217,12 @@ func TestExportRdf(t *testing.T) {
 
 	scanner := bufio.NewScanner(r)
 	count := 0
+
+	l := &lex.Lexer{}
 	for scanner.Scan() {
-		nq, err := rdf.Parse(scanner.Text())
+		nq, err := chunker.ParseRDF(scanner.Text(), l)
 		require.NoError(t, err)
-		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5"}, nq.Subject)
+		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "0x1", "0x2":
@@ -198,6 +234,8 @@ func TestExportRdf(t *testing.T) {
 			case "0x4":
 			case "0x5":
 				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
+			case "0x6":
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -240,12 +278,15 @@ func TestExportRdf(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming.
-	require.Equal(t, 8, count)
+	require.Equal(t, 9, count)
 
 	checkExportSchema(t, schemaFileList)
 }
 
 func TestExportJson(t *testing.T) {
+	// Index the name predicate. We ensure it doesn't show up on export.
+	initTestExport(t, "name:string @index .")
+
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
@@ -276,6 +317,7 @@ func TestExportJson(t *testing.T) {
   {"uid":"0x2","name@en":"pho\ton"},
   {"uid":"0x3","name":"First Line\nSecondLine"},
   {"uid":"0x5","name":""},
+  {"uid":"0x6","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
   {"uid":"0x1","friend":[{"uid":"0x5"}]},
   {"uid":"0x2","friend":[{"uid":"0x5"}]},
   {"uid":"0x3","friend":[{"uid":"0x5"}]},
@@ -294,17 +336,17 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	resp, err := http.Get("http://" + z.SockAddrHttp + "/admin/export?format=json")
+	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=rdf")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=xml")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
 	require.NoError(t, err)
 	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?output=rdf")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
 	require.NoError(t, err)
 	require.Equal(t, resp.StatusCode, http.StatusOK)
 }
@@ -332,7 +374,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "Alice:string @reverse @count @lang @upsert . \n",
+			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{
@@ -407,7 +449,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data_base:string @lang . \n",
+			expected: "<data_base>:string @lang . \n",
 		},
 		{
 			skv: &skv{
@@ -422,7 +464,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data.base:string @lang . \n",
+			expected: "<data.base>:string @lang . \n",
 		},
 	}
 	for _, testCase := range testCases {

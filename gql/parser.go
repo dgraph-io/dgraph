@@ -27,12 +27,15 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 const (
-	uid   = "uid"
-	value = "val"
-	typ   = "type"
+	uidFunc   = "uid"
+	valueFunc = "val"
+	typFunc   = "type"
+	lenFunc   = "len"
+	countFunc = "count"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -52,21 +55,22 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*pb.Order
-	Children     []*GraphQuery
-	Filter       *FilterTree
-	MathExp      *MathTree
-	Normalize    bool
-	Recurse      bool
-	RecurseArgs  RecurseArgs
-	Cascade      bool
-	IgnoreReflex bool
-	Facets       *pb.FacetParams
-	FacetsFilter *FilterTree
-	GroupbyAttrs []GroupByAttr
-	FacetVar     map[string]string
-	FacetOrder   string
-	FacetDesc    bool
+	Order            []*pb.Order
+	Children         []*GraphQuery
+	Filter           *FilterTree
+	MathExp          *MathTree
+	Normalize        bool
+	Recurse          bool
+	RecurseArgs      RecurseArgs
+	ShortestPathArgs ShortestPathArgs
+	Cascade          bool
+	IgnoreReflex     bool
+	Facets           *pb.FacetParams
+	FacetsFilter     *FilterTree
+	GroupbyAttrs     []GroupByAttr
+	FacetVar         map[string]string
+	FacetOrder       string
+	FacetDesc        bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -83,11 +87,23 @@ type GraphQuery struct {
 	IsEmpty bool
 }
 
+// RecurseArgs stores the arguments needed to process the @recurse directive.
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
 }
 
+// ShortestPathArgs stores the arguments needed to process the shortest path query.
+type ShortestPathArgs struct {
+	// From, To can have a uid or a uid function as the argument.
+	// 1. from: 0x01
+	// 2. from: uid(0x01)
+	// 3. from: uid(p) // a variable
+	From *Function
+	To   *Function
+}
+
+// GroupByAttr stores the arguments needed to process the @groupby directive.
 type GroupByAttr struct {
 	Attr  string
 	Alias string
@@ -100,7 +116,7 @@ type pair struct {
 	Val string
 }
 
-// Internal structure for doing dfs on fragments.
+// fragmentNode is an internal structure for doing dfs on fragments.
 type fragmentNode struct {
 	Name    string
 	Gq      *GraphQuery
@@ -108,7 +124,7 @@ type fragmentNode struct {
 	Exited  bool // Exited in dfs.
 }
 
-// Key is fragment names.
+// fragmentMap is used to associate fragment names to their corresponding fragmentNode.
 type fragmentMap map[string]*fragmentNode
 
 const (
@@ -118,6 +134,7 @@ const (
 	ListVar  = 3
 )
 
+// VarContext stores information about the vars needed to complete a query.
 type VarContext struct {
 	Name string
 	Typ  int //  1 for UID vars, 2 for value vars
@@ -141,9 +158,10 @@ type FilterTree struct {
 	Func  *Function
 }
 
+// Arg stores an argument to a function.
 type Arg struct {
 	Value        string
-	IsValueVar   bool // If argument is val(a)
+	IsValueVar   bool // If argument is val(a), e.g. eq(name, val(a))
 	IsGraphQLVar bool
 }
 
@@ -157,6 +175,7 @@ type Function struct {
 	NeedsVar   []VarContext // If the function requires some variable
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
+	IsLenVar   bool         // eq(len(s), 5)
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -193,10 +212,12 @@ var mathOpPrecedence = map[string]int{
 	"!=": 5,
 }
 
+// IsAggregator returns true if the function name is an aggregation function.
 func (f *Function) IsAggregator() bool {
 	return isAggregator(f.Name)
 }
 
+// IsPasswordVerifier returns true if the function name is "checkpwd".
 func (f *Function) IsPasswordVerifier() bool {
 	return f.Name == "checkpwd"
 }
@@ -219,7 +240,7 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 		return nil
 	}
 	if fn.Entered {
-		return x.Errorf("Cycle detected: %s", fn.Name)
+		return errors.Errorf("Cycle detected: %s", fn.Name)
 	}
 	fn.Entered = true
 	if err := fn.Gq.expandFragments(fmap); err != nil {
@@ -239,7 +260,7 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 			fname := child.fragment // Name of fragment being referenced.
 			fchild := fmap[fname]
 			if fchild == nil {
-				return x.Errorf("Missing fragment: %s", fname)
+				return errors.Errorf("Missing fragment: %s", fname)
 			}
 			if err := fchild.expand(fmap); err != nil {
 				return err
@@ -256,16 +277,6 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
-type query struct {
-	Variables map[string]string `json:"variables"`
-	Query     string            `json:"query"`
-}
-
-type queryAlt struct {
-	Variables string `json:"variables"`
-	Query     string `json:"query"`
-}
-
 func convertToVarMap(variables map[string]string) (vm varMap) {
 	vm = make(map[string]varInfo)
 	for k, v := range variables {
@@ -276,6 +287,7 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 	return vm
 }
 
+// Request stores the query text and the variable mapping.
 type Request struct {
 	Str       string
 	Variables map[string]string
@@ -286,13 +298,13 @@ func checkValueType(vm varMap) error {
 		typ := v.Type
 
 		if len(typ) == 0 {
-			return x.Errorf("Type of variable %v not specified", k)
+			return errors.Errorf("Type of variable %v not specified", k)
 		}
 
 		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
-				return x.Errorf("Variable %v should be initialised", k)
+				return errors.Errorf("Variable %v should be initialised", k)
 			}
 			typ = typ[:len(typ)-1]
 		}
@@ -303,24 +315,24 @@ func checkValueType(vm varMap) error {
 			case "int":
 				{
 					if _, err := strconv.ParseInt(v.Value, 0, 64); err != nil {
-						return x.Wrapf(err, "Expected an int but got %v", v.Value)
+						return errors.Wrapf(err, "Expected an int but got %v", v.Value)
 					}
 				}
 			case "float":
 				{
 					if _, err := strconv.ParseFloat(v.Value, 64); err != nil {
-						return x.Wrapf(err, "Expected a float but got %v", v.Value)
+						return errors.Wrapf(err, "Expected a float but got %v", v.Value)
 					}
 				}
 			case "bool":
 				{
 					if _, err := strconv.ParseBool(v.Value); err != nil {
-						return x.Wrapf(err, "Expected a bool but got %v", v.Value)
+						return errors.Wrapf(err, "Expected a bool but got %v", v.Value)
 					}
 				}
 			case "string": // Value is a valid string. No checks required.
 			default:
-				return x.Errorf("Type %v not supported", typ)
+				return errors.Errorf("Type %q not supported", typ)
 			}
 		}
 	}
@@ -332,7 +344,7 @@ func substituteVar(f string, res *string, vmap varMap) error {
 	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok || va.Type == "" {
-			return x.Errorf("Variable not defined %v", f)
+			return errors.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
 	}
@@ -352,7 +364,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	idVal, ok := gq.Args["id"]
 	if ok && len(gq.UID) == 0 {
 		if idVal == "" {
-			return x.Errorf("Id can't be empty")
+			return errors.Errorf("Id can't be empty")
 		}
 		uids, err := parseID(idVal)
 		if err != nil {
@@ -411,14 +423,14 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
-			if f.Func.Name == uid {
+			if f.Func.Name == uidFunc {
 				// This is to support GraphQL variables in uid functions.
 				idVal, ok := vmap[v.Value]
 				if !ok {
-					return x.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
+					return errors.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
 				}
 				if idVal.Value == "" {
-					return x.Errorf("Id can't be empty")
+					return errors.Errorf("Id can't be empty")
 				}
 				uids, err := parseID(idVal.Value)
 				if err != nil {
@@ -459,11 +471,37 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(r Request) (res Result, rerr error) {
+func Parse(r Request) (Result, error) {
+	return ParseWithNeedVars(r, nil)
+}
+
+// ParseWithNeedVars performs parsing of a query with given needVars.
+//
+// The needVars parameter is passed in the case of upsert block.
+// For example, when parsing the query block inside -
+// upsert {
+//   query {
+//     me(func: eq(email, "someone@gmail.com"), first: 1) {
+//       v as uid
+//     }
+//   }
+//
+//   mutation {
+//     set {
+//       uid(v) <name> "Some One" .
+//       uid(v) <email> "someone@gmail.com" .
+//     }
+//   }
+// }
+//
+// The variable name v needs to be passed through the needVars parameter. Otherwise, an error
+// is reported complaining that the variable v is defined but not used in the query block.
+func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
-	lexer := lex.NewLexer(query)
+	var lexer lex.Lexer
+	lexer.Reset(query)
 	lexer.Run(lexTopLevel)
 	if err := lexer.ValidateResult(); err != nil {
 		return res, err
@@ -528,7 +566,7 @@ func Parse(r Request) (res Result, rerr error) {
 				return res, err
 			}
 
-			// Substitute all variables with corresponding values
+			// Substitute all graphql variables with corresponding values
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}
@@ -539,6 +577,12 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 
 		allVars := res.QueryVars
+		// Add the variables that are needed outside the query block.
+		// For example, mutation block in upsert block will be using
+		// variables from the query block that is getting parsed here.
+		if len(needVars) != 0 {
+			allVars = append(allVars, &Vars{Needs: needVars})
+		}
 		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
@@ -558,7 +602,7 @@ func validateResult(res *Result) error {
 			continue
 		}
 		if _, found := seenQueryAliases[q.Alias]; found {
-			return x.Errorf("Duplicate aliases not allowed: %v", q.Alias)
+			return errors.Errorf("Duplicate aliases not allowed: %v", q.Alias)
 		}
 		seenQueryAliases[q.Alias] = true
 	}
@@ -582,22 +626,20 @@ func checkDependency(vl []*Vars) error {
 	defines = x.RemoveDuplicates(defines)
 
 	if len(defines) != lenBefore {
-		return x.Errorf("Some variables are declared multiple times.")
+		return errors.Errorf("Some variables are declared multiple times.")
 	}
-
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		return errors.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
-
 	if len(defines) < len(needs) {
-		return x.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
+		return errors.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
 	for i := 0; i < len(defines); i++ {
 		if defines[i] != needs[i] {
-			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
+			return errors.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
 				defines, needs)
 		}
 	}
@@ -625,6 +667,15 @@ func (gq *GraphQuery) collectVars(v *Vars) {
 	}
 	if gq.MathExp != nil {
 		gq.MathExp.collectVars(v)
+	}
+
+	shortestPathFrom := gq.ShortestPathArgs.From
+	if shortestPathFrom != nil && len(shortestPathFrom.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathFrom.NeedsVar[0].Name)
+	}
+	shortestPathTo := gq.ShortestPathArgs.To
+	if shortestPathTo != nil && len(shortestPathTo.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathTo.NeedsVar[0].Name)
 	}
 }
 
@@ -796,7 +847,9 @@ L:
 				gq.Cascade = true
 			case "groupby":
 				gq.IsGroupby = true
-				parseGroupby(it, gq)
+				if err := parseGroupby(it, gq); err != nil {
+					return nil, err
+				}
 			case "ignorereflex":
 				gq.IgnoreReflex = true
 			case "recurse":
@@ -1092,7 +1145,7 @@ func unquoteIfQuoted(str string) (string, error) {
 		return str, nil
 	}
 	uq, err := strconv.Unquote(str)
-	return uq, x.Wrapf(err, "could not unquote %q:", str)
+	return uq, errors.Wrapf(err, "could not unquote %q:", str)
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
@@ -1137,7 +1190,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		var val string
-		if item.Val == value {
+		if item.Val == valueFunc {
 			count, err := parseVarList(it, gq)
 			if err != nil {
 				return result, err
@@ -1194,6 +1247,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 }
 
 // debugString converts FilterTree to a string. Good for testing, debugging.
+// nolint: unused
 func (f *FilterTree) debugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	f.stringHelper(buf)
@@ -1201,6 +1255,7 @@ func (f *FilterTree) debugString() string {
 }
 
 // stringHelper does simple DFS to convert FilterTree to string.
+// nolint: unused
 func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(f != nil)
 	if f.Func != nil && len(f.Func.Name) > 0 {
@@ -1212,9 +1267,13 @@ func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
 			buf.WriteRune(' ')
 			if f.Func.IsCount {
 				buf.WriteString("count(")
+			} else if f.Func.IsValueVar {
+				buf.WriteString("val(")
+			} else if f.Func.IsLenVar {
+				buf.WriteString("len(")
 			}
 			buf.WriteString(f.Func.Attr)
-			if f.Func.IsCount {
+			if f.Func.IsCount || f.Func.IsValueVar || f.Func.IsLenVar {
 				buf.WriteRune(')')
 			}
 			if len(f.Func.Lang) > 0 {
@@ -1274,7 +1333,7 @@ func (s *filterTreeStack) popAssert() *FilterTree {
 
 func (s *filterTreeStack) pop() (*FilterTree, error) {
 	if s.empty() {
-		return nil, x.Errorf("Empty stack")
+		return nil, errors.Errorf("Empty stack")
 	}
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
@@ -1289,19 +1348,19 @@ func (s *filterTreeStack) peek() *FilterTree {
 func evalStack(opStack, valueStack *filterTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
-		return x.Errorf("Invalid filter statement")
+		return errors.Errorf("Invalid filter statement")
 	}
 	if topOp.Op == "not" {
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
-			return x.Errorf("Invalid filter statement")
+			return errors.Errorf("Invalid filter statement")
 		}
 		topOp.Child = []*FilterTree{topVal}
 	} else {
 		// "and" and "or" are binary operators, so pop two values.
 		if valueStack.size() < 2 {
-			return x.Errorf("Invalid filter statement")
+			return errors.Errorf("Invalid filter statement")
 		}
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()
@@ -1434,7 +1493,7 @@ type regexArgs struct {
 func parseRegexArgs(val string) (regexArgs, error) {
 	end := strings.LastIndex(val, "/")
 	if end < 0 {
-		return regexArgs{}, x.Errorf("Unexpected error while parsing regex arg: %s", val)
+		return regexArgs{}, errors.Errorf("Unexpected error while parsing regex arg: %s", val)
 	}
 	expr := strings.Replace(val[1:end], "\\/", "/", -1)
 	flags := ""
@@ -1493,7 +1552,7 @@ L:
 					return nil, err
 				}
 				seenFuncArg = true
-				if nestedFunc.Name == value {
+				if nestedFunc.Name == valueFunc {
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
@@ -1508,13 +1567,25 @@ L:
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = ValueVar
-				} else {
-					if nestedFunc.Name != "count" {
-						return nil, itemInFunc.Errorf("Only val/count allowed as function "+
-							"within another. Got: %s", nestedFunc.Name)
+				} else if nestedFunc.Name == lenFunc {
+					if len(nestedFunc.NeedsVar) > 1 {
+						return nil,
+							itemInFunc.Errorf("Multiple variables not allowed in len function")
 					}
+					if !isInequalityFn(function.Name) {
+						return nil,
+							itemInFunc.Errorf("len function only allowed inside inequality" +
+								" function")
+					}
+					function.Attr = nestedFunc.NeedsVar[0].Name
+					function.IsLenVar = true
+					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+				} else if nestedFunc.Name == countFunc {
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
+				} else {
+					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
+						"within another. Got: %s", nestedFunc.Name)
 				}
 				expectArg = false
 				continue
@@ -1600,7 +1671,7 @@ L:
 			if isDollar {
 				val = "$" + val
 				isDollar = false
-				if function.Name == uid && gq != nil {
+				if function.Name == uidFunc && gq != nil {
 					if len(gq.Args["id"]) > 0 {
 						return nil, itemInFunc.Errorf("Only one GraphQL variable " +
 							"allowed inside uid function.")
@@ -1614,7 +1685,9 @@ L:
 			}
 
 			// Unlike other functions, uid function has no attribute, everything is args.
-			if len(function.Attr) == 0 && function.Name != uid && function.Name != typ {
+			if len(function.Attr) == 0 && function.Name != uidFunc &&
+				function.Name != typFunc {
+
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
 						" must not be quoted with \": %s", itemInFunc.Val)
@@ -1623,12 +1696,12 @@ L:
 				attrItemsAgo = 0
 			} else if expectLang {
 				if val == "*" {
-					return nil, x.Errorf(
+					return nil, errors.Errorf(
 						"The * symbol cannot be used as a valid language inside functions")
 				}
 				function.Lang = val
 				expectLang = false
-			} else if function.Name != uid {
+			} else if function.Name != uidFunc {
 				// For UID function. we set g.UID
 				function.Args = append(function.Args, Arg{Value: val})
 			}
@@ -1638,13 +1711,20 @@ L:
 			}
 
 			expectArg = false
-			if function.Name == value {
+			if function.Name == valueFunc {
 				// E.g. @filter(gt(val(a), 10))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
 					Typ:  ValueVar,
 				})
-			} else if function.Name == uid {
+			} else if function.Name == lenFunc {
+				// E.g. @filter(gt(len(a), 10))
+				// TODO(Aman): type could be ValueVar too!
+				function.NeedsVar = append(function.NeedsVar, VarContext{
+					Name: val,
+					Typ:  UidVar,
+				})
+			} else if function.Name == uidFunc {
 				// uid function could take variables as well as actual uids.
 				// If we can parse the value that means its an uid otherwise a variable.
 				uid, err := strconv.ParseUint(val, 0, 64)
@@ -1672,11 +1752,11 @@ L:
 		}
 	}
 
-	if function.Name != uid && function.Name != typ && len(function.Attr) == 0 {
+	if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
 		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
 	}
 
-	if function.Name == typ && len(function.Args) != 1 {
+	if function.Name == typFunc && len(function.Args) != 1 {
 		return nil, it.Errorf("type function only supports one argument. Got: %v", function.Args)
 	}
 
@@ -2074,7 +2154,7 @@ func parseID(val string) ([]uint64, error) {
 	}
 
 	if val[len(val)-1] != ']' {
-		return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
+		return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -2091,7 +2171,7 @@ func parseID(val string) ([]uint64, error) {
 			continue
 		}
 		if c == '[' || c == ')' {
-			return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
+			return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
@@ -2198,7 +2278,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				return item.Errorf("Only one group by directive allowed.")
 			}
 			curp.IsGroupby = true
-			parseGroupby(it, curp)
+			if err := parseGroupby(it, curp); err != nil {
+				return err
+			}
 		case "type":
 			err := parseType(it, curp)
 			if err != nil {
@@ -2246,7 +2328,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 
 	for _, lang := range langs {
 		if lang == string(star) && len(langs) > 1 {
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"If * is used, no other languages are allowed in the language list. Found %v",
 				langs)
 		}
@@ -2285,6 +2367,11 @@ func attrAndLang(attrData string) (attr string, langs []string) {
 	attr = attrData[:idx]
 	langs = strings.Split(attrData[idx+1:], ":")
 	return
+}
+
+func isEmpty(gq *GraphQuery) bool {
+	return gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 &&
+		gq.ShortestPathArgs.From == nil && gq.ShortestPathArgs.To == nil
 }
 
 // getRoot gets the root graph query object after parsing the args.
@@ -2334,7 +2421,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
-			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
+			if isEmpty(gq) {
 				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
@@ -2361,7 +2448,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, item.Errorf("Expecting a colon. Got: %v", item)
 		}
 
-		if key == "func" {
+		switch key {
+		case "func":
 			// Store the generator function.
 			if gq.Func != nil {
 				return gq, item.Errorf("Only one function allowed at root")
@@ -2375,7 +2463,55 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			gq.Func = gen
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
-		} else {
+		case "from", "to":
+			if gq.Alias != "shortest" {
+				return gq, item.Errorf("from/to only allowed for shortest path queries")
+			}
+
+			fn := &Function{}
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return nil, item.Errorf("Invalid query")
+			}
+
+			assignShortestPathFn := func(fn *Function, key string) {
+				if key == "from" {
+					gq.ShortestPathArgs.From = fn
+				} else if key == "to" {
+					gq.ShortestPathArgs.To = fn
+				}
+			}
+
+			if peekIt[0].Val == uidFunc {
+				gen, err := parseFunction(it, gq)
+				if err != nil {
+					return gq, err
+				}
+				fn.NeedsVar = gen.NeedsVar
+				fn.Name = gen.Name
+				assignShortestPathFn(fn, key)
+				continue
+			}
+
+			// This means it's not a uid function, so it has to be an actual uid.
+			it.Next()
+			item := it.Item()
+			val := collectName(it, item.Val)
+			uid, err := strconv.ParseUint(val, 0, 64)
+			switch e := err.(type) {
+			case nil:
+				fn.UID = append(fn.UID, uid)
+			case *strconv.NumError:
+				if e.Err == strconv.ErrRange {
+					return nil, item.Errorf("The uid value %q is too large.", val)
+				}
+				return nil,
+					item.Errorf("from/to in shortest path can only accept uid function or an uid."+
+						" Got: %s", val)
+			}
+			assignShortestPathFn(fn, key)
+
+		default:
 			var val string
 			if !it.Next() {
 				return nil, it.Errorf("Invalid query")
@@ -2402,7 +2538,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				item = it.Item()
 			}
 
-			if val == "" && item.Val == value {
+			if val == "" && item.Val == valueFunc {
 				count, err := parseVarList(it, gq)
 				if err != nil {
 					return nil, err
@@ -2417,7 +2553,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				// Get language list, if present
 				items, err := it.Peek(1)
 				if err == nil && items[0].Typ == itemLeftRound {
-					if (key == "orderasc" || key == "orderdesc") && val != value {
+					if (key == "orderasc" || key == "orderdesc") && val != valueFunc {
 						return nil, it.Errorf("Expected val(). Got %s() with order.", val)
 					}
 				}
@@ -2472,12 +2608,12 @@ func isSortkey(k string) bool {
 	return k == "orderasc" || k == "orderdesc"
 }
 
-type Count int
+type countType int
 
 const (
-	notSeen      Count = iota // default value
-	seen                      // when we see count keyword
-	seenWithPred              // when we see a predicate within count.
+	notSeen      countType = iota // default value
+	seen                          // when we see count keyword
+	seenWithPred                  // when we see a predicate within count.
 )
 
 func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
@@ -2509,7 +2645,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
 		return it.Errorf("Bad nesting of predicates or functions")
 	}
-	var count Count
+	var count countType
 	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
@@ -2592,7 +2728,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isAggregator(valLower) {
 				child := &GraphQuery{
-					Attr:       value,
+					Attr:       valueFunc,
 					Args:       make(map[string]string),
 					Var:        varName,
 					IsInternal: true,
@@ -2620,7 +2756,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.Attr = attr
 					child.IsInternal = false
 				} else {
-					if it.Item().Val != value {
+					if it.Item().Val != valueFunc {
 						return it.Errorf("Only variables allowed in aggregate functions. Got: %v",
 							it.Item().Val)
 					}
@@ -2685,7 +2821,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					IsInternal: true,
 				}
 				switch item.Val {
-				case value:
+				case valueFunc:
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
@@ -2728,10 +2864,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				if peekIt[0].Typ == itemRightRound {
 					return it.Errorf("Cannot use count(), please use count(uid)")
-				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+				} else if peekIt[0].Val == uidFunc && peekIt[1].Typ == itemRightRound {
 					if gq.IsGroupby {
 						// count(uid) case which occurs inside @groupby
-						val = uid
+						val = uidFunc
 						// Skip uid)
 						it.Next()
 						it.Next()
@@ -2743,12 +2879,16 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					gq.Var = varName
 					if alias != "" {
 						gq.UidCountAlias = alias
+						// This is a count(uid) node.
+						// Reset the alias here after assigning to UidCountAlias, so that siblings
+						// of this node don't get it.
+						alias = ""
 					}
 					it.Next()
 					it.Next()
 				}
 				continue
-			} else if valLower == value {
+			} else if valLower == valueFunc {
 				if varName != "" {
 					return it.Errorf("Cannot assign a variable to val()")
 				}
@@ -2782,7 +2922,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if valLower == uid {
+			} else if valLower == uidFunc {
 				if count == seen {
 					return it.Errorf("Count of a variable is not allowed")
 				}

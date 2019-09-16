@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-/*
-
-Package dgo is used to interact with a Dgraph server. Queries, mutations,
-and most other types of admin tasks can be run from the client.
-
-*/
+// Package dgo is used to interact with a Dgraph server. Queries, mutations,
+// and most other types of admin tasks can be run from the client.
 package dgo

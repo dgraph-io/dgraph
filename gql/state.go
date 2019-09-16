@@ -17,7 +17,9 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -28,48 +30,178 @@ const (
 	rightSquare = ']'
 	period      = '.'
 	comma       = ','
-	bang        = '!'
-	dollar      = '$'
 	slash       = '/'
-	backslash   = '\\'
 	equal       = '='
 	quote       = '"'
 	at          = '@'
 	colon       = ':'
 	lsThan      = '<'
-	grThan      = '>'
 	star        = '*'
 )
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
+	itemText                 lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                     // left curly bracket
+	itemRightCurl                                    // right curly bracket
+	itemEqual                                        // equals to symbol
+	itemName                                         // [9] names
+	itemOpType                                       // operation type
+	itemLeftRound                                    // left round bracket
+	itemRightRound                                   // right round bracket
+	itemColon                                        // Colon
+	itemAt                                           // @
+	itemPeriod                                       // .
+	itemDollar                                       // $
+	itemRegex                                        // /
+	itemMutationOp                                   // mutation operation (set, delete)
+	itemMutationOpContent                            // mutation operation content
+	itemUpsertBlock                                  // mutation upsert block
+	itemUpsertBlockOp                                // upsert block op (query, mutate)
+	itemUpsertBlockOpContent                         // upsert block operations' content
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
 
+// lexIdentifyBlock identifies whether it is an upsert block
+// If the block begins with "{" => mutation block
+// Else if the block begins with "upsert" => upsert block
+func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIdentifyBlock
+	for {
+		switch r := l.Next(); {
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameBlock
+		case r == leftCurl:
+			l.Backup()
+			return lexInsideMutation
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Invalid mutation block")
+		default:
+			return l.Errorf("Unexpected character while identifying mutation block: %#U", r)
+		}
+	}
+}
+
+// lexNameBlock lexes the blocks, for now, only upsert block
+func lexNameBlock(l *lex.Lexer) lex.StateFn {
+	// The caller already checked isNameBegin, and absorbed one rune.
+	l.AcceptRun(isNameSuffix)
+	switch word := l.Input[l.Start:l.Pos]; word {
+	case "upsert":
+		l.Emit(itemUpsertBlock)
+		return lexUpsertBlock
+	default:
+		return l.Errorf("Invalid block: [%s]", word)
+	}
+}
+
+// lexUpsertBlock lexes the upsert block
+func lexUpsertBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexUpsertBlock
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.BlockDepth--
+			l.Emit(itemRightCurl)
+			if l.BlockDepth == 0 {
+				return lexTopLevel
+			}
+		case r == leftCurl:
+			l.BlockDepth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameUpsertOp
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed upsert block")
+		default:
+			return l.Errorf("Unrecognized character in upsert block: %#U", r)
+		}
+	}
+}
+
+// lexNameUpsertOp parses the operation names inside upsert block
+func lexNameUpsertOp(l *lex.Lexer) lex.StateFn {
+	// The caller already checked isNameBegin, and absorbed one rune.
+	l.AcceptRun(isNameSuffix)
+	word := l.Input[l.Start:l.Pos]
+	switch word {
+	case "query":
+		l.Emit(itemUpsertBlockOp)
+		return lexBlockContent
+	case "mutation":
+		l.Emit(itemUpsertBlockOp)
+		return lexInsideMutation
+	case "fragment":
+		l.Emit(itemUpsertBlockOp)
+		return lexBlockContent
+	default:
+		return l.Errorf("Invalid operation type: %s", word)
+	}
+}
+
+// lexBlockContent lexes and absorbs the text inside a block (covered by braces).
+func lexBlockContent(l *lex.Lexer) lex.StateFn {
+	return lexContent(l, leftCurl, rightCurl, lexUpsertBlock)
+}
+
+// lexIfContent lexes the whole of @if directive in a mutation block (covered by small brackets)
+func lexIfContent(l *lex.Lexer) lex.StateFn {
+	if r := l.Next(); r != at {
+		return l.Errorf("Expected [@], found; [%#U]", r)
+	}
+
+	l.AcceptRun(isNameSuffix)
+	word := l.Input[l.Start:l.Pos]
+	if word != "@if" {
+		return l.Errorf("Expected @if, found [%v]", word)
+	}
+
+	return lexContent(l, '(', ')', lexInsideMutation)
+}
+
+func lexContent(l *lex.Lexer, leftRune, rightRune rune, returnTo lex.StateFn) lex.StateFn {
+	depth := 0
+	for {
+		switch l.Next() {
+		case lex.EOF:
+			return l.Errorf("Matching brackets not found")
+		case quote:
+			if err := l.LexQuotedString(); err != nil {
+				return l.Errorf(err.Error())
+			}
+		case leftRune:
+			depth++
+		case rightRune:
+			depth--
+			if depth < 0 {
+				return l.Errorf("Unopened %c found", rightRune)
+			} else if depth == 0 {
+				l.Emit(itemUpsertBlockOpContent)
+				return returnTo
+			}
+		}
+	}
+
+}
+
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
 	for {
 		switch r := l.Next(); {
+		case r == at:
+			l.Backup()
+			return lexIfContent
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -144,12 +276,10 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemAt)
 			return lexDirectiveOrLangList
 		case isNameBegin(r) || isNumber(r):
-			empty = false
 			return lexArgName
 		case r == slash:
 			// if argument starts with '/' it's a regex, otherwise it's a division
 			if empty {
-				empty = false
 				return lexRegex(l)
 			}
 			fallthrough
@@ -231,6 +361,13 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {
+	// TODO(Aman): Find a way to identify different blocks in future. We only have
+	// Upsert block right now. BlockDepth tells us nesting of blocks. Currently, only
+	// the Upsert block has nested mutation/query/fragment blocks.
+	if l.BlockDepth != 0 {
+		return lexUpsertBlock
+	}
+
 	l.Mode = lexTopLevel
 Loop:
 	for {
@@ -401,7 +538,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation
@@ -460,10 +597,8 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemOpType)
 		return lexInsideSchema
 	} else {
-		l.Errorf("Invalid operation type: %s", word)
+		return l.Errorf("Invalid operation type: %s", word)
 	}
-
-	return lexQuery
 }
 
 // lexArgName lexes and emits the name part of an argument.
@@ -486,11 +621,6 @@ func isSpace(r rune) bool {
 // isEndLiteral returns true if rune is quotation mark.
 func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
-}
-
-// isEndArg returns true if rune is a comma or right round bracket.
-func isEndArg(r rune) bool {
-	return r == comma || r == ')'
 }
 
 func isLangOrDirective(r rune) bool {

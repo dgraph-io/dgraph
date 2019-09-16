@@ -25,14 +25,15 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 	var requiredTokenizer tok.Tokenizer
 	switch funcType {
-	case FullTextSearchFn:
+	case fullTextSearchFn:
 		requiredTokenizer = tok.FullTextTokenizer{}
-	case MatchFn:
+	case matchFn:
 		requiredTokenizer = tok.TrigramTokenizer{}
 	default:
 		requiredTokenizer = tok.TermTokenizer{}
@@ -69,7 +70,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	if lang == "." {
 		lang = "en"
 	}
-	if funcType == FullTextSearchFn {
+	if funcType == fullTextSearchFn {
 		return tok.GetFullTextTokens(funcArgs, lang)
 	}
 	return tok.GetTermTokens(funcArgs)
@@ -78,7 +79,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
@@ -100,7 +101,7 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 	// Should we return an error if we don't find a non-lossy tokenizer for eq function.
 	if f != "eq" {
-		return nil, x.Errorf("Attribute:%s does not have proper index for comparison", attr)
+		return nil, errors.Errorf("Attribute:%s does not have proper index for comparison", attr)
 	}
 
 	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
@@ -133,7 +134,7 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		break
 
 	case len(ineqTokens) > 1:
-		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
+		return nil, "", errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
 
@@ -164,11 +165,12 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
-		k := x.Parse(key)
+		k, err := x.Parse(key)
+		if err != nil {
+			return nil, "", err
+		}
 
 		switch {
-		case k == nil:
-
 		// if its lossy then we handle inequality comparison later
 		// in handleCompareFunction
 		case tokenizer.IsLossy():

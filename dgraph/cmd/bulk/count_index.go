@@ -17,10 +17,15 @@
 package bulk
 
 import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -34,8 +39,8 @@ type current struct {
 }
 
 type countIndexer struct {
-	*state
-	db     *badger.DB
+	*reducer
+	writer *badger.StreamWriter
 	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
@@ -45,8 +50,12 @@ type countIndexer struct {
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
 func (c *countIndexer) addUid(rawKey []byte, count int) {
-	key := x.Parse(rawKey)
-	if key == nil || (!key.IsData() && !key.IsReverse()) {
+	key, err := x.Parse(rawKey)
+	if err != nil {
+		fmt.Printf("Error while parsing key %s: %v\n", hex.Dump(rawKey), err)
+		return
+	}
+	if !key.IsData() && !key.IsReverse() {
 		return
 	}
 	sameIndexKey := key.Attr == c.cur.pred && key.IsReverse() == c.cur.rev
@@ -72,8 +81,10 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	writer := posting.NewTxnWriter(c.db)
+	defer c.wg.Done()
 
+	streamId := atomic.AddUint32(&c.streamId, 1)
+	list := &bpb.KVList{}
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 
@@ -81,12 +92,20 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		pl.Pack = codec.Encode(uids, 256)
 		data, err := pl.Marshal()
 		x.Check(err)
-		x.Check(writer.SetAt(
-			x.CountKey(pred, uint32(count), rev),
-			data, posting.BitCompletePosting, c.state.writeTs))
+		list.Kv = append(list.Kv, &bpb.KV{
+			Key:      x.CountKey(pred, uint32(count), rev),
+			Value:    data,
+			UserMeta: []byte{posting.BitCompletePosting},
+			Version:  c.state.writeTs,
+			StreamId: streamId,
+		})
 	}
-	x.Check(writer.Flush())
-	c.wg.Done()
+	sort.Slice(list.Kv, func(i, j int) bool {
+		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
+	})
+	if err := c.writer.Write(list); err != nil {
+		x.Check(err)
+	}
 }
 
 func (c *countIndexer) wait() {

@@ -18,7 +18,7 @@ services:
       source: $GOPATH/src/github.com/dgraph-io/dgraph/tlstest/tls
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5080 --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth REQUIREANDVERIFY
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth REQUIREANDVERIFY
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -26,13 +26,13 @@ services:
     labels:
       cluster: test
     ports:
-    - 5080:5080
-    - 6080:6080
+    - 5180:5180
+    - 6180:6180
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 0 --idx=1 --my=zero1:5080 --replicas=3 --logtostderr
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr
       -v=2 --bindall
 volumes: {}

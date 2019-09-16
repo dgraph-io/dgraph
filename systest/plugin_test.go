@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestPlugins(t *testing.T) {
@@ -89,7 +90,7 @@ func TestPlugins(t *testing.T) {
 			txn := cluster.client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
-			CompareJSON(t, test.wantResult, string(reply.GetJson()))
+			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
 
