@@ -68,7 +68,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
 			case BigFloatID:
-				val := new(big.Float).SetPrec(200)
+				var val big.Float
+				val.SetPrec(200)
 				if err := val.UnmarshalText(data); err != nil {
 					return to, err
 				}
@@ -122,7 +123,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = val
 			case BigFloatID:
-				val := new(big.Float).SetPrec(200)
+				var val big.Float
+				val.SetPrec(200)
 				if err := val.UnmarshalText(data); err != nil {
 					return to, err
 				}
@@ -175,7 +177,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res = float64(vc)
 			case BigFloatID:
-				*res = new(big.Float).SetPrec(200).SetInt64(vc)
+				var val big.Float
+				val.SetPrec(200).SetInt64(vc)
+				*res = val
 			case BoolID:
 				*res = vc != 0
 			case StringID, DefaultID:
@@ -233,7 +237,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res = vc
 			case BigFloatID:
-				*res = new(big.Float).SetPrec(200).SetFloat64(vc)
+				var b big.Float
+				b.SetPrec(200).SetFloat64(vc)
+				*res = b
 			case BinaryID:
 				var bs [8]byte
 				u := math.Float64bits(vc)
@@ -433,7 +439,7 @@ func Marshal(from Val, to *Val) error {
 			return cantConvert(fromID, toID)
 		}
 	case BigFloatID:
-		vc := val.(*big.Float)
+		vc := val.(big.Float)
 		switch toID {
 		case StringID, DefaultID:
 			*res = vc.String()
@@ -613,7 +619,8 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case BigFloatID:
-		return v.Value.(*big.Float).MarshalText()
+		value := v.Value.(big.Float)
+		return value.MarshalText()
 	case StringID, DefaultID:
 		return json.Marshal(v.Safe().(string))
 	case PasswordID:

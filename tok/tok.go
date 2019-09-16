@@ -50,7 +50,7 @@ const (
 	IdentBool     = 0x9
 	IdentTrigram  = 0xA
 	IdentHash     = 0xB
-	IdentBigFloat   = 0xC
+	IdentBigFloat = 0xC
 	IdentCustom   = 0x80
 )
 
@@ -178,11 +178,12 @@ type BigFloatTokenizer struct{}
 func (t BigFloatTokenizer) Name() string { return "bigfloat" }
 func (t BigFloatTokenizer) Type() string { return "bigfloat" }
 func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
-	return []string{(v.(*big.Float)).String()}, nil
+	value := v.(big.Float)
+	return []string{value.String()}, nil
 }
 func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
 func (t BigFloatTokenizer) IsSortable() bool { return true }
-func (t BigFloatTokenizer) IsLossy() bool    { return true }
+func (t BigFloatTokenizer) IsLossy() bool    { return false }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

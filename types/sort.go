@@ -17,6 +17,7 @@
 package types
 
 import (
+	"math/big"
 	"sort"
 	"time"
 
@@ -88,7 +89,7 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 
 	typ := v[0][0].Tid
 	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID, BigFloatID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return errors.Errorf("Value of type: %s isn't sortable", typ.Name())
@@ -112,7 +113,7 @@ func Less(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, UidID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, UidID, IntID, FloatID, StringID, DefaultID, BigFloatID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, errors.Errorf("Compare not supported for type: %v", a.Tid)
@@ -135,6 +136,11 @@ func less(a, b Val) bool {
 		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
 		return (a.Safe().(string)) < (b.Safe().(string))
+	case BigFloatID:
+		var lValue, rValue big.Float
+		lValue = a.Value.(big.Float)
+		rValue = b.Value.(big.Float)
+		return lValue.Cmp(&rValue) == -1
 	}
 	return false
 }
@@ -164,7 +170,7 @@ func Equal(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID, BoolID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID, BoolID, BigFloatID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, errors.Errorf("Equal not supported for type: %v", a.Tid)
@@ -197,6 +203,10 @@ func equal(a, b Val) bool {
 		aVal, aOk := a.Value.(bool)
 		bVal, bOk := b.Value.(bool)
 		return aOk && bOk && aVal == bVal
+	case BigFloatID:
+		aVal, aOk := a.Value.(big.Float)
+		bVal, bOk := b.Value.(big.Float)
+		return aOk && bOk && aVal.Cmp(&bVal) == 0
 	}
 	return false
 }
