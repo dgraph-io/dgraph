@@ -185,6 +185,7 @@ func TestUpsertExampleJSON(t *testing.T) {
      }]
    }
 }`
+	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
@@ -1735,7 +1736,7 @@ upsert {
 	require.NotContains(t, res, "amount")
 }
 
-func TestUpsertBuldUpdateValue(t *testing.T) {
+func TestUpsertBulkUpdateValue(t *testing.T) {
 	SetupBankExample(t)
 
 	// Resetting the val in upsert to check if the
@@ -1790,7 +1791,7 @@ upsert {
 
 }
 
-func TestAggregateValBuldUpdate(t *testing.T) {
+func TestAggregateValBulkUpdate(t *testing.T) {
 	SetupBankExample(t)
 	q1 := `
 {

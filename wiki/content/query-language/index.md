@@ -52,7 +52,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x579683)) {
+  bladerunner(func: uid(0x2066e)) {
     uid
     name@en
     initial_release_date
@@ -81,7 +81,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x579683, 0x5af1c7)) {
+  movies(func: uid(0x25280, 0x707f9)) {
     uid
     name@en
     initial_release_date
@@ -628,7 +628,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x7de2ec)) {
+  films(func: uid(0x1daf5)) {
     name@hi
     actor.film {
       performance.film {
@@ -704,12 +704,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x679de1).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x99706).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x679de1)){
+    director.film @filter(uid_in(~director.film, 0x99706)) {
       name@en
     }
   }
@@ -1039,13 +1039,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x8116e4`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x99e44`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x8116e4) {
+    director.film (first:5, after: 0x99e44) {
       uid
       name@en
     }
@@ -1788,10 +1788,9 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 
 ## Expand Predicates
 
-The `expand()` function can be used to expand the predicates in a node. Starting
-with version 1.1, the keyword `_predicate_` has been deprecated. Instead, to
-properly use the `expand()` function, the use of the type system is required.
-Refer to the section on the type system to check how to set the types of a given
+The `expand()` function can be used to expand the predicates out of a node. To
+ use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
 There are four ways to use the `expand` function.
@@ -1806,12 +1805,12 @@ There are four ways to use the `expand` function.
 * If `_reverse_` is passed as an argument to `expand()`, only the reverse
   predicates at each node in that level are retrieved.
 
-The last three keywords require that the node's types have been set to properly
-work. Dgraph will look for all the types that have been assigned to this node,
+The last three keywords require that the nodes have types. Dgraph will look 
+for all the types that have been assigned to a node,
 query the types to check which attributes they have, and use those to compute
 the list of predicates to expand.
 
-For example, consider a node that has the following types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have 
 the following definitions:
 
 ```
@@ -1828,7 +1827,8 @@ type Pet {
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
-the node has. Then it will query the definitions of the types and build a list.
+the node has (`Animal` and `Pet`). Then it will get the definitions of 
+`Animal` and `Pet` and build a list of predicates.
 Finally, it will query the schema to check if any of those predicates have a
 reverse node. If, for example, there's a reverse node in the `owner` predicate,
 the final list of predicates to expand will be:
@@ -1842,10 +1842,9 @@ owner
 veterinarian
 ```
 
-If the predicate has no string without a language tag, `expand()` won't expand
-it (see [language preference]({{< relref "#language-support" >}})). For example,
-above `name` generally doesn't have strings without tags in the dataset, so
-`name@.` is required.
+For `string` predicates, `expand` only returns values not tagged with a language
+(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+required to add `name@fr` or `name@.` as well as expand to a query.
 
 ## Cascade Directive
 
@@ -2052,140 +2051,6 @@ If data is already stored before the mutation, existing values are not checked t
 If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
 
 Reverse edges are also computed if specified by a schema mutation.
-
-### Type System
-
-Starting in version 1.1, Dgraph has support for a type system. At the moment,
-the type system is basic but can be used already to categorize nodes and query
-them based on their type. The type system is also used during expand queries.
-
-Keep in mind that the type system is a work in progress and more features will
-be added in coming versions.
-
-#### Type definition
-
-Types are defined using the GraphQL standard. Here's an example of a basic type.
-
-```
-type Student {
-  name: string
-  dob: datetime
-  home_address: string
-  year: int
-}
-```
-
-Types are declared along with the schema using the Alter endpoint. In order to
-properly support the above type, we need a predicate for each of the attributes
-in the type as shown below:
-
-```
-name: string .
-dob: datetime .
-home_address: string .
-year: int .
-```
-
-If a predicate contains a reverse index, you can assume that both the predicate and
-the reverse predicate are part of any type definition that contains that predicate.
-Expand queries will follow that convention.
-
-To use the same attribute in multiple types, make sure the type and indexes
-required for both are the same. Otherwise, use separate attribute and predicate
-names for each type. Below there is a small example.
-
-```
-type Student {
-  student_name: string
-}
-
-type Textbook {
-  textbook_name: string
-}
-
-student_name: string @index(exact) .
-textbook_name: string @lang @index(fulltext) .
-```
-
-Types also support list attributes (i.e `friends: [uid]`) and non-nullable types
-(i.e `friends: [uid]!`). However, the type of the attributes are not being used
-right now, as the type system is still a work in progress. It's a good idea to
-properly think about how they should be setup to avoid any issues once the type
-system starts using them.
-
-If you send a type definition through the Alter endpoint for a type that already
-exists, the current definition will be overwritten.
-
-#### Setting the type of a node
-
-Scalar nodes cannot have types since they only have one attribute and its type
-is the type of the node. UID nodes can have a type. The type is set by setting
-the value of the `dgraph.type` predicate for that node. A node can have multiple
-types. Here's an example of how to set the types of a node:
-
-```
-{
-  set {
-    _:a <name> "Garfield" .
-    _:a <dgraph.type> "Pet" .
-    _:a <dgraph.type> "Animal" .
-  }
-}
-```
-
-`dgraph.type` is a reserved predicate and cannot be removed or modified.
-
-#### Using types during queries
-
-The type system can be used as a top level function in the query language. Here's an example:
-
-```
-{
-  q(func: type(Animal)) {
-    uid
-    name
-  }
-}
-```
-
-This query will only return nodes whose type has been previously set to `Animal`.
-
-The types can also be used to filter results inside the queries. For example:
-
-```
-{
-  q(func: has(parent)) {
-    uid
-    parent @type(Person) {
-      uid
-      name
-    }
-  }
-}
-```
-
-This query will return the nodes that have a parent predicate but only if the
-type of the parent node has been previously set to `Person`.
-
-#### Deleting a type
-
-Type definitions can be deleted using the Alter endpoint. All that is needed is
-to send an operation object with the field `DropOp` (or `drop_op` depending on
-the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
-to the type that is meant to be deleted.
-
-Below is an example deleting the type `Person` using the Go client:
-```go
-err := c.Alter(context.Background(), &api.Operation{
-                DropOp: api.Operation_TYPE,
-                DropValue: "Person"})
-```
-
-#### Expand queries and types
-
-Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
-functions now require that the types of the nodes to expand have been properly
-set. Refer to that section for more information.
 
 ### Predicates i18n
 
@@ -2498,6 +2363,136 @@ schema(type: [Person, Animal]) {}
 
 Note that type queries do not contain anything between the curly braces. The
 output will be the entire definition of the requested types.
+
+## Type System
+
+Dgraph supports a type system that can be used to categorize nodes and query
+them based on their type. The type system is also used during expand queries.
+
+### Type definition
+
+Types are defined using a GraphQL-like syntax. For example:
+
+```
+type Student {
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
+  friends: [uid]
+}
+```
+
+Types are declared along with the schema using the Alter endpoint. In order to
+properly support the above type, a predicate for each of the attributes
+in the type is also needed, such as:
+
+```
+name: string @index(term) .
+dob: datetime .
+home_address: string .
+year: int .
+friends: [uid] .
+```
+
+If a `uid` predicate contains a reverse index, both the predicate and the
+reverse predicate are part of any type definition which contain that predicate.
+Expand queries will follow that convention.
+
+Edges can be used in multiple types: for example, `name` might be used for both
+a person and a pet. Sometimes, however, it's required to use a different
+predicate for each type to represent a similar concept. For example, if student
+names and book names required different indexes, then the predicates must be
+different.
+
+```
+type Student {
+  student_name: string
+}
+
+type Textbook {
+  textbook_name: string
+}
+
+student_name: string @index(exact) .
+textbook_name: string @lang @index(fulltext) .
+```
+
+Types also support lists like `friends: [uid]` or `tags: [string]`.
+
+Altering the schema for a type that already exists, overwrites the existing
+definition.
+
+### Setting the type of a node
+
+Scalar nodes cannot have types since they only have one attribute and its type
+is the type of the node. UID nodes can have a type. The type is set by setting
+the value of the `dgraph.type` predicate for that node. A node can have multiple
+types. Here's an example of how to set the types of a node:
+
+```
+{
+  set {
+    _:a <name> "Garfield" .
+    _:a <dgraph.type> "Pet" .
+    _:a <dgraph.type> "Animal" .
+  }
+}
+```
+
+`dgraph.type` is a reserved predicate and cannot be removed or modified.
+
+### Using types during queries
+
+Types can be used as a top level function in the query language. For example:
+
+```
+{
+  q(func: type(Animal)) {
+    uid
+    name
+  }
+}
+```
+
+This query will only return nodes whose type is set to `Animal`.
+
+Types can also be used to filter results inside a query. For example:
+
+```
+{
+  q(func: has(parent)) {
+    uid
+    parent @filter(type(Person)) {
+      uid
+      name
+    }
+  }
+}
+```
+
+This query will return the nodes that have a parent predicate and only the
+`parent`'s of type `Person`.
+
+### Deleting a type
+
+Type definitions can be deleted using the Alter endpoint. All that is needed is
+to send an operation object with the field `DropOp` (or `drop_op` depending on
+the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
+to the type that is meant to be deleted.
+
+Below is an example deleting the type `Person` using the Go client:
+```go
+err := c.Alter(context.Background(), &api.Operation{
+                DropOp: api.Operation_TYPE,
+                DropValue: "Person"})
+```
+
+### Expand queries and types
+
+Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
+`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
+nodes to expand have types.
 
 ## Facets : Edge attributes
 
