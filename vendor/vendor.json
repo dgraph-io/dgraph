@@ -717,10 +717,10 @@
 			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
-			"checksumSHA1": "L3HoHVqp2EaBSOqBxB7l0PTyu7g=",
+			"checksumSHA1": "4gKrTOaoNvbAgDCVfSLd6J77oPw=",
 			"path": "github.com/golang/snappy",
-			"revision": "2a8bb927dd31d8daada140a5d09578521ce5c36a",
-			"revisionTime": "2019-02-18T23:22:22Z"
+			"revision": "ff6b7dc882cf4cfba7ee0b9f7dcc1ac096c554aa",
+			"revisionTime": "2019-09-04T06:34:54Z"
 		},
 		{
 			"checksumSHA1": "L3HoHVqp2EaBSOqBxB7l0PTyu7g=",
