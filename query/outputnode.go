@@ -390,7 +390,7 @@ func (fj *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	c := types.ValueForType(types.IntID)
 	c.Value = int64(len(sg.DestUIDs.Uids))
 	n1 := fj.New(sg.Params.Alias)
-	field := sg.Params.uidCountAlias
+	field := sg.Params.UidCountAlias
 	if field == "" {
 		field = "count"
 	}
@@ -400,7 +400,7 @@ func (fj *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 
 func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
-		aggVal, ok := child.Params.uidToVal[0]
+		aggVal, ok := child.Params.UidToVal[0]
 		if !ok {
 			if len(child.Params.NeedsVar) == 0 {
 				return errors.Errorf("Only aggregated variables allowed within empty block.")
@@ -435,12 +435,12 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	}
 
 	hasChild := false
-	if sg.Params.uidCount && !(sg.Params.uidCountAlias == "" && sg.Params.Normalize) {
+	if sg.Params.UidCount && !(sg.Params.UidCountAlias == "" && sg.Params.Normalize) {
 		hasChild = true
 		fj.addCountAtRoot(sg)
 	}
 
-	if sg.Params.isGroupBy {
+	if sg.Params.IsGroupBy {
 		if len(sg.GroupbyRes) == 0 {
 			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
@@ -562,7 +562,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 }
 
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	sv, ok := pc.Params.uidToVal[uid]
+	sv, ok := pc.Params.UidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
 	}
@@ -605,18 +605,18 @@ func facetName(fieldName string, f *api.Facet) string {
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex {
-		if alreadySeen(sg.Params.parentIds, uid) {
+		if alreadySeen(sg.Params.ParentIds, uid) {
 			// A node can't have itself as the child at any level.
 			return nil
 		}
 		// Push myself to stack before sending this to children.
-		sg.Params.parentIds = append(sg.Params.parentIds, uid)
+		sg.Params.ParentIds = append(sg.Params.ParentIds, uid)
 	}
 
 	var invalidUids map[uint64]bool
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
-		if pc.Params.ignoreResult {
+		if pc.Params.IgnoreResult {
 			continue
 		}
 		if pc.IsInternal() {
@@ -645,7 +645,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if idx < 0 {
 			continue
 		}
-		if pc.Params.isGroupBy {
+		if pc.Params.IsGroupBy {
 			if len(pc.GroupbyRes) <= idx {
 				return errors.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
 					idx, len(pc.GroupbyRes))
@@ -668,7 +668,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if sg.Params.IgnoreReflex {
-				pc.Params.parentIds = sg.Params.parentIds
+				pc.Params.ParentIds = sg.Params.ParentIds
 			}
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -715,11 +715,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					}
 				}
 			}
-			if pc.Params.uidCount && !(pc.Params.uidCountAlias == "" && pc.Params.Normalize) {
+			if pc.Params.UidCount && !(pc.Params.UidCountAlias == "" && pc.Params.Normalize) {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
 				c.Value = int64(len(ul.Uids))
-				alias := pc.Params.uidCountAlias
+				alias := pc.Params.UidCountAlias
 				if alias == "" {
 					alias = "count"
 				}
@@ -760,7 +760,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return convErr
 				}
 
-				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
+				if pc.Params.ExpandAll && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
 						return errors.Errorf(
 							"pb.error: all lang tags should be either present or absent")
@@ -789,14 +789,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 	}
 
-	if sg.Params.IgnoreReflex && len(sg.Params.parentIds) > 0 {
+	if sg.Params.IgnoreReflex && len(sg.Params.ParentIds) > 0 {
 		// Lets pop the stack.
-		sg.Params.parentIds = (sg.Params.parentIds)[:len(sg.Params.parentIds)-1]
+		sg.Params.ParentIds = (sg.Params.ParentIds)[:len(sg.Params.ParentIds)-1]
 	}
 
 	// Only for shortest path query we wan't to return uid always if there is
 	// nothing else at that level.
-	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
+	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.Shortest {
 		dst.SetUID(uid, "uid")
 	}
 
