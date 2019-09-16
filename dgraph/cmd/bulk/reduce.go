@@ -39,7 +39,6 @@ func (r *reducer) run() {
 		thr.Start()
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
-		r.writesThr.Start()
 		go func(job shuffleOutput) {
 			r.reduce(job)
 			thr.Done()
@@ -54,7 +53,22 @@ func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(pb.PostingList)
-	txn := job.db.NewTransactionAt(r.state.writeTs, true)
+
+	newTxn := func() *badger.Txn {
+		r.writesThr.Start()
+		return job.db.NewTransactionAt(r.state.writeTs, true)
+	}
+
+	commitTxn := func(txn *badger.Txn) {
+		NumBadgerWrites.Add(1)
+		x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
+			x.Check(err)
+			NumBadgerWrites.Add(-1)
+			r.writesThr.Done()
+		}))
+	}
+
+	txn := newTxn()
 
 	outputPostingList := func() {
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
@@ -68,7 +82,18 @@ func (r *reducer) reduce(job shuffleOutput) {
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
-		x.Check(txn.SetEntry(badger.NewEntry(currentKey, val).WithMeta(meta)))
+
+		// if err returned is ErrTxnTooBig, we should commit current Txn and start new Txn.
+		e := badger.NewEntry(currentKey, val).WithMeta(meta)
+		err = txn.SetEntry(e)
+		if err == badger.ErrTxnTooBig {
+			commitTxn(txn)
+
+			txn = newTxn()
+			x.Check(txn.SetEntry(e)) // We are not checking ErrTxnTooBig second time.
+		} else {
+			x.Check(err)
+		}
 
 		uids = uids[:0]
 		pl.Reset()
@@ -96,10 +121,5 @@ func (r *reducer) reduce(job shuffleOutput) {
 	}
 	outputPostingList()
 
-	NumBadgerWrites.Add(1)
-	x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
-		x.Check(err)
-		NumBadgerWrites.Add(-1)
-		r.writesThr.Done()
-	}))
+	commitTxn(txn)
 }

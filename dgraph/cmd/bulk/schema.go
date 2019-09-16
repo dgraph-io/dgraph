@@ -128,7 +128,18 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.SetEntry(badger.NewEntry(k, v).WithMeta(posting.BitCompletePosting)))
+
+		// If error returned while setting entry is badger.ErrTxnTooBig, we should
+		// commit current txn and start new one.
+		entry := badger.NewEntry(k, v).WithMeta(posting.BitCompletePosting)
+		err = txn.SetEntry(entry)
+		if err == badger.ErrTxnTooBig {
+			x.Check(txn.CommitAt(1, nil))
+			txn = db.NewTransactionAt(math.MaxUint64, true)
+			x.Check(txn.SetEntry(entry)) // We are not checking ErrTxnTooBig for second time.
+		} else {
+			x.Check(err)
+		}
 	}
 
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
