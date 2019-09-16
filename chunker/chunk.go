@@ -41,6 +41,10 @@ type Chunker interface {
 	NQuads() *NQuadBuffer
 }
 
+type ChunkErr struct {
+	errs []error
+}
+
 type rdfChunker struct {
 	lexer *lex.Lexer
 	nqs   *NQuadBuffer
@@ -57,6 +61,23 @@ type jsonChunker struct {
 
 func (jc *jsonChunker) NQuads() *NQuadBuffer {
 	return jc.nqs
+}
+
+func (cerr *ChunkErr) Error() string {
+	errStrs := make([]string, len(cerr.errs))
+	for i, err := range cerr.errs {
+		errStrs[i] = err.Error()
+	}
+
+	return strings.Join(errStrs, "\n")
+}
+
+func (cerr *ChunkErr) Add(err error) {
+	cerr.errs = append(cerr.errs, err)
+}
+
+func (cerr *ChunkErr) ErrCount() int {
+	return len(cerr.errs)
 }
 
 // InputFormat represents the multiple formats supported by Chunker.
@@ -130,6 +151,7 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return nil
 	}
 
+	var chunkErrs ChunkErr
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -140,11 +162,17 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		if err == ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
-			return errors.Wrapf(err, "while parsing line %q", str)
+			chunkErrs.Add(errors.Wrapf(err, "while parsing line %q", str))
+		} else {
+			rc.nqs.Push(&nq)
 		}
-		rc.nqs.Push(&nq)
 	}
-	return nil
+
+	if chunkErrs.ErrCount() == 0 {
+		return nil
+	}
+
+	return &chunkErrs
 }
 
 // Chunk tries to consume multiple top-level maps from the reader until a size threshold is

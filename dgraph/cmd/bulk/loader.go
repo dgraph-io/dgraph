@@ -60,6 +60,7 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	ValidateOnly     bool
 
 	MapShards    int
 	ReduceShards int
@@ -112,7 +113,9 @@ func newLoader(opt options) *loader {
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
-	go ld.prog.report()
+	if !opt.ValidateOnly {
+		go ld.prog.report()
+	}
 	return ld
 }
 
@@ -149,6 +152,14 @@ func readSchema(filename string) *schema.ParsedSchema {
 }
 
 func (ld *loader) mapStage() {
+	if ld.opt.ValidateOnly {
+		fmt.Println("Validating input files")
+		defer func() {
+			fmt.Printf("Input file validation complete. %d errors found\n",
+				ld.prog.errCount)
+		}()
+	}
+
 	ld.prog.setPhase(mapPhase)
 	ld.xids = xidmap.New(ld.zero, nil)
 
