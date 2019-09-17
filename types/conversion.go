@@ -69,7 +69,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = math.Float64frombits(i)
 			case BigFloatID:
 				var val big.Float
-				val.SetPrec(200)
+				val.SetPrec(BigFloatPrecision)
 				if err := val.UnmarshalText(data); err != nil {
 					return to, err
 				}
@@ -124,7 +124,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = val
 			case BigFloatID:
 				var val big.Float
-				val.SetPrec(200)
+				val.SetPrec(BigFloatPrecision)
 				if err := val.UnmarshalText(data); err != nil {
 					return to, err
 				}
@@ -178,7 +178,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = float64(vc)
 			case BigFloatID:
 				var val big.Float
-				val.SetPrec(200).SetInt64(vc)
+				val.SetPrec(BigFloatPrecision).SetInt64(vc)
 				*res = val
 			case BoolID:
 				*res = vc != 0
@@ -193,7 +193,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case BigFloatID:
 		{
 			var t big.Float
-			t.SetPrec(200)
+			t.SetPrec(BigFloatPrecision)
 			if err := t.UnmarshalText(data); err != nil {
 				return to, err
 			}
@@ -238,7 +238,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = vc
 			case BigFloatID:
 				var b big.Float
-				b.SetPrec(200).SetFloat64(vc)
+				b.SetPrec(BigFloatPrecision).SetFloat64(vc)
 				*res = b
 			case BinaryID:
 				var bs [8]byte
@@ -290,9 +290,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = float64(1)
 				}
 			case BigFloatID:
-				*res = new(big.Float).SetPrec(200).SetInt64(0)
+				*res = new(big.Float).SetPrec(BigFloatPrecision).SetInt64(0)
 				if vc {
-					*res = new(big.Float).SetPrec(200).SetInt64(1)
+					*res = new(big.Float).SetPrec(BigFloatPrecision).SetInt64(1)
 				}
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
