@@ -373,7 +373,7 @@ func TestRequiredTypeFieldsBasic(t *testing.T) {
 			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal"}]}]}}`, js)
 }
 
-func TestRequiredTypeFieldsRecursive(t *testing.T) {
+func TestRequiredTypeFieldsRecursive1(t *testing.T) {
 	q1 := `{
 		q(func: uid(302)) {
 			classmate {
@@ -418,6 +418,47 @@ func TestRequiredTypeFieldsRecursive(t *testing.T) {
 			{"dob":"2010-01-01T00:00:00Z", "legal_name":"Student 1", "preferred_name":"Micheal",
 			"class":[
 				{"description":"First course of introductory algebra", "full_name":"Algebra 1"}]}]}]}}`, js)
+}
+
+func TestRequiredTypeFieldsRecursive2(t *testing.T) {
+	q1 := `{
+		q(func: uid(310)) {
+			description
+			full_name
+			professor {
+				full_name
+				title
+			}
+			term {
+				year
+				season
+			}
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data": {"q":[
+		{"description":"First course of introductory algebra", "full_name":"Algebra 1",
+		"professor":[
+			{"full_name":"Algebra 1 professor", "title":"Tenured professor"},
+			{"title":"Teaching assistant"}],
+		"term":{"year":2019}}]}}`, js)
+
+	q2 := `{
+		q(func: uid(310)) @type(Class) {
+			description
+			full_name
+			professor {
+				full_name
+				title
+			}
+			term {
+				year
+				season
+			}
+		}
+	}`
+	js = processQueryNoErr(t, q2)
+	require.JSONEq(t, `{"data": {"q":[]}}`, js)
 }
 
 func TestRequiredTypeMultiple(t *testing.T) {
@@ -496,8 +537,8 @@ func TestTypeRequiredUid(t *testing.T) {
 	js := processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"q":[
 		{"professor":[
-			{"full_name":"Algebra 1 professor", "title":"Tenured professor", "department":[{"founded":1947}]},
-			{"title": "Teaching assistant", "department":[{"founded":1947}]}]}]}}`, js)
+			{"full_name":"Algebra 1 professor", "title":"Tenured professor", "department":{"founded":1947}},
+			{"title": "Teaching assistant", "department":{"founded":1947}}]}]}}`, js)
 
 	q2 := `{
 		q(func: uid(310)) {
@@ -515,5 +556,5 @@ func TestTypeRequiredUid(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[
 		{"professor":[
 			{"full_name":"Algebra 1 professor", "title":"Tenured professor",
-			"department":[{"founded":1947}]}]}]}}`, js)
+			"department":{"founded":1947}}]}]}}`, js)
 }

@@ -236,17 +236,24 @@ type Student {
 type Class {
 	full_name: string!
 	description: string
+	professor: [Professor]
+	term: Term!
 }
 
 type Profesor {
 	legal_name: string!
 	title: string
-	department: [uid]!
+	department: uid!
 }
 
 type Department {
 	full_name: string!
 	founded: int
+}
+
+type Term {
+	year: int!
+	season: string!
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
@@ -289,8 +296,9 @@ updated_at                     : datetime @index(year) .
 number                         : int @index(int) .
 classmate                      : [uid] .
 class                          : [uid] .
-department                     : [uid] .
+department                     : uid .
 founded                        : int .
+term                           : uid .
 `
 
 func populateCluster() {
@@ -596,10 +604,14 @@ func populateCluster() {
 		<310> <description> "First course of introductory algebra" .
 		<310> <professor> <320> .
 		<310> <professor> <321> .
+		<310> <term> <315> .
 		<310> <dgraph.type> "Class" .
 
 		<311> <description> "Second course of introductory algebra" .
 		<311> <dgraph.type> "Class" .
+
+		<315> <year> "2019" .
+		<315> <dgraph.type> "Term" .
 
 		<320> <full_name> "Algebra 1 professor" .
 		<320> <title> "Tenured professor" .

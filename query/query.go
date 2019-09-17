@@ -2420,6 +2420,11 @@ func (sg *SubGraph) enforceTypeFields(typeName string) {
 			// This is a scalar field. Look at the valueMatrix to find what source uids
 			// do not contain data for this predicate.
 			for i, uid := range child.SrcUIDs.GetUids() {
+				if i >= len(child.valueMatrix) {
+					toRemove[uid] = struct{}{}
+					continue
+				}
+
 				valueList := child.valueMatrix[i]
 
 				if len(valueList.GetValues()) == 0 {
@@ -2434,18 +2439,22 @@ func (sg *SubGraph) enforceTypeFields(typeName string) {
 		} else {
 			// This is an UID field that is referencing another type. We must recurse
 			// on this level with the new type.
+			lenBefore := len(child.DestUIDs.GetUids())
 			child.enforceTypeFields(field.GetObjectTypeName())
+
+			if lenBefore > 0 && len(child.DestUIDs.GetUids()) == 0 {
+				for _, uid := range sg.DestUIDs.GetUids() {
+					toRemove[uid] = struct{}{}
+				}
+			}
 		}
 	}
 
 	// Remove invalid uids from destUIDs and uidMatrix.
-	out := pb.List{}
-	for _, uid := range sg.DestUIDs.GetUids() {
-		if _, ok := toRemove[uid]; !ok {
-			out.Uids = append(out.Uids, uid)
-		}
-	}
-	sg.DestUIDs = &out
+	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, i int) bool {
+		_, ok := toRemove[uid]
+		return !ok
+	})
 	sg.updateUidMatrix()
 }
 
