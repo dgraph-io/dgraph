@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/gqlerror"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo"
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Client is the GraphQL API's view of the database.  Rather than relying on
@@ -58,6 +60,9 @@ func AsDgraph(dgo *dgo.Dgraph) Client {
 }
 
 func (dg *dgraph) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	span := trace.FromContext(ctx)
+	stop := x.SpanTimer(span, "dgraph.Query")
+	defer stop()
 
 	queryStr := asString(query)
 

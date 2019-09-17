@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // queryResolver can resolve a single GraphQL query field
@@ -40,10 +41,9 @@ type queryResolver struct {
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
 
-	ctx, qspan := otrace.StartSpan(ctx, qr.query.Alias())
-	defer func() {
-		qspan.End()
-	}()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveQuery")
+	defer stop()
 
 	if qr.query.QueryType() == schema.SchemaQuery {
 		resp, err := schema.Introspect(qr.operation, qr.query, qr.schema)
@@ -58,28 +58,20 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		return res
 	}
 
-	_, span := otrace.StartSpan(ctx, "queryRewriter")
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite query")
-		span.End()
 		return res
 	}
-	span.End()
 
-	spanCtx, span := otrace.StartSpan(ctx, "dgraph.Query")
-	resp, err := qr.dgraph.Query(spanCtx, dgQuery)
+	resp, err := qr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
-		span.End()
 		return res
 	}
-	span.End()
 
-	spanCtx, span = otrace.StartSpan(ctx, "completeDgraphResult")
-	completed, err := completeDgraphResult(spanCtx, qr.query, resp)
-	span.End()
+	completed, err := completeDgraphResult(ctx, qr.query, resp)
 	res.err = err
 
 	// chop leading '{' and trailing '}' from JSON object
