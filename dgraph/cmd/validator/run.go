@@ -56,6 +56,5 @@ func run() {
 		}
 	}
 
-	loader := newLoader(opt)
-	loader.mapStage()
+	newLoader(opt).mapStage()
 }
