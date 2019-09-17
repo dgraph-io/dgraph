@@ -11,7 +11,7 @@ clone_folder: c:\gopath\src\github.com\dgraph-io\badger
 
 # Environment variables
 environment:
-  GOVERSION: 1.8.3
+  GOVERSION: 1.12
   GOPATH: c:\gopath
   GO111MODULE: on
 
