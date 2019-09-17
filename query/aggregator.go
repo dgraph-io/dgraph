@@ -160,7 +160,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			if isBigFloat {
 				v.Tid = types.BigFloatID
 				var sqrtResult big.Float
-				sqrtResult.SetPrec(200)
+				sqrtResult.SetPrec(types.BigFloatPrecision)
 				value := v.Value.(big.Float)
 				sqrtResult.Sqrt(&value)
 				v.Value = sqrtResult
@@ -214,7 +214,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 	if va.Tid == types.BigFloatID {
 		isBigFloat = true
-		prevValue.SetPrec(200)
+		prevValue.SetPrec(types.BigFloatPrecision)
 		prevValue.SetFloat64(l)
 	}
 	switch ag.name {

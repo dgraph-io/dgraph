@@ -183,7 +183,7 @@ func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
 }
 func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
 func (t BigFloatTokenizer) IsSortable() bool { return true }
-func (t BigFloatTokenizer) IsLossy() bool    { return false }
+func (t BigFloatTokenizer) IsLossy() bool    { return true }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

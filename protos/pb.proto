@@ -261,7 +261,7 @@ message Posting {
 		UID = 7;
 		PASSWORD = 8;
 		STRING = 9;
-    OBJECT = 10;
+		OBJECT = 10;
 		BIGINT = 11;
 	}
 	ValType val_type = 3;
