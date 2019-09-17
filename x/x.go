@@ -35,14 +35,14 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/ssh/terminal"
-
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
+	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"

@@ -33,7 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 

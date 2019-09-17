@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,6 +31,8 @@ var (
 	ErrFinished = errors.New("Transaction has already been committed or discarded")
 	// ErrReadOnly is returned when a write/update is performed on a readonly transaction
 	ErrReadOnly = errors.New("Readonly transaction cannot run mutations or be committed")
+	// ErrAborted is returned when an operation is performed on an aborted transaction.
+	ErrAborted = errors.New("Transaction has been aborted. Please retry")
 )
 
 // Txn is a single atomic transaction.
@@ -160,7 +161,7 @@ func (txn *Txn) Do(ctx context.Context, req *api.Request) (*api.Response, error)
 		// If the transaction was aborted, return the right error
 		// so the caller can handle it.
 		if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
-			err = y.ErrAborted
+			err = ErrAborted
 		}
 
 		return nil, err
@@ -191,7 +192,7 @@ func (txn *Txn) Commit(ctx context.Context) error {
 
 	err := txn.commitOrAbort(ctx)
 	if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
-		err = y.ErrAborted
+		err = ErrAborted
 	}
 
 	return err

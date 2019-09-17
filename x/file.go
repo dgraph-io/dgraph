@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgo/x"
 	"github.com/golang/glog"
 )
 
@@ -88,7 +87,7 @@ func FindDataFiles(str string, ext []string) []string {
 			glog.Errorf("File or directory does not exist: %s", str)
 			return []string{}
 		}
-		x.Check(err)
+		Check(err)
 
 		if fi.IsDir() {
 			matchFn := func(f string) bool {
