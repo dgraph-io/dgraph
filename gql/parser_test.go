@@ -3119,6 +3119,22 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 	require.Equal(t, "SchooL", res.Query[0].Children[0].GroupbyAttrs[1].Alias)
 }
 
+func TestParseGroupbyWithAliasForError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(first: 10, SchooL: school) {
+				count(uid)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(), "Can't use keyword first as alias in groupby")
+}
+
 func TestParseGroupbyError(t *testing.T) {
 	// predicates not allowed inside groupby.
 	query := `

@@ -1987,6 +1987,9 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 				if alias != "" {
 					return item.Errorf("Expected predicate after %s:", alias)
 				}
+				if validKey(val) {
+					return item.Errorf("Can't use keyword %s as alias in groupby", val)
+				}
 				alias = val
 				it.Next() // Consume the itemColon
 				continue
