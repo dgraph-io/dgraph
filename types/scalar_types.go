@@ -17,11 +17,11 @@
 package types
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	geom "github.com/twpayne/go-geom"
-	"math/big"
 )
 
 const nanoSecondsInSec = 1000000000

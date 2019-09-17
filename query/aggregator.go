@@ -151,17 +151,22 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			v.Value = math.Exp(l)
 			res = v
 		case "u-":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+			if isBigFloat {
+				value := v.Value.(big.Float)
+				negResult := *new(big.Float).SetPrec(types.BigFloatPrecision)
+				negResult.Neg(&value)
+				v.Value = negResult
+			} else {
+				if !isIntOrFloat {
+					return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				}
+				v.Value = -l
 			}
-			v.Value = -l
 			res = v
 		case "sqrt":
 			if isBigFloat {
-				v.Tid = types.BigFloatID
-				var sqrtResult big.Float
-				sqrtResult.SetPrec(types.BigFloatPrecision)
 				value := v.Value.(big.Float)
+				sqrtResult := *new(big.Float).SetPrec(types.BigFloatPrecision)
 				sqrtResult.Sqrt(&value)
 				v.Value = sqrtResult
 			} else {
@@ -175,19 +180,25 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			if isBigFloat {
 				value := v.Value.(big.Float)
 				l, _ = value.Float64()
-			} else if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				v.Value = *new(big.Float).SetFloat64(math.Floor(l))
+			} else {
+				if !isIntOrFloat {
+					return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				}
+				v.Value = math.Floor(l)
 			}
-			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
 			if isBigFloat {
 				value := v.Value.(big.Float)
 				l, _ = value.Float64()
-			} else if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				v.Value = *new(big.Float).SetFloat64(math.Ceil(l))
+			} else {
+				if !isIntOrFloat {
+					return errors.Errorf("Wrong type encountered for func %q", ag.name)
+				}
+				v.Value = math.Ceil(l)
 			}
-			v.Value = math.Ceil(l)
 			res = v
 		case "since":
 			if v.Tid == types.DateTimeID {
@@ -214,8 +225,12 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 	if va.Tid == types.BigFloatID {
 		isBigFloat = true
-		prevValue.SetPrec(types.BigFloatPrecision)
-		prevValue.SetFloat64(l)
+		if v.Tid == types.FloatID {
+			prevValue.SetPrec(types.BigFloatPrecision)
+			prevValue.SetFloat64(l)
+		} else if v.Tid == types.BigFloatID {
+			prevValue = v.Value.(big.Float)
+		}
 	}
 	switch ag.name {
 	case "+":

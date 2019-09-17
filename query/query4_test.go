@@ -19,7 +19,8 @@ package query
 import (
 	"context"
 	// "encoding/json"
-	// "fmt"
+	"fmt"
+	"math/big"
 	// "strings"
 	"testing"
 
@@ -340,4 +341,105 @@ func TestTypeExpandLang(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
 		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+}
+
+func TestBigFloatTypeTokenizer(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "10.0000000000000000000123"  .
+		<0x777> <amount> "10.0000000000000000000124"  .
+	`
+	addTriplesToCluster(triples)
+
+	// Verify fulltext index works as expected.
+	q1 := `
+	{
+		me(func: eq(amount, "10.0000000000000000000124")) {
+			uid
+			amount
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data":{"me":[{"uid":"0x777","amount":10.0000000000000000000124}]}}`,
+		js)
+}
+
+func TestBigFloatCeil(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2.1"  .
+	`
+	addTriplesToCluster(triples)
+
+	// Verify fulltext index works as expected.
+	q1 := `
+	{
+		me(func: eq(amount, "2.1")) {
+			uid
+			amount as amount
+			amt : math(ceil(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2.1)
+	ceil2 := *new(big.Float).SetPrec(200).SetFloat64(3)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), ceil2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatFloor(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2.1"  .
+	`
+	addTriplesToCluster(triples)
+
+	// Verify fulltext index works as expected.
+	q1 := `
+	{
+		me(func: eq(amount, "2.1")) {
+			uid
+			amount as amount
+			amt : math(floor(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2.1)
+	floor2 := *new(big.Float).SetPrec(200).SetFloat64(2)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), floor2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatSqrt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "2"  .
+	`
+	addTriplesToCluster(triples)
+
+	// Verify fulltext index works as expected.
+	q1 := `
+	{
+		me(func: eq(amount, "2")) {
+			uid
+			amount as amount
+			amt : math(sqrt(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	float2 := *new(big.Float).SetPrec(200).SetFloat64(2)
+	sqrt2 := *new(big.Float).SetPrec(200).Sqrt(&float2)
+	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
+		float2.Text('f', 200), sqrt2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
 }

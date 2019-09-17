@@ -18,13 +18,13 @@ package tok
 
 import (
 	"encoding/binary"
+	"math/big"
 	"plugin"
 	"time"
 
 	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
-	"math/big"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -179,11 +179,11 @@ func (t BigFloatTokenizer) Name() string { return "bigfloat" }
 func (t BigFloatTokenizer) Type() string { return "bigfloat" }
 func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
 	value := v.(big.Float)
-	return []string{value.String()}, nil
+	return []string{value.Text('f', types.BigFloatPrecision)}, nil
 }
 func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
 func (t BigFloatTokenizer) IsSortable() bool { return true }
-func (t BigFloatTokenizer) IsLossy() bool    { return true }
+func (t BigFloatTokenizer) IsLossy() bool    { return false }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

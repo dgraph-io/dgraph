@@ -17,6 +17,7 @@
 package query
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -109,7 +110,74 @@ func TestProcessBinary(t *testing.T) {
 	}
 }
 
+func TestProcessBinaryBigFloat(t *testing.T) {
+	tests := []struct {
+		in  *mathTree
+		out types.Val
+	}{
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)},
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(99)},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(9)},
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(12)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(4)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)},
+		},
+		{in: &mathTree{
+			Fn: "max",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)},
+		},
+		{in: &mathTree{
+			Fn: "min",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)},
+		},
+	}
+	for _, tc := range tests {
+		t.Logf("Test %s", tc.in.Fn)
+		err := processBinary(tc.in)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, tc.in.Const)
+	}
+}
+
 func TestProcessUnary(t *testing.T) {
+	float3 := *new(big.Float).SetPrec(200)
+	float3.SetFloat64(3)
+	sqrt3 := *new(big.Float).SetPrec(200)
+	sqrt3.Sqrt(&float3)
+
 	tests := []struct {
 		in  *mathTree
 		out types.Val
@@ -120,6 +188,13 @@ func TestProcessUnary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.FloatID, Value: -2.0},
+		},
+		{in: &mathTree{
+			Fn: "u-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: float3}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetPrec(200).SetFloat64(-3)},
 		},
 		{in: &mathTree{
 			Fn: "ln",
@@ -143,6 +218,13 @@ func TestProcessUnary(t *testing.T) {
 			out: types.Val{Tid: types.FloatID, Value: 3.0},
 		},
 		{in: &mathTree{
+			Fn: "sqrt",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: float3}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: sqrt3},
+		},
+		{in: &mathTree{
 			Fn: "floor",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.FloatID, Value: 2.5}},
@@ -150,11 +232,25 @@ func TestProcessUnary(t *testing.T) {
 			out: types.Val{Tid: types.FloatID, Value: 2.0},
 		},
 		{in: &mathTree{
+			Fn: "floor",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: sqrt3}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)},
+		},
+		{in: &mathTree{
 			Fn: "ceil",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.FloatID, Value: 2.5}},
 			}},
 			out: types.Val{Tid: types.FloatID, Value: 3.0},
+		},
+		{in: &mathTree{
+			Fn: "ceil",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.BigFloatID, Value: sqrt3}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)},
 		},
 	}
 	for _, tc := range tests {
@@ -233,6 +329,75 @@ func TestProcessBinaryBoolean(t *testing.T) {
 	}
 }
 
+func TestBigFloatMathsBoolean(t *testing.T) {
+	tests := []struct {
+		in  *mathTree
+		out types.Val
+	}{
+		{in: &mathTree{
+			Fn: "==",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: true},
+		},
+		{in: &mathTree{
+			Fn: "!=",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: true},
+		},
+		{in: &mathTree{
+			Fn: ">=",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(4)}}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: false},
+		},
+		{in: &mathTree{
+			Fn: "<=",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: true},
+		},
+		{in: &mathTree{
+			Fn: ">",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: false},
+		},
+		{in: &mathTree{
+			Fn: "<",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{
+					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+			}},
+			out: types.Val{Tid: types.BoolID, Value: true},
+		},
+	}
+	for _, tc := range tests {
+		t.Logf("Test %s", tc.in.Fn)
+		err := processBinaryBoolean(tc.in)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, tc.in.Val[0])
+	}
+}
+
 func TestProcessTernary(t *testing.T) {
 	tests := []struct {
 		in  *mathTree
@@ -255,6 +420,15 @@ func TestProcessTernary(t *testing.T) {
 				{Const: types.Val{Tid: types.FloatID, Value: 2.0}},
 			}},
 			out: types.Val{Tid: types.FloatID, Value: 2.0},
+		},
+		{in: &mathTree{
+			Fn: "cond",
+			Child: []*mathTree{
+				{Val: map[uint64]types.Val{0: {Tid: types.BoolID, Value: false}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)}},
+			}},
+			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)},
 		},
 	}
 	for _, tc := range tests {
