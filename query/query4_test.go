@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+
 	// "encoding/json"
 	// "fmt"
 	// "strings"
@@ -340,4 +341,48 @@ func TestTypeExpandLang(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
 		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+}
+
+func TestCascadeSubQuery1(t *testing.T) {
+	query := `{
+                      me(func: eq(xname, "Animesh")) {
+                          xname
+                          xage
+                          xfriend @cascade {
+                              xname
+                              xage
+                              xfriend {
+                                  xname
+                                  xage
+                              }
+                          }
+                      }
+
+                  }
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"xname":"Animesh","xage":24}]}}`, js)
+}
+
+func TestCascadeSubQuery2(t *testing.T) {
+	query := `{
+                      me(func: eq(xname, "Animesh")) {
+                          xname
+                          xage
+                          xfriend {
+                              xname
+                              xage
+                              xfriend @cascade {
+                                  xname
+                                  xage
+                              }
+                          }
+                      }
+
+                  }
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"me":[{"xname":"Animesh","xage":24,
+                   "xfriend":[{"xname":"Ashish","xage":27}]}]}}`, js)
 }
