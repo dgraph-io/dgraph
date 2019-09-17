@@ -193,7 +193,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	switch strings.ToLower(contentType) {
 	case "application/json":
 		if err := json.Unmarshal(body, &params); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
 
@@ -312,7 +313,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
 		if err := json.Unmarshal(body, &ms); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
 
@@ -576,4 +578,53 @@ type skipJSONUnmarshal struct {
 func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
 	sju.bs = bs
 	return nil
+}
+
+// convertJSONError adds line and character information to the JSON error.
+func convertJSONError(input string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if jsonError, ok := err.(*json.SyntaxError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	if jsonError, ok := err.(*json.UnmarshalTypeError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	return err
+}
+
+func jsonLineAndChar(input string, offset int) (line int, character int, err error) {
+	lf := rune(0x0A)
+
+	if offset > len(input) || offset < 0 {
+		return 0, 0, errors.Errorf("Couldn't find offset %d within the input.", offset)
+	}
+
+	line = 1
+	for i, b := range input {
+		if b == lf {
+			line++
+			character = 0
+		}
+		character++
+		if i == offset {
+			break
+		}
+	}
+
+	return line, character, nil
 }
