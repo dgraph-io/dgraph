@@ -171,7 +171,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BigFloatID:
 		var b big.Float
 		b = v.Value.(big.Float)
-		return []byte(b.Text('f', types.BigFloatPrecision)), nil
+		return b.MarshalText()
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
 	case types.PasswordID:
