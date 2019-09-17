@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 
 	"github.com/golang/glog"
+	"go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
@@ -67,12 +68,15 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	ctx, span := trace.StartSpan(r.Context(), "handler")
+	defer span.End()
+
 	if !gh.isValid() {
 		panic("graphqlHandler not initialised")
 	}
 
 	rh := gh.resolverForRequest(r)
-	res := rh.Resolve(r.Context())
+	res := rh.Resolve(ctx)
 	if _, err := res.WriteTo(w); err != nil {
 		glog.Error(err)
 	}

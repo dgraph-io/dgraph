@@ -25,12 +25,19 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
+)
+
+const (
+	methodResolve = "RequestResolver.Resolve"
 )
 
 // GraphQL spec:
@@ -123,6 +130,10 @@ func (r *RequestResolver) WithError(err error) {
 // and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
 func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, methodResolve)
+	defer stop()
+
 	if r == nil {
 		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", api.RequestID(ctx))
 		return schema.ErrorResponsef("[%s] Internal error", api.RequestID(ctx))
@@ -135,6 +146,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 
 	if r.resp.Errors != nil {
 		return r.resp
+	}
+
+	r.resp.Extensions = &schema.Extensions{
+		RequestID: api.RequestID(ctx),
 	}
 
 	op, err := r.Schema.Operation(r.GqlReq)
@@ -279,6 +294,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // if there is a result.
 func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte) (
 	[]byte, gqlerror.List) {
+	span := trace.FromContext(ctx)
+	stop := x.SpanTimer(span, "completeDgraphResult")
+	defer stop()
+
 	// We need an initial case in the alg because Dgraph always returns a list
 	// result no matter what.
 	//

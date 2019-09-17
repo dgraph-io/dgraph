@@ -41,8 +41,15 @@ type Response struct {
 	// - I think we should mostly return 200 status code
 	// - for spec we need to return errors and data in same response
 
-	Errors gqlerror.List
-	Data   bytes.Buffer
+	Errors     gqlerror.List
+	Data       bytes.Buffer
+	Extensions *Extensions
+}
+
+// Extensions : GraphQL specifies allowing "extensions" in results, but the
+// format is up to the implementation.
+type Extensions struct {
+	RequestID string `json:"requestID,omitempty"`
 }
 
 // ErrorResponsef returns a Response containing a single GraphQL error with a
@@ -95,11 +102,13 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	js, err := json.Marshal(struct {
-		Errors gqlerror.List   `json:"errors,omitempty"`
-		Data   json.RawMessage `json:"data,omitempty"`
+		Errors     gqlerror.List   `json:"errors,omitempty"`
+		Data       json.RawMessage `json:"data,omitempty"`
+		Extensions *Extensions     `json:"extensions,omitempty"`
 	}{
-		Errors: r.Errors,
-		Data:   r.Data.Bytes(),
+		Errors:     r.Errors,
+		Data:       r.Data.Bytes(),
+		Extensions: r.Extensions,
 	})
 
 	if err != nil {
