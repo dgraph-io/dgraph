@@ -618,17 +618,20 @@
 -
   name: "Include only fields for which skip is !false or include is true"
   variables:
-    include: false
-    skip: false
+    includeFalse: false
+    includeTrue: true
+    skipFalse: false
+    skipTrue: true
   gqlquery: |
-    query ($include: Boolean!, $skip: Boolean!) {
+    query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
+      $skipFalse: Boolean!) {
       queryAuthor {
-        name
-        dob @include(if: $include) @skip(if: $skip)
-        reputation @skip(if: $skip)
-        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) {
+        dob @include(if: $includeFalse) @skip(if: $skipFalse)
+        reputation @include(if: $includeFalse) @skip(if: $skipTrue)
+        name @include(if: $includeTrue) @skip(if: $skipFalse)
+        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) @include(if: $includeTrue)
+          @skip(if: $skipTrue) {
           title
-          text @include(if: $include)
           tags
         }
       }
@@ -637,10 +640,5 @@
     query {
       queryAuthor(func: type(Author)) {
         name : Author.name
-        reputation : Author.reputation
-        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (first: 10) {
-          title : Post.title
-          tags : Post.tags
-        }
       }
     }
