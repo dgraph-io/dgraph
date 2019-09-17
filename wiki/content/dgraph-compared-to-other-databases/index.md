@@ -22,15 +22,11 @@ Graph databases optimize internal data representation to be able to do graph ope
 
 ### Language
 
-Neo4j supports Cypher and Gremlin query language. Dgraph supports
-[GraphQL+-]({{< relref "query-language/index.md#graphql">}}), a variation of
-[GraphQL](https://facebook.github.io/graphql/), a query language created by
-Facebook. As opposed to Cypher or Gremlin, which produce results in simple list
-format, GraphQL allows results to be produced in a subgraph format, which has
-richer semantics. Also, GraphQL supports schema validation which is useful to
+Dgraph supports [GraphQL+-]({{< relref "query-language/index.md#graphql">}}),
+a variation of [GraphQL](https://graphql.org/), a query language created by
+Facebook. GraphQL allows results to be produced in a subgraph format, which has
+rich semantics. Also, GraphQL supports schema validation which is useful to
 ensure data correctness during both input and output.
-
-While GraphQL is modern, Gremlin and Cypher are a lot more popular. Dgraph plans to support them after v1.0.
 
 ### Scalability
 
