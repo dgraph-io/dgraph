@@ -27,7 +27,7 @@
         name : Author.name
       }
     }
-    
+
 -
   name: "ID query with field alias"
   gqlquery: |
@@ -547,5 +547,100 @@
     query {
       queryCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
         name : Country.name
+      }
+    }
+
+-
+  name: "Skip name"
+  variables:
+    shouldSkip: true
+  gqlquery: |
+    query ($shouldSkip: Boolean!) {
+      getAuthor(id: "0x1") {
+        name @skip(if: $shouldSkip)
+        posts {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        posts : Author.posts {
+          title : Post.title
+          text : Post.text
+        }
+      }
+    }
+
+-
+  name: "Skip posts"
+  variables:
+    shouldSkip: true
+  gqlquery: |
+    query ($shouldSkip: Boolean!) {
+      getAuthor(id: "0x1") {
+        name
+        posts @skip(if: $shouldSkip) {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Don't include field with filter"
+  variables:
+    shouldInclude: false
+  gqlquery: |
+    query ($shouldInclude: Boolean!) {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }) @include(if: $shouldInclude) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Include only fields for which skip is !false or include is true"
+  variables:
+    include: false
+    skip: false
+  gqlquery: |
+    query ($include: Boolean!, $skip: Boolean!) {
+      queryAuthor {
+        name
+        dob @include(if: $include) @skip(if: $skip)
+        reputation @skip(if: $skip)
+        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) {
+          title
+          text @include(if: $include)
+          tags
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        reputation : Author.reputation
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (first: 10) {
+          title : Post.title
+          tags : Post.tags
+        }
       }
     }
