@@ -185,6 +185,10 @@ func addTypeFunc(q *gql.GraphQuery, typ schema.Type) {
 
 func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 	for _, f := range field.SelectionSet() {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+
 		child := &gql.GraphQuery{}
 
 		if f.Alias() != "" {

@@ -473,6 +473,9 @@ func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, 
 
 	buf.WriteRune('{')
 	for _, f := range fields {
+		if f.Skip() || !f.Include() {
+			continue
+		}
 		buf.WriteString(comma)
 		buf.WriteRune('"')
 		buf.WriteString(f.ResponseName())
