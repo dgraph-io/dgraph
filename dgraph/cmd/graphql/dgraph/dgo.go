@@ -94,6 +94,9 @@ func responseBytes(resp *dgoapi.Response) []byte {
 }
 
 func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
+	span := trace.FromContext(ctx)
+	stop := x.SpanTimer(span, "dgraph.Mutate")
+	defer stop()
 
 	jsonMu, err := json.Marshal(val)
 	if err != nil {
