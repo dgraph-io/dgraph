@@ -31,7 +31,7 @@ func newTrie() (*Trie, error) {
 		return nil, err
 	}
 
-	stateDB, err := db.NewBadgerService("./test_data/state")
+	stateDB, err := db.NewBadgerDB("./test_data/state")
 	if err != nil {
 		return nil, err
 	}

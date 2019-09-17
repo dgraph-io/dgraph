@@ -72,20 +72,9 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	// DB
 	// Create database dir and initialize stateDB and blockDB
 	dataDir := getDatabaseDir(ctx, fig)
-
-	stateDataDir := filepath.Join(dataDir, "state")
-	stateDB, err := polkadb.NewBadgerService(stateDataDir)
+	dbSrv, err := polkadb.NewDatabaseService(dataDir)
 	if err != nil {
-		return nil, nil, err
-	}
-	blockDataDir := filepath.Join(dataDir, "block")
-	blockDB, err := polkadb.NewBadgerService(blockDataDir)
-	if err != nil {
-		return nil, nil, err
-	}
-	dbSrv := &polkadb.ChainDB{
-		StateDB: stateDB,
-		BlockDB: blockDB,
+		log.Crit("error creating DB service", "error", err)
 	}
 	// append DBs to services registrar
 	srvcs = append(srvcs, dbSrv)

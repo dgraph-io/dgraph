@@ -24,11 +24,13 @@ type PutItem interface {
 // Database wraps all database operations. All methods are safe for concurrent use.
 type Database interface {
 	PutItem
+	Iteratee
 	Get(key []byte) ([]byte, error)
 	Has(key []byte) (bool, error)
 	Del(key []byte) error
 	NewBatch() Batch
-	Close()
+	Close() error
+	Path() string
 }
 
 // Batch is a write-only operation

@@ -18,6 +18,7 @@ package polkadb
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -85,11 +86,22 @@ func (db *MemDatabase) Del(key []byte) error {
 }
 
 // Close ...
-func (db *MemDatabase) Close() {
+func (db *MemDatabase) Close() error {
 	// do nothing
+	return nil
 }
 
 // NewBatch ...
 func (db *MemDatabase) NewBatch() Batch {
 	return nil
+}
+
+// NewIterator ...
+func (db *MemDatabase) NewIterator() Iterable {
+	return Iterable{}
+}
+
+// Path ...
+func (db *MemDatabase) Path() string {
+	return fmt.Sprintf("&memDB=%p memDB=%v\n", db.db, db.db)
 }

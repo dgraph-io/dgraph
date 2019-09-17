@@ -24,17 +24,10 @@ import (
 	"github.com/golang/snappy"
 )
 
-// BadgerService contains directory path to data and db instance
-type BadgerService struct {
+// BadgerDB contains directory path to data and db instance
+type BadgerDB struct {
 	config Config
 	db     *badger.DB
-}
-
-// ChainDB contains both databases for service registry
-type ChainDB struct {
-	StateDB *BadgerService
-	BlockDB *BadgerService
-	err     <-chan error
 }
 
 //Config defines configurations for BadgerService instance
@@ -42,53 +35,13 @@ type Config struct {
 	DataDir string
 }
 
-// Iterable struct contains a transaction, iterator and context fields released, initialized
-type Iterable struct {
-	txn      *badger.Txn
-	iter     *badger.Iterator
-	released bool
-	init     bool
-}
-
-// Batch struct contains a database instance, key-value mapping for batch writes and length of item value for batch write
-type batchWriter struct {
-	db   *BadgerService
-	b    map[string][]byte
-	size int
-}
-
-type table struct {
-	db     Database
-	prefix string
-}
-
-type tableBatch struct {
-	batch  Batch
-	prefix string
-}
-
-func (chainDB *ChainDB) Start() <-chan error {
-	chainDB.err = make(<-chan error)
-	return chainDB.err
-}
-
-func (chainDB *ChainDB) Stop() <-chan error {
-	e := make(chan error)
-	// Closing Badger Database
-	err := chainDB.StateDB.db.Close()
-	if err != nil {
-		e <- err
-	}
-	err = chainDB.BlockDB.db.Close()
-	if err != nil {
-		e <- err
-	}
-	return e
-}
-
-// NewBadgerService opens and returns a new DB object
-func NewBadgerService(file string) (*BadgerService, error) {
+// NewBadgerDB initializes badgerDB instance
+func NewBadgerDB(file string) (*BadgerDB, error) {
 	opts := badger.DefaultOptions(file)
+	opts.ValueDir = file
+	opts.WithSyncWrites(false)
+	opts.WithNumCompactors(20)
+
 	if err := os.MkdirAll(file, os.ModePerm); err != nil {
 		log.Crit("err creating directory for DB ", err)
 	}
@@ -98,7 +51,7 @@ func NewBadgerService(file string) (*BadgerService, error) {
 		return nil, err
 	}
 
-	return &BadgerService{
+	return &BadgerDB{
 		config: Config{
 			DataDir: file,
 		},
@@ -107,12 +60,19 @@ func NewBadgerService(file string) (*BadgerService, error) {
 }
 
 // Path returns the path to the database directory.
-func (db *BadgerService) Path() string {
+func (db *BadgerDB) Path() string {
 	return db.config.DataDir
 }
 
+// Batch struct contains a database instance, key-value mapping for batch writes and length of item value for batch write
+type batchWriter struct {
+	db   *BadgerDB
+	b    map[string][]byte
+	size int
+}
+
 // NewBatch returns batchWriter with a badgerDB instance and an initialized mapping
-func (db *BadgerService) NewBatch() Batch {
+func (db *BadgerDB) NewBatch() Batch {
 	return &batchWriter{
 		db: db,
 		b:  make(map[string][]byte),
@@ -120,7 +80,7 @@ func (db *BadgerService) NewBatch() Batch {
 }
 
 // Put puts the given key / value to the queue
-func (db *BadgerService) Put(key []byte, value []byte) error {
+func (db *BadgerDB) Put(key []byte, value []byte) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Set(snappy.Encode(nil, key), snappy.Encode(nil, value))
 		return err
@@ -128,7 +88,7 @@ func (db *BadgerService) Put(key []byte, value []byte) error {
 }
 
 // Has checks the given key exists already; returning true or false
-func (db *BadgerService) Has(key []byte) (exists bool, err error) {
+func (db *BadgerDB) Has(key []byte) (exists bool, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, errr := txn.Get(snappy.Encode(nil, key))
 		if item != nil {
@@ -144,24 +104,27 @@ func (db *BadgerService) Has(key []byte) (exists bool, err error) {
 }
 
 // Get returns the given key
-func (db *BadgerService) Get(key []byte) (data []byte, err error) {
-	_ = db.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(snappy.Encode(nil, key))
-		if err != nil {
-			return err
+func (db *BadgerDB) Get(key []byte) (data []byte, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		item, e := txn.Get(snappy.Encode(nil, key))
+		if e != nil {
+			return e
 		}
-		val, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
+		val, e := item.ValueCopy(nil)
+		if e != nil {
+			return e
 		}
 		data, _ = snappy.Decode(nil, val)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return data, nil
 }
 
 // Del removes the key from the queue and database
-func (db *BadgerService) Del(key []byte) error {
+func (db *BadgerDB) Del(key []byte) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(snappy.Encode(nil, key))
 		if err == badger.ErrKeyNotFound {
@@ -172,17 +135,27 @@ func (db *BadgerService) Del(key []byte) error {
 }
 
 // Close closes a DB
-func (db *BadgerService) Close() {
+func (db *BadgerDB) Close() error {
 	err := db.db.Close()
 	if err == nil {
 		log.Info("Database closed")
+		return err
 	} else {
 		log.Crit("Failed to close database", "err", err)
+		return nil
 	}
 }
 
+// Iterable struct contains a transaction, iterator and context fields released, initialized
+type Iterable struct {
+	txn      *badger.Txn
+	iter     *badger.Iterator
+	released bool
+	init     bool
+}
+
 // NewIterator returns a new iterator within the Iterator struct along with a new transaction
-func (db *BadgerService) NewIterator() Iterable {
+func (db *BadgerDB) NewIterator() Iterable {
 	txn := db.db.NewTransaction(false)
 	opts := badger.DefaultIteratorOptions
 	iter := txn.NewIterator(opts)
@@ -290,73 +263,4 @@ func (b *batchWriter) Delete(key []byte) error {
 func (b *batchWriter) Reset() {
 	b.b = make(map[string][]byte)
 	b.size = 0
-}
-
-// NewTable returns a Database object that prefixes all keys with a given
-// string.
-func NewTable(db Database, prefix string) Database {
-	return &table{db: db, prefix: prefix}
-}
-
-// Put adds keys with the prefix value given to NewTable
-func (dt *table) Put(key []byte, value []byte) error {
-	return dt.db.Put(append([]byte(dt.prefix), key...), value)
-}
-
-// Has checks keys with the prefix value given to NewTable
-func (dt *table) Has(key []byte) (bool, error) {
-	return dt.db.Has(append([]byte(dt.prefix), key...))
-}
-
-// Get retrieves keys with the prefix value given to NewTable
-func (dt *table) Get(key []byte) ([]byte, error) {
-	return dt.db.Get(append([]byte(dt.prefix), key...))
-}
-
-// Del removes keys with the prefix value given to NewTable
-func (dt *table) Del(key []byte) error {
-	return dt.db.Del(append([]byte(dt.prefix), key...))
-}
-
-func (dt *table) Close() {
-	dt.db.Close()
-}
-
-// NewTableBatch returns a Batch object which prefixes all keys with a given string.
-func NewTableBatch(db Database, prefix string) Batch {
-	return &tableBatch{db.NewBatch(), prefix}
-}
-
-// NewBatch returns tableBatch with a Batch type and the given prefix
-func (dt *table) NewBatch() Batch {
-	return &tableBatch{dt.db.NewBatch(), dt.prefix}
-}
-
-// Put encodes key-values with prefix given to NewBatchTable and adds them to a mapping for batch writes, sets the size of item value
-func (tb *tableBatch) Put(key, value []byte) error {
-	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
-}
-
-// Write performs batched writes with the provided prefix
-func (tb *tableBatch) Write() error {
-	return tb.batch.Write()
-}
-
-// ValueSize returns the amount of data in the batch accounting for the given prefix
-func (tb *tableBatch) ValueSize() int {
-	return tb.batch.ValueSize()
-}
-
-// // Reset clears batch key-values and resets the size to zero
-func (tb *tableBatch) Reset() {
-	tb.batch.Reset()
-}
-
-// Delete removes the key from the batch and database
-func (tb *tableBatch) Delete(k []byte) error {
-	err := tb.batch.Delete(k)
-	if err != nil {
-		return err
-	}
-	return nil
 }

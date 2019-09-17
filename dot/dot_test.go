@@ -38,19 +38,10 @@ func createTestDot(t *testing.T) *Dot {
 	}
 
 	// DB
-	stateDataDir := "../test_data/state"
-	stateDB, err := polkadb.NewBadgerService(stateDataDir)
+	dataDir := "../test_data"
+	dbSrv, err := polkadb.NewDatabaseService(dataDir)
 	if err != nil {
 		t.Fatal(err)
-	}
-	blockDataDir := "../test_data/block"
-	blockDB, err := polkadb.NewBadgerService(blockDataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbSrv := &polkadb.ChainDB{
-		StateDB: stateDB,
-		BlockDB: blockDB,
 	}
 	services = append(services, dbSrv)
 
@@ -65,7 +56,7 @@ func TestDot_Start(t *testing.T) {
 	var availableServices = [...]services.Service{
 		&p2p.Service{},
 		&api.Service{},
-		&polkadb.ChainDB{},
+		&polkadb.DbService{},
 	}
 
 	dot := createTestDot(t)
