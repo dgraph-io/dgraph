@@ -133,3 +133,28 @@
         }
       }
     }
+
+-
+  name: "can work with skip and filter"
+  variables:
+    skip: true
+    include: false
+  gqlquery: |
+    mutation ($skip: Boolean!, $include: Boolean!) {
+      ADD_UPDATE_MUTATION {
+        post {
+          postID @skip(if: $skip)
+          title
+          author @include(if: $include) {
+            name
+            posts(filter: { title: { anyofterms: "GraphQL" } })
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        title : Post.title
+      }
+    }
