@@ -274,7 +274,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
 
-	numPaths := sg.Params.numPaths
+	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
@@ -433,7 +433,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.From == 0 || sg.Params.To == 0 {
 		return nil, nil
 	}
-	numPaths := sg.Params.numPaths
+	numPaths := sg.Params.NumPaths
 	if numPaths == 0 {
 		// Return 1 path by default.
 		numPaths = 1
@@ -585,7 +585,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 	shortestSg := new(SubGraph)
 	shortestSg.Params = params{
 		Alias:    "_path_",
-		shortest: true,
+		Shortest: true,
 	}
 	shortestSg.pathMeta = &pathMetadata{
 		weight: totalWeight,
@@ -602,7 +602,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 		node := new(SubGraph)
 		nodeInfo := dist[childUid]
 		node.Params = params{
-			shortest: true,
+			Shortest: true,
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
@@ -620,7 +620,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 
 	node := new(SubGraph)
 	node.Params = params{
-		shortest: true,
+		Shortest: true,
 	}
 	uid := result[len(result)-1]
 	node.SrcUIDs = &pb.List{Uids: []uint64{uid}}
@@ -636,7 +636,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		shortestSg := new(SubGraph)
 		shortestSg.Params = params{
 			Alias:    "_path_",
-			shortest: true,
+			Shortest: true,
 		}
 		shortestSg.pathMeta = &pathMetadata{
 			weight: it.totalWeight,
@@ -653,7 +653,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			childUid := it.route[i+1].uid
 			node := new(SubGraph)
 			node.Params = params{
-				shortest: true,
+				Shortest: true,
 			}
 			if it.route[i+1].facet != nil {
 				// For consistent later processing.
@@ -671,7 +671,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 
 		node := new(SubGraph)
 		node.Params = params{
-			shortest: true,
+			Shortest: true,
 		}
 		uid := it.route[i].uid
 		node.SrcUIDs = &pb.List{Uids: []uint64{uid}}

@@ -2052,133 +2052,6 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
-### Type System
-
-Dgraph supports a type system that can be used to categorize nodes and query
-them based on their type. The type system is also used during expand queries.
-
-#### Type definition
-
-Types are defined using a GraphQL-like syntax. For example:
-
-```
-type Student {
-  name: string
-  dob: datetime
-  home_address: string
-  year: int
-  friends: [uid]
-}
-```
-
-Types are declared along with the schema using the Alter endpoint. In order to
-properly support the above type, a predicate for each of the attributes
-in the type is also needed, such as:
-
-```
-name: string @index(term) .
-dob: datetime .
-home_address: string .
-year: int .
-friends: [uid] .
-```
-
-If a `uid` predicate contains a reverse index, both the predicate and the reverse 
-predicate are part of any type definition which contain that predicate.
-Expand queries will follow that convention.
-
-Edges can be used in multiple types: for example, `name` might be used for both a person
-and a pet.  Sometimes, however, it's required to use a different predicate for each type 
-to represent a similar concept.  For example, if student names and book names required 
-different indexes, then the predicates must be different.
-
-```
-type Student {
-  student_name: string
-}
-
-type Textbook {
-  textbook_name: string
-}
-
-student_name: string @index(exact) .
-textbook_name: string @lang @index(fulltext) .
-```
-
-Types also support lists like `friends: [uid]` or `tags: [string]`.
-
-Altering the schema for a type that already exists, overwrites the existing definition.
-
-#### Setting the type of a node
-
-Scalar nodes cannot have types since they only have one attribute and its type
-is the type of the node. UID nodes can have a type. The type is set by setting
-the value of the `dgraph.type` predicate for that node. A node can have multiple
-types. Here's an example of how to set the types of a node:
-
-```
-{
-  set {
-    _:a <name> "Garfield" .
-    _:a <dgraph.type> "Pet" .
-    _:a <dgraph.type> "Animal" .
-  }
-}
-```
-
-`dgraph.type` is a reserved predicate and cannot be removed or modified.
-
-#### Using types during queries
-
-Types can be used as a top level function in the query language. For example:
-
-```
-{
-  q(func: type(Animal)) {
-    uid
-    name
-  }
-}
-```
-
-This query will only return nodes whose type is set to `Animal`.
-
-Types can also be used to filter results inside a query. For example:
-
-```
-{
-  q(func: has(parent)) {
-    uid
-    parent @filter(type(Person)) {
-      uid
-      name
-    }
-  }
-}
-```
-
-This query will return the nodes that have a parent predicate and only the 
-`parent`'s of type `Person`.
-
-#### Deleting a type
-
-Type definitions can be deleted using the Alter endpoint. All that is needed is
-to send an operation object with the field `DropOp` (or `drop_op` depending on
-the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
-to the type that is meant to be deleted.
-
-Below is an example deleting the type `Person` using the Go client:
-```go
-err := c.Alter(context.Background(), &api.Operation{
-                DropOp: api.Operation_TYPE,
-                DropValue: "Person"})
-```
-
-#### Expand queries and types
-
-Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.: `expand(_all_)`, 
-`expand(_reverse_)`, or `expand(_forward_)`) require that the nodes to expand have types. 
-
 ### Predicates i18n
 
 If your predicate is a URI or has language-specific characters, then enclose
@@ -2490,6 +2363,136 @@ schema(type: [Person, Animal]) {}
 
 Note that type queries do not contain anything between the curly braces. The
 output will be the entire definition of the requested types.
+
+## Type System
+
+Dgraph supports a type system that can be used to categorize nodes and query
+them based on their type. The type system is also used during expand queries.
+
+### Type definition
+
+Types are defined using a GraphQL-like syntax. For example:
+
+```
+type Student {
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
+  friends: [uid]
+}
+```
+
+Types are declared along with the schema using the Alter endpoint. In order to
+properly support the above type, a predicate for each of the attributes
+in the type is also needed, such as:
+
+```
+name: string @index(term) .
+dob: datetime .
+home_address: string .
+year: int .
+friends: [uid] .
+```
+
+If a `uid` predicate contains a reverse index, both the predicate and the
+reverse predicate are part of any type definition which contain that predicate.
+Expand queries will follow that convention.
+
+Edges can be used in multiple types: for example, `name` might be used for both
+a person and a pet. Sometimes, however, it's required to use a different
+predicate for each type to represent a similar concept. For example, if student
+names and book names required different indexes, then the predicates must be
+different.
+
+```
+type Student {
+  student_name: string
+}
+
+type Textbook {
+  textbook_name: string
+}
+
+student_name: string @index(exact) .
+textbook_name: string @lang @index(fulltext) .
+```
+
+Types also support lists like `friends: [uid]` or `tags: [string]`.
+
+Altering the schema for a type that already exists, overwrites the existing
+definition.
+
+### Setting the type of a node
+
+Scalar nodes cannot have types since they only have one attribute and its type
+is the type of the node. UID nodes can have a type. The type is set by setting
+the value of the `dgraph.type` predicate for that node. A node can have multiple
+types. Here's an example of how to set the types of a node:
+
+```
+{
+  set {
+    _:a <name> "Garfield" .
+    _:a <dgraph.type> "Pet" .
+    _:a <dgraph.type> "Animal" .
+  }
+}
+```
+
+`dgraph.type` is a reserved predicate and cannot be removed or modified.
+
+### Using types during queries
+
+Types can be used as a top level function in the query language. For example:
+
+```
+{
+  q(func: type(Animal)) {
+    uid
+    name
+  }
+}
+```
+
+This query will only return nodes whose type is set to `Animal`.
+
+Types can also be used to filter results inside a query. For example:
+
+```
+{
+  q(func: has(parent)) {
+    uid
+    parent @filter(type(Person)) {
+      uid
+      name
+    }
+  }
+}
+```
+
+This query will return the nodes that have a parent predicate and only the
+`parent`'s of type `Person`.
+
+### Deleting a type
+
+Type definitions can be deleted using the Alter endpoint. All that is needed is
+to send an operation object with the field `DropOp` (or `drop_op` depending on
+the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
+to the type that is meant to be deleted.
+
+Below is an example deleting the type `Person` using the Go client:
+```go
+err := c.Alter(context.Background(), &api.Operation{
+                DropOp: api.Operation_TYPE,
+                DropValue: "Person"})
+```
+
+### Expand queries and types
+
+Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
+`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
+nodes to expand have types.
 
 ## Facets : Edge attributes
 

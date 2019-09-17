@@ -857,6 +857,10 @@ L:
 				if err := parseRecurseArgs(it, gq); err != nil {
 					return nil, err
 				}
+			case "type":
+				if err := parseType(it, gq); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, item.Errorf("Unknown directive [%s]", item.Val)
 			}

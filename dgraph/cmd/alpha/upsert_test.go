@@ -185,6 +185,7 @@ func TestUpsertExampleJSON(t *testing.T) {
      }]
    }
 }`
+	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
