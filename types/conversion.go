@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"math/big"
 )
 
 // Convert converts the value to given scalar type.
@@ -68,12 +68,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
 			case BigFloatID:
-				var val big.Float
-				val.SetPrec(BigFloatPrecision)
-				if err := val.UnmarshalText(data); err != nil {
+				var b big.Float
+				b.SetPrec(BigFloatPrecision)
+				if err := b.UnmarshalText(data); err != nil {
 					return to, err
 				}
-				*res = val
+				*res = b
 			case BoolID:
 				if len(data) == 0 || data[0] == 0 {
 					*res = false
@@ -123,12 +123,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = val
 			case BigFloatID:
-				var val big.Float
-				val.SetPrec(BigFloatPrecision)
-				if err := val.UnmarshalText(data); err != nil {
+				var b big.Float
+				b.SetPrec(BigFloatPrecision)
+				if err := b.UnmarshalText(data); err != nil {
 					return to, err
 				}
-				*res = val
+				*res = b
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
@@ -177,9 +177,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res = float64(vc)
 			case BigFloatID:
-				var val big.Float
-				val.SetPrec(BigFloatPrecision).SetInt64(vc)
-				*res = val
+				var b big.Float
+				b.SetPrec(BigFloatPrecision).SetInt64(vc)
+				*res = b
 			case BoolID:
 				*res = vc != 0
 			case StringID, DefaultID:
@@ -204,11 +204,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res, _ = t.Float64()
 			case BinaryID:
-				val, err := t.MarshalText()
+				b, err := t.MarshalText()
 				if err != nil {
 					return to, errors.Errorf("Error while parsing %s", err.Error())
 				}
-				*res = val
+				*res = b
 			case IntID:
 				*res, _ = t.Int64()
 			case BoolID:
