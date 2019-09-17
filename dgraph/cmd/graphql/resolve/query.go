@@ -20,10 +20,12 @@ import (
 	"context"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // queryResolver can resolve a single GraphQL query field
@@ -38,6 +40,10 @@ type queryResolver struct {
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
+
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveQuery")
+	defer stop()
 
 	if qr.query.QueryType() == schema.SchemaQuery {
 		resp, err := schema.Introspect(qr.operation, qr.query, qr.schema)

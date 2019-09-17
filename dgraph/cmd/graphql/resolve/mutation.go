@@ -23,7 +23,9 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/gqlerror"
+	otrace "go.opencensus.io/trace"
 )
 
 // Mutations come in like this with variables:
@@ -142,6 +144,13 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveMutation")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
+			mr.mutation.MutationType())
+	}
 
 	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
@@ -176,6 +185,14 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveDeleteMutation")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
+			mr.mutation.MutationType())
+	}
+
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
