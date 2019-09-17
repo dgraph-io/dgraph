@@ -19,10 +19,10 @@ package graphql
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,18 +35,19 @@ import (
 // These really need to run as one test because the created uid from the Country
 // needs to flow to the author, etc.
 func TestAddMutation(t *testing.T) {
-	var countryUID, authorUID string
+	var country country
+	var author author
 
 	// Add single object :
 	// Country is a single object not linked to anything else.
 	// So only need to check that it gets added as expected.
 	t.Run("add Country", func(t *testing.T) {
-		countryUID = addCountry(t)
+		country = addCountry(t)
 
-		t.Run("get Country", func(t *testing.T) {
+		t.Run("check Country", func(t *testing.T) {
 			// addCountry() asserts that the mutation response was as expected.
 			// Let's also check that what's in the DB is what we expect.
-			getCountry(t, countryUID)
+			requireCountry(t, country.ID, country)
 		})
 	})
 
@@ -54,10 +55,10 @@ func TestAddMutation(t *testing.T) {
 	// An Author links to an existing country.  So need to check that the author
 	// was added and that it has the link to the right Country.
 	t.Run("add Author", func(t *testing.T) {
-		authorUID = addAuthor(t, countryUID)
+		author = addAuthor(t, country.ID)
 
-		t.Run("get Author", func(t *testing.T) {
-			getAuthor(t, authorUID, countryUID)
+		t.Run("check Author", func(t *testing.T) {
+			requireAuthor(t, author.ID, author)
 		})
 	})
 
@@ -66,15 +67,15 @@ func TestAddMutation(t *testing.T) {
 	// So need to check that the Post was added to the right Author
 	// AND that the Author's posts now includes the new post.
 	t.Run("add Post", func(t *testing.T) {
-		postUID := addPost(t, authorUID)
+		post := addPost(t, author.ID, country.ID)
 
-		t.Run("get Post", func(t *testing.T) {
-			getPost(t, postUID, authorUID, countryUID)
+		t.Run("check Post", func(t *testing.T) {
+			requirePost(t, post.PostID, post)
 		})
 	})
 }
 
-func addCountry(t *testing.T) string {
+func addCountry(t *testing.T) country {
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($name: String!) {
 			addCountry(input: { name: $name }) {
@@ -87,47 +88,60 @@ func addCountry(t *testing.T) string {
 		Variables: map[string]interface{}{"name": "Testland"},
 	}
 	addCountryExpected := `
-		{ "data": { "addCountry": { "country": { "id": "_UID_", "name": "Testland" } } } }`
+		{ "addCountry": { "country": { "id": "_UID_", "name": "Testland" } } }`
 
-	resp, err := addCountryParams.ExecuteAsPost(graphqlURL)
+	gqlResponse := addCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddCountry struct {
+			Country country
+		}
+	}
+	err := json.Unmarshal([]byte(addCountryExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	replacedJSON, err := test.ReplaceJSON(resp,
-		map[string]interface{}{"id": "_UID_", "requestID": "requestID"})
-	require.JSONEq(t, addCountryExpected, string(replacedJSON))
+	requireUID(t, result.AddCountry.Country.ID)
 
-	// Because the JSONEq ^^ passed we know the structure of resp an can just grab
-	// out the created ID.
-	var respJSON map[string]interface{}
-	err = json.Unmarshal(resp, &respJSON)
-	require.NoError(t, err)
+	// Always ignore the ID of the object that was just created.  That ID is
+	// minted by Dgraph.
+	opt := cmpopts.IgnoreFields(country{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	country :=
-		respJSON["data"].(map[string]interface{})["addCountry"].(map[string]interface{})["country"]
-	return country.(map[string]interface{})["id"].(string)
+	return result.AddCountry.Country
 }
 
-func getCountry(t *testing.T, uid string) {
-	getCountryParams := &GraphQLParams{
-		Query: `query getCountry($createdID: ID!) {
-			getCountry(id: $createdID) {
+// requireCountry enforces that node with ID uid in the GraphQL store is of type
+// Country and is value expectedCountry.
+func requireCountry(t *testing.T, uid string, expectedCountry country) {
+	params := &GraphQLParams{
+		Query: `query getCountry($id: ID!) {
+			getCountry(id: $id) {
 				id
 				name
 			}
 		}`,
-		Variables: map[string]interface{}{"createdID": uid},
+		Variables: map[string]interface{}{"id": uid},
 	}
-	getCountryExpected := `{ "data": { "getCountry": { "id": "_UID_", "name": "Testland" } } }`
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 
-	resp, err := getCountryParams.ExecuteAsPost(graphqlURL)
+	var result struct {
+		GetCountry country
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	require.JSONEq(t,
-		strings.ReplaceAll(getCountryExpected, "_UID_", uid),
-		string(resp))
+	if diff := cmp.Diff(expectedCountry, result.GetCountry); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
-func addAuthor(t *testing.T, countryUID string) string {
+func addAuthor(t *testing.T, countryUID string) author {
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AuthorInput!) {
 			addAuthor(input: $author) {
@@ -137,7 +151,7 @@ func addAuthor(t *testing.T, countryUID string) string {
 					dob
 					reputation
 					country {
-						countryID : id
+						id
 				  		name
 					}
 			  	}
@@ -151,41 +165,46 @@ func addAuthor(t *testing.T, countryUID string) string {
 		}},
 	}
 
-	addAuthorExpected := fmt.Sprintf(`{ "data": { "addAuthor": { 
-		"author": { 
-			"id": "_UID_", 
-			"name": "Test Author", 
+	addAuthorExpected := fmt.Sprintf(`{ "addAuthor": {
+		"author": {
+			"id": "_UID_",
+			"name": "Test Author",
 			"dob": "2010-01-01T05:04:33Z",
 			"reputation": 7.75,
 			"country": {
-				"countryID": "%s",
+				"id": "%s",
 				"name": "Testland"
 			}
-		} 
-	} } }`, countryUID)
+		}
+	} }`, countryUID)
 
-	resp, err := addAuthorParams.ExecuteAsPost(graphqlURL)
+	gqlResponse := addAuthorParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddAuthor struct {
+			Author author
+		}
+	}
+	err := json.Unmarshal([]byte(addAuthorExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	replacedJSON, err := test.ReplaceJSON(resp,
-		map[string]interface{}{"id": "_UID_", "requestID": "requestID"})
-	require.JSONEq(t, addAuthorExpected, string(replacedJSON))
+	requireUID(t, result.AddAuthor.Author.ID)
 
-	// Because the JSONEq ^^ passed we know the structure of resp an can just grab
-	// out the created ID.
-	var respJSON map[string]interface{}
-	err = json.Unmarshal(resp, &respJSON)
-	require.NoError(t, err)
+	opt := cmpopts.IgnoreFields(author{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	auth :=
-		respJSON["data"].(map[string]interface{})["addAuthor"].(map[string]interface{})["author"]
-	return auth.(map[string]interface{})["id"].(string)
+	return result.AddAuthor.Author
 }
 
-func getAuthor(t *testing.T, authorUID, countryUID string) {
-	getAuthorParams := &GraphQLParams{
-		Query: `query getAuthor($createdID: ID!) {
-			getAuthor(id: $createdID) {
+func requireAuthor(t *testing.T, authorID string, expectedAuthor author) {
+	params := &GraphQLParams{
+		Query: `query getAuthor($id: ID!) {
+			getAuthor(id: $id) {
 				id
 				name
 				dob
@@ -196,28 +215,23 @@ func getAuthor(t *testing.T, authorUID, countryUID string) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"createdID": authorUID},
+		Variables: map[string]interface{}{"id": authorID},
 	}
-	getAuthorExpected := fmt.Sprintf(`{ "data": {
-		"getAuthor": { 
-			"id": "%s", 
-			"name": "Test Author", 
-			"dob": "2010-01-01T05:04:33Z",
-			"reputation": 7.75,
-			"country": {
-				"id": "%s",
-				"name": "Testland"
-			}
-		} 
-	} }`, authorUID, countryUID)
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 
-	resp, err := getAuthorParams.ExecuteAsPost(graphqlURL)
+	var result struct {
+		GetAuthor author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	require.JSONEq(t, getAuthorExpected, string(resp))
+	if diff := cmp.Diff(expectedAuthor, result.GetAuthor); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
-func addPost(t *testing.T, authorUID string) string {
+func addPost(t *testing.T, authorID, countryID string) post {
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: PostInput!) {
 			addPost(input: $post) {
@@ -230,6 +244,10 @@ func addPost(t *testing.T, authorUID string) string {
 				author {
 					id
 					name
+					country {
+						id
+						name
+					}
 				}
 			  }
 			}
@@ -239,45 +257,55 @@ func addPost(t *testing.T, authorUID string) string {
 			"text":        "This post is just a test.",
 			"isPublished": true,
 			"tags":        []string{"example", "test"},
-			"author":      map[string]interface{}{"id": authorUID},
+			"author":      map[string]interface{}{"id": authorID},
 		}},
 	}
 
-	addPostExpected := fmt.Sprintf(`{ "data": { "addPost": { 
-		"post": { 
-			"postID": "_UID_", 
-			"title": "Test Post", 
+	addPostExpected := fmt.Sprintf(`{ "addPost": {
+		"post": {
+			"postID": "_UID_",
+			"title": "Test Post",
 			"text": "This post is just a test.",
 			"isPublished": true,
 			"tags": ["example", "test"],
 			"author": {
 				"id": "%s",
-				"name": "Test Author"
+				"name": "Test Author",
+				"country": {
+					"id": "%s",
+					"name": "Testland"
+				}
 			}
-		} 
-	} } }`, authorUID)
+		}
+	} }`, authorID, countryID)
 
-	resp, err := addPostParams.ExecuteAsPost(graphqlURL)
+	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddPost struct {
+			Post post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	replacedJSON, err := test.ReplaceJSON(resp,
-		map[string]interface{}{"postID": "_UID_", "requestID": "requestID"})
-	require.JSONEq(t, addPostExpected, string(replacedJSON))
+	requireUID(t, result.AddPost.Post.PostID)
 
-	// Because the JSONEq ^^ passed we know the structure of resp an can just grab
-	// out the created ID.
-	var respJSON map[string]interface{}
-	err = json.Unmarshal(resp, &respJSON)
-	require.NoError(t, err)
+	opt := cmpopts.IgnoreFields(post{}, "PostID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	post := respJSON["data"].(map[string]interface{})["addPost"].(map[string]interface{})["post"]
-	return post.(map[string]interface{})["postID"].(string)
+	return result.AddPost.Post
 }
 
-func getPost(t *testing.T, postUID, authorUID, countryUID string) {
-	getPostParams := &GraphQLParams{
-		Query: `query getPost($createdID: ID!)  {
-			getPost(id: $createdID) {
+func requirePost(t *testing.T, postID string, expectedPost post) {
+	params := &GraphQLParams{
+		Query: `query getPost($id: ID!)  {
+			getPost(id: $id) {
 				postID
 				title
 				text
@@ -293,28 +321,19 @@ func getPost(t *testing.T, postUID, authorUID, countryUID string) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"createdID": postUID},
+		Variables: map[string]interface{}{"id": postID},
 	}
-	getPostExpected := fmt.Sprintf(`{ "data": { 
-		"getPost": { 
-			"postID": "%s", 
-			"title": "Test Post", 
-			"text": "This post is just a test.",
-			"isPublished": true,
-			"tags": ["example", "test"],
-			"author": {
-				"id": "%s",
-				"name": "Test Author",
-				"country": {
-					"id": "%s",
-					"name": "Testland"
-				}
-			}
-		} 
-	} }`, postUID, authorUID, countryUID)
 
-	resp, err := getPostParams.ExecuteAsPost(graphqlURL)
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		GetPost post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	require.JSONEq(t, getPostExpected, string(resp))
+	if diff := cmp.Diff(expectedPost, result.GetPost); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }

@@ -21,9 +21,14 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -70,15 +75,47 @@ type GraphQLResponse struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-// CreateGQLPost builds a HTTP POST request from the GraphQL input structure
-// and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(url string) ([]byte, error) {
-	req, err := params.createGQLPost(url)
-	if err != nil {
-		return nil, err
-	}
+type country struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
 
-	return runGQLRequest(req)
+type author struct {
+	ID         string
+	Name       string
+	Dob        time.Time
+	Reputation float32
+	Country    country
+	Posts      []post
+}
+
+type post struct {
+	PostID      string
+	Title       string
+	Text        string
+	Tags        []string
+	NulLikes    int
+	IsPublished bool
+	PostType    string
+	Author      author
+}
+
+// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
+// and executes the request to url.
+func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLPost(url)
+	require.NoError(t, err)
+
+	res, err := runGQLRequest(req)
+	require.NoError(t, err)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(res, &result)
+	require.NoError(t, err)
+
+	requireContainsRequestID(t, result)
+
+	return result
 }
 
 // ExecuteAsGet builds a HTTP GET request from the GraphQL input structure
@@ -122,4 +159,20 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+func requireContainsRequestID(t *testing.T, resp *GraphQLResponse) {
+	v, ok := resp.Extensions["requestID"]
+	require.True(t, ok, "GraphQL response didn't contain a request ID")
+
+	str, ok := v.(string)
+	require.True(t, ok, "GraphQL requestID is not a string")
+
+	_, err := uuid.Parse(str)
+	require.NoError(t, err, "GraphQL requestID is not a UUID")
+}
+
+func requireUID(t *testing.T, uid string) {
+	_, err := strconv.ParseUint(uid, 0, 64)
+	require.NoError(t, err)
 }
