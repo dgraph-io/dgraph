@@ -3034,7 +3034,7 @@ func TestParseGroupbyWithAliasForError(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
-	require.Contains(t, err.Error(), "Can't use first as alias.")
+	require.Contains(t, err.Error(), "Can't use keyword first as alias in groupby")
 }
 
 func TestParseGroupbyError(t *testing.T) {
