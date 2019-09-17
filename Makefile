@@ -17,7 +17,7 @@ $(GOLANGCI):
 ## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint` on project files.
 .PHONY: lint
 lint: $(GOLANGCI)
-	golangci-lint run ./...
+	golangci-lint run ./... -c .golangci.yml
 
 ## test: Runs `go test` on project test files.
 test:
@@ -38,6 +38,15 @@ build:
 start:
 	@echo "  >  \033[32mStarting server...\033[0m "
 	./bin/gossamer
+
+$(ADDLICENSE):
+	go get -u github.com/google/addlicense
+
+## license: Adds license header to missing files, go gets addLicense if missing. Runs `addlicense -c gossamer -f ./copyright.txt -y 2019 .` on project files.
+.PHONY: license
+license: $(ADDLICENSE)
+	@echo "  >  \033[32mAdding license headers...\033[0m "
+	addlicense -c gossamer -f ./copyright.txt -y 2019 .
 
 docker:
 	@echo "  >  \033[32mBuilding Docker Container...\033[0m "
