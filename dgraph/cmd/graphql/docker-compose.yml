@@ -57,7 +57,6 @@ services:
       cluster: test
     command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.graphql --alpha alpha1:9180 -v3
 
- 
   graphql:
     image: dgraph/dgraph:latest
     container_name: graphql
@@ -76,6 +75,7 @@ services:
       cluster: test
       service: graphql
     command: /gobin/dgraph graphql --alpha alpha1:9180 --jaeger.collector=http://jaeger:14268 --v 3
+    
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
