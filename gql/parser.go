@@ -857,6 +857,10 @@ L:
 				if err := parseRecurseArgs(it, gq); err != nil {
 					return nil, err
 				}
+			case "type":
+				if err := parseType(it, gq); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, item.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1978,6 +1982,9 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if peekIt[0].Typ == itemColon {
 				if alias != "" {
 					return item.Errorf("Expected predicate after %s:", alias)
+				}
+				if validKey(val) {
+					return item.Errorf("Can't use keyword %s as alias in groupby", val)
 				}
 				alias = val
 				it.Next() // Consume the itemColon

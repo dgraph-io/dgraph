@@ -735,6 +735,12 @@
 			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
+			"checksumSHA1": "4gKrTOaoNvbAgDCVfSLd6J77oPw=",
+			"path": "github.com/golang/snappy",
+			"revision": "ff6b7dc882cf4cfba7ee0b9f7dcc1ac096c554aa",
+			"revisionTime": "2019-09-04T06:34:54Z"
+		},
+		{
 			"checksumSHA1": "L3HoHVqp2EaBSOqBxB7l0PTyu7g=",
 			"path": "github.com/golang/snappy",
 			"revision": "2a8bb927dd31d8daada140a5d09578521ce5c36a",
@@ -859,6 +865,12 @@
 			"path": "github.com/hashicorp/hcl/json/token",
 			"revision": "23c074d0eceb2b8a5bfdbb271ab780cde70f05a8",
 			"revisionTime": "2017-10-17T18:19:29Z"
+		},
+		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
 		},
 		{
 			"checksumSHA1": "fPE6hs5I61ZEXc54kkSoFaafqOk=",

@@ -241,8 +241,8 @@ func (m *mapper) uid(xid string) uint64 {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid := m.xids.AssignUid(xid)
-	if !m.opt.StoreXids {
+	uid, isNew := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {

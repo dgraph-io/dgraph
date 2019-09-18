@@ -136,8 +136,8 @@ func lexText(l *lex.Lexer) lex.StateFn {
 				l.Depth = atSubject
 			}
 
-		// This should happen when there is either UID or Val funciton
-		// hence, we are just checking for u or v
+		// This should happen when there is either UID or Val function.
+		// Hence, we are just checking for u or v
 		case r == 'u' || r == 'v':
 			if l.Depth != atSubject && l.Depth != atObject {
 				return l.Errorf("Unexpected char '%c'", r)
