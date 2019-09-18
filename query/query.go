@@ -869,7 +869,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		sg.Params.Langs = nil
 	}
 	// count is to limit how many results we want.
-	first := CalculateFirstN(sg)
+	first := calculateFirstN(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -892,8 +892,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
-// calculateCountResult returns the count of result we need to proceed query further down.
-func CalculateFirstN(sg *SubGraph) int {
+// calculateFirstN returns the count of result we need to proceed query further down.
+func calculateFirstN(sg *SubGraph) int {
 	// by default count is zero. (zero will retrive all the results)
 	count := math.MaxInt8
 	// In order to limit we have to make sure that the this level met the following conditions
