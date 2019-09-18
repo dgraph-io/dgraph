@@ -351,61 +351,12 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 
 func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
-	var list bool
 
 	it.Next()
-	if it.Item().Typ != itemColon {
-		return nil, it.Item().Errorf("Missing colon in type declaration. Got %v", it.Item().Val)
-	}
-
-	it.Next()
-	if it.Item().Typ == itemLeftSquare {
-		list = true
-		it.Next()
-	}
-
-	if it.Item().Typ != itemText {
-		return nil, it.Item().Errorf("Missing field type in type declaration. Got %v",
-			it.Item().Val)
-	}
-	field.ValueType = getType(it.Item().Val)
-	if field.ValueType == pb.Posting_OBJECT {
-		field.ObjectTypeName = it.Item().Val
-	}
-
-	it.Next()
-	if it.Item().Typ == itemExclamationMark {
-		field.NonNullable = true
-		it.Next()
-	}
-
-	if list {
-		if it.Item().Typ != itemRightSquare {
-			return nil, it.Item().Errorf("Expected matching square bracket. Got %v", it.Item().Val)
-		}
-		field.List = true
-		it.Next()
-
-		if it.Item().Typ == itemExclamationMark {
-			field.NonNullableList = true
-			it.Next()
-		}
-	}
-
 	if it.Item().Typ != itemNewLine {
 		return nil, it.Item().Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
 	}
-
 	return field, nil
-}
-
-func getType(typeName string) pb.Posting_ValType {
-	typ, ok := types.TypeForName(strings.ToLower(typeName))
-	if ok {
-		return pb.Posting_ValType(typ)
-	}
-
-	return pb.Posting_OBJECT
 }
 
 // ParsedSchema represents the parsed schema and type updates.

@@ -834,8 +834,8 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
 		type Node {
-			to: uid
-			name: string
+			to
+			name
 		}
 `
 
@@ -1566,7 +1566,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
 			type Person {
-				name: string
+				name
 			}
 		`,
 	}))
@@ -1576,7 +1576,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+		"fields":[{"name":"name", "type":"default"}]}]}`, string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
