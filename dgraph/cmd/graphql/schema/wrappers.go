@@ -78,6 +78,8 @@ type Field interface {
 	ResponseName() string
 	ArgValue(name string) interface{}
 	IDArgValue() (uint64, error)
+	Skip() bool
+	Include() bool
 	Type() Type
 	SelectionSet() []Field
 	Location() *Location
@@ -230,6 +232,22 @@ func (f *field) ArgValue(name string) interface{} {
 	return f.field.ArgumentMap(f.op.vars)[name]
 }
 
+func (f *field) Skip() bool {
+	dir := f.field.Directives.ForName("skip")
+	if dir == nil {
+		return false
+	}
+	return dir.ArgumentMap(f.op.vars)["if"].(bool)
+}
+
+func (f *field) Include() bool {
+	dir := f.field.Directives.ForName("include")
+	if dir == nil {
+		return true
+	}
+	return dir.ArgumentMap(f.op.vars)["if"].(bool)
+}
+
 func (f *field) IDArgValue() (uint64, error) {
 	idArg := f.ArgValue(IDArgName)
 	if idArg == nil {
@@ -284,6 +302,14 @@ func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
 
+func (q *query) Skip() bool {
+	return false
+}
+
+func (q *query) Include() bool {
+	return true
+}
+
 func (q *query) IDArgValue() (uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -327,6 +353,14 @@ func (m *mutation) Alias() string {
 
 func (m *mutation) ArgValue(name string) interface{} {
 	return (*field)(m).ArgValue(name)
+}
+
+func (m *mutation) Skip() bool {
+	return false
+}
+
+func (m *mutation) Include() bool {
+	return true
 }
 
 func (m *mutation) Type() Type {

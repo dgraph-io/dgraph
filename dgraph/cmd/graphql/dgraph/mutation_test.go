@@ -109,7 +109,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 				gqlMutationStr := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
 				op, err := gqlSchema.Operation(
 					&schema.Request{
-						Query: gqlMutationStr,
+						Query:     gqlMutationStr,
+						Variables: tcase.Variables,
 					})
 				require.NoError(t, err)
 				gqlMutation := test.GetMutation(t, op)

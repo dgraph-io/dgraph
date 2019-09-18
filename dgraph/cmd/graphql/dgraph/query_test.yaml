@@ -27,7 +27,7 @@
         name : Author.name
       }
     }
-    
+
 -
   name: "ID query with field alias"
   gqlquery: |
@@ -547,5 +547,76 @@
     query {
       queryCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
         name : Country.name
+      }
+    }
+
+-
+  name: "Skip directive"
+  variables:
+    skipTrue: true
+    skipFalse: false
+  gqlquery: |
+    query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
+      getAuthor(id: "0x1") {
+        name @skip(if: $skipFalse)
+        posts @skip(if: $skipTrue) {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Include directive"
+  variables:
+    includeTrue: true
+    includeFalse: false
+  gqlquery: |
+    query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
+      queryAuthor {
+        name @include(if: $includeTrue)
+        posts(filter: { title: { anyofterms: "GraphQL" } }) @include(if: $includeFalse) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Include only fields for which skip is !false or include is true"
+  variables:
+    includeFalse: false
+    includeTrue: true
+    skipFalse: false
+    skipTrue: true
+  gqlquery: |
+    query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
+      $skipFalse: Boolean!) {
+      queryAuthor {
+        dob @include(if: $includeFalse) @skip(if: $skipFalse)
+        reputation @include(if: $includeFalse) @skip(if: $skipTrue)
+        name @include(if: $includeTrue) @skip(if: $skipFalse)
+        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) @include(if: $includeTrue)
+          @skip(if: $skipTrue) {
+          title
+          tags
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
       }
     }
