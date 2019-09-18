@@ -581,6 +581,7 @@ func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
 }
 
 // convertJSONError adds line and character information to the JSON error.
+// Idea taken from: https://bit.ly/2moFIVS
 func convertJSONError(input string, err error) error {
 	if err == nil {
 		return nil
