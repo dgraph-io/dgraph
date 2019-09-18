@@ -179,11 +179,12 @@ func (t BigFloatTokenizer) Name() string { return "bigfloat" }
 func (t BigFloatTokenizer) Type() string { return "bigfloat" }
 func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
 	value := v.(big.Float)
-	return []string{value.Text('f', types.BigFloatPrecision)}, nil
+	roundOff, _ := value.Int64()
+	return []string{encodeInt(roundOff)}, nil
 }
 func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
 func (t BigFloatTokenizer) IsSortable() bool { return true }
-func (t BigFloatTokenizer) IsLossy() bool    { return false }
+func (t BigFloatTokenizer) IsLossy() bool    { return true }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

@@ -224,7 +224,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			default:
 				return to, cantConvert(fromID, toID)
 			}
-
 		}
 	case FloatID:
 		{
@@ -562,7 +561,7 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 			return def, errors.Errorf("Expected value of type []byte. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_BytesVal{BytesVal: v}}, nil
-	// Geo, datetime and BigFloat are stored in binary format in the N-Quad, so lets
+	// Geo, datetime, and BigFloat are stored in binary format in the N-Quad, so lets
 	// convert them here.
 	case BigFloatID:
 		b, err := toBinary(id, value)
