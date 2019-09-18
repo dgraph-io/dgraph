@@ -551,38 +551,15 @@
     }
 
 -
-  name: "Skip name"
+  name: "Skip directive"
   variables:
-    shouldSkip: true
+    skipTrue: true
+    skipFalse: false
   gqlquery: |
-    query ($shouldSkip: Boolean!) {
+    query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
       getAuthor(id: "0x1") {
-        name @skip(if: $shouldSkip)
-        posts {
-          title
-          text
-        }
-      }
-    }
-  dgquery: |-
-    query {
-      getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        posts : Author.posts {
-          title : Post.title
-          text : Post.text
-        }
-      }
-    }
-
--
-  name: "Skip posts"
-  variables:
-    shouldSkip: true
-  gqlquery: |
-    query ($shouldSkip: Boolean!) {
-      getAuthor(id: "0x1") {
-        name
-        posts @skip(if: $shouldSkip) {
+        name @skip(if: $skipFalse)
+        posts @skip(if: $skipTrue) {
           title
           text
         }
@@ -596,14 +573,15 @@
     }
 
 -
-  name: "Don't include field with filter"
+  name: "Include directive"
   variables:
-    shouldInclude: false
+    includeTrue: true
+    includeFalse: false
   gqlquery: |
-    query ($shouldInclude: Boolean!) {
+    query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
       queryAuthor {
-        name
-        posts(filter: { title: { anyofterms: "GraphQL" } }) @include(if: $shouldInclude) {
+        name @include(if: $includeTrue)
+        posts(filter: { title: { anyofterms: "GraphQL" } }) @include(if: $includeFalse) {
           title
         }
       }
