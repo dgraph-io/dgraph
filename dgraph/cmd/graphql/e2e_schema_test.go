@@ -155,7 +155,7 @@ const (
 
 func TestDgraphSchema(t *testing.T) {
 
-	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	d, err := grpc.Dial(dgraphAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
