@@ -54,8 +54,8 @@ const (
 	StringID = TypeID(pb.Posting_STRING)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
-	// BigFloatID represents the arbitrary precision type
-	BigFloatID = TypeID(pb.Posting_BIGINT)
+	// BigFloatID represents the arbitrary precision type.
+	BigFloatID = TypeID(pb.Posting_BIGFLOAT)
 )
 
 var typeNameMap = map[string]TypeID{

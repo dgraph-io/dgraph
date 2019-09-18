@@ -667,7 +667,6 @@ func TestBigFloatTypeTokenizer(t *testing.T) {
 	`
 	addTriplesToCluster(triples)
 
-	// Verify fulltext index works as expected.
 	q1 := `
 	{
 		me(func: eq(amount, "10.0000000000000000000124")) {
@@ -689,7 +688,6 @@ func TestBigFloatCeil(t *testing.T) {
 	`
 	addTriplesToCluster(triples)
 
-	// Verify fulltext index works as expected.
 	q1 := `
 	{
 		me(func: eq(amount, "2.1")) {
@@ -715,7 +713,6 @@ func TestBigFloatFloor(t *testing.T) {
 	`
 	addTriplesToCluster(triples)
 
-	// Verify fulltext index works as expected.
 	q1 := `
 	{
 		me(func: eq(amount, "2.1")) {
@@ -741,7 +738,6 @@ func TestBigFloatSqrt(t *testing.T) {
 	`
 	addTriplesToCluster(triples)
 
-	// Verify fulltext index works as expected.
 	q1 := `
 	{
 		me(func: eq(amount, "2")) {
@@ -755,5 +751,183 @@ func TestBigFloatSqrt(t *testing.T) {
 	sqrt2 := *new(big.Float).SetPrec(200).Sqrt(&float2)
 	expectedRes := fmt.Sprintf(`{"data": {"me":[{"uid":"0x666", "amount":%s, "amt":%s}]}}`,
 		float2.Text('f', 200), sqrt2.Text('f', 200))
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatSort(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount), orderasc: amount) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x777"},{"uid":"0x888"}` +
+		`,{"uid":"0x124"},{"uid":"0x666"},{"uid":"0x123"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatMax(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			max_amt : max(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"max_amt":123123.123123123132`)
+}
+
+func TestBigFloatSum(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			sum_amt : sum(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"sum_amt":123520.2462462464320000000001`)
+}
+
+func TestBigFloatAvg(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) {
+			uid
+			amount as amount
+		}
+		q() {
+			avg_amt : avg(val(amount))
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	require.Contains(t, js, `"avg_amt":24704.04924924928640000000002`)
+}
+
+func TestBigFloatLt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(lt(amount, 100)){
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x124"},{"uid":"0x777"},{"uid":"0x888"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatGt(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(ge(amount, 100)){
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x123"},{"uid":"0x666"}]}}`
+	require.JSONEq(t, js, expectedRes)
+}
+
+func TestBigFloatConnectingFilters(t *testing.T) {
+	s1 := testSchema + "\n amount: bigfloat @index(bigfloat) .\n"
+
+	setSchema(s1)
+	triples := `
+		<0x666> <amount> "100"  .
+		<0x124> <amount> "99.1231231233" .
+		<0x777> <amount> "99" .
+		<0x888> <amount> "99.0000000000000000000001" .
+		<0x123> <amount> "123123.123123123132" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		me(func: has(amount)) @filter(gt(amount, 99.1231231233) AND lt(amount, 1000)) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, q1)
+	expectedRes := `{"data":{"me":[{"uid":"0x666"}]}}`
 	require.JSONEq(t, js, expectedRes)
 }
