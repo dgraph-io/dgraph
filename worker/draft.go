@@ -518,6 +518,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
+			txn.ClearListCache()
 			return txn.CommitToDisk(writer, commit)
 		})
 

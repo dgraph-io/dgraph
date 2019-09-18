@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -127,6 +128,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+func (txn *Txn) ClearListCache() {
+	for key := range txn.cache.deltas {
+		listCache.Del(key)
+	}
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
@@ -206,6 +213,26 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
+	if listCache != nil {
+		cachedVal, ok := listCache.Get(key)
+		if ok {
+			l := cachedVal.(*List)
+
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := new(List)
+			lCopy.minTs = l.minTs
+			lCopy.maxTs = l.maxTs
+			lCopy.key = key
+			lCopy.plist = l.plist
+			lCopy.mutationMap = make(map[uint64]*pb.PostingList)
+			for ts, pl := range l.mutationMap {
+				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+			}
+
+			return lCopy, nil
+		}
+	}
+
 	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
 	// issues during txn.Get. Therefore, always iterate.
 	iterOpts := badger.DefaultIteratorOptions
@@ -214,5 +241,14 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+
+	l, err := ReadPostingList(key, itr)
+	if listCache != nil {
+		listCache.Set(key, l, cacheCost(l))
+	}
+	return l, err
+}
+
+func cacheCost(list *List) int64 {
+	return 0
 }
