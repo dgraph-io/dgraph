@@ -1815,14 +1815,14 @@ the following definitions:
 
 ```
 type Animal {
-    name: string
-    species: uid
-    dob: datetime
+    name
+    species
+    dob
 }
 
 type Pet {
-    owner: uid
-    veterinarian: uid
+    owner
+    veterinarian
 }
 ```
 
@@ -2375,11 +2375,11 @@ Types are defined using a GraphQL-like syntax. For example:
 
 ```
 type Student {
-  name: string
-  dob: datetime
-  home_address: string
-  year: int
-  friends: [uid]
+  name
+  dob
+  home_address
+  year
+  friends
 }
 ```
 
@@ -2407,18 +2407,16 @@ different.
 
 ```
 type Student {
-  student_name: string
+  student_name
 }
 
 type Textbook {
-  textbook_name: string
+  textbook_name
 }
 
 student_name: string @index(exact) .
 textbook_name: string @lang @index(fulltext) .
 ```
-
-Types also support lists like `friends: [uid]` or `tags: [string]`.
 
 Altering the schema for a type that already exists, overwrites the existing
 definition.
