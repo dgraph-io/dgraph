@@ -89,7 +89,7 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
-		"map_output",
+		mapShardDir,
 		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map.gz", fileNum),
 	)
