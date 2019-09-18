@@ -272,7 +272,7 @@ ratel:
     successThreshold: 1
 
   readinessProbe:
-    enabled: flase
+    enabled: false
     port: 8000
     path: /
     initialDelaySeconds: 5
