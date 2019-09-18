@@ -333,31 +333,6 @@ func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	builder.WriteString("\t")
 	builder.WriteString(update.Predicate)
-	builder.WriteString(": ")
-
-	if update.List {
-		builder.WriteString("[")
-	}
-
-	if update.ValueType == pb.Posting_OBJECT {
-		builder.WriteString(update.ObjectTypeName)
-	} else {
-		tid := types.TypeID(update.ValueType)
-		builder.WriteString(tid.Name())
-	}
-
-	if update.NonNullable {
-		builder.WriteString("!")
-	}
-
-	if update.List {
-		builder.WriteString("]")
-	}
-
-	if update.NonNullableList {
-		builder.WriteString("!")
-	}
-
 	builder.WriteString("\n")
 	return builder.String()
 }
