@@ -771,6 +771,12 @@
 			"revisionTime": "2019-08-05T20:51:40Z"
 		},
 		{
+			"checksumSHA1": "8e4FCBYtCft1PtDbYZPO7lgXfnI=",
+			"path": "github.com/google/go-cmp/cmp/cmpopts",
+			"revision": "b1c9c4891a6525d98001fea424c8926c6d77bb56",
+			"revisionTime": "2019-08-29T22:54:27Z"
+		},
+		{
 			"checksumSHA1": "FUnTgtE5i3f8asIvicGkJSFlrts=",
 			"path": "github.com/google/go-cmp/cmp/internal/diff",
 			"revision": "2d0692c2e9617365a95b295612ac0d4415ba4627",

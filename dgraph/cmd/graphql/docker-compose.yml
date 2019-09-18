@@ -26,17 +26,13 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
     ports:
       - 8180:8180
       - 9180:9180
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --jaeger.collector=http://jaeger:14268
 
   graphql-init:
     image: dgraph/dgraph:latest
@@ -56,7 +52,7 @@ services:
     restart: on-failure
     labels:
       cluster: test
-    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 -v3
+    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.graphql --alpha alpha1:9180 -v3
 
   graphql:
     image: dgraph/dgraph:latest
@@ -76,6 +72,7 @@ services:
       cluster: test
       service: graphql
     command: /gobin/dgraph graphql --alpha alpha1:9180 --jaeger.collector=http://jaeger:14268 --v 3
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
