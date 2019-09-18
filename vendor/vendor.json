@@ -819,6 +819,12 @@
 			"revisionTime": "2017-10-17T18:19:29Z"
 		},
 		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
+		},
+		{
 			"checksumSHA1": "fPE6hs5I61ZEXc54kkSoFaafqOk=",
 			"path": "github.com/jcmturner/gofork/encoding/asn1",
 			"revision": "dc7c13fece037a4a36e2b3c69db4991498d30692",
