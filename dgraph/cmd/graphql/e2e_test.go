@@ -33,7 +33,7 @@ import (
 
 const (
 	graphqlURL = "http://localhost:9000/graphql"
-	dgraphAddr = "http://localhost:8180"
+	alphagRPC  = "localhost:9180"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
