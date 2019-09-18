@@ -256,6 +256,32 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	return nil
 }
 
+type BlockHeaderMessage common.BlockHeader
+
+// string formats a BlockHeaderMessage as a string
+func (bhm *BlockHeaderMessage) String() string {
+	return fmt.Sprintf("BlockHeaderMessage ParentHash=0x%x Number=%d StateRoot=0x%x ExtrinsicsRoot=0x%x Digest=0x%x",
+		bhm.ParentHash,
+		bhm.Number,
+		bhm.StateRoot,
+		bhm.ExtrinsicsRoot,
+		bhm.Digest)
+}
+
+func (bhm *BlockHeaderMessage) Encode() ([]byte, error) {
+	enc, err := scale.Encode(bhm)
+	if err != nil {
+		return enc, err
+	}
+	return append([]byte{BlockAnnounceMsgType}, enc...), nil
+}
+
+//Decodes the message into a BlockHeaderMessage, it assumes the type byte has been removed
+func (bhm *BlockHeaderMessage) Decode(msg []byte) error {
+	_, err := scale.Decode(msg, bhm)
+	return err
+}
+
 type BlockResponseMessage struct {
 	Id   uint64
 	Data []byte // TODO: change this to BlockData type
@@ -333,4 +359,5 @@ func readHash(r io.Reader) (common.Hash, error) {
 	h := [32]byte{}
 	copy(h[:], buf)
 	return common.Hash(h), nil
+
 }
