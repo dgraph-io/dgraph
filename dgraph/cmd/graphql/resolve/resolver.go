@@ -207,8 +207,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		for _, m := range op.Mutations() {
 			if r.resp.Errors != nil {
 				r.WithError(
-					gqlerror.Errorf("[%s] mutation %s not executed because of previous error",
-						api.RequestID(ctx), m.ResponseName()))
+					gqlerror.Errorf("mutation %s not executed because of previous error",
+						m.ResponseName()))
 				continue
 			}
 

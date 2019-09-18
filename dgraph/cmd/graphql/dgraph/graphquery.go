@@ -81,7 +81,7 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	}
 
 	if q.Func.Name == "uid" && len(q.Func.UID) == 1 {
-		b.WriteString(fmt.Sprintf("(func: uid(0x%x))", q.Func.UID[0]))
+		b.WriteString(fmt.Sprintf("(func: uid(%#x))", q.Func.UID[0]))
 	} else if q.Func.Name == "type" && len(q.Func.Args) == 1 {
 		b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value))
 		writeOrderAndPage(b, q, true)

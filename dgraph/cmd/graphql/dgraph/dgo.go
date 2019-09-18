@@ -122,7 +122,7 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 
 	mu := &dgoapi.Mutation{
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<0x%x> * * .", uid)),
+		DelNquads: []byte(fmt.Sprintf("<%#x> * * .", uid)),
 	}
 
 	_, err := dg.client.NewTxn().Mutate(ctx, mu)
@@ -168,7 +168,7 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 	}
 
 	if len(decode.CheckID) != 1 {
-		return gqlerror.Errorf("Node with id %s is not of type %s", string(uid), typ)
+		return gqlerror.Errorf("Node with id %#x is not of type %s", uid, typ)
 	}
 
 	return nil

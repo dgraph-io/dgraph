@@ -71,7 +71,7 @@ type GraphQLParams struct {
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
 type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
-	Errors     []x.GqlError           `json:"errors,omitempty"`
+	Errors     []*x.GqlError          `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 

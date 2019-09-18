@@ -129,16 +129,17 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 				"[%s] Only add, delete and update mutations are implemented", api.RequestID(ctx))}
 	}
 
+	var b bytes.Buffer
+	b.WriteRune('"')
+	b.WriteString(mr.mutation.ResponseName())
+	b.WriteString(`": `)
 	if len(res.data) > 0 {
-		var b bytes.Buffer
-		b.WriteRune('"')
-		b.WriteString(mr.mutation.ResponseName())
-		b.WriteString(`": `)
 		b.Write(res.data)
-
-		res.data = b.Bytes()
+	} else {
+		b.WriteString("null")
 	}
 
+	res.data = b.Bytes()
 	return res
 }
 
@@ -203,14 +204,12 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
 	if err != nil {
 		return &resolved{
-			err: schema.GQLWrapf(err, "[%s] couldn't complete %s",
-				api.RequestID(ctx), mr.mutation.Name())}
+			err: schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())}
 	}
 
 	err = mr.dgraph.DeleteNode(ctx, uid)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "[%s] couldn't complete %s",
-			api.RequestID(ctx), mr.mutation.Name())
+		res.err = schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
 		// FIXME: ^^ also add the GraphQL path etc to link properly to the operation
 		return res
 	}
