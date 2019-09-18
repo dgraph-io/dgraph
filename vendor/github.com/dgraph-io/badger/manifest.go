@@ -344,7 +344,11 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 	version := y.BytesToU32(magicBuf[4:8])
 	if version != magicVersion {
 		return Manifest{}, 0,
-			fmt.Errorf("manifest has unsupported version: %d (we support %d)", version, magicVersion)
+			//nolint:lll
+			fmt.Errorf("manifest has unsupported version: %d (we support %d).\n"+
+				"Please see https://github.com/dgraph-io/badger/blob/master/README.md#i-see-manifest-has-unsupported-version-x-we-support-y-error"+
+				" on how to fix this.",
+				version, magicVersion)
 	}
 
 	build := createManifest()
