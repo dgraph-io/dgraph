@@ -46,6 +46,8 @@ func (r *reducer) run() {
 		}(reduceJob)
 	}
 	thr.Wait()
+	// We should wait for all pending transactions to commit here. In this function we are not
+	// calling r.writesThr.Start(), but those are called as part of r.reduce(job) function.
 	r.writesThr.Wait()
 }
 
@@ -83,14 +85,16 @@ func (r *reducer) reduce(job shuffleOutput) {
 		val, err := pl.Marshal()
 		x.Check(err)
 
-		// if err returned is ErrTxnTooBig, we should commit current Txn and start new Txn.
+		// If error returned while setting entry is badger.ErrTxnTooBig, we should commit current
+		// txn and start a new one. But if setEntry returns same error on new Txn, that means
+		// entry size is bigger than maximum size Txn can have. Hence we should panic.
 		e := badger.NewEntry(currentKey, val).WithMeta(meta)
 		err = txn.SetEntry(e)
 		if err == badger.ErrTxnTooBig {
 			commitTxn(txn)
 
 			txn = newTxn()
-			x.Check(txn.SetEntry(e)) // We are not checking ErrTxnTooBig second time.
+			x.Check(txn.SetEntry(e)) // We are not checking ErrTxnTooBig the second time.
 		} else {
 			x.Check(err)
 		}

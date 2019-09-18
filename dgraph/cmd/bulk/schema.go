@@ -129,14 +129,15 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		v, err := sch.Marshal()
 		x.Check(err)
 
-		// If error returned while setting entry is badger.ErrTxnTooBig, we should
-		// commit current txn and start new one.
-		entry := badger.NewEntry(k, v).WithMeta(posting.BitCompletePosting)
-		err = txn.SetEntry(entry)
+		// If error returned while setting entry is badger.ErrTxnTooBig, we should commit current
+		// txn and start a new one. But if setEntry returns same error on new Txn, that means
+		// entry size is bigger than maximum size Txn can have. Hence we should panic.
+		e := badger.NewEntry(k, v).WithMeta(posting.BitCompletePosting)
+		err = txn.SetEntry(e)
 		if err == badger.ErrTxnTooBig {
 			x.Check(txn.CommitAt(1, nil))
 			txn = db.NewTransactionAt(math.MaxUint64, true)
-			x.Check(txn.SetEntry(entry)) // We are not checking ErrTxnTooBig for second time.
+			x.Check(txn.SetEntry(e)) // We are not checking ErrTxnTooBig for second time.
 		} else {
 			x.Check(err)
 		}
