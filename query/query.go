@@ -869,7 +869,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		sg.Params.Langs = nil
 	}
 	// count is to limit how many results we want.
-	count := calculateCountResult(sg)
+	first := CalculateFirstN(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -883,7 +883,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
-		Count:        int32(count),
+		First:        int32(first),
 	}
 
 	if sg.SrcUIDs != nil {
@@ -893,9 +893,9 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 }
 
 // calculateCountResult returns the count of result we need to proceed query further down.
-func calculateCountResult(sg *SubGraph) int {
+func CalculateFirstN(sg *SubGraph) int {
 	// by default count is zero. (zero will retrive all the results)
-	count := 0
+	count := math.MaxInt8
 	// In order to limit we have to make sure that the this level met the following conditions
 	// - No Filter (We can't filter until we have all the uids)
 	// {
@@ -916,11 +916,9 @@ func calculateCountResult(sg *SubGraph) int {
 	//     name
 	//   }
 	// }
-	isSupportedFunction := func() bool {
-		return sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
-	}
+	isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
-		isSupportedFunction() {
+		isSupportedFunction {
 		// Offset also added because, we need n results to trim the offset.
 		count = sg.Params.Offset + sg.Params.Count
 	}

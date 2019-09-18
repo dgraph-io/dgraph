@@ -2030,7 +2030,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)
 			// We'll stop fetching if we fetch the required count.
-			if x.IsListFull(result, q.Count) {
+			if len(result.Uids) >= int(q.First) {
 				break
 			}
 			continue
@@ -2046,7 +2046,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		} else if !empty {
 			result.Uids = append(result.Uids, pk.Uid)
 			// We'll stop fetching if we fetch the required count.
-			if x.IsListFull(result, q.Count) {
+			if len(result.Uids) >= int(q.First) {
 				break
 			}
 		}
