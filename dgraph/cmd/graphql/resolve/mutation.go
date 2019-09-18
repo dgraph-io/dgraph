@@ -209,8 +209,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 
 	err = mr.dgraph.DeleteNode(ctx, uid)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "[%s] couldn't complete %s",
-			api.RequestID(ctx), mr.mutation.Name())
+		res.err = schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
 		// FIXME: ^^ also add the GraphQL path etc to link properly to the operation
 		return res
 	}
