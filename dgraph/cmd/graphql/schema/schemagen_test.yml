@@ -163,4 +163,36 @@ schemas:
       X.dt4: dateTime @index(day) .
       X.dt5: dateTime @index(hour) .
       X.e: string @index(exact) .
-      
+
+  -
+    name: "interface and types interact properly"
+    input: |
+      interface A {
+        id: ID!
+        name: String!
+      }
+      type B implements A {
+        id: ID!
+        name: String!
+        correct: Boolean
+      }
+      type C implements A {
+        id: ID!
+        name: String!
+        dob: DateTime!
+      }
+    output: |
+      type A {
+        A.name: string
+      }
+      A.name: string .
+      type B {
+        A.name: string
+        B.correct: bool
+      }
+      B.correct: bool .
+      type C {
+        A.name: string
+        C.dob: dateTime
+      }
+      C.dob: dateTime .

@@ -52,6 +52,7 @@ func TestDGSchemaGen(t *testing.T) {
 				require.NoError(t, errs)
 
 				dgSchema := schHandler.DGSchema()
+
 				if diff := cmp.Diff(sch.Output, dgSchema); diff != "" {
 					t.Errorf("schema mismatch (-want +got):\n%s", diff)
 				}
@@ -77,7 +78,6 @@ func TestSchemaString(t *testing.T) {
 			require.NoError(t, errs)
 
 			newSchemaStr := schHandler.GQLSchema()
-
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
