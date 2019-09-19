@@ -147,7 +147,10 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 		// Handle the uid function in upsert block
 		s := stripSpaces(v)
-		if strings.HasPrefix(s, "uid(") {
+		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
+			if !strings.HasSuffix(s, ")") {
+				return errors.Errorf("While processing '%s', brackets are not closed properly", s)
+			}
 			nq.ObjectId = s
 			return nil
 		}

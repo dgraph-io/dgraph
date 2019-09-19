@@ -156,7 +156,8 @@ func newPool(addr string) (*Pool, error) {
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
+			grpc.MaxCallSendMsgSize(x.GrpcMaxSize),
+			grpc.UseCompressor((snappyCompressor{}).Name())),
 		grpc.WithBackoffMaxDelay(time.Second),
 		grpc.WithInsecure())
 	if err != nil {

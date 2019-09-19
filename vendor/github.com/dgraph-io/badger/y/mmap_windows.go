@@ -38,7 +38,8 @@ func Mmap(fd *os.File, write bool, size int64) ([]byte, error) {
 		return nil, err
 	}
 
-	// Truncate the database to the size of the mmap.
+	// In windows, we cannot mmap a file more than it's actual size.
+	// So truncate the file to the size of the mmap.
 	if fi.Size() < size {
 		if err := fd.Truncate(size); err != nil {
 			return nil, fmt.Errorf("truncate: %s", err)

@@ -38,12 +38,18 @@ func TestXidmap(t *testing.T) {
 	withDB(t, func(db *badger.DB) {
 		xidmap := New(conn, db)
 
-		uida := xidmap.AssignUid("a")
-		require.Equal(t, uida, xidmap.AssignUid("a"))
+		uida, isNew := xidmap.AssignUid("a")
+		require.True(t, isNew)
+		uidaNew, isNew := xidmap.AssignUid("a")
+		require.Equal(t, uida, uidaNew)
+		require.False(t, isNew)
 
-		uidb := xidmap.AssignUid("b")
+		uidb, isNew := xidmap.AssignUid("b")
 		require.True(t, uida != uidb)
-		require.Equal(t, uidb, xidmap.AssignUid("b"))
+		require.True(t, isNew)
+		uidbnew, isNew := xidmap.AssignUid("b")
+		require.Equal(t, uidb, uidbnew)
+		require.False(t, isNew)
 
 		to := xidmap.AllocateUid() + uint64(1e6+3)
 		xidmap.BumpTo(to)
@@ -54,8 +60,12 @@ func TestXidmap(t *testing.T) {
 		xidmap = nil
 
 		xidmap2 := New(conn, db)
-		require.Equal(t, uida, xidmap2.AssignUid("a"))
-		require.Equal(t, uidb, xidmap2.AssignUid("b"))
+		uida2, isNew := xidmap2.AssignUid("a")
+		require.Equal(t, uida, uida2)
+		require.False(t, isNew)
+		uidb2, isNew := xidmap2.AssignUid("b")
+		require.Equal(t, uidb, uidb2)
+		require.False(t, isNew)
 	})
 }
 

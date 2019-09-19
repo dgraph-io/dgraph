@@ -52,7 +52,7 @@ var (
 )
 
 // revertToManifest checks that all necessary table files exist and removes all table files not
-// referenced by the manifest.  idMap is a set of table file id's that were read from the directory
+// referenced by the manifest. idMap is a set of table file id's that were read from the directory
 // listing.
 func revertToManifest(kv *DB, mf *Manifest, idMap map[uint64]struct{}) error {
 	// 1. Check all files in manifest exist.
@@ -237,7 +237,10 @@ func (s *levelsController) dropTree() (int, error) {
 	// Generate the manifest changes.
 	changes := []*pb.ManifestChange{}
 	for _, table := range all {
-		changes = append(changes, newDeleteChange(table.ID()))
+		// Add a delete change only if the table is not in memory.
+		if !table.IsInmemory {
+			changes = append(changes, newDeleteChange(table.ID()))
+		}
 	}
 	changeSet := pb.ManifestChangeSet{Changes: changes}
 	if err := s.kv.manifest.addChanges(changeSet.Changes); err != nil {
@@ -647,7 +650,10 @@ func buildChangeSet(cd *compactDef, newTables []*table.Table) pb.ManifestChangeS
 			newCreateChange(table.ID(), cd.nextLevel.level))
 	}
 	for _, table := range cd.top {
-		changes = append(changes, newDeleteChange(table.ID()))
+		// Add a delete change only if the table is not in memory.
+		if !table.IsInmemory {
+			changes = append(changes, newDeleteChange(table.ID()))
+		}
 	}
 	for _, table := range cd.bot {
 		changes = append(changes, newDeleteChange(table.ID()))
@@ -869,15 +875,19 @@ func (s *levelsController) doCompact(p compactionPriority) error {
 }
 
 func (s *levelsController) addLevel0Table(t *table.Table) error {
-	// We update the manifest _before_ the table becomes part of a levelHandler, because at that
-	// point it could get used in some compaction.  This ensures the manifest file gets updated in
-	// the proper order. (That means this update happens before that of some compaction which
-	// deletes the table.)
-	err := s.kv.manifest.addChanges([]*pb.ManifestChange{
-		newCreateChange(t.ID(), 0),
-	})
-	if err != nil {
-		return err
+	// Add table to manifest file only if it is not opened in memory. We don't want to add a table
+	// to the manifest file if it exists only in memory.
+	if !t.IsInmemory {
+		// We update the manifest _before_ the table becomes part of a levelHandler, because at that
+		// point it could get used in some compaction.  This ensures the manifest file gets updated in
+		// the proper order. (That means this update happens before that of some compaction which
+		// deletes the table.)
+		err := s.kv.manifest.addChanges([]*pb.ManifestChange{
+			newCreateChange(t.ID(), 0),
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	for !s.levels[0].tryAddLevel0Table(t) {
@@ -993,6 +1003,7 @@ func (s *levelsController) getTableInfo(withKeysCount bool) (result []TableInfo)
 				for it.Rewind(); it.Valid(); it.Next() {
 					count++
 				}
+				it.Close()
 			}
 
 			info := TableInfo{
