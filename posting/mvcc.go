@@ -128,6 +128,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+func ClearListCache(key []byte) {
+	listCache.Del(key)
+}
+
 func (txn *Txn) ClearListCache() {
 	if txn == nil || txn.cache == nil {
 		return
