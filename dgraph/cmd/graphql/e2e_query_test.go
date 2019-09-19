@@ -80,6 +80,61 @@ func TestQueryByType(t *testing.T) {
 	}
 }
 
+func TestOrderAtRoot(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry(order: { asc: name }) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		QueryCountry []*country
+	}
+	expected.QueryCountry = []*country{
+		&country{Name: "Angola"},
+		&country{Name: "Bangladesh"},
+		&country{Name: "Mozambique"},
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPageAtRoot(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry(order: { desc: name }, first: 2, offset: 1) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		QueryCountry []*country
+	}
+	expected.QueryCountry = []*country{
+		&country{Name: "Bangladesh"},
+		&country{Name: "Angola"},
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRegExp(t *testing.T) {
 	queryCountryByRegExp(t, "/[Aa]ng/",
 		[]*country{
