@@ -118,6 +118,8 @@ func getColumnValues(columns []string, dataTypes []dataType,
 			valuePtrs = append(valuePtrs, new(sql.NullFloat64))
 		case datetimeType:
 			valuePtrs = append(valuePtrs, new(mysql.NullTime))
+		case bigIntType:
+			valuePtrs = append(valuePtrs, new(sql.NullInt64))
 		default:
 			panic(fmt.Sprintf("detected unsupported type %s on column %s",
 				dataTypes[i], columns[i]))

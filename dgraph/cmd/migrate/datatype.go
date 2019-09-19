@@ -24,6 +24,7 @@ const (
 	doubleType
 	datetimeType
 	uidType // foreign key reference, which would corrspond to uid type in Dgraph
+	bigIntType
 )
 
 // the typeToString map is used to generate the Dgraph schema file
@@ -41,6 +42,7 @@ func initDataTypes() {
 	typeToString[doubleType] = "double"
 	typeToString[datetimeType] = "datetime"
 	typeToString[uidType] = "uid"
+	typeToString[bigIntType] = "int"
 
 	sqlTypeToInternal = make(map[string]dataType)
 	sqlTypeToInternal["int"] = intType
@@ -52,6 +54,7 @@ func initDataTypes() {
 	sqlTypeToInternal["float"] = floatType
 	sqlTypeToInternal["double"] = doubleType
 	sqlTypeToInternal["decimal"] = floatType
+	sqlTypeToInternal["bigint"] = bigIntType
 }
 
 func (t dataType) String() string {
