@@ -17,6 +17,7 @@
 package babe
 
 import (
+	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
@@ -29,7 +30,7 @@ type BabeSession struct {
 	// currentEpoch uint64
 	// currentSlot  uint64
 
-	// TODO: TransactionQueue
+	txQueue *tx.PriorityQueue
 }
 
 // NewBabeSession returns a new Babe session using the provided VRF keys and runtime
@@ -38,5 +39,6 @@ func NewBabeSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runt
 		vrfPublicKey:  pubkey,
 		vrfPrivateKey: privkey,
 		rt:            rt,
+		txQueue:       new(tx.PriorityQueue),
 	}
 }

@@ -42,6 +42,9 @@ func (h Hash) ToBytes() []byte {
 	return b[:]
 }
 
+// Extrinsic is a generic transaction whose format is verified in the runtime
+type Extrinsic []byte
+
 // BlockHeader is the header of a Polkadot block
 type BlockHeader struct {
 	ParentHash     Hash     // the block hash of the block's parent
