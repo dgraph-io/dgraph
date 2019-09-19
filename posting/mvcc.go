@@ -213,24 +213,21 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
-	if listCache != nil {
-		cachedVal, ok := listCache.Get(key)
-		if ok {
-			l := cachedVal.(*List)
+	cachedVal, ok := listCache.Get(key)
+	if ok {
+		l := cachedVal.(*List)
 
-			// No need to clone the immutable layer or the key since mutations will not modify it.
-			lCopy := new(List)
-			lCopy.minTs = l.minTs
-			lCopy.maxTs = l.maxTs
-			lCopy.key = key
-			lCopy.plist = l.plist
-			lCopy.mutationMap = make(map[uint64]*pb.PostingList)
-			for ts, pl := range l.mutationMap {
-				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-			}
-
-			return lCopy, nil
+		// No need to clone the immutable layer or the key since mutations will not modify it.
+		lCopy := new(List)
+		lCopy.minTs = l.minTs
+		lCopy.maxTs = l.maxTs
+		lCopy.key = key
+		lCopy.plist = l.plist
+		lCopy.mutationMap = make(map[uint64]*pb.PostingList)
+		for ts, pl := range l.mutationMap {
+			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 		}
+		return lCopy, nil
 	}
 
 	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
@@ -243,12 +240,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr.Seek(key)
 
 	l, err := ReadPostingList(key, itr)
-	if listCache != nil {
-		listCache.Set(key, l, cacheCost(l))
-	}
+	listCache.Set(key, l, cacheCost(l))
 	return l, err
 }
 
 func cacheCost(list *List) int64 {
-	return 0
+	return 1
 }

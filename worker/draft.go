@@ -518,7 +518,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			txn.ClearListCache()
 			return txn.CommitToDisk(writer, commit)
 		})
 
@@ -537,6 +536,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 
 	g := groups()
 	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		txn.ClearListCache()
+	}
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
