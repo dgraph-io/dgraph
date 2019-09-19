@@ -430,6 +430,41 @@ func TestCascadeSubQuery2(t *testing.T) {
 	}`, js)
 }
 
+func TestCascadeSubQuery3(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend @cascade {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female"
+				}
+				]
+		}
+	}`, js)
+}
+
 func TestCascadeSubQueryWithFilter(t *testing.T) {
 	query := `
 	{
