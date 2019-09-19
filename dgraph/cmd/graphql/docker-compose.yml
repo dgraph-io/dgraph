@@ -54,6 +54,21 @@ services:
       cluster: test
     command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.graphql --alpha alpha1:9180 -v3
 
+  graphql-test-data:
+    image: dgraph/dgraph:latest
+    container_name: graphql-test-data
+    working_dir: /data/graphql
+    volumes:
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql
+        target: /schema
+        read_only: true
+    depends_on:
+      - graphql-init
+    labels:
+      cluster: test
+    command: 'dgraph live -f /schema/e2e_test_data.json --alpha alpha1:9180'
+    
   graphql:
     image: dgraph/dgraph:latest
     container_name: graphql
@@ -66,7 +81,7 @@ services:
     ports:
       - 9000:9000
     depends_on:
-      - graphql-init
+      - graphql-test-data
     restart: always
     labels:
       cluster: test
