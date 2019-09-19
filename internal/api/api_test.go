@@ -16,40 +16,92 @@
 
 package api
 
-import "testing"
-
-// -------------- Mock Apis ------------------
-const (
-	TestPeerCount = 1337
-	TestVersion   = "1.2.3"
+import (
+	"testing"
 )
 
+// -------------- Mock Apis ------------------
+var (
+	testPeerCount   = 1
+	testVersion     = "0.0.1"
+	name            = "Gossamer"
+	peerID          = "Qmc85Ephxa3sR7xaTzTq2UpCJ4a4HWAfxxaV6TarXHWVVh"
+	noBootstrapping = false
+	peers           = []string{"QmeQeqpf3fz3CG2ckQq3CUWwUnyT2cqxJepHpjji7ehVtX"}
+)
+
+// Creating a mock peer
 type MockP2pApi struct{}
 
 func (a *MockP2pApi) PeerCount() int {
-	return TestPeerCount
+	return testPeerCount
 }
 
+func (a *MockP2pApi) Peers() []string {
+	return peers
+}
+
+func (b *MockP2pApi) ID() string {
+	return peerID
+}
+
+func (b *MockP2pApi) NoBootstrapping() bool {
+	return noBootstrapping
+}
+
+// Creating a mock runtime API
 type MockRuntimeApi struct{}
 
-func (a *MockRuntimeApi) Version() string {
-	return TestVersion
+func (a *MockRuntimeApi) Name() string {
+	//TODO: Replace with dynamic name
+	return name
 }
+
+func (a *MockRuntimeApi) Version() string {
+	return testVersion
+}
+
+// func (a *MockRuntimeApi) Chain() string {
+// 	return Chain
+// }
+
+// // System properties not implemented yet
+// func (b *MockRuntimeApi) properties() string {
+// 	return properties
+// }
 
 // -------------------------------------------
 
 func TestSystemModule(t *testing.T) {
 	srvc := NewApiService(&MockP2pApi{}, &MockRuntimeApi{})
 
+	// System.Name
+	n := srvc.Api.RuntimeModule.Name()
+	if n != name {
+		t.Fatalf("System.Name - expected %+v got: %+v\n", name, n)
+	}
+
+	// System.networkState
+	s := srvc.Api.P2pModule.ID()
+	if s != peerID {
+		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", peerID, s)
+	}
+
+	// System.peers
+	p := srvc.Api.P2pModule.Peers()
+	if s != peerID {
+		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", peers, p)
+	}
+
 	// System.PeerCount
-	c := srvc.Api.System.PeerCount()
-	if c != TestPeerCount {
-		t.Fatalf("System.PeerCount - expected: %d got: %d\n", TestPeerCount, c)
+	c := srvc.Api.P2pModule.PeerCount()
+	if c != testPeerCount {
+		t.Fatalf("System.PeerCount - expected: %d got: %d\n", testPeerCount, c)
 	}
 
 	// System.Version
-	v := srvc.Api.System.Version()
-	if v != TestVersion {
-		t.Fatalf("System.Version - expected: %s got: %s\n", TestVersion, v)
+	v := srvc.Api.RuntimeModule.Version()
+	if v != testVersion {
+		t.Fatalf("System.Version - expected: %s got: %s\n", testVersion, v)
 	}
 }

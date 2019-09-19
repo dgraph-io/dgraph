@@ -367,3 +367,18 @@ func handleStream(stream net.Stream) {
 
 	log.Debug("got message", "peer", stream.Conn().RemotePeer(), "type", msgType, "msg", msg.String())
 }
+
+// Peers returns connected peers
+func (s *Service) Peers() []string {
+	return PeerIdToStringArray(s.host.Network().Peers())
+}
+
+// ID returns the ID of the node
+func (s *Service) ID() string {
+	return s.host.ID().String()
+}
+
+// NoBootstrapping returns true if you can't bootstrap nodes
+func (s *Service) NoBootstrapping() bool {
+	return s.noBootstrap
+}

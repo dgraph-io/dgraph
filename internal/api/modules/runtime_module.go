@@ -14,31 +14,37 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package api
+package module
 
 import (
 	log "github.com/ChainSafe/log15"
 )
 
-type systemModule struct {
-	p2p     P2pApi
-	runtime RuntimeApi
+type RuntimeModule struct {
+	Rt RuntimeApi
 }
 
-func NewSystemModule(p2p P2pApi, rt RuntimeApi) *systemModule {
-	return &systemModule{
-		p2p,
-		rt,
-	}
+// RuntimeApi is the interface expected to implemented by `runtime` package
+type RuntimeApi interface {
+	// Chain() string  //Cannot implement yet
+	Name() string //Replace with dynamic name later
+	// properties() string //Cannot implement yet
+	Version() string
 }
 
-func (m *systemModule) Version() string {
+func NewRuntimeModule(RTapi RuntimeApi) *RuntimeModule {
+	return &RuntimeModule{RTapi}
+}
+
+// Release version
+func (r *RuntimeModule) Version() string {
 	log.Debug("[rpc] Executing System.Version", "params", nil)
-	return m.runtime.Version()
+	//TODO: Replace with dynamic version
+	return "0.0.1"
 }
 
-// TODO: Move to 'p2p' module
-func (m *systemModule) PeerCount() int {
-	log.Debug("[rpc] Executing System.PeerCount", "params", nil)
-	return m.p2p.PeerCount()
+func (r *RuntimeModule) Name() string {
+	log.Debug("[rpc] Executing System.Name", "params", nil)
+	//TODO: Replace with dynamic name
+	return "Gossamer"
 }
