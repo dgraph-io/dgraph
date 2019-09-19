@@ -201,6 +201,10 @@ input CharacterOrder {
 	then: CharacterOrder
 }
 
+input CharacterRef {
+	id: ID!
+}
+
 input DroidFilter {
 	name: StringExactFilter
 	appearsIn: Episode

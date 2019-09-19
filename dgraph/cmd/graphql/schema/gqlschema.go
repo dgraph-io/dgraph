@@ -305,23 +305,25 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 
+		// Common types to both Interface and Object.
+		addReferenceType(sch, defn)
+		addPatchType(sch, defn)
+		addUpdateType(sch, defn)
+		addUpdatePayloadType(sch, defn)
+		addDeletePayloadType(sch, defn)
+
 		if defn.Kind == ast.Interface {
-			addPatchType(sch, defn)
-			addUpdateType(sch, defn)
-			addUpdatePayloadType(sch, defn)
-			addDeletePayloadType(sch, defn)
+			// addInputType doesn't make sense as interface is like an abstract class and we can't
+			// create objects of its type.
+
+			// TODO - Verify that reference type makes sense here.
 			addUpdateMutation(sch, defn)
 			addDeleteMutation(sch, defn)
 
 		} else if defn.Kind == ast.Object {
 			// types and inputs needed for mutations
 			addInputType(sch, defn)
-			addReferenceType(sch, defn)
-			addPatchType(sch, defn)
-			addUpdateType(sch, defn)
 			addAddPayloadType(sch, defn)
-			addUpdatePayloadType(sch, defn)
-			addDeletePayloadType(sch, defn)
 			addMutations(sch, defn)
 		}
 

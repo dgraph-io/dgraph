@@ -157,6 +157,10 @@ input CharacterOrder {
 	then: CharacterOrder
 }
 
+input CharacterRef {
+	id: ID!
+}
+
 input EmployeeOrder {
 	asc: EmployeeOrderable
 	desc: EmployeeOrderable
