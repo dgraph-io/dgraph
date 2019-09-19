@@ -129,6 +129,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func (txn *Txn) ClearListCache() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+
 	for key := range txn.cache.deltas {
 		listCache.Del(key)
 	}
