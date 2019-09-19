@@ -1,0 +1,313 @@
+#######################
+# Input Schema
+#######################
+
+interface Character {
+	id: ID!
+	name: String! @searchable(by: exact)
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+}
+
+type Human implements Character {
+	id: ID!
+	name: String! @searchable(by: exact)
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+	totalCredits: Int
+}
+
+type Droid implements Character {
+	id: ID!
+	name: String! @searchable(by: exact)
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+	primaryFunction: String
+}
+
+enum Episode {
+	NEWHOPE
+	EMPIRE
+	JEDI
+}
+
+type Starship {
+	id: ID!
+	name: String! @searchable(by: term)
+	length: Float
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddDroidPayload {
+	droid: Droid
+}
+
+type AddHumanPayload {
+	human: Human
+}
+
+type AddStarshipPayload {
+	starship: Starship
+}
+
+type DeleteDroidPayload {
+	msg: String
+}
+
+type DeleteHumanPayload {
+	msg: String
+}
+
+type DeleteStarshipPayload {
+	msg: String
+}
+
+type UpdateDroidPayload {
+	droid: Droid
+}
+
+type UpdateHumanPayload {
+	human: Human
+}
+
+type UpdateStarshipPayload {
+	starship: Starship
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum DroidOrderable {
+	name
+	primaryFunction
+}
+
+enum HumanOrderable {
+	name
+	totalCredits
+}
+
+enum StarshipOrderable {
+	name
+	length
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input DroidFilter {
+	name: StringExactFilter
+	appearsIn: Episode
+	and: DroidFilter
+	or: DroidFilter
+	not: DroidFilter
+}
+
+input DroidInput {
+	name: String!
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int): [Episode!]!
+	primaryFunction: String
+}
+
+input DroidOrder {
+	asc: DroidOrderable
+	desc: DroidOrderable
+	then: DroidOrder
+}
+
+input DroidRef {
+	id: ID!
+}
+
+input HumanFilter {
+	name: StringExactFilter
+	appearsIn: Episode
+	and: HumanFilter
+	or: HumanFilter
+	not: HumanFilter
+}
+
+input HumanInput {
+	name: String!
+	friends: [Character]
+	appearsIn: [Episode!]!
+	starships: [StarshipRef]
+	totalCredits: Int
+}
+
+input HumanOrder {
+	asc: HumanOrderable
+	desc: HumanOrderable
+	then: HumanOrder
+}
+
+input HumanRef {
+	id: ID!
+}
+
+input PatchDroid {
+	name: String
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int): [Episode!]
+	primaryFunction: String
+}
+
+input PatchHuman {
+	name: String
+	friends: [Character]
+	appearsIn: [Episode!]
+	starships: [StarshipRef]
+	totalCredits: Int
+}
+
+input PatchStarship {
+	name: String
+	length: Float
+}
+
+input StarshipFilter {
+	name: StringTermFilter
+	and: StarshipFilter
+	or: StarshipFilter
+	not: StarshipFilter
+}
+
+input StarshipInput {
+	name: String!
+	length: Float
+}
+
+input StarshipOrder {
+	asc: StarshipOrderable
+	desc: StarshipOrderable
+	then: StarshipOrder
+}
+
+input StarshipRef {
+	id: ID!
+}
+
+input UpdateDroidInput {
+	id: ID!
+	patch: PatchDroid!
+}
+
+input UpdateHumanInput {
+	id: ID!
+	patch: PatchHuman!
+}
+
+input UpdateStarshipInput {
+	id: ID!
+	patch: PatchStarship!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	getDroid(id: ID!): Droid
+	queryDroid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
+	getStarship(id: ID!): Starship
+	queryStarship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addHuman(input: HumanInput!): AddHumanPayload
+	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+	deleteHuman(id: ID!): DeleteHumanPayload
+	addDroid(input: DroidInput!): AddDroidPayload
+	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
+	deleteDroid(id: ID!): DeleteDroidPayload
+	addStarship(input: StarshipInput!): AddStarshipPayload
+	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
+	deleteStarship(id: ID!): DeleteStarshipPayload
+}

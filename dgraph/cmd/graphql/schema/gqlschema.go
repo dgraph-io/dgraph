@@ -202,6 +202,30 @@ func expandSchema(doc *ast.SchemaDocument) {
 		panic(gqlErr)
 	}
 
+	// Cache the interface definitions in a map. They could also be defined after types which
+	// implement them.
+	interfaces := make(map[string]*ast.Definition)
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Interface {
+			interfaces[defn.Name] = defn
+		}
+	}
+
+	// Walk through type definitions which implement an interface and fill in the fields from the
+	// interface.
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
+			for _, implements := range defn.Interfaces {
+				i, ok := interfaces[implements]
+				if !ok {
+					// This would fail schema validation later.
+					continue
+				}
+				defn.Fields = append(i.Fields, defn.Fields...)
+			}
+		}
+	}
+
 	for _, defn := range docExtras.Definitions {
 		doc.Definitions = append(doc.Definitions, defn)
 	}
@@ -901,7 +925,16 @@ func generateEnumString(typ *ast.Definition) string {
 	return sch.String()
 }
 
+func generateInterfaceString(typ *ast.Definition) string {
+	return fmt.Sprintf("interface %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+}
+
 func generateObjectString(typ *ast.Definition) string {
+	if len(typ.Interfaces) > 0 {
+		interfaces := strings.Join(typ.Interfaces, " & ")
+		return fmt.Sprintf("type %s implements %s {\n%s}\n", typ.Name, interfaces,
+			genFieldsString(typ.Fields))
+	}
 	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
@@ -932,7 +965,9 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Object {
+		if typ.Kind == ast.Interface {
+			original.WriteString(generateInterfaceString(typ) + "\n")
+		} else if typ.Kind == ast.Object {
 			original.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
 			original.WriteString(generateEnumString(typ) + "\n")
