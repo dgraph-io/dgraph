@@ -47,10 +47,9 @@ invalid_schemas:
         x: X!
       }
     errlist: [
-      {"message":"You can't add scalar definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
-      {"message":"You can't add interface definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":2, "column":11}]},
-      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
-      {"message":"You can't add input_object definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+      {"message":"You can't add scalar definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      {"message":"You can't add input_object definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
     ]
 
   -
@@ -82,7 +81,7 @@ invalid_schemas:
     input: |
       union U = R | S | T
     errlist: [
-      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
+      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
 
   -
@@ -143,12 +142,12 @@ invalid_schemas:
         id: ID! @searchable(by: term)
       }
     errlist: [
-      {"message": "Type X; Field id: has the @searchable directive but fields of type ID are 
-          not searchable.", 
+      {"message": "Type X; Field id: has the @searchable directive but fields of type ID are
+          not searchable.",
       "locations":[{"line":2, "column":12}]},
-      {"message": "Type Y; Field id: has the @searchable directive but the argument term doesn't 
-          apply to field type ID.  Searchable term applies to fields of type String. Fields of type 
-          ID are not searchable.", 
+      {"message": "Type Y; Field id: has the @searchable directive but the argument term doesn't
+          apply to field type ID.  Searchable term applies to fields of type String. Fields of type
+          ID are not searchable.",
       "locations":[{"line":5, "column":12}]}
       ]
 
@@ -162,8 +161,8 @@ invalid_schemas:
         y: String
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but fields of type Y 
-          are not searchable.", 
+      {"message": "Type X; Field y: has the @searchable directive but fields of type Y
+          are not searchable.",
       "locations":[{"line":2, "column":9}]}
       ]
 
@@ -177,9 +176,9 @@ invalid_schemas:
         y: String
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't 
-          apply to field type Y.  Searchable term applies to fields of type String. Fields of 
-          type Y are not searchable.", 
+      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't
+          apply to field type Y.  Searchable term applies to fields of type String. Fields of
+          type Y are not searchable.",
       "locations":[{"line":2, "column":9}]}
       ]
 
@@ -190,9 +189,9 @@ invalid_schemas:
         y: Int @searchable(by: term)
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't 
-          apply to field type Int.  Searchable term applies to fields of type String. Fields of 
-          type Int are searchable by just @searchable.", 
+      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't
+          apply to field type Int.  Searchable term applies to fields of type String. Fields of
+          type Int are searchable by just @searchable.",
       "locations":[{"line":2, "column":11}]}
       ]
 
@@ -203,9 +202,9 @@ invalid_schemas:
         y: String @searchable(by: day)
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument day doesn't 
-          apply to field type String.  Searchable day applies to fields of type DateTime. Fields 
-          of type String are searchable by exact, fulltext, hash, term and trigram.", 
+      {"message": "Type X; Field y: has the @searchable directive but the argument day doesn't
+          apply to field type String.  Searchable day applies to fields of type DateTime. Fields
+          of type String are searchable by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -216,10 +215,19 @@ invalid_schemas:
         y: String @searchable(by: bogus)
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @searchable bogus isn't valid.Fields of type 
-          String are searchable by exact, fulltext, hash, term and trigram.", 
+      {"message": "Type X; Field y: the argument to @searchable bogus isn't valid.Fields of type
+          String are searchable by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
+
+
+#  -
+#    name: "Interface implemented by type not defined"
+#    input: |
+#      type Droid implements Character {
+#        primaryFunction: String
+#      }
+#    errlist: [{"message": "Undefined type \"Character\"."}]
 
 valid_schemas:
   -
