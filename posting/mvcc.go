@@ -223,7 +223,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		lCopy.maxTs = l.maxTs
 		lCopy.key = key
 		lCopy.plist = l.plist
-		lCopy.mutationMap = make(map[uint64]*pb.PostingList)
+		lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
 		for ts, pl := range l.mutationMap {
 			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 		}
@@ -240,10 +240,9 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr.Seek(key)
 
 	l, err := ReadPostingList(key, itr)
-	listCache.Set(key, l, cacheCost(l))
-	return l, err
-}
-
-func cacheCost(list *List) int64 {
-	return 1
+	if err != nil {
+		return l, err
+	}
+	listCache.Set(key, l, x.DeepSize(l))
+	return l, nil
 }
