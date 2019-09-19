@@ -164,6 +164,13 @@ func Init(ps *badger.DB) {
 		Metrics:     true,
 	})
 	x.Check(err)
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			m := listCache.Metrics()
+			glog.Infof(m.String())
+		}
+	}()
 	go updateMemoryMetrics(closer)
 }
 
