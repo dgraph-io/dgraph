@@ -20,12 +20,14 @@ import (
 	"bytes"
 	"fmt"
 	"hash/crc32"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/table"
+	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/badger/y"
 )
@@ -140,7 +142,7 @@ func (item *Item) IsDeletedOrExpired() bool {
 	return isDeletedOrExpired(item.meta, item.expiresAt)
 }
 
-// DiscardEarlierVersions returns whether the iterator was created with the
+// DiscardEarlierVersions returns whether the item was created with the
 // option to discard earlier versions of a key when multiple are available.
 func (item *Item) DiscardEarlierVersions() bool {
 	return item.meta&bitDiscardEarlierVersions > 0
@@ -252,7 +254,7 @@ func (item *Item) KeySize() int64 {
 	return int64(len(item.key))
 }
 
-// ValueSize returns the exact size of the value.
+// ValueSize returns the approximate size of the value.
 //
 // This can be called to quickly estimate the size of a value without fetching
 // it.
@@ -267,7 +269,9 @@ func (item *Item) ValueSize() int64 {
 	vp.Decode(item.vptr)
 
 	klen := int64(len(item.key) + 8) // 8 bytes for timestamp.
-	return int64(vp.Len) - klen - headerBufSize - crc32.Size
+	// 6 bytes are for the approximate length of the header. Since header is encoded in varint, we
+	// cannot find the exact length of header without fetching it.
+	return int64(vp.Len) - klen - 6 - crc32.Size
 }
 
 // UserMeta returns the userMeta set by the user. Typically, this byte, optionally set by the user
@@ -334,31 +338,78 @@ type IteratorOptions struct {
 	Prefix      []byte // Only iterate over this given prefix.
 	prefixIsKey bool   // If set, use the prefix for bloom filter lookup.
 
-	internalAccess bool // Used to allow internal access to badger keys.
+	InternalAccess bool // Used to allow internal access to badger keys.
+}
+
+func (opt *IteratorOptions) compareToPrefix(key []byte) int {
+	// We should compare key without timestamp. For example key - a[TS] might be > "aa" prefix.
+	key = y.ParseKey(key)
+	if len(key) > len(opt.Prefix) {
+		key = key[:len(opt.Prefix)]
+	}
+	return bytes.Compare(key, opt.Prefix)
 }
 
 func (opt *IteratorOptions) pickTable(t table.TableInterface) bool {
 	if len(opt.Prefix) == 0 {
 		return true
 	}
-	trim := func(key []byte) []byte {
-		if len(key) > len(opt.Prefix) {
-			return key[:len(opt.Prefix)]
-		}
-		return key
-	}
-	if bytes.Compare(trim(t.Smallest()), opt.Prefix) > 0 {
+	if opt.compareToPrefix(t.Smallest()) > 0 {
 		return false
 	}
-	if bytes.Compare(trim(t.Biggest()), opt.Prefix) < 0 {
+	if opt.compareToPrefix(t.Biggest()) < 0 {
 		return false
 	}
 	// Bloom filter lookup would only work if opt.Prefix does NOT have the read
 	// timestamp as part of the key.
-	if opt.prefixIsKey && t.DoesNotHave(opt.Prefix) {
+	if opt.prefixIsKey && t.DoesNotHave(farm.Fingerprint64(opt.Prefix)) {
 		return false
 	}
 	return true
+}
+
+// pickTables picks the necessary table for the iterator. This function also assumes
+// that the tables are sorted in the right order.
+func (opt *IteratorOptions) pickTables(all []*table.Table) []*table.Table {
+	if len(opt.Prefix) == 0 {
+		out := make([]*table.Table, len(all))
+		copy(out, all)
+		return out
+	}
+	sIdx := sort.Search(len(all), func(i int) bool {
+		return opt.compareToPrefix(all[i].Biggest()) >= 0
+	})
+	if sIdx == len(all) {
+		// Not found.
+		return []*table.Table{}
+	}
+
+	filtered := all[sIdx:]
+	if !opt.prefixIsKey {
+		eIdx := sort.Search(len(filtered), func(i int) bool {
+			return opt.compareToPrefix(filtered[i].Smallest()) > 0
+		})
+		out := make([]*table.Table, len(filtered[:eIdx]))
+		copy(out, filtered[:eIdx])
+		return out
+	}
+
+	var out []*table.Table
+	hash := farm.Fingerprint64(opt.Prefix)
+	for _, t := range filtered {
+		// When we encounter the first table whose smallest key is higher than
+		// opt.Prefix, we can stop.
+		if opt.compareToPrefix(t.Smallest()) > 0 {
+			return out
+		}
+		// opt.Prefix is actually the key. So, we can run bloom filter checks
+		// as well.
+		if t.DoesNotHave(hash) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // DefaultIteratorOptions contains default options when iterating over Badger key-value stores.
@@ -433,6 +484,7 @@ func (txn *Txn) NewKeyIterator(key []byte, opt IteratorOptions) *Iterator {
 	}
 	opt.Prefix = key // This key must be without the timestamp.
 	opt.prefixIsKey = true
+	opt.AllVersions = true
 	return txn.NewIterator(opt)
 }
 
@@ -456,6 +508,9 @@ func (it *Iterator) Item() *Item {
 func (it *Iterator) Valid() bool {
 	if it.item == nil {
 		return false
+	}
+	if it.opt.prefixIsKey {
+		return bytes.Equal(it.item.key, it.opt.Prefix)
 	}
 	return bytes.HasPrefix(it.item.key, it.opt.Prefix)
 }
@@ -539,7 +594,7 @@ func (it *Iterator) parseItem() bool {
 	}
 
 	// Skip badger keys.
-	if !it.opt.internalAccess && bytes.HasPrefix(key, badgerPrefix) {
+	if !it.opt.InternalAccess && bytes.HasPrefix(key, badgerPrefix) {
 		mi.Next()
 		return false
 	}
@@ -648,9 +703,9 @@ func (it *Iterator) prefetch() {
 	}
 }
 
-// Seek would seek to the provided key if present. If absent, it would seek to the next smallest key
-// greater than the provided key if iterating in the forward direction. Behavior would be reversed if
-// iterating backwards.
+// Seek would seek to the provided key if present. If absent, it would seek to the next
+// smallest key greater than the provided key if iterating in the forward direction.
+// Behavior would be reversed if iterating backwards.
 func (it *Iterator) Seek(key []byte) {
 	for i := it.data.pop(); i != nil; i = it.data.pop() {
 		i.wg.Wait()

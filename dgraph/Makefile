@@ -38,9 +38,14 @@ ifneq ($(strip $(BUILD_TAGS)),)
 	endif
 endif
 
-# add the gcflags to disable compiler optimizations, which will help debugging with dlv
+# Build with compiler optimizations disabled, which will help debugging with dlv.
 ifneq ($(strip $(BUILD_DEBUG)),)
 	BUILD_FLAGS += -gcflags="all=-N -l"
+endif
+
+# Build with race detector enabled.
+ifneq ($(strip $(BUILD_RACE)),)
+	BUILD_FLAGS += -race
 endif
 
 .PHONY: all $(BIN)
@@ -56,6 +61,7 @@ uninstall:
 	@go clean -i -x
 
 install:
+	@echo "Commit SHA256: `git rev-parse HEAD`"
 	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
 	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`

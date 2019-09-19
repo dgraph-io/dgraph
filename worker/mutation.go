@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"errors"
 	"math"
 	"time"
 
@@ -34,14 +33,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
 var (
+	// ErrNonExistentTabletMessage is the error message sent when no tablet is serving a predicate.
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
-	errNonExistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
-	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
+	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
+	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
 )
 
 func isStarAll(v []byte) bool {
@@ -60,7 +61,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
-			return x.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
 	}
 
@@ -74,9 +75,34 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		return err
 	}
 
-	t := time.Now()
 	key := x.DataKey(edge.Attr, edge.Entity)
-	plist, err := txn.Get(key)
+	// The following is a performance optimization which allows us to not read a posting list from
+	// disk. We calculate this based on how AddMutationWithIndex works. The general idea is that if
+	// we're not using the read posting list, we don't need to retrieve it. We need the posting list
+	// if we're doing indexing or count index or enforcing single UID, etc. In other cases, we can
+	// just create a posting list facade in memory and use it to store the delta in Badger. Later,
+	// the rollup operation would consolidate all these deltas into a posting list.
+	var getFn func(key []byte) (*posting.List, error)
+	switch {
+	case len(su.GetTokenizer()) > 0 || su.GetCount():
+		// Any index or count index.
+		getFn = txn.Get
+	case su.GetValueType() == pb.Posting_UID && !su.GetList():
+		// Single UID, not a list.
+		getFn = txn.Get
+	case edge.Op == pb.DirectedEdge_DEL:
+		// Covers various delete cases to keep things simple.
+		getFn = txn.Get
+	default:
+		// Reverse index doesn't need the posting list to be read. We already covered count index,
+		// single uid and delete all above.
+		// Values, whether single or list, don't need to be read.
+		// Uid list doesn't need to be read.
+		getFn = txn.GetFromDelta
+	}
+
+	t := time.Now()
+	plist, err := getFn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if span := otrace.FromContext(ctx); span != nil {
 			span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},
@@ -86,11 +112,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if err != nil {
 		return err
 	}
-
-	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {
-		return err // abort applying the rest of them.
-	}
-	return nil
+	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
@@ -109,14 +131,14 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	return updateSchema(update.Predicate, *update)
+	return updateSchema(update)
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	if tablet, err := groups().Tablet(update.Predicate); err != nil {
 		return err
 	} else if tablet.GetGroupId() != groups().groupId() {
-		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 	}
 
 	if err := checkSchema(update); err != nil {
@@ -151,13 +173,18 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s pb.SchemaUpdate) error {
-	schema.State().Set(attr, s)
+func updateSchema(s *pb.SchemaUpdate) error {
+	schema.State().Set(s.Predicate, *s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.SetWithMeta(x.SchemaKey(attr), data, posting.BitSchemaPosting); err != nil {
+	err = txn.SetEntry(&badger.Entry{
+		Key:      x.SchemaKey(s.Predicate),
+		Value:    data,
+		UserMeta: posting.BitSchemaPosting,
+	})
+	if err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
@@ -177,7 +204,9 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	updateSchema(attr, s)
+	if err := updateSchema(&s); err != nil {
+		glog.Errorf("Error while updating schema: %+v", err)
+	}
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
@@ -198,7 +227,12 @@ func updateType(typeName string, t pb.TypeUpdate) error {
 	defer txn.Discard()
 	data, err := t.Marshal()
 	x.Check(err)
-	if err := txn.SetWithMeta(x.TypeKey(typeName), data, posting.BitSchemaPosting); err != nil {
+	err = txn.SetEntry(&badger.Entry{
+		Key:      x.TypeKey(typeName),
+		Value:    data,
+		UserMeta: posting.BitSchemaPosting,
+	})
+	if err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
@@ -230,30 +264,30 @@ func hasEdges(attr string, startTs uint64) bool {
 }
 func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
-		return x.Errorf("No predicate specified in schema mutation")
+		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
-		return x.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
+		return errors.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
 	}
 
 	if len(s.Tokenizer) > 0 && s.Directive != pb.SchemaUpdate_INDEX {
-		return x.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
+		return errors.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 	}
 
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+		return errors.Errorf("Index not allowed on predicate of type uid on predicate %s",
 			s.Predicate)
 	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
-		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+		return errors.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 {
-		return x.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
+		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
 			s.Predicate)
 	}
 
@@ -268,22 +302,22 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	case t.IsScalar() && (t.Enum() == pb.Posting_PASSWORD || s.ValueType == pb.Posting_PASSWORD):
 		// can't change password -> x, x -> password
 		if t.Enum() != s.ValueType {
-			return x.Errorf("Schema change not allowed from %s to %s",
-				t.Enum().String(), typ.Enum().String())
+			return errors.Errorf("Schema change not allowed from %s to %s",
+				t.Enum(), typ.Enum())
 		}
 
 	case t.IsScalar() == typ.IsScalar():
 		// If old type was list and new type is non-list, we don't allow it until user
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
-			return x.Errorf("Schema change not allowed from [%s] => %s without"+
+			return errors.Errorf("Schema change not allowed from [%s] => %s without"+
 				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 		}
 
 	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
-			return x.Errorf("Schema change not allowed from scalar to uid or vice versa"+
+			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
 				" while there is data for pred: %s", s.Predicate)
 		}
 	}
@@ -292,24 +326,24 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 func checkType(t *pb.TypeUpdate) error {
 	if len(t.TypeName) == 0 {
-		return x.Errorf("Type name must be specified in type update")
+		return errors.Errorf("Type name must be specified in type update")
 	}
 
 	for _, field := range t.Fields {
 		if len(field.Predicate) == 0 {
-			return x.Errorf("Field in type definition must have a name")
+			return errors.Errorf("Field in type definition must have a name")
 		}
 
 		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
-			return x.Errorf("Field with value type OBJECT must specify the name of the object type")
+			return errors.Errorf("Field with value type OBJECT must specify the name of the object type")
 		}
 
 		if field.Directive != pb.SchemaUpdate_NONE {
-			return x.Errorf("Field in type definition cannot have a directive")
+			return errors.Errorf("Field in type definition cannot have a directive")
 		}
 
 		if len(field.Tokenizer) > 0 {
-			return x.Errorf("Field in type definition cannot have tokenizers")
+			return errors.Errorf("Field in type definition cannot have tokenizers")
 		}
 	}
 
@@ -332,17 +366,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	// type checks
 	switch {
 	case edge.Lang != "" && !su.GetLang():
-		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
 			edge.Attr, edge)
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return x.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -374,6 +408,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	return nil
 }
 
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
@@ -385,6 +420,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	return c.AssignUids(ctx, num)
 }
 
+// Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().connToZeroLeader()
 	if pl == nil {
@@ -398,7 +434,7 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.Fill(tctx, groups().groupId())
+		txn.FillContext(tctx, groups().groupId())
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
@@ -585,6 +621,15 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 		}
 	}
 
+	// We should wait to ensure that we have seen all the updates until the StartTs of this mutation
+	// transaction. Otherwise, when we read the posting list value for calculating the indices, we
+	// might be wrong because we might be missing out a commit which has updated the value. This
+	// wait here ensures that the proposal would only be registered after seeing txn status of all
+	// pending transactions. Thus, the ordering would be correct.
+	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
+		return err
+	}
+
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)
@@ -601,7 +646,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 		return txnCtx, ctx.Err()
 	}
 	if !groups().ServesGroup(m.GroupId) {
-		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+		return txnCtx, errors.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 
 	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)

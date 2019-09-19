@@ -17,7 +17,6 @@
 package zero
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -35,6 +34,7 @@ import (
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/context"
@@ -42,11 +42,9 @@ import (
 
 type node struct {
 	*conn.Node
-	server      *Server
-	ctx         context.Context
-	reads       map[uint64]chan uint64
-	subscribers map[uint32]chan struct{}
-	closer      *y.Closer // to stop Run.
+	server *Server
+	ctx    context.Context
+	closer *y.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
@@ -77,15 +75,17 @@ func (n *node) uniqueKey() string {
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 
+// proposeAndWait makes a proposal to the quorum for Group Zero and waits for it to be accepted by
+// the group before returning. It is safe to call concurrently.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
 	switch {
 	case n.Raft() == nil:
-		return x.Errorf("Raft isn't initialized yet.")
+		return errors.Errorf("Raft isn't initialized yet.")
 	case ctx.Err() != nil:
 		return ctx.Err()
 	case !n.AmLeader():
 		// Do this check upfront. Don't do this inside propose for reasons explained below.
-		return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
+		return errors.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
 	}
 
 	// We could consider adding a wrapper around the user proposal, so we can access any key-values.
@@ -107,9 +107,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		che := make(chan error, 1)
+		errCh := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
-			Ch: che,
+			ErrCh: errCh,
 			// Don't use the original context, because that's not what we're passing to Raft.
 			Ctx: cctx,
 		}
@@ -126,12 +126,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
-			return x.Wrapf(err, "While proposing")
+			return errors.Wrapf(err, "While proposing")
 		}
 
 		// Wait for proposal to be applied or timeout.
 		select {
-		case err := <-che:
+		case err := <-errCh:
 			// We arrived here by a call to n.props.Done().
 			return err
 		case <-cctx.Done():
@@ -175,7 +175,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	m := n.server.member(member.Addr)
 	// Ensures that different nodes don't have same address.
 	if m != nil && (m.Id != member.Id || m.GroupId != member.GroupId) {
-		return x.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
+		return errors.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
 	}
 	if member.GroupId == 0 {
 		state.Zeros[member.Id] = member
@@ -210,11 +210,11 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {
 		// We shouldn't allow more members than the number of replicas.
-		return x.Errorf("Group reached replication level. Can't add another member: %+v", member)
+		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
 
 	// Create a connection to this server.
-	go conn.Get().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -263,7 +263,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	}()
 
 	if tablet.GroupId == 0 {
-		return x.Errorf("Tablet group id is zero: %+v", tablet)
+		return errors.Errorf("Tablet group id is zero: %+v", tablet)
 	}
 	group := state.Groups[tablet.GroupId]
 	if tablet.Remove {
@@ -358,6 +358,21 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, err
 		}
 	}
+	if p.License != nil {
+		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
+		// reject the proposal.
+		numNodes := len(state.GetZeros())
+		for _, group := range state.GetGroups() {
+			numNodes += len(group.GetMembers())
+		}
+		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
+			return p.Key, errInvalidProposal
+		}
+		state.License = p.License
+		// Check expiry and set enabled accordingly.
+		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
+		state.License.Enabled = time.Now().UTC().Before(expiry)
+	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
@@ -378,7 +393,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	cc.Unmarshal(e.Data)
+	if err := cc.Unmarshal(e.Data); err != nil {
+		glog.Errorf("While unmarshalling confchange: %+v", err)
+	}
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		if cc.NodeID == n.Id {
@@ -396,7 +413,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
-				err := x.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
+				err := errors.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
 				n.DoneConfChange(cc.ID, err)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
@@ -448,9 +465,9 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(opts.peer) > 0 {
-		p := conn.Get().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer)
 		if p == nil {
-			return x.Errorf("Unhealthy connection to %v", opts.peer)
+			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}
 
 		gconn := p.Get()
@@ -491,13 +508,18 @@ func (n *node) initAndStartNode() error {
 				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
-					return
+					break
 				}
 				if err == errInvalidProposal {
+					glog.Errorf("invalid proposal error while proposing cluster id")
 					return
 				}
 				glog.Errorf("While proposing CID: %v. Retrying...", err)
 				time.Sleep(3 * time.Second)
+			}
+
+			if err := n.proposeTrialLicense(); err != nil {
+				glog.Errorf("while proposing trial license to cluster: %v", err)
 			}
 		}()
 	}
@@ -516,7 +538,6 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 		select {
 		case <-ticker.C:
 			n.server.updateZeroLeader()
-
 		case <-closer.HasBeenClosed():
 			return
 		}
@@ -544,7 +565,7 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			n.lastQuorum = time.Now()
 			n.mu.Unlock()
 			// Also do some connection cleanup.
-			conn.Get().RemoveInvalid(state)
+			conn.GetPools().RemoveInvalid(state)
 			span.Annotate(nil, "Updated lastQuorum")
 
 		} else if glog.V(1) {
@@ -598,13 +619,13 @@ func (n *node) trySnapshot(skip uint64) {
 
 func (n *node) Run() {
 	var leader bool
-	ticker := time.NewTicker(20 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(4)
+	closer := y.NewCloser(5)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
@@ -612,12 +633,14 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
+	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
+	var timer x.Timer
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
@@ -626,7 +649,7 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
@@ -653,8 +676,14 @@ func (n *node) Run() {
 				}
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			span.Annotatef(nil, "Saved to storage")
-			diskDur := time.Since(start)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -689,16 +718,18 @@ func (n *node) Run() {
 				}
 			}
 			span.Annotate(nil, "Sent messages")
+			timer.Record("proposals")
 
 			n.Raft().Advance()
 			span.Annotate(nil, "Advanced Raft")
+			timer.Record("advance")
+
 			span.End()
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 200*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

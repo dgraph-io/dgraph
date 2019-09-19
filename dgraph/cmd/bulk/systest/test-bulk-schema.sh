@@ -6,7 +6,7 @@ readonly ME=${0##*/}
 readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
 
-declare -ri ZERO_PORT=5080 HTTP_PORT=8180
+declare -ri ZERO_PORT=5180 HTTP_PORT=8180
 
 INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
@@ -49,7 +49,7 @@ function StartZero
   docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
-    if docker logs bank-dg0.1 2>&1 | grep -q 'CID set'; then
+    if docker logs zero1 2>&1 | grep -q 'CID set'; then
       return
     else
       TIMEOUT=$((TIMEOUT - 1))
@@ -64,15 +64,15 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --no-start dg1
+  docker-compose -f $DOCKER_CONF up --force-recreate --no-start alpha1
   if [[ $p_dir ]]; then
-    docker cp $p_dir bank-dg1:/data/dg1/
+    docker cp $p_dir alpha1:/data/alpha1/
   fi
-  docker-compose -f $DOCKER_CONF up --detach dg1
+  docker-compose -f $DOCKER_CONF up --detach alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
-    if docker logs bank-dg1 2>&1 | grep -q 'Got Zero leader'; then
+    if docker logs alpha1 2>&1 | grep -q 'Got Zero leader'; then
       return
     else
       TIMEOUT=$((TIMEOUT - 1))
@@ -99,7 +99,7 @@ predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
 
-  curl localhost:$HTTP_PORT/mutate -X POST -H 'X-Dgraph-CommitNow: true' -d $'
+  curl -H "Content-Type: application/rdf" localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
   set {
     _:company1 <predicate_with_default_type> "CompanyABC" .
@@ -112,23 +112,25 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 
 function DoExport
 {
   INFO "running export"
-  docker exec bank-dg1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec alpha1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
-  docker cp bank-dg1:/data/dg1/export .
+  docker cp alpha1:/data/alpha1/export .
   sleep 1
 }
 
 function BulkLoadExportedData
 {
   INFO "bulk loading exported data"
-  dgraph bulk -z localhost:$ZERO_PORT \
+  # using a random HTTP port for pprof to avoid collisions with other processes
+  HTTPPORT=$(( ( RANDOM % 1000 )  + 8080 ))
+  dgraph bulk -z localhost:$ZERO_PORT --http "localhost:$HTTPPORT"\
               -s ../dir1/export/*/g01.schema.gz \
               -f ../dir1/export/*/g01.rdf.gz \
      >$LOGFILE 2>&1 </dev/null
@@ -190,7 +192,11 @@ EOF
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
-      1 _predicate_
+      1 dgraph.group.acl
+      1 dgraph.password
+      1 dgraph.type
+      1 dgraph.user.group
+      1 dgraph.xid
       1 genre
       1 language
       1 name

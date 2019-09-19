@@ -1,0 +1,328 @@
+# This highly available config creates 3 Dgraph Zeros, 3 Dgraph
+# Alphas with 3 replicas, and 1 Ratel UI client. The Dgraph cluster
+# will still be available to service requests even when one Zero
+# and/or one Alpha are down.
+#
+# There are 4 public services exposed, users can use:
+#       dgraph-zero-public - To load data using Live & Bulk Loaders
+#       dgraph-alpha-public - To connect clients and for HTTP APIs
+#       dgraph-ratel-public - For Dgraph UI
+#       dgraph-alpha-x-http-public - Use for debugging & profiling
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-zero-public
+  labels:
+    app: dgraph-zero
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  - port: 6080
+    targetPort: 6080
+    name: zero-http
+  selector:
+    app: dgraph-zero
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-alpha-public
+  labels:
+    app: dgraph-alpha
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: alpha-http
+  - port: 9080
+    targetPort: 9080
+    name: alpha-grpc
+  selector:
+    app: dgraph-alpha
+---
+# This service is created in-order to debug & profile a specific alpha.
+# You can create one for each alpha that you need to profile.
+# For a more general HTTP APIs use the above service instead.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-alpha-0-http-public
+  labels:
+    app: dgraph-alpha
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: alpha-http
+  selector:
+    statefulset.kubernetes.io/pod-name: dgraph-alpha-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-ratel-public
+  labels:
+    app: dgraph-ratel
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: ratel-http
+  selector:
+    app: dgraph-ratel
+---
+# This is a headless service which is necessary for discovery for a dgraph-zero StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-zero
+  labels:
+    app: dgraph-zero
+spec:
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  clusterIP: None
+  selector:
+    app: dgraph-zero
+---
+# This is a headless service which is necessary for discovery for a dgraph-alpha StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-alpha
+  labels:
+    app: dgraph-alpha
+spec:
+  ports:
+  - port: 7080
+    targetPort: 7080
+    name: alpha-grpc-int
+  clusterIP: None
+  selector:
+    app: dgraph-alpha
+---
+# This StatefulSet runs 3 Dgraph Zero.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dgraph-zero
+spec:
+  serviceName: "dgraph-zero"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dgraph-zero
+  template:
+    metadata:
+      labels:
+        app: dgraph-zero
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph-zero
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: zero
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5080
+          name: zero-grpc
+        - containerPort: 6080
+          name: zero-http
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+            ordinal=${BASH_REMATCH[1]}
+            idx=$(($ordinal + 1))
+            if [[ $ordinal -eq 0 ]]; then
+              exec dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas 3
+            else
+              exec dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas 3
+            fi
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 5Gi
+---
+# This StatefulSet runs 3 replicas of Dgraph Alpha.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dgraph-alpha
+spec:
+  serviceName: "dgraph-alpha"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dgraph-alpha
+  template:
+    metadata:
+      labels:
+        app: dgraph-alpha
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph-alpha
+              topologyKey: kubernetes.io/hostname
+      # Initializing the Alphas:
+      #
+      # You may want to initialize the Alphas with data before starting, e.g.
+      # with data from the Dgraph Bulk Loader: https://docs.dgraph.io/deploy/#bulk-loader.
+      # You can accomplish by uncommenting this initContainers config. This
+      # starts a container with the same /dgraph volume used by Alpha and runs
+      # before Alpha starts.
+      #
+      # You can copy your local p directory to the pod's /dgraph/p directory
+      # with this command:
+      #
+      #    kubectl cp path/to/p dgraph-alpha-0:/dgraph/ -c init-alpha
+      #    (repeat for each alpha pod)
+      #
+      # When you're finished initializing each Alpha data directory, you can signal
+      # it to terminate successfully by creating a /dgraph/doneinit file:
+      #
+      #    kubectl exec dgraph-alpha-0 -c init-alpha touch /dgraph/doneinit
+      #
+      # Note that pod restarts cause re-execution of Init Containers. Since
+      # /dgraph is persisted across pod restarts, the Init Container will exit
+      # automatically when /dgraph/doneinit is present and proceed with starting
+      # the Alpha process.
+      #
+      # Tip: StatefulSet pods can start in parallel by configuring
+      # .spec.podManagementPolicy to Parallel:
+      #
+      #     https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#deployment-and-scaling-guarantees
+      #
+      # initContainers:
+      #   - name: init-alpha
+      #     image: dgraph/dgraph:latest
+      #     command:
+      #       - bash
+      #       - "-c"
+      #       - |
+      #         echo "Write to /dgraph/doneinit when ready."
+      #         until [ -f /dgraph/doneinit ]; do sleep 2; done
+      #     volumeMounts:
+      #       - name: datadir
+      #         mountPath: /dgraph
+      containers:
+      - name: alpha
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7080
+          name: alpha-grpc-int
+        - containerPort: 8080
+          name: alpha-http
+        - containerPort: 9080
+          name: alpha-grpc
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        env:
+          # This should be the same namespace as the dgraph-zero
+          # StatefulSet to resolve a Dgraph Zero's DNS name for
+          # Alpha's --zero flag.
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+      terminationGracePeriodSeconds: 600
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dgraph-ratel
+  labels:
+    app: dgraph-ratel
+spec:
+  selector:
+    matchLabels:
+      app: dgraph-ratel
+  template:
+    metadata:
+      labels:
+        app: dgraph-ratel
+    spec:
+      containers:
+      - name: ratel
+        image: dgraph/dgraph:latest
+        ports:
+        - containerPort: 8000
+        command:
+          - dgraph-ratel

@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
@@ -60,16 +61,13 @@ This would trigger G1 to get latest state. Wait for it.
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(opts.rebalanceInterval)
-	for {
-		select {
-		case <-ticker.C:
-			predicate, srcGroup, dstGroup := s.chooseTablet()
-			if len(predicate) == 0 {
-				break
-			}
-			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
-				glog.Errorln(err)
-			}
+	for range ticker.C {
+		predicate, srcGroup, dstGroup := s.chooseTablet()
+		if len(predicate) == 0 {
+			continue
+		}
+		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+			glog.Errorln(err)
 		}
 	}
 }
@@ -91,19 +89,19 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	// Ensure that reserved predicates cannot be moved.
 	if x.IsReservedPredicate(predicate) {
-		return x.Errorf("Unable to move reserved predicate %s", predicate)
+		return errors.Errorf("Unable to move reserved predicate %s", predicate)
 	}
 
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
-		return x.Errorf("Unable to reach quorum: %v", err)
+		return errors.Wrapf(err, "unable to reach quorum")
 	}
 	if !s.Node.AmLeader() {
-		return x.Errorf("I am not the Zero leader")
+		return errors.Errorf("I am not the Zero leader")
 	}
 	tab := s.ServingTablet(predicate)
 	if tab == nil {
-		return x.Errorf("Tablet to be moved: [%v] is not being served", predicate)
+		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
 	msg := fmt.Sprintf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
@@ -118,13 +116,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
 	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 	if err != nil || ids.StartId == 0 {
-		return x.Errorf("While leasing txn timestamp. Id: %+v Error: %v", ids, err)
+		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 	}
 
 	// Get connection to leader of source group.
 	pl := s.Leader(srcGroup)
 	if pl == nil {
-		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
+		return errors.Errorf("No healthy connection found to leader of group %d", srcGroup)
 	}
 	wc := pb.NewWorkerClient(pl.Get())
 	in := &pb.MovePredicatePayload{
@@ -136,7 +134,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	span.Annotatef(nil, "Starting move: %+v", in)
 	glog.Infof("Starting move: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
+		return errors.Wrapf(err, "while calling MovePredicate")
 	}
 
 	p := &pb.ZeroProposal{}
@@ -150,7 +148,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	span.Annotate(nil, msg)
 	glog.Info(msg)
 	if err := s.Node.proposeAndWait(ctx, p); err != nil {
-		return x.Errorf("While proposing tablet reassignment. Proposal: %+v Error: %v", p, err)
+		return errors.Wrapf(err, "while proposing tablet reassignment. Proposal: %+v", p)
 	}
 	msg = fmt.Sprintf("Predicate move done for: [%v] from group %d to %d\n",
 		predicate, srcGroup, dstGroup)

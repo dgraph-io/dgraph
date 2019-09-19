@@ -38,6 +38,7 @@ import (
 )
 
 var (
+	// Debug is the sub-command invoked when calling "dgraph debug"
 	Debug x.SubCommand
 	opt   flagOptions
 )
@@ -118,7 +119,8 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 			continue
 		}
 		lastKey = append(lastKey[:0], item.Key()...)
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
 			continue
 		}
@@ -254,8 +256,9 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 			continue
 		}
 
-		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Attr == "_predicate_" {
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
+		if !pk.IsData() {
 			continue
 		}
 
@@ -346,7 +349,8 @@ func jepsen(db *badger.DB) {
 
 func history(lookup []byte, itr *badger.Iterator) {
 	var buf bytes.Buffer
-	pk := x.Parse(lookup)
+	pk, err := x.Parse(lookup)
+	x.Check(err)
 	fmt.Fprintf(&buf, "==> key: %x. PK: %+v\n", lookup, pk)
 	for ; itr.Valid(); itr.Next() {
 		item := itr.Item()
@@ -492,21 +496,19 @@ func printKeys(db *badger.DB) {
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		var buf bytes.Buffer
 
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
-		if pk.IsRaft() {
-			buf.WriteString("{r}")
-		}
 		if pk.IsData() {
 			buf.WriteString("{d}")
 		}
 		if pk.IsIndex() {
 			buf.WriteString("{i}")
 		}
-		if pk.IsCount() {
+		if pk.IsCountOrCountRev() {
 			buf.WriteString("{c}")
 		}
 		if pk.IsSchema() {
@@ -554,6 +556,8 @@ func getHistogramBounds(minExponent, maxExponent uint32) []float64 {
 	return bounds
 }
 
+// HistogramData stores the information needed to represent the sizes of the keys and values
+// as a histogram.
 type HistogramData struct {
 	Bounds         []float64
 	Count          int64
@@ -563,7 +567,7 @@ type HistogramData struct {
 	Sum            int64
 }
 
-// Return a new instance of HistogramData with properly initialized fields.
+// NewHistogramData returns a new instance of HistogramData with properly initialized fields.
 func NewHistogramData(bounds []float64) *HistogramData {
 	return &HistogramData{
 		Bounds:         bounds,
@@ -573,8 +577,7 @@ func NewHistogramData(bounds []float64) *HistogramData {
 	}
 }
 
-// Update the Min and Max fields if value is less than or greater than the
-// current values.
+// Update changes the Min and Max fields if value is less than or greater than the current values.
 func (histogram *HistogramData) Update(value int64) {
 	if value > histogram.Max {
 		histogram.Max = value
@@ -600,7 +603,7 @@ func (histogram *HistogramData) Update(value int64) {
 	}
 }
 
-// Print the histogram data in a human-readable format.
+// PrintHistogram prints the histogram data in a human-readable format.
 func (histogram HistogramData) PrintHistogram() {
 	fmt.Printf("Min value: %d\n", histogram.Min)
 	fmt.Printf("Max value: %d\n", histogram.Max)
@@ -697,8 +700,17 @@ func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bo
 		})
 		fmt.Fprintf(buf, " Max: %d .", pr.Delta.GetMaxAssigned())
 		for _, txn := range pr.Delta.Txns {
-			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
 			delete(pending, txn.StartTs)
+		}
+		// There could be many thousands of txns within a single delta. We
+		// don't need to print out every single entry, so just show the
+		// first 10.
+		if len(pr.Delta.Txns) >= 10 {
+			fmt.Fprintf(buf, " Num txns: %d .", len(pr.Delta.Txns))
+			pr.Delta.Txns = pr.Delta.Txns[:10]
+		}
+		for _, txn := range pr.Delta.Txns {
+			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
 		}
 		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
 	case pr.Snapshot != nil:
@@ -735,11 +747,9 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	bopts := badger.DefaultOptions
-	bopts.Dir = dir
-	bopts.ValueDir = dir
-	bopts.TableLoadingMode = options.MemoryMap
-	bopts.ReadOnly = opt.readOnly
+	bopts := badger.DefaultOptions(dir).
+		WithTableLoadingMode(options.MemoryMap).
+		WithReadOnly(opt.readOnly)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)

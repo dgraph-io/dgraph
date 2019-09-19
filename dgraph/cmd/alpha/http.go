@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -39,30 +39,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/metadata"
 )
 
 func allowed(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut
-}
-
-func extractStartTs(urlPath string) (uint64, error) {
-	params := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
-
-	switch l := len(params); l {
-	case 1:
-		// When startTs is not supplied. /query or /mutate
-		return 0, nil
-	case 2:
-		ts, err := strconv.ParseUint(params[1], 0, 64)
-		if err != nil {
-			return 0, fmt.Errorf("Error: %+v while parsing StartTs path parameter as uint64", err)
-		}
-		return ts, nil
-	default:
-		return 0, x.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
-	}
 }
 
 // Common functionality for these request handlers. Returns true if the request is completely
@@ -112,6 +95,54 @@ func readRequest(w http.ResponseWriter, r *http.Request) []byte {
 	return body
 }
 
+// parseUint64 reads the value for given URL parameter from request and
+// parses it into uint64, empty string is converted into zero value
+func parseUint64(r *http.Request, name string) (uint64, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return 0, nil
+	}
+
+	uintVal, err := strconv.ParseUint(value, 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while parsing %s as uint64", name)
+	}
+
+	return uintVal, nil
+}
+
+// parseBool reads the value for given URL parameter from request and
+// parses it into bool, empty string is converted into zero value
+func parseBool(r *http.Request, name string) (bool, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return false, nil
+	}
+
+	boolval, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, errors.Wrapf(err, "while parsing %s as bool", name)
+	}
+
+	return boolval, nil
+}
+
+// parseDuration reads the value for given URL parameter from request and
+// parses it into time.Duration, empty string is converted into zero value
+func parseDuration(r *http.Request, name string) (time.Duration, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return 0, nil
+	}
+
+	durationValue, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while parsing %s as time.Duration", name)
+	}
+
+	return durationValue, nil
+}
+
 // Write response body, transparently compressing if necessary.
 func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
@@ -133,57 +164,82 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := api.Request{}
-	ts, err := extractStartTs(r.URL.Path)
+	isDebugMode, err := parseBool(r, "debug")
 	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	req.StartTs = ts
-
-	if vars := r.Header.Get("X-Dgraph-Vars"); vars != "" {
-		req.Vars = map[string]string{}
-		if err := json.Unmarshal([]byte(vars), &req.Vars); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while unmarshalling Vars header into map")
-			return
-		}
+	queryTimeout, err := parseDuration(r, "timeout")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	startTs, err := parseUint64(r, "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
 	}
 
 	body := readRequest(w, r)
 	if body == nil {
 		return
 	}
-	req.Query = string(body)
 
-	d := r.URL.Query().Get("debug")
-	ctx := context.WithValue(context.Background(), query.DebugKey, d)
-	ctx = attachAccessJwt(ctx, r)
-
-	// Timeout is expected to be in millisecond
-	paramTimeout := r.URL.Query().Get("timeout")
-	if paramTimeout != "" {
-		timeout, err := time.ParseDuration(paramTimeout)
-		if err != nil {
-			x.SetStatusWithData(w, x.Error, err.Error())
+	var params struct {
+		Query     string            `json:"query"`
+		Variables map[string]string `json:"variables"`
+	}
+	contentType := r.Header.Get("Content-Type")
+	switch strings.ToLower(contentType) {
+	case "application/json":
+		if err := json.Unmarshal(body, &params); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
 
+	case "application/graphql+-":
+		params.Query = string(body)
+
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
+			"Supported content types are application/json, application/graphql+-")
+		return
+	}
+
+	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
+	ctx = attachAccessJwt(ctx, r)
+
+	if queryTimeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+		ctx, cancel = context.WithTimeout(ctx, queryTimeout)
 		defer cancel()
+	}
+
+	req := api.Request{
+		Vars:    params.Variables,
+		Query:   params.Query,
+		StartTs: startTs,
 	}
 
 	if req.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
-		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))
-		if be {
+		isBestEffort, err := parseBool(r, "be")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		if isBestEffort {
 			req.BestEffort = true
 			req.ReadOnly = true
 		}
+
 		// If ro is set, run this as a readonly query.
-		ro, _ := strconv.ParseBool(r.URL.Query().Get("ro"))
-		if ro {
+		isReadOnly, err := parseBool(r, "ro")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		if isReadOnly {
 			req.ReadOnly = true
 		}
 	}
@@ -220,7 +276,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	out.WriteRune('}')
 
-	writeResponse(w, r, out.Bytes())
+	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+		// If client crashes before server could write response, writeResponse will error out,
+		// Check2 will fatal and shut the server down in such scenario. We don't want that.
+		glog.Errorln("Unable to write response: ", err)
+	}
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
@@ -228,63 +288,79 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := readRequest(w, r)
-	if m == nil {
+	commitNow, err := parseBool(r, "commitNow")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	startTs, err := parseUint64(r, "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	body := readRequest(w, r)
+	if body == nil {
 		return
 	}
 
+	// start parsing the query
 	parseStart := time.Now()
 
-	var mu *api.Mutation
-	var err error
-	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
-		// Parse JSON.
+	var req *api.Request
+	contentType := r.Header.Get("Content-Type")
+	switch strings.ToLower(contentType) {
+	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
-		err := json.Unmarshal(m, &ms)
-		if err != nil {
+		if err := json.Unmarshal(body, &ms); err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
 
-		mu = &api.Mutation{}
+		mu := &api.Mutation{}
+		req = &api.Request{Mutations: []*api.Mutation{mu}}
 		if setJSON, ok := ms["set"]; ok && setJSON != nil {
 			mu.SetJson = setJSON.bs
 		}
 		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
 			mu.DeleteJson = delJSON.bs
 		}
-	} else {
+		if queryText, ok := ms["query"]; ok && queryText != nil {
+			req.Query, err = strconv.Unquote(string(queryText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
+		if condText, ok := ms["cond"]; ok && condText != nil {
+			mu.Cond, err = strconv.Unquote(string(condText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
+
+	case "application/rdf":
 		// Parse N-Quads.
-		mu, err = gql.ParseMutation(string(m))
+		req, err = gql.ParseMutation(string(body))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
-	}
 
-	parseEnd := time.Now()
-
-	// Maybe rename it so that default is CommitNow.
-	commit := r.Header.Get("X-Dgraph-CommitNow")
-	if commit != "" {
-		c, err := strconv.ParseBool(commit)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing Commit header as bool")
-			return
-		}
-		mu.CommitNow = c
-	}
-	ctx := attachAccessJwt(context.Background(), r)
-
-	ts, err := extractStartTs(r.URL.Path)
-	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
+			"Supported content types are application/json, application/rdf")
 		return
 	}
-	mu.StartTs = ts
 
-	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
+	// end of query parsing
+	parseEnd := time.Now()
+
+	req.StartTs = startTs
+	req.CommitNow = commitNow
+
+	ctx := attachAccessJwt(context.Background(), r)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -292,14 +368,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
-		Txn:     resp.Context,
+		Txn:     resp.Txn,
 		Latency: resp.Latency,
 	}
 	sort.Strings(e.Txn.Keys)
 	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
-	if mu.CommitNow {
+	if req.CommitNow {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 
@@ -317,7 +393,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	_, _ = writeResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -325,27 +401,72 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &api.Assigned{}
-	tc := &api.TxnContext{}
-	resp.Context = tc
-
-	ts, err := extractStartTs(r.URL.Path)
+	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-
-	if ts == 0 {
+	if startTs == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs path parameter is mandatory while trying to commit")
+			"startTs parameter is mandatory while trying to commit")
 		return
 	}
-	tc.StartTs = ts
 
-	// Keys are sent as an array in the body.
-	reqText := readRequest(w, r)
-	if reqText == nil {
+	abort, err := parseBool(r, "abort")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
+	}
+
+	var response map[string]interface{}
+	if abort {
+		response, err = handleAbort(startTs)
+	} else {
+		// Keys are sent as an array in the body.
+		reqText := readRequest(w, r)
+		if reqText == nil {
+			return
+		}
+
+		response, err = handleCommit(startTs, reqText)
+	}
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+
+	_, _ = writeResponse(w, r, js)
+}
+
+func handleAbort(startTs uint64) (map[string]interface{}, error) {
+	tc := &api.TxnContext{
+		StartTs: startTs,
+		Aborted: true,
+	}
+
+	_, err := worker.CommitOverNetwork(context.Background(), tc)
+	switch err {
+	case y.ErrAborted:
+		return map[string]interface{}{
+			"code":    x.Success,
+			"message": "Done",
+		}, nil
+	case nil:
+		return nil, errors.Errorf("transaction could not be aborted")
+	default:
+		return nil, err
+	}
+}
+
+func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+	tc := &api.TxnContext{
+		StartTs: startTs,
 	}
 
 	var reqList []string
@@ -356,8 +477,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	var reqMap map[string][]string
 	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Error while unmarshalling request body")
-		return
+		return nil, err
 	}
 
 	if useList {
@@ -369,13 +489,14 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
-		x.SetStatus(w, x.Error, err.Error())
-		return
+		return nil, err
 	}
-	resp.Context.CommitTs = cts
 
+	resp := &api.Response{}
+	resp.Txn = tc
+	resp.Txn.CommitTs = cts
 	e := query.Extensions{
-		Txn: resp.Context,
+		Txn: resp.Txn,
 	}
 	e.Txn.Keys = e.Txn.Keys[:0]
 	response := map[string]interface{}{}
@@ -385,55 +506,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	mp["message"] = "Done"
 	response["data"] = mp
 
-	js, err := json.Marshal(response)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	writeResponse(w, r, js)
-}
-
-func abortHandler(w http.ResponseWriter, r *http.Request) {
-	if commonHandler(w, r) {
-		return
-	}
-
-	resp := &api.Assigned{}
-	tc := &api.TxnContext{}
-	resp.Context = tc
-
-	ts, err := extractStartTs(r.URL.Path)
-	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
-		return
-	}
-
-	if ts == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs path parameter is mandatory while trying to abort.")
-		return
-	}
-	tc.StartTs = ts
-	tc.Aborted = true
-
-	_, aerr := worker.CommitOverNetwork(context.Background(), tc)
-	if aerr != nil {
-		x.SetStatus(w, x.Error, aerr.Error())
-		return
-	}
-
-	response := map[string]interface{}{}
-	response["code"] = x.Success
-	response["message"] = "Done"
-
-	js, err := json.Marshal(response)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	writeResponse(w, r, js)
+	return response, nil
 }
 
 func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
@@ -454,15 +527,13 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	op := &api.Operation{}
-
 	b := readRequest(w, r)
 	if b == nil {
 		return
 	}
 
-	err := jsonpb.UnmarshalString(string(b), op)
-	if err != nil {
+	op := &api.Operation{}
+	if err := jsonpb.UnmarshalString(string(b), op); err != nil {
 		op.Schema = string(b)
 	}
 
@@ -477,7 +548,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = attachAccessJwt(ctx, r)
-	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
+	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -494,7 +565,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	_, _ = writeResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.

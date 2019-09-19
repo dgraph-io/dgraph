@@ -46,12 +46,48 @@ Use the `has` function among the value variables to search on non-indexed predic
   }
   query(func: eq(val(p), "1961-01-01T00:00:00Z")) {
       uid
-      name@en 
-      name@ru 
+      name@en
+      name@ru
       name@pl
       festival.date_founded
       festival.focus { name@en }
       festival.individual_festivals { total : count(uid) }
+  }
+}
+{{< /runnable >}}
+
+## Sort edge by nested node values
+
+Dgraph [sorting][{{< relref "query-language/index.md#sorting" >}}] is based on a single level of the subgraph. To sort a level by the values of a deeper level, use [query variables]({{ relref "query-language/index.md#query-variables" }}) to bring nested values up to the level of the edge to be sorted.
+
+Example: Get all actors from a Steven Spielberg movie sorted alphabetically. The actor's name is not accessed from a single traversal from the `starring` edge; the name is accessible via `performance.actor`.
+
+{{< runnable >}}
+{
+  spielbergMovies as var(func: allofterms(name@en, "steven spielberg")) {
+    name@en
+    director.film (orderasc: name@en, first: 1) {
+      starring {
+        performance.actor {
+          ActorName as name@en
+        }
+        # Stars is a uid-to-value map mapping
+        # starring edges to performance.actor names
+        Stars as min(val(ActorName))
+      }
+    }
+  }
+
+  movies(func: uid(spielbergMovies)) @cascade {
+    name@en
+    director.film (orderasc: name@en, first: 1) {
+      name@en
+      starring (orderasc: val(Stars)) {
+        performance.actor {
+          name@en
+        }
+      }
+    }
   }
 }
 {{< /runnable >}}

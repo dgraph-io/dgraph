@@ -13,10 +13,13 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/protos/pb"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -36,47 +39,45 @@ const (
 	//
 	// Example manifest:
 	// {
-	//   "version": 2280,
+	//   "since": 2280,
 	//   "groups": [ 1, 2, 3 ],
-	//   "read_ts": 110001
 	// }
 	//
-	// "version" is the maximum data version, obtained from Backup() after it runs. This value
-	// is used for subsequent incremental backups.
+	// "since" is the read timestamp used at the backup request. This value is called "since"
+	// because it used by subsequent incremental backups.
 	// "groups" are the group IDs that participated.
-	// "read_ts" is the read timestamp used at the backup request.
 	backupManifest = `manifest.json`
 )
 
-// handler interface is implemented by URI scheme handlers.
+// UriHandler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
 // this interface to supply Dgraph with a way to create or load backup files into DB.
-type handler interface {
+// For all methods below, the URL object is parsed as described in `newHandler' and
+// the Processor object has the DB, estimated tablets size, and backup parameters.
+type UriHandler interface {
 	// Handlers must know how to Write to their URI location.
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// Create prepares the location for write operations. This function is defined for
-	// creating new backup files at a location described by the URL. The caller of this
-	// comes from an HTTP request.
-	//
-	// The URL object is parsed as described in `newHandler`.
-	// The Request object has the DB, estimated tablets size, and backup parameters.
-	Create(*url.URL, *Request) error
+	// GetLatestManifest reads the manifests at the given URL and returns the
+	// latest manifest.
+	GetLatestManifest(*url.URL) (*Manifest, error)
+
+	// CreateBackupFile prepares the object or file to save the backup file.
+	CreateBackupFile(*url.URL, *pb.BackupRequest) error
+
+	// CreateManifest prepares the manifest for writing.
+	CreateManifest(*url.URL, *pb.BackupRequest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
+	// It optionally takes the name of the last directory to consider. Any backup directories
+	// created after will be ignored.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	//
-	// The URL object is parsed as described in `newHandler`.
-	// The loadFn receives the files as they are processed by a handler, to do the actual
-	// load to DB.
-	Load(*url.URL, loadFn) (uint64, error)
+	Load(*url.URL, string, loadFn) (uint64, error)
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
-	//
-	// The URL object is parsed as described in `newHandler`.
 	ListManifests(*url.URL) ([]string, error)
 
 	// ReadManifest will read the manifest at the given location and load it into the given
@@ -84,9 +85,8 @@ type handler interface {
 	ReadManifest(string, *Manifest) error
 }
 
-// getHandler returns a handler for the URI scheme.
-// Returns new handler on success, nil otherwise.
-func getHandler(scheme string) handler {
+// getHandler returns a UriHandler for the URI scheme.
+func getHandler(scheme string) UriHandler {
 	switch scheme {
 	case "file", "":
 		return &fileHandler{}
@@ -96,7 +96,7 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
-// newHandler parses the requested URI, finds a handler and then tries to create a session.
+// NewUriHandler parses the requested URI and finds the corresponding UriHandler.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -119,48 +119,41 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func (r *Request) newHandler() (handler, error) {
-	var h handler
-
-	uri, err := url.Parse(r.Backup.Location)
-	if err != nil {
-		return nil, err
-	}
-
-	// find handler for this URI scheme
-	h = getHandler(uri.Scheme)
+func NewUriHandler(uri *url.URL) (UriHandler, error) {
+	h := getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unable to handle url: %s", uri)
+		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
 
-	if err = h.Create(uri, r); err != nil {
-		return nil, err
-	}
 	return h, nil
 }
 
-// loadFn is a function that will receive the current file being read.
-// A reader and the backup groupId are passed as arguments.
-type loadFn func(reader io.Reader, groupId int) error
+// predicateSet is a map whose keys are predicates. It is meant to be used as a set.
+type predicateSet map[string]struct{}
 
-// Load will scan location l for backup files, then load them sequentially through reader.
-// Returns the maximum Ts version on success, otherwise an error.
-func Load(l string, fn loadFn) (version uint64, err error) {
-	uri, err := url.Parse(l)
+// loadFn is a function that will receive the current file being read.
+// A reader, the backup groupId, and a map whose keys are the predicates to restore
+// are passed as arguments.
+type loadFn func(reader io.Reader, groupId int, preds predicateSet) error
+
+// Load will scan location l for backup files in the given backup series and load them
+// sequentially. Returns the maximum Since value on success, otherwise an error.
+func Load(location, backupId string, fn loadFn) (since uint64, err error) {
+	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
 	}
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return 0, x.Errorf("Unsupported URI: %v", uri)
+		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, fn)
+	return h.Load(uri, backupId, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
-func ListManifests(l string) ([]*ManifestStatus, error) {
+func ListManifests(l string) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
@@ -168,7 +161,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unsupported URI: %v", uri)
+		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
 	paths, err := h.ListManifests(uri)
@@ -176,18 +169,80 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		return nil, err
 	}
 
-	var listedManifests []*ManifestStatus
+	listedManifests := make(map[string]*Manifest)
 	for _, path := range paths {
 		var m Manifest
-		var ms ManifestStatus
-
 		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, x.Wrapf(err, "While reading %q", path)
+			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
-		ms.Manifest = &m
-		ms.FileName = path
-		listedManifests = append(listedManifests, &ms)
+		listedManifests[path] = &m
 	}
 
 	return listedManifests, nil
+}
+
+// filterManifests takes a list of manifests and returns the list of manifests
+// that should be considered during a restore.
+func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error) {
+	// Go through the files in reverse order and stop when the latest full backup is found.
+	var filteredManifests []*Manifest
+	for i := len(manifests) - 1; i >= 0; i-- {
+		// If backupId is not empty, skip all the manifests that do not match the given
+		// backupId. If it's empty, do not skip any manifests as the default behavior is
+		// to restore the latest series of backups.
+		if len(backupId) > 0 && manifests[i].BackupId != backupId {
+			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
+				manifests[i].Path, backupId)
+			continue
+		}
+
+		filteredManifests = append(filteredManifests, manifests[i])
+		if manifests[i].Type == "full" {
+			break
+		}
+	}
+
+	// Reverse the filtered lists since the original iteration happened in reverse.
+	for i := len(filteredManifests)/2 - 1; i >= 0; i-- {
+		opp := len(filteredManifests) - 1 - i
+		filteredManifests[i], filteredManifests[opp] = filteredManifests[opp], filteredManifests[i]
+	}
+
+	if err := verifyManifests(filteredManifests); err != nil {
+		return nil, err
+	}
+
+	return filteredManifests, nil
+}
+
+func verifyManifests(manifests []*Manifest) error {
+	if len(manifests) == 0 {
+		return nil
+	}
+
+	if manifests[0].BackupNum != 1 {
+		return errors.Errorf("expected a BackupNum value of 1 for first manifest but got %d",
+			manifests[0].BackupNum)
+	}
+
+	backupId := manifests[0].BackupId
+	var backupNum uint64
+	for _, manifest := range manifests {
+		if manifest.BackupId != backupId {
+			return errors.Errorf("found a manifest with backup ID %s but expected %s",
+				manifest.BackupId, backupId)
+		}
+
+		backupNum++
+		if manifest.BackupNum != backupNum {
+			return errors.Errorf("found a manifest with backup number %d but expected %d",
+				manifest.BackupNum, backupNum)
+		}
+	}
+
+	return nil
+}
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
 }

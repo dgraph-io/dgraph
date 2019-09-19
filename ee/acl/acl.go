@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
@@ -32,7 +33,7 @@ func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err erro
 	groupId = conf.GetString("group")
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
-		return "", "", fmt.Errorf("one of the --user or --group must be specified, but not both")
+		return "", "", errors.Errorf("one of the --user or --group must be specified, but not both")
 	}
 	return userId, groupId, nil
 }
@@ -53,10 +54,10 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 		case bool:
 			isSet = conf.GetBool(opt)
 		default:
-			return fmt.Errorf("unexpected option type for %s", opt)
+			return errors.Errorf("unexpected option type for %s", opt)
 		}
 		if isSet {
-			return fmt.Errorf("the option --%s should not be set", opt)
+			return errors.Errorf("the option --%s should not be set", opt)
 		}
 	}
 
@@ -83,13 +84,13 @@ func add(conf *viper.Viper) error {
 func userAdd(conf *viper.Viper, userid string, password string) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get admin context:%v", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
 	defer cancel()
 
 	if len(password) == 0 {
 		var err error
-		password, err = askUserPassword(userid, "New", 2)
+		password, err = x.AskUserPassword(userid, "New", 2)
 		if err != nil {
 			return err
 		}
@@ -106,10 +107,10 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return errors.Wrapf(err, "while querying user")
 	}
 	if user != nil {
-		return fmt.Errorf("unable to create user because of conflict: %v", userid)
+		return errors.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
 	createUserNQuads := CreateUserNQuads(userid, password)
@@ -120,7 +121,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to create user: %v", err)
+		return errors.Wrapf(err, "unable to create user")
 	}
 
 	fmt.Printf("Created new user with id %v\n", userid)
@@ -130,7 +131,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 func groupAdd(conf *viper.Viper, groupId string) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get admin context: %v", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
 	defer cancel()
 
@@ -145,10 +146,10 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return fmt.Errorf("error while querying group: %v", err)
+		return errors.Wrapf(err, "while querying group")
 	}
 	if group != nil {
-		return fmt.Errorf("group %q already exists", groupId)
+		return errors.Errorf("group %q already exists", groupId)
 	}
 
 	createGroupNQuads := []*api.NQuad{
@@ -169,7 +170,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		Set:       createGroupNQuads,
 	}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to create group: %v", err)
+		return errors.Wrapf(err, "unable to create group")
 	}
 
 	fmt.Printf("Created new group with id %v\n", groupId)
@@ -195,9 +196,12 @@ func del(conf *viper.Viper) error {
 		})
 }
 
+// AclEntity is an interface that must be met by all the types of entities (i.e users, groups)
+// in the ACL system.
 type AclEntity interface {
-	// the implementation of GetUid must check the case that the entity is nil
-	// and return an empty string accordingly
+	// GetUid returns the UID of the entity.
+	// The implementation of GetUid must check the case that the entity is nil
+	// and return an empty string accordingly.
 	GetUid() string
 }
 
@@ -205,7 +209,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	queryFn func(context.Context, *dgo.Txn, string) (AclEntity, error)) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get admin context:%v", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
 	defer cancel()
 
@@ -223,7 +227,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 		return err
 	}
 	if len(entity.GetUid()) == 0 {
-		return fmt.Errorf("unable to delete %q since it does not exist",
+		return errors.Errorf("unable to delete %q since it does not exist",
 			userOrGroupId)
 	}
 
@@ -240,7 +244,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to delete %q: %v", userOrGroupId, err)
+		return errors.Wrapf(err, "unable to delete %q", userOrGroupId)
 	}
 
 	fmt.Printf("Successfully deleted %q\n", userOrGroupId)
@@ -263,7 +267,8 @@ func mod(conf *viper.Viper) error {
 		groupList := conf.GetString("group_list")
 		if (newPassword && groupList != defaultGroupList) ||
 			(!newPassword && groupList == defaultGroupList) {
-			return fmt.Errorf("one of --new_password or --group_list must be provided, but not both")
+			return errors.Errorf(
+				"one of --new_password or --group_list must be provided, but not both")
 		}
 
 		if newPassword {
@@ -285,12 +290,12 @@ func changePassword(conf *viper.Viper, userId string) error {
 	// 1. get the dgo client with appropriate access JWT
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get dgo client:%v", err)
+		return errors.Wrapf(err, "unable to get dgo client")
 	}
 	defer cancel()
 
 	// 2. get the new password
-	newPassword, err := askUserPassword(userId, "New", 2)
+	newPassword, err := x.AskUserPassword(userId, "New", 2)
 	if err != nil {
 		return err
 	}
@@ -307,10 +312,10 @@ func changePassword(conf *viper.Viper, userId string) error {
 	// 3. query the user's current uid
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return errors.Wrapf(err, "while querying user")
 	}
 	if user == nil {
-		return fmt.Errorf("user %q does not exist", userId)
+		return errors.Errorf("user %q does not exist", userId)
 	}
 
 	// 4. mutate the user's password
@@ -325,7 +330,7 @@ func changePassword(conf *viper.Viper, userId string) error {
 		Set:       chPdNQuads,
 	}
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to change password for user %v: %v", userId, err)
+		return errors.Wrapf(err, "unable to change password for user %v", userId)
 	}
 	fmt.Printf("Successfully changed password for %v\n", userId)
 	return nil
@@ -334,7 +339,7 @@ func changePassword(conf *viper.Viper, userId string) error {
 func userMod(conf *viper.Viper, userId string, groups string) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get admin context:%v", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
 	defer cancel()
 
@@ -349,10 +354,10 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return fmt.Errorf("error while querying user: %v", err)
+		return errors.Wrapf(err, "while querying user")
 	}
 	if user == nil {
-		return fmt.Errorf("user %q does not exist", userId)
+		return errors.Errorf("user %q does not exist", userId)
 	}
 
 	targetGroupsMap := make(map[string]struct{})
@@ -397,7 +402,7 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("error while mutating the group: %+v", err)
+		return errors.Wrapf(err, "while mutating the group")
 	}
 	fmt.Printf("Successfully modified groups for user %v.\n", userId)
 	fmt.Println("The latest info is:")
@@ -411,25 +416,25 @@ func chMod(conf *viper.Viper) error {
 	perm := conf.GetInt("perm")
 	switch {
 	case len(groupId) == 0:
-		return fmt.Errorf("the groupid must not be empty")
+		return errors.Errorf("the groupid must not be empty")
 	case len(predicate) > 0 && len(predRegex) > 0:
-		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
+		return errors.Errorf("one of --pred or --pred_regex must be specified, but not both")
 	case len(predicate) == 0 && len(predRegex) == 0:
-		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
+		return errors.Errorf("one of --pred or --pred_regex must be specified, but not both")
 	case perm > 7:
-		return fmt.Errorf("the perm value must be less than or equal to 7, "+
+		return errors.Errorf("the perm value must be less than or equal to 7, "+
 			"the provided value is %d", perm)
 	case len(predRegex) > 0:
 		// make sure the predRegex can be compiled as a regex
 		if _, err := regexp.Compile(predRegex); err != nil {
-			return fmt.Errorf("unable to compile %v as a regular expression: %v",
-				predRegex, err)
+			return errors.Wrapf(err, "unable to compile %v as a regular expression",
+				predRegex)
 		}
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
-		return fmt.Errorf("unable to get admin context: %v", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
 	defer cancel()
 
@@ -444,18 +449,18 @@ func chMod(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
-		return fmt.Errorf("error while querying group: %v\n", err)
+		return errors.Wrapf(err, "while querying group")
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("unable to change permission for group because it does not exist: %v",
+		return errors.Errorf("unable to change permission for group because it does not exist: %v",
 			groupId)
 	}
 
 	var currentAcls []Acl
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-				groupId, err)
+			return errors.Wrapf(err, "unable to unmarshal the acls associated with the group %v",
+				groupId)
 		}
 	}
 
@@ -479,7 +484,7 @@ func chMod(conf *viper.Viper) error {
 
 	newAclBytes, err := json.Marshal(newAcls)
 	if err != nil {
-		return fmt.Errorf("unable to marshal the updated acls: %v", err)
+		return errors.Wrapf(err, "unable to marshal the updated acls")
 	}
 
 	chModNQuads := &api.NQuad{
@@ -493,8 +498,8 @@ func chMod(conf *viper.Viper) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to change mutations for the group %v on predicate %v: %v",
-			groupId, predicate, err)
+		return errors.Wrapf(err, "unable to change mutations for the group %v on predicate %v",
+			groupId, predicate)
 	}
 	fmt.Printf("Successfully changed permission for group %v on predicate %v to %v\n",
 		groupId, predicate, perm)
@@ -520,7 +525,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
-		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
+		return nil, errors.Wrapf(err, "hile query user with id %s", userid)
 	}
 	user, err = UnmarshalUser(queryResp, "user")
 	if err != nil {
@@ -536,7 +541,7 @@ func getUserModNQuad(ctx context.Context, txn *dgo.Txn, userId string,
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("group %q does not exist", groupId)
+		return nil, errors.Errorf("group %q does not exist", groupId)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
@@ -607,7 +612,7 @@ func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
 		return err
 	}
 	if user == nil {
-		return fmt.Errorf("The user %q does not exist.\n", userId)
+		return errors.Errorf("The user %q does not exist.\n", userId)
 	}
 
 	fmt.Printf("User  : %s\n", userId)
@@ -625,7 +630,7 @@ func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error
 		return err
 	}
 	if group == nil {
-		return fmt.Errorf("The group %q does not exist.\n", groupId)
+		return errors.Errorf("The group %q does not exist.\n", groupId)
 	}
 	fmt.Printf("Group: %s\n", groupId)
 	fmt.Printf("UID  : %s\n", group.Uid)
@@ -640,8 +645,8 @@ func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error
 	var acls []Acl
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-				groupId, err)
+			return errors.Wrapf(err, "unable to unmarshal the acls associated with the group %v",
+				groupId)
 		}
 
 		for _, acl := range acls {
@@ -658,10 +663,10 @@ func info(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
-		return fmt.Errorf("unable to get admin context: %v\n", err)
+		return errors.Wrapf(err, "unable to get admin context")
 	}
+	defer cancel()
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer ctxCancel()

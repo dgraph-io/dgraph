@@ -18,6 +18,7 @@ package schema
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -51,7 +53,7 @@ type state struct {
 	elog      trace.EventLog
 }
 
-// SateFor returns the schema for given group
+// State returns the struct holding the current schema.
 func State() *state {
 	return pstate
 }
@@ -167,7 +169,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	if schema, ok := s.predicate[pred]; ok {
 		return types.TypeID(schema.ValueType), nil
 	}
-	return types.UndefinedID, x.Errorf("Schema not defined for predicate: %v.", pred)
+	return types.UndefinedID, errors.Errorf("Schema not defined for predicate: %v.", pred)
 }
 
 // IsIndexed returns whether the predicate is indexed or not
@@ -299,14 +301,16 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
+// Init resets the schema state, setting the underlying DB to the given pointer.
 func Init(ps *badger.DB) {
 	pstore = ps
 	reset()
 }
 
+// Load reads the schema for the given predicate from the DB.
 func Load(predicate string) error {
 	if len(predicate) == 0 {
-		return x.Errorf("Empty predicate")
+		return errors.Errorf("Empty predicate")
 	}
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
@@ -340,6 +344,7 @@ func LoadFromDb() error {
 	return LoadTypesFromDb()
 }
 
+// LoadSchemaFromDb iterates through the DB and loads all the stored schema updates.
 func LoadSchemaFromDb() error {
 	prefix := x.SchemaPrefix()
 	txn := pstore.NewTransactionAt(1, false)
@@ -353,13 +358,14 @@ func LoadSchemaFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			continue
 		}
 		attr := pk.Attr
 		var s pb.SchemaUpdate
-		err := item.Value(func(val []byte) error {
+		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
@@ -374,6 +380,7 @@ func LoadSchemaFromDb() error {
 	return nil
 }
 
+// LoadTypesFromDb iterates through the DB and loads all the stored type updates.
 func LoadTypesFromDb() error {
 	prefix := x.TypePrefix()
 	txn := pstore.NewTransactionAt(1, false)
@@ -387,13 +394,14 @@ func LoadTypesFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			continue
 		}
 		attr := pk.Attr
 		var t pb.TypeUpdate
-		err := item.Value(func(val []byte) error {
+		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
 				t = pb.TypeUpdate{TypeName: attr}
 			}
@@ -426,15 +434,6 @@ func CompleteInitialSchema() []*pb.SchemaUpdate {
 
 func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
-
-	// propose the schema for _predicate_
-	if x.WorkerConfig.ExpandEdge {
-		initialSchema = append(initialSchema, &pb.SchemaUpdate{
-			Predicate: x.PredicateListAttr,
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		})
-	}
 
 	initialSchema = append(initialSchema, &pb.SchemaUpdate{
 		Predicate: "dgraph.type",
@@ -481,7 +480,7 @@ func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
 		return false
 	}
 
-	initialSchema := InitialSchema()
+	initialSchema := CompleteInitialSchema()
 	for _, original := range initialSchema {
 		if original.Predicate != pred {
 			continue

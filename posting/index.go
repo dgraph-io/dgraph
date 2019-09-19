@@ -29,11 +29,13 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var emptyCountParams countParams
@@ -53,11 +55,11 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
-		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
+		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
 	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
@@ -112,13 +114,13 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
-	plist, err := txn.Get(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.AddMutation(ctx, txn, edge); err != nil {
+	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -139,10 +141,9 @@ type countParams struct {
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
-	plist.Lock()
-	defer plist.Unlock()
+
 	if hasCountIndex {
-		countBefore = plist.length(txn.StartTs, 0)
+		countBefore = plist.Length(txn.StartTs, 0)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -151,7 +152,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = plist.length(txn.StartTs, 0)
+		countAfter = plist.Length(txn.StartTs, 0)
 		if countAfter == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -168,7 +169,18 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.Get(key)
+	hasCountIndex := schema.State().HasCount(t.Attr)
+
+	var getFn func(key []byte) (*List, error)
+	if hasCountIndex {
+		// We need to retrieve the full posting list from disk, to allow us to get the length of the
+		// posting list for the counts.
+		getFn = txn.Get
+	} else {
+		// We are just adding a reverse edge. No need to read the list from disk.
+		getFn = txn.GetFromDelta
+	}
+	plist, err := getFn(key)
 	if err != nil {
 		return err
 	}
@@ -183,7 +195,6 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Facets:  t.Facets,
 	}
 
-	hasCountIndex := schema.State().HasCount(t.Attr)
 	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
 		return err
@@ -249,22 +260,20 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		}
 	}
 
-	l.Lock()
-	defer l.Unlock()
 	return l.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist, err := txn.Get(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.AddMutation(ctx, txn, t); err != nil {
+	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -302,6 +311,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	t1 := time.Now()
 	l.Lock()
 	defer l.Unlock()
+
 	if dur := time.Since(t1); dur > time.Millisecond {
 		span := otrace.FromContext(ctx)
 		span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-lock", true)},
@@ -329,9 +339,15 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, err
 		}
 
+		// This is a scalar value of non-list type and a delete edge mutation, so if the value
+		// given by the user doesn't match the value we have, we return found to be false, to avoid
+		// deleting the uid from index posting list.
+		// This second check is required because we fingerprint the scalar values as math.MaxUint64,
+		// so even though they might be different the check in the doUpdateIndex block above would
+		// return found to be true.
 		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
-			return val, found, emptyCountParams, err
+			return val, false, emptyCountParams, nil
 		}
 	}
 
@@ -342,7 +358,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err = l.addMutation(ctx, txn, t); err != nil {
+	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -360,12 +376,12 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	return val, found, emptyCountParams, nil
 }
 
-// AddMutationWithIndex is AddMutation with support for indexing. It also
+// AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	txn *Txn) error {
 	if len(edge.Attr) == 0 {
-		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
+		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
 
@@ -428,16 +444,33 @@ func deleteTokensFor(attr, tokenizerName string) error {
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
-		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	prefix = append(prefix, tokenizer.Identifier())
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
 
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.IndexPrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+	prefix = append(prefix, tokenizer.Identifier())
 	return pstore.DropPrefix(prefix)
 }
 
 func deleteReverseEdges(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.ReversePrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+
 	return pstore.DropPrefix(prefix)
 }
 
@@ -446,11 +479,26 @@ func deleteCountIndex(attr string) error {
 	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
 		return err
 	}
-	return pstore.DropPrefix(pk.CountPrefix(true))
+	if err := pstore.DropPrefix(pk.CountPrefix(true)); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix := pk.CountPrefix(false)
+	prefix[len(prefix)-1] = x.ByteSplit
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	prefix = pk.CountPrefix(true)
+	prefix[len(prefix)-1] = x.ByteSplit
+	return pstore.DropPrefix(prefix)
 }
 
-// Index rebuilding logic here.
-type rebuild struct {
+// rebuilder handles the process of rebuilding an index.
+type rebuilder struct {
+	attr    string
 	prefix  []byte
 	startTs uint64
 
@@ -459,60 +507,63 @@ type rebuild struct {
 	fn func(uid uint64, pl *List, txn *Txn) error
 }
 
-func (r *rebuild) Run(ctx context.Context) error {
-	t := pstore.NewTransactionAt(r.startTs, false)
-	defer t.Discard()
-
-	glog.V(1).Infof("Rebuild: Starting process. StartTs=%d. Prefix=\n%s\n",
-		r.startTs, hex.Dump(r.prefix))
-	opts := badger.DefaultIteratorOptions
-	opts.AllVersions = true
-	opts.Prefix = r.prefix
-	it := t.NewIterator(opts)
-	defer it.Close()
+func (r *rebuilder) Run(ctx context.Context) error {
+	glog.V(1).Infof(
+		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
+		r.attr, r.startTs, hex.Dump(r.prefix))
 
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
 	txn := NewTxn(r.startTs)
 
-	var prevKey []byte
-	for it.Rewind(); it.Valid(); {
-		item := it.Item()
-		if bytes.Equal(item.Key(), prevKey) {
-			it.Next()
-			continue
-		}
-		key := item.KeyCopy(nil)
-		prevKey = key
-
-		pk := x.Parse(key)
-		if pk == nil {
-			it.Next()
-			continue
-		}
-
+	stream := pstore.NewStreamAt(r.startTs)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
+	stream.Prefix = r.prefix
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
-		l, err := ReadPostingList(key, it)
+		pk, err := x.Parse(key)
 		if err != nil {
-			return err
+			return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+		}
+
+		item := itr.Item()
+		keyCopy := item.KeyCopy(nil)
+		l, err := ReadPostingList(keyCopy, itr)
+		if err != nil {
+			return nil, err
 		}
 		if err := r.fn(pk.Uid, l, txn); err != nil {
-			return err
+			return nil, err
 		}
-	}
-	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
-	txn.Update() // Convert data into deltas.
+		return nil, nil
+	}
+	stream.Send = func(*bpb.KVList) error {
+		// The work of adding the index edges to the transaction is done by r.fn
+		// so this function doesn't have any work to do.
+		return nil
+	}
+
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
+	glog.V(1).Infof("Rebuilding index for predicate %s: Iteration done. Now committing at ts=%d\n",
+		r.attr, r.startTs)
+
+	// Convert data into deltas.
+	txn.Update()
 
 	// Now we write all the created posting lists to disk.
 	writer := NewTxnWriter(pstore)
+	counter := 0
+	numDeltas := len(txn.cache.deltas)
 	for key, delta := range txn.cache.deltas {
 		if len(delta) == 0 {
 			continue
@@ -522,6 +573,12 @@ func (r *rebuild) Run(ctx context.Context) error {
 		// kv.Version as the timestamp.
 		if err := writer.SetAt([]byte(key), delta, BitDeltaPosting, r.startTs); err != nil {
 			return err
+		}
+
+		counter++
+		if counter%1e5 == 0 {
+			glog.V(1).Infof("Rebuilding index for predicate %s: wrote %d of %d deltas to disk.\n",
+				r.attr, counter, numDeltas)
 		}
 	}
 	glog.V(1).Infoln("Rebuild: Flushing all writes.")
@@ -552,10 +609,10 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	if err := rebuildIndex(ctx, rb); err != nil {
 		return err
 	}
-	if err := rebuildCountIndex(ctx, rb); err != nil {
+	if err := rebuildReverseEdges(ctx, rb); err != nil {
 		return err
 	}
-	return rebuildReverseEdges(ctx, rb)
+	return rebuildCountIndex(ctx, rb)
 }
 
 type indexRebuildInfo struct {
@@ -650,7 +707,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		}
 	}
 
-	// Exit early if the index only need to be deleted and not rebuild.
+	// Exit early if the index only need to be deleted and not rebuilt.
 	if rebuildInfo.op == indexDelete {
 		return nil
 	}
@@ -675,7 +732,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -771,15 +828,18 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	// Create the forward index.
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	if err := builder.Run(ctx); err != nil {
 		return err
 	}
 
-	// Create the reverse index.
+	// Create the reverse index. The count reverse index is created if this
+	// predicate has both a count and reverse directive in the schema. It's safe
+	// to call builder.Run even if that's not the case as the reverse prefix
+	// will be empty.
 	reverse = true
-	builder = rebuild{prefix: pk.ReversePrefix(), startTs: rb.StartTs}
+	builder = rebuilder{attr: rb.Attr, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
 }
@@ -802,7 +862,7 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 		return indexNoop
 	}
 
-	// If the current schema requires an index, index should be rebuild.
+	// If the current schema requires an index, index should be rebuilt.
 	if currIndex {
 		return indexRebuild
 	}
@@ -829,7 +889,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
@@ -866,7 +926,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 		return true, nil
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
-		return false, fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
+		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
 			" without dropping it first.", rb.CurrentSchema.Predicate)
 	}
 
@@ -881,7 +941,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -907,8 +967,8 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
-		txn.cache.Set(string(pl.key), pl)
-		if err := pl.AddMutation(ctx, txn, t); err != nil {
+		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
+		if err := pl.addMutation(ctx, txn, t); err != nil {
 			return err
 		}
 		// Add the new edge with the fingerprinted value id.
@@ -920,7 +980,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
-		return pl.AddMutation(ctx, txn, newEdge)
+		return pl.addMutation(ctx, txn, newEdge)
 	}
 	return builder.Run(ctx)
 }

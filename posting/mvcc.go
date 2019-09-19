@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -28,17 +27,15 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 var (
-	ErrTsTooOld = x.Errorf("Transaction is too old")
+	// ErrTsTooOld is returned when a transaction is too old to be applied.
+	ErrTsTooOld = errors.Errorf("Transaction is too old")
 )
 
-func (txn *Txn) SetAbort() {
-	atomic.StoreUint32(&txn.shouldAbort, 1)
-}
-
+// ShouldAbort returns whether the transaction should be aborted.
 func (txn *Txn) ShouldAbort() bool {
 	if txn == nil {
 		return false
@@ -46,46 +43,40 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) AddConflictKey(conflictKey string) {
+func (txn *Txn) addConflictKey(conflictKey uint64) {
 	txn.Lock()
 	defer txn.Unlock()
 	if txn.conflicts == nil {
-		txn.conflicts = make(map[string]struct{})
+		txn.conflicts = make(map[uint64]struct{})
 	}
-	if len(conflictKey) > 0 {
+	if conflictKey > 0 {
 		txn.conflicts[conflictKey] = struct{}{}
 	}
 }
 
-func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
+// FillContext updates the given transaction context with data from this transaction.
+func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
-	defer txn.Unlock()
 	ctx.StartTs = txn.StartTs
 	for key := range txn.conflicts {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
-		fps := strconv.FormatUint(farm.Fingerprint64([]byte(key)), 36)
+		fps := strconv.FormatUint(key, 36)
 		if !x.HasString(ctx.Keys, fps) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}
 	}
+	txn.Unlock()
 
 	txn.Update()
-	for key := range txn.cache.deltas {
-		pk := x.Parse([]byte(key))
-		// Also send the group id that the predicate was being served by. This is useful when
-		// checking if Zero should allow a commit during a predicate move.
-		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
-		if !x.HasString(ctx.Preds, predKey) {
-			ctx.Preds = append(ctx.Preds, predKey)
-		}
-	}
+	txn.cache.fillPreds(ctx, gid)
 }
 
-// Don't call this for schema mutations. Directly commit them.
+// CommitToDisk commits a transaction to disk.
 // This function only stores deltas to the commit timestamps. It does not try to generate a state.
 // State generation is done via rollups, which happen when a snapshot is created.
+// Don't call this for schema mutations. Directly commit them.
 func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
@@ -102,10 +93,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 
 	var idx int
 	for idx < len(keys) {
-		// writer.Update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
-		// that error, writer.Update would still commit the transaction and return any error. If
+		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
+		// that error, writer.update would still commit the transaction and return any error. If
 		// nil, we continue to process the remaining keys.
-		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
+		err := writer.update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
 				data := cache.deltas[key]
@@ -118,7 +109,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
+				err := btxn.SetEntry(&badger.Entry{
+					Key:      []byte(key),
+					Value:    data,
+					UserMeta: BitDeltaPosting,
+				})
+				if err != nil {
 					return err
 				}
 			}
@@ -141,11 +137,9 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	})
 }
 
-// constructs the posting list from the disk using the passed iterator.
+// ReadPostingList constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
-//
-// key would now be owned by the posting list. So, ensure that it isn't reused
-// elsewhere.
+// key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
@@ -193,10 +187,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 		case BitSchemaPosting:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
 		default:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {

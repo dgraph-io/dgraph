@@ -22,9 +22,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // fileHandler is used for 'file:' URI scheme.
@@ -42,48 +44,10 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	return json.Unmarshal(b, m)
 }
 
-// Create prepares the a path to save backup files.
-// Returns error on failure, nil on success.
-func (h *fileHandler) Create(uri *url.URL, req *Request) error {
-	var dir, path, fileName string
+func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName string) error {
+	var dir, path string
 
-	// check that the path exists and we can access it.
-	if !pathExist(uri.Path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
-	}
-
-	// Find the max version from the latest backup. This is done only when starting a new
-	// backup, not when creating a manifest.
-	if req.Manifest == nil {
-		// Walk the path and find the most recent backup.
-		// If we can't find a manifest file, this is a full backup.
-		var lastManifest string
-		suffix := filepath.Join(string(filepath.Separator), backupManifest)
-		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
-				lastManifest = path
-			}
-			return false
-		})
-		// Found a manifest now we extract the version to use in Backup().
-		if lastManifest != "" {
-			var m Manifest
-			if err := h.readManifest(lastManifest, &m); err != nil {
-				return err
-			}
-			// No new changes since last check
-			if m.Version == req.Backup.SnapshotTs {
-				return ErrBackupNoChanges
-			}
-			// Return the version of last backup
-			req.Version = m.Version
-		}
-		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
-	} else {
-		fileName = backupManifest
-	}
-
-	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
+	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.UnixTs))
 	err := os.Mkdir(dir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
@@ -95,79 +59,136 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 		return err
 	}
 	glog.V(2).Infof("Using file path: %q", path)
-
 	return nil
 }
 
-// Load uses tries to load any backup files found.
-// Returns nil and the maximum Ts version on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	if !pathExist(uri.Path) {
-		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Get a lisst of all the manifest files at the location.
+	// Find the max Since value from the latest backup.
+	var lastManifest string
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
+			lastManifest = path
+		}
+		return false
+	})
+
+	var m Manifest
+	if lastManifest == "" {
+		return &m, nil
+	}
+
+	if err := h.readManifest(lastManifest, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// CreateBackupFile prepares the a path to save the backup file.
+func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
+	if !pathExist(uri.Path) {
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	fileName := backupName(req.ReadTs, req.GroupId)
+	return h.createFiles(uri, req, fileName)
+}
+
+// CreateManifest completes the backup by writing the manifest to a file.
+func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
+	if !pathExist(uri.Path) {
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	return h.createFiles(uri, req, backupManifest)
+}
+
+// Load uses tries to load any backup files found.
+// Returns the maximum value of Since on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+	if !pathExist(uri.Path) {
+		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	paths := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
-	if len(manifests) == 0 {
-		return 0, x.Errorf("No manifests found at path: %s", uri.Path)
+	if len(paths) == 0 {
+		return 0, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
-	sort.Strings(manifests)
+	sort.Strings(paths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s): %v\n", manifests)
+		fmt.Printf("Found backup manifest(s): %v\n", paths)
 	}
 
-	// version is returned with the max manifest version found.
-	var version uint64
+	// Read and filter the files to get the list of files to consider
+	// for this restore operation.
+	var manifests []*Manifest
+	for _, path := range paths {
+		var m Manifest
+		if err := h.readManifest(path, &m); err != nil {
+			return 0, errors.Wrapf(err, "While reading %q", path)
+		}
+		m.Path = path
+		manifests = append(manifests, &m)
+	}
+	manifests, err := filterManifests(manifests, backupId)
+	if err != nil {
+		return 0, err
+	}
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for _, manifest := range manifests {
-		var m Manifest
-		if err := h.readManifest(manifest, &m); err != nil {
-			return 0, x.Wrapf(err, "While reading %q", manifest)
-		}
-		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
+	var since uint64
+	for i, manifest := range manifests {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
+				fmt.Printf("Restore: skip backup: %#v\n", manifest)
 			}
 			continue
 		}
 
-		// Check the files for each group in the manifest exist.
-		path := filepath.Dir(manifest)
-		for _, groupId := range m.Groups {
-			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+		path := filepath.Dir(manifests[i].Path)
+		for gid := range manifest.Groups {
+			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
-				return 0, x.Wrapf(err, "Failed to open %q", file)
+				return 0, errors.Wrapf(err, "Failed to open %q", file)
 			}
 			defer fp.Close()
-			if err = fn(fp, int(groupId)); err != nil {
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+			if err = fn(fp, int(gid), predSet); err != nil {
 				return 0, err
 			}
 		}
-		version = m.Version
+		since = manifest.Since
 	}
-	return version, nil
+	return since, nil
 }
 
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 	if !pathExist(uri.Path) {
-		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Get a list of all the manifest files at the location.
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
 	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(manifests) == 0 {
-		return nil, x.Errorf("No manifests found at path: %s", uri.Path)
+		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {

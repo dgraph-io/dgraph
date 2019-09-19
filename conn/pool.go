@@ -18,7 +18,6 @@ package conn
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -27,22 +26,25 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"google.golang.org/grpc"
 )
 
 var (
-	ErrNoConnection        = fmt.Errorf("No connection exists")
-	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
+	// ErrNoConnection indicates no connection exists to a node.
+	ErrNoConnection = errors.New("No connection exists")
+	// ErrUnhealthyConnection indicates the connection to a node is unhealthy.
+	ErrUnhealthyConnection = errors.New("Unhealthy connection")
 	echoDuration           = 500 * time.Millisecond
 )
 
-// "Pool" is used to manage the grpc client connection(s) for communicating with other
+// Pool is used to manage the grpc client connection(s) for communicating with other
 // worker instances.  Right now it just holds one of them.
 type Pool struct {
 	sync.RWMutex
-	// A "pool" now consists of one connection.  gRPC uses HTTP2 transport to combine
+	// A pool now consists of one connection.  gRPC uses HTTP2 transport to combine
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
@@ -51,6 +53,7 @@ type Pool struct {
 	closer   *y.Closer
 }
 
+// Pools manages a concurrency-safe set of Pool.
 type Pools struct {
 	sync.RWMutex
 	all map[string]*Pool
@@ -63,10 +66,12 @@ func init() {
 	pi.all = make(map[string]*Pool)
 }
 
-func Get() *Pools {
+// GetPools returns the list of pools.
+func GetPools() *Pools {
 	return pi
 }
 
+// Get returns the list for the given address.
 func (p *Pools) Get(addr string) (*Pool, error) {
 	p.RLock()
 	defer p.RUnlock()
@@ -80,6 +85,7 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	return pool, nil
 }
 
+// RemoveInvalid removes invalid nodes from the list of pools.
 func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
 	// Keeps track of valid IP addresses, assigned to active nodes. We do this
 	// to avoid removing valid IP addresses from the Removed list.
@@ -119,6 +125,7 @@ func (p *Pools) getPool(addr string) (*Pool, bool) {
 	return existingPool, has
 }
 
+// Connect creates a Pool instance for the node with the given address or returns the existing one.
 func (p *Pools) Connect(addr string) *Pool {
 	existingPool, has := p.getPool(addr)
 	if has {
@@ -149,7 +156,8 @@ func newPool(addr string) (*Pool, error) {
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
+			grpc.MaxCallSendMsgSize(x.GrpcMaxSize),
+			grpc.UseCompressor((snappyCompressor{}).Name())),
 		grpc.WithBackoffMaxDelay(time.Second),
 		grpc.WithInsecure())
 	if err != nil {
@@ -173,6 +181,7 @@ func (p *Pool) shutdown() {
 	p.conn.Close()
 }
 
+// SetUnhealthy marks a pool as unhealthy.
 func (p *Pool) SetUnhealthy() {
 	p.Lock()
 	defer p.Unlock()
@@ -186,7 +195,7 @@ func (p *Pool) listenToHeartbeat() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stream, err := c.Heartbeat(ctx, &api.Payload{})
+	s, err := c.Heartbeat(ctx, &api.Payload{})
 	if err != nil {
 		return err
 	}
@@ -201,7 +210,7 @@ func (p *Pool) listenToHeartbeat() error {
 
 	// This loop can block indefinitely as long as it keeps on receiving pings back.
 	for {
-		_, err := stream.Recv()
+		_, err := s.Recv()
 		if err != nil {
 			return err
 		}
@@ -235,6 +244,7 @@ func (p *Pool) MonitorHealth() {
 	}
 }
 
+// IsHealthy returns whether the pool is healthy.
 func (p *Pool) IsHealthy() bool {
 	if p == nil {
 		return false

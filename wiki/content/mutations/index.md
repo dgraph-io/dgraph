@@ -116,7 +116,7 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
@@ -163,7 +163,83 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
+## External IDs and Upsert Block
 
+The upsert block makes managing external IDs easy.
+
+Set the schema.
+```
+xid: string @index(exact) .
+<http://schema.org/name>: string @index(exact) .
+<http://schema.org/type>: [uid] @reverse .
+```
+
+Set the type first of all.
+```
+{
+  set {
+    _:blank <xid> "http://schema.org/Person" .
+  }
+}
+```
+
+Now you can create a new person and attach its type using the upsert block.
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          set {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+You can also delete a person and detach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          delete {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+Query by user.
+```
+{
+  q(func: eq(<http://schema.org/name>, "Robin Wright")) {
+    uid
+    xid
+    <http://schema.org/name>
+    <http://schema.org/type> {
+      uid
+      xid
+    }
+  }
+}
+```
 
 ## Language and RDF Types
 
@@ -215,7 +291,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```
 dgraph live --help
 ```
-See also [Bulk Data Loading](/deploy#bulk-data-loading).
+See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
 
@@ -249,7 +325,13 @@ For a particular node `N`, all data for predicate `P` (and corresponding indexin
 }
 ```
 
-The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
+The pattern `S * *` deletes all known edges out of a node (the node itself may
+remain as the target of edges), any reverse edges corresponding to the removed
+edges and any indexing for the removed data. The predicates to delete are
+derived from the type information for that node (the value of the `dgraph.type`
+edges on that node and their corresponding definitions in the schema). If that
+information is missing, this operation will be a no-op.
+
 ```
 {
   delete {
@@ -283,12 +365,12 @@ Other tagged values are left untouched.
 
 ## Mutations using cURL
 
-Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the HTTP header `X-DgraphCommitNow: true`.
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the parameter `commitNow=true` in the URL.
 
 To run a `set` mutation:
 
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -299,10 +381,10 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 To run a `delete` mutation:
 
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   delete {
-    # Example: Alice's UID is 0x56f33
+    # Example: The UID of Alice is 0x56f33
     <0x56f33> <name> * .
   }
 }'
@@ -310,8 +392,8 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 
 To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
 
-```
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate --data-binary @mutation.txt
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true --data-binary @mutation.txt
 ```
 
 ## JSON Mutation Format
@@ -388,6 +470,23 @@ _:blank-0 <rating> "tastes good"@en .
 _:blank-0 <rating> "sabe bien"@es .
 _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
+```
+
+### Geolocation support
+
+Support for geolocation data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support indexing on the Point, Polygon, and MultiPolygon types, but we can store
+other types of geolocation data. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
 ```
 
 ### Referencing existing nodes
@@ -517,8 +616,13 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
-If no predicates specified, then all of the nodes outbound edges are deleted
-(corresponding to deleting `S * *`):
+If no predicates are specified, then all of the node's known outbound edges (to
+other nodes and to literal values) are deleted (corresponding to deleting `S *
+*`). The predicates to delete are derived using the type system. Refer to the
+[RDF format]({{< relref "#delete" >}}) documentation and the section on the
+[type system]({{< relref "query-language/index.md#type-system" >}}) for more
+information:
+
 ```json
 {
   "uid": "0x123"
@@ -646,12 +750,10 @@ Deletion operations are the same as [Deleting literal values]({{< relref "#delet
 
 ### Using JSON operations via cURL
 
-First you have to configure the HTTP headers. There are two in this case. One to
-inform Dgraph that is a JSON mutation and another to commit now.
+First you have to configure the HTTP header to specify content-type.
 
-```BASH
--H 'X-Dgraph-MutationType: json'
--H 'X-Dgraph-CommitNow: true'
+```sh
+-H 'Content-Type: application/json'
 ```
 
 {{% notice "note" %}}
@@ -661,8 +763,8 @@ details. You can also use Python's built in `json.tool` module with `python -m
 json.tool` to do JSON formatting.
 {{% /notice %}}
 
-```BASH
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "set": [
         {
@@ -678,8 +780,8 @@ curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph
 
 To delete:
 
-```BASH
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "delete": [
         {
@@ -691,6 +793,272 @@ curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph
 
 Mutation with a JSON file:
 
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
+
+where the contents of data.json looks like the following:
+
+```json
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+The JSON file must follow the same format for mutations over HTTP: a single JSON
+object with the `"set"` or `"delete"` key and an array of JSON objects for the
+mutation. If you already have a file with an array of data, you can use `jq` to
+transform your data to the proper format. For example, if your data.json file
+looks like this:
+
+```json
+[
+  {
+    "name": "Alice"
+  },
+  {
+    "name": "Bob"
+  }
+]
+```
+
+then you can transform your data to the proper format with the following `jq`
+command, where the `.` in the `jq` string represents the contents of data.json:
+
+```sh
+cat data.json | jq '{set: .}'
+```
+
+```
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+## Upsert Block
+
+The upsert block allows performing queries and mutations in a single request. The upsert
+block contains one query block and one mutation block. Variables defined in the query
+block can be used in the mutation block using the `uid` function.
+Support for `val` function is coming soon.
+
+In general, the structure of the upsert block is as follows:
+
+```
+upsert {
+  query <query block>
+  [fragment <fragment block>]
+  mutation <mutation block>
+}
+```
+
+The Mutation block currently only allows the `uid` function, which allows extracting UIDs
+from variables defined in the query block. There are two possible outcomes based on the
+results of executing the query block:
+
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
+
+### Example
+
+Consider an example with the following schema:
+
+```sh
+curl localhost:8080/alter -X POST -d $'
+  name: string @index(term) .
+  email: string @index(exact, trigram) @upsert .
+  age: int @index(int) .
+' | jq
+```
+
+Now, let's say we want to create a new user with `email` and `name` information.
+We also want to make sure that one email has exactly one corresponding user in
+the database. To achieve this, we need to first query whether a user exists
+in the database with the given email. If a user exists, we use its UID
+to update the `name` information. If the user doesn't exist, we create
+a new user and update the `email` and `name` information.
+
+We can do this using the upsert block as follows:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: eq(email, "user@company1.io"))
+  }
+
+  mutation {
+    set {
+      uid(v) <name> "first last" .
+      uid(v) <email> "user@company1.io" .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "uid(v)": "0x2"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+The query part of the upsert block stores the UID of the user with the provided email
+in the variable `v`. The mutation part then extracts the UID from variable `v` and
+stores the `name` and `email` information in the database. If the user exists,
+the information is updated. If the user doesn't exist, `uid(v)` is treated
+as a blank node and a new user is created as explained above.
+
+If we run the same mutation again, the data would just be overwritten and no new uid is
+created. Note that the `uids` map is empty in the response when the mutation is executed again:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+Now, we want to add the `age` information for the same user having the same email
+`user@company1.io`. We can use the upsert block to do the same as follows:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: eq(email, "user@company1.io"))
+  }
+
+  mutation {
+    set {
+      uid(v) <age> "28" .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+Here, the query block queries for a user with `email` as `user@company1.io`. It stores
+the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user by extracting the uid from the variable `v` using `uid` function.
+
+If we want to execute the mutation only when the user exists, we could use
+[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+
+### Bulk Delete Example
+
+Let's say we want to delete all the users of `company1` from the database. This can be
+achieved in just one query using the upsert block:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: regexp(email, /.*@company1.io$/))
+  }
+
+  mutation {
+    delete {
+      uid(v) <name> * .
+      uid(v) <email> * .
+      uid(v) <age> * .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+## Conditional Upsert
+
+The upsert block also allows specifying a conditional mutation block using an `@if`
+directive. The mutation is executed only when the specified condition is true. If the
+condition is false, the mutation is silently ignored. The general structure of
+Conditional Upsert looks like as follows:
+
+```
+upsert {
+  query <query block>
+  [fragment <fragment block>]
+  mutation @if(<condition>) <mutation block>
+}
+```
+
+The `@if` directive accepts a condition on variables defined in the query block and can be
+connected using `AND`, `OR` and `NOT`.
+
+### Example
+
+Let's say in our previous example, we know the `company1` has less than 100 employees.
+For safety, we want the mutation to execute only when the variable `v` stores less than
+100 but greater than 50 UIDs in it. This can be achieved as follows:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: regexp(email, /.*@company1.io$/))
+  }
+
+  mutation @if(lt(len(v), 100) AND gt(len(v), 50)) {
+    delete {
+      uid(v) <name> * .
+      uid(v) <email> * .
+      uid(v) <age> * .
+    }
+  }
+}
+' | jq
 ```

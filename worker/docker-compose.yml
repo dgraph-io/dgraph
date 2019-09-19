@@ -1,4 +1,5 @@
-# Auto-generated with: [./compose -a 6 -z 3 -j]
+# Auto-generated with: [./compose -a 6 -z 3 -j -w]
+# and manually edited afterward
 #
 version: "3.5"
 services:
@@ -17,7 +18,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 100 --my=alpha1:7180
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   alpha2:
     image: dgraph/dgraph:latest
     container_name: alpha2
@@ -35,7 +36,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 102 --my=alpha2:7182
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   alpha3:
     image: dgraph/dgraph:latest
     container_name: alpha3
@@ -53,7 +54,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 103 --my=alpha3:7183
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   alpha4:
     image: dgraph/dgraph:latest
     container_name: alpha4
@@ -71,7 +72,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 104 --my=alpha4:7184
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   alpha5:
     image: dgraph/dgraph:latest
     container_name: alpha5
@@ -89,7 +90,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 105 --my=alpha5:7185
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   alpha6:
     image: dgraph/dgraph:latest
     container_name: alpha6
@@ -107,7 +108,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 -o 106 --my=alpha6:7186
-      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --snapshot_after 500
+      --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --snapshot_after 100
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
@@ -150,7 +151,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 -o 102 --idx=2
-      --my=zero2:5182 --replicas=3 --logtostderr -v=2 --peer=zero1:5180  --rebalance_interval 3h
+      --my=zero2:5182 --replicas=3 --logtostderr -v=2 --peer=zero1:5180 --rebalance_interval 3h
   zero3:
     image: dgraph/dgraph:latest
     container_name: zero3
@@ -168,5 +169,5 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 -o 103 --idx=3
-      --my=zero3:5183 --replicas=3 --logtostderr -v=2 --peer=zero1:5180  --rebalance_interval 3h
+      --my=zero3:5183 --replicas=3 --logtostderr -v=2 --peer=zero1:5180 --rebalance_interval 3h
 volumes: {}

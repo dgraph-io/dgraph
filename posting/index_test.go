@@ -148,11 +148,11 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		x.Fatalf("Unhandled op: %v", op)
 	}
 	txn := Oracle().RegisterStartTs(startTs)
-	txn.cache.Set(string(l.key), l)
+	txn.cache.SetIfAbsent(string(l.key), l)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
-		err := l.AddMutation(context.Background(), txn, edge)
+		err := l.addMutation(context.Background(), txn, edge)
 		require.NoError(t, err)
 	}
 
@@ -217,7 +217,8 @@ func tokensForTest(attr string) []string {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		k := x.Parse(key)
+		k, err := x.Parse(key)
+		x.Check(err)
 		x.AssertTrue(k.IsIndex())
 		out = append(out, k.Term)
 	}
@@ -257,10 +258,10 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func TestRebuildIndex(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	currentSchema, _ := schema.State().Get("name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
@@ -307,10 +308,10 @@ func TestRebuildIndex(t *testing.T) {
 }
 
 func TestRebuildIndexWithDeletion(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	currentSchema, _ := schema.State().Get("name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
@@ -361,11 +362,11 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	addEdgeToUID(t, "friend", 1, 23, uint64(10), uint64(11))
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	currentSchema, _ := schema.State().Get("friend")
 	rb := IndexRebuild{
 		Attr:          "friend",

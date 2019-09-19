@@ -24,14 +24,12 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -97,7 +95,7 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 			Bytes: x509.MarshalPKCS1PrivateKey(k),
 		})
 	}
-	return nil, x.Errorf("Unsupported key type: %T", key)
+	return nil, errors.Errorf("Unsupported key type: %T", key)
 }
 
 // readKey tries to read and decode the contents of a private key file.
@@ -111,13 +109,13 @@ func readKey(keyFile string) (crypto.PrivateKey, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("Failed to read key block")
+		return nil, errors.Errorf("Failed to read key block")
 	case block.Type == "EC PRIVATE KEY":
 		return x509.ParseECPrivateKey(block.Bytes)
 	case block.Type == "RSA PRIVATE KEY":
 		return x509.ParsePKCS1PrivateKey(block.Bytes)
 	}
-	return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
+	return nil, errors.Errorf("Unknown PEM type: %s", block.Type)
 }
 
 // readCert tries to read and decode the contents of a signed cert file.
@@ -131,9 +129,9 @@ func readCert(certFile string) (*x509.Certificate, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("Failed to read cert block")
+		return nil, errors.Errorf("Failed to read cert block")
 	case block.Type != "CERTIFICATE":
-		return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
+		return nil, errors.Errorf("Unknown PEM type: %s", block.Type)
 	}
 
 	return x509.ParseCertificate(block.Bytes)

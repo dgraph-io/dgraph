@@ -31,10 +31,7 @@ import (
 )
 
 func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-
+	opt := badger.DefaultOptions(dir)
 	return badger.Open(opt)
 }
 
@@ -76,7 +73,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
 	posting.Oracle().RegisterStartTs(2)
-	snap, err := n.calculateSnapshot(1)
+	snap, err := n.calculateSnapshot(0, 1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), snap.ReadTs)
 	require.Equal(t, uint64(1), snap.Index)
@@ -104,7 +101,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
 	posting.Oracle().ResetTxns()
-	snap, err = n.calculateSnapshot(1)
+	snap, err = n.calculateSnapshot(0, 1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(9), snap.ReadTs)
 	require.Equal(t, uint64(8), snap.Index)
@@ -120,7 +117,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	entries = append(entries, getEntryForMutation(9, 11))
 	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(9)
-	snap, err = n.calculateSnapshot(0)
+	snap, err = n.calculateSnapshot(0, 0)
 	require.NoError(t, err)
 	require.Nil(t, snap)
 }

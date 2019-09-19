@@ -28,6 +28,7 @@ import (
 	"github.com/golang/glog"
 )
 
+// Telemetry holds information about the state of the zero server.
 type Telemetry struct {
 	Arch        string
 	Cid         string
@@ -42,7 +43,7 @@ type Telemetry struct {
 	Version     string
 }
 
-var keenUrl = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+var keenURL = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
 func newTelemetry(ms *pb.MembershipState) *Telemetry {
 	if len(ms.Cid) == 0 {
@@ -74,16 +75,18 @@ func (t *Telemetry) post() error {
 	if err != nil {
 		return err
 	}
-	url := keenUrl + "/dev"
+	url := keenURL + "/dev"
 	if len(t.Version) > 0 {
-		url = keenUrl + "/pings"
+		url = keenURL + "/pings"
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "D0398E8C83BB30F67C519FDA6175975F680921890C35B36C34BE109544597497CA758881BD7D56CC2355A2F36B4560102CBC3279AC7B27E5391372C36A31167EB0D06BF3764894AD20A0554BAFF14C292A40BC252BB9FF008736A0FD1D44E085")
+	req.Header.Set("Authorization", "D0398E8C83BB30F67C519FDA6175975F680921890C35B36C34BE1095445"+
+		"97497CA758881BD7D56CC2355A2F36B4560102CBC3279AC7B27E5391372C36A31167EB0D06BF3764894AD20"+
+		"A0554BAFF14C292A40BC252BB9FF008736A0FD1D44E085")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

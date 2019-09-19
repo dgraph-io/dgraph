@@ -91,6 +91,12 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 		fmt.Printf("Hardstate: %+v\n", hs)
 	}
 
+	if chk, err := store.Checkpoint(); err != nil {
+		fmt.Printf("Got error while retrieving checkpoint: %v\n", err)
+	} else {
+		fmt.Printf("Checkpoint: %d\n", chk)
+	}
+
 	lastIdx, err := store.LastIndex()
 	if err != nil {
 		fmt.Printf("Got error while retrieving last index: %v\n", err)
@@ -124,7 +130,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 				if err != nil {
 					log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
 				}
-				if err := batch.Set(k, data, 0); err != nil {
+				if err := batch.Set(k, data); err != nil {
 					log.Fatalf("Unable to set data: %+v", err)
 				}
 			default:

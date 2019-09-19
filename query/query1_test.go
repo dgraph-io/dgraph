@@ -94,7 +94,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -112,7 +112,7 @@ func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -130,7 +130,7 @@ func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -150,7 +150,7 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -263,7 +263,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), q)
+	_, err := processQuery(context.Background(), t, q)
 	require.Error(t, err)
 }
 
@@ -298,7 +298,7 @@ func TestBoolSort(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), q)
+	_, err := processQuery(context.Background(), t, q)
 	require.Error(t, err)
 }
 
@@ -383,7 +383,7 @@ func TestHashTokGeqErr(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -401,7 +401,7 @@ func TestNameNotIndexed(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -439,7 +439,7 @@ func TestDuplicateAlias(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestDebugUid(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := processQuery(t, ctx, query)
+	buf, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -699,7 +699,7 @@ func TestMathVarCrash(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -849,7 +849,7 @@ func TestMultipleGtError(t *testing.T) {
 	}
 
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -997,7 +997,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1104,7 +1104,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 	}
 }`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
 
@@ -1236,9 +1236,63 @@ func TestAggregateRootError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmpty1(t *testing.T) {
+	query := `
+	{
+		var(func: has(number)) {
+			number as number
+		}
+		var() {
+			highest as max(val(number))
+		}
+
+		all(func: eq(number, val(highest))) {
+			uid
+			number
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
+func TestAggregateEmpty2(t *testing.T) {
+	query := `
+		{
+			var(func: has(number))
+			{
+				highest_number as number
+			}
+			all(func: eq(number, val(highest_number)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
+func TestAggregateEmpty3(t *testing.T) {
+	query := `
+		{
+			var(func: has(number))
+			{
+				highest_number as number
+			}
+			all(func: ge(number, val(highest_number)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
 }
 
 func TestFilterLang(t *testing.T) {
@@ -1332,7 +1386,7 @@ func TestUidAttr(t *testing.T) {
 			out: `{"data":{"q":[]}}`},
 	}
 	for _, tc := range tests {
-		js, err := processQuery(t, context.Background(), tc.in)
+		js, err := processQuery(context.Background(), t, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -1424,7 +1478,7 @@ func TestMultipleValueSortError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Sorting not supported on attr: graduation of type: [scalar]")
 }
@@ -1441,7 +1495,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
 }
@@ -1583,6 +1637,73 @@ func TestMultiSort7Paginate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
+func TestMultiSortPaginateWithOffset(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			"Offset in middle of bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 6, offset: 1) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset at boundary of bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 4, offset: 3) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset in middle of second bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 3, offset: 4) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset equal to number of uids",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 3, offset: 8) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[]}}`,
+		},
+		{
+			"Offset larger than records",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 10, offset: 10000) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[]}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tt.query)
+			require.JSONEq(t, tt.result, js)
+		})
+	}
+}
+
 func TestFilterRootOverride(t *testing.T) {
 
 	query := `{
@@ -1655,7 +1776,7 @@ func TestMultipleValueVarError(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
 }
@@ -1678,20 +1799,20 @@ func TestReturnEmptyBlock(t *testing.T) {
 }
 
 func TestExpandVal(t *testing.T) {
-	// We ignore password in expand(_all_)
 	query := `
 	{
-		var(func: uid(1)) {
-			pred as _predicate_
+		var(func: uid(11)) {
+			pred as name
 		}
 
-		me(func: uid(1)) {
+		me(func: uid(11)) {
 			expand(val(pred))
 		}
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","power":13.250000,"noindex_name":"Michonne's name not indexed","survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"dob":"1910-01-01T00:00:00Z","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"gender":"female","_xid_":"mich"}]}}`, js)
+	require.JSONEq(t,
+		`{"data":{"me":[{"name":"name"}]}}`, js)
 }
 
 func TestGroupByGeoCrash(t *testing.T) {
@@ -1716,7 +1837,7 @@ func TestPasswordError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t,
 		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")
@@ -1735,49 +1856,6 @@ func TestCountPanic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[{"uid":"0x1","name":"Michonne","count(name)":1},{"uid":"0x12c","count(name)":0}]}}`, js)
-}
-
-func TestExpandAll(t *testing.T) {
-
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_all_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
-}
-
-func TestExpandForward(t *testing.T) {
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_forward_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000}]}}`, js)
-}
-
-func TestExpandReverse(t *testing.T) {
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_reverse_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
 }
 
 func TestUidWithoutDebug(t *testing.T) {

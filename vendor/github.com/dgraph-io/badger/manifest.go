@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -99,7 +100,7 @@ const (
 func (m *Manifest) asChanges() []*pb.ManifestChange {
 	changes := make([]*pb.ManifestChange, 0, len(m.Tables))
 	for id, tm := range m.Tables {
-		changes = append(changes, newCreateChange(id, int(tm.Level), tm.Checksum))
+		changes = append(changes, newCreateChange(id, int(tm.Level)))
 	}
 	return changes
 }
@@ -113,11 +114,14 @@ func (m *Manifest) clone() Manifest {
 
 // openOrCreateManifestFile opens a Badger manifest file if it exists, or creates on if
 // one doesn’t.
-func openOrCreateManifestFile(dir string, readOnly bool) (ret *manifestFile, result Manifest, err error) {
+func openOrCreateManifestFile(dir string, readOnly bool) (
+	ret *manifestFile, result Manifest, err error) {
 	return helpOpenOrCreateManifestFile(dir, readOnly, manifestDeletionsRewriteThreshold)
 }
 
-func helpOpenOrCreateManifestFile(dir string, readOnly bool, deletionsThreshold int) (ret *manifestFile, result Manifest, err error) {
+func helpOpenOrCreateManifestFile(dir string, readOnly bool, deletionsThreshold int) (
+	ret *manifestFile, result Manifest, err error) {
+
 	path := filepath.Join(dir, ManifestFilename)
 	var flags uint32
 	if readOnly {
@@ -183,7 +187,7 @@ func (mf *manifestFile) close() error {
 // the wrong time.)
 func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 	changes := pb.ManifestChangeSet{Changes: changesParam}
-	buf, err := changes.Marshal()
+	buf, err := proto.Marshal(&changes)
 	if err != nil {
 		return err
 	}
@@ -213,14 +217,14 @@ func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 	}
 
 	mf.appendLock.Unlock()
-	return mf.fp.Sync()
+	return y.FileSync(mf.fp)
 }
 
 // Has to be 4 bytes.  The value can never change, ever, anyway.
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
 // The magic version number.
-const magicVersion = 4
+const magicVersion = 7
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -238,7 +242,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	changes := m.asChanges()
 	set := pb.ManifestChangeSet{Changes: changes}
 
-	changeBuf, err := set.Marshal()
+	changeBuf, err := proto.Marshal(&set)
 	if err != nil {
 		fp.Close()
 		return nil, 0, err
@@ -252,7 +256,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 		fp.Close()
 		return nil, 0, err
 	}
-	if err := fp.Sync(); err != nil {
+	if err := y.FileSync(fp); err != nil {
 		fp.Close()
 		return nil, 0, err
 	}
@@ -318,7 +322,8 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 }
 
 var (
-	errBadMagic = errors.New("manifest has bad magic")
+	errBadMagic    = errors.New("manifest has bad magic")
+	errBadChecksum = errors.New("manifest has checksum mismatch")
 )
 
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
@@ -336,10 +341,14 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 	if !bytes.Equal(magicBuf[0:4], magicText[:]) {
 		return Manifest{}, 0, errBadMagic
 	}
-	version := binary.BigEndian.Uint32(magicBuf[4:8])
+	version := y.BytesToU32(magicBuf[4:8])
 	if version != magicVersion {
 		return Manifest{}, 0,
-			fmt.Errorf("manifest has unsupported version: %d (we support %d)", version, magicVersion)
+			//nolint:lll
+			fmt.Errorf("manifest has unsupported version: %d (we support %d).\n"+
+				"Please see https://github.com/dgraph-io/badger/blob/master/README.md#i-see-manifest-has-unsupported-version-x-we-support-y-error"+
+				" on how to fix this.",
+				version, magicVersion)
 	}
 
 	build := createManifest()
@@ -354,7 +363,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			}
 			return Manifest{}, 0, err
 		}
-		length := binary.BigEndian.Uint32(lenCrcBuf[0:4])
+		length := y.BytesToU32(lenCrcBuf[0:4])
 		var buf = make([]byte, length)
 		if _, err := io.ReadFull(&r, buf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -362,12 +371,12 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			}
 			return Manifest{}, 0, err
 		}
-		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
-			break
+		if crc32.Checksum(buf, y.CastagnoliCrcTable) != y.BytesToU32(lenCrcBuf[4:8]) {
+			return Manifest{}, 0, errBadChecksum
 		}
 
 		var changeSet pb.ManifestChangeSet
-		if err := changeSet.Unmarshal(buf); err != nil {
+		if err := proto.Unmarshal(buf, &changeSet); err != nil {
 			return Manifest{}, 0, err
 		}
 
@@ -386,8 +395,7 @@ func applyManifestChange(build *Manifest, tc *pb.ManifestChange) error {
 			return fmt.Errorf("MANIFEST invalid, table %d exists", tc.Id)
 		}
 		build.Tables[tc.Id] = TableManifest{
-			Level:    uint8(tc.Level),
-			Checksum: append([]byte{}, tc.Checksum...),
+			Level: uint8(tc.Level),
 		}
 		for len(build.Levels) <= int(tc.Level) {
 			build.Levels = append(build.Levels, levelManifest{make(map[uint64]struct{})})
@@ -419,12 +427,11 @@ func applyChangeSet(build *Manifest, changeSet *pb.ManifestChangeSet) error {
 	return nil
 }
 
-func newCreateChange(id uint64, level int, checksum []byte) *pb.ManifestChange {
+func newCreateChange(id uint64, level int) *pb.ManifestChange {
 	return &pb.ManifestChange{
-		Id:       id,
-		Op:       pb.ManifestChange_CREATE,
-		Level:    uint32(level),
-		Checksum: checksum,
+		Id:    id,
+		Op:    pb.ManifestChange_CREATE,
+		Level: uint32(level),
 	}
 }
 

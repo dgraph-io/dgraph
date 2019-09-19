@@ -26,10 +26,12 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	ostats "go.opencensus.io/stats"
 )
 
 var o *oracle
 
+// Oracle returns the global oracle instance.
 // TODO: Oracle should probably be located in worker package, instead of posting
 // package now that we don't run inSnapshot anymore.
 func Oracle() *oracle {
@@ -41,6 +43,7 @@ func init() {
 	o.init()
 }
 
+// Txn represents a transaction.
 type Txn struct {
 	StartTs uint64
 
@@ -51,7 +54,7 @@ type Txn struct {
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
-	conflicts map[string]struct{}
+	conflicts map[uint64]struct{}
 
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
@@ -60,6 +63,7 @@ type Txn struct {
 	cache *LocalCache // This pointer does not get modified.
 }
 
+// NewTxn returns a new Txn instance.
 func NewTxn(startTs uint64) *Txn {
 	return &Txn{
 		StartTs:    startTs,
@@ -68,16 +72,24 @@ func NewTxn(startTs uint64) *Txn {
 	}
 }
 
+// Get retrieves the posting list for the given list from the local cache.
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
+
+// GetFromDelta retrieves the posting list from delta cache, not from Badger.
+func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
+	return txn.cache.GetFromDelta(key)
+}
+
+// Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
 }
 
 // Store is used by tests.
 func (txn *Txn) Store(pl *List) *List {
-	return txn.cache.Set(string(pl.key), pl)
+	return txn.cache.SetIfAbsent(string(pl.key), pl)
 }
 
 type oracle struct {
@@ -226,6 +238,8 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		delete(o.waiters, startTs)
 	}
 	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
+	ostats.Record(context.Background(),
+		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.
 }
 
 func (o *oracle) ResetTxns() {

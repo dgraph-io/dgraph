@@ -1,25 +1,202 @@
 {
-	recurse(func: gt(count(~genre), 30000), depth: 2){
-		name@en
-		~genre (first:2) @filter(gt(count(starring), 2))
-		starring (first: 2)
-		performance.actor
-	}
+  movies as var(func: gt(count(~genre), 30000), orderasc: name@en) {
+    name@en
+    ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      starring {
+        performance.actor {
+          ActorName as name@en
+        }
+        Stars as min(val(ActorName))
+      }
+    }
+  }
+
+  movies(func: uid(movies)) {
+    name@en
+    director.film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      name@en
+      starring (orderasc: val(Stars), first: 2) {
+        performance.actor {
+          name@en
+        }
+      }
+    }
+  }
 }
 ---
 {
-  "recurse": [
+  "movies": [
     {
-      "name@en": "Documentary film"
+      "name@en": "Documentary film",
+      "director.film": [
+        {
+          "name@en": "!Women Art Revolution",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "B. Ruby Rich"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Barbara Kruger"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "$100 and a T-Shirt: A Documentary About Zines in the Northwest",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Calvin Johnson"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Donna Cossy"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-      "name@en": "Drama"
+      "name@en": "Short Film",
+      "director.film": [
+        {
+          "name@en": "#PostModem",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Amy Seimetz"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Arly Montes"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "#twitterkills",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Amanda Hendy"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Annie Hendy"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-      "name@en": "Comedy"
+      "name@en": "Drama",
+      "director.film": [
+        {
+          "name@en": "$100,000 for Ringo",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Eleonora Bianchi"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Fernando Sancho"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "$9.99",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Anthony LaPaglia"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Barry Otto"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-      "name@en": "Short Film"
+      "name@en": "Comedy",
+      "director.film": [
+        {
+          "name@en": "\"FF.SS.\" – Cioè: \"...che mi hai portato a fare sopra a Posillipo se non mi vuoi più bene?\"",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Alfredo Cerruti"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Bobby Solo"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "#1 Cheerleader Camp",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Adam Wright"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Alex Kozitsky"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -35,6 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 type groupi struct {
@@ -133,7 +135,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
-	raftServer.Node = gr.Node.Node
+	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
@@ -143,7 +145,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
-	go gr.informZeroAboutTablets()
+	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 }
 
@@ -176,15 +178,38 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
-		g.upsertSchema(s)
+		if gid, err := g.BelongsToReadOnly(s.Predicate); err != nil {
+			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
+				s.Predicate)
+			g.upsertSchema(s)
+		} else if gid == 0 {
+			g.upsertSchema(s)
+		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
+			!proto.Equal(s, &curr) {
+			// If this tablet is served to the group, do not upsert the schema unless the
+			// stored schema and the proposed one are different.
+			g.upsertSchema(s)
+		} else {
+			// The schema for this predicate has already been proposed.
+			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			continue
+		}
 	}
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
-	// schema for _predicate_ is not changed once set.
-	m.StartTs = 1
+	// schema for a reserved predicate is not changed once set.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
+	cancel()
+	if err != nil {
+		glog.Errorf("error while requesting timestamp for schema %v: %v", schema, err)
+		return
+	}
+
+	m.StartTs = ts.StartId
 	m.Schema = append(m.Schema, schema)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
@@ -205,6 +230,7 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
+// MaxLeaseId returns the maximum UID that has been leased.
 func MaxLeaseId() uint64 {
 	g := groups()
 	g.RLock()
@@ -215,11 +241,20 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// GetMembershipState returns the current membership state.
+func GetMembershipState() *pb.MembershipState {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return proto.Clone(g.state).(*pb.MembershipState)
+}
+
+// UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return x.Errorf("Don't have the address of any dgraphzero server")
+		return errors.Errorf("Don't have the address of any dgraphzero server")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -253,20 +288,20 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.Get().Connect(member.Addr)
+				conn.GetPools().Connect(member.Addr)
 			}
 		}
 		for _, tablet := range group.Tablets {
 			g.tablets[tablet.Predicate] = tablet
 		}
-		if gid == g.gid {
-			glog.V(3).Infof("group %d checksum: %d", g.gid, group.Checksum)
+		if gid == g.groupId() {
+			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.Get().Connect(member.Addr)
+			conn.GetPools().Connect(member.Addr)
 		}
 	}
 	if !foundSelf {
@@ -281,17 +316,20 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+				go func() {
+					if err := g.Node.ProposePeerRemoval(
+						context.Background(), member.Id); err != nil {
+						glog.Errorf("Error while proposing node removal: %+v", err)
+					}
+				}()
 			}
 		}
-		conn.Get().RemoveInvalid(g.state)
+		conn.GetPools().RemoveInvalid(g.state)
 	}
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
-	g.RLock()
-	defer g.RUnlock()
-	return g.gid == gid
+	return g.groupId() == gid
 }
 
 func (g *groupi) ChecksumsMatch(ctx context.Context) error {
@@ -307,7 +345,7 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 				return nil
 			}
 		case <-ctx.Done():
-			return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+			return errors.Errorf("Group checksum mismatch for id: %d", g.groupId())
 		}
 	}
 }
@@ -469,12 +507,10 @@ func (g *groupi) members(gid uint32) map[uint64]*pb.Member {
 
 func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
-	if members != nil {
-		for _, m := range members {
-			pl, err := conn.Get().Get(m.Addr)
-			if err == nil {
-				return pl
-			}
+	for _, m := range members {
+		pl, err := conn.GetPools().Get(m.Addr)
+		if err == nil {
+			return pl
 		}
 	}
 	return nil
@@ -482,11 +518,9 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 
 func (g *groupi) MyPeer() (uint64, bool) {
 	members := g.members(g.groupId())
-	if members != nil {
-		for _, m := range members {
-			if m.Id != g.Node.Id {
-				return m.Id, true
-			}
+	for _, m := range members {
+		if m.Id != g.Node.Id {
+			return m.Id, true
 		}
 	}
 	return 0, false
@@ -501,7 +535,7 @@ func (g *groupi) Leader(gid uint32) *conn.Pool {
 	}
 	for _, m := range members {
 		if m.Leader {
-			if pl, err := conn.Get().Get(m.Addr); err == nil {
+			if pl, err := conn.GetPools().Get(m.Addr); err == nil {
 				return pl
 			}
 		}
@@ -519,6 +553,11 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 		gids = append(gids, gid)
 	}
 	return
+}
+
+// KnownGroups returns the known groups using the global groupi instance.
+func KnownGroups() []uint32 {
+	return groups().KnownGroups()
 }
 
 func (g *groupi) triggerMembershipSync() {
@@ -550,7 +589,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.Get().Connect(mz.GetAddr())
+				return conn.GetPools().Connect(mz.GetAddr())
 			}
 		}
 		return nil
@@ -566,7 +605,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.Get().Connect(x.WorkerConfig.ZeroAddr)
+			pl = conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -616,7 +655,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	if string(reply.GetData()) == "OK" {
 		return nil
 	}
-	return x.Errorf(string(reply.GetData()))
+	return errors.Errorf(string(reply.GetData()))
 }
 
 // sendMembershipUpdates sends the membership update to Zero leader. If this Alpha is the leader, it
@@ -730,10 +769,14 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case <-ctx.Done():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -742,7 +785,9 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
 				break OUTER
 			}
 		}
@@ -779,9 +824,6 @@ func (g *groupi) processOracleDeltaStream() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		c := pb.NewZeroClient(pl.Get())
-		// The first entry send by Zero contains the entire state of transactions. Zero periodically
-		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
-		// safe way to get the status of all the transactions.
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			glog.Errorf("Error while calling Oracle %v\n", err)
@@ -793,7 +835,11 @@ func (g *groupi) processOracleDeltaStream() {
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
-			defer stream.CloseSend()
+			defer func() {
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
+			}()
 			defer close(deltaCh)
 
 			for {
@@ -906,4 +952,12 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 		}
 	}
+}
+
+// EnterpriseEnabled returns whether enterprise features can be used or not.
+func EnterpriseEnabled() bool {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return g.state.GetLicense().GetEnabled()
 }

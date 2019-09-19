@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package main
 
 import (
@@ -21,23 +22,24 @@ import (
 	"os"
 	"os/user"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type StringMap map[string]string
+type stringMap map[string]string
 
-type Volume struct {
+type volume struct {
 	Type     string
 	Source   string
 	Target   string
 	ReadOnly bool `yaml:"read_only"`
 }
 
-type Service struct {
+type service struct {
 	name          string // not exported
 	Image         string
 	ContainerName string    `yaml:"container_name"`
@@ -45,31 +47,30 @@ type Service struct {
 	Pid           string    `yaml:",omitempty"`
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
 	DependsOn     []string  `yaml:"depends_on,omitempty"`
-	Labels        StringMap `yaml:",omitempty"`
+	Labels        stringMap `yaml:",omitempty"`
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
-	Volumes       []Volume  `yaml:",omitempty"`
-	TempFS        []string  `yaml:",omitempty"`
+	Volumes       []volume  `yaml:",omitempty"`
+	TmpFS         []string  `yaml:",omitempty"`
 	User          string    `yaml:",omitempty"`
 	Command       string    `yaml:",omitempty"`
 }
 
-type ComposeConfig struct {
+type composeConfig struct {
 	Version  string
-	Services map[string]Service
-	Volumes  map[string]StringMap
+	Services map[string]service
+	Volumes  map[string]stringMap
 }
 
-type Options struct {
+type options struct {
 	NumZeros      int
 	NumAlphas     int
 	NumReplicas   int
 	LruSizeMB     int
-	Enterprise    bool
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
-	TempFS        bool
+	TmpFS         bool
 	UserOwnership bool
 	Jaeger        bool
 	Metrics       bool
@@ -77,10 +78,13 @@ type Options struct {
 	Verbosity     int
 	OutFile       string
 	LocalBin      bool
+	Tag           string
 	WhiteList     bool
+	Ratel         bool
+	RatelPort     int
 }
 
-var opts Options
+var opts options
 
 const (
 	zeroBasePort  int = 5080 // HTTP=6080
@@ -102,11 +106,11 @@ func getOffset(idx int) int {
 	return idx
 }
 
-func initService(basename string, idx, grpcPort int) Service {
-	var svc Service
+func initService(basename string, idx, grpcPort int) service {
+	var svc service
 
 	svc.name = name(basename, idx)
-	svc.Image = "dgraph/dgraph:latest"
+	svc.Image = "dgraph/dgraph:" + opts.Tag
 	svc.ContainerName = svc.name
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
@@ -119,7 +123,7 @@ func initService(basename string, idx, grpcPort int) Service {
 		toExposedPort(grpcPort + 1000), // http port
 	}
 
-	svc.Volumes = append(svc.Volumes, Volume{
+	svc.Volumes = append(svc.Volumes, volume{
 		Type:     "bind",
 		Source:   "$GOPATH/bin",
 		Target:   "/gobin",
@@ -127,14 +131,14 @@ func initService(basename string, idx, grpcPort int) Service {
 	})
 
 	switch {
-	case opts.DataVol == true:
-		svc.Volumes = append(svc.Volumes, Volume{
+	case opts.DataVol:
+		svc.Volumes = append(svc.Volumes, volume{
 			Type:   "volume",
 			Source: "data",
 			Target: "/data",
 		})
 	case opts.DataDir != "":
-		svc.Volumes = append(svc.Volumes, Volume{
+		svc.Volumes = append(svc.Volumes, volume{
 			Type:   "bind",
 			Source: opts.DataDir,
 			Target: "/data",
@@ -150,7 +154,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	if opts.UserOwnership {
 		user, err := user.Current()
 		if err != nil {
-			x.CheckfNoTrace(x.Errorf("unable to get current user: %v", err))
+			x.CheckfNoTrace(errors.Wrap(err, "unable to get current user"))
 		}
 		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
@@ -164,15 +168,15 @@ func initService(basename string, idx, grpcPort int) Service {
 	return svc
 }
 
-func getZero(idx int) Service {
+func getZero(idx int) service {
 	basename := "zero"
 	basePort := zeroBasePort + opts.PortOffset
 	grpcPort := basePort + getOffset(idx)
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
@@ -190,15 +194,15 @@ func getZero(idx int) Service {
 	return svc
 }
 
-func getAlpha(idx int) Service {
+func getAlpha(idx int) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
@@ -206,49 +210,68 @@ func getAlpha(idx int) Service {
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort+opts.PortOffset)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
+	svc.Command += fmt.Sprintf(" --idx=%d", idx)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
-	if opts.Enterprise {
-		svc.Command += " --enterprise_features"
-		if opts.AclSecret != "" {
-			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
-			svc.Volumes = append(svc.Volumes, Volume{
-				Type:     "bind",
-				Source:   opts.AclSecret,
-				Target:   "/secret/hmac",
-				ReadOnly: true,
-			})
-		}
+	if opts.AclSecret != "" {
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.AclSecret,
+			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
 	}
 
 	return svc
 }
 
-func getJaeger() Service {
-	svc := Service{
+func getJaeger() service {
+	svc := service{
 		Image:         "jaegertracing/all-in-one:latest",
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
+			toExposedPort(14268),
 			toExposedPort(16686),
 		},
-		Environment: []string{"COLLECTOR_ZIPKIN_HTTP_PORT=9411"},
-		Command:     "--memory.max-traces=1000000",
+		Environment: []string{
+			"SPAN_STORAGE_TYPE=badger",
+		},
+		Command: "--badger.ephemeral=false" +
+			" --badger.directory-key /working/jaeger" +
+			" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
 
-func addMetrics(cfg *ComposeConfig) {
-	cfg.Volumes["prometheus-volume"] = StringMap{}
-	cfg.Volumes["grafana-volume"] = StringMap{}
+func getRatel() service {
+	portFlag := ""
+	if opts.RatelPort != 8000 {
+		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
+	}
+	svc := service{
+		Image:         "dgraph/dgraph:" + opts.Tag,
+		ContainerName: "ratel",
+		Ports: []string{
+			toExposedPort(opts.RatelPort),
+		},
+		Command: "dgraph-ratel" + portFlag,
+	}
+	return svc
+}
 
-	cfg.Services["node-exporter"] = Service{
+func addMetrics(cfg *composeConfig) {
+	cfg.Volumes["prometheus-volume"] = stringMap{}
+	cfg.Volumes["grafana-volume"] = stringMap{}
+
+	cfg.Services["node-exporter"] = service{
 		Image:         "quay.io/prometheus/node-exporter",
 		ContainerName: "node-exporter",
 		Pid:           "host",
 		WorkingDir:    "/working/jaeger",
-		Volumes: []Volume{{
+		Volumes: []volume{{
 			Type:     "bind",
 			Source:   "/",
 			Target:   "/host",
@@ -256,14 +279,14 @@ func addMetrics(cfg *ComposeConfig) {
 		}},
 	}
 
-	cfg.Services["prometheus"] = Service{
+	cfg.Services["prometheus"] = service{
 		Image:         "prom/prometheus",
 		ContainerName: "prometheus",
 		Hostname:      "prometheus",
 		Ports: []string{
 			toExposedPort(9090),
 		},
-		Volumes: []Volume{
+		Volumes: []volume{
 			{
 				Type:   "volume",
 				Source: "prometheus-volume",
@@ -278,7 +301,7 @@ func addMetrics(cfg *ComposeConfig) {
 		},
 	}
 
-	cfg.Services["grafana"] = Service{
+	cfg.Services["grafana"] = service{
 		Image:         "grafana/grafana",
 		ContainerName: "grafana",
 		Hostname:      "grafana",
@@ -290,14 +313,12 @@ func addMetrics(cfg *ComposeConfig) {
 			"GF_AUTH_ANONYMOUS_ENABLED=true",
 			"GF_AUTH_ANONYMOUS_ORG_ROLE=Admin",
 		},
-		Volumes: []Volume{{
+		Volumes: []volume{{
 			Type:   "volume",
 			Source: "grafana-volume",
 			Target: "/var/lib/grafana",
 		}},
 	}
-
-	return
 }
 
 func warning(str string) {
@@ -332,13 +353,11 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
-	cmd.PersistentFlags().BoolVarP(&opts.Enterprise, "enterprise", "e", false,
-		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
-	cmd.PersistentFlags().BoolVar(&opts.TempFS, "tmpfs", false,
+	cmd.PersistentFlags().BoolVar(&opts.TmpFS, "tmpfs", false,
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
@@ -352,8 +371,14 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
+	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
+		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
+	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
+		"include ratel service")
+	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
+		"Port to expose Ratel service")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -366,29 +391,28 @@ func main() {
 
 	// Do some sanity checks.
 	if opts.NumZeros < 1 || opts.NumZeros > 99 {
-		fatal(fmt.Errorf("number of zeros must be 1-99"))
+		fatal(errors.Errorf("number of zeros must be 1-99"))
 	}
 	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
-		fatal(fmt.Errorf("number of alphas must be 1-99"))
+		fatal(errors.Errorf("number of alphas must be 1-99"))
 	}
 	if opts.NumReplicas%2 == 0 {
-		fatal(fmt.Errorf("number of replicas must be odd"))
+		fatal(errors.Errorf("number of replicas must be odd"))
 	}
 	if opts.LruSizeMB < 1024 {
-		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
-	}
-	if opts.AclSecret != "" && !opts.Enterprise {
-		warning("adding --enterprise because it is required by ACL feature")
-		opts.Enterprise = true
+		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
 	}
 	if opts.DataVol && opts.DataDir != "" {
-		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
 	}
 	if opts.UserOwnership && opts.DataDir == "" {
-		fatal(fmt.Errorf("--user option requires --data_dir=<path>"))
+		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
+	}
+	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
+		fatal(errors.Errorf("--ratel_port option requires --ratel"))
 	}
 
-	services := make(map[string]Service)
+	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
 		svc := getZero(i)
@@ -400,18 +424,22 @@ func main() {
 		services[svc.name] = svc
 	}
 
-	cfg := ComposeConfig{
+	cfg := composeConfig{
 		Version:  "3.5",
 		Services: services,
-		Volumes:  make(map[string]StringMap),
+		Volumes:  make(map[string]stringMap),
 	}
 
 	if opts.DataVol {
-		cfg.Volumes["data"] = StringMap{}
+		cfg.Volumes["data"] = stringMap{}
 	}
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Ratel {
+		services["ratel"] = getRatel()
 	}
 
 	if opts.Metrics {
@@ -432,7 +460,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile)
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
-			fatal(fmt.Errorf("unable to write file: %v", err))
+			fatal(errors.Errorf("unable to write file: %v", err))
 		}
 	}
 }

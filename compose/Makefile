@@ -16,10 +16,13 @@
 
 BIN           = compose
 BUILD_FLAGS  ?= "-N -l"
-GOPATH       ?= $(shell go env GOPATH)
 
 .PHONY: all
-all: $(BIN)
+all: install_dgraph $(BIN)
+
+.PHONY: install_dgraph
+install_dgraph:
+	$(MAKE) -C .. install
 
 $(BIN): compose.go
 	go build -gcflags=$(BUILD_FLAGS) -o $(BIN)

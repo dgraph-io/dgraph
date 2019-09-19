@@ -19,12 +19,15 @@ package badger
 import (
 	"bytes"
 	"context"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/golang/protobuf/proto"
 )
 
 const pageSize = 4 << 20 // 4MB
@@ -66,10 +69,11 @@ type Stream struct {
 	// single goroutine, i.e. logic within Send method can expect single threaded execution.
 	Send func(*pb.KVList) error
 
-	readTs  uint64
-	db      *DB
-	rangeCh chan keyRange
-	kvChan  chan *pb.KVList
+	readTs       uint64
+	db           *DB
+	rangeCh      chan keyRange
+	kvChan       chan *pb.KVList
+	nextStreamId uint32
 }
 
 // ToList is a default implementation of KeyToList. It picks up all valid versions of the key,
@@ -113,6 +117,23 @@ func (st *Stream) ToList(key []byte, itr *Iterator) (*pb.KVList, error) {
 // end byte slices are owned by keyRange struct.
 func (st *Stream) produceRanges(ctx context.Context) {
 	splits := st.db.KeySplits(st.Prefix)
+
+	// We don't need to create more key ranges than NumGo goroutines. This way, we will have limited
+	// number of "streams" coming out, which then helps limit the memory used by SSWriter.
+	{
+		pickEvery := int(math.Floor(float64(len(splits)) / float64(st.NumGo)))
+		if pickEvery < 1 {
+			pickEvery = 1
+		}
+		filtered := splits[:0]
+		for i, split := range splits {
+			if (i+1)%pickEvery == 0 {
+				filtered = append(filtered, split)
+			}
+		}
+		splits = filtered
+	}
+
 	start := y.SafeCopy(nil, st.Prefix)
 	for _, key := range splits {
 		st.rangeCh <- keyRange{left: start, right: y.SafeCopy(nil, []byte(key))}
@@ -143,6 +164,9 @@ func (st *Stream) produceKVs(ctx context.Context) error {
 		itr := txn.NewIterator(iterOpts)
 		defer itr.Close()
 
+		// This unique stream id is used to identify all the keys from this iteration.
+		streamId := atomic.AddUint32(&st.nextStreamId, 1)
+
 		outList := new(pb.KVList)
 		var prevKey []byte
 		for itr.Seek(kr.left); itr.Valid(); {
@@ -172,15 +196,30 @@ func (st *Stream) produceKVs(ctx context.Context) error {
 				continue
 			}
 			outList.Kv = append(outList.Kv, list.Kv...)
-			size += list.Size()
+			size += proto.Size(list)
 			if size >= pageSize {
-				st.kvChan <- outList
+				for _, kv := range outList.Kv {
+					kv.StreamId = streamId
+				}
+				select {
+				case st.kvChan <- outList:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 				outList = new(pb.KVList)
 				size = 0
 			}
 		}
 		if len(outList.Kv) > 0 {
-			st.kvChan <- outList
+			for _, kv := range outList.Kv {
+				kv.StreamId = streamId
+			}
+			// TODO: Think of a way to indicate that a stream is over.
+			select {
+			case st.kvChan <- outList:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		return nil
 	}
@@ -222,7 +261,7 @@ func (st *Stream) streamKVs(ctx context.Context) error {
 				break loop
 			}
 		}
-		sz := uint64(batch.Size())
+		sz := uint64(proto.Size(batch))
 		bytesSent += sz
 		count += len(batch.Kv)
 		t := time.Now()
@@ -278,8 +317,8 @@ func (st *Stream) Orchestrate(ctx context.Context) error {
 
 	// kvChan should only have a small capacity to ensure that we don't buffer up too much data if
 	// sending is slow. Page size is set to 4MB, which is used to lazily cap the size of each
-	// KVList. To get around 64MB buffer, we can set the channel size to 16.
-	st.kvChan = make(chan *pb.KVList, 16)
+	// KVList. To get 128MB buffer, we can set the channel size to 32.
+	st.kvChan = make(chan *pb.KVList, 32)
 
 	if st.KeyToList == nil {
 		st.KeyToList = st.ToList

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package y contains the code shared by the Go client and Dgraph server. It should have
-// minimum dependencies in order to keep the client light.
+// Package y contains the code shared by the Go client and Dgraph server.
+// It should have minimum dependencies in order to keep the client light.
 package y
 
 import (
@@ -23,6 +23,8 @@ import (
 )
 
 var (
-	ErrAborted  = errors.New("Transaction has been aborted. Please retry.")
-	ErrConflict = errors.New("Conflicts with pending transaction. Please abort.")
+	// ErrAborted is returned when an operation is performed on an aborted transaction.
+	ErrAborted = errors.New("Transaction has been aborted. Please retry")
+	// ErrConflict is returned when commit couldn't succeed due to conflicts.
+	ErrConflict = errors.New("Conflicts with pending transaction. Please abort")
 )

@@ -21,6 +21,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dgryski/go-farm"
+
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
@@ -231,9 +233,10 @@ func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
 	tables, decr := s.getTableForKey(key)
 	keyNoTs := y.ParseKey(key)
 
+	hash := farm.Fingerprint64(keyNoTs)
 	var maxVs y.ValueStruct
 	for _, th := range tables {
-		if th.DoesNotHave(keyNoTs) {
+		if th.DoesNotHave(hash) {
 			y.NumLSMBloomHits.Add(s.strLevel, 1)
 			continue
 		}
@@ -248,7 +251,7 @@ func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
 		}
 		if y.SameKey(key, it.Key()) {
 			if version := y.ParseTs(it.Key()); maxVs.Version < version {
-				maxVs = it.Value()
+				maxVs = it.ValueCopy()
 				maxVs.Version = version
 			}
 		}
@@ -262,20 +265,22 @@ func (s *levelHandler) appendIterators(iters []y.Iterator, opt *IteratorOptions)
 	s.RLock()
 	defer s.RUnlock()
 
-	tables := make([]*table.Table, 0, len(s.tables))
-	for _, t := range s.tables {
-		if opt.pickTable(t) {
-			tables = append(tables, t)
-		}
-	}
-	if len(tables) == 0 {
-		return iters
-	}
-
 	if s.level == 0 {
 		// Remember to add in reverse order!
 		// The newer table at the end of s.tables should be added first as it takes precedence.
-		return appendIteratorsReversed(iters, tables, opt.Reverse)
+		// Level 0 tables are not in key sorted order, so we need to consider them one by one.
+		var out []*table.Table
+		for _, t := range s.tables {
+			if opt.pickTable(t) {
+				out = append(out, t)
+			}
+		}
+		return appendIteratorsReversed(iters, out, opt.Reverse)
+	}
+
+	tables := opt.pickTables(s.tables)
+	if len(tables) == 0 {
+		return iters
 	}
 	return append(iters, table.NewConcatIterator(tables, opt.Reverse))
 }

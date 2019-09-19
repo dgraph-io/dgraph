@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -33,7 +33,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("error reading CA file %q", certPath)
+			return nil, errors.Errorf("error reading CA file %q", certPath)
 		}
 	}
 
@@ -99,7 +99,7 @@ func ExampleLoginOverTLS() {
 	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
-	dg, err := dgraphClientWithCerts(z.SockAddr, conf)
+	dg, err := dgraphClientWithCerts(testutil.SockAddr, conf)
 	if err != nil {
 		glog.Fatalf("Unable to get dgraph client: %v", err)
 	}

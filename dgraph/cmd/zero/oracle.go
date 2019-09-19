@@ -17,8 +17,6 @@
 package zero
 
 import (
-	"errors"
-	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -29,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
@@ -38,6 +37,7 @@ type syncMark struct {
 	ts    uint64
 }
 
+// Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
@@ -49,16 +49,17 @@ type Oracle struct {
 	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
-	subscribers map[int]chan *pb.OracleDelta
+	subscribers map[int]chan pb.OracleDelta
 	updates     chan *pb.OracleDelta
 	doneUntil   y.WaterMark
 	syncMarks   []syncMark
 }
 
+// Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.keyCommit = make(map[string]uint64)
-	o.subscribers = make(map[int]chan *pb.OracleDelta)
+	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
 	go o.sendDeltasToSubscribers()
@@ -132,7 +133,7 @@ func (o *Oracle) currentState() *pb.OracleDelta {
 	return resp
 }
 
-func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
+func (o *Oracle) newSubscriber() (<-chan pb.OracleDelta, int) {
 	o.Lock()
 	defer o.Unlock()
 	var id int
@@ -142,8 +143,12 @@ func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
 			break
 		}
 	}
-	ch := make(chan *pb.OracleDelta, 1000)
-	ch <- o.currentState() // Queue up the full state as the first entry.
+
+	// The channel takes a delta instead of a pointer as the receiver needs to
+	// modify it by setting the group checksums. Passing a pointer previously
+	// resulted in a race condition.
+	ch := make(chan pb.OracleDelta, 1000)
+	ch <- *o.currentState() // Queue up the full state as the first entry.
 	o.subscribers[id] = ch
 	return ch, id
 }
@@ -212,7 +217,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
-			case ch <- delta:
+			case ch <- *delta:
 			default:
 				close(ch)
 				delete(o.subscribers, id)
@@ -259,7 +264,10 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	max := x.Max(ids.EndId, ids.ReadOnly)
-	o.doneUntil.WaitForMark(context.Background(), max)
+	if err := o.doneUntil.WaitForMark(context.Background(), max); err != nil {
+		glog.Errorf("Error while waiting for mark: %+v", err)
+	}
+
 	// Now send it out to updates.
 	o.updates <- &pb.OracleDelta{MaxAssigned: max}
 
@@ -268,6 +276,7 @@ func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	o.maxAssigned = x.Max(o.maxAssigned, max)
 }
 
+// MaxPending returns the maximum assigned timestamp.
 func (o *Oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
@@ -334,44 +343,30 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
 		preds := make(map[string]struct{})
-		// _predicate_ would never be part of conflict detection, so keys corresponding to any
-		// modifications to this predicate would not be sent to Zero. But, we still need to abort
-		// transactions which are coming in, while this predicate is being moved. This means that if
-		// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
-		// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
-		// which sneaked in during the move.
 
-		// Ensure that we only consider checking _predicate_, if expand_edge flag is
-		// set to true, i.e. we are actually serving _predicate_. Otherwise, the
-		// code below, which checks if a tablet is present or is readonly, causes
-		// ALL txns to abort. See #2547.
-		if tablet := s.ServingTablet("_predicate_"); tablet != nil {
-			pkey := fmt.Sprintf("%d-_predicate_", tablet.GroupId)
-			preds[pkey] = struct{}{}
-		}
 		for _, k := range src.Preds {
 			preds[k] = struct{}{}
 		}
 		for pkey := range preds {
 			splits := strings.Split(pkey, "-")
 			if len(splits) < 2 {
-				return x.Errorf("Unable to find group id in %s", pkey)
+				return errors.Errorf("Unable to find group id in %s", pkey)
 			}
 			gid, err := strconv.Atoi(splits[0])
 			if err != nil {
-				return x.Errorf("Unable to parse group id from %s. Error: %v", pkey, err)
+				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := strings.Join(splits[1:], "-")
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
-				return x.Errorf("Tablet for %s is nil", pred)
+				return errors.Errorf("Tablet for %s is nil", pred)
 			}
 			if tablet.GroupId != uint32(gid) {
-				return x.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
+				return errors.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
 					gid, pred, tablet.GroupId)
 			}
 			if s.isBlocked(pred) {
-				return x.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
+				return errors.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
 			}
 		}
 		return nil
@@ -405,6 +400,10 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	return s.proposeTxn(ctx, src)
 }
 
+// CommitOrAbort either commits a transaction or aborts it.
+// The abortion can happen under the following conditions
+// 1) the api.TxnContext.Aborted flag is set in the src argument
+// 2) if there's an error (e.g server is not the leader or there's a conflicting transaction)
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -413,7 +412,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	defer span.End()
 
 	if !s.Node.AmLeader() {
-		return nil, x.Errorf("Only leader can decide to commit or abort")
+		return nil, errors.Errorf("Only leader can decide to commit or abort")
 	}
 	err := s.commit(ctx, src)
 	if err != nil {
@@ -425,7 +424,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 var errClosed = errors.New("Streaming closed by oracle")
 var errNotLeader = errors.New("Node is no longer leader")
 
-func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
+// Oracle streams the oracle state to the alphas.
+// The first entry sent by Zero contains the entire state of transactions. Zero periodically
+// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+// safe way to get the status of all the transactions.
+func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
 	}
@@ -445,7 +448,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			// Pass in the latest group checksum as well, so the Alpha can use that to determine
 			// when not to service a read.
 			delta.GroupChecksums = s.groupChecksums()
-			if err := server.Send(delta); err != nil {
+			if err := server.Send(&delta); err != nil {
 				return err
 			}
 		case <-ctx.Done():
@@ -456,6 +459,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 	}
 }
 
+// SyncedUntil returns the timestamp up to which all the nodes have synced.
 func (s *Server) SyncedUntil() uint64 {
 	s.orc.Lock()
 	defer s.orc.Unlock()
@@ -475,6 +479,7 @@ func (s *Server) SyncedUntil() uint64 {
 	return syncUntil
 }
 
+// TryAbort attempts to abort the given transactions which are not already committed..
 func (s *Server) TryAbort(ctx context.Context,
 	txns *pb.TxnTimestamps) (*pb.OracleDelta, error) {
 	delta := &pb.OracleDelta{}

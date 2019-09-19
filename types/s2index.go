@@ -23,6 +23,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
@@ -37,8 +38,8 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 	return tokens
 }
 
-// IndexTokens returns the tokens to be used in a geospatial index for the given geometry. If the
-// geometry is not supported it returns an error.
+// IndexGeoTokens returns the tokens to be used in a geospatial index for the
+// given geometry. If the geometry is not supported it returns an error.
 func IndexGeoTokens(g geom.T) ([]string, error) {
 	parents, cover, err := indexCells(g)
 	if err != nil {
@@ -72,7 +73,7 @@ const (
 // query.
 func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
-		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
+		return nil, nil, errors.Errorf("Covering only available for 2D co-ordinates.")
 	}
 	switch v := g.(type) {
 	case *geom.Point:
@@ -101,7 +102,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 		parents := getParentCells(cover, MinCellLevel)
 		return parents, cover, nil
 	default:
-		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
+		return nil, nil, errors.Errorf("Cannot index geometry of type %T", v)
 	}
 }
 
@@ -134,10 +135,10 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	r := p.LinearRing(0)
 	n := r.NumCoords()
 	if n < 4 {
-		return nil, x.Errorf("Can't convert ring with less than 4 pts")
+		return nil, errors.Errorf("Can't convert ring with less than 4 pts")
 	}
 	if !r.Coord(0).Equal(geom.XY, r.Coord(n-1)) {
-		return nil, x.Errorf("Last coordinate not same as first for polygon: %+v\n", p)
+		return nil, errors.Errorf("Last coordinate not same as first for polygon: %+v\n", p)
 	}
 	// S2 specifies that the orientation of the polygons should be CCW. However there is no
 	// restriction on the orientation in WKB (or geojson). To get the correct orientation we assume

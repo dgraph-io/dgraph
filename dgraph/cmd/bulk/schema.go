@@ -32,19 +32,15 @@ import (
 
 type schemaStore struct {
 	sync.RWMutex
-	m map[string]*pb.SchemaUpdate
+	schemaMap map[string]*pb.SchemaUpdate
+	types     []*pb.TypeUpdate
 	*state
 }
 
-func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
+func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*pb.SchemaUpdate{
-			"_predicate_": {
-				ValueType: pb.Posting_STRING,
-				List:      true,
-			},
-		},
-		state: state,
+		schemaMap: map[string]*pb.SchemaUpdate{},
+		state:     state,
 	}
 
 	// Load all initial predicates. Some predicates that might not be used when
@@ -52,30 +48,45 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 	// better to include them in case the input data contains triples with these
 	// predicates.
 	for _, update := range schema.CompleteInitialSchema() {
-		s.m[update.Predicate] = update
+		s.schemaMap[update.Predicate] = update
 	}
 
 	if opt.StoreXids {
-		s.m["xid"] = &pb.SchemaUpdate{
+		s.schemaMap["xid"] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"hash"},
 		}
 	}
-	for _, sch := range initial {
+
+	for _, sch := range initial.Preds {
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
-		if _, ok := s.m[p]; ok {
-			x.Check(fmt.Errorf("Predicate %q already exists in schema", p))
+		if _, ok := s.schemaMap[p]; ok {
+			fmt.Printf("Predicate %q already exists in schema\n", p)
+			continue
 		}
-		s.m[p] = sch
+		s.schemaMap[p] = sch
 	}
+
+	s.types = initial.Types
+
 	return s
 }
 
 func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 	s.RLock()
 	defer s.RUnlock()
-	return s.m[pred]
+	return s.schemaMap[pred]
+}
+
+func (s *schemaStore) setSchemaAsList(pred string) {
+	s.Lock()
+	defer s.Unlock()
+	schema, ok := s.schemaMap[pred]
+	if !ok {
+		return
+	}
+	schema.List = true
 }
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
@@ -84,17 +95,17 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	}
 
 	s.RLock()
-	sch, ok := s.m[de.Attr]
+	sch, ok := s.schemaMap[de.Attr]
 	s.RUnlock()
 	if !ok {
 		s.Lock()
-		sch, ok = s.m[de.Attr]
+		sch, ok = s.schemaMap[de.Attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
 			if objectIsUID {
 				sch.List = true
 			}
-			s.m[de.Attr] = sch
+			s.schemaMap[de.Attr] = sch
 		}
 		s.Unlock()
 	}
@@ -117,7 +128,8 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 	m := make(map[string]struct{})
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		m[pk.Attr] = struct{}{}
 		itr.Seek(pk.SkipPredicate())
 		continue
@@ -134,14 +146,29 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 	txn := db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	for _, pred := range preds {
-		sch, ok := s.m[pred]
+		sch, ok := s.schemaMap[pred]
 		if !ok {
 			continue
 		}
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.SetWithMeta(k, v, posting.BitCompletePosting))
+		x.Check(txn.SetEntry(&badger.Entry{
+			Key:      k,
+			Value:    v,
+			UserMeta: posting.BitSchemaPosting}))
+	}
+
+	// Write all the types as all groups should have access to all the types.
+	for _, typ := range s.types {
+		k := x.TypeKey(typ.TypeName)
+		v, err := typ.Marshal()
+		x.Check(err)
+		x.Check(txn.SetEntry(&badger.Entry{
+			Key:      k,
+			Value:    v,
+			UserMeta: posting.BitSchemaPosting,
+		}))
 	}
 
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1

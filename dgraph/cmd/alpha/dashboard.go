@@ -34,7 +34,8 @@ type keywords struct {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Dgraph browser is available for running separately using the dgraph-ratel binary"))
+	x.Check2(w.Write([]byte(
+		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
@@ -94,8 +95,8 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	js, err := json.Marshal(kws)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		x.Check2(w.Write([]byte(err.Error())))
 		return
 	}
-	w.Write(js)
+	x.Check2(w.Write(js))
 }

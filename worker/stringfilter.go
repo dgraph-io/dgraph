@@ -26,16 +26,17 @@ import (
 	"github.com/golang/glog"
 )
 
-type matchFn func(types.Val, stringFilter) bool
+type matchFunc func(types.Val, stringFilter) bool
 
 type stringFilter struct {
 	funcName  string
 	funcType  FuncType
 	lang      string
 	tokens    []string
-	match     matchFn
+	match     matchFunc
 	ineqValue types.Val
 	eqVals    []types.Val
+	tokName   string
 }
 
 func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.List {
@@ -64,7 +65,7 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 		previous, ok := tokenMap[token]
 		if ok {
 			tokenMap[token] = true
-			if previous == false { // count only once
+			if !previous { // count only once
 				cnt++
 			}
 		}
@@ -92,15 +93,7 @@ func ineqMatch(value types.Val, filter stringFilter) bool {
 }
 
 func tokenizeValue(value types.Val, filter stringFilter) []string {
-	var tokName string
-	switch filter.funcType {
-	case StandardFn:
-		tokName = "term"
-	case FullTextSearchFn:
-		tokName = "fulltext"
-	}
-
-	tokenizer, found := tok.GetTokenizer(tokName)
+	tokenizer, found := tok.GetTokenizer(filter.tokName)
 	// tokenizer was used in previous stages of query processing, it has to be available
 	x.AssertTrue(found)
 

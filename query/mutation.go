@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -31,23 +30,18 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
+// ApplyMutations performs the required edge expansions and forwards the results to the
+// worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	if x.WorkerConfig.ExpandEdge {
-		edges, err := expandEdges(ctx, m)
-		if err != nil {
-			return nil, x.Wrapf(err, "While adding pb.edges")
-		}
-		m.Edges = edges
-	} else {
-		for _, mu := range m.Edges {
-			if mu.Attr == x.Star && !x.WorkerConfig.ExpandEdge {
-				return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
-					" Cannot perform S * * deletion.")
-			}
-		}
+	edges, err := expandEdges(ctx, m)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
+	m.Edges = edges
+
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -69,41 +63,22 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
-			valMatrix, err := getNodePredicates(ctx, sg)
+
+			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
 				return nil, err
 			}
-			if len(valMatrix) != 1 {
-				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
-					edge.GetEntity())
-			}
-			for _, tv := range valMatrix[0].Values {
-				if len(tv.Val) > 0 {
-					preds = append(preds, string(tv.Val))
-				}
-			}
+			preds = append(preds, getPredicatesFromTypes(types)...)
+			preds = append(preds, x.ReservedPredicates()...)
 		}
 
 		for _, pred := range preds {
 			edgeCopy := *edge
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)
-
-			// We only want to delete the pred from <uid> + <_predicate_> posting list if this is
-			// a SP* deletion operation. Otherwise we just continue.
-			if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) != x.Star {
-				continue
-			}
-
-			e := &pb.DirectedEdge{
-				Op:     edge.Op,
-				Entity: edge.GetEntity(),
-				Attr:   "_predicate_",
-				Value:  []byte(pred),
-			}
-			edges = append(edges, e)
 		}
 	}
+
 	return edges, nil
 }
 
@@ -123,7 +98,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 				return nil
 			}
 			if time.Now().After(deadline) {
-				err := x.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+				err := errors.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
 				glog.V(2).Infof("verifyUid returned error: %v", err)
 				return err
 			}
@@ -147,7 +122,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		}
 
 		if len(nq.Subject) == 0 {
-			return nil, x.Errorf("Subject must not be empty for nquad: %+v", nq)
+			return nil, errors.Errorf("Subject must not be empty for nquad: %+v", nq)
 		}
 		var uid uint64
 		if strings.HasPrefix(nq.Subject, "_:") {
@@ -191,7 +166,8 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	return newUids, nil
 }
 
-func ToInternal(gmu *gql.Mutation,
+// ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
+func ToDirectedEdges(gmu *gql.Mutation,
 	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
@@ -206,7 +182,7 @@ func ToInternal(gmu *gql.Mutation,
 		var edge *pb.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
-			return x.Wrap(err)
+			return errors.Wrap(err, "")
 		}
 		edge.Op = op
 		edges = append(edges, edge)
