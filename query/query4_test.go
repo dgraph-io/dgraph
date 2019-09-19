@@ -368,7 +368,7 @@ func TestCascadeSubQuery1(t *testing.T) {
 					"full_name": "Michonne's large name for hashing",
 					"gender": "female"
 				}
-				]
+			]
 		}
 	}`, js)
 }
@@ -395,39 +395,39 @@ func TestCascadeSubQuery2(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
-	{
-		"data": {
-			"me": [
-				{
-					"name": "Michonne",
-					"full_name": "Michonne's large name for hashing",
-					"gender": "female",
-					"friend": [
-						{
-							"name": "Rick Grimes",
-							"friend": [
-								{
-									"name": "Michonne",
-									"full_name": "Michonne's large name for hashing",
-									"dob": "1910-01-01T00:00:00Z",
-									"age": 38
-								}
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female",
+						"friend": [
+							{
+								"name": "Rick Grimes",
+								"friend": [
+									{
+										"name": "Michonne",
+										"full_name": "Michonne's large name for hashing",
+										"dob": "1910-01-01T00:00:00Z",
+										"age": 38
+									}
 								]
-						},
+							},
 							{
-							"name": "Glenn Rhee"
-						},
+								"name": "Glenn Rhee"
+							},
 							{
-							"name": "Daryl Dixon"
-						},
+								"name": "Daryl Dixon"
+							},
 							{
-							"name": "Andrea"
-						}
+								"name": "Andrea"
+							}
 						]
-				}
+					}
 				]
-		}
-	}`, js)
+			}
+		}`, js)
 }
 
 func TestCascadeSubQuery3(t *testing.T) {
@@ -460,7 +460,7 @@ func TestCascadeSubQuery3(t *testing.T) {
 					"full_name": "Michonne's large name for hashing",
 					"gender": "female"
 				}
-				]
+			]
 		}
 	}`, js)
 }
@@ -487,31 +487,31 @@ func TestCascadeSubQueryWithFilter(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
-	{
-		"data": {
-			"me": [
-				{
-					"name": "Michonne",
-					"full_name": "Michonne's large name for hashing",
-					"gender": "female",
-					"friend": [
-						{
-							"name": "Rick Grimes"
-						},
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female",
+						"friend": [
 							{
-							"name": "Glenn Rhee"
-						},
+								"name": "Rick Grimes"
+							},
 							{
-							"name": "Daryl Dixon"
-						},
+								"name": "Glenn Rhee"
+							},
 							{
-							"name": "Andrea"
-						}
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
 						]
-				}
+					}
 				]
-		}
-	}`, js)
+			}
+		}`, js)
 }
 
 func TestCascadeSubQueryWithVars1(t *testing.T) {
@@ -532,47 +532,47 @@ func TestCascadeSubQueryWithVars1(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
-	{
-		"data": {
-			"him": [
-				{
-					"friend": [
-						{
-							"friend": [
-								{
-									"name": "Michonne"
-								}
-								]
-						},
+		{
+			"data": {
+				"him": [
+					{
+						"friend": [
 							{
-							"friend": [
-								{
-									"name": "Glenn Rhee"
-								}
+								"friend": [
+									{
+										"name": "Michonne"
+									}
 								]
-						}
+							},
+							{
+								"friend": [
+									{
+										"name": "Glenn Rhee"
+									}
+								]
+							}
 						]
-				}
+					}
 				],
-			"me": [
-				{
-					"name": "Michonne"
-				},
+				"me": [
 					{
-					"name": "Rick Grimes"
-				},
+						"name": "Michonne"
+					},
 					{
-					"name": "Glenn Rhee"
-				},
+						"name": "Rick Grimes"
+					},
 					{
-					"name": "Daryl Dixon"
-				},
+						"name": "Glenn Rhee"
+					},
 					{
-					"name": "Andrea"
-				}
+						"name": "Daryl Dixon"
+					},
+					{
+						"name": "Andrea"
+					}
 				]
-		}
-	}`, js)
+			}
+		}`, js)
 }
 
 func TestCascadeSubQueryWithVars2(t *testing.T) {
@@ -591,22 +591,22 @@ func TestCascadeSubQueryWithVars2(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
-	{
-		"data": {
-			"me": [
-				{
-					"name": "Michonne"
-				},
+		{
+			"data": {
+				"me": [
 					{
-					"name": "Rick Grimes"
-				},
+						"name": "Michonne"
+					},
 					{
-					"name": "Glenn Rhee"
-				},
+						"name": "Rick Grimes"
+					},
 					{
-					"name": "Andrea"
-				}
+						"name": "Glenn Rhee"
+					},
+					{
+						"name": "Andrea"
+					}
 				]
-		}
-	}`, js)
+			}
+		}`, js)
 }
