@@ -344,45 +344,73 @@ func TestTypeExpandLang(t *testing.T) {
 }
 
 func TestCascadeSubQuery1(t *testing.T) {
-	query := `{
-                      me(func: eq(xname, "Animesh")) {
-                          xname
-                          xage
-                          xfriend @cascade {
-                              xname
-                              xage
-                              xfriend {
-                                  xname
-                                  xage
-                              }
-                          }
-                      }
-
-                  }
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
 `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"xname":"Animesh","xage":24}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female"}]}}`, js)
 }
 
 func TestCascadeSubQuery2(t *testing.T) {
-	query := `{
-                      me(func: eq(xname, "Animesh")) {
-                          xname
-                          xage
-                          xfriend {
-                              xname
-                              xage
-                              xfriend @cascade {
-                                  xname
-                                  xage
-                              }
-                          }
-                      }
-
-                  }
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend {
+				name
+				full_name
+				friend @cascade {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
 `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t,
-		`{"data":{"me":[{"xname":"Animesh","xage":24,
-                   "xfriend":[{"xname":"Ashish","xage":27}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female","friend":[{"name":"Rick Grimes","friend":[{"name":"Michonne","full_name":"Michonne's large name for hashing","dob":"1910-01-01T00:00:00Z","age":38}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+}
+
+func TestCascadeSubQueryWithFilter(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend {
+				name
+				full_name
+				friend @cascade @filter(gt(age, 40)) {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
 }

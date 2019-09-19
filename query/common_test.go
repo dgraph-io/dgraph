@@ -618,31 +618,3 @@ func populateCluster() {
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
 	`)
 }
-
-func insertSmallDataSet() {
-	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
-	if err != nil {
-		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
-	}
-
-	schema := `
-                  xname: string @index(term, exact) .
-                  xage: int .
-                  xfriend: [uid] .
-`
-
-	setSchema(schema)
-
-	data := `
-                _:animesh <xname> "Animesh" .
-                _:ashish <xname> "Ashish" .
-                _:aman <xname> "Aman" .
-
-                _:animesh <xage> "24" .
-                _:ashish <xage> "27" .
-
-                _:animesh <xfriend> _:ashish .
-                _:ashish <xfriend> _:aman .
-`
-	addTriplesToCluster(data)
-}

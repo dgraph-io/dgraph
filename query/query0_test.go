@@ -2287,6 +2287,5 @@ func TestMain(m *testing.M) {
 	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	populateCluster()
-	insertSmallDataSet()
 	os.Exit(m.Run())
 }
