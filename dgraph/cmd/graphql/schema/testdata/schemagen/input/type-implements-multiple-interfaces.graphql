@@ -1,0 +1,21 @@
+interface Character {
+    id: ID!
+    name: String! @searchable(by: exact)
+    friends: [Character]
+}
+
+interface Employee {
+    employeeId: String!
+    title: String!
+}
+
+type Human implements Character & Employee {
+    id: ID!
+    name: String! @searchable(by: exact)
+    friends: [Character]
+
+    employeeId: String!
+    title: String!
+
+    totalCredits: Int
+}

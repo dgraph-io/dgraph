@@ -1,0 +1,236 @@
+#######################
+# Input Schema
+#######################
+
+interface Character {
+	id: ID!
+	name: String! @searchable(by: exact)
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+}
+
+interface Employee {
+	employeeId: String!
+	title: String!
+}
+
+type Human implements Character & Employee {
+	id: ID!
+	name: String! @searchable(by: exact)
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	employeeId: String!
+	title: String!
+	totalCredits: Int
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddHumanPayload {
+	human: Human
+}
+
+type DeleteCharacterPayload {
+	msg: String
+}
+
+type DeleteHumanPayload {
+	msg: String
+}
+
+type UpdateCharacterPayload {
+	character: Character
+}
+
+type UpdateHumanPayload {
+	human: Human
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum CharacterOrderable {
+	name
+}
+
+enum EmployeeOrderable {
+	employeeId
+	title
+}
+
+enum HumanOrderable {
+	name
+	employeeId
+	title
+	totalCredits
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input CharacterFilter {
+	name: StringExactFilter
+	and: CharacterFilter
+	or: CharacterFilter
+	not: CharacterFilter
+}
+
+input CharacterOrder {
+	asc: CharacterOrderable
+	desc: CharacterOrderable
+	then: CharacterOrder
+}
+
+input EmployeeOrder {
+	asc: EmployeeOrderable
+	desc: EmployeeOrderable
+	then: EmployeeOrder
+}
+
+input HumanFilter {
+	name: StringExactFilter
+	and: HumanFilter
+	or: HumanFilter
+	not: HumanFilter
+}
+
+input HumanInput {
+	name: String!
+	friends: [Character]
+	employeeId: String!
+	title: String!
+	totalCredits: Int
+}
+
+input HumanOrder {
+	asc: HumanOrderable
+	desc: HumanOrderable
+	then: HumanOrder
+}
+
+input HumanRef {
+	id: ID!
+}
+
+input PatchCharacter {
+	name: String
+	friends: [Character]
+}
+
+input PatchHuman {
+	name: String
+	friends: [Character]
+	employeeId: String
+	title: String
+	totalCredits: Int
+}
+
+input UpdateCharacterInput {
+	id: ID!
+	patch: PatchCharacter!
+}
+
+input UpdateHumanInput {
+	id: ID!
+	patch: PatchHuman!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getCharacter(id: ID!): Character
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+	deleteCharacter(id: ID!): DeleteCharacterPayload
+	addHuman(input: HumanInput!): AddHumanPayload
+	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+	deleteHuman(id: ID!): DeleteHumanPayload
+}
