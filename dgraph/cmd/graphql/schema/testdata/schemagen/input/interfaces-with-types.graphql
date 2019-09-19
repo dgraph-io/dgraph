@@ -6,13 +6,19 @@ interface Character {
 }
 
 type Human implements Character {
-    # For Dgraph GraphQL layer, it's not necessary to re-list
-    # the fields from an interface being implemented.
+    id: ID!
+    name: String! @searchable(by: exact)
+    friends: [Character]
+    appearsIn: [Episode!]! @searchable
     starships: [Starship]
     totalCredits: Int
 }
 
 type Droid implements Character {
+    id: ID!
+    name: String! @searchable(by: exact)
+    friends: [Character]
+    appearsIn: [Episode!]! @searchable
     primaryFunction: String
 }
 

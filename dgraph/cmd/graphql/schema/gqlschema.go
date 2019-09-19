@@ -202,29 +202,9 @@ func expandSchema(doc *ast.SchemaDocument) {
 		panic(gqlErr)
 	}
 
-	// Cache the interface definitions in a map. They could also be defined after types which
-	// implement them.
-	interfaces := make(map[string]*ast.Definition)
-	for _, defn := range doc.Definitions {
-		if defn.Kind == ast.Interface {
-			interfaces[defn.Name] = defn
-		}
-	}
-
-	// Walk through type definitions which implement an interface and fill in the fields from the
-	// interface.
-	for _, defn := range doc.Definitions {
-		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
-			for _, implements := range defn.Interfaces {
-				i, ok := interfaces[implements]
-				if !ok {
-					// This would fail schema validation later.
-					continue
-				}
-				defn.Fields = append(i.Fields, defn.Fields...)
-			}
-		}
-	}
+	// TODO - Get the fields from the interface and fill them into types that implement them.
+	// We'd have to perform a deep copy of the fields before adding them to the types otherwise
+	// the arguments and filters are added multiple times.
 
 	for _, defn := range docExtras.Definitions {
 		doc.Definitions = append(doc.Definitions, defn)
@@ -321,7 +301,19 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	for _, key := range definitions {
 		defn := sch.Types[key]
 
-		if defn.Kind == ast.Object {
+		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
+			continue
+		}
+
+		if defn.Kind == ast.Interface {
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+			addDeletePayloadType(sch, defn)
+			addUpdateMutation(sch, defn)
+			addDeleteMutation(sch, defn)
+
+		} else if defn.Kind == ast.Object {
 			// types and inputs needed for mutations
 			addInputType(sch, defn)
 			addReferenceType(sch, defn)
@@ -331,13 +323,13 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			addUpdatePayloadType(sch, defn)
 			addDeletePayloadType(sch, defn)
 			addMutations(sch, defn)
-
-			// types and inputs needed for query and search
-			addFilterType(sch, defn)
-			addTypeOrderable(sch, defn)
-			addFieldFilters(sch, defn)
-			addQueries(sch, defn)
 		}
+
+		// types and inputs needed for query and search
+		addFilterType(sch, defn)
+		addTypeOrderable(sch, defn)
+		addFieldFilters(sch, defn)
+		addQueries(sch, defn)
 	}
 }
 

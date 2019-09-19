@@ -5,15 +5,15 @@
 interface Character {
 	id: ID!
 	name: String! @searchable(by: exact)
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 }
 
 type Human implements Character {
 	id: ID!
 	name: String! @searchable(by: exact)
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
@@ -21,8 +21,8 @@ type Human implements Character {
 type Droid implements Character {
 	id: ID!
 	name: String! @searchable(by: exact)
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int, filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int, first: Int, offset: Int): [Episode!]! @searchable
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 	primaryFunction: String
 }
 
@@ -128,6 +128,10 @@ type AddStarshipPayload {
 	starship: Starship
 }
 
+type DeleteCharacterPayload {
+	msg: String
+}
+
 type DeleteDroidPayload {
 	msg: String
 }
@@ -138,6 +142,10 @@ type DeleteHumanPayload {
 
 type DeleteStarshipPayload {
 	msg: String
+}
+
+type UpdateCharacterPayload {
+	character: Character
 }
 
 type UpdateDroidPayload {
@@ -155,6 +163,10 @@ type UpdateStarshipPayload {
 #######################
 # Generated Enums
 #######################
+
+enum CharacterOrderable {
+	name
+}
 
 enum DroidOrderable {
 	name
@@ -175,6 +187,20 @@ enum StarshipOrderable {
 # Generated Inputs
 #######################
 
+input CharacterFilter {
+	name: StringExactFilter
+	appearsIn: Episode
+	and: CharacterFilter
+	or: CharacterFilter
+	not: CharacterFilter
+}
+
+input CharacterOrder {
+	asc: CharacterOrderable
+	desc: CharacterOrderable
+	then: CharacterOrder
+}
+
 input DroidFilter {
 	name: StringExactFilter
 	appearsIn: Episode
@@ -185,8 +211,8 @@ input DroidFilter {
 
 input DroidInput {
 	name: String!
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]!
+	friends: [Character]
+	appearsIn: [Episode!]!
 	primaryFunction: String
 }
 
@@ -226,10 +252,16 @@ input HumanRef {
 	id: ID!
 }
 
+input PatchCharacter {
+	name: String
+	friends: [Character]
+	appearsIn: [Episode!]
+}
+
 input PatchDroid {
 	name: String
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]
+	friends: [Character]
+	appearsIn: [Episode!]
 	primaryFunction: String
 }
 
@@ -268,6 +300,11 @@ input StarshipRef {
 	id: ID!
 }
 
+input UpdateCharacterInput {
+	id: ID!
+	patch: PatchCharacter!
+}
+
 input UpdateDroidInput {
 	id: ID!
 	patch: PatchDroid!
@@ -288,6 +325,8 @@ input UpdateStarshipInput {
 #######################
 
 type Query {
+	getCharacter(id: ID!): Character
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	getDroid(id: ID!): Droid
@@ -301,6 +340,8 @@ type Query {
 #######################
 
 type Mutation {
+	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+	deleteCharacter(id: ID!): DeleteCharacterPayload
 	addHuman(input: HumanInput!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(id: ID!): DeleteHumanPayload
