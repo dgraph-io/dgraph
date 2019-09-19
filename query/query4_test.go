@@ -359,7 +359,18 @@ func TestCascadeSubQuery1(t *testing.T) {
 	}
 `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female"}]}}`, js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female"
+				}
+				]
+		}
+	}`, js)
 }
 
 func TestCascadeSubQuery2(t *testing.T) {
@@ -383,7 +394,40 @@ func TestCascadeSubQuery2(t *testing.T) {
 	}
 `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female","friend":[{"name":"Rick Grimes","friend":[{"name":"Michonne","full_name":"Michonne's large name for hashing","dob":"1910-01-01T00:00:00Z","age":38}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female",
+					"friend": [
+						{
+							"name": "Rick Grimes",
+							"friend": [
+								{
+									"name": "Michonne",
+									"full_name": "Michonne's large name for hashing",
+									"dob": "1910-01-01T00:00:00Z",
+									"age": 38
+								}
+								]
+						},
+							{
+							"name": "Glenn Rhee"
+						},
+							{
+							"name": "Daryl Dixon"
+						},
+							{
+							"name": "Andrea"
+						}
+						]
+				}
+				]
+		}
+	}`, js)
 }
 
 func TestCascadeSubQueryWithFilter(t *testing.T) {
@@ -407,5 +451,127 @@ func TestCascadeSubQueryWithFilter(t *testing.T) {
 	}
 `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","full_name":"Michonne's large name for hashing","gender":"female","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female",
+					"friend": [
+						{
+							"name": "Rick Grimes"
+						},
+							{
+							"name": "Glenn Rhee"
+						},
+							{
+							"name": "Daryl Dixon"
+						},
+							{
+							"name": "Andrea"
+						}
+						]
+				}
+				]
+		}
+	}`, js)
+}
+
+func TestCascadeSubQueryWithVars1(t *testing.T) {
+	query := `
+	{
+		him(func: uid(0x01)) {
+			L as friend {
+				B as friend @cascade {
+					name
+				}
+			}
+		}
+
+		me(func: uid(L, B)) {
+			name
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"him": [
+				{
+					"friend": [
+						{
+							"friend": [
+								{
+									"name": "Michonne"
+								}
+								]
+						},
+							{
+							"friend": [
+								{
+									"name": "Glenn Rhee"
+								}
+								]
+						}
+						]
+				}
+				],
+			"me": [
+				{
+					"name": "Michonne"
+				},
+					{
+					"name": "Rick Grimes"
+				},
+					{
+					"name": "Glenn Rhee"
+				},
+					{
+					"name": "Daryl Dixon"
+				},
+					{
+					"name": "Andrea"
+				}
+				]
+		}
+	}`, js)
+}
+
+func TestCascadeSubQueryWithVars2(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x01)) {
+			L as friend  @cascade {
+				B as friend
+			}
+		}
+
+		me(func: uid(L, B)) {
+			name
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne"
+				},
+					{
+					"name": "Rick Grimes"
+				},
+					{
+					"name": "Glenn Rhee"
+				},
+					{
+					"name": "Andrea"
+				}
+				]
+		}
+	}`, js)
 }
