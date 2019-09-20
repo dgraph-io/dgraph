@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 )
 
 func main() {
@@ -45,6 +47,9 @@ func main() {
 				lastNum = ms.NumGC
 			} else {
 				runtime.GC()
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+					humanize.Bytes(ms.HeapInuse),
+					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
 				lastNum = ms.NumGC + 1
 			}
 		}
