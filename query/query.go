@@ -883,7 +883,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
-		First:        int32(first),
+		First:        first,
 	}
 
 	if sg.SrcUIDs != nil {
@@ -893,9 +893,9 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 }
 
 // calculateFirstN returns the count of result we need to proceed query further down.
-func calculateFirstN(sg *SubGraph) int {
+func calculateFirstN(sg *SubGraph) int32 {
 	// by default count is zero. (zero will retrive all the results)
-	count := math.MaxInt8
+	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
 	// - No Filter (We can't filter until we have all the uids)
 	// {
@@ -922,7 +922,7 @@ func calculateFirstN(sg *SubGraph) int {
 		// Offset also added because, we need n results to trim the offset.
 		count = sg.Params.Offset + sg.Params.Count
 	}
-	return count
+	return int32(count)
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
