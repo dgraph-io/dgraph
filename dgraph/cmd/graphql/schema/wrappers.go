@@ -560,7 +560,7 @@ func (t *astType) String() string {
 
 func (t *astType) IDField() FieldDefinition {
 	def := t.inSchema.Types[t.Name()]
-	if def.Kind != ast.Object {
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
 
