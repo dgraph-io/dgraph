@@ -430,7 +430,8 @@ func TestCascadeSubQuery2(t *testing.T) {
 		}`, js)
 }
 
-func TestCascadeSubQuery3(t *testing.T) {
+func TestCascadeRepeatedMultipleLevels(t *testing.T) {
+	// It should have result same as applying @cascade at the top level friend predicate.
 	query := `
 	{
 		me(func: uid(0x01)) {
@@ -609,4 +610,47 @@ func TestCascadeSubQueryWithVars2(t *testing.T) {
 				]
 			}
 		}`, js)
+}
+
+func TestCascadeSubQueryMultiUid(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01, 0x02, 0x03)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	// Friends of Michonne who don't have full_name predicate associated with them are filtered.
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female"
+					},
+					{
+						"name": "King Lear"
+					},
+					{
+						"name": "Margaret"
+					}
+				]
+			}
+		}
+	`, js)
 }
