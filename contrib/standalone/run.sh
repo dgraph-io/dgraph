@@ -10,6 +10,5 @@ echo -e "\033[0;33m
 Warning: This standalone version is meant for quickstart purposes only.
          It is NOT RECOMMENDED for production environments.\033[0;0m"
 
-echo "running alpha with LRU size of $lru_mb MB"
 # TODO properly handle SIGTERM for all three processes.
 dgraph-ratel & dgraph zero & dgraph alpha --lru_mb $lru_mb
