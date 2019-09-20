@@ -1033,6 +1033,9 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 // parseGqlVariables parses the the graphQL variable declaration.
 func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
+	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
+		return nil
+	}
 	for it.Next() {
 		var varName string
 		// Get variable name.
