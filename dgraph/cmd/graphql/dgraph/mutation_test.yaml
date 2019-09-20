@@ -19,7 +19,7 @@
     underlying Dgraph edge names"
   dgraphmuation: |
     { "uid":"_:newnode",
-      "dgraph.type":"Author",
+      "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.dob":"2000-01-01",
       "Author.posts":[]
@@ -39,7 +39,7 @@
     injected and all data transformed to underlying Dgraph edge names"
   dgraphmuation: |
     { "uid":"_:newnode",
-      "dgraph.type":"Author",
+      "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
     }
@@ -60,7 +60,7 @@
     getting injected and all data transformed to underlying Dgraph edge names"
   dgraphmuation: |
     { "uid":"_:newnode",
-      "dgraph.type":"Author",
+      "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
     }
@@ -86,7 +86,7 @@
     Dgraph JSON mutation"
   dgraphmuation: |
     { "uid":"_:newnode",
-      "dgraph.type":"Author",
+      "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.country": { "uid": "0x123" },
       "Author.posts":[]
@@ -134,7 +134,7 @@
     a new 'posts' edge."
   dgraphmuation: |
     { "uid" : "_:newnode",
-      "dgraph.type" : "Post",
+      "dgraph.type" : ["Post"],
       "Post.title" : "Exciting post",
       "Post.text" : "A really good post",
       "Post.author": {

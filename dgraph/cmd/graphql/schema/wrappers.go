@@ -117,6 +117,7 @@ type Type interface {
 	DgraphPredicate(fld string) string
 	Nullable() bool
 	ListType() Type
+	Interfaces() []string
 	fmt.Stringer
 }
 
@@ -128,6 +129,9 @@ type FieldDefinition interface {
 	Type() Type
 	IsID() bool
 	Inverse() (Type, FieldDefinition)
+	// If the field was defined as part of an interface and is inherited from it
+	// in a type definition, this function would return the name of the interface.
+	ParentInterface() string
 }
 
 type astType struct {
@@ -156,8 +160,9 @@ type field struct {
 }
 
 type fieldDefinition struct {
-	fieldDef *ast.FieldDefinition
-	inSchema *ast.Schema
+	fieldDef        *ast.FieldDefinition
+	inSchema        *ast.Schema
+	parentInterface string
 }
 
 type mutation field
@@ -422,10 +427,23 @@ func (m *mutation) MutationType() MutationType {
 }
 
 func (t *astType) Field(name string) FieldDefinition {
+	typ := t.inSchema.Types[t.Name()]
+	parentInterface := t.Name()
+	// TODO - Check how to cache this information.
+	for _, inter := range typ.Interfaces {
+		for _, field := range t.inSchema.Types[inter].Fields {
+			if field.Name == name {
+				parentInterface = inter
+				break
+			}
+		}
+	}
+
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
-		inSchema: t.inSchema,
+		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
+		inSchema:        t.inSchema,
+		parentInterface: parentInterface,
 	}
 }
 
@@ -447,6 +465,10 @@ func (fd *fieldDefinition) Type() Type {
 		typ:      fd.fieldDef.Type,
 		inSchema: fd.inSchema,
 	}
+}
+
+func (fd *fieldDefinition) ParentInterface() string {
+	return fd.parentInterface
 }
 
 func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
@@ -538,4 +560,8 @@ func (t *astType) IDField() FieldDefinition {
 	}
 
 	return nil
+}
+
+func (t *astType) Interfaces() []string {
+	return t.inSchema.Types[t.typ.NamedType].Interfaces
 }

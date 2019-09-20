@@ -132,7 +132,9 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 		res["uid"] = srcUID
 		if m.MutationType() == schema.AddMutation {
-			res["dgraph.type"] = mutatedType.Name()
+			dgraphTypes := []string{mutatedType.Name()}
+			dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
+			res["dgraph.type"] = dgraphTypes
 		}
 
 		return res, nil
@@ -224,9 +226,9 @@ func rewriteObject(
 	for field, val := range obj {
 		var res interface{}
 		var err error
-		fieldName := fmt.Sprintf("%s.%s", typ.Name(), field)
 
 		fieldDef := typ.Field(field)
+		fieldName := fmt.Sprintf("%s.%s", fieldDef.ParentInterface(), field)
 
 		switch val := val.(type) {
 		case map[string]interface{}:
