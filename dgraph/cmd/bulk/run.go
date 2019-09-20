@@ -28,11 +28,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
 
