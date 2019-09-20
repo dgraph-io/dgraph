@@ -207,7 +207,8 @@ func (ag *aggregator) ApplyUnaryFunction(v types.Val, vBase argType, l float64) 
 	return nil
 }
 
-func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType, vFloat float64, vBigFloat big.Float) error {
+func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType,
+	vFloat float64, vBigFloat big.Float) error {
 	var zero big.Float
 	var res types.Val
 	switch ag.name {
@@ -354,7 +355,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		if vBase == BIGFLOAT {
 			vaBase = BIGFLOAT
 			va.Tid = types.BigFloatID
-			va.Value = *big.NewFloat(vFloat)
+			va.Value = *big.NewFloat(vFloat).SetPrec(types.BigFloatPrecision)
 		}
 	}
 	if va.Tid == types.BigFloatID {
