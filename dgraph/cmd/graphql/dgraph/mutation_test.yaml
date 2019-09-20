@@ -197,3 +197,36 @@
       "dgraph.type": ["Human", "Character", "Employee"]
     }
 
+
+-
+  name: "Update mutation for a type that implements an interface"
+  gqlmutation: |
+    mutation updateHuman($patch: UpdateHumanInput!) {
+      updateHuman(input: $patch) {
+        human {
+          name
+          dob
+          female
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      {
+        "id": "0x123",
+        "patch": { "name": "Bob",
+          "dob": "2000-01-01",
+          "female": true,
+          "ename": "employee no. 1"
+        }
+      }
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgraphmuation: |
+    { "uid" : "0x123",
+      "Character.name": "Bob",
+      "Employee.ename": "employee no. 1",
+      "Human.dob": "2000-01-01",
+      "Human.female": true
+    }
+
