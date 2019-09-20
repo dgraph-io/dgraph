@@ -5,10 +5,11 @@ set -e
 
 lru_kb=$(cat /proc/meminfo | grep MemTotal | sed "s/.* \([0-9]*\) .*/\1/")
 lru_mb=$(expr $lru_kb / 1024)
+
+echo -e "\033[0;33m
+Warning: This standalone version is meant for quickstart purposes only.
+         It is NOT RECOMMENDED for production environments.\033[0;0m"
+
 echo "running alpha with LRU size of $lru_mb MB"
-echo ""
-echo "The standalone version is meant for quickstart purposes only. It is NOT
-RECOMMENDED for production environments."
-echo ""
 # TODO properly handle SIGTERM for all three processes.
 dgraph-ratel & dgraph zero & dgraph alpha --lru_mb $lru_mb
