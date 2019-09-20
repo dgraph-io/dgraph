@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 )
 
 func main() {
@@ -30,5 +32,28 @@ func main() {
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
+
+	// Make sure the garbage collector is run periodically.
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		var lastNum uint32
+		var ms runtime.MemStats
+		for range ticker.C {
+			runtime.ReadMemStats(&ms)
+			if ms.NumGC > lastNum {
+				// GC was already run by the Go runtime. No need to run it again.
+				lastNum = ms.NumGC
+			} else {
+				runtime.GC()
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+					humanize.Bytes(ms.HeapInuse),
+					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
+				lastNum = ms.NumGC + 1
+			}
+		}
+	}()
+
 	cmd.Execute()
 }
