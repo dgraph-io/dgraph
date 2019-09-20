@@ -262,7 +262,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	memStatSize := int64(afterStats.Alloc - beforeStats.Alloc)
 	deepSize := x.DeepSize(l)
 	if float64(memStatSize) / float64(deepSize) > 1.5 {
-		glog.Infof("DeepSize %v, MemStatsSize: %v", memStatSize, deepSize)
+		glog.Infof("memStatSize %v, DeepSize: %v", memStatSize, deepSize)
 	}
 	listCache.Set(key, l, int64(afterStats.Alloc - beforeStats.Alloc))
 	return l, nil
