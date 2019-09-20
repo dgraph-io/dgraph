@@ -817,29 +817,26 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 // calculateMetrics populates the given map with the number of uids are gathered for each
 // attributes.
-func calculateMetrics(sg *SubGraph, metricsMap map[string]int) {
+func calculateMetrics(sg *SubGraph, metrics map[string]int) {
 	// we'll calcuate only destination because this are the uid gathered by this subgraph.
 	// srcUid is given by parent graph so we don't take that in account. But here we may miss
 	// some results, because if any filters applied those uids are gone.
-	updateMetricsMap := func(sg *SubGraph) {
-		prev := metricsMap[sg.Attr]
-		// QUESTION: @manish @pawan: should I add destuid or length of posting list?.
-		prev = prev + len(sg.DestUIDs.GetUids())
-		// DestUIDs will be zero if there is any value matrix so including that
-		// as well.
-		for _, valList := range sg.valueMatrix {
-			prev = prev + len(valList.GetValues())
-		}
-		metricsMap[sg.Attr] = prev
+	prev := metrics[sg.Attr]
+	// QUESTION: @manish @pawan: should I add destuid or length of posting list?.
+	prev = prev + len(sg.DestUIDs.GetUids())
+	// DestUIDs will be zero if there is any value matrix so including that
+	// as well.
+	for _, valList := range sg.valueMatrix {
+		prev = prev + len(valList.GetValues())
 	}
-	updateMetricsMap(sg)
+	metrics[sg.Attr] = prev
 
 	// add all the uids gathered by filters
 	for _, filter := range sg.Filters {
-		updateMetricsMap(filter)
+		calculateMetrics(filter, metrics)
 	}
 	// calculate metrics for the childres as well.
 	for _, child := range sg.Children {
-		calculateMetrics(child, metricsMap)
+		calculateMetrics(child, metrics)
 	}
 }
