@@ -635,4 +635,4 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 		}
 	})
 }
-}
+
