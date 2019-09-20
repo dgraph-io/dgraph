@@ -35,7 +35,7 @@ type AuthorityId [32]byte
 type Epoch struct {
 	EpochIndex     uint64
 	StartSlot      uint64
-	Duration       uint64
+	Duration       uint64      // Slot duration in milliseconds
 	Authorities    AuthorityId // Schnorrkel public key of authority
 	Randomness     byte
 	SecondarySlots bool
