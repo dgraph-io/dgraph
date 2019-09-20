@@ -20,7 +20,8 @@
         "Author.name": "Ann Author",
         "Author.dob": "2000-01-01",
         "Author.reputation": 6.6,
-        "Author.country": { "uid": "_:bangladesh" }
+        "Author.country": { "uid": "_:bangladesh" },
+        "Author.posts": [{ "uid": "_:post1" }, { "uid": "_:post3" }]
     },
     {
         "uid": "_:author2",
@@ -28,7 +29,8 @@
         "Author.name": "Ann Other Author",
         "Author.dob": "1988-01-01",
         "Author.reputation": 8.9,
-        "Author.country": { "uid": "_:angola" }
+        "Author.country": { "uid": "_:angola" },
+        "Author.posts": [{ "uid": "_:post3" }, { "uid": "_:post4" }]
     },
     {
         "uid": "_:post1",
