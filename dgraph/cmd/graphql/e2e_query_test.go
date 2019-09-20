@@ -19,6 +19,7 @@ package graphql
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -195,6 +196,38 @@ func allPosts(t *testing.T) []*post {
 	require.Equal(t, 4, len(result.QueryPost))
 
 	return result.QueryPost
+}
+
+func TestDeepFilter(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
+				name
+				posts(filter: { title: { anyofterms: "GraphQL" } }) {
+					title
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:  "Ann Other Author",
+		Posts: []post{{Title: "GraphQL in Dgraph"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
 // TestManyQueries runs multiple queries in the one block.  Internally, the GraphQL
