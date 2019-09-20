@@ -55,8 +55,8 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 	require.NoError(t, err, "Unable to read schema file")
 
 	handler, err := schema.NewHandler(string(gql))
-	fmt.Println(handler.GQLSchema())
 	require.NoError(t, err, "input schema contained errors")
+	fmt.Println(handler.GQLSchema())
 
 	return LoadSchema(t, handler.GQLSchema())
 }

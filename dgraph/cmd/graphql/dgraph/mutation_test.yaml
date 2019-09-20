@@ -168,7 +168,7 @@
     }
 
 -
-  name: "Update mutation for a type that implements an"
+  name: "Add mutation for a type that implements an interface"
   gqlmutation: |
     mutation addHuman($human: HumanInput!) {
       addHuman(input: $human) {
@@ -183,15 +183,17 @@
     { "human":
       { "name": "Bob",
         "dob": "2000-01-01",
-        "female": true
+        "female": true,
+        "ename": "employee no. 1"
       }
     }
-  explanation: "The update should get rewritten with correct edges from the interface."
+  explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmuation: |
     { "uid" : "_:newnode",
       "Character.name": "Bob",
+      "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
       "Human.female": true,
-      "dgraph.type": ["Human", "Character"]
+      "dgraph.type": ["Human", "Character", "Employee"]
     }
 

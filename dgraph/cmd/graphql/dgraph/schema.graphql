@@ -38,9 +38,14 @@ interface Character {
         name: String!
 }
 
-type Human implements Character {
+interface Employee {
+        ename: String!
+}
+
+type Human implements Character & Employee {
         id: ID!
         name: String!
+        ename: String!
         dob: DateTime
         female: Boolean
 }
