@@ -1661,6 +1661,20 @@ amount: bigfloat .`))
 	return expectedRes
 }
 
+func TestBigFloatInvalidInput(t *testing.T) {
+	SetupBankExample(t)
+	m1 := `
+{
+  set {
+    _:user4 <name> "user4" .
+    _:user4 <amount> "100.000.0" .
+  }
+}
+`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), `cannot unmarshal "100.000.0" into a *big.Float`)
+}
+
 func TestUpsertSanityCheck(t *testing.T) {
 	expectedRes := SetupBankExample(t)
 

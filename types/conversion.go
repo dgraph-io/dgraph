@@ -206,7 +206,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				b, err := t.MarshalText()
 				if err != nil {
-					return to, errors.Errorf("Error while parsing %s", err.Error())
+					return to, errors.Errorf("Error while conversion %s", err.Error())
 				}
 				*res = b
 			case IntID:
@@ -289,10 +289,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = float64(1)
 				}
 			case BigFloatID:
-				*res = new(big.Float).SetPrec(BigFloatPrecision).SetInt64(0)
+				value := float64(0)
 				if vc {
-					*res = new(big.Float).SetPrec(BigFloatPrecision).SetInt64(1)
+					value = float64(1)
 				}
+				*res = big.NewFloat(value).SetPrec(BigFloatPrecision)
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:
@@ -445,7 +446,7 @@ func Marshal(from Val, to *Val) error {
 		case BinaryID:
 			val, err := vc.MarshalText()
 			if err != nil {
-				return errors.Errorf("Error while parsing %s", err.Error())
+				return errors.Errorf("Error while conversion %s", err.Error())
 			}
 			*res = val
 		default:
