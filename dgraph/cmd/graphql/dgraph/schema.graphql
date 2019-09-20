@@ -35,7 +35,7 @@ enum PostType {
 # TODO - Make this recursive by referencing a character within here.
 interface Character {
         id: ID!
-        name: String!
+        name: String! @searchable
 }
 
 interface Employee {
@@ -44,7 +44,7 @@ interface Employee {
 
 type Human implements Character & Employee {
         id: ID!
-        name: String!
+        name: String! @searchable
         ename: String!
         dob: DateTime
         female: Boolean

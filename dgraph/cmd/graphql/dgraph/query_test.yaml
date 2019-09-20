@@ -666,3 +666,24 @@
         female : Human.female
       }
     }
+
+-
+  name: "filter with order for type which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman (filter: { name: { anyofterms: "GraphQL" } }, order: { asc: ename }) {
+        id
+        name
+        ename
+        dob
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human), orderasc: Employee.ename) @filter(anyofterms(Character.name, "GraphQL")) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+      }
+    }
