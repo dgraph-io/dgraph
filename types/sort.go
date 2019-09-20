@@ -204,9 +204,9 @@ func equal(a, b Val) bool {
 		bVal, bOk := b.Value.(bool)
 		return aOk && bOk && aVal == bVal
 	case BigFloatID:
-		aVal, aOk := a.Value.(big.Float)
-		bVal, bOk := b.Value.(big.Float)
-		return aOk && bOk && aVal.Cmp(&bVal) == 0
+		aVal := a.Value.(big.Float)
+		bVal := b.Value.(big.Float)
+		return aVal.Cmp(&bVal) == 0
 	}
 	return false
 }

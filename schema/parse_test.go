@@ -49,6 +49,7 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+amount: bigfloat .
 `
 
 func TestSchema(t *testing.T) {
@@ -70,11 +71,19 @@ func TestSchema(t *testing.T) {
 			Predicate: "age",
 			ValueType: pb.Posting_INT,
 		}},
+		{"amount", &pb.SchemaUpdate{
+			Predicate: "amount",
+			ValueType: pb.Posting_BIGFLOAT,
+		}},
 	})
 
 	typ, err := State().TypeOf("age")
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
+
+	typ, err = State().TypeOf("amount")
+	require.NoError(t, err)
+	require.Equal(t, types.BigFloatID, typ)
 
 	_, err = State().TypeOf("agea")
 	require.Error(t, err)

@@ -169,8 +169,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.BigFloatID:
-		var b big.Float
-		b = v.Value.(big.Float)
+		b := v.Value.(big.Float)
 		return b.MarshalText()
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil

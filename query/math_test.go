@@ -118,50 +118,50 @@ func TestProcessBinaryBigFloat(t *testing.T) {
 		{in: &mathTree{
 			Fn: "+",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2.15)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1.15)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3.3)},
 		},
 		{in: &mathTree{
 			Fn: "-",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(100)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(99)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(99)},
 		},
 		{in: &mathTree{
 			Fn: "*",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(9)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(9)},
 		},
 		{in: &mathTree{
 			Fn: "/",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(12)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(4)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(12)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(4)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3)},
 		},
 		{in: &mathTree{
 			Fn: "max",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(100)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(100)},
 		},
 		{in: &mathTree{
 			Fn: "min",
 			Child: []*mathTree{
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(100)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(100)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1)},
 		},
 	}
 	for _, tc := range tests {
@@ -174,7 +174,7 @@ func TestProcessBinaryBigFloat(t *testing.T) {
 
 func TestProcessUnary(t *testing.T) {
 	float3 := *new(big.Float).SetPrec(200)
-	float3.SetFloat64(3)
+	float3.SetFloat64(3.1)
 	sqrt3 := *new(big.Float).SetPrec(200)
 	sqrt3.Sqrt(&float3)
 
@@ -194,7 +194,7 @@ func TestProcessUnary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.BigFloatID, Value: float3}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetPrec(200).SetFloat64(-3)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(-3.1).SetPrec(200)},
 		},
 		{in: &mathTree{
 			Fn: "ln",
@@ -236,7 +236,7 @@ func TestProcessUnary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.BigFloatID, Value: sqrt3}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1).SetPrec(200)},
 		},
 		{in: &mathTree{
 			Fn: "ceil",
@@ -250,7 +250,7 @@ func TestProcessUnary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.BigFloatID, Value: sqrt3}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2).SetPrec(200)},
 		},
 	}
 	for _, tc := range tests {
@@ -338,8 +338,8 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: "==",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.123)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2.123)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
 		},
@@ -347,8 +347,8 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: "!=",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.4623)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3.623)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
 		},
@@ -356,9 +356,9 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: ">=",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.123)}}},
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(4)}}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(4.123)}}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: false},
 		},
@@ -366,8 +366,8 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: "<=",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.123)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3.992)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
 		},
@@ -375,8 +375,8 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: ">",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.45)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(3.43)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: false},
 		},
@@ -384,8 +384,8 @@ func TestBigFloatMathsBoolean(t *testing.T) {
 			Fn: "<",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{
-					0: {Tid: types.BigFloatID, Value: *new(big.Float).SetInt64(2)}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(3)}},
+					0: {Tid: types.BigFloatID, Value: *big.NewFloat(2.1213)}}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2.1232)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
 		},
@@ -425,10 +425,10 @@ func TestProcessTernary(t *testing.T) {
 			Fn: "cond",
 			Child: []*mathTree{
 				{Val: map[uint64]types.Val{0: {Tid: types.BoolID, Value: false}}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(1)}},
-				{Const: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(1.456)}},
+				{Const: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2.123)}},
 			}},
-			out: types.Val{Tid: types.BigFloatID, Value: *new(big.Float).SetFloat64(2)},
+			out: types.Val{Tid: types.BigFloatID, Value: *big.NewFloat(2.123)},
 		},
 	}
 	for _, tc := range tests {

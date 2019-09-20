@@ -18,14 +18,11 @@ package query
 
 import (
 	"context"
-	// "encoding/json"
 	"fmt"
 	"math/big"
-	// "strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	// "google.golang.org/grpc/metadata"
 )
 
 func TestDeleteAndReaddIndex(t *testing.T) {
