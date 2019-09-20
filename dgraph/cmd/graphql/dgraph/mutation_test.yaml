@@ -167,3 +167,31 @@
       "Post.text": "updated text"
     }
 
+-
+  name: "Update mutation for a type that implements an"
+  gqlmutation: |
+    mutation addHuman($human: HumanInput!) {
+      addHuman(input: $human) {
+        human {
+          name
+          dob
+          female
+        }
+      }
+    }
+  gqlvariables: |
+    { "human":
+      { "name": "Bob",
+        "dob": "2000-01-01",
+        "female": true
+      }
+    }
+  explanation: "The update should get rewritten with correct edges from the interface."
+  dgraphmuation: |
+    { "uid" : "_:newnode",
+      "Character.name": "Bob",
+      "Human.dob": "2000-01-01",
+      "Human.female": true,
+      "dgraph.type": ["Human", "Character"]
+    }
+

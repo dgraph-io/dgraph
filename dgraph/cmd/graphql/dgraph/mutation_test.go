@@ -55,8 +55,7 @@ func TestMutationRewriting(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-
-	rewritererToTest := NewMutationRewriter()
+	rewriterToTest := NewMutationRewriter()
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -75,7 +74,7 @@ func TestMutationRewriting(t *testing.T) {
 
 			mut := test.GetMutation(t, op)
 
-			jsonMut, err := rewritererToTest.Rewrite(mut)
+			jsonMut, err := rewriterToTest.Rewrite(mut)
 
 			test.RequireJSONEq(t, tcase.Error, err)
 			if tcase.Error == nil {
