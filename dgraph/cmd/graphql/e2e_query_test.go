@@ -240,3 +240,56 @@ func TestManyQueries(t *testing.T) {
 	}
 }
 
+// TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
+// an error.  Internally, the GraphQL server should run those concurrently, and
+// an error in one query should not affect the results of any others.
+func TestQueriesWithError(t *testing.T) {
+	posts := allPosts(t)
+
+	getPattern := `getPost(id: "%s") {
+		postID
+		title
+		text
+		tags
+		isPublished
+		postType
+	}
+	`
+
+	// make one random query fail
+	shouldFail := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(posts))
+
+	var bld strings.Builder
+	bld.WriteString("query {\n")
+	for idx, p := range posts {
+		bld.WriteString(fmt.Sprintf("  query%v : ", idx))
+		if idx == shouldFail {
+			bld.WriteString(fmt.Sprintf(getPattern, "Not_An_ID"))
+		} else {
+			bld.WriteString(fmt.Sprintf(getPattern, p.PostID))
+		}
+	}
+	bld.WriteString("}")
+
+	queryParams := &GraphQLParams{
+		Query: bld.String(),
+	}
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	require.Len(t, gqlResponse.Errors, 1, "expected 1 error from malformed query")
+
+	var result map[string]*post
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	for idx, expectedPost := range posts {
+		resultPost := result[fmt.Sprintf("query%v", idx)]
+		if idx == shouldFail {
+			require.Nil(t, resultPost, "expected this query to fail and return nil")
+		} else {
+			if diff := cmp.Diff(expectedPost, resultPost); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		}
+	}
+}
