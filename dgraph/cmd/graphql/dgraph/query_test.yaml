@@ -687,3 +687,26 @@
         dob : Human.dob
       }
     }
+
+-
+  name: "queryCharacter with fragment for human"
+  gqlquery: |
+    query {
+      queryCharacter {
+        name
+        id
+        ... on Human {
+          female
+          ename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        id : uid
+        name : Character.name
+        female : Human.female
+        dob : Human.dob
+      }
+    }

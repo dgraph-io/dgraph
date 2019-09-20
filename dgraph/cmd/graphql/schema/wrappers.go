@@ -284,6 +284,13 @@ func (f *field) SelectionSet() (flds []Field) {
 		if fld, ok := s.(*ast.Field); ok {
 			flds = append(flds, &field{field: fld, op: f.op})
 		}
+		if fragment, ok := s.(*ast.InlineFragment); ok {
+			for _, s := range fragment.SelectionSet {
+				if fld, ok := s.(*ast.Field); ok {
+					flds = append(flds, &field{field: fld, op: f.op})
+				}
+			}
+		}
 	}
 
 	return

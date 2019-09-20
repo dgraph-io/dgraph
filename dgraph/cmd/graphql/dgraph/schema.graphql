@@ -32,7 +32,6 @@ enum PostType {
         Opinion
 }
 
-# TODO - Make this recursive by referencing a character within here.
 interface Character {
         id: ID!
         name: String! @searchable

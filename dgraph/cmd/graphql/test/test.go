@@ -18,7 +18,6 @@ package test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -56,7 +55,6 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 
 	handler, err := schema.NewHandler(string(gql))
 	require.NoError(t, err, "input schema contained errors")
-	fmt.Println(handler.GQLSchema())
 
 	return LoadSchema(t, handler.GQLSchema())
 }
