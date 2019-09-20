@@ -620,3 +620,26 @@
         name : Author.name
       }
     }
+
+-
+  name: "query type which implements an interface"
+  gqlquery: |
+    query {
+      getHuman(id: "0x1") {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      getHuman(func: uid(0x1)) @filter(type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
