@@ -204,27 +204,6 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
-	// Bulk loader can take up a lot of RAM. So, run GC often.
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		var lastNum uint32
-		var ms runtime.MemStats
-		for range ticker.C {
-			runtime.ReadMemStats(&ms)
-			fmt.Printf("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse),
-				humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
-			if ms.NumGC > lastNum {
-				// GC was already run by the Go runtime. No need to run it again.
-				lastNum = ms.NumGC
-			} else {
-				runtime.GC()
-				lastNum = ms.NumGC + 1
-			}
-		}
-	}()
-
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()

@@ -66,20 +66,20 @@ func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 		p := v.Pointer()
 		if !seen[p] && !v.IsNil() {
 			seen[p] = true
-			return roundupsize(base + valueSize(v.Elem(), seen))
+			return base + valueSize(v.Elem(), seen)
 		}
 
 	case reflect.Slice:
 		n := v.Len()
 		for i := 0; i < n; i++ {
-			base += roundupsize(valueSize(v.Index(i), seen))
+			base += valueSize(v.Index(i), seen)
 		}
 
 		// Account for the parts of the array not covered by this slice.  Since
 		// we can't get the values directly, assume they're zeroes. That may be
 		// incorrect, in which case we may underestimate.
 		if cap := v.Cap(); cap > n {
-			base += roundupsize(v.Type().Size() * uintptr(cap-n))
+			base += v.Type().Size() * uintptr(cap-n)
 		}
 
 	case reflect.Map:
@@ -93,17 +93,17 @@ func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 		if nb == 0 {
 			nb = 1
 		}
-		base = roundupsize(16 * nb)
+		base = 16 * nb
 		for _, key := range v.MapKeys() {
-			base += roundupsize(valueSize(key, seen))
-			base += roundupsize(valueSize(v.MapIndex(key), seen))
+			base += valueSize(key, seen)
+			base += valueSize(v.MapIndex(key), seen)
 		}
 
 		// We have nb buckets of 8 slots each, and v.Len() slots are filled.
 		// The remaining slots we will assume contain zero key/value pairs.
 		zk := v.Type().Key().Size()  // a zero key
 		zv := v.Type().Elem().Size() // a zero value
-		base += roundupsize((8*nb - uintptr(v.Len())) * (zk + zv))
+		base += (8*nb - uintptr(v.Len())) * (zk + zv)
 
 	case reflect.Struct:
 		// Chase pointer and slice fields and add the size of their members.
@@ -114,19 +114,16 @@ func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 				p := f.Pointer()
 				if !seen[p] && !f.IsNil() {
 					seen[p] = true
-					base += roundupsize(valueSize(f.Elem(), seen))
+					base += valueSize(f.Elem(), seen)
 				}
 			case reflect.Slice:
-				base += roundupsize(valueSize(f, seen))
+				base += valueSize(f, seen)
 			}
 		}
 
 	case reflect.String:
-		return roundupsize(base + uintptr(v.Len()))
+		return base + uintptr(v.Len())
 
 	}
-	return roundupsize(base)
+	return base
 }
-
-//go:linkname roundupsize runtime.roundupsize
-func roundupsize(uintptr) uintptr
