@@ -146,7 +146,7 @@ func TestRegExp(t *testing.T) {
 func TestHashSearch(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
-			queryAuthor(filter: { name: { eq: "An Author" } }) {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
 				name
 				dob
 			}
@@ -160,7 +160,7 @@ func TestHashSearch(t *testing.T) {
 		QueryAuthor []*author
 	}
 	expected.QueryAuthor = []*author{
-		&author{Name: "An Author", Dob: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)}}
+		&author{Name: "Ann Author", Dob: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)}}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 

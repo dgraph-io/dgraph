@@ -17,7 +17,7 @@
     {
         "uid": "_:author1",
         "dgraph.type": "Author",
-        "Author.name": "A. N. Author",
+        "Author.name": "Ann Author",
         "Author.dob": "2000-01-01",
         "Author.reputation": 6.6,
         "Author.country": { "uid": "_:bangladesh" }
@@ -25,7 +25,7 @@
     {
         "uid": "_:author2",
         "dgraph.type": "Author",
-        "Author.name": "A. Nother Author",
+        "Author.name": "Ann Other Author",
         "Author.dob": "1988-01-01",
         "Author.reputation": 8.9,
         "Author.country": { "uid": "_:angola" }
