@@ -622,7 +622,7 @@
     }
 
 -
-  name: "query type which implements an interface"
+  name: "getHuman which implements an interface"
   gqlquery: |
     query {
       getHuman(id: "0x1") {
@@ -636,6 +636,29 @@
   dgquery: |-
     query {
       getHuman(func: uid(0x1)) @filter(type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
+
+-
+  name: "queryHuman which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human)) {
         id : uid
         name : Character.name
         ename : Employee.ename

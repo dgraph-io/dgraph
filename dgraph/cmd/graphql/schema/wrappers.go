@@ -577,9 +577,5 @@ func (t *astType) IDField() FieldDefinition {
 }
 
 func (t *astType) Interfaces() []string {
-	typ := t.inSchema.Types[t.typ.NamedType]
-	if typ == nil {
-		return []string{}
-	}
-	return t.inSchema.Types[t.typ.NamedType].Interfaces
+	return t.inSchema.Types[t.typ.Name()].Interfaces
 }
