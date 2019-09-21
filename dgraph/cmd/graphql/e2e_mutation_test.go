@@ -620,6 +620,73 @@ func TestManyMutationsWithError(t *testing.T) {
 	cleanUp(t, []*country{result.Add1.Country}, []*author{}, []*post{})
 }
 
+// After a successful mutation, the following query is executed.  That query can
+// contain any depth or filtering that makes sense for the schema.
+//
+// I this case, we set up an author with existing posts, then add another post.
+// The filter is down inside post->author->posts and finds just one of the
+// author's posts.
+func TestMutationWithDeepFilter(t *testing.T) {
+
+	newCountry := addCountry(t)
+	newAuthor := addAuthor(t, newCountry.ID)
+
+	// Make sure they have a post not found by the filter
+	newPost := addPost(t, newAuthor.ID, newCountry.ID)
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($post: PostInput!) {
+			addPost(input: $post) {
+			  post {
+				postID
+				author {
+					posts(filter: { title: { allofterms: "find me" }}) {
+						title
+					}
+				}
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"post": map[string]interface{}{
+			"title":  "find me : a test of deep search after mutation",
+			"author": map[string]interface{}{"id": newAuthor.ID},
+		}},
+	}
+
+	// Expect the filter to find just the new post, not any of the author's existing posts.
+	addPostExpected := `{ "addPost": {
+		"post": {
+			"postID": "_UID_",
+			"author": {
+				"posts": [ { "title": "find me : a test of deep search after mutation" } ]
+			}
+		}
+	} }`
+
+	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddPost struct {
+			Post *post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddPost.Post.PostID)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor},
+		[]*post{newPost, result.AddPost.Post})
+}
+
 func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*post) {
 	t.Run("cleaning up", func(t *testing.T) {
 		for _, post := range posts {
@@ -635,4 +702,3 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 		}
 	})
 }
-
