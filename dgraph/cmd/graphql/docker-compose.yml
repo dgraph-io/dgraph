@@ -61,13 +61,13 @@ services:
     volumes:
       - type: bind
         source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql
-        target: /data
+        target: /gqldata
         read_only: true
     depends_on:
       - graphql-init
     labels:
       cluster: test
-    command: 'dgraph live -f /data/e2e_test_data.json --alpha alpha1:9180'
+    command: 'dgraph live -f /gqldata/e2e_test_data.json --alpha alpha1:9180'
     
   graphql:
     image: dgraph/dgraph:latest
