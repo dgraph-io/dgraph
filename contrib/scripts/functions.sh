@@ -25,7 +25,7 @@ function restartCluster {
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
-  sleep 10 || exit 1
+  sleep 30 || exit 1
 }
 
 function stopCluster {
