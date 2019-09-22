@@ -72,7 +72,7 @@ services:
     restart: on-failure
     labels:
       cluster: test
-    command: '/gobin/dgraph live -f /gqldata/e2e_test_data.json --alpha alpha1:9180'
+    command: 'sleep 10s; /gobin/dgraph live -f /gqldata/e2e_test_data.json --alpha alpha1:9180'
     
   graphql:
     image: dgraph/dgraph:latest
