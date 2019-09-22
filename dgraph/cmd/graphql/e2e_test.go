@@ -166,15 +166,15 @@ func requireContainsRequestID(t *testing.T, resp *GraphQLResponse) {
 	v, ok := resp.Extensions["requestID"]
 	require.True(t, ok,
 		"GraphQL response didn't contain a request ID - response was:\n%s",
-		serializeWithError(resp))
+		serializeOrError(resp))
 
 	str, ok := v.(string)
 	require.True(t, ok, "GraphQL requestID is not a string - response was:\n%s",
-		serializeWithError(resp))
+		serializeOrError(resp))
 
 	_, err := uuid.Parse(str)
 	require.NoError(t, err, "GraphQL requestID is not a UUID - response was:\n%s",
-		serializeWithError(resp))
+		serializeOrError(resp))
 }
 
 func requireUID(t *testing.T, uid string) {
@@ -184,14 +184,13 @@ func requireUID(t *testing.T, uid string) {
 
 func requireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 	require.Nil(t, resp.Errors,
-		"required no GraphQL errors, but received :\n%s", serializeWithError(resp.Errors))
+		"required no GraphQL errors, but received :\n%s", serializeOrError(resp.Errors))
 }
 
-func serializeWithError(toSerialize interface{}) string {
+func serializeOrError(toSerialize interface{}) string {
 	byts, err := json.Marshal(toSerialize)
-	if err == nil {
-		return string(byts)
-	} else {
+	if err != nil {
 		return "unable to serialize because " + err.Error()
 	}
+	return string(byts)
 }
