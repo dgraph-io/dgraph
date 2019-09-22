@@ -617,7 +617,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		queryCountryByRegExp(t, "/abc/", []*country{})
 	})
 
-	cleanUp(t, []*country{result.Add1.Country}, []*author{}, []*post{})
+	cleanUp(t, []*country{newCountry, result.Add1.Country}, []*author{newAuthor}, []*post{})
 }
 
 // After a successful mutation, the following query is executed.  That query can
