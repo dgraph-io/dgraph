@@ -222,7 +222,7 @@ func TestDeepFilter(t *testing.T) {
 
 	expected := &author{
 		Name:  "Ann Other Author",
-		Posts: []post{{Title: "GraphQL in Dgraph"}},
+		Posts: []post{{Title: "Learning GraphQL in Dgraph"}},
 	}
 
 	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
@@ -408,3 +408,220 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
+
+// FIXME: Int is currently not working in API.  It's because it doesn't deserialize properly.
+// We just need to look at the expected type and make sure it's an in.  There's a card in Asana.
+// func TestIntFilters(t *testing.T) {
+// 	cases := map[string]struct {
+// 		Filter   interface{}
+// 		Expected []*post
+// 	}{
+// 		"less than": {
+// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"lt": 87}},
+// 			Expected: []*post{
+// 				{Title: "GraphQL in Dgraph doco"},
+// 				{Title: "Random post"}}},
+// 		"less or equal": {
+// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"le": 87}},
+// 			Expected: []*post{
+// 				{Title: "GraphQL in Dgraph doco"},
+// 				{Title: "Learning GraphQL in Dgraph"},
+// 				{Title: "Random post"}}},
+// 		"equal": {
+// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"eq": 87}},
+// 			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
+// 		"greater or equal": {
+// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"ge": 87}},
+// 			Expected: []*post{
+// 				{Title: "Introducing GraphQL in Dgraph"},
+// 				{Title: "Learning GraphQL in Dgraph"}}},
+// 		"greater than": {
+// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
+// 			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+// 	}
+
+// 	for name, test := range cases {
+// 		t.Run(name, func(t *testing.T) {
+// 			postTest(t, test.Filter, test.Expected)
+// 		})
+// 	}
+// }
+
+func TestBooleanFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"true": {
+			Filter: map[string]interface{}{"isPublished": true},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"false": {
+			Filter:   map[string]interface{}{"isPublished": false},
+			Expected: []*post{{Title: "Random post"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func TestTermFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"all of terms": {
+			Filter: map[string]interface{}{
+				"title": map[string]interface{}{"allofterms": "GraphQL Dgraph"}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"any of terms": {
+			Filter: map[string]interface{}{
+				"title": map[string]interface{}{"anyofterms": "GraphQL Dgraph"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func TestFullTextFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"all of text": {
+			Filter: map[string]interface{}{
+				"text": map[string]interface{}{"alloftext": "learn GraphQL"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"any of text": {
+			Filter: map[string]interface{}{
+				"text": map[string]interface{}{"anyoftext": "learn GraphQL"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func TestStringExactFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter:   map[string]interface{}{"topic": map[string]interface{}{"lt": "GraphQL"}},
+			Expected: []*post{{Title: "GraphQL doco"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"topic": map[string]interface{}{"le": "GraphQL"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"topic": map[string]interface{}{"eq": "GraphQL"}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"topic": map[string]interface{}{"ge": "GraphQL"}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"greater than": {
+			Filter: map[string]interface{}{"topic": map[string]interface{}{"gt": "GraphQL"}},
+			Expected: []*post{
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func TestScalarListFilters(t *testing.T) {
+
+	// tags is a list of strings with @search(by: exact).  So all the filters
+	// lt, le, ... mean "is there something in the list that's lt 'Dgraph'", etc.
+
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter:   map[string]interface{}{"tags": map[string]interface{}{"lt": "Dgraph"}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"tags": map[string]interface{}{"le": "Dgraph"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"tags": map[string]interface{}{"eq": "Database"}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"tags": map[string]interface{}{"ge": "Dgraph"}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"tags": map[string]interface{}{"gt": "GraphQL"}},
+			Expected: []*post{{Title: "Random post"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func postTest(t *testing.T, filter interface{}, expected []*post) {
+	queryParams := &GraphQLParams{
+		Query: `query filterVariable($filter: PostFilter) {
+			queryPost(filter: $filter, order: { asc: title }) {
+				title
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": filter},
+	}
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result.QueryPost); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TODO: skip and include - same three tests as translation
