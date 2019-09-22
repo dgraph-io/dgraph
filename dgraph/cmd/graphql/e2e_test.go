@@ -162,17 +162,36 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 }
 
 func requireContainsRequestID(t *testing.T, resp *GraphQLResponse) {
+
 	v, ok := resp.Extensions["requestID"]
-	require.True(t, ok, "GraphQL response didn't contain a request ID")
+	require.True(t, ok,
+		"GraphQL response didn't contain a request ID - response was:\n%s",
+		serializeWithError(resp))
 
 	str, ok := v.(string)
-	require.True(t, ok, "GraphQL requestID is not a string")
+	require.True(t, ok, "GraphQL requestID is not a string - response was:\n%s",
+		serializeWithError(resp))
 
 	_, err := uuid.Parse(str)
-	require.NoError(t, err, "GraphQL requestID is not a UUID")
+	require.NoError(t, err, "GraphQL requestID is not a UUID - response was:\n%s",
+		serializeWithError(resp))
 }
 
 func requireUID(t *testing.T, uid string) {
 	_, err := strconv.ParseUint(uid, 0, 64)
 	require.NoError(t, err)
+}
+
+func requireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
+	require.Nil(t, resp.Errors,
+		"required no GraphQL errors, but received :\n%s", serializeWithError(resp.Errors))
+}
+
+func serializeWithError(toSerialize interface{}) string {
+	byts, err := json.Marshal(toSerialize)
+	if err == nil {
+		return string(byts)
+	} else {
+		return "unable to serialize because " + err.Error()
+	}
 }
