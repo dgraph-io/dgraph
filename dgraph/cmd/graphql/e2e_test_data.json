@@ -33,6 +33,14 @@
         "Author.posts": [{ "uid": "_:post3" }, { "uid": "_:post4" }]
     },
     {
+        "uid": "_:author3",
+        "dgraph.type": "Author",
+        "Author.name": "Three Author",
+        "Author.dob": "2001-01-01",
+        "Author.reputation": 9.1,
+        "Author.country": { "uid": "_:bangladesh" }
+    },
+    {
         "uid": "_:post1",
         "dgraph.type": "Post",
         "Post.title": "GraphQL in Dgraph",
