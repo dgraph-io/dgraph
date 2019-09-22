@@ -449,7 +449,7 @@ func TestEncodeBlockAnnounceMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bhm := &BlockHeaderMessage{
+	bhm := &BlockAnnounceMessage{
 		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
@@ -471,7 +471,7 @@ func TestDecodeBlockAnnounceMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bhm := new(BlockHeaderMessage)
+	bhm := new(BlockAnnounceMessage)
 	err = bhm.Decode(announceMessage)
 	if err != nil {
 		t.Fatal(err)
@@ -489,7 +489,7 @@ func TestDecodeBlockAnnounceMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := &BlockHeaderMessage{
+	expected := &BlockAnnounceMessage{
 		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,

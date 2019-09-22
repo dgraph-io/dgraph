@@ -256,29 +256,29 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	return nil
 }
 
-type BlockHeaderMessage common.BlockHeader
+type BlockAnnounceMessage common.BlockHeader
 
-// string formats a BlockHeaderMessage as a string
-func (bhm *BlockHeaderMessage) String() string {
-	return fmt.Sprintf("BlockHeaderMessage ParentHash=0x%x Number=%d StateRoot=0x%x ExtrinsicsRoot=0x%x Digest=0x%x",
-		bhm.ParentHash,
-		bhm.Number,
-		bhm.StateRoot,
-		bhm.ExtrinsicsRoot,
-		bhm.Digest)
+// string formats a BlockAnnounceMessage as a string
+func (bm *BlockAnnounceMessage) String() string {
+	return fmt.Sprintf("BlockAnnounceMessage ParentHash=0x%x Number=%d StateRoot=0x%x ExtrinsicsRoot=0x%x Digest=0x%x",
+		bm.ParentHash,
+		bm.Number,
+		bm.StateRoot,
+		bm.ExtrinsicsRoot,
+		bm.Digest)
 }
 
-func (bhm *BlockHeaderMessage) Encode() ([]byte, error) {
-	enc, err := scale.Encode(bhm)
+func (bm *BlockAnnounceMessage) Encode() ([]byte, error) {
+	enc, err := scale.Encode(bm)
 	if err != nil {
 		return enc, err
 	}
 	return append([]byte{BlockAnnounceMsgType}, enc...), nil
 }
 
-//Decodes the message into a BlockHeaderMessage, it assumes the type byte has been removed
-func (bhm *BlockHeaderMessage) Decode(msg []byte) error {
-	_, err := scale.Decode(msg, bhm)
+//Decodes the message into a BlockAnnounceMessage, it assumes the type byte has been removed
+func (bm *BlockAnnounceMessage) Decode(msg []byte) error {
+	_, err := scale.Decode(msg, bm)
 	return err
 }
 
