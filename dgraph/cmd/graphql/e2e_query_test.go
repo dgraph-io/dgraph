@@ -326,3 +326,85 @@ func TestQueriesWithError(t *testing.T) {
 		}
 	}
 }
+
+func TestDateFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*author
+	}{
+		"less than": {
+			Filter:   map[string]interface{}{"dob": map[string]interface{}{"lt": "2000-01-01"}},
+			Expected: []*author{{Name: "Ann Other Author"}}},
+		"less or equal": {
+			Filter:   map[string]interface{}{"dob": map[string]interface{}{"le": "2000-01-01"}},
+			Expected: []*author{{Name: "Ann Author"}, {Name: "Ann Other Author"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"dob": map[string]interface{}{"eq": "2000-01-01"}},
+			Expected: []*author{{Name: "Ann Author"}}},
+		"greater or equal": {
+			Filter:   map[string]interface{}{"dob": map[string]interface{}{"ge": "2000-01-01"}},
+			Expected: []*author{{Name: "Ann Author"}, {Name: "Three Author"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"dob": map[string]interface{}{"gt": "2000-01-01"}},
+			Expected: []*author{{Name: "Three Author"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			authorTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func TestFloatFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*author
+	}{
+		"less than": {
+			Filter:   map[string]interface{}{"reputation": map[string]interface{}{"lt": 8.9}},
+			Expected: []*author{{Name: "Ann Author"}}},
+		"less or equal": {
+			Filter:   map[string]interface{}{"reputation": map[string]interface{}{"le": 8.9}},
+			Expected: []*author{{Name: "Ann Author"}, {Name: "Ann Other Author"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"reputation": map[string]interface{}{"eq": 8.9}},
+			Expected: []*author{{Name: "Ann Other Author"}}},
+		"greater or equal": {
+			Filter:   map[string]interface{}{"reputation": map[string]interface{}{"ge": 8.9}},
+			Expected: []*author{{Name: "Ann Other Author"}, {Name: "Three Author"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"reputation": map[string]interface{}{"gt": 8.9}},
+			Expected: []*author{{Name: "Three Author"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			authorTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func authorTest(t *testing.T, filter interface{}, expected []*author) {
+	queryParams := &GraphQLParams{
+		Query: `query filterVariable($filter: AuthorFilter) {
+			queryAuthor(filter: $filter, order: { asc: name }) {
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": filter},
+	}
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result.QueryAuthor); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
