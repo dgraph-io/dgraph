@@ -134,32 +134,36 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
 
-	if r == nil {
-		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", api.RequestID(ctx))
-		return schema.ErrorResponsef("[%s] Internal error", api.RequestID(ctx))
-	}
-
-	if r.Schema == nil {
-		glog.Errorf("[%s] Call to Resolve with no schema", api.RequestID(ctx))
-		return schema.ErrorResponsef("[%s] Internal error", api.RequestID(ctx))
-	}
-
-	if r.resp.Errors != nil {
-		return r.resp
-	}
-
 	r.resp.Extensions = &schema.Extensions{
 		RequestID: api.RequestID(ctx),
 	}
 
-	op, err := r.Schema.Operation(r.GqlReq)
-	if err != nil {
-		return schema.ErrorResponse(err)
+	if r == nil {
+		glog.Errorf("Call to Resolve with nil RequestResolver")
+		r.WithError(errors.New("Internal error"))
+	}
+
+	if r.Schema == nil {
+		glog.Errorf("Call to Resolve with no schema")
+		r.WithError(errors.New("Internal error"))
 	}
 
 	if glog.V(3) {
-		glog.Infof("[%s] Resolving GQL request: \n%s\n",
-			api.RequestID(ctx), r.GqlReq.Query)
+		b, err := json.Marshal(r.GqlReq.Variables)
+		if err != nil {
+			glog.Infof("Failed to marshal variables for logging : %s", err)
+			b = nil
+		}
+		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", r.GqlReq.Query, string(b))
+	}
+
+	op, err := r.Schema.Operation(r.GqlReq)
+	if err != nil {
+		r.WithError(err)
+	}
+
+	if r.resp.Errors != nil {
+		return r.resp
 	}
 
 	// A single request can contain either queries or mutations - not both.
