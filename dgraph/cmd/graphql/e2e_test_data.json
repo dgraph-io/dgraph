@@ -30,7 +30,7 @@
         "Author.dob": "1988-01-01",
         "Author.reputation": 8.9,
         "Author.country": { "uid": "_:angola" },
-        "Author.posts": [{ "uid": "_:post3" }, { "uid": "_:post4" }]
+        "Author.posts": [{ "uid": "_:post2" }, { "uid": "_:post4" }]
     },
     {
         "uid": "_:author3",
@@ -43,9 +43,10 @@
     {
         "uid": "_:post1",
         "dgraph.type": "Post",
-        "Post.title": "GraphQL in Dgraph",
+        "Post.title": "Introducing GraphQL in Dgraph",
         "Post.text": "The worlds best graph database, now with the best GraphQL support",
-        "Post.tags": ["GraphQL", "Dgraph", "database"],
+        "Post.tags": ["GraphQL", "Dgraph", "Database"],
+        "Post.topic": "GraphQL",
         "Post.numLikes": 100,
         "Post.isPublished": true,
         "Post.postType": "Fact",
@@ -54,9 +55,10 @@
     {
         "uid": "_:post2",
         "dgraph.type": "Post",
-        "Post.title": "GraphQL in Dgraph",
+        "Post.title": "Learning GraphQL in Dgraph",
         "Post.text": "Where do I learn more about GraphQL support in Dgraph?",
         "Post.tags": ["GraphQL", "Dgraph"],
+        "Post.topic": "Learn",
         "Post.numLikes": 87,
         "Post.isPublished": true,
         "Post.postType": "Question",
@@ -65,9 +67,10 @@
     {
         "uid": "_:post3",
         "dgraph.type": "Post",
-        "Post.title": "GraphQL in Dgraph",
+        "Post.title": "GraphQL doco",
         "Post.text": "I think the best place to learn GraphQL support in Dgraph is the excellent docs!",
         "Post.tags": ["GraphQL", "Dgraph"],
+        "Post.topic": "Docs",
         "Post.numLikes": 77,
         "Post.isPublished": true,
         "Post.postType": "Opinion",
@@ -79,6 +82,7 @@
         "Post.title": "Random post",
         "Post.text": "this post is not worth publishing",
         "Post.tags": ["Random"],
+        "Post.topic": "Random",
         "Post.numLikes": 0,
         "Post.isPublished": false,
         "Post.postType": "Fact",
