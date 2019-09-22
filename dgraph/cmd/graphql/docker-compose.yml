@@ -69,6 +69,7 @@ services:
         read_only: true
     depends_on:
       - graphql-init
+    restart: on-failure
     labels:
       cluster: test
     command: '/gobin/dgraph live -f /gqldata/e2e_test_data.json --alpha alpha1:9180'
