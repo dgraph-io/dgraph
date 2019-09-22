@@ -776,8 +776,8 @@ To make it work again, add a type definition via the alter endpoint. Let’s ass
 
 ```text
 type Person {
-  name: string 
-  age: int
+  name
+  age
 }
 ```
 
