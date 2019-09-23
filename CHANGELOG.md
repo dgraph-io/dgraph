@@ -569,8 +569,8 @@ Tracing
 ### Fixed
 
 - Preserve the order of entries in a mutation if multiple versions of the same
-  edge are found. This addresses the mutation re-ordering change (#2987) from v1.0.15.
-- Fixing the zero client in live loader to avoid using TLS. Fixes #3919. (#3936)
+  edge are found. This addresses the mutation re-ordering change ([#2987][]) from v1.0.15.
+- Fixing the zero client in live loader to avoid using TLS. Fixes [#3919][]. ([#3936][])
 
 [#3919]: https://github.com/dgraph-io/dgraph/issues/3919
 [#3936]: https://github.com/dgraph-io/dgraph/issues/3936
