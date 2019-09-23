@@ -355,8 +355,6 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		if defn.Kind == ast.Interface {
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
-
-			// TODO - Verify that reference type makes sense here.
 			addUpdateMutation(sch, defn)
 			addDeleteMutation(sch, defn)
 
