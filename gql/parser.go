@@ -2234,6 +2234,8 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		}
 	} else if item.Val == "cascade" {
 		curp.Cascade = true
+	} else if item.Val == "normalize" {
+		curp.Normalize = true
 	} else if peek[0].Typ == itemLeftRound {
 		// this is directive
 		switch item.Val {

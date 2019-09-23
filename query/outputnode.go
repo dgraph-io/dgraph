@@ -61,6 +61,7 @@ type outputNode interface {
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64, attr string)
+	SetFlatten(flatten bool)
 	IsEmpty() bool
 
 	addCountAtRoot(*SubGraph)
@@ -84,6 +85,7 @@ type fastJsonNode struct {
 	scalarVal []byte
 	attrs     []*fastJsonNode
 	list      bool
+	flatten   bool
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -141,6 +143,10 @@ func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 
 func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
+}
+
+func (fj *fastJsonNode) SetFlatten(flatten bool) {
+	fj.flatten = flatten
 }
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -469,19 +475,13 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		}
 
 		hasChild = true
-		if !sg.Params.Normalize {
-			fj.AddListChild(sg.Params.Alias, n1)
-			continue
-		}
 
-		// Lets normalize the response now.
-		normalized, err := n1.(*fastJsonNode).normalize()
+		err := createAttrs(n1)
 		if err != nil {
 			return err
 		}
-		for _, c := range normalized {
-			fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
-		}
+
+		fj.AddListChild(sg.Params.Alias, n1)
 	}
 
 	if !hasChild {
@@ -613,6 +613,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		sg.Params.ParentIds = append(sg.Params.ParentIds, uid)
 	}
 
+	dst.SetFlatten(sg.Params.Normalize)
 	var invalidUids map[uint64]bool
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
@@ -806,6 +807,39 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			Value: sg.pathMeta.weight,
 		}
 		dst.AddValue("_weight_", totalWeight)
+	}
+
+	return nil
+}
+
+func createAttrs(oNode outputNode) error {
+	node := oNode.(*fastJsonNode)
+
+	err := flattenResult(node)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func flattenResult(node *fastJsonNode) error {
+	if node.flatten {
+		attrList, err := node.normalize()
+		if err != nil {
+			return err
+		}
+
+		var allAttrs []*fastJsonNode
+		for _, attrs := range attrList {
+			allAttrs = append(allAttrs, attrs...)
+		}
+
+		node.attrs = allAttrs
+	} else {
+		for _, child := range node.attrs {
+			flattenResult(child)
+		}
 	}
 
 	return nil
