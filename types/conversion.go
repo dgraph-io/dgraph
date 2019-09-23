@@ -289,11 +289,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = float64(1)
 				}
 			case BigFloatID:
-				value := float64(0)
 				if vc {
-					value = float64(1)
+					*res = big.NewFloat(1).SetPrec(BigFloatPrecision)
+				} else {
+					*res = big.NewFloat(0).SetPrec(BigFloatPrecision)
 				}
-				*res = big.NewFloat(value).SetPrec(BigFloatPrecision)
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:

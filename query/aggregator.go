@@ -112,15 +112,74 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	return false, errors.Errorf("Invalid compare function %q", ag)
 }
 
-type argType int
+type numType int
 
 const (
-	DEFAULT argType = iota
+	DEFAULT numType = iota
 	FLOAT
 	BIGFLOAT
 )
 
-func (ag *aggregator) ApplyUnaryFunction(v types.Val, vBase argType, l float64) error {
+func (ag *aggregator) ApplyVal(v types.Val) error {
+	if v.Value == nil {
+		// If the value is missing, treat it as 0.
+		v.Value = int64(0)
+		v.Tid = types.IntID
+	}
+
+	var vBase numType
+	var vFloat float64
+	if v.Tid == types.IntID {
+		vFloat = float64(v.Value.(int64))
+		v.Value = vFloat
+		v.Tid = types.FloatID
+		vBase = FLOAT
+	} else if v.Tid == types.FloatID {
+		vFloat = v.Value.(float64)
+		vBase = FLOAT
+	} else if v.Tid == types.BigFloatID {
+		vBase = BIGFLOAT
+	}
+	// If its not int or float, keep the type.
+
+	if isUnary(ag.name) {
+		return ag.ApplyUnaryFunction(v, vBase, vFloat)
+	}
+
+	if ag.result.Value == nil {
+		ag.result = v
+		return nil
+	}
+
+	va := ag.result
+	var vBigFloat big.Float
+	var vaBase numType
+	if va.Tid == types.FloatID {
+		vaBase = FLOAT
+		if vBase == BIGFLOAT {
+			vaBase = BIGFLOAT
+			va.Tid = types.BigFloatID
+			va.Value = *big.NewFloat(vFloat).SetPrec(types.BigFloatPrecision)
+		}
+	}
+	if va.Tid == types.BigFloatID {
+		vaBase = BIGFLOAT
+		if vBase == FLOAT {
+			vBigFloat.SetPrec(types.BigFloatPrecision).SetFloat64(vFloat)
+			vBase = BIGFLOAT
+		} else if vBase == BIGFLOAT {
+			vBigFloat = v.Value.(big.Float)
+		}
+	}
+
+	if vBase != vaBase {
+		return errors.Errorf("Different type encountered for binary func %q", ag.name)
+	}
+
+	return ag.ApplyBinaryFunction(v, va, vBase, vFloat, vBigFloat)
+}
+
+func (ag *aggregator) ApplyUnaryFunction(v types.Val, vBase numType, l float64) error {
 	var res types.Val
 	switch ag.name {
 	case "ln":
@@ -207,10 +266,11 @@ func (ag *aggregator) ApplyUnaryFunction(v types.Val, vBase argType, l float64) 
 	return nil
 }
 
-func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType,
+func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase numType,
 	vFloat float64, vBigFloat big.Float) error {
 	var zero big.Float
 	var res types.Val
+	divisionError := errors.Errorf("Division by zero")
 	switch ag.name {
 	case "+":
 		if vBase == DEFAULT {
@@ -258,14 +318,14 @@ func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType,
 
 		if vBase == BIGFLOAT {
 			if vBigFloat.Cmp(&zero) == 0 {
-				return errors.Errorf("Division by zero")
+				return divisionError
 			}
 			value := va.Value.(big.Float)
 			value.Quo(&value, &vBigFloat)
 			va.Value = value
 		} else {
 			if vFloat == 0 {
-				return errors.Errorf("Division by zero")
+				return divisionError
 			}
 			va.Value = va.Value.(float64) / vFloat
 		}
@@ -276,7 +336,7 @@ func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType,
 		}
 
 		if vFloat == 0 {
-			return errors.Errorf("Division by zero")
+			return divisionError
 		}
 		va.Value = math.Mod(va.Value.(float64), vFloat)
 		res = va
@@ -314,65 +374,6 @@ func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase argType,
 	}
 	ag.result = res
 	return nil
-}
-
-func (ag *aggregator) ApplyVal(v types.Val) error {
-	if v.Value == nil {
-		// If the value is missing, treat it as 0.
-		v.Value = int64(0)
-		v.Tid = types.IntID
-	}
-
-	var vBase argType
-	var vFloat float64
-	if v.Tid == types.IntID {
-		vFloat = float64(v.Value.(int64))
-		v.Value = vFloat
-		v.Tid = types.FloatID
-		vBase = FLOAT
-	} else if v.Tid == types.FloatID {
-		vFloat = v.Value.(float64)
-		vBase = FLOAT
-	} else if v.Tid == types.BigFloatID {
-		vBase = BIGFLOAT
-	}
-	// If its not int or float, keep the type.
-
-	if isUnary(ag.name) {
-		return ag.ApplyUnaryFunction(v, vBase, vFloat)
-	}
-
-	if ag.result.Value == nil {
-		ag.result = v
-		return nil
-	}
-
-	va := ag.result
-	var vBigFloat big.Float
-	var vaBase argType
-	if va.Tid == types.FloatID {
-		vaBase = FLOAT
-		if vBase == BIGFLOAT {
-			vaBase = BIGFLOAT
-			va.Tid = types.BigFloatID
-			va.Value = *big.NewFloat(vFloat).SetPrec(types.BigFloatPrecision)
-		}
-	}
-	if va.Tid == types.BigFloatID {
-		vaBase = BIGFLOAT
-		if vBase == FLOAT {
-			vBigFloat.SetPrec(types.BigFloatPrecision).SetFloat64(vFloat)
-			vBase = BIGFLOAT
-		} else if vBase == BIGFLOAT {
-			vBigFloat = v.Value.(big.Float)
-		}
-	}
-
-	if vBase != vaBase {
-		return errors.Errorf("Different type encountered for binary func %q", ag.name)
-	}
-
-	return ag.ApplyBinaryFunction(v, va, vBase, vFloat, vBigFloat)
 }
 
 func (ag *aggregator) Apply(val types.Val) {
