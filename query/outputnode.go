@@ -61,7 +61,7 @@ type outputNode interface {
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64, attr string)
-	SetFlatten(flatten bool)
+	SetNormalize(isNormalized bool)
 	IsEmpty() bool
 
 	addCountAtRoot(*SubGraph)
@@ -79,13 +79,13 @@ func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonN
 }
 
 type fastJsonNode struct {
-	attr      string
-	order     int // relative ordering (for sorted results)
-	isChild   bool
-	scalarVal []byte
-	attrs     []*fastJsonNode
-	list      bool
-	flatten   bool
+	attr         string
+	order        int // relative ordering (for sorted results)
+	isChild      bool
+	scalarVal    []byte
+	attrs        []*fastJsonNode
+	list         bool
+	isNormalized bool
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -145,8 +145,8 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
-func (fj *fastJsonNode) SetFlatten(flatten bool) {
-	fj.flatten = flatten
+func (fj *fastJsonNode) SetNormalize(isNormalized bool) {
+	fj.isNormalized = isNormalized
 }
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -476,11 +476,9 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 
 		hasChild = true
 
-		err := createAttrs(n1)
-		if err != nil {
+		if err := flattenResult(n1.(*fastJsonNode)); err != nil {
 			return err
 		}
-
 		fj.AddListChild(sg.Params.Alias, n1)
 	}
 
@@ -613,7 +611,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		sg.Params.ParentIds = append(sg.Params.ParentIds, uid)
 	}
 
-	dst.SetFlatten(sg.Params.Normalize)
+	dst.SetNormalize(sg.Params.Normalize)
 	var invalidUids map[uint64]bool
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
@@ -812,19 +810,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-func createAttrs(oNode outputNode) error {
-	node := oNode.(*fastJsonNode)
-
-	err := flattenResult(node)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func flattenResult(node *fastJsonNode) error {
-	if node.flatten {
+	if node.isNormalized {
 		attrList, err := node.normalize()
 		if err != nil {
 			return err
@@ -838,7 +825,9 @@ func flattenResult(node *fastJsonNode) error {
 		node.attrs = allAttrs
 	} else {
 		for _, child := range node.attrs {
-			flattenResult(child)
+			if err := flattenResult(child); err != nil {
+				return err
+			}
 		}
 	}
 
