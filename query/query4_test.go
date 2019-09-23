@@ -18,13 +18,9 @@ package query
 
 import (
 	"context"
-	// "encoding/json"
-	// "fmt"
-	// "strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	// "google.golang.org/grpc/metadata"
 )
 
 func TestDeleteAndReaddIndex(t *testing.T) {
@@ -560,4 +556,320 @@ func TestHasFilterOrderOffset(t *testing.T) {
 			]
 		  }
 	}`, js)
+}
+func TestCascadeSubQuery1(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female"
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCascadeSubQuery2(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend {
+				name
+				full_name
+				friend @cascade {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female",
+						"friend": [
+							{
+								"name": "Rick Grimes",
+								"friend": [
+									{
+										"name": "Michonne",
+										"full_name": "Michonne's large name for hashing",
+										"dob": "1910-01-01T00:00:00Z",
+										"age": 38
+									}
+								]
+							},
+							{
+								"name": "Glenn Rhee"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestCascadeRepeatedMultipleLevels(t *testing.T) {
+	// It should have result same as applying @cascade at the top level friend predicate.
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend @cascade {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"me": [
+				{
+					"name": "Michonne",
+					"full_name": "Michonne's large name for hashing",
+					"gender": "female"
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCascadeSubQueryWithFilter(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) {
+			name
+			full_name
+			gender
+			friend {
+				name
+				full_name
+				friend @cascade @filter(gt(age, 40)) {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female",
+						"friend": [
+							{
+								"name": "Rick Grimes"
+							},
+							{
+								"name": "Glenn Rhee"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestCascadeSubQueryWithVars1(t *testing.T) {
+	query := `
+	{
+		him(func: uid(0x01)) {
+			L as friend {
+				B as friend @cascade {
+					name
+				}
+			}
+		}
+
+		me(func: uid(L, B)) {
+			name
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"him": [
+					{
+						"friend": [
+							{
+								"friend": [
+									{
+										"name": "Michonne"
+									}
+								]
+							},
+							{
+								"friend": [
+									{
+										"name": "Glenn Rhee"
+									}
+								]
+							}
+						]
+					}
+				],
+				"me": [
+					{
+						"name": "Michonne"
+					},
+					{
+						"name": "Rick Grimes"
+					},
+					{
+						"name": "Glenn Rhee"
+					},
+					{
+						"name": "Daryl Dixon"
+					},
+					{
+						"name": "Andrea"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestCascadeSubQueryWithVars2(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x01)) {
+			L as friend  @cascade {
+				B as friend
+			}
+		}
+
+		me(func: uid(L, B)) {
+			name
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne"
+					},
+					{
+						"name": "Rick Grimes"
+					},
+					{
+						"name": "Glenn Rhee"
+					},
+					{
+						"name": "Andrea"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestCascadeSubQueryMultiUid(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01, 0x02, 0x03)) {
+			name
+			full_name
+			gender
+			friend @cascade {
+				name
+				full_name
+				friend {
+					name
+					full_name
+					dob
+					age
+				}
+			}
+		}
+	}
+`
+	js := processQueryNoErr(t, query)
+	// Friends of Michonne who don't have full_name predicate associated with them are filtered.
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michonne",
+						"full_name": "Michonne's large name for hashing",
+						"gender": "female"
+					},
+					{
+						"name": "King Lear"
+					},
+					{
+						"name": "Margaret"
+					}
+				]
+			}
+		}
+	`, js)
 }

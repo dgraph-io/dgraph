@@ -516,7 +516,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
-			Cascade:        sg.Params.Cascade,
+			Cascade:        gchild.Cascade || sg.Params.Cascade,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
@@ -1286,7 +1286,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !sg.Params.Cascade {
+		if !child.Params.Cascade {
 			continue
 		}
 

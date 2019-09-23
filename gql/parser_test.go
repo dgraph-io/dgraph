@@ -52,6 +52,30 @@ func TestParseCountValError(t *testing.T) {
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
 }
 
+func TestParseQueryNamedQuery(t *testing.T) {
+	query := `
+query works() {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryNameQueryWithoutBrackers(t *testing.T) {
+	query := `
+query works {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func TestParseVarError(t *testing.T) {
 	query := `
 	{
@@ -3119,6 +3143,22 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 	require.Equal(t, "SchooL", res.Query[0].Children[0].GroupbyAttrs[1].Alias)
 }
 
+func TestParseGroupbyWithAliasForError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(first: 10, SchooL: school) {
+				count(uid)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(), "Can't use keyword first as alias in groupby")
+}
+
 func TestParseGroupbyError(t *testing.T) {
 	// predicates not allowed inside groupby.
 	query := `
@@ -4763,77 +4803,4 @@ func TestTypeFilterInPredicate(t *testing.T) {
 
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
-}
-
-func TestTypeInRoot(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) @type(Person) {
-			name
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "name", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Filter.Func.Args[0].Value)
-}
-
-func TestTypeInPredicate(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				name
-			}
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
-
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
-}
-
-func TestMultipleTypeDirectives(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				pet @type(Animal) {
-					name
-				}
-			}
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
-
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "pet", gq.Query[0].Children[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
 }

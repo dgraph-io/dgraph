@@ -97,9 +97,13 @@ func (lf *logFile) munmap() (err error) {
 		// Nothing to do
 		return nil
 	}
+
 	if err := y.Munmap(lf.fmap); err != nil {
 		return errors.Wrapf(err, "Unable to munmap value log: %q", lf.path)
 	}
+	// This is important. We should set the map to nil because ummap
+	// system call doesn't change the length or capacity of the fmap slice.
+	lf.fmap = nil
 	return nil
 }
 
@@ -137,10 +141,20 @@ func (lf *logFile) doneWriting(offset uint32) error {
 		return errors.Wrapf(err, "Unable to sync value log: %q", lf.path)
 	}
 
+	// Unmap file before we truncate it. Windows cannot truncate a file that is mmapped.
+	if err := lf.munmap(); err != nil {
+		return errors.Wrapf(err, "failed to mumap vlog file %s", lf.fd.Name())
+	}
+
 	// TODO: Confirm if we need to run a file sync after truncation.
 	// Truncation must run after unmapping, otherwise Windows would crap itself.
 	if err := lf.fd.Truncate(int64(offset)); err != nil {
 		return errors.Wrapf(err, "Unable to truncate file: %q", lf.path)
+	}
+
+	// Reinitialize the log file. This will mmap the entire file.
+	if err := lf.init(); err != nil {
+		return errors.Wrapf(err, "failed to initialize file %s", lf.fd.Name())
 	}
 
 	// Previously we used to close the file after it was written and reopen it in read-only mode.
@@ -722,11 +736,11 @@ func (vlog *valueLog) createVlogFile(fid uint32) (*logFile, error) {
 	if err = syncDir(vlog.dirPath); err != nil {
 		return nil, errFile(err, vlog.dirPath, "Sync value log dir")
 	}
-	if err = lf.mmap(2 * vlog.opt.ValueLogFileSize); err != nil {
-		return nil, errFile(err, lf.path, "Mmap value log file")
-	}
 	if err = bootstrapLogfile(lf.fd); err != nil {
 		return nil, err
+	}
+	if err = lf.mmap(2 * vlog.opt.ValueLogFileSize); err != nil {
+		return nil, errFile(err, lf.path, "Mmap value log file")
 	}
 
 	// writableLogOffset is only written by write func, by read by Read func.
@@ -848,6 +862,10 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 			// Log file is corrupted. Delete it.
 			if err == errDeleteVlogFile {
 				delete(vlog.filesMap, fid)
+				// Close the fd of the file before deleting the file otherwise windows complaints.
+				if err := lf.fd.Close(); err != nil {
+					return errors.Wrapf(err, "failed to close vlog file %s", lf.fd.Name())
+				}
 				path := vlog.fpath(lf.fid)
 				if err := os.Remove(path); err != nil {
 					return y.Wrapf(err, "failed to delete empty value log file: %q", path)

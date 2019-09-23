@@ -857,10 +857,6 @@ L:
 				if err := parseRecurseArgs(it, gq); err != nil {
 					return nil, err
 				}
-			case "type":
-				if err := parseType(it, gq); err != nil {
-					return nil, err
-				}
 			default:
 				return nil, item.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1037,6 +1033,9 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 // parseGqlVariables parses the the graphQL variable declaration.
 func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
+	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
+		return nil
+	}
 	for it.Next() {
 		var varName string
 		// Get variable name.
@@ -1983,6 +1982,9 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 				if alias != "" {
 					return item.Errorf("Expected predicate after %s:", alias)
 				}
+				if validKey(val) {
+					return item.Errorf("Can't use keyword %s as alias in groupby", val)
+				}
 				alias = val
 				it.Next() // Consume the itemColon
 				continue
@@ -2016,40 +2018,6 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	if count == 0 {
 		return item.Errorf("Expected atleast one attribute in groupby")
 	}
-	return nil
-}
-
-func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
-	it.Next()
-	if it.Item().Typ != itemLeftRound {
-		return it.Item().Errorf("Expected a left round after type")
-	}
-
-	it.Next()
-	if it.Item().Typ != itemName {
-		return it.Item().Errorf("Expected a type name inside type directive")
-	}
-	typeName := it.Item().Val
-
-	it.Next()
-	if it.Item().Typ != itemRightRound {
-		return it.Item().Errorf("Expected ) after the type name in type directive")
-	}
-
-	// For now @type(TypeName) is equivalent of filtering using the type function.
-	// Later the type declarations will be used to ensure that the fields inside
-	// each block correspond to the specified type.
-	gq.Filter = &FilterTree{
-		Func: &Function{
-			Name: "type",
-			Args: []Arg{
-				{
-					Value: typeName,
-				},
-			},
-		},
-	}
-
 	return nil
 }
 
@@ -2264,6 +2232,8 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		} else {
 			return item.Errorf("Facets parsing failed.")
 		}
+	} else if item.Val == "cascade" {
+		curp.Cascade = true
 	} else if peek[0].Typ == itemLeftRound {
 		// this is directive
 		switch item.Val {
@@ -2283,11 +2253,6 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			}
 			curp.IsGroupby = true
 			if err := parseGroupby(it, curp); err != nil {
-				return err
-			}
-		case "type":
-			err := parseType(it, curp)
-			if err != nil {
 				return err
 			}
 		default:

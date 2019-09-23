@@ -44,7 +44,7 @@ func CalculateChecksum(data []byte, ct pb.Checksum_Algorithm) uint64 {
 func VerifyChecksum(data []byte, expected *pb.Checksum) error {
 	actual := CalculateChecksum(data, expected.Algo)
 	if actual != expected.Sum {
-		return Wrapf(ErrChecksumMismatch, "actual: %d, expected: %d", actual, expected)
+		return Wrapf(ErrChecksumMismatch, "actual: %d, expected: %d", actual, expected.Sum)
 	}
 	return nil
 }
