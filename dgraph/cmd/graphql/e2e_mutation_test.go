@@ -17,8 +17,8 @@
 package graphql
 
 // Tests that mutate the GraphQL database should return the database state to what it
-// was a the begining of the test.  The GraphQL query tests rely on a fixed input
-// dataset and mutating and leaving unexpected data will result in flakey tests.
+// was at the begining of the test.  The GraphQL query tests rely on a fixed input
+// dataset and mutating and leaving unexpected data will result in flaky tests.
 
 import (
 	"encoding/json"

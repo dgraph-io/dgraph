@@ -152,7 +152,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		b, err := json.Marshal(r.GqlReq.Variables)
 		if err != nil {
 			glog.Infof("Failed to marshal variables for logging : %s", err)
-			b = nil
 		}
 		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", r.GqlReq.Query, string(b))
 	}
