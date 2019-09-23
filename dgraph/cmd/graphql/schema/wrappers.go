@@ -304,8 +304,7 @@ func (f *field) SelectionSet() (flds []Field) {
 		if fragment, ok := s.(*ast.InlineFragment); ok {
 			// This is the case where an inline fragment is defined within a query
 			// block. Usually this is for requesting some fields for a concrete type
-			// within a query for an interface. We use the fld.ObjectDefinition in
-			// that case.
+			// within a query for an interface.
 			for _, s := range fragment.SelectionSet {
 				if fld, ok := s.(*ast.Field); ok {
 					pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)

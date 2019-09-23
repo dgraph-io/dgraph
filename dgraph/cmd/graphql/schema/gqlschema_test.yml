@@ -221,14 +221,6 @@ invalid_schemas:
       ]
 
 
-#  -
-#    name: "Interface implemented by type not defined"
-#    input: |
-#      type Droid implements Character {
-#        primaryFunction: String
-#      }
-#    errlist: [{"message": "Undefined type \"Character\"."}]
-
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
