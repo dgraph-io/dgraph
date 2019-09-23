@@ -149,6 +149,7 @@ func TestMain(m *testing.M) {
 		}
 
 		d.Close()
+		ready = true
 	}
 
 	if err != nil {
