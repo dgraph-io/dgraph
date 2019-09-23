@@ -707,6 +707,6 @@
         id : uid
         name : Character.name
         female : Human.female
-        ename : Human.ename
+        ename : Employee.ename
       }
     }

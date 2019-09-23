@@ -282,27 +282,37 @@ func (f *field) Type() Type {
 	}
 }
 
+func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
+	typ := objDef.Name
+	pi := parentInterface(sch, objDef, fname)
+	if pi != "" {
+		typ = pi
+	}
+	return typ
+}
+
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
-			objName := fld.ObjectDefinition.Name
-			pi := parentInterface(f.op.inSchema, fld.ObjectDefinition, fld.Name)
-			if pi != "" {
-				objName = pi
-			}
+			pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
 			flds = append(flds, &field{
 				field:      fld,
 				op:         f.op,
-				dgraphPred: objName + "." + fld.Name,
+				dgraphPred: pt + "." + fld.Name,
 			})
 		}
 		if fragment, ok := s.(*ast.InlineFragment); ok {
+			// This is the case where an inline fragment is defined within a query
+			// block. Usually this is for requesting some fields for a concrete type
+			// within a query for an interface. We use the fld.ObjectDefinition in
+			// that case.
 			for _, s := range fragment.SelectionSet {
 				if fld, ok := s.(*ast.Field); ok {
+					pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
 					flds = append(flds, &field{
 						field:      fld,
 						op:         f.op,
-						dgraphPred: fld.ObjectDefinition.Name + "." + fld.Name,
+						dgraphPred: pt + "." + fld.Name,
 					})
 				}
 			}
@@ -463,18 +473,11 @@ func (m *mutation) DgraphPredicate() string {
 
 func (t *astType) Field(name string) FieldDefinition {
 	typ := t.inSchema.Types[t.Name()]
-
-	parentType := typ.Name
-	pi := parentInterface(t.inSchema, typ, name)
-	if pi != "" {
-		parentType = pi
-	}
-
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
 		fieldDef:   t.inSchema.Types[t.Name()].Fields.ForName(name),
 		inSchema:   t.inSchema,
-		parentType: parentType,
+		parentType: parentType(t.inSchema, typ, name),
 	}
 }
 
