@@ -18,17 +18,23 @@ package graphql
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -98,6 +104,59 @@ type post struct {
 	IsPublished bool
 	PostType    string
 	Author      author
+}
+
+func TestMain(m *testing.M) {
+
+	// Because of how the containers are brought up, there's no guarantee that the
+	// `graphql init` has been run by now, or that the GraphQL API is up.  So we
+	// need to try and connect and potentially retry a few times.
+
+	var ready bool
+	var err error
+	retries := 2
+	sleep := 10 * time.Second
+
+	for !ready && retries > 0 {
+		retries--
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
+		if err != nil {
+			time.Sleep(sleep)
+			continue
+		}
+
+		client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+
+		err = ensureSchemaIsChanged(client)
+		if err != nil {
+			time.Sleep(sleep)
+			continue
+		}
+
+		err = ensureGraphQLRunning()
+		if err != nil {
+			time.Sleep(sleep)
+			continue
+		}
+
+		err = populateGraphQLData(client)
+		if err != nil {
+			time.Sleep(sleep)
+			continue
+		}
+
+		d.Close()
+	}
+
+	if err != nil {
+		panic(fmt.Sprintf("Waited for GraphQL server to become available, but it never did.\n"+
+			"Got error %+v", err.Error()))
+	}
+
+	os.Exit(m.Run())
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
@@ -193,4 +252,77 @@ func serializeOrError(toSerialize interface{}) string {
 		return "unable to serialize because " + err.Error()
 	}
 	return string(byts)
+}
+
+func populateGraphQLData(client *dgo.Dgraph) error {
+	jsonFile := "e2e_test_data.json"
+	byts, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		return errors.Wrapf(err, "Unable to read file %s.", jsonFile)
+	}
+
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   byts,
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	if err != nil {
+		return errors.Wrap(err, "Unable to add GraphQL test data")
+	}
+
+	return nil
+}
+
+func ensureSchemaIsChanged(client *dgo.Dgraph) error {
+
+	// A 'blank' schema should have just one predicate - dgraph.type.
+	// So if graphql initialisation has been run, the schema will have more
+	// than one predicate.  A later test confirms that it's the schema we
+	// expect; here we just want to know that the containers are up.
+
+	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
+	if err != nil {
+		return errors.Wrap(err, "unable to query Dgraph schema")
+	}
+
+	var resultSchema struct {
+		data struct {
+			schema []interface{}
+		}
+	}
+	err = json.Unmarshal(resp.Json, &resultSchema)
+	if err != nil {
+		return errors.Wrap(err, "couldn't unmarshal Dgraph schema")
+	}
+
+	if len(resultSchema.data.schema) == 1 {
+		return errors.New("GraphQL schema init has not yet been run")
+	}
+
+	return nil
+}
+
+func ensureGraphQLRunning() error {
+
+	body, err := json.Marshal(&GraphQLParams{
+		Query: `query { queryAuthor { name } }`,
+	})
+	if err != nil {
+		return errors.Wrap(err, "unable to build GraphQL query")
+	}
+
+	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.Wrap(err, "unable to execute GraphQL test query")
+	}
+
+	// OK means server is up
+	if status := resp.StatusCode; status != http.StatusOK {
+		return errors.Wrap(err, "request to GraphQL server didn't return OK")
+	}
+
+	return nil
 }
