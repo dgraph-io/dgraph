@@ -138,7 +138,7 @@ func updateMemoryMetrics(lc *y.Closer) {
 			x.MemoryIdle.M(int64(idle)),
 			x.MemoryProc.M(int64(getMemUsage())))
 	}
-	// Call update immediately so that Dgraph does report memory stats without
+	// Call update immediately so that Dgraph reports memory stats without
 	// having to wait for the first tick.
 	update()
 
