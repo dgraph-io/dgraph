@@ -196,15 +196,55 @@ var directiveValidators = map[string]directiveValidator{
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
+func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
+	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
+	// them. We add arguments for filters and order statements later.
+	dst := &ast.FieldDefinition{
+		Description:  src.Description,
+		Name:         src.Name,
+		DefaultValue: src.DefaultValue,
+		Type:         src.Type,
+		Directives:   src.Directives,
+		Position:     src.Position,
+	}
+	return dst
+}
+
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		panic(gqlErr)
 	}
 
-	// TODO - Get the fields from the interface and fill them into types that implement them.
-	// We'd have to perform a deep copy of the fields before adding them to the types otherwise
-	// the arguments and filters are added multiple times.
+	// Cache the interface definitions in a map. They could also be defined after types which
+	// implement them.
+	interfaces := make(map[string]*ast.Definition)
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Interface {
+			interfaces[defn.Name] = defn
+		}
+	}
+
+	// Walk through type definitions which implement an interface and fill in the fields from the
+	// interface.
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
+			for _, implements := range defn.Interfaces {
+				i, ok := interfaces[implements]
+				if !ok {
+					// This would fail schema validation later.
+					continue
+				}
+				fields := make([]*ast.FieldDefinition, 0, len(i.Fields))
+				for _, field := range i.Fields {
+					// Creating a copy here is important, otherwise arguments like filter, order
+					// etc. are added multiple times if the pointer is shared.
+					fields = append(fields, copyAstFieldDef(field))
+				}
+				defn.Fields = append(fields, defn.Fields...)
+			}
+		}
+	}
 
 	for _, defn := range docExtras.Definitions {
 		doc.Definitions = append(doc.Definitions, defn)

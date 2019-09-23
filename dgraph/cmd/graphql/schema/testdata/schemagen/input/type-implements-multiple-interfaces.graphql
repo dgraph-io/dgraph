@@ -10,12 +10,5 @@ interface Employee {
 }
 
 type Human implements Character & Employee {
-    id: ID!
-    name: String! @searchable(by: exact)
-    friends: [Character]
-
-    employeeId: String!
-    title: String!
-
     totalCredits: Int
 }

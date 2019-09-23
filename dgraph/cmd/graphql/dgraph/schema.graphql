@@ -42,9 +42,6 @@ interface Employee {
 }
 
 type Human implements Character & Employee {
-        id: ID!
-        name: String! @searchable
-        ename: String!
         dob: DateTime
         female: Boolean
 }

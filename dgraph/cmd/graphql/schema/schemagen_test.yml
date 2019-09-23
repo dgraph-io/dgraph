@@ -172,13 +172,9 @@ schemas:
         name: String!
       }
       type B implements A {
-        id: ID!
-        name: String!
         correct: Boolean
       }
       type C implements A {
-        id: ID!
-        name: String!
         dob: DateTime!
       }
     output: |
