@@ -526,7 +526,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IgnoreReflex:   sg.Params.IgnoreReflex,
 			Langs:          gchild.Langs,
 			NeedsVar:       append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
-			Normalize:      sg.Params.Normalize,
+			Normalize:      gchild.Normalize || sg.Params.Normalize,
 			Order:          gchild.Order,
 			Var:            gchild.Var,
 			GroupbyAttrs:   gchild.GroupbyAttrs,
