@@ -476,10 +476,10 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 
 		hasChild = true
 
-		if err := flattenResult(n1.(*fastJsonNode)); err != nil {
+		fj.AddListChild(sg.Params.Alias, n1)
+		if err := flattenResult(n1.(*fastJsonNode), fj, len(fj.attrs)-1); err != nil {
 			return err
 		}
-		fj.AddListChild(sg.Params.Alias, n1)
 	}
 
 	if !hasChild {
@@ -810,22 +810,21 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-func flattenResult(node *fastJsonNode) error {
+func flattenResult(node, parent *fastJsonNode, childIdx int) error {
 	if node.isNormalized {
 		attrList, err := node.normalize()
 		if err != nil {
 			return err
 		}
 
-		var allAttrs []*fastJsonNode
+		parent.attrs[childIdx] = &fastJsonNode{attr: node.attr, attrs: attrList[0]}
+		attrList = attrList[1:]
 		for _, attrs := range attrList {
-			allAttrs = append(allAttrs, attrs...)
+			parent.attrs = append(parent.attrs, &fastJsonNode{attr: node.attr, attrs: attrs})
 		}
-
-		node.attrs = allAttrs
 	} else {
-		for _, child := range node.attrs {
-			if err := flattenResult(child); err != nil {
+		for idx, child := range node.attrs {
+			if err := flattenResult(child, node, idx); err != nil {
 				return err
 			}
 		}
