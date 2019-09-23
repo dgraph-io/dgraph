@@ -547,21 +547,8 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	implements := t.Interfaces()
-	if len(implements) == 0 {
-		return fmt.Sprintf("%s.%s", t.Name(), fld)
-	}
-
-	for _, i := range implements {
-		typDef := t.inSchema.Types[i]
-		for _, field := range typDef.Fields {
-			if field.Name == fld {
-				return fmt.Sprintf("%s.%s", typDef.Name, fld)
-			}
-		}
-	}
-
-	return fmt.Sprintf("%s.%s", t.Name(), fld)
+	pt := parentType(t.inSchema, t.inSchema.Types[t.typ.Name()], fld)
+	return fmt.Sprintf("%s.%s", pt, fld)
 }
 
 func (t *astType) String() string {
