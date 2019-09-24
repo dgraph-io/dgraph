@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -69,12 +70,16 @@ func TestQueryByType(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
+		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
 		&country{Name: "Mozambique"},
-		&country{Name: "Angola"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
+
+	sort.Slice(result.QueryCountry, func(i, j int) bool {
+		return result.QueryCountry[i].Name < result.QueryCountry[j].Name
+	})
 
 	if diff := cmp.Diff(expected, result); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
