@@ -41,6 +41,10 @@ interface Employee {
         ename: String!
 }
 
+type Director implements Character {
+        movies: [String!]
+}
+
 type Human implements Character & Employee {
         dob: DateTime
         female: Boolean

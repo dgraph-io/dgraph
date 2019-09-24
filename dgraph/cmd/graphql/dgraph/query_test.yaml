@@ -710,3 +710,30 @@
         ename : Employee.ename
       }
     }
+
+-
+  name: "queryCharacter with fragment on multiple types"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Human {
+          female
+          ename
+        }
+        ... on Director {
+          movies
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        id : uid
+        name : Character.name
+        female : Human.female
+        ename : Employee.ename
+        movies : Director.movies
+      }
+    }
