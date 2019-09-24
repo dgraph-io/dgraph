@@ -148,14 +148,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		r.WithError(errors.New("Internal error"))
 	}
 
-	if glog.V(3) {
-		b, err := json.Marshal(r.GqlReq.Variables)
-		if err != nil {
-			glog.Infof("Failed to marshal variables for logging : %s", err)
-		}
-		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", r.GqlReq.Query, string(b))
-	}
-
 	op, err := r.Schema.Operation(r.GqlReq)
 	if err != nil {
 		r.WithError(err)
@@ -163,6 +155,14 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 
 	if r.resp.Errors != nil {
 		return r.resp
+	}
+
+	if glog.V(3) {
+		b, err := json.Marshal(r.GqlReq.Variables)
+		if err != nil {
+			glog.Infof("Failed to marshal variables for logging : %s", err)
+		}
+		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", r.GqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
