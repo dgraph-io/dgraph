@@ -1555,6 +1555,79 @@ func TestNormalizeDirective(t *testing.T) {
 		js)
 }
 
+func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {
+
+	query := `
+		{
+			me(func: uid(0x01)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"fn":"Michonne","n":"Rick Grimes"},{"n":"Glenn Rhee"},{"n":"Daryl Dixon"},{"fn":"Glenn Rhee","n":"Andrea"}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
+}
+
+func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				mn: name
+				gender
+				friend {
+					n: name
+					dob
+					friend @normalize { # Results of this subquery will be normalized
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"n":"Rick Grimes","dob":"1910-01-02T00:00:00Z","friend":{"fn":"Michonne"}},{"n":"Glenn Rhee","dob":"1909-05-05T00:00:00Z"},{"n":"Daryl Dixon","dob":"1909-01-10T00:00:00Z"},{"n":"Andrea","dob":"1901-01-15T00:00:00Z","friend":{"fn":"Glenn Rhee"}}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
+}
+
+func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @normalize { # Results of this query will be normalized
+				mn: name
+				gender
+				friend {
+					n: name
+					dob
+					friend @normalize { # It would appear as if @normalize isn't here.
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`, js)
+}
+
 func TestNearPoint(t *testing.T) {
 
 	query := `{
