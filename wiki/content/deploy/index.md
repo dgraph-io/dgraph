@@ -1860,7 +1860,6 @@ This triggers an export for all Alpha groups of the cluster. The data is exporte
 1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
 2. For every other group, its group's export data is stored with the Alpha leader of that group. 
 
-
 It is up to the user to retrieve the right export files from the Alphas in the
 cluster. Dgraph does not copy all files to the Alpha that initiated the export.
 The user must also ensure that there is sufficient space on disk to store the
