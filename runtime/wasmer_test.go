@@ -130,7 +130,7 @@ func TestExecVersion(t *testing.T) {
 }
 
 const TESTS_FP string = "./test_wasm.wasm"
-const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/09d34b04fff635e92eaecfb192d42aae4f58ba54/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
+const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/c0ff6e519676affd727a45fe605bc7c84a0a536d/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
 
 // getTestBlob checks if the test wasm file exists and if not, it fetches it from github
 func getTestBlob() (n int64, err error) {
@@ -458,6 +458,39 @@ func TestExt_clear_prefix(t *testing.T) {
 	}
 }
 
+// test that ext_blake2_128 performs a blake2b hash of the data
+func TestExt_blake2_128(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+	// save data in memory
+	data := []byte("helloworld")
+	pos := 170
+	out := 180
+	copy(mem[pos:pos+len(data)], data)
+
+	testFunc, ok := runtime.vm.Exports["test_ext_blake2_128"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// make sure hashes match
+	hash, err := common.Blake2b128(data)
+	if err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(hash, mem[out:out+16]) {
+		t.Errorf("hash saved in memory does not equal calculated hash, got %x expected %x", mem[out:out+16], hash)
+	}
+}
+
 // test that ext_blake2_256 performs a blake2b hash of the data
 func TestExt_blake2_256(t *testing.T) {
 	runtime, err := newTestRuntime()
@@ -613,8 +646,63 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 	}
 }
 
+// test that ext_twox_64 performs a xxHash64
+func TestExt_twox_64(t *testing.T) {
+	// test cases from https://github.com/paritytech/substrate/blob/13fc71c681cc9a3cc911c32c7890b52885092969/core/executor/src/wasm_executor.rs#L1701
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+	// save data in memory
+	// test for empty []byte
+	data := []byte(nil)
+	pos := 170
+	out := pos + len(data)
+	copy(mem[pos:pos+len(data)], data)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_twox_64"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//check result against expected value
+	if "99e9d85137db46ef" != hex.EncodeToString(mem[out:out+8]) {
+		t.Error("hash saved in memory does not equal calculated hash")
+	}
+
+	// test for data value "Hello world!"
+	data = []byte("Hello world!")
+	out = pos + len(data)
+	copy(mem[pos:pos+len(data)], data)
+
+	// call wasm function
+	testFunc, ok = runtime.vm.Exports["test_ext_twox_64"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//check result against expected value
+	if "b27dfd7f223f177f" != hex.EncodeToString(mem[out:out+8]) {
+		t.Error("hash saved in memory does not equal calculated hash")
+	}
+}
+
 // test that ext_twox_128 performs a xxHash64 twice on give byte array of the data
 func TestExt_twox_128(t *testing.T) {
+	// test cases from https://github.com/paritytech/substrate/blob/13fc71c681cc9a3cc911c32c7890b52885092969/core/executor/src/wasm_executor.rs#L1701
 	runtime, err := newTestRuntime()
 	if err != nil {
 		t.Fatal(err)
@@ -640,7 +728,6 @@ func TestExt_twox_128(t *testing.T) {
 	}
 
 	//check result against expected value
-	t.Logf("Ext_twox_128 data: %s, result: %s", data, hex.EncodeToString(mem[out:out+16]))
 	if "99e9d85137db46ef4bbea33613baafd5" != hex.EncodeToString(mem[out:out+16]) {
 		t.Error("hash saved in memory does not equal calculated hash")
 	}
@@ -662,9 +749,44 @@ func TestExt_twox_128(t *testing.T) {
 	}
 
 	//check result against expected value
-	t.Logf("Ext_twox_128 data: %s, result: %s", data, hex.EncodeToString(mem[out:out+16]))
 	if "b27dfd7f223f177f2a13647b533599af" != hex.EncodeToString(mem[out:out+16]) {
 		t.Error("hash saved in memory does not equal calculated hash")
+	}
+}
+
+// test that ext_keccak_256 returns the correct hash
+func TestExt_keccak_256(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	data := []byte(nil)
+	pos := 170
+	out := pos + len(data)
+	copy(mem[pos:pos+len(data)], data)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_keccak_256"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// test case from https://github.com/debris/tiny-keccak/blob/master/tests/keccak.rs#L4
+	expected, err := common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(expected[:], mem[out:out+32]) {
+		t.Fatalf("fail: got %x expected %x", mem[out:out+32], expected)
 	}
 }
 

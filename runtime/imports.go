@@ -356,16 +356,41 @@ func ext_blake2_256(context unsafe.Pointer, data, length, out int32) {
 //export ext_blake2_128
 func ext_blake2_128(context unsafe.Pointer, data, length, out int32) {
 	log.Debug("[ext_blake2_128] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+	hash, err := common.Blake2b128(memory[data : data+length])
+	if err != nil {
+		log.Error("[ext_blake2_128]", "error", err)
+	}
+
+	copy(memory[out:out+16], hash[:])
 }
 
 //export ext_keccak_256
 func ext_keccak_256(context unsafe.Pointer, data, length, out int32) {
 	log.Debug("[ext_keccak_256] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+	hash := common.Keccak256(memory[data : data+length])
+	copy(memory[out:out+32], hash[:])
 }
 
 //export ext_twox_64
 func ext_twox_64(context unsafe.Pointer, data, len, out int32) {
 	log.Debug("[ext_twox_64] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	hasher := xxhash.NewS64(0) // create xxHash with 0 seed
+	_, err := hasher.Write(memory[data : data+len])
+	if err != nil {
+		log.Error("[ext_twox_64]", "error", err)
+	}
+
+	res := hasher.Sum64()
+	hash := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash, uint64(res))
+	copy(memory[out:out+8], hash)
 }
 
 //export ext_twox_128
@@ -373,7 +398,6 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 	log.Debug("[ext_twox_128] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	log.Debug("[ext_twox_128]", "value", memory[data:data+len])
 
 	// compute xxHash64 twice with seeds 0 and 1 applied on given byte array
 	h0 := xxhash.NewS64(0) // create xxHash with 0 seed
@@ -382,7 +406,6 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 		log.Error("[ext_twox_128]", "error", err)
 	}
 	res0 := h0.Sum64()
-	log.Debug("[ext_twox_128]", "xxH64(0) of value", res0)
 	hash0 := make([]byte, 8)
 	binary.LittleEndian.PutUint64(hash0, uint64(res0))
 
@@ -392,7 +415,6 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 		log.Error("[ext_twox_128]", "error", err)
 	}
 	res1 := h1.Sum64()
-	log.Debug("[ext_twox_128]", "xxH64(1) of value", res1)
 	hash1 := make([]byte, 8)
 	binary.LittleEndian.PutUint64(hash1, uint64(res1))
 
