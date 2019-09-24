@@ -26,6 +26,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -45,7 +46,7 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	dirs := shardDirs(r.opt.TmpDir)
+	dirs := shardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
