@@ -220,6 +220,47 @@ invalid_schemas:
       "locations":[{"line":2, "column":14}]}
       ]
 
+  -
+    name: "Type implements an interface which wasn't defined"
+    input: |
+      type X implements Y {
+        y: String @searchable(by: bogus)
+      }
+    errlist: [
+      {"message": Undefined type "Y".,
+      "locations":[{"line":1, "column":6}]}
+      ]
+
+  -
+    name: "Type implemets an interface with the field definition repeated"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+        id: ID
+        y: String @searchable(by: bogus)
+      }
+    errlist: [
+      {"message": "Field X.id can only be defined once.",
+      "locations":[{"line":5, "column":3}]}
+      ]
+
+  -
+    name: "Type defines an interface with the field name repeated but different type"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+        id: String
+        y: String @searchable(by: bogus)
+      }
+    errlist: [
+      {"message": "Field X.id can only be defined once.",
+      "locations":[{"line":5, "column":3}]}
+      ]
+
 
 valid_schemas:
   -

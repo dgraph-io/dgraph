@@ -105,7 +105,7 @@ func NewHandler(input string) (Handler, error) {
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		return nil, gqlErr
+		return nil, gqlerror.List{gqlErr}
 	}
 
 	gqlErrList = postGQLValidation(sch, defns)
