@@ -224,7 +224,7 @@ invalid_schemas:
     name: "Type implements an interface which wasn't defined"
     input: |
       type X implements Y {
-        y: String @searchable(by: bogus)
+        y: String
       }
     errlist: [
       {"message": Undefined type "Y".,
@@ -239,7 +239,7 @@ invalid_schemas:
       }
       type X implements Y {
         id: ID
-        y: String @searchable(by: bogus)
+        y: String
       }
     errlist: [
       {"message": "Field X.id can only be defined once.",
@@ -254,7 +254,7 @@ invalid_schemas:
       }
       type X implements Y {
         id: String
-        y: String @searchable(by: bogus)
+        y: String
       }
     errlist: [
       {"message": "Field X.id can only be defined once.",
@@ -288,23 +288,6 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Field Z.id can only be defined once.",
-      "locations":[{"line":2, "column":3}]}
-      ]
-
-  -
-    name: "Type implements from two interfaces where both have the same field"
-    input: |
-      interface X {
-        name: String
-      }
-      interface Y {
-        name: String
-      }
-      type Z implements X & Y {
-        email: String
-      }
-    errlist: [
-      {"message": "Field Z.name can only be defined once.",
       "locations":[{"line":2, "column":3}]}
       ]
 
