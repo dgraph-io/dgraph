@@ -274,6 +274,23 @@ invalid_schemas:
       "locations":[{"line":5, "column":1}]}
       ]
 
+  -
+    name: "Type implemets from two interfaces where both have ID"
+    input: |
+      interface X {
+        id: ID
+      }
+      interface Y {
+        id: ID
+      }
+      type Z implements X & Y {
+        name: String
+      }
+    errlist: [
+      {"message": "Field Z.id can only be defined once.",
+      "locations":[{"line":2, "column":3}]}
+      ]
+
 
 valid_schemas:
   -
