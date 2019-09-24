@@ -201,7 +201,7 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{}
+	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -256,6 +256,16 @@ func serializeOrError(toSerialize interface{}) string {
 }
 
 func populateGraphQLData(client *dgo.Dgraph) error {
+
+	// Helps in local dev to not re-add data multiple times.
+	countries, err := allCountriesAdded()
+	if err != nil {
+		return errors.Wrap(err, "couldn't determine if GraphQL data had already been added")
+	}
+	if len(countries) > 0 {
+		return nil
+	}
+
 	jsonFile := "e2e_test_data.json"
 	byts, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
@@ -274,10 +284,40 @@ func populateGraphQLData(client *dgo.Dgraph) error {
 	return nil
 }
 
+func allCountriesAdded() ([]*country, error) {
+	body, err := json.Marshal(&GraphQLParams{Query: `query { queryCountry { name } }`})
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to build GraphQL query")
+	}
+
+	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to build GraphQL request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := runGQLRequest(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "error running GraphQL query")
+	}
+
+	var result struct {
+		Data struct {
+			QueryCountry []*country
+		}
+	}
+	err = json.Unmarshal(resp, &result)
+	if err != nil {
+		return nil, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	return result.Data.QueryCountry, nil
+}
+
 func ensureSchemaIsChanged(client *dgo.Dgraph) error {
 
 	// A 'blank' schema should have just one predicate - dgraph.type.
-	// So if graphql initialisation has been run, the schema will have more
+	// So if graphql initialization has been run, the schema will have more
 	// than one predicate.  A later test confirms that it's the schema we
 	// expect; here we just want to know that the containers are up.
 
@@ -303,27 +343,10 @@ func ensureSchemaIsChanged(client *dgo.Dgraph) error {
 	return nil
 }
 
+// ensureGraphQLRunning tests if the GraphQL server is up by running a query.  It
+// doesn't matter if there is data or not, just if contacting the server was
+// successful.
 func ensureGraphQLRunning() error {
-
-	body, err := json.Marshal(&GraphQLParams{
-		Query: `query { queryAuthor { name } }`,
-	})
-	if err != nil {
-		return errors.Wrap(err, "unable to build GraphQL query")
-	}
-
-	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "unable to execute GraphQL test query")
-	}
-
-	// OK means server is up
-	if status := resp.StatusCode; status != http.StatusOK {
-		return errors.Wrap(err, "request to GraphQL server didn't return OK")
-	}
-
-	return nil
+	_, err := allCountriesAdded()
+	return err
 }
