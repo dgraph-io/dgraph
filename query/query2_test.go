@@ -1546,17 +1546,71 @@ func TestNormalizeDirective(t *testing.T) {
 					sn: name
 				}
 			}
-		}
-	`
+		}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
-		js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "d": "1910-01-02T00:00:00Z",
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1910-01-02T00:00:00Z",
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1909-05-05T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1909-05-05T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1909-01-10T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1909-01-10T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1901-01-15T00:00:00Z",
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1901-01-15T00:00:00Z",
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Helmut"
+				}
+			  ]
+			}
+		}`, js)
 }
 
 func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1577,7 +1631,41 @@ func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"fn":"Michonne","n":"Rick Grimes"},{"n":"Glenn Rhee"},{"n":"Daryl Dixon"},{"fn":"Glenn Rhee","n":"Andrea"}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "mn": "Michonne",
+				  "gender": "female",
+				  "friend": [
+					{
+					  "fn": "Michonne",
+					  "n": "Rick Grimes"
+					},
+					{
+					  "n": "Glenn Rhee"
+					},
+					{
+					  "n": "Daryl Dixon"
+					},
+					{
+					  "fn": "Glenn Rhee",
+					  "n": "Andrea"
+					}
+				  ],
+				  "son": [
+					{
+					  "sn": "Andre"
+					},
+					{
+					  "sn": "Helmut"
+					}
+				  ]
+				}
+			  ]
+			}
+		}`, js)
 }
 
 func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
@@ -1601,7 +1689,53 @@ func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"n":"Rick Grimes","dob":"1910-01-02T00:00:00Z","friend":[{"fn":"Michonne"}]},{"n":"Glenn Rhee","dob":"1909-05-05T00:00:00Z"},{"n":"Daryl Dixon","dob":"1909-01-10T00:00:00Z"},{"n":"Andrea","dob":"1901-01-15T00:00:00Z","friend":[{"fn":"Glenn Rhee"}]}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "mn": "Michonne",
+				  "gender": "female",
+				  "friend": [
+					{
+					  "n": "Rick Grimes",
+					  "dob": "1910-01-02T00:00:00Z",
+					  "friend": [
+						{
+						  "fn": "Michonne"
+						}
+					  ]
+					},
+					{
+					  "n": "Glenn Rhee",
+					  "dob": "1909-05-05T00:00:00Z"
+					},
+					{
+					  "n": "Daryl Dixon",
+					  "dob": "1909-01-10T00:00:00Z"
+					},
+					{
+					  "n": "Andrea",
+					  "dob": "1901-01-15T00:00:00Z",
+					  "friend": [
+						{
+						  "fn": "Glenn Rhee"
+						}
+					  ]
+					}
+				  ],
+				  "son": [
+					{
+					  "sn": "Andre"
+					},
+					{
+					  "sn": "Helmut"
+					}
+				  ]
+				}
+			  ]
+			}
+		}`, js)
 }
 
 func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
@@ -1625,7 +1759,57 @@ func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`, js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Andre"
+				},
+				{
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Helmut"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Andre"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Helmut"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Andre"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Helmut"
+				},
+				{
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Andre"
+				},
+				{
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Helmut"
+				}
+			  ]
+			}
+		}`, js)
 }
 
 func TestNearPoint(t *testing.T) {

@@ -479,6 +479,9 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		fj.AddListChild(sg.Params.Alias, n1)
 	}
 
+	// fj is a dummy node, it doesn't have any parent. So passing nil
+	// for parent and 0 for childIdx. Since we are not setting isNormalized
+	// in dummy node, we can safely call normalizeResult for fj.
 	if err := normalizeResult(fj, nil, 0); err != nil {
 		return err
 	}
@@ -811,6 +814,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
+// normalizeResult function recursively flattens inner nodes. If isNormalized is set
+// for a node, it removes the node from it's parent and attaches it's normalized attributes.
+// It doesn't do recursive call for nodes whose isNormalized is set.
 func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
 	if node.isNormalized {
 		attrList, err := node.normalize()
@@ -818,14 +824,14 @@ func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
 			return err
 		}
 
-		parent.attrs[childIdx] = &fastJsonNode{
-			attr:    node.attr,
-			attrs:   attrList[0],
-			isChild: node.isChild,
+		parent.attrs[childIdx] = &fastJsonNode{ // A small optimization. Instead of removing
+			attr:    node.attr,    // element from slice, we are replacing it
+			attrs:   attrList[0],  // with one of the node that we intend to
+			isChild: node.isChild, // attach to parent.
 		}
 		for _, attrs := range attrList[1:] {
 			parent.attrs = append(parent.attrs,
-				&fastJsonNode{attr: node.attr, attrs: attrs})
+				&fastJsonNode{attr: node.attr, attrs: attrs, isChild: node.isChild})
 		}
 	} else {
 		for idx, child := range node.attrs {
