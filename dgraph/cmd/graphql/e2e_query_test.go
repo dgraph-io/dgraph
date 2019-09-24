@@ -634,4 +634,52 @@ func postTest(t *testing.T, filter interface{}, expected []*post) {
 	}
 }
 
-// TODO: skip and include - same three tests as translation
+func TestSkipDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
+			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
+				name @skip(if: $skipFalse)
+				dob
+				reputation
+				posts @skip(if: $skipTrue) {
+					title
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"skipTrue":  true,
+			"skipFalse": false,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author",
+		"dob":"1988-01-01T00:00:00Z","reputation":8.9}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
+
+func TestIncludeDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
+			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
+			  name @include(if: $includeTrue)
+			  dob
+			  posts @include(if: $includeFalse) {
+				title
+			  }
+			}
+		  }`,
+		Variables: map[string]interface{}{
+			"includeTrue":  true,
+			"includeFalse": false,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author","dob":"1988-01-01T00:00:00Z"}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
