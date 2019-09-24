@@ -1601,7 +1601,7 @@ func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"n":"Rick Grimes","dob":"1910-01-02T00:00:00Z","friend":{"fn":"Michonne"}},{"n":"Glenn Rhee","dob":"1909-05-05T00:00:00Z"},{"n":"Daryl Dixon","dob":"1909-01-10T00:00:00Z"},{"n":"Andrea","dob":"1901-01-15T00:00:00Z","friend":{"fn":"Glenn Rhee"}}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"mn":"Michonne","gender":"female","friend":[{"n":"Rick Grimes","dob":"1910-01-02T00:00:00Z","friend":[{"fn":"Michonne"}]},{"n":"Glenn Rhee","dob":"1909-05-05T00:00:00Z"},{"n":"Daryl Dixon","dob":"1909-01-10T00:00:00Z"},{"n":"Andrea","dob":"1901-01-15T00:00:00Z","friend":[{"fn":"Glenn Rhee"}]}],"son":[{"sn":"Andre"},{"sn":"Helmut"}]}]}}`, js)
 }
 
 func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
