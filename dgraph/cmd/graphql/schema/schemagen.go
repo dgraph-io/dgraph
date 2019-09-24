@@ -85,7 +85,7 @@ func NewHandler(input string) (Handler, error) {
 
 	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: input})
 	if gqlErr != nil {
-		return nil, gqlErr
+		return nil, gqlerror.List{gqlErr}
 	}
 
 	gqlErrList := preGQLValidation(doc)
