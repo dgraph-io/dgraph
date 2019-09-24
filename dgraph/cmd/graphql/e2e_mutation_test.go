@@ -774,7 +774,7 @@ func addHuman(t *testing.T, starshipID string) string {
 			}
 		}`,
 		Variables: map[string]interface{}{"human": map[string]interface{}{
-			"name":         "Han Solo",
+			"name":         "Han",
 			"totalCredits": 10,
 			"appearsIn":    []string{"EMPIRE"},
 			"starships": []map[string]interface{}{{
@@ -836,10 +836,32 @@ func addDroid(t *testing.T) string {
 	return result.AddDroid.Droid.ID
 }
 
+func updateCharacter(t *testing.T, id string) {
+	updateCharacterParams := &GraphQLParams{
+		Query: `mutation updateCharacter($character: UpdateCharacterInput!) {
+			updateCharacter(input: $character) {
+				character {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"character": map[string]interface{}{
+			"id": id,
+			"patch": map[string]interface{}{
+				"name": "Han Solo",
+			},
+		}},
+	}
+
+	gqlResponse := updateCharacterParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
+	updateCharacter(t, humanID)
 
 	queryCharacterParams := &GraphQLParams{
 		Query: `query {

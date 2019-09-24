@@ -683,3 +683,33 @@ func TestIncludeDirective(t *testing.T) {
 	expected := `{"queryAuthor":[{"name":"Ann Other Author","dob":"1988-01-01T00:00:00Z"}]}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
+
+func TestIncludeAndSkipDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
+			$skipFalse: Boolean!) {
+			queryAuthor (filter: { name: { eq: "Ann Other Author" } }) {
+			  dob @include(if: $includeFalse) @skip(if: $skipFalse)
+			  reputation @include(if: $includeFalse) @skip(if: $skipTrue)
+			  name @include(if: $includeTrue) @skip(if: $skipFalse)
+			  posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10)
+			    @include(if: $includeTrue) @skip(if: $skipTrue) {
+				title
+				tags
+			  }
+			}
+		  }`,
+		Variables: map[string]interface{}{
+			"includeFalse": false,
+			"includeTrue":  true,
+			"skipFalse":    false,
+			"skipTrue":     true,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
