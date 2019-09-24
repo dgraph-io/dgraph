@@ -169,10 +169,10 @@ schemas:
     input: |
       interface A {
         id: ID!
-        name: String!
+        name: String! @searchable(by: exact)
       }
       type B implements A {
-        correct: Boolean
+        correct: Boolean @searchable
       }
       type C implements A {
         dob: DateTime!
@@ -181,12 +181,12 @@ schemas:
       type A {
         A.name: string
       }
-      A.name: string .
+      A.name: string @index(exact) .
       type B {
         A.name: string
         B.correct: bool
       }
-      B.correct: bool .
+      B.correct: bool @index(bool) .
       type C {
         A.name: string
         C.dob: dateTime
