@@ -49,6 +49,11 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
+	countrySort := func(i, j int) bool {
+		return result.QueryCountry[i].Name < result.QueryCountry[j].Name
+	}
+	sort.Slice(result.QueryCountry, countrySort)
+
 	if diff := cmp.Diff(expected, result); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
@@ -144,8 +149,8 @@ func TestPageAtRoot(t *testing.T) {
 func TestRegExp(t *testing.T) {
 	queryCountryByRegExp(t, "/[Aa]ng/",
 		[]*country{
-			&country{Name: "Bangladesh"},
 			&country{Name: "Angola"},
+			&country{Name: "Bangladesh"},
 		})
 }
 
