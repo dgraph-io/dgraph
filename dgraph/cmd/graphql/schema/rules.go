@@ -33,14 +33,15 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-	if defn.Kind != ast.Object && defn.Kind != ast.Enum {
-		return gqlerror.ErrorPosf(
-			defn.Position,
-			"You can't add %s definitions. Only type and enums are allowed in initial schema.",
-			strings.ToLower(string(defn.Kind)),
-		)
+	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface {
+		return nil
 	}
-	return nil
+	return gqlerror.ErrorPosf(
+		defn.Position,
+		"You can't add %s definitions. "+
+			"Only type, interface and enums are allowed in initial schema.",
+		strings.ToLower(string(defn.Kind)),
+	)
 }
 
 func nameCheck(defn *ast.Definition) *gqlerror.Error {

@@ -1,4 +1,4 @@
-# Test schema that contains an example of everything that's useful to 
+# Test schema that contains an example of everything that's useful to
 # test for query rewriting.
 
 type Country {
@@ -30,4 +30,22 @@ enum PostType {
         Fact
         Question
         Opinion
+}
+
+interface Character {
+        id: ID!
+        name: String! @searchable
+}
+
+interface Employee {
+        ename: String!
+}
+
+type Director implements Character {
+        movies: [String!]
+}
+
+type Human implements Character & Employee {
+        dob: DateTime
+        female: Boolean
 }

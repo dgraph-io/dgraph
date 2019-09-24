@@ -1,0 +1,27 @@
+interface Character {
+    id: ID!
+    name: String! @searchable(by: exact)
+    friends: [Character]
+    appearsIn: [Episode!]! @searchable
+}
+
+type Human implements Character {
+    starships: [Starship]
+    totalCredits: Int
+}
+
+type Droid implements Character {
+    primaryFunction: String
+}
+
+enum Episode {
+    NEWHOPE
+    EMPIRE
+    JEDI
+}
+
+type Starship {
+    id: ID!
+    name: String! @searchable(by: term)
+    length: Float
+}
