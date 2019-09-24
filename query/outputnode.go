@@ -479,7 +479,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		fj.AddListChild(sg.Params.Alias, n1)
 	}
 
-	if err := flattenResult(fj, nil, 0); err != nil {
+	if err := normalizeResult(fj, nil, 0); err != nil {
 		return err
 	}
 
@@ -811,7 +811,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-func flattenResult(node, parent *fastJsonNode, childIdx int) error {
+func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
 	if node.isNormalized {
 		attrList, err := node.normalize()
 		if err != nil {
@@ -825,7 +825,7 @@ func flattenResult(node, parent *fastJsonNode, childIdx int) error {
 		}
 	} else {
 		for idx, child := range node.attrs {
-			if err := flattenResult(child, node, idx); err != nil {
+			if err := normalizeResult(child, node, idx); err != nil {
 				return err
 			}
 		}
