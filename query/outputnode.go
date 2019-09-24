@@ -818,10 +818,14 @@ func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
 			return err
 		}
 
-		parent.attrs[childIdx] = &fastJsonNode{attr: node.attr, attrs: attrList[0], isChild: node.isChild}
-		attrList = attrList[1:]
-		for _, attrs := range attrList {
-			parent.attrs = append(parent.attrs, &fastJsonNode{attr: node.attr, attrs: attrs})
+		parent.attrs[childIdx] = &fastJsonNode{
+			attr:    node.attr,
+			attrs:   attrList[0],
+			isChild: node.isChild,
+		}
+		for _, attrs := range attrList[1:] {
+			parent.attrs = append(parent.attrs,
+				&fastJsonNode{attr: node.attr, attrs: attrs})
 		}
 	} else {
 		for idx, child := range node.attrs {
