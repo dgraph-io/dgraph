@@ -29,3 +29,30 @@ enum PostType {
         Question
         Opinion
 }
+
+interface Character {
+        id: ID!
+        name: String! @searchable(by: exact)
+        appearsIn: [Episode!] @searchable
+}
+
+type Human implements Character {
+        starships: [Starship]
+        totalCredits: Float
+}
+
+type Droid implements Character {
+        primaryFunction: String
+}
+
+enum Episode {
+        NEWHOPE
+        EMPIRE
+        JEDI
+}
+
+type Starship {
+        id: ID!
+        name: String! @searchable(by: term)
+        length: Float
+}

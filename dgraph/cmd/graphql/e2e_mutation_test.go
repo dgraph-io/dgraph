@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -506,9 +507,9 @@ func TestManyMutations(t *testing.T) {
 		Variables: map[string]interface{}{
 			"name1": "Testland1", "del": newCountry.ID, "name2": "Testland2"},
 	}
-	multiMutationExpected := `{ 
+	multiMutationExpected := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland1" } },
-		"deleteCountry" : { "msg": "Deleted" }, 
+		"deleteCountry" : { "msg": "Deleted" },
 		"add2": { "country": { "id": "_UID_", "name": "Testland2" } }
 	}`
 
@@ -578,7 +579,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"del": newAuthor.ID},
 	}
-	expectedData := `{ 
+	expectedData := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland" } },
 		"deleteCountry" : null
 	}`
@@ -701,4 +702,186 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 			deleteCountry(t, country.ID, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
 		}
 	})
+}
+
+type starship struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Length float64 `json:"length"`
+}
+
+func addStarship(t *testing.T) *starship {
+	addStarshipParams := &GraphQLParams{
+		Query: `mutation addStarship($starship: StarshipInput!) {
+			addStarship(input: $starship) {
+				starship {
+					id
+					name
+					length
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{"starship": map[string]interface{}{
+			"name":   "Millennium Falcon",
+			"length": 2,
+		}},
+	}
+
+	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
+		"starship":{
+			"name":"Millennium Falcon",
+			"length":2
+		}
+	}}`)
+
+	var expected, result struct {
+		AddStarship struct {
+			Starship *starship
+		}
+	}
+	err := json.Unmarshal([]byte(addStarshipExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddStarship.Starship.ID)
+
+	opt := cmpopts.IgnoreFields(starship{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddStarship.Starship
+}
+
+func addHuman(t *testing.T, starshipID string) {
+	addHumanParams := &GraphQLParams{
+		Query: `mutation addHuman($human: HumanInput!) {
+			addHuman(input: $human) {
+				human {
+					id
+					name
+					appearsIn
+					starships {
+						name
+						length
+					}
+					totalCredits
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{"human": map[string]interface{}{
+			"name":         "Han Solo",
+			"totalCredits": 10,
+			"appearsIn":    []string{"EMPIRE"},
+			"starships": []map[string]interface{}{{
+				"id": starshipID,
+			}},
+		}},
+	}
+
+	gqlResponse := addHumanParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		AddHuman struct {
+			Human struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddHuman.Human.ID)
+}
+
+func addDroid(t *testing.T) {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addDroid($droid: DroidInput!) {
+			addDroid(input: $droid) {
+				droid {
+					id
+					name
+					primaryFunction
+					appearsIn
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"droid": map[string]interface{}{
+			"name":            "R2-D2",
+			"primaryFunction": "Robot",
+			"appearsIn":       []string{"EMPIRE"},
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		AddDroid struct {
+			Droid struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddDroid.Droid.ID)
+}
+
+func TestQueryInterfaceAfterAddMutation(t *testing.T) {
+	newStarship := addStarship(t)
+	addHuman(t, newStarship.ID)
+	addDroid(t)
+
+	queryCharacterParams := &GraphQLParams{
+		Query: `query {
+		queryCharacter {
+		  name
+		  appearsIn
+		  ... on Human {
+			starships {
+				name
+				length
+			}
+			totalCredits
+		  }
+		  ... on Droid {
+			primaryFunction
+		  }
+		}
+	  }`,
+	}
+
+	gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"queryCharacter": [
+		  {
+			"name": "Han Solo",
+			"appearsIn": "EMPIRE",
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
+		  },
+		  {
+			"name": "R2-D2",
+			"appearsIn": "EMPIRE",
+			"primaryFunction": "Robot"
+		  }
+		]
+	  }`
+
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	// TODO - Add cleanup function.
 }
