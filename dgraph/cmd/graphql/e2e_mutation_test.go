@@ -16,6 +16,10 @@
 
 package graphql
 
+// Tests that mutate the GraphQL database should return the database state to what it
+// was at the begining of the test.  The GraphQL query tests rely on a fixed input
+// dataset and mutating and leaving unexpected data will result in flaky tests.
+
 import (
 	"encoding/json"
 	"fmt"
@@ -36,19 +40,20 @@ import (
 // These really need to run as one test because the created uid from the Country
 // needs to flow to the author, etc.
 func TestAddMutation(t *testing.T) {
-	var country *country
-	var author *author
+	var newCountry *country
+	var newAuthor *author
+	var newPost *post
 
 	// Add single object :
 	// Country is a single object not linked to anything else.
 	// So only need to check that it gets added as expected.
 	t.Run("add Country", func(t *testing.T) {
-		country = addCountry(t)
+		newCountry = addCountry(t)
 
 		t.Run("check Country", func(t *testing.T) {
 			// addCountry() asserts that the mutation response was as expected.
 			// Let's also check that what's in the DB is what we expect.
-			requireCountry(t, country.ID, country)
+			requireCountry(t, newCountry.ID, newCountry)
 		})
 	})
 
@@ -56,10 +61,10 @@ func TestAddMutation(t *testing.T) {
 	// An Author links to an existing country.  So need to check that the author
 	// was added and that it has the link to the right Country.
 	t.Run("add Author", func(t *testing.T) {
-		author = addAuthor(t, country.ID)
+		newAuthor = addAuthor(t, newCountry.ID)
 
 		t.Run("check Author", func(t *testing.T) {
-			requireAuthor(t, author.ID, author)
+			requireAuthor(t, newAuthor.ID, newAuthor)
 		})
 	})
 
@@ -68,12 +73,14 @@ func TestAddMutation(t *testing.T) {
 	// So need to check that the Post was added to the right Author
 	// AND that the Author's posts now includes the new post.
 	t.Run("add Post", func(t *testing.T) {
-		post := addPost(t, author.ID, country.ID)
+		newPost = addPost(t, newAuthor.ID, newCountry.ID)
 
 		t.Run("check Post", func(t *testing.T) {
-			requirePost(t, post.PostID, post)
+			requirePost(t, newPost.PostID, newPost)
 		})
 	})
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
 func addCountry(t *testing.T) *country {
@@ -340,16 +347,18 @@ func requirePost(t *testing.T, postID string, expectedPost *post) {
 }
 
 func TestUpdateMutation(t *testing.T) {
-	country := addCountry(t)
-	country.Name = "updated name"
+	newCountry := addCountry(t)
+	newCountry.Name = "updated name"
 
 	t.Run("update Country", func(t *testing.T) {
-		updateCountry(t, country)
+		updateCountry(t, newCountry)
 	})
 
 	t.Run("check updated Country", func(t *testing.T) {
-		requireCountry(t, country.ID, country)
+		requireCountry(t, newCountry.ID, newCountry)
 	})
+
+	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
 }
 
 func updateCountry(t *testing.T, updCountry *country) {
@@ -416,16 +425,62 @@ func deleteCountry(
 	}
 }
 
+func deleteAuthor(
+	t *testing.T,
+	authorID string,
+	deleteAuthorExpected string,
+	expectedErrors []*x.GqlError) {
+
+	deleteAuthorParams := &GraphQLParams{
+		Query: `mutation deleteAuthor($del: ID!) {
+			deleteAuthor(id: $del) { msg }
+		}`,
+		Variables: map[string]interface{}{"del": authorID},
+	}
+
+	gqlResponse := deleteAuthorParams.ExecuteAsPost(t, graphqlURL)
+
+	require.JSONEq(t, deleteAuthorExpected, string(gqlResponse.Data))
+
+	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func deletePost(
+	t *testing.T,
+	postID string,
+	deletePostExpected string,
+	expectedErrors []*x.GqlError) {
+
+	deletePostParams := &GraphQLParams{
+		Query: `mutation deletePost($del: ID!) {
+			deletePost(id: $del) { msg }
+		}`,
+		Variables: map[string]interface{}{"del": postID},
+	}
+
+	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
+
+	require.JSONEq(t, deletePostExpected, string(gqlResponse.Data))
+
+	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestDeleteWrongID(t *testing.T) {
-	country := addCountry(t)
-	author := addAuthor(t, country.ID)
+	newCountry := addCountry(t)
+	newAuthor := addAuthor(t, newCountry.ID)
 
 	expectedData := `{ "deleteCountry": null }`
 	expectedErrors := []*x.GqlError{
 		&x.GqlError{Message: `input: couldn't complete deleteCountry because ` +
-			fmt.Sprintf(`input: Node with id %s is not of type Country`, author.ID)}}
+			fmt.Sprintf(`input: Node with id %s is not of type Country`, newAuthor.ID)}}
 
-	deleteCountry(t, author.ID, expectedData, expectedErrors)
+	deleteCountry(t, newAuthor.ID, expectedData, expectedErrors)
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
 }
 
 func TestManyMutations(t *testing.T) {
@@ -484,6 +539,8 @@ func TestManyMutations(t *testing.T) {
 	t.Run("country deleted", func(t *testing.T) {
 		requireCountry(t, newCountry.ID, nil)
 	})
+
+	cleanUp(t, []*country{result.Add1.Country, result.Add2.Country}, []*author{}, []*post{})
 }
 
 // TestManyMutationsWithError : Multiple mutations run serially (queries would
@@ -558,5 +615,90 @@ func TestManyMutationsWithError(t *testing.T) {
 	// Make sure that third mutation didn't run
 	t.Run("Country wasn't added", func(t *testing.T) {
 		queryCountryByRegExp(t, "/abc/", []*country{})
+	})
+
+	cleanUp(t, []*country{newCountry, result.Add1.Country}, []*author{newAuthor}, []*post{})
+}
+
+// After a successful mutation, the following query is executed.  That query can
+// contain any depth or filtering that makes sense for the schema.
+//
+// I this case, we set up an author with existing posts, then add another post.
+// The filter is down inside post->author->posts and finds just one of the
+// author's posts.
+func TestMutationWithDeepFilter(t *testing.T) {
+
+	newCountry := addCountry(t)
+	newAuthor := addAuthor(t, newCountry.ID)
+
+	// Make sure they have a post not found by the filter
+	newPost := addPost(t, newAuthor.ID, newCountry.ID)
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($post: PostInput!) {
+			addPost(input: $post) {
+			  post {
+				postID
+				author {
+					posts(filter: { title: { allofterms: "find me" }}) {
+						title
+					}
+				}
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"post": map[string]interface{}{
+			"title":  "find me : a test of deep search after mutation",
+			"author": map[string]interface{}{"id": newAuthor.ID},
+		}},
+	}
+
+	// Expect the filter to find just the new post, not any of the author's existing posts.
+	addPostExpected := `{ "addPost": {
+		"post": {
+			"postID": "_UID_",
+			"author": {
+				"posts": [ { "title": "find me : a test of deep search after mutation" } ]
+			}
+		}
+	} }`
+
+	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddPost struct {
+			Post *post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddPost.Post.PostID)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor},
+		[]*post{newPost, result.AddPost.Post})
+}
+
+func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*post) {
+	t.Run("cleaning up", func(t *testing.T) {
+		for _, post := range posts {
+			deletePost(t, post.PostID, `{"deletePost" : { "msg": "Deleted" } }`, nil)
+		}
+
+		for _, author := range authors {
+			deleteAuthor(t, author.ID, `{"deleteAuthor" : { "msg": "Deleted" } }`, nil)
+		}
+
+		for _, country := range countries {
+			deleteCountry(t, country.ID, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
+		}
 	})
 }
