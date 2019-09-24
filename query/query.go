@@ -920,7 +920,9 @@ func calculateFirstN(sg *SubGraph) int32 {
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
 		isSupportedFunction {
 		// Offset also added because, we need n results to trim the offset.
-		count = sg.Params.Offset + sg.Params.Count
+		if sg.Params.Count != 0 {
+			count = sg.Params.Count + sg.Params.Offset
+		}
 	}
 	return int32(count)
 }
