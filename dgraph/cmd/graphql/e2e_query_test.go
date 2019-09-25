@@ -634,4 +634,39 @@ func postTest(t *testing.T, filter interface{}, expected []*post) {
 	}
 }
 
-// TODO: skip and include - same three tests as translation
+func TestQueryByMultipleIds(t *testing.T) {
+	posts := allPosts(t)
+	ids := make([]string, 0, len(posts))
+	for _, post := range posts {
+		ids = append(ids, post.PostID)
+	}
+
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": ids,
+		}},
+	}
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	if diff := cmp.Diff(posts, result.QueryPost); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
