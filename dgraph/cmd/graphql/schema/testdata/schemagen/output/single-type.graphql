@@ -113,6 +113,10 @@ enum MessageOrderable {
 # Generated Inputs
 #######################
 
+input MessageFilter {
+	ids: [ID!]
+}
+
 input MessageInput {
 	content: String!
 	author: String
@@ -146,7 +150,7 @@ input UpdateMessageInput {
 
 type Query {
 	getMessage(id: ID!): Message
-	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
+	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 }
 
 #######################

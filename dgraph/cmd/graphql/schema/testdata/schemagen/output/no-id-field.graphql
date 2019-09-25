@@ -4,7 +4,7 @@
 
 type Post {
 	content: String!
-	author: Author!
+	author(filter: AuthorFilter): Author!
 	genre: Genre
 }
 
@@ -136,6 +136,10 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AuthorFilter {
+	ids: [ID!]
+}
+
 input AuthorInput {
 	name: String
 }
@@ -187,7 +191,7 @@ input UpdateAuthorInput {
 type Query {
 	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID!): Author
-	queryAuthor(order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
 }
 

@@ -154,6 +154,7 @@ input PatchPost {
 }
 
 input PostFilter {
+	ids: [ID!]
 	title: StringTermFilter
 	text: StringFullTextFilter
 	tags: StringRegExpFilter
