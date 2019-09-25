@@ -172,6 +172,10 @@ func Init(ps *badger.DB) {
 	})
 	x.Check(err)
 	go func() {
+		if listCache == nil {
+			return
+		}
+
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
 			m := listCache.Metrics()

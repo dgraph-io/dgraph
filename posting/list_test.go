@@ -1251,6 +1251,7 @@ func TestMain(m *testing.M) {
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
 	Init(ps)
+	listCache = nil
 	schema.Init(ps)
 
 	r := m.Run()
