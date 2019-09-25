@@ -179,12 +179,11 @@ func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 	}
 }
 
-func addUIDFunc(q *gql.GraphQuery, uids []uint64) error {
+func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
 	q.Func = &gql.Function{
 		Name: "uid",
 		UID:  uids,
 	}
-	return nil
 }
 
 func addTypeFunc(q *gql.GraphQuery, typ schema.Type) {
