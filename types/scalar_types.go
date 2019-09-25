@@ -17,6 +17,7 @@
 package types
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -24,6 +25,7 @@ import (
 )
 
 const nanoSecondsInSec = 1000000000
+const BigFloatPrecision = 200
 
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
@@ -52,6 +54,8 @@ const (
 	StringID = TypeID(pb.Posting_STRING)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
+	// BigFloatID represents the arbitrary precision type.
+	BigFloatID = TypeID(pb.Posting_BIGFLOAT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -65,6 +69,7 @@ var typeNameMap = map[string]TypeID{
 	"uid":      UidID,
 	"string":   StringID,
 	"password": PasswordID,
+	"bigfloat": BigFloatID,
 }
 
 // TypeID represents the type of the data.
@@ -98,6 +103,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
+	case BigFloatID:
+		return "bigfloat"
 	}
 	return ""
 }
@@ -161,6 +168,11 @@ func ValueForType(id TypeID) Val {
 	case DateTimeID:
 		var t time.Time
 		return Val{DateTimeID, &t}
+
+	case BigFloatID:
+		var b big.Float
+		b.SetPrec(BigFloatPrecision)
+		return Val{BigFloatID, &b}
 
 	case StringID:
 		var s string

@@ -1593,12 +1593,44 @@ upsert {
 	require.Contains(t, err.Error(), "Invalid input: U at lexText")
 }
 
+func TestBigFloat(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: bigfloat .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <amount> "10.00000000000000000001" .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	expectedRes := `{"data":{"q":[{"name":"user1","amount":10.00000000000000000001}]}}`
+	require.EqualValues(t, expectedRes, res)
+}
+
 func SetupBankExample(t *testing.T) string {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
 name: string @index(exact) .
 branch: string .
-amount: float .`))
+amount: bigfloat .`))
 
 	m1 := `
 {
@@ -1627,6 +1659,20 @@ amount: float .`))
 	require.NoError(t, err)
 
 	return expectedRes
+}
+
+func TestBigFloatInvalidInput(t *testing.T) {
+	SetupBankExample(t)
+	m1 := `
+{
+  set {
+    _:user4 <name> "user4" .
+    _:user4 <amount> "100.000.0" .
+  }
+}
+`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), `cannot unmarshal "100.000.0" into a *big.Float`)
 }
 
 func TestUpsertSanityCheck(t *testing.T) {
@@ -1748,7 +1794,7 @@ upsert {
       amt as amount
     }
     me () {
-      updated_amt as math(amt+1)
+      updated_amt as math(amt+1.123456789101112)
     }
   }
 
@@ -1776,13 +1822,13 @@ upsert {
   "data": {
     "q": [{
        "name": "user3",
-       "amount": 1001.000000
+       "amount": 1001.123456789101112
      }, {
        "name": "user1",
-       "amount": 11.000000
+       "amount": 11.123456789101112
      }, {
        "name": "user2",
-       "amount": 101.000000
+       "amount": 101.123456789101112
      }]
    }
 }`

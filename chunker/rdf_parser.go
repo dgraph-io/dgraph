@@ -330,6 +330,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:double":          types.FloatID,
 	"xs:float":           types.FloatID,
 	"xs:base64Binary":    types.BinaryID,
+	"xs:decimal":         types.BigFloatID,
 	"geo:geojson":        types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":          types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":        types.DateTimeID,

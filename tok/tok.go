@@ -18,6 +18,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"math/big"
 	"plugin"
 	"time"
 
@@ -49,6 +50,7 @@ const (
 	IdentBool     = 0x9
 	IdentTrigram  = 0xA
 	IdentHash     = 0xB
+	IdentBigFloat = 0xC
 	IdentCustom   = 0x80
 )
 
@@ -82,6 +84,7 @@ type Tokenizer interface {
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
+	registerTokenizer(BigFloatTokenizer{})
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})
@@ -168,6 +171,20 @@ func registerTokenizer(t Tokenizer) {
 	x.AssertTruef(ok, "Invalid type %q for tokenizer %s", t.Type(), t.Name())
 	tokenizers[t.Name()] = t
 }
+
+// BigFloatTokenizer generates tokens from big float data.
+type BigFloatTokenizer struct{}
+
+func (t BigFloatTokenizer) Name() string { return "bigfloat" }
+func (t BigFloatTokenizer) Type() string { return "bigfloat" }
+func (t BigFloatTokenizer) Tokens(v interface{}) ([]string, error) {
+	value := v.(big.Float)
+	roundOff, _ := value.Int64()
+	return []string{encodeInt(roundOff)}, nil
+}
+func (t BigFloatTokenizer) Identifier() byte { return IdentBigFloat }
+func (t BigFloatTokenizer) IsSortable() bool { return true }
+func (t BigFloatTokenizer) IsLossy() bool    { return true }
 
 // GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}

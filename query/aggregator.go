@@ -19,6 +19,7 @@ package query
 import (
 	"bytes"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -111,6 +112,14 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	return false, errors.Errorf("Invalid compare function %q", ag)
 }
 
+type numType int
+
+const (
+	DEFAULT numType = iota
+	FLOAT
+	BIGFLOAT
+)
+
 func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
 		// If the value is missing, treat it as 0.
@@ -118,69 +127,23 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		v.Tid = types.IntID
 	}
 
-	var isIntOrFloat bool
-	var l float64
+	var vBase numType
+	var vFloat float64
 	if v.Tid == types.IntID {
-		l = float64(v.Value.(int64))
-		v.Value = l
+		vFloat = float64(v.Value.(int64))
+		v.Value = vFloat
 		v.Tid = types.FloatID
-		isIntOrFloat = true
+		vBase = FLOAT
 	} else if v.Tid == types.FloatID {
-		l = v.Value.(float64)
-		isIntOrFloat = true
+		vFloat = v.Value.(float64)
+		vBase = FLOAT
+	} else if v.Tid == types.BigFloatID {
+		vBase = BIGFLOAT
 	}
 	// If its not int or float, keep the type.
 
-	var res types.Val
 	if isUnary(ag.name) {
-		switch ag.name {
-		case "ln":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Log(l)
-			res = v
-		case "exp":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Exp(l)
-			res = v
-		case "u-":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = -l
-			res = v
-		case "sqrt":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Sqrt(l)
-			res = v
-		case "floor":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Floor(l)
-			res = v
-		case "ceil":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Ceil(l)
-			res = v
-		case "since":
-			if v.Tid == types.DateTimeID {
-				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
-				v.Tid = types.FloatID
-			} else {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			res = v
-		}
-		ag.result = res
-		return nil
+		return ag.ApplyUnaryFunction(v, vBase, vFloat)
 	}
 
 	if ag.result.Value == nil {
@@ -189,60 +152,208 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	va := ag.result
-	if va.Tid != types.IntID && va.Tid != types.FloatID {
-		isIntOrFloat = false
+	var vBigFloat big.Float
+	var vaBase numType
+	if va.Tid == types.FloatID {
+		vaBase = FLOAT
+		if vBase == BIGFLOAT {
+			vaBase = BIGFLOAT
+			va.Tid = types.BigFloatID
+			va.Value = *big.NewFloat(vFloat).SetPrec(types.BigFloatPrecision)
+		}
 	}
+	if va.Tid == types.BigFloatID {
+		vaBase = BIGFLOAT
+		if vBase == FLOAT {
+			vBigFloat.SetPrec(types.BigFloatPrecision).SetFloat64(vFloat)
+			vBase = BIGFLOAT
+		} else if vBase == BIGFLOAT {
+			vBigFloat = v.Value.(big.Float)
+		}
+	}
+
+	if vBase != vaBase {
+		return errors.Errorf("Different type encountered for binary func %q", ag.name)
+	}
+
+	return ag.ApplyBinaryFunction(v, va, vBase, vFloat, vBigFloat)
+}
+
+func (ag *aggregator) ApplyUnaryFunction(v types.Val, vBase numType, l float64) error {
+	var res types.Val
+	switch ag.name {
+	case "ln":
+		if vBase != FLOAT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+		v.Value = math.Log(l)
+		res = v
+	case "exp":
+		if vBase != FLOAT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+		v.Value = math.Exp(l)
+		res = v
+	case "u-":
+		//This function reverses the sign of the value.
+		if vBase == DEFAULT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+
+		if vBase == BIGFLOAT {
+			value := v.Value.(big.Float)
+			neg := big.NewFloat(0).SetPrec(types.BigFloatPrecision).Neg(&value)
+			v.Value = *neg
+		} else {
+			v.Value = -l
+		}
+
+		res = v
+	case "sqrt":
+		if vBase == DEFAULT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+
+		if vBase == BIGFLOAT {
+			value := v.Value.(big.Float)
+			res := big.NewFloat(0).SetPrec(types.BigFloatPrecision).Sqrt(&value)
+			v.Value = *res
+		} else {
+			v.Value = math.Sqrt(l)
+		}
+
+		res = v
+	case "floor":
+		if vBase == DEFAULT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+
+		if vBase == BIGFLOAT {
+			value := v.Value.(big.Float)
+			l, _ = value.Float64()
+			v.Value = *big.NewFloat(math.Floor(l)).
+				SetPrec(types.BigFloatPrecision)
+		} else {
+			v.Value = math.Floor(l)
+		}
+
+		res = v
+	case "ceil":
+		if vBase == DEFAULT {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+
+		if vBase == BIGFLOAT {
+			value := v.Value.(big.Float)
+			res, _ := value.Float64()
+			v.Value = *big.NewFloat(math.Ceil(res)).
+				SetPrec(types.BigFloatPrecision)
+		} else {
+			v.Value = math.Ceil(l)
+		}
+
+		res = v
+	case "since":
+		if v.Tid == types.DateTimeID {
+			v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
+			v.Tid = types.FloatID
+		} else {
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+		}
+		res = v
+	}
+	ag.result = res
+	return nil
+}
+
+func (ag *aggregator) ApplyBinaryFunction(v, va types.Val, vBase numType,
+	vFloat float64, vBigFloat big.Float) error {
+	var zero big.Float
+	var res types.Val
+	divisionError := errors.Errorf("Division by zero")
 	switch ag.name {
 	case "+":
-		if !isIntOrFloat {
+		if vBase == DEFAULT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		va.Value = va.Value.(float64) + l
+
+		if vBase == BIGFLOAT {
+			value := va.Value.(big.Float)
+			value.Add(&value, &vBigFloat)
+			va.Value = value
+		} else {
+			va.Value = va.Value.(float64) + vFloat
+		}
 		res = va
 	case "-":
-		if !isIntOrFloat {
+		if vBase == DEFAULT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		va.Value = va.Value.(float64) - l
+
+		if vBase == BIGFLOAT {
+			value := va.Value.(big.Float)
+			value.Sub(&value, &vBigFloat)
+			va.Value = value
+		} else {
+			va.Value = va.Value.(float64) - vFloat
+		}
 		res = va
 	case "*":
-		if !isIntOrFloat {
+		if vBase == DEFAULT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		va.Value = va.Value.(float64) * l
+
+		if vBase == BIGFLOAT {
+			value := va.Value.(big.Float)
+			value.Mul(&value, &vBigFloat)
+			va.Value = value
+		} else {
+			va.Value = va.Value.(float64) * vFloat
+		}
 		res = va
 	case "/":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q %q %q", ag.name, va.Tid, v.Tid)
+		if vBase == DEFAULT {
+			return errors.Errorf("Wrong type encountered for func %q %q", ag.name, va.Tid)
 		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
+
+		if vBase == BIGFLOAT {
+			if vBigFloat.Cmp(&zero) == 0 {
+				return divisionError
+			}
+			value := va.Value.(big.Float)
+			value.Quo(&value, &vBigFloat)
+			va.Value = value
+		} else {
+			if vFloat == 0 {
+				return divisionError
+			}
+			va.Value = va.Value.(float64) / vFloat
 		}
-		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
-		if !isIntOrFloat {
+		if vBase != FLOAT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
+
+		if vFloat == 0 {
+			return divisionError
 		}
-		va.Value = math.Mod(va.Value.(float64), l)
+		va.Value = math.Mod(va.Value.(float64), vFloat)
 		res = va
 	case "pow":
-		if !isIntOrFloat {
+		if vBase != FLOAT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		va.Value = math.Pow(va.Value.(float64), l)
+		va.Value = math.Pow(va.Value.(float64), vFloat)
 		res = va
 	case "logbase":
-		if l == 1 {
-			return nil
-		}
-		if !isIntOrFloat {
+		if vBase != FLOAT {
 			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
-		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
+		if vFloat == 1 {
+			return nil
+		}
+		va.Value = math.Log(va.Value.(float64)) / math.Log(vFloat)
 		res = va
 	case "min":
 		r, err := types.Less(va, v)
@@ -295,6 +406,10 @@ func (ag *aggregator) Apply(val types.Val) {
 			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
+		} else if va.Tid == types.BigFloatID && vb.Tid == types.BigFloatID {
+			lhs := va.Value.(big.Float)
+			rhs := vb.Value.(big.Float)
+			va.Value = *new(big.Float).SetPrec(types.BigFloatPrecision).Add(&lhs, &rhs)
 		}
 		// Skipping the else case since that means the pair cannot be summed.
 		res = va
@@ -325,13 +440,21 @@ func (ag *aggregator) divideByCount() {
 	if ag.name != "avg" || ag.count == 0 || ag.result.Value == nil {
 		return
 	}
+
+	if ag.result.Tid == types.BigFloatID {
+		val := ag.result.Value.(big.Float)
+		val.Quo(&val, new(big.Float).SetPrec(types.BigFloatPrecision).SetInt64(int64(ag.count)))
+		ag.result.Tid = types.BigFloatID
+		ag.result.Value = val
+		return
+	}
+
 	var v float64
 	if ag.result.Tid == types.IntID {
 		v = float64(ag.result.Value.(int64))
 	} else if ag.result.Tid == types.FloatID {
 		v = ag.result.Value.(float64)
 	}
-
 	ag.result.Tid = types.FloatID
 	ag.result.Value = v / float64(ag.count)
 }

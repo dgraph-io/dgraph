@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -167,6 +168,9 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return t.MarshalJSON()
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
+	case types.BigFloatID:
+		b := v.Value.(big.Float)
+		return b.MarshalText()
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
 	case types.PasswordID:

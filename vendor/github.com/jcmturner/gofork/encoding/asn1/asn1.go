@@ -127,9 +127,9 @@ func parseInt32(bytes []byte) (int32, error) {
 
 var bigOne = big.NewInt(1)
 
-// parseBigInt treats the given bytes as a big-endian, signed integer and returns
+// parseBigFloat treats the given bytes as a big-endian, signed integer and returns
 // the result.
-func parseBigInt(bytes []byte) (*big.Int, error) {
+func parseBigFloat(bytes []byte) (*big.Int, error) {
 	if err := checkInteger(bytes); err != nil {
 		return nil, err
 	}
@@ -810,7 +810,7 @@ func parseField(v reflect.Value, bytes []byte, initOffset int, params fieldParam
 		v.SetBool(true)
 		return
 	case bigIntType:
-		parsedInt, err1 := parseBigInt(innerBytes)
+		parsedInt, err1 := parseBigFloat(innerBytes)
 		if err1 == nil {
 			v.Set(reflect.ValueOf(parsedInt))
 		}

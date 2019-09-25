@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -66,6 +67,13 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
+			case BigFloatID:
+				var b big.Float
+				b.SetPrec(BigFloatPrecision)
+				if err := b.UnmarshalText(data); err != nil {
+					return to, err
+				}
+				*res = b
 			case BoolID:
 				if len(data) == 0 || data[0] == 0 {
 					*res = false
@@ -114,6 +122,13 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, errors.Errorf("Got invalid value: NaN")
 				}
 				*res = val
+			case BigFloatID:
+				var b big.Float
+				b.SetPrec(BigFloatPrecision)
+				if err := b.UnmarshalText(data); err != nil {
+					return to, err
+				}
+				*res = b
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
@@ -161,12 +176,51 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bs[:]
 			case FloatID:
 				*res = float64(vc)
+			case BigFloatID:
+				var b big.Float
+				b.SetPrec(BigFloatPrecision).SetInt64(vc)
+				*res = b
 			case BoolID:
 				*res = vc != 0
 			case StringID, DefaultID:
 				*res = strconv.FormatInt(vc, 10)
 			case DateTimeID:
 				*res = time.Unix(vc, 0).UTC()
+			default:
+				return to, cantConvert(fromID, toID)
+			}
+		}
+	case BigFloatID:
+		{
+			var t big.Float
+			t.SetPrec(BigFloatPrecision)
+			if err := t.UnmarshalText(data); err != nil {
+				return to, err
+			}
+
+			switch toID {
+			case BigFloatID:
+				*res = t
+			case FloatID:
+				*res, _ = t.Float64()
+			case BinaryID:
+				b, err := t.MarshalText()
+				if err != nil {
+					return to, errors.Errorf("Error while conversion %s", err.Error())
+				}
+				*res = b
+			case IntID:
+				*res, _ = t.Int64()
+			case BoolID:
+				*res = t.Cmp(new(big.Float).SetFloat64(0)) != 0
+			case StringID, DefaultID:
+				*res = t.String()
+			case DateTimeID:
+				secs, _ := t.Int64()
+				floatSecs, _ := t.Float64()
+				fracSecs := floatSecs - float64(secs)
+				nsecs := int64(fracSecs * nanoSecondsInSec)
+				*res = time.Unix(secs, nsecs).UTC()
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -181,6 +235,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			switch toID {
 			case FloatID:
 				*res = vc
+			case BigFloatID:
+				var b big.Float
+				b.SetPrec(BigFloatPrecision).SetFloat64(vc)
+				*res = b
 			case BinaryID:
 				var bs [8]byte
 				u := math.Float64bits(vc)
@@ -230,6 +288,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				if vc {
 					*res = float64(1)
 				}
+			case BigFloatID:
+				if vc {
+					*res = big.NewFloat(1).SetPrec(BigFloatPrecision)
+				} else {
+					*res = big.NewFloat(0).SetPrec(BigFloatPrecision)
+				}
 			case StringID, DefaultID:
 				*res = strconv.FormatBool(vc)
 			default:
@@ -261,6 +325,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = t.Unix()
 			case FloatID:
 				*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
+			case BigFloatID:
+				x, y := big.NewFloat(nanoSecondsInSec), big.NewFloat(float64(t.UnixNano()))
+				*res = new(big.Float).Quo(y, x)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -368,6 +435,20 @@ func Marshal(from Val, to *Val) error {
 			u := math.Float64bits(vc)
 			binary.LittleEndian.PutUint64(bs[:], u)
 			*res = bs[:]
+		default:
+			return cantConvert(fromID, toID)
+		}
+	case BigFloatID:
+		vc := val.(big.Float)
+		switch toID {
+		case StringID, DefaultID:
+			*res = vc.String()
+		case BinaryID:
+			val, err := vc.MarshalText()
+			if err != nil {
+				return errors.Errorf("Error while conversion %s", err.Error())
+			}
+			*res = val
 		default:
 			return cantConvert(fromID, toID)
 		}
@@ -481,8 +562,14 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 			return def, errors.Errorf("Expected value of type []byte. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_BytesVal{BytesVal: v}}, nil
-	// Geo and datetime are stored in binary format in the N-Quad, so lets
+	// Geo, datetime, and BigFloat are stored in binary format in the N-Quad, so lets
 	// convert them here.
+	case BigFloatID:
+		b, err := toBinary(id, value)
+		if err != nil {
+			return def, err
+		}
+		return &api.Value{Val: &api.Value_BigfloatVal{BigfloatVal: b}}, nil
 	case GeoID:
 		b, err := toBinary(id, value)
 		if err != nil {
@@ -531,6 +618,9 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(time.Time))
 	case GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
+	case BigFloatID:
+		value := v.Value.(big.Float)
+		return value.MarshalText()
 	case StringID, DefaultID:
 		return json.Marshal(v.Safe().(string))
 	case PasswordID:
