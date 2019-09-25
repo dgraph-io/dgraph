@@ -25,10 +25,10 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
-	"github.com/golang/glog"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -261,9 +261,9 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	// listCache.Set(key, l, x.DeepSize(l))
 	memStatSize := int64(afterStats.Alloc - beforeStats.Alloc)
 	deepSize := x.DeepSize(l)
-	if float64(memStatSize) / float64(deepSize) > 1.5 {
+	if float64(memStatSize)/float64(deepSize) > 1.5 {
 		glog.Infof("memStatSize %v, DeepSize: %v", memStatSize, deepSize)
 	}
-	listCache.Set(key, l, int64(afterStats.Alloc - beforeStats.Alloc))
+	listCache.Set(key, l, int64(afterStats.Alloc-beforeStats.Alloc))
 	return l, nil
 }
