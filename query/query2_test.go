@@ -1679,6 +1679,10 @@ func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
 					dob
 					friend @normalize { # Results of this subquery will be normalized
 						fn : name
+						dob
+						friend {
+							ffn: name
+						}
 					}
 				}
 				son {
@@ -1692,48 +1696,61 @@ func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
 	require.JSONEq(t, `
 		{
 			"data": {
-			  "me": [
-				{
-				  "mn": "Michonne",
-				  "gender": "female",
-				  "friend": [
+				"me": [
 					{
-					  "n": "Rick Grimes",
-					  "dob": "1910-01-02T00:00:00Z",
-					  "friend": [
-						{
-						  "fn": "Michonne"
-						}
-					  ]
-					},
-					{
-					  "n": "Glenn Rhee",
-					  "dob": "1909-05-05T00:00:00Z"
-					},
-					{
-					  "n": "Daryl Dixon",
-					  "dob": "1909-01-10T00:00:00Z"
-					},
-					{
-					  "n": "Andrea",
-					  "dob": "1901-01-15T00:00:00Z",
-					  "friend": [
-						{
-						  "fn": "Glenn Rhee"
-						}
-					  ]
+						"friend": [
+							{
+								"dob": "1910-01-02T00:00:00Z",
+								"friend": [
+									{
+										"ffn": "Rick Grimes",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Glenn Rhee",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Daryl Dixon",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Andrea",
+										"fn": "Michonne"
+									}
+								],
+								"n": "Rick Grimes"
+							},
+							{
+								"dob": "1909-05-05T00:00:00Z",
+								"n": "Glenn Rhee"
+							},
+							{
+								"dob": "1909-01-10T00:00:00Z",
+								"n": "Daryl Dixon"
+							},
+							{
+								"dob": "1901-01-15T00:00:00Z",
+								"friend": [
+									{
+										"fn": "Glenn Rhee"
+									}
+								],
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
 					}
-				  ],
-				  "son": [
-					{
-					  "sn": "Andre"
-					},
-					{
-					  "sn": "Helmut"
-					}
-				  ]
-				}
-			  ]
+				]
 			}
 		}`, js)
 }
@@ -1808,6 +1825,288 @@ func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
 				  "sn": "Helmut"
 				}
 			  ]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveSubQueryLevel1MultipleUIDs(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"friend": [
+							{
+								"fn": "Michonne",
+								"n": "Rick Grimes"
+							},
+							{
+								"n": "Glenn Rhee"
+							},
+							{
+								"n": "Daryl Dixon"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
+					},
+					{
+						"friend": [
+							{
+								"fn": "Rick Grimes",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Daryl Dixon",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Andrea",
+								"n": "Michonne"
+							}
+						],
+						"gender": "male",
+						"mn": "Rick Grimes"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveMultipleSubQueryLevel1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23))  {
+				mn: name
+				gender
+				friend @normalize {
+					fn: name
+					dob
+					friend {
+						ffn : name
+					}
+				}
+				follow @normalize {
+					foln: name
+					friend {
+						fofn: name
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"follow": [
+							{
+								"foln": "Glenn Rhee"
+							},
+							{
+								"fofn": "Glenn Rhee",
+								"foln": "Andrea"
+							}
+						],
+						"friend": [
+							{
+								"ffn": "Michonne",
+								"fn": "Rick Grimes"
+							},
+							{
+								"fn": "Glenn Rhee"
+							},
+							{
+								"fn": "Daryl Dixon"
+							},
+							{
+								"ffn": "Glenn Rhee",
+								"fn": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne"
+					},
+					{
+						"friend": [
+							{
+								"ffn": "Rick Grimes",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Glenn Rhee",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Daryl Dixon",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Andrea",
+								"fn": "Michonne"
+							}
+						],
+						"gender": "male",
+						"mn": "Rick Grimes"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveMultipleQuery(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1)) @normalize {
+				mn: name
+				gender
+				friend { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+			me2(func: uid(1)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"fn": "Michonne",
+						"mn": "Michonne",
+						"n": "Rick Grimes",
+						"sn": "Andre"
+					},
+					{
+						"fn": "Michonne",
+						"mn": "Michonne",
+						"n": "Rick Grimes",
+						"sn": "Helmut"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Glenn Rhee",
+						"sn": "Andre"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Glenn Rhee",
+						"sn": "Helmut"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Daryl Dixon",
+						"sn": "Andre"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Daryl Dixon",
+						"sn": "Helmut"
+					},
+					{
+						"fn": "Glenn Rhee",
+						"mn": "Michonne",
+						"n": "Andrea",
+						"sn": "Andre"
+					},
+					{
+						"fn": "Glenn Rhee",
+						"mn": "Michonne",
+						"n": "Andrea",
+						"sn": "Helmut"
+					}
+				],
+				"me2": [
+					{
+						"friend": [
+							{
+								"fn": "Michonne",
+								"n": "Rick Grimes"
+							},
+							{
+								"n": "Glenn Rhee"
+							},
+							{
+								"n": "Daryl Dixon"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
+					}
+				]
 			}
 		}`, js)
 }
