@@ -492,15 +492,15 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
-	if len(filter.Fields) > 1 {
+	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
+	// if the filter has more than one field or if it has one non-id field.
+	if (len(filter.Fields) == 1 && filter.Fields[0].Name != "ids") || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
 			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
 		)
 	}
 
-	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
-	// if the filter has more than one field.
 	filter.Fields = append(filter.Fields,
 		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
 	schema.Types[filterName] = filter

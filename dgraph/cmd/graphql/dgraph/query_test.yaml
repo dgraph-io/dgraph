@@ -722,3 +722,18 @@
         name : Author.name
       }
     }
+
+-
+  name: "Filter with ids only includes valid ids in dgquery."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }
