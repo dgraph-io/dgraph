@@ -6,7 +6,7 @@ type Post {
 	id: ID!
 	title: String!
 	text: String
-	author: Author!
+	author(filter: AuthorFilter): Author!
 }
 
 type Author {
@@ -133,6 +133,11 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AuthorFilter {
+	ids: [ID!]
+	not: AuthorFilter
+}
+
 input AuthorInput {
 	name: String!
 }
@@ -155,6 +160,11 @@ input PatchPost {
 	title: String
 	text: String
 	author: AuthorRef
+}
+
+input PostFilter {
+	ids: [ID!]
+	not: PostFilter
 }
 
 input PostInput {
@@ -189,9 +199,9 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID!): Author
-	queryAuthor(order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 }
 
 #######################

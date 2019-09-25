@@ -138,6 +138,7 @@ enum PostOrderable {
 #######################
 
 input AuthorFilter {
+	ids: [ID!]
 	name: StringHashFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -173,6 +174,7 @@ input PatchPost {
 }
 
 input PostFilter {
+	ids: [ID!]
 	title: StringTermFilter
 	text: StringFullTextFilter
 	and: PostFilter

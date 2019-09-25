@@ -3,16 +3,7 @@
 #######################
 
 type Post {
-	id: ID!
-	title: String!
-	text: String
-	postType: PostType!
-}
-
-enum PostType {
-	Statement
-	Question
-	Answer
+	content: String! @searchable
 }
 
 #######################
@@ -97,42 +88,27 @@ type AddPostPayload {
 	post: Post
 }
 
-type DeletePostPayload {
-	msg: String
-}
-
-type UpdatePostPayload {
-	post: Post
-}
-
 #######################
 # Generated Enums
 #######################
 
 enum PostOrderable {
-	title
-	text
+	content
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input PatchPost {
-	title: String
-	text: String
-	postType: PostType
-}
-
 input PostFilter {
-	ids: [ID!]
+	content: StringTermFilter
+	and: PostFilter
+	or: PostFilter
 	not: PostFilter
 }
 
 input PostInput {
-	title: String!
-	text: String
-	postType: PostType!
+	content: String!
 }
 
 input PostOrder {
@@ -141,21 +117,11 @@ input PostOrder {
 	then: PostOrder
 }
 
-input PostRef {
-	id: ID!
-}
-
-input UpdatePostInput {
-	id: ID!
-	patch: PatchPost!
-}
-
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
@@ -165,6 +131,4 @@ type Query {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(id: ID!): DeletePostPayload
 }

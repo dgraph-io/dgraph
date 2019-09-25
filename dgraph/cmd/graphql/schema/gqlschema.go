@@ -465,7 +465,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 	fldType := fld.Type.Name()
-	if hasSearchables(schema.Types[fldType]) {
+	if hasFilterable(schema.Types[fldType]) {
 		fld.Arguments = append(fld.Arguments,
 			&ast.ArgumentDefinition{
 				Name: "filter",
@@ -502,7 +502,7 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasSearchables(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -513,6 +513,17 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
+		if isID(fld) {
+			filter.Fields = append(filter.Fields,
+				&ast.FieldDefinition{
+					Name: "ids",
+					Type: ast.ListType(&ast.Type{
+						NamedType: IDType,
+						NonNull:   true,
+					}, nil),
+				})
+			continue
+		}
 		if searchable := getSearchable(fld); searchable != "" {
 			filterTypeName := builtInFilters[searchable]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
@@ -537,13 +548,23 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
-	filter.Fields = append(filter.Fields,
-		&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
-		&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
-		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
-	)
+	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
+	// if the filter has more than one field or if it has one non-id field.
+	if (len(filter.Fields) == 1 && filter.Fields[0].Name != "ids") || len(filter.Fields) > 1 {
+		filter.Fields = append(filter.Fields,
+			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+		)
+	}
 
+	filter.Fields = append(filter.Fields,
+		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
 	schema.Types[filterName] = filter
+}
+
+func hasFilterable(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" || isID(fld) })
 }
 
 func hasSearchables(defn *ast.Definition) bool {

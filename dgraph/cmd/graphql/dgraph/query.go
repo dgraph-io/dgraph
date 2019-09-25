@@ -148,7 +148,11 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		Attr: field.ResponseName(),
 	}
 
-	addTypeFunc(dgQuery, field.Type())
+	if ids := idFilter(field); ids != nil {
+		addUIDFunc(dgQuery, ids)
+	} else {
+		addTypeFunc(dgQuery, field.Type())
+	}
 	addFilter(dgQuery, field)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
@@ -172,6 +176,13 @@ func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 			Op:    "and",
 			Child: []*gql.FilterTree{q.Filter, thisFilter},
 		}
+	}
+}
+
+func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
+	q.Func = &gql.Function{
+		Name: "uid",
+		UID:  uids,
 	}
 }
 
@@ -247,13 +258,53 @@ func addPagination(q *gql.GraphQuery, field schema.Field) {
 	}
 }
 
+func convertIDs(idsSlice []interface{}) []uint64 {
+	ids := make([]uint64, 0, len(idsSlice))
+	for _, id := range idsSlice {
+		uid, err := strconv.ParseUint(id.(string), 0, 64)
+		if err != nil {
+			// Skip sending the is part of the query to Dgraph.
+			continue
+		}
+		ids = append(ids, uid)
+	}
+	return ids
+}
+
+func idFilter(field schema.Field) []uint64 {
+	filter, ok := field.ArgValue("filter").(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	idsFilter := filter["ids"]
+	if idsFilter == nil {
+		return nil
+	}
+	idsSlice := idsFilter.([]interface{})
+	return convertIDs(idsSlice)
+}
+
 func addFilter(q *gql.GraphQuery, field schema.Field) {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
 	if !ok {
 		return
 	}
 
+	// There are two cases here.
+	// 1. It could be the case of a filter at root.  In this case we would have added a uid
+	// function at root. Lets delete the ids key so that it isn't added in the filter.
+	// Also, we need to add a dgraph.type filter.
+	// 2. This could be a deep filter. In that case we don't need to do anything special.
+	_, hasIDsFilter := filter["ids"]
+	filterAtRoot := hasIDsFilter && q.Func != nil && q.Func.Name == "uid"
+	if filterAtRoot {
+		// If id was present as a filter,
+		delete(filter, "ids")
+	}
 	q.Filter = buildFilter(field.Type(), filter)
+	if filterAtRoot {
+		addTypeFilter(q, field.Type())
+	}
 }
 
 // buildFilter builds a Dgraph gql.FilterTree from a GraphQL 'filter' arg.
@@ -344,6 +395,15 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 							{Value: typ.DgraphPredicate(field)},
 							{Value: maybeQuoteArg(fn, val)},
 						},
+					},
+				})
+			case []interface{}:
+				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
+				ids := convertIDs(dgFunc)
+				ands = append(ands, &gql.FilterTree{
+					Func: &gql.Function{
+						Name: "uid",
+						UID:  ids,
 					},
 				})
 			case interface{}:
