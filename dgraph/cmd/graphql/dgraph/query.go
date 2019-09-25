@@ -148,7 +148,11 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		Attr: field.ResponseName(),
 	}
 
-	addTypeFunc(dgQuery, field.Type())
+	if ids := idFilter(field); len(ids) > 0 {
+		addUIDFunc(dgQuery, ids)
+	} else {
+		addTypeFunc(dgQuery, field.Type())
+	}
 	addFilter(dgQuery, field)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
@@ -173,6 +177,14 @@ func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 			Child: []*gql.FilterTree{q.Filter, thisFilter},
 		}
 	}
+}
+
+func addUIDFunc(q *gql.GraphQuery, uids []uint64) error {
+	q.Func = &gql.Function{
+		Name: "uid",
+		UID:  uids,
+	}
+	return nil
 }
 
 func addTypeFunc(q *gql.GraphQuery, typ schema.Type) {
@@ -247,13 +259,49 @@ func addPagination(q *gql.GraphQuery, field schema.Field) {
 	}
 }
 
+func convertIDs(idsSlice []interface{}) []uint64 {
+	ids := make([]uint64, 0, len(idsSlice))
+	for _, id := range idsSlice {
+		uid, err := strconv.ParseUint(id.(string), 0, 64)
+		if err != nil {
+			// TODO - Check if we want to propogate this error.
+			continue
+		}
+		ids = append(ids, uid)
+	}
+	return ids
+}
+
+func idFilter(field schema.Field) []uint64 {
+	filter, ok := field.ArgValue("filter").(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	idsFilter := filter["ids"]
+	if idsFilter == nil {
+		return nil
+	}
+	idsSlice := idsFilter.([]interface{})
+	return convertIDs(idsSlice)
+}
+
 func addFilter(q *gql.GraphQuery, field schema.Field) {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
 	if !ok {
 		return
 	}
 
+	_, ok = filter["ids"]
+	if ok {
+		// If id was present as a filter, we would have added a uid function at root.
+		// Lets delete the ids key so that it isn't added in the filter.
+		// Also, we need to add a dgraph.type filter.
+		delete(filter, "ids")
+	}
 	q.Filter = buildFilter(field.Type(), filter)
+	if ok {
+		addTypeFilter(q, field.Type())
+	}
 }
 
 // buildFilter builds a Dgraph gql.FilterTree from a GraphQL 'filter' arg.
@@ -344,6 +392,15 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 							{Value: typ.DgraphPredicate(field)},
 							{Value: maybeQuoteArg(fn, val)},
 						},
+					},
+				})
+			case []interface{}:
+				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
+				ids := convertIDs(dgFunc)
+				ands = append(ands, &gql.FilterTree{
+					Func: &gql.Function{
+						Name: "uid",
+						UID:  ids,
 					},
 				})
 			case interface{}:

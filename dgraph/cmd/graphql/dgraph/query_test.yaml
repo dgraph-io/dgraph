@@ -620,3 +620,33 @@
         name : Author.name
       }
     }
+
+-
+  name: "Filter with ids uses uid func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Filter with ids and not translates correctly.."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { not: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(NOT (uid(0x1, 0x2))) {
+        name : Author.name
+      }
+    }
