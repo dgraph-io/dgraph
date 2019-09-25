@@ -45,8 +45,7 @@ func TestParseCountValError(t *testing.T) {
     }
     count(val(u))
   }
-}
-	`
+}`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
