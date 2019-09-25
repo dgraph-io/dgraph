@@ -1033,6 +1033,9 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 // parseGqlVariables parses the the graphQL variable declaration.
 func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
+	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
+		return nil
+	}
 	for it.Next() {
 		var varName string
 		// Get variable name.
@@ -2229,6 +2232,8 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		} else {
 			return item.Errorf("Facets parsing failed.")
 		}
+	} else if item.Val == "cascade" {
+		curp.Cascade = true
 	} else if peek[0].Typ == itemLeftRound {
 		// this is directive
 		switch item.Val {

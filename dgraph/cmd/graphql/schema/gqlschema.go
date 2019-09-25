@@ -196,10 +196,54 @@ var directiveValidators = map[string]directiveValidator{
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
+func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
+	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
+	// them. We add arguments for filters and order statements later.
+	dst := &ast.FieldDefinition{
+		Description:  src.Description,
+		Name:         src.Name,
+		DefaultValue: src.DefaultValue,
+		Type:         src.Type,
+		Directives:   src.Directives,
+		Position:     src.Position,
+	}
+	return dst
+}
+
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		panic(gqlErr)
+	}
+
+	// Cache the interface definitions in a map. They could also be defined after types which
+	// implement them.
+	interfaces := make(map[string]*ast.Definition)
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Interface {
+			interfaces[defn.Name] = defn
+		}
+	}
+
+	// Walk through type definitions which implement an interface and fill in the fields from the
+	// interface.
+	for _, defn := range doc.Definitions {
+		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
+			for _, implements := range defn.Interfaces {
+				i, ok := interfaces[implements]
+				if !ok {
+					// This would fail schema validation later.
+					continue
+				}
+				fields := make([]*ast.FieldDefinition, 0, len(i.Fields))
+				for _, field := range i.Fields {
+					// Creating a copy here is important, otherwise arguments like filter, order
+					// etc. are added multiple times if the pointer is shared.
+					fields = append(fields, copyAstFieldDef(field))
+				}
+				defn.Fields = append(fields, defn.Fields...)
+			}
+		}
 	}
 
 	for _, defn := range docExtras.Definitions {
@@ -297,23 +341,35 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	for _, key := range definitions {
 		defn := sch.Types[key]
 
-		if defn.Kind == ast.Object {
+		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
+			continue
+		}
+
+		// Common types to both Interface and Object.
+		addReferenceType(sch, defn)
+		addPatchType(sch, defn)
+		addUpdateType(sch, defn)
+		addUpdatePayloadType(sch, defn)
+		addDeletePayloadType(sch, defn)
+
+		if defn.Kind == ast.Interface {
+			// addInputType doesn't make sense as interface is like an abstract class and we can't
+			// create objects of its type.
+			addUpdateMutation(sch, defn)
+			addDeleteMutation(sch, defn)
+
+		} else if defn.Kind == ast.Object {
 			// types and inputs needed for mutations
 			addInputType(sch, defn)
-			addReferenceType(sch, defn)
-			addPatchType(sch, defn)
-			addUpdateType(sch, defn)
 			addAddPayloadType(sch, defn)
-			addUpdatePayloadType(sch, defn)
-			addDeletePayloadType(sch, defn)
 			addMutations(sch, defn)
-
-			// types and inputs needed for query and search
-			addFilterType(sch, defn)
-			addTypeOrderable(sch, defn)
-			addFieldFilters(sch, defn)
-			addQueries(sch, defn)
 		}
+
+		// types and inputs needed for query and search
+		addFilterType(sch, defn)
+		addTypeOrderable(sch, defn)
+		addFieldFilters(sch, defn)
+		addQueries(sch, defn)
 	}
 }
 
@@ -922,7 +978,16 @@ func generateEnumString(typ *ast.Definition) string {
 	return sch.String()
 }
 
+func generateInterfaceString(typ *ast.Definition) string {
+	return fmt.Sprintf("interface %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+}
+
 func generateObjectString(typ *ast.Definition) string {
+	if len(typ.Interfaces) > 0 {
+		interfaces := strings.Join(typ.Interfaces, " & ")
+		return fmt.Sprintf("type %s implements %s {\n%s}\n", typ.Name, interfaces,
+			genFieldsString(typ.Fields))
+	}
 	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
@@ -953,7 +1018,9 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Object {
+		if typ.Kind == ast.Interface {
+			original.WriteString(generateInterfaceString(typ) + "\n")
+		} else if typ.Kind == ast.Object {
 			original.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
 			original.WriteString(generateEnumString(typ) + "\n")

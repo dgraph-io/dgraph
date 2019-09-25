@@ -105,6 +105,12 @@ const (
 			"tokenizer": ["term"]
 		},
 		{
+			"predicate": "Post.topic",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"]
+		},		
+		{
 			"predicate": "dgraph.graphql.date",
 			"type": "string"
 		},
@@ -143,6 +149,7 @@ const (
 				{"name": "Post.title", "type": "string"},
 				{"name": "Post.text", "type": "string"},
 				{"name": "Post.tags", "type": "[string]"},
+				{"name": "Post.topic", "type": "string"},
 				{"name": "Post.numLikes", "type": "int"},
 				{"name": "Post.isPublished", "type": "bool"},
 				{"name": "Post.postType", "type": "string"},

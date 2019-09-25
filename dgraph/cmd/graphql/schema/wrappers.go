@@ -83,6 +83,7 @@ type Field interface {
 	Type() Type
 	SelectionSet() []Field
 	Location() *Location
+	DgraphPredicate() string
 }
 
 // TODO: Location will be swapped with the the one the x soon when errors
@@ -117,6 +118,7 @@ type Type interface {
 	DgraphPredicate(fld string) string
 	Nullable() bool
 	ListType() Type
+	Interfaces() []string
 	fmt.Stringer
 }
 
@@ -128,6 +130,10 @@ type FieldDefinition interface {
 	Type() Type
 	IsID() bool
 	Inverse() (Type, FieldDefinition)
+	// If the field was defined as part of an interface and is inherited from it
+	// in a type definition, this function would return the name of the interface.
+	// Otherwise it returns the name of the object type that the field belongs to.
+	ParentType() string
 }
 
 type astType struct {
@@ -150,14 +156,16 @@ type operation struct {
 }
 
 type field struct {
-	field *ast.Field
-	op    *operation
-	sel   ast.Selection
+	field      *ast.Field
+	op         *operation
+	sel        ast.Selection
+	dgraphPred string
 }
 
 type fieldDefinition struct {
-	fieldDef *ast.FieldDefinition
-	inSchema *ast.Schema
+	fieldDef   *ast.FieldDefinition
+	inSchema   *ast.Schema
+	parentType string
 }
 
 type mutation field
@@ -274,10 +282,39 @@ func (f *field) Type() Type {
 	}
 }
 
+func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
+	typ := objDef.Name
+	pi := parentInterface(sch, objDef, fname)
+	if pi != "" {
+		typ = pi
+	}
+	return typ
+}
+
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
-			flds = append(flds, &field{field: fld, op: f.op})
+			pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
+			flds = append(flds, &field{
+				field:      fld,
+				op:         f.op,
+				dgraphPred: pt + "." + fld.Name,
+			})
+		}
+		if fragment, ok := s.(*ast.InlineFragment); ok {
+			// This is the case where an inline fragment is defined within a query
+			// block. Usually this is for requesting some fields for a concrete type
+			// within a query for an interface.
+			for _, s := range fragment.SelectionSet {
+				if fld, ok := s.(*ast.Field); ok {
+					pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
+					flds = append(flds, &field{
+						field:      fld,
+						op:         f.op,
+						dgraphPred: pt + "." + fld.Name,
+					})
+				}
+			}
 		}
 	}
 
@@ -288,6 +325,10 @@ func (f *field) Location() *Location {
 	return &Location{
 		Line:   f.field.Position.Line,
 		Column: f.field.Position.Column}
+}
+
+func (f *field) DgraphPredicate() string {
+	return f.dgraphPred
 }
 
 func (q *query) Name() string {
@@ -341,6 +382,10 @@ func (q *query) QueryType() QueryType {
 	default:
 		return NotSupportedQuery
 	}
+}
+
+func (q *query) DgraphPredicate() string {
+	return (*field)(q).dgraphPred
 }
 
 func (m *mutation) Name() string {
@@ -421,11 +466,17 @@ func (m *mutation) MutationType() MutationType {
 	}
 }
 
+func (m *mutation) DgraphPredicate() string {
+	return (*field)(m).dgraphPred
+}
+
 func (t *astType) Field(name string) FieldDefinition {
+	typ := t.inSchema.Types[t.Name()]
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
-		inSchema: t.inSchema,
+		fieldDef:   t.inSchema.Types[t.Name()].Fields.ForName(name),
+		inSchema:   t.inSchema,
+		parentType: parentType(t.inSchema, typ, name),
 	}
 }
 
@@ -447,6 +498,10 @@ func (fd *fieldDefinition) Type() Type {
 		typ:      fd.fieldDef.Type,
 		inSchema: fd.inSchema,
 	}
+}
+
+func (fd *fieldDefinition) ParentType() string {
+	return fd.parentType
 }
 
 func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
@@ -491,7 +546,8 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	return fmt.Sprintf("%s.%s", t.Name(), fld)
+	pt := parentType(t.inSchema, t.inSchema.Types[t.typ.Name()], fld)
+	return fmt.Sprintf("%s.%s", pt, fld)
 }
 
 func (t *astType) String() string {
@@ -524,7 +580,7 @@ func (t *astType) String() string {
 
 func (t *astType) IDField() FieldDefinition {
 	def := t.inSchema.Types[t.Name()]
-	if def.Kind != ast.Object {
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
 
@@ -538,4 +594,8 @@ func (t *astType) IDField() FieldDefinition {
 	}
 
 	return nil
+}
+
+func (t *astType) Interfaces() []string {
+	return t.inSchema.Types[t.typ.Name()].Interfaces
 }

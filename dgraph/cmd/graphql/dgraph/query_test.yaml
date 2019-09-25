@@ -622,6 +622,123 @@
     }
 
 -
+  name: "getHuman which implements an interface"
+  gqlquery: |
+    query {
+      getHuman(id: "0x1") {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      getHuman(func: uid(0x1)) @filter(type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
+
+-
+  name: "queryHuman which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
+
+-
+  name: "filter with order for type which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman (filter: { name: { anyofterms: "GraphQL" } }, order: { asc: ename }) {
+        id
+        name
+        ename
+        dob
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human), orderasc: Employee.ename) @filter(anyofterms(Character.name, "GraphQL")) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+      }
+    }
+
+-
+  name: "queryCharacter with fragment for human"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Human {
+          female
+          ename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        id : uid
+        name : Character.name
+        female : Human.female
+        ename : Employee.ename
+      }
+    }
+
+-
+  name: "queryCharacter with fragment on multiple types"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Human {
+          female
+          ename
+        }
+        ... on Director {
+          movies
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        id : uid
+        name : Character.name
+        female : Human.female
+        ename : Employee.ename
+        movies : Director.movies
+      }
+    }
+
+-
   name: "Filter with ids uses uid func at root."
   gqlquery: |
     query {
@@ -637,7 +754,7 @@
     }
 
 -
-  name: "Filter with ids inside and argument doesn't use uid func at root.."
+  name: "Filter with ids inside and argument doesn't use uid func at root."
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { ids: ["0x1", "0x2"] }}) {

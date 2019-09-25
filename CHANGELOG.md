@@ -563,6 +563,18 @@ Tracing
 [63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
 [18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
 
+## 1.0.18 - [Unreleased]
+[Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...release/v1.0
+
+### Fixed
+
+- Preserve the order of entries in a mutation if multiple versions of the same
+  edge are found. This addresses the mutation re-ordering change ([#2987][]) from v1.0.15.
+- Fixing the zero client in live loader to avoid using TLS. Fixes [#3919][]. ([#3936][])
+
+[#3919]: https://github.com/dgraph-io/dgraph/issues/3919
+[#3936]: https://github.com/dgraph-io/dgraph/issues/3936
+
 ## [1.0.17] - 2019-08-30
 [1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
 
