@@ -1868,6 +1868,26 @@ Query Example: Harry Potter movies, with each actor and characters played.  With
 }
 {{< /runnable >}}
 
+You can apply `@cascade` on inner query blocks as well.
+{{< runnable >}}
+{
+  HP(func: allofterms(name@en, "Harry Potter")) {
+    name@en
+    genre {
+      name@en
+    }
+    starring @cascade {
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name@en, "Warwick")){
+            name@en
+         }
+    }
+  }
+}
+{{< /runnable >}}
+
 ## Normalize directive
 
 With the `@normalize` directive, only aliased predicates are returned and the result is flattened to remove nesting.
