@@ -340,6 +340,225 @@ func TestTypeExpandLang(t *testing.T) {
 		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
 }
 
+// Test Related to worker based pagination.
+
+func TestHasOrderDesc(t *testing.T) {
+	query := `{
+		q(func:has(name), orderdesc: name, first:5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": ""
+			  },
+			  {
+				"name": ""
+			  },
+			  {
+				"name": "Badger"
+			  },
+			  {
+				"name": "name"
+			  },
+			  {
+				"name": "expand"
+			  }
+			]
+		  }
+	}`, js)
+}
+func TestHasOrderDescOffset(t *testing.T) {
+	query := `{
+		q(func:has(name), orderdesc: name, first:5, offset: 5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Shoreline Amphitheater"
+			  },
+			  {
+				"name": "School B"
+			  },
+			  {
+				"name": "School A"
+			  },
+			  {
+				"name": "San Mateo School District"
+			  },
+			  {
+				"name": "San Mateo High School"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasOrderAsc(t *testing.T) {
+	query := `{
+		q(func:has(name), orderasc: name, first:5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": ""
+			  },
+			  {
+				"name": ""
+			  },
+			  {
+				"name": "Alex"
+			  },
+			  {
+				"name": "Alice"
+			  },
+			  {
+				"name": "Alice"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasOrderAscOffset(t *testing.T) {
+	query := `{
+		q(func:has(name), orderasc: name, first:5, offset: 5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Alice"
+			  },
+			  {
+				"name": "Alice"
+			  },
+			  {
+				"name": "Alice"
+			  },
+			  {
+				"name": "Alice\""
+			  },
+			  {
+				"name": "Andre"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFirst(t *testing.T) {
+	query := `{
+		q(func:has(name),first:5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Michonne"
+			  },
+			  {
+				"name": "King Lear"
+			  },
+			  {
+				"name": "Margaret"
+			  },
+			  {
+				"name": "Leonard"
+			  },
+			  {
+				"name": "Garfield"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFirstOffset(t *testing.T) {
+	query := `{
+		q(func:has(name),first:5, offset: 5) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Bear"
+			  },
+			  {
+				"name": "Nemo"
+			  },
+			  {
+				"name": "name"
+			  },
+			  {
+				"name": "Rick Grimes"
+			  },
+			  {
+				"name": "Glenn Rhee"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFirstFilter(t *testing.T) {
+	query := `{
+		q(func:has(name), first: 1, offset:2)@filter(lt(age, 25)) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Daryl Dixon"
+			  }
+			]
+		  }
+	}`, js)
+}
+
+func TestHasFilterOrderOffset(t *testing.T) {
+	query := `{
+		q(func:has(name), first: 2, offset:2, orderasc: name)@filter(gt(age, 20)) {
+			 name
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+			  {
+				"name": "Alice"
+			  },
+			  {
+				"name": "Bob"
+			  }
+			]
+		  }
+	}`, js)
+}
 func TestCascadeSubQuery1(t *testing.T) {
 	query := `
 	{

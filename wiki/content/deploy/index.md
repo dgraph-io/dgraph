@@ -1855,12 +1855,19 @@ can be initiated using the `--whitelist` flag on `dgraph alpha`.
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
-{{% notice "note" %}}An export file would be created on only the server which is the leader for a group
-and not on followers.{{% /notice %}}
+This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
-This triggers an export of all the groups spread across the entire cluster. Each Alpha leader for
-a group writes output as a gzipped file to the export directory specified on startup by `--export`.
-If any of the groups fail, the entire export process is considered failed and an error is returned.
+1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
+2. For every other group, its group's export data is stored with the Alpha leader of that group. 
+
+It is up to the user to retrieve the right export files from the Alphas in the
+cluster. Dgraph does not copy all files to the Alpha that initiated the export.
+The user must also ensure that there is sufficient space on disk to store the
+export.
+
+Each Alpha leader for a group writes output as a gzipped file to the export
+directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
+entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
 `format` URL parameter. For example:
@@ -1870,8 +1877,6 @@ $ curl 'localhost:8080/admin/export?format=json'
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
-
-{{% notice "note" %}}It is up to the user to retrieve the right export files from the Alphas in the cluster. Dgraph does not copy files to the Alpha that initiated the export.{{% /notice %}}
 
 ### Shutdown Database
 
