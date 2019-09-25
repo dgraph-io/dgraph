@@ -85,7 +85,7 @@ type fastJsonNode struct {
 	scalarVal    []byte
 	attrs        []*fastJsonNode
 	list         bool
-	isNormalized bool
+	isNormalized bool // true for the nodes with `@normalize` directive and all it's children.
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -824,20 +824,24 @@ func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
 			return err
 		}
 
-		parent.attrs[childIdx] = &fastJsonNode{ // A small optimization. Instead of removing
-			attr:    node.attr,    // element from slice, we are replacing it
-			attrs:   attrList[0],  // with one of the node that we intend to
-			isChild: node.isChild, // attach to parent.
+		// A small optimization. Instead of removing element from slice, we are replacing it
+		// with one of the node that we intend to attach to parent.
+		parent.attrs[childIdx] = &fastJsonNode{
+			attr:    node.attr,
+			attrs:   attrList[0],
+			isChild: node.isChild,
 		}
 		for _, attrs := range attrList[1:] {
 			parent.attrs = append(parent.attrs,
 				&fastJsonNode{attr: node.attr, attrs: attrs, isChild: node.isChild})
 		}
-	} else {
-		for idx, child := range node.attrs {
-			if err := normalizeResult(child, node, idx); err != nil {
-				return err
-			}
+
+		return nil
+	}
+
+	for idx, child := range node.attrs {
+		if err := normalizeResult(child, node, idx); err != nil {
+			return err
 		}
 	}
 
