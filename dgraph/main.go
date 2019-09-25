@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 )
 
 func main() {
@@ -31,7 +33,7 @@ func main() {
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
 
-	// Run GC periodically.
+	// Make sure the garbage collector is run periodically.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -45,11 +47,13 @@ func main() {
 				lastNum = ms.NumGC
 			} else {
 				runtime.GC()
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+					humanize.Bytes(ms.HeapInuse),
+					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
 				lastNum = ms.NumGC + 1
 			}
 		}
 	}()
-
 
 	cmd.Execute()
 }
