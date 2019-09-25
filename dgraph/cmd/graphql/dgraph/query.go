@@ -263,7 +263,7 @@ func convertIDs(idsSlice []interface{}) []uint64 {
 	for _, id := range idsSlice {
 		uid, err := strconv.ParseUint(id.(string), 0, 64)
 		if err != nil {
-			// TODO - Check if we want to propogate this error.
+			// Skip sending the is part of the query to Dgraph.
 			continue
 		}
 		ids = append(ids, uid)
