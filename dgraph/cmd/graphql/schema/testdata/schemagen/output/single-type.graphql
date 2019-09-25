@@ -115,6 +115,7 @@ enum MessageOrderable {
 
 input MessageFilter {
 	ids: [ID!]
+	not: MessageFilter
 }
 
 input MessageInput {

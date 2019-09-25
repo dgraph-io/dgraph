@@ -126,6 +126,7 @@ input PatchPost {
 
 input PostFilter {
 	ids: [ID!]
+	not: PostFilter
 }
 
 input PostInput {

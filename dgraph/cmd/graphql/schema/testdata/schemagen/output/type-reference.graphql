@@ -135,6 +135,7 @@ enum PostOrderable {
 
 input AuthorFilter {
 	ids: [ID!]
+	not: AuthorFilter
 }
 
 input AuthorInput {
@@ -163,6 +164,7 @@ input PatchPost {
 
 input PostFilter {
 	ids: [ID!]
+	not: PostFilter
 }
 
 input PostInput {
