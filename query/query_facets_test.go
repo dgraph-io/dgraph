@@ -77,6 +77,34 @@ func populateClusterWithFacets() {
 	facetSetupDone = true
 }
 
+func TestFacetWithVar(t *testing.T) {
+	triples := `
+_:f <name> "user1" .
+_:f <works_in> _:sf (since="2018") .
+_:m <name> "user2" .
+_:m <works_in> _:sf (since="2019") .
+_:i <name> "user3" .
+_:i <works_in> _:bg (since="2019") .
+_:sf <name> "San Francisco" .
+_:bg <name> "Bangalore" .
+`
+
+	addTriplesToCluster(triples)
+
+	query := `
+query works($since: string = "2018") {
+  q(func: has(works_in)) @cascade {
+    name
+    works_in @facets @facets(gt(since, $since)) {
+      name
+    }
+  }
+}
+`
+	js := processQueryNoErr(t, query)
+	require.NotContains(t, js, "user1")
+}
+
 func TestRetrieveFacetsSimple(t *testing.T) {
 	populateClusterWithFacets()
 	query := `
