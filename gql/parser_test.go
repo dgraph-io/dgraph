@@ -45,7 +45,8 @@ func TestParseCountValError(t *testing.T) {
     }
     count(val(u))
   }
-}`
+}
+	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
@@ -2040,8 +2041,8 @@ query works($since: string = "2018") {
       name
     }
   }
-}
-	`
+}`
+
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
