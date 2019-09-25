@@ -148,7 +148,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		Attr: field.ResponseName(),
 	}
 
-	if ids := idFilter(field); len(ids) > 0 {
+	if ids := idFilter(field); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, field.Type())

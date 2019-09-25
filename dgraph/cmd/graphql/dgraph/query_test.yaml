@@ -707,3 +707,18 @@
         }
       }
     }
+
+-
+  name: "Filter with no valid ids construct the right query with type func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid()) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }
