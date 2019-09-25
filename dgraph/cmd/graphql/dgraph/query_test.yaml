@@ -637,6 +637,21 @@
     }
 
 -
+  name: "Filter with ids inside and argument doesn't use uid func at root.."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((uid(0x1, 0x2) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+      }
+    }
+
+-
   name: "Filter with ids and not translates correctly.."
   gqlquery: |
     query {
