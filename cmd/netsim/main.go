@@ -25,7 +25,7 @@ import (
 
 	p2p "github.com/ChainSafe/gossamer/p2p"
 	log "github.com/ChainSafe/log15"
-	peer "github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 var messages = []string{
