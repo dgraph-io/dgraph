@@ -670,3 +670,35 @@ func TestQueryByMultipleIds(t *testing.T) {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestQueryByMultipleInvalidIds(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": []string{"foo", "bar"},
+		}},
+	}
+	// Since the ids are invalid and can't be converted to uint64, the query sent to Dgraph should
+	// have func: uid() at root and should return 0 results.
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.Equal(t, `{"queryPost":[]}`, string(gqlResponse.Data))
+	var result struct {
+		QueryPost []*post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(result.QueryPost))
+}
