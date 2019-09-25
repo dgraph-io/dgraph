@@ -276,11 +276,9 @@ BUCKETS:
 	var multiSortOffsets []int32
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
-		if len(ts.Order) > 1 {
-			// TODO - For lossy tokenizer, no need to pick all values.
-			values = append(values, il.values)
-			multiSortOffsets = append(multiSortOffsets, il.multiSortOffset)
-		}
+		// TODO - For lossy tokenizer, no need to pick all values.
+		values = append(values, il.values)
+		multiSortOffsets = append(multiSortOffsets, il.multiSortOffset)
 	}
 
 	select {
@@ -468,11 +466,10 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if r.err != nil {
 		return nil, r.err
 	}
+	// we need to sort here. Because, we are indexing language wise, so there
+	// may be a disorder. So we need to do sorting here anyways eventhogh we
+	// do reverse iteration. TODO: language specific exact indexing.
 	// If request didn't have multiple attributes we return.
-	if len(ts.Order) <= 1 {
-		return r.reply, nil
-	}
-
 	err := multiSort(ctx, r, ts)
 	return r.reply, err
 }
@@ -574,7 +571,6 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}
-
 		// Result set might have reduced after sorting. As some uids might not have a
 		// value in the lang specified.
 		n = len(result.Uids)
@@ -606,9 +602,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		}
 
 		il.ulist.Uids = append(il.ulist.Uids, result.Uids[:n]...)
-		if len(ts.Order) > 1 {
-			il.values = append(il.values, vals[:n]...)
-		}
+		il.values = append(il.values, vals[:n]...)
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
@@ -691,24 +685,44 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 		case <-ctx.Done():
 			return multiSortVals, ctx.Err()
 		default:
+			var val types.Val
+			var err error
 			uid := ul.Uids[i]
-			uids = append(uids, uid)
-			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
-			if err != nil {
-				// Value couldn't be found or couldn't be converted to the sort
-				// type.  By using a nil Value, it will appear at the
-				// end (start) for orderasc (orderdesc).
-				val.Value = nil
+			if len(order.Langs) > 0 {
+				val, err = fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
+				if err != nil || val.Value == nil {
+					// Value couldn't be found or couldn't be converted to the sort
+					// type.  By using a nil Value, it will appear at the
+					// end (start) for orderasc (orderdesc).
+					// @pawan don't know why is this happening.
+					// anyways I'm skipping here. Lemme know, If I'm missing something
+					val.Value = nil
+					// skipping here. Since There is no value.
+					continue
+				}
+			} else {
+				val, err = fetchUntaggedValue(uid, order.Attr, typ, ts.ReadTs)
+				if err != nil || val.Value == nil {
+					// Value couldn't be found or couldn't be converted to the sort
+					// type.  By using a nil Value, it will appear at the
+					// end (start) for orderasc (orderdesc).
+					// @pawan don't know why is this happening.
+					// anyways I'm skipping here. Lemme know, If I'm missing something
+					val.Value = nil
+					// skipping here. Since There is no value.
+					continue
+				}
 			}
 			values = append(values, []types.Val{val})
+			// filtering the uid which has value for the given language.
+			// fetchValue takes care of the language specific fetching.
+			uids = append(uids, uid)
 		}
 	}
 	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc})
 	ul.Uids = uids
-	if len(ts.Order) > 1 {
-		for _, v := range values {
-			multiSortVals = append(multiSortVals, v[0])
-		}
+	for _, v := range values {
+		multiSortVals = append(multiSortVals, v[0])
 	}
 	return multiSortVals, err
 }
@@ -721,9 +735,7 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	if err != nil {
 		return types.Val{}, err
 	}
-
 	src, err := pl.ValueFor(readTs, langs)
-
 	if err != nil {
 		return types.Val{}, err
 	}
@@ -732,5 +744,23 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 		return types.Val{}, err
 	}
 
+	return dst, nil
+}
+
+func fetchUntaggedValue(uid uint64, attr string, scalar types.TypeID,
+	readTs uint64) (types.Val, error) {
+	// Don't put the values in memory
+	pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	if err != nil {
+		return types.Val{}, err
+	}
+	src, err := pl.AllUntaggedValues(readTs)
+	if err != nil || len(src) == 0 {
+		return types.Val{}, err
+	}
+	dst, err := types.Convert(src[0], scalar)
+	if err != nil {
+		return types.Val{}, err
+	}
 	return dst, nil
 }
