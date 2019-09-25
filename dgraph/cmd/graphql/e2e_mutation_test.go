@@ -763,13 +763,6 @@ func addHuman(t *testing.T, starshipID string) string {
 			addHuman(input: $human) {
 				human {
 					id
-					name
-					appearsIn
-					starships {
-						name
-						length
-					}
-					totalCredits
 			  	}
 			}
 		}`,
@@ -806,9 +799,6 @@ func addDroid(t *testing.T) string {
 			addDroid(input: $droid) {
 				droid {
 					id
-					name
-					primaryFunction
-					appearsIn
 				}
 			}
 		}`,
@@ -937,14 +927,14 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
-		Add1 struct {
-			Country *country
-		}
-		DeleteCountry struct {
+		DeleteStarhip struct {
 			Msg string
 		}
-		Add2 struct {
-			Country *country
+		DeleteHuman struct {
+			Msg string
+		}
+		DeleteDroid struct {
+			Msg string
 		}
 	}
 
