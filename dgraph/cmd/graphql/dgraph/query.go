@@ -291,15 +291,19 @@ func addFilter(q *gql.GraphQuery, field schema.Field) {
 		return
 	}
 
-	_, ok = filter["ids"]
-	if ok {
-		// If id was present as a filter, we would have added a uid function at root.
-		// Lets delete the ids key so that it isn't added in the filter.
-		// Also, we need to add a dgraph.type filter.
+	// There are two cases here.
+	// 1. It could be the case of a filter at root.  In this case we would have added a uid
+	// function at root. Lets delete the ids key so that it isn't added in the filter.
+	// Also, we need to add a dgraph.type filter.
+	// 2. This could be a deep filter. In that case we don't need to do anything special.
+	_, hasIDsFilter := filter["ids"]
+	filterAtRoot := hasIDsFilter && q.Func != nil && q.Func.Name == "uid"
+	if filterAtRoot {
+		// If id was present as a filter,
 		delete(filter, "ids")
 	}
 	q.Filter = buildFilter(field.Type(), filter)
-	if ok {
+	if filterAtRoot {
 		addTypeFilter(q, field.Type())
 	}
 }

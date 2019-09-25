@@ -665,3 +665,45 @@
         name : Author.name
       }
     }
+
+-
+  name: "Deep filter with ids"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { ids: ["0x1", "0x2"], and: { title: { anyofterms: "GraphQL" } }}) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((anyofterms(Post.title, "GraphQL") AND uid(0x1, 0x2))) {
+          title : Post.title
+        }
+      }
+    }
+
+-
+  name: "Deep filter with ids in not key"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" }, not: { ids: ["0x1", "0x2"] } }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((NOT (uid(0x1, 0x2)) AND anyofterms(Post.title, "GraphQL"))) {
+          title : Post.title
+        }
+      }
+    }
