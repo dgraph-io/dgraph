@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math"
-	"runtime"
 	"strconv"
 	"sync/atomic"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -249,21 +247,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	defer itr.Close()
 	itr.Seek(key)
 
-	var beforeStats runtime.MemStats
-	var afterStats runtime.MemStats
-	runtime.ReadMemStats(&beforeStats)
 	l, err := ReadPostingList(key, itr)
-	runtime.ReadMemStats(&afterStats)
-
 	if err != nil {
 		return l, err
 	}
-	// listCache.Set(key, l, x.DeepSize(l))
-	memStatSize := int64(afterStats.Alloc - beforeStats.Alloc)
-	deepSize := x.DeepSize(l)
-	if float64(memStatSize)/float64(deepSize) > 1.5 {
-		glog.Infof("memStatSize %v, DeepSize: %v", memStatSize, deepSize)
-	}
-	listCache.Set(key, l, int64(afterStats.Alloc-beforeStats.Alloc))
+	listCache.Set(key, l, x.DeepSize(l))
 	return l, nil
 }

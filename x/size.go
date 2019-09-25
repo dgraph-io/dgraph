@@ -31,7 +31,6 @@ package x
 import (
 	"math"
 	"reflect"
-	_ "unsafe"
 )
 
 // DeepSize reports the size of v in bytes, as reflect.Size, but also including
