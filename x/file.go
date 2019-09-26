@@ -126,11 +126,11 @@ func IsMissingOrEmptyDir(path string) (_ bool, err error) {
 		return false, err
 	}
 	defer func() {
-        cerr := file.Close()
-        if err == nil {
-            err = cerr
-        }
-    }()
+		cerr := file.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = file.Readdir(1)
 	if err == nil {
