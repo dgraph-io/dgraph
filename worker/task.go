@@ -772,8 +772,9 @@ type queryState struct {
 	cache *posting.LocalCache
 }
 
-func (qs *queryState) helpProcessTask(
-	ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (
+	*pb.Result, error) {
+
 	span := otrace.FromContext(ctx)
 	out := new(pb.Result)
 	attr := q.Attr
@@ -854,8 +855,6 @@ func (qs *queryState) helpProcessTask(
 	}
 
 	if srcFn.fnType == regexFn {
-		// Go through the indexkeys for the predicate and match them with
-		// the regex matcher.
 		span.Annotate(nil, "handleRegexFunction")
 		if err := qs.handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
@@ -961,8 +960,8 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	// Here we determine the list of uids to match.
 	switch {
 	// If this is a filter eval, use the given uid list (good)
-	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
-		uids = arg.q.UidList
+	case arg.q.UidList != nil:
+		uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
 
 	// Prefer to use an index (fast)
 	case useIndex:

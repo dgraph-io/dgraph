@@ -78,7 +78,6 @@ func TestRecurseNestedError2(t *testing.T) {
 }
 
 func TestRecurseQuery(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -93,7 +92,6 @@ func TestRecurseQuery(t *testing.T) {
 }
 
 func TestRecurseExpand(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(32)) @recurse {
@@ -105,7 +103,6 @@ func TestRecurseExpand(t *testing.T) {
 }
 
 func TestRecurseExpandRepeatedPredError(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(32)) @recurse {
@@ -120,7 +117,6 @@ func TestRecurseExpandRepeatedPredError(t *testing.T) {
 }
 
 func TestRecurseQueryOrder(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -136,7 +132,6 @@ func TestRecurseQueryOrder(t *testing.T) {
 }
 
 func TestRecurseQueryAllowLoop(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -150,7 +145,6 @@ func TestRecurseQueryAllowLoop(t *testing.T) {
 }
 
 func TestRecurseQueryAllowLoop2(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 4,loop: true) {
@@ -164,7 +158,6 @@ func TestRecurseQueryAllowLoop2(t *testing.T) {
 }
 
 func TestRecurseQueryLimitDepth1(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 2) {
@@ -178,7 +171,6 @@ func TestRecurseQueryLimitDepth1(t *testing.T) {
 }
 
 func TestRecurseQueryLimitDepth2(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 2) {
@@ -194,7 +186,6 @@ func TestRecurseQueryLimitDepth2(t *testing.T) {
 }
 
 func TestRecurseVariable(t *testing.T) {
-
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -212,7 +203,6 @@ func TestRecurseVariable(t *testing.T) {
 }
 
 func TestRecurseVariableUid(t *testing.T) {
-
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -231,7 +221,6 @@ func TestRecurseVariableUid(t *testing.T) {
 }
 
 func TestRecurseVariableVar(t *testing.T) {
-
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -251,7 +240,6 @@ func TestRecurseVariableVar(t *testing.T) {
 }
 
 func TestRecurseVariable2(t *testing.T) {
-
 	query := `
 			{
 
@@ -274,7 +262,6 @@ func TestRecurseVariable2(t *testing.T) {
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:0x01, to:101) {
@@ -291,7 +278,6 @@ func TestShortestPath_ExpandError(t *testing.T) {
 }
 
 func TestShortestPath_NoPath(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:0x01, to:101) {
@@ -308,7 +294,6 @@ func TestShortestPath_NoPath(t *testing.T) {
 }
 
 func TestKShortestPath_NoPath(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:0x01, to:101, numpaths: 2) {
@@ -326,7 +311,6 @@ func TestKShortestPath_NoPath(t *testing.T) {
 }
 
 func TestKShortestPathWeighted(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1001, numpaths: 4) {
@@ -341,7 +325,6 @@ func TestKShortestPathWeighted(t *testing.T) {
 }
 
 func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1001, numpaths: 4, minweight:0, maxweight: 1000) {
@@ -357,7 +340,6 @@ func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
 }
 
 func TestKShortestPathWeightedMinWeight(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1001, numpaths: 4, minweight: 3) {
@@ -370,7 +352,6 @@ func TestKShortestPathWeightedMinWeight(t *testing.T) {
 }
 
 func TestKShortestPathWeightedMaxWeight(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1001, numpaths: 4, maxweight: 0.1) {
@@ -383,7 +364,6 @@ func TestKShortestPathWeightedMaxWeight(t *testing.T) {
 }
 
 func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1001, depth:1, numpaths: 4) {
@@ -398,7 +378,6 @@ func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
 }
 
 func TestKShortestPathWeighted1(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1003, numpaths: 3) {
@@ -415,7 +394,6 @@ func TestKShortestPathWeighted1(t *testing.T) {
 }
 
 func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
-
 	query := `
 		{
 			shortest(from: 1, to:1003, numpaths: 3, minweight: 1.3, maxweight: 1.5) {
@@ -429,7 +407,6 @@ func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
 }
 
 func TestTwoShortestPath(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from: 1, to:1002, numpaths: 2) {
@@ -450,7 +427,6 @@ func TestTwoShortestPath(t *testing.T) {
 }
 
 func TestTwoShortestPathMaxWeight(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from: 1, to:1002, numpaths: 2, maxweight:1) {
@@ -466,7 +442,6 @@ func TestTwoShortestPathMaxWeight(t *testing.T) {
 }
 
 func TestTwoShortestPathMinWeight(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from: 1, to:1002, numpaths: 2, minweight:10) {
@@ -499,7 +474,6 @@ func TestShortestPath(t *testing.T) {
 }
 
 func TestShortestPathRev(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:23, to:1) {
@@ -614,7 +588,6 @@ func TestShortestPathWithUidVariableNoMatchForFrom(t *testing.T) {
 }
 
 func TestFacetVarRetrieval(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(1)) {
@@ -632,7 +605,6 @@ func TestFacetVarRetrieval(t *testing.T) {
 }
 
 func TestFacetVarRetrieveOrder(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(1)) {
@@ -652,7 +624,6 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 }
 
 func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -669,7 +640,6 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 }
 
 func TestShortestPathWeights(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -687,7 +657,6 @@ func TestShortestPathWeights(t *testing.T) {
 }
 
 func TestShortestPath2(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:0x01, to:1000) {
@@ -706,7 +675,6 @@ func TestShortestPath2(t *testing.T) {
 }
 
 func TestShortestPath4(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
@@ -725,7 +693,6 @@ func TestShortestPath4(t *testing.T) {
 }
 
 func TestShortestPath_filter(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -744,7 +711,6 @@ func TestShortestPath_filter(t *testing.T) {
 }
 
 func TestShortestPath_filter2(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -761,7 +727,6 @@ func TestShortestPath_filter2(t *testing.T) {
 }
 
 func TestTwoShortestPathVariable(t *testing.T) {
-
 	query := `
 		{
 			a as var(func: uid(1))
@@ -787,7 +752,6 @@ func TestTwoShortestPathVariable(t *testing.T) {
 }
 
 func TestUseVarsFilterMultiId(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -812,7 +776,6 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 }
 
 func TestUseVarsMultiFilterId(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -835,7 +798,6 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 }
 
 func TestUseVarsCascade(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(0x01)) @cascade {
@@ -856,7 +818,6 @@ func TestUseVarsCascade(t *testing.T) {
 }
 
 func TestUseVars(t *testing.T) {
-
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -875,7 +836,6 @@ func TestUseVars(t *testing.T) {
 }
 
 func TestGetUIDCount(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -923,7 +883,6 @@ func TestDebug1(t *testing.T) {
 }
 
 func TestDebug2(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1255,7 +1214,6 @@ func TestMinSchema(t *testing.T) {
 }
 
 func TestAvg(t *testing.T) {
-
 	query := `
 	{
 		me(func: uid(0x01)) {
@@ -1276,7 +1234,6 @@ func TestAvg(t *testing.T) {
 }
 
 func TestSum(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1391,7 +1348,6 @@ func TestCheckPasswordParseError(t *testing.T) {
 }
 
 func TestCheckPasswordDifferentAttr1(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1405,7 +1361,6 @@ func TestCheckPasswordDifferentAttr1(t *testing.T) {
 }
 
 func TestCheckPasswordDifferentAttr2(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1419,7 +1374,6 @@ func TestCheckPasswordDifferentAttr2(t *testing.T) {
 }
 
 func TestCheckPasswordInvalidAttr(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -1435,7 +1389,6 @@ func TestCheckPasswordInvalidAttr(t *testing.T) {
 
 // test for old version of checkpwd with hardcoded attribute name
 func TestCheckPasswordQuery1(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -1450,7 +1403,6 @@ func TestCheckPasswordQuery1(t *testing.T) {
 
 // test for improved version of checkpwd with custom attribute name
 func TestCheckPasswordQuery2(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1465,7 +1417,6 @@ func TestCheckPasswordQuery2(t *testing.T) {
 
 // test for improved version of checkpwd with alias for unknown attribute
 func TestCheckPasswordQuery3(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1480,7 +1431,6 @@ func TestCheckPasswordQuery3(t *testing.T) {
 
 // test for improved version of checkpwd with alias for known attribute
 func TestCheckPasswordQuery4(t *testing.T) {
-
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1636,7 +1586,6 @@ func TestFieldAlias(t *testing.T) {
 }
 
 func TestToFastJSONFilter(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1656,7 +1605,6 @@ func TestToFastJSONFilter(t *testing.T) {
 }
 
 func TestToFastJSONFilterMissBrac(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1673,7 +1621,6 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 }
 
 func TestToFastJSONFilterallofterms(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1731,7 +1678,6 @@ func TestValidFullTextIndex(t *testing.T) {
 
 // dob (date of birth) is not a string
 func TestFilterRegexError(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1748,7 +1694,6 @@ func TestFilterRegexError(t *testing.T) {
 }
 
 func TestFilterRegex1(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1766,7 +1711,6 @@ func TestFilterRegex1(t *testing.T) {
 }
 
 func TestFilterRegex2(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1784,7 +1728,6 @@ func TestFilterRegex2(t *testing.T) {
 }
 
 func TestFilterRegex3(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1802,7 +1745,6 @@ func TestFilterRegex3(t *testing.T) {
 }
 
 func TestFilterRegex4(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1820,7 +1762,6 @@ func TestFilterRegex4(t *testing.T) {
 }
 
 func TestFilterRegex5(t *testing.T) {
-
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1854,7 +1795,6 @@ func TestFilterRegex6(t *testing.T) {
 }
 
 func TestFilterRegex7(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1871,7 +1811,6 @@ func TestFilterRegex7(t *testing.T) {
 }
 
 func TestFilterRegex8(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1888,7 +1827,6 @@ func TestFilterRegex8(t *testing.T) {
 }
 
 func TestFilterRegex9(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1905,7 +1843,6 @@ func TestFilterRegex9(t *testing.T) {
 }
 
 func TestFilterRegex10(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1922,7 +1859,6 @@ func TestFilterRegex10(t *testing.T) {
 }
 
 func TestFilterRegex11(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1941,7 +1877,6 @@ func TestFilterRegex11(t *testing.T) {
 // case insensitive mode may be turned on with modifier:
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex12(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1960,7 +1895,6 @@ func TestFilterRegex12(t *testing.T) {
 // case insensitive mode may be turned on and off with modifier:
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex13(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1978,7 +1912,6 @@ func TestFilterRegex13(t *testing.T) {
 
 // invalid regexp modifier
 func TestFilterRegex14(t *testing.T) {
-
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1995,7 +1928,6 @@ func TestFilterRegex14(t *testing.T) {
 
 // multi-lang - simple
 func TestFilterRegex15(t *testing.T) {
-
 	query := `
 		{
 			me(func:regexp(name@ru, /Барсук/)) {
@@ -2011,7 +1943,6 @@ func TestFilterRegex15(t *testing.T) {
 
 // multi-lang - test for bug (#945) - multi-byte runes
 func TestFilterRegex16(t *testing.T) {
-
 	query := `
 		{
 			me(func:regexp(name@ru, /^артём/i)) {
@@ -2134,4 +2065,62 @@ func TestQueryMultipleTypes(t *testing.T) {
 		"fields":[{"name":"name", "type":"string"}]},
 	{"name":"Person", "fields":[{"name":"name", "type": "string"},
 		{"name":"pet", "type":"Animal"}]}]}}`, js)
+}
+
+func TestRegexInFilterNoDataOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: has(nonExistent)) @filter(regexp(make, /.*han/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestRegexInFilterIndexedPredOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: regexp(name, /.*nonExistent/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestMultiRegexInFilter(t *testing.T) {
+	query := `
+		{
+			q(func: has(full_name)) @filter(regexp(full_name, /.*michonne/i) OR regexp(name, /.*michonne/i)) {
+				expand(_all_)
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Michonne"}]}}`, res)
+}
+
+func TestMultiRegexInFilter2(t *testing.T) {
+	query := `
+		{
+			q(func: has(firstName)) @filter(regexp(firstName, /.*han/i) OR regexp(lastName, /.*han/i)) {
+				firstName
+				lastName
+			}
+		}
+	`
+
+	// run 20 times ensure that there is no data race
+	// https://github.com/dgraph-io/dgraph/issues/4030
+	for i := 0; i < 20; i++ {
+		res := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)
+	}
 }
