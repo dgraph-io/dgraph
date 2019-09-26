@@ -1283,7 +1283,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
 	}
-	if snapshotIdx <= 0 {
+	if snapshotIdx == 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
 		snapshotIdx = lastEntry.Index
