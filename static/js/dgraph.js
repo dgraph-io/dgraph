@@ -46,20 +46,6 @@ function eraseCookie(name) {
   createCookie(name, "", -1);
 }
 
-// isElementInViewport checks if element is visible in the DOM
-function isElementInViewport(el) {
-  var rect = el.getBoundingClientRect();
-  var topbarOffset = 64;
-
-  return (
-    rect.top >= topbarOffset &&
-    rect.left >= 0 &&
-    rect.bottom <=
-      (window.innerHeight || document.documentElement.clientHeight) &&
-    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-  );
-}
-
 /**
  * getCurrentVersion gets the current doc version from the URL path and returns it
  *

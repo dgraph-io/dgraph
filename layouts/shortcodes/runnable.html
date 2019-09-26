@@ -1,8 +1,6 @@
 {{ $code := trim .Inner "\n" }}
 {{ $checksum := md5 $code }}
 
-{{ $customExampleGoGRPC := replace (.Get "customExampleGoGRPC") "\\n" "\n" }}
-
 <div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false"{{ with .Get "vars" }} data-vars="{{ . }}"{{end}}>
   <div class="container-fluid">
     <div class="row">
@@ -57,12 +55,7 @@
                 {{ partial "example-curl" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
             </div>
             <div class="runnable-tab-content" data-tab="go-grpc">
-              {{ if eq $customExampleGoGRPC "" }}
-                {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
-              {{ else }}
-                <pre><code class="no-copy" tabindex="-1">{{ $customExampleGoGRPC }}
-                </pre></code>
-              {{ end }}
+              {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
             </div>
 	    <div class="runnable-tab-content" data-tab="java">
               {{ partial "example-java" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
