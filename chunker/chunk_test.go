@@ -37,17 +37,50 @@ func TestJSONLoadStart(t *testing.T) {
 		json string
 		desc string
 	}{
-		{"", "file is empty"},
-		{"  \t   ", "file is white space"},
+		{"[,]", "Illegal rune found \",\", expecting {"},
+		{"[a]", "Illegal rune found \"a\", expecting {"},
+		{"{}]", "JSON map is followed by an extraneous ]"},
 		{"These are words.", "file is not JSON"},
-		{`{"company":"dgraph"}`, "file is not JSON array 1"},
-		{`    { "company" : "dgraph" }    `, "file is not JSON array 2"},
 		{"\x1f\x8b\x08\x08\x3e\xc7\x0a\x5c\x00\x03\x65\x6d\x70\x74\x79\x00", "file is binary"},
 	}
 
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
-		require.Error(t, chunker.Begin(bufioReader(test.json)), test.desc)
+		chunker := NewChunker(JsonFormat, 1000)
+		_, err := chunker.Chunk(bufioReader(test.json))
+		require.True(t, err != nil && err != io.EOF, test.desc)
+	}
+}
+
+func TestChunkJSONMapAndArray(t *testing.T) {
+	tests := []struct {
+		json   string
+		chunks []string
+	}{
+		{`[]`, []string{"[]"}},
+		{`[{}]`, []string{"[{}]"}},
+		{`[{"user": "alice"}]`, []string{`[{"user":"alice"}]`}},
+		{`[{"user": "alice", "age": 26}]`, []string{`[{"user":"alice","age":26}]`}},
+		{`[{"user": "alice", "age": 26}, {"name": "bob"}]`, []string{`[{"user":"alice","age":26},{"name":"bob"}]`}},
+	}
+
+	for _, test := range tests {
+		chunker := NewChunker(JsonFormat, 1000)
+		r := bufioReader(test.json)
+		var chunks []string
+		for {
+			chunkBuf, err := chunker.Chunk(r)
+			if err != nil {
+				require.Equal(t, io.EOF, err, "Received error for %s", test)
+			}
+
+			chunks = append(chunks, chunkBuf.String())
+
+			if err == io.EOF {
+				break
+			}
+		}
+
+		require.Equal(t, test.chunks, chunks, "Got different chunks")
 	}
 }
 
@@ -57,21 +90,21 @@ func TestJSONLoadReadNext(t *testing.T) {
 		json string
 		desc string
 	}{
-		{"[]", "array is empty"},
 		{"[,]", "no start of JSON map 1"},
 		{"[ this is not really a json array ]", "no start of JSON map 2"},
 		{"[{]", "malformed map"},
 		{"[{}", "malformed array"},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
-		json, err := chunker.Chunk(reader)
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
-		require.Nil(t, json, test.desc)
-		require.Error(t, err, test.desc)
+		chunkBuf, err := chunker.Chunk(reader)
+		if err == nil {
+			err = chunker.Parse(chunkBuf)
+			require.True(t, err != nil && err != io.EOF, test.desc)
+		} else {
+			require.True(t, err != io.EOF, test.desc)
+		}
 	}
 }
 
@@ -82,41 +115,39 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		expt string
 		desc string
 	}{
-		{"[{}]", "{}", "empty map"},
-		{`[{"closingDelimeter":"}"}]`, `{"closingDelimeter":"}"}`, "quoted closing brace"},
-		{`[{"company":"dgraph"}]`, `{"company":"dgraph"}`, "simple, compact map"},
+		{"[{}]", "[{}]", "empty map"},
+		{`[{"closingDelimeter":"}"}]`, `[{"closingDelimeter":"}"}]`, "quoted closing brace"},
+		{`[{"company":"dgraph"}]`, `[{"company":"dgraph"}]`, "simple, compact map"},
 		{
 			"[\n  {\n    \"company\" : \"dgraph\"\n  }\n]\n",
-			"{\n    \"company\" : \"dgraph\"\n  }",
+			"[{\"company\":\"dgraph\"}]",
 			"simple, pretty map",
 		},
 		{
 			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
-			`{"professor":"Alastor \"Mad-Eye\" Moody"}`,
+			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
 			"escaped balanced quotes",
 		},
 		{
 
 			`[{"something{": "}something"}]`,
-			`{"something{": "}something"}`,
+			`[{"something{":"}something"}]`,
 			"escape quoted brackets",
 		},
 		{
 			`[{"height":"6'0\""}]`,
-			`{"height":"6'0\""}`,
+			`[{"height":"6'0\""}]`,
 			"escaped unbalanced quote",
 		},
 		{
 			`[{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}]`,
-			`{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}`,
+			`[{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}]`,
 			"nested braces",
 		},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
 		json, err := chunker.Chunk(reader)
 		if err == io.EOF {
 			// pass
@@ -176,14 +207,13 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}`,
 	}
 
-	chunker := NewChunker(JsonFormat)
+	chunker := NewChunker(JsonFormat, 1000)
 	reader := bufioReader(testDoc)
 
 	var json *bytes.Buffer
 	var idx int
 
-	err := chunker.Begin(reader)
-	require.NoError(t, err, "begin reading JSON document")
+	var err error
 	for idx = 0; err == nil; idx++ {
 		desc := fmt.Sprintf("reading chunk #%d", idx+1)
 		json, err = chunker.Chunk(reader)
@@ -193,6 +223,5 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 			require.Equal(t, testChunks[idx], json.String(), desc)
 		}
 	}
-	err = chunker.End(reader)
-	require.NoError(t, err, "end reading JSON document")
+	require.Equal(t, io.EOF, err, "end reading JSON document")
 }

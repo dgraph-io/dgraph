@@ -35,8 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,12 +133,12 @@ func runJSONQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	return err
 }
 
 func runJSONMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/json", true, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/json", true, true, 0)
 	return err
 }
 
@@ -265,7 +265,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `{"data":{"schema":[`+
+	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+
@@ -1218,7 +1218,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
-	z.CompareJSON(t, `{"data":{"schema":[`+
+	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		x.AclPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
@@ -1294,14 +1294,15 @@ func TestDeleteAllSP2(t *testing.T) {
 }
 
 func TestDeleteScalarValue(t *testing.T) {
-	var s = `name: string .`
+	var s = `name: string @index(exact) .`
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 	require.NoError(t, alterSchemaWithRetry(s))
 
 	var m = `
 	{
 	  set {
-	    <0x12345> <name> "xxx" .
+		<0x12345> <name> "xxx" .
+		<0x12346> <name> "xxx" .
 	  }
 	}
 	`
@@ -1342,6 +1343,17 @@ func TestDeleteScalarValue(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
 
+	indexQuery := `
+	{
+		me(func: eq(name, "xxx")) {
+			name
+		}
+	}
+	`
+	output, err = runGraphqlQuery(indexQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}, {"name":"xxx"}]}}`, output)
+
 	var d2 = `
 	{
       delete {
@@ -1356,6 +1368,11 @@ func TestDeleteScalarValue(t *testing.T) {
 	output, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
+
+	// Verify index was also updated this time and one of the triples got deleted.
+	output, err = runGraphqlQuery(indexQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name": "xxx"}]}}`, output)
 }
 
 func TestDeleteValueLang(t *testing.T) {
@@ -1438,7 +1455,7 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
-	z.CompareJSON(t,
+	testutil.CompareJSON(t,
 		`{"data":{"schema":[`+
 			x.AclPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
@@ -1494,7 +1511,7 @@ func TestJsonUnicode(t *testing.T) {
 }
 
 func TestGrpcCompressionSupport(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr,
+	conn, err := grpc.Dial(testutil.SockAddr,
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
@@ -1677,7 +1694,7 @@ var grootRefreshJwt string
 
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(z.SockAddrZero, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1685,7 +1702,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = z.GrootHttpLogin(addr + "/login")
+	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/login")
 
 	r := m.Run()
 	os.Exit(r)

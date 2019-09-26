@@ -75,6 +75,8 @@ func (n *node) uniqueKey() string {
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 
+// proposeAndWait makes a proposal to the quorum for Group Zero and waits for it to be accepted by
+// the group before returning. It is safe to call concurrently.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
 	switch {
 	case n.Raft() == nil:
@@ -356,6 +358,21 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, err
 		}
 	}
+	if p.License != nil {
+		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
+		// reject the proposal.
+		numNodes := len(state.GetZeros())
+		for _, group := range state.GetGroups() {
+			numNodes += len(group.GetMembers())
+		}
+		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
+			return p.Key, errInvalidProposal
+		}
+		state.License = p.License
+		// Check expiry and set enabled accordingly.
+		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
+		state.License.Enabled = time.Now().UTC().Before(expiry)
+	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
@@ -491,13 +508,18 @@ func (n *node) initAndStartNode() error {
 				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
-					return
+					break
 				}
 				if err == errInvalidProposal {
+					glog.Errorf("invalid proposal error while proposing cluster id")
 					return
 				}
 				glog.Errorf("While proposing CID: %v. Retrying...", err)
 				time.Sleep(3 * time.Second)
+			}
+
+			if err := n.proposeTrialLicense(); err != nil {
+				glog.Errorf("while proposing trial license to cluster: %v", err)
 			}
 		}()
 	}
@@ -516,7 +538,6 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 		select {
 		case <-ticker.C:
 			n.server.updateZeroLeader()
-
 		case <-closer.HasBeenClosed():
 			return
 		}
@@ -598,13 +619,13 @@ func (n *node) trySnapshot(skip uint64) {
 
 func (n *node) Run() {
 	var leader bool
-	ticker := time.NewTicker(20 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(4)
+	closer := y.NewCloser(5)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
@@ -612,6 +633,7 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
+	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
@@ -703,7 +725,7 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			span.End()
-			if timer.Total() > 100*time.Millisecond {
+			if timer.Total() > 200*time.Millisecond {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",

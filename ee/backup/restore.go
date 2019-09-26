@@ -102,9 +102,9 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 			// Filter keys using the preds set. Do not do this filtering for type keys
 			// as they are meant to be in every group and their Attr value does not
 			// match a predicate name.
-			parsedKey := x.Parse(restoreKey)
-			if parsedKey == nil {
-				return errors.Errorf("could not parse key %s", hex.Dump(restoreKey))
+			parsedKey, err := x.Parse(restoreKey)
+			if err != nil {
+				return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
 			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue

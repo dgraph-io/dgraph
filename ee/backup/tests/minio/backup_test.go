@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -33,8 +34,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 )
 
 var (
@@ -54,10 +55,10 @@ var (
 )
 
 func TestBackupMinio(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	mc, err = z.NewMinioClient()
+	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
@@ -79,7 +80,7 @@ func TestBackupMinio(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	// Move tablet to group 1 to avoid messes later.
-	_, err = http.Get("http://" + z.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
+	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -87,7 +88,7 @@ func TestBackupMinio(t *testing.T) {
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := z.GetState()
+		state, err := testutil.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
 			moveOk = true
@@ -129,7 +130,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
-	restored = runRestore(t, backupDir, "", incr1.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr1.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -153,7 +154,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second incremental backup.
 	_ = runBackup(t, 9, 3)
-	restored = runRestore(t, backupDir, "", incr2.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr2.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -177,7 +178,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second full backup.
 	dirs := runBackupInternal(t, true, 12, 4)
-	restored = runRestore(t, backupDir, "", incr3.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr3.Txn.CommitTs)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -196,7 +197,7 @@ func TestBackupMinio(t *testing.T) {
 	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, backupDir, "", incr3.Context.CommitTs)
+	runFailingRestore(t, backupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup()
@@ -219,9 +220,9 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.NoError(t, z.GetError(resp.Body))
-	// TODO(martinmr): remove this sleep.
-	time.Sleep(time.Second)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(buf), "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -254,7 +255,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
-	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)
+	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 

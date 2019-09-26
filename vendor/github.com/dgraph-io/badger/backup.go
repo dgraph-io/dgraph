@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
+	"github.com/golang/protobuf/proto"
 )
 
 // Backup is a wrapper function over Stream.Backup to generate full and incremental backups of the
@@ -116,10 +117,10 @@ func (stream *Stream) Backup(w io.Writer, since uint64) (uint64, error) {
 }
 
 func writeTo(list *pb.KVList, w io.Writer) error {
-	if err := binary.Write(w, binary.LittleEndian, uint64(list.Size())); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, uint64(proto.Size(list))); err != nil {
 		return err
 	}
-	buf, err := list.Marshal()
+	buf, err := proto.Marshal(list)
 	if err != nil {
 		return err
 	}
@@ -129,9 +130,10 @@ func writeTo(list *pb.KVList, w io.Writer) error {
 
 // KVLoader is used to write KVList objects in to badger. It can be used to restore a backup.
 type KVLoader struct {
-	db       *DB
-	throttle *y.Throttle
-	entries  []*Entry
+	db          *DB
+	throttle    *y.Throttle
+	entries     []*Entry
+	entriesSize int64
 }
 
 // NewKVLoader returns a new instance of KVLoader.
@@ -139,6 +141,7 @@ func (db *DB) NewKVLoader(maxPendingWrites int) *KVLoader {
 	return &KVLoader{
 		db:       db,
 		throttle: y.NewThrottle(maxPendingWrites),
+		entries:  make([]*Entry, 0, db.opt.maxBatchCount),
 	}
 }
 
@@ -151,17 +154,23 @@ func (l *KVLoader) Set(kv *pb.KV) error {
 	if len(kv.Meta) > 0 {
 		meta = kv.Meta[0]
 	}
-
-	l.entries = append(l.entries, &Entry{
+	e := &Entry{
 		Key:       y.KeyWithTs(kv.Key, kv.Version),
 		Value:     kv.Value,
 		UserMeta:  userMeta,
 		ExpiresAt: kv.ExpiresAt,
 		meta:      meta,
-	})
-	if len(l.entries) >= 1000 {
-		return l.send()
 	}
+	estimatedSize := int64(e.estimateSize(l.db.opt.ValueThreshold))
+	// Flush entries if inserting the next entry would overflow the transactional limits.
+	if int64(len(l.entries))+1 >= l.db.opt.maxBatchCount ||
+		l.entriesSize+estimatedSize >= l.db.opt.maxBatchSize {
+		if err := l.send(); err != nil {
+			return err
+		}
+	}
+	l.entries = append(l.entries, e)
+	l.entriesSize += estimatedSize
 	return nil
 }
 
@@ -175,7 +184,8 @@ func (l *KVLoader) send() error {
 		return err
 	}
 
-	l.entries = make([]*Entry, 0, 1000)
+	l.entries = make([]*Entry, 0, l.db.opt.maxBatchCount)
+	l.entriesSize = 0
 	return nil
 }
 
@@ -219,7 +229,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 		}
 
 		list := &pb.KVList{}
-		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
+		if err := proto.Unmarshal(unmarshalBuf[:sz], list); err != nil {
 			return err
 		}
 

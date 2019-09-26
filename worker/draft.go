@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -129,7 +130,10 @@ var errHasPendingTxns = errors.New("Pending transactions found. Please retry ope
 // operation is not an option.
 func detectPendingTxns(attr string) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
-		pk := x.Parse(key)
+		pk, err := x.Parse(key)
+		if err != nil {
+			return false
+		}
 		return pk.Attr == attr
 	})
 	if len(tctxs) == 0 {
@@ -264,7 +268,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
-	sort.Slice(m.Edges, func(i, j int) bool {
+	// It is possible that the user gives us multiple versions of the same edge, one with no facets
+	// and another with facets. In that case, use stable sort to maintain the ordering given to us
+	// by the user.
+	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
+	// different goroutines.
+	sort.SliceStable(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
 		if ei.GetAttr() != ej.GetAttr() {
@@ -399,6 +408,7 @@ func (n *node) processRollups() {
 			return
 		case readTs = <-n.rollupCh:
 		case <-tick.C:
+			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
 			if readTs <= last {
 				break // Break out of the select case.
 			}
@@ -687,6 +697,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
 						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+							"snapshotAfter:%d snap:%v", first, chk, chk-first,
+							x.WorkerConfig.SnapshotAfter, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -950,7 +963,7 @@ func (n *node) Run() {
 					glog.Errorf("Error recording stats: %+v", err)
 				}
 			}
-			if timer.Total() > 100*time.Millisecond {
+			if timer.Total() > 200*time.Millisecond {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s"+
 						" Num entries: %d. MustSync: %v",
@@ -978,8 +991,9 @@ func (n *node) rollupLists(readTs uint64) error {
 			// Only leader needs to calculate the tablet sizes.
 			return
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			return
 		}
 		val, ok := m.Load(pk.Attr)

@@ -67,7 +67,6 @@ type options struct {
 	NumAlphas     int
 	NumReplicas   int
 	LruSizeMB     int
-	Enterprise    bool
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
@@ -81,6 +80,8 @@ type options struct {
 	LocalBin      bool
 	Tag           string
 	WhiteList     bool
+	Ratel         bool
+	RatelPort     int
 }
 
 var opts options
@@ -213,17 +214,14 @@ func getAlpha(idx int) service {
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
-	if opts.Enterprise {
-		svc.Command += " --enterprise_features"
-		if opts.AclSecret != "" {
-			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
-			svc.Volumes = append(svc.Volumes, volume{
-				Type:     "bind",
-				Source:   opts.AclSecret,
-				Target:   "/secret/hmac",
-				ReadOnly: true,
-			})
-		}
+	if opts.AclSecret != "" {
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.AclSecret,
+			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
 	}
 
 	return svc
@@ -244,6 +242,22 @@ func getJaeger() service {
 		Command: "--badger.ephemeral=false" +
 			" --badger.directory-key /working/jaeger" +
 			" --badger.directory-value /working/jaeger",
+	}
+	return svc
+}
+
+func getRatel() service {
+	portFlag := ""
+	if opts.RatelPort != 8000 {
+		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
+	}
+	svc := service{
+		Image:         "dgraph/dgraph:" + opts.Tag,
+		ContainerName: "ratel",
+		Ports: []string{
+			toExposedPort(opts.RatelPort),
+		},
+		Command: "dgraph-ratel" + portFlag,
 	}
 	return svc
 }
@@ -339,8 +353,6 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
-	cmd.PersistentFlags().BoolVarP(&opts.Enterprise, "enterprise", "e", false,
-		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
@@ -363,6 +375,10 @@ func main() {
 		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
+	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
+		"include ratel service")
+	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
+		"Port to expose Ratel service")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -386,15 +402,14 @@ func main() {
 	if opts.LruSizeMB < 1024 {
 		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
 	}
-	if opts.AclSecret != "" && !opts.Enterprise {
-		warning("adding --enterprise because it is required by ACL feature")
-		opts.Enterprise = true
-	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
 	}
 	if opts.UserOwnership && opts.DataDir == "" {
 		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
+	}
+	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
+		fatal(errors.Errorf("--ratel_port option requires --ratel"))
 	}
 
 	services := make(map[string]service)
@@ -421,6 +436,10 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Ratel {
+		services["ratel"] = getRatel()
 	}
 
 	if opts.Metrics {

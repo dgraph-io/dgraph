@@ -19,10 +19,10 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/dgryski/go-farm"
 
@@ -44,8 +44,9 @@ var (
 	// In such a case, retry.
 	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = errors.New("No value found")
-	errStopIteration = errors.New("Stop iteration")
+	ErrNoValue = errors.New("No value found")
+	// ErrStopIteration is returned when an iteration is terminated early.
+	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
 )
@@ -279,7 +280,8 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	return &pb.Posting{
+	p := postingPool.Get().(*pb.Posting)
+	*p = pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     t.ValueType,
@@ -289,6 +291,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		Op:          op,
 		Facets:      t.Facets,
 	}
+	return p
 }
 
 func hasDeleteAll(mpost *pb.Posting) bool {
@@ -393,6 +396,26 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
+var postingPool = &sync.Pool{
+	New: func() interface{} {
+		return &pb.Posting{}
+	},
+}
+
+func (l *List) release() {
+	fromList := func(list *pb.PostingList) {
+		for _, p := range list.GetPostings() {
+			postingPool.Put(p)
+		}
+	}
+	fromList(l.plist)
+	for _, plist := range l.mutationMap {
+		fromList(plist)
+	}
+	l.plist = nil
+	l.mutationMap = nil
+}
+
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
@@ -400,8 +423,11 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return y.ErrConflict
 	}
 
-	getKey := func(key []byte, uid uint64) string {
-		return fmt.Sprintf("%s|%d", key, uid)
+	getKey := func(key []byte, uid uint64) uint64 {
+		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
+		// here to save memory allocations.
+		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
+		return farm.Fingerprint64(key) ^ uid
 	}
 
 	mpost := NewPosting(t)
@@ -415,8 +441,11 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	var conflictKey string
-	pk := x.Parse(l.key)
+	var conflictKey uint64
+	pk, err := x.Parse(l.key)
+	if err != nil {
+		return err
+	}
 	switch {
 	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
@@ -449,7 +478,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	case pk.IsData(): // NOT a list. This case must happen after the above case.
 		conflictKey = getKey(l.key, 0)
 
-	case pk.IsIndex() || pk.IsCount():
+	case pk.IsIndex() || pk.IsCountOrCountRev():
 		// Index keys are by default of type [uid].
 		conflictKey = getKey(l.key, t.ValueId)
 
@@ -635,7 +664,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
-	if err == errStopIteration {
+	if err == ErrStopIteration {
 		return nil
 	}
 	return err
@@ -648,7 +677,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	var count int
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
-		return errStopIteration
+		return ErrStopIteration
 	})
 	if err != nil {
 		return false, err
@@ -729,7 +758,9 @@ func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
-	kv.Key = x.GetSplitKey(baseKey, startUid)
+	key, err := x.GetSplitKey(baseKey, startUid)
+	x.Check(err)
+	kv.Key = key
 	val, meta := marshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
@@ -1040,7 +1071,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				pos = p
 				found = true
-				return errStopIteration
+				return ErrStopIteration
 			}
 			return nil
 		})
@@ -1087,7 +1118,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 			pos = p
 			found = true
 		}
-		return errStopIteration
+		return ErrStopIteration
 	})
 
 	return found, pos, err
@@ -1106,7 +1137,10 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	key := x.GetSplitKey(l.key, startUid)
+	key, err := x.GetSplitKey(l.key, startUid)
+	if err != nil {
+		return nil, err
+	}
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {

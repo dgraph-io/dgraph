@@ -115,9 +115,10 @@ type Decoder struct {
 }
 
 func (d *Decoder) unpackBlock() []uint64 {
-	if cap(d.uids) == 0 {
-		d.uids = make([]uint64, 0, d.Pack.BlockSize)
-	} else {
+	if len(d.uids) > 0 {
+		// We were previously preallocating the d.uids slice to block size. This caused slowdown
+		// because many blocks are small and only contain a few ints, causing wastage while still
+		// paying cost of allocation.
 		d.uids = d.uids[:0]
 	}
 
@@ -137,7 +138,7 @@ func (d *Decoder) unpackBlock() []uint64 {
 		if len(encData) < 17 {
 			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
 			// decoding and expects it to be of length >= 4 at all the stages. Padding
-			// with zero to make sure lenght is always >= 4.
+			// with zero to make sure length is always >= 4.
 			encData = append(encData, 0, 0, 0)
 		}
 

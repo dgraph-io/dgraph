@@ -19,12 +19,14 @@ package bulk
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"container/heap"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -44,7 +46,7 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	dirs := shardDirs(r.opt.TmpDir)
+	dirs := shardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
@@ -131,8 +133,10 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
+	gzReader, err := gzip.NewReader(fd)
+	x.Check(err)
 
-	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(fd, 16<<10)}
+	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
 }
 
 func (r *reducer) encodeAndWrite(
@@ -144,7 +148,8 @@ func (r *reducer) encodeAndWrite(
 
 	preds := make(map[string]uint32)
 	setStreamId := func(kv *bpb.KV) {
-		pk := x.Parse(kv.Key)
+		pk, err := x.Parse(kv.Key)
+		x.Check(err)
 		x.AssertTrue(len(pk.Attr) > 0)
 
 		// We don't need to consider the data prefix, count prefix, etc. because each predicate
@@ -288,8 +293,8 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		// list, we cannot enforce the constraint without losing data. Inform the user and
 		// force the schema to be a list so that all the data can be found when Dgraph is started.
 		// The user should fix their data once Dgraph is up.
-		parsedKey := x.Parse(currentKey)
-		x.AssertTrue(parsedKey != nil)
+		parsedKey, err := x.Parse(currentKey)
+		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
 			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {

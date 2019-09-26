@@ -316,9 +316,20 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 		switch item.Typ {
 		case itemRightCurl:
 			it.Next()
-			if it.Item().Typ != itemNewLine {
-				return nil, it.Item().Errorf("Expected new line after type declaration. Got %v",
-					it.Item().Val)
+			if it.Item().Typ != itemNewLine && it.Item().Typ != lex.ItemEOF {
+				return nil, it.Item().Errorf(
+					"Expected new line or EOF after type declaration. Got %v", it.Item())
+			}
+			it.Prev()
+
+			fieldSet := make(map[string]struct{})
+			for _, field := range fields {
+				if _, ok := fieldSet[field.GetPredicate()]; ok {
+					return nil, it.Item().Errorf("Duplicate fields with name: %s",
+						field.GetPredicate())
+				}
+
+				fieldSet[field.GetPredicate()] = struct{}{}
 			}
 
 			typeUpdate.Fields = fields
@@ -427,7 +438,8 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 func Parse(s string) (*ParsedSchema, error) {
 	var result ParsedSchema
 
-	l := lex.NewLexer(s)
+	var l lex.Lexer
+	l.Reset(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
 		return nil, err

@@ -43,7 +43,7 @@ type Telemetry struct {
 	Version     string
 }
 
-var keenUrl = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+var keenURL = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
 func newTelemetry(ms *pb.MembershipState) *Telemetry {
 	if len(ms.Cid) == 0 {
@@ -75,9 +75,9 @@ func (t *Telemetry) post() error {
 	if err != nil {
 		return err
 	}
-	url := keenUrl + "/dev"
+	url := keenURL + "/dev"
 	if len(t.Version) > 0 {
-		url = keenUrl + "/pings"
+		url = keenURL + "/pings"
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {

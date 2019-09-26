@@ -6,23 +6,29 @@ BadgerDB is an embeddable, persistent and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
-## Project Status [Oct 27, 2018]
+## Project Status [Jun 26, 2019]
 
 Badger is stable and is being used to serve data sets worth hundreds of
 terabytes. Badger supports concurrent ACID transactions with serializable
 snapshot isolation (SSI) guarantees. A Jepsen-style bank test runs nightly for
-8h, with `--race` flag and ensures maintainance of transactional guarantees.
+8h, with `--race` flag and ensures the maintenance of transactional guarantees.
 Badger has also been tested to work with filesystem level anomalies, to ensure
 persistence and consistency.
 
-Badger v1.0 was released in Nov 2017, with a Badger v2.0 release coming up in a
-few months. The [Changelog] is kept fairly up-to-date.
+Badger v1.0 was released in Nov 2017, and the latest version that is data-compatible
+with v1.0 is v1.6.0.
+
+Badger v2.0, a new release coming up very soon will use a new storage format which won't
+be compatible with all of the v1.x. The [Changelog] is kept fairly up-to-date.
+
+For more details on our version naming schema please read [Choosing a version](#choosing-a-version).
 
 [Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
 
 ## Table of Contents
  * [Getting Started](#getting-started)
     + [Installing](#installing)
+      - [Choosing a version](#choosing-a-version)
     + [Opening a database](#opening-a-database)
     + [Transactions](#transactions)
       - [Read-only transactions](#read-only-transactions)
@@ -61,6 +67,27 @@ $ go get github.com/dgraph-io/badger/...
 This will retrieve the library and install the `badger` command line
 utility into your `$GOBIN` path.
 
+#### Choosing a version
+
+BadgerDB is a pretty special package from the point of view that the most important change we can
+make to it is not on its API but rather on how data is stored on disk.
+
+This is why we follow a version naming schema that differs from Semantic Versioning.
+
+- New major versions are released when the data format on disk changes in an incompatible way.
+- New minor versions are released whenever the API changes but data compatibility is maintained.
+ Note that the changes on the API could be backward-incompatible - unlike Semantic Versioning.
+- New patch versions are released when there's no changes to the data format nor the API.
+
+Following these rules:
+
+- v1.5.0 and v1.6.0 can be used on top of the same files without any concerns, as their major
+ version is the same, therefore the data format on disk is compatible.
+- v1.6.0 and v2.0.0 are data incompatible as their major version implies, so files created with
+ v1.6.0 will need to be converted into the new format before they can be used by v2.0.0.
+
+For a longer explanation on the reasons behind using a new versioning naming schema, you can read
+[VERSIONING.md](VERSIONING.md).
 
 ### Opening a database
 The top-level object in Badger is a `DB`. It represents multiple files on disk
@@ -82,10 +109,7 @@ import (
 func main() {
   // Open the Badger database located in the /tmp/badger directory.
   // It will be created if it doesn't exist.
-  opts := badger.DefaultOptions
-  opts.Dir = "/tmp/badger"
-  opts.ValueDir = "/tmp/badger"
-  db, err := badger.Open(opts)
+  db, err := badger.Open(badger.DefaultOptions("tmp/badger"))
   if err != nil {
 	  log.Fatal(err)
   }
@@ -134,7 +158,7 @@ of your application, you have the option to retry the operation if you receive
 this error.
 
 An `ErrTxnTooBig` will be reported in case the number of pending writes/deletes in
-the transaction exceed a certain limit. In that case, it is best to commit the
+the transaction exceeds a certain limit. In that case, it is best to commit the
 transaction and start a new transaction immediately. Here is an example (we are
 not checking for errors in some places for simplicity):
 
@@ -277,7 +301,7 @@ is thread-safe and can be used concurrently via various goroutines.
 Badger would lease a range of integers to hand out from memory, with the
 bandwidth provided to `DB.GetSequence`. The frequency at which disk writes are
 done is determined by this lease bandwidth and the frequency of `Next`
-invocations. Setting a bandwith too low would do more disk writes, setting it
+invocations. Setting a bandwidth too low would do more disk writes, setting it
 too high would result in wasted integers if Badger is closed or crashes.
 To avoid wasted integers, call `Release` before closing Badger.
 
@@ -426,7 +450,7 @@ forward or backward through the keys one at a time.
 
 By default, Badger prefetches the values of the next 100 items. You can adjust
 that with the `IteratorOptions.PrefetchSize` field. However, setting it to
-a value higher than GOMAXPROCS (which we recommend to be 128 or higher)
+a value higher than `GOMAXPROCS` (which we recommend to be 128 or higher)
 shouldn’t give any additional benefits. You can also turn off the fetching of
 values altogether. See section below on key-only iteration.
 
@@ -739,7 +763,7 @@ Below is a list of known projects that use Badger:
 If you are using Badger in a project please send a pull request to add it to the list.
 
 ## Frequently Asked Questions
-- **My writes are getting stuck. Why?**
+### My writes are getting stuck. Why?
 
 **Update: With the new `Value(func(v []byte))` API, this deadlock can no longer
 happen.**
@@ -764,7 +788,7 @@ There are multiple workarounds during iteration:
    iteration. This might be useful if you just want to delete a lot of keys.
 1. Do the writes in a separate transaction after the reads.
 
-- **My writes are really slow. Why?**
+### My writes are really slow. Why?
 
 Are you creating a new transaction for every single key update, and waiting for
 it to `Commit` fully before creating a new one? This will lead to very low
@@ -789,7 +813,7 @@ handle(wb.Flush()) // Wait for all txns to finish.
 Note that `WriteBatch` API does not allow any reads. For read-modify-write
 workloads, you should be using the `Transaction` API.
 
-- **I don't see any disk write. Why?**
+### I don't see any disk writes. Why?
 
 If you're using Badger with `SyncWrites=false`, then your writes might not be written to value log
 and won't get synced to disk immediately. Writes to LSM tree are done inmemory first, before they
@@ -797,17 +821,17 @@ get compacted to disk. The compaction would only happen once `MaxTableSize` has 
 you're doing a few writes and then checking, you might not see anything on disk. Once you `Close`
 the database, you'll see these writes on disk.
 
-- **Reverse iteration doesn't give me the right results.**
+### Reverse iteration doesn't give me the right results.
 
 Just like forward iteration goes to the first key which is equal or greater than the SEEK key, reverse iteration goes to the first key which is equal or lesser than the SEEK key. Therefore, SEEK key would not be part of the results. You can typically add a `0xff` byte as a suffix to the SEEK key to include it in the results. See the following issues: [#436](https://github.com/dgraph-io/badger/issues/436) and [#347](https://github.com/dgraph-io/badger/issues/347).
 
-- **Which instances should I use for Badger?**
+### Which instances should I use for Badger?
 
 We recommend using instances which provide local SSD storage, without any limit
 on the maximum IOPS. In AWS, these are storage optimized instances like i3. They
 provide local SSDs which clock 100K IOPS over 4KB blocks easily.
 
-- **I'm getting a closed channel error. Why?**
+### I'm getting a closed channel error. Why?
 
 ```
 panic: close of closed channel
@@ -816,17 +840,50 @@ panic: send on closed channel
 
 If you're seeing panics like above, this would be because you're operating on a closed DB. This can happen, if you call `Close()` before sending a write, or multiple times. You should ensure that you only call `Close()` once, and all your read/write operations finish before closing.
 
-- **Are there any Go specific settings that I should use?**
+### Are there any Go specific settings that I should use?
 
-We *highly* recommend setting a high number for GOMAXPROCS, which allows Go to
+We *highly* recommend setting a high number for `GOMAXPROCS`, which allows Go to
 observe the full IOPS throughput provided by modern SSDs. In Dgraph, we have set
 it to 128. For more details, [see this
 thread](https://groups.google.com/d/topic/golang-nuts/jPb_h3TvlKE/discussion).
 
-- **Are there any linux specific settings that I should use?**
+### Are there any Linux specific settings that I should use?
 
-We recommend setting max file descriptors to a high number depending upon the expected size of you data.
+We recommend setting `max file descriptors` to a high number depending upon the expected size of
+your data. On Linux and Mac, you can check the file descriptor limit with `ulimit -n -H` for the
+hard limit and `ulimit -n -S` for the soft limit. A soft limit of `65535` is a good lower bound.
+You can adjust the limit as needed.
 
+### I see "manifest has unsupported version: X (we support Y)" error.
+
+This error means you have a badger directory which was created by an older version of badger and
+you're trying to open in a newer version of badger. The underlying data format can change across
+badger versions and users will have to migrate their data directory.
+Badger data can be migrated from version X of badger to version Y of badger by following the steps
+listed below.
+Assume you were on badger v1.5.5 and you wish to migrate to v2.0.0 version
+1. Install badger version v1.5.5.
+    - `cd $GOPATH/src/github.com/dgraph-io/badger`
+    - `git checkout v1.5.5`
+    - `cd badger && go install`
+
+      This should install the old badger binary in your $GOBIN.
+2. Create Backup
+    - `badger backup --dir path/to/badger/directory -f badger.backup`
+3. Install badger version v2.0.0
+    - `cd $GOPATH/src/github.com/dgraph-io/badger`
+    - `git checkout v2.0.0`
+    - `cd badger && go install`
+
+      This should install new badger binary in your $GOBIN
+4. Install badger version v2.0.0
+    - `badger restore --dir path/to/new/badger/directory -f badger.backup`
+
+      This will create a new directory on `path/to/new/badger/directory` and add badger data in
+      newer format to it.
+
+NOTE - The above steps shouldn't cause any data loss but please ensure the new data is valid before
+deleting the old badger directory.
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/badger/issues) for filing bugs or feature requests.

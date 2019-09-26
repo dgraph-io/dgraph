@@ -93,8 +93,6 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.Bool("enterprise_features", false, "Enable Dgraph enterprise features. "+
-		"If you set this to true, you agree to the Dgraph Community License.")
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
@@ -275,6 +273,10 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			glog.V(2).Infof("Error while writing health check response: %v", err)
+		}
 		return
 	}
 
@@ -388,6 +390,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
+	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
@@ -435,11 +438,6 @@ func run() {
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
-		if !Alpha.Conf.GetBool("enterprise_features") {
-			glog.Fatalf("You must enable Dgraph enterprise features with the " +
-				"--enterprise_features option in order to use ACL.")
-		}
-
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
@@ -501,7 +499,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+	glog.Infof("edgraph.Config: %s", edgraph.Config)
 
 	edgraph.InitServerState()
 	defer func() {

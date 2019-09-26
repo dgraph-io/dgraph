@@ -44,18 +44,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-var (
-	emptyUIDList    pb.List
-	emptyFacetsList pb.FacetsList
-	emptyResult     pb.Result
-	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
-)
-
 func invokeNetworkRequest(ctx context.Context, addr string,
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.GetPools().Get(addr)
 	if err != nil {
-		return &emptyResult, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
+		return &pb.Result{}, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 
 	conn := pl.Get()
@@ -138,9 +131,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	attr := q.Attr
 	gid, err := groups().BelongsToReadOnly(attr)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -159,7 +152,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 
 	reply := result.(*pb.Result)
@@ -390,12 +383,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 
 			if err == posting.ErrNoValue || len(vals) == 0 {
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
-					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+					out.ValueMatrix = append(out.ValueMatrix, &pb.ValueList{Values: []*pb.TaskValue{}})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -453,7 +446,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.FacetMatrix = append(out.FacetMatrix,
 					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 			} else {
-				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 			}
 
 			switch {
@@ -464,10 +457,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				}
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == passwordFn:
 				lastPos := len(out.ValueMatrix) - 1
 				if len(out.ValueMatrix[lastPos].Values) == 0 {
@@ -485,7 +478,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
 				}
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
 				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
@@ -595,7 +588,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
@@ -639,11 +632,10 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			default:
+			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
-					span.Annotate(nil, "default")
+					span.Annotate(nil, "default with facets")
 				}
-
 				uidList := &pb.List{
 					Uids: make([]uint64, 0, pl.ApproxLen()),
 				}
@@ -675,6 +667,15 @@ func (qs *queryState) handleUidPostings(
 				if q.FacetParam != nil {
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
+			default:
+				if i == 0 {
+					span.Annotate(nil, "default no facets")
+				}
+				uidList, err := pl.Uids(opts)
+				if err != nil {
+					return err
+				}
+				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
 		}
 		return nil
@@ -702,25 +703,32 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
+	var total int
+	for _, list := range out.UidMatrix {
+		total += len(list.Uids)
+	}
+	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 
 const (
 	// UseTxnCache indicates the transaction cache should be used.
 	UseTxnCache = iota
-	// NoTxnCache indicates no transaction caches should be used.
-	NoTxnCache
+	// NoCache indicates no caches should be used.
+	NoCache
 )
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
+	defer span.End()
+
 	stop := x.SpanTimer(span, "processTask"+q.Attr)
 	defer stop()
 
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
@@ -728,7 +736,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
@@ -739,24 +747,23 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
 	if gid, err := groups().BelongsToReadOnly(q.Attr); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	} else if gid != groups().groupId() {
-		return &emptyResult, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 
 	var qs queryState
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	if qs.cache == nil {
-		qs.cache = posting.NewLocalCache(q.ReadTs)
-	}
+	// For now, remove the query level cache. It is causing contention for queries with high
+	// fan-out.
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	return out, nil
 }
@@ -874,7 +881,7 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		if err := qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.filterGeoFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -904,7 +911,8 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 
 	return langForFunc(langs) != "." &&
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
-			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn)
+			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
+			srcFn.fnType == customIndexFn)
 }
 
 func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
@@ -1243,49 +1251,70 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	return nil
 }
 
-func (qs *queryState) filterGeoFunction(arg funcArgs) error {
+func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "filterGeoFunction")
+	defer stop()
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	isList := schema.State().IsList(attr)
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-		if !isList {
-			val, err := pl.Value(arg.q.ReadTs)
-			if err == posting.ErrNoValue {
-				continue
-			} else if err != nil {
-				return err
-			}
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-			}
-
-			continue
-		}
-
-		// list type
-		vals, err := pl.AllValues(arg.q.ReadTs)
-		if err == posting.ErrNoValue {
-			continue
-		} else if err != nil {
-			return err
-		}
-		for _, val := range vals {
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-				break
-			}
-		}
+	numGo, width := x.DivideAndRule(len(uids.Uids))
+	if span != nil && numGo > 1 {
+		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
+			len(uids.Uids), numGo, width)
 	}
 
+	filtered := make([]*pb.List, numGo)
+	filter := func(idx, start, end int) error {
+		filtered[idx] = &pb.List{}
+		out := filtered[idx]
+		for _, uid := range uids.Uids[start:end] {
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				return err
+			}
+			var tv pb.TaskValue
+			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+				tv.ValType = p.ValType
+				tv.Val = p.Value
+				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
+					out.Uids = append(out.Uids, uid)
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(uids.Uids) {
+			end = len(uids.Uids)
+		}
+		go func(idx, start, end int) {
+			errCh <- filter(idx, start, end)
+		}(i, start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
+	final := &pb.List{}
+	for _, out := range filtered {
+		final.Uids = append(final.Uids, out.Uids...)
+	}
+	if span != nil && numGo > 1 {
+		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+	}
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
 	}
 	return nil
 }
@@ -1360,9 +1389,20 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	case hasFn:
 		// Dont do anything, as filtering based on lang is already
 		// done above.
-	case fullTextSearchFn, standardFn:
+	case fullTextSearchFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
+		filter.tokName = "fulltext"
+		filtered = matchStrings(filtered, values, filter)
+	case standardFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "term"
+		filtered = matchStrings(filtered, values, filter)
+	case customIndexFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = arg.q.SrcFunc.Args[0]
 		filtered = matchStrings(filtered, values, filter)
 	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
@@ -1445,7 +1485,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
 	case aggregatorFn:
-		// confirm agrregator could apply on the attributes
+		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
 			return nil, errors.Errorf("Attribute %q is not scalar-type", attr)
@@ -1633,16 +1673,16 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	defer span.End()
 
 	if ctx.Err() != nil {
-		return &emptyResult, ctx.Err()
+		return &pb.Result{}, ctx.Err()
 	}
 
 	gid, err := groups().BelongsToReadOnly(q.Attr)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	} else if gid != groups().groupId() {
-		return &emptyResult, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 
 	var numUids int
@@ -1652,7 +1692,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return &emptyResult, errors.Errorf(
+		return &pb.Result{}, errors.Errorf(
 			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 
@@ -1668,7 +1708,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	select {
 	case <-ctx.Done():
-		return &emptyResult, ctx.Err()
+		return &pb.Result{}, ctx.Err()
 	case reply := <-c:
 		return reply.result, reply.err
 	}
@@ -1987,7 +2027,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return err
+		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.
@@ -1998,6 +2041,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)
+			// We'll stop fetching if we fetch the required count.
+			if len(result.Uids) >= int(q.First) {
+				break
+			}
 			continue
 		}
 
@@ -2010,6 +2057,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 			return err
 		} else if !empty {
 			result.Uids = append(result.Uids, pk.Uid)
+			// We'll stop fetching if we fetch the required count.
+			if len(result.Uids) >= int(q.First) {
+				break
+			}
 		}
 
 		if len(result.Uids)%100000 == 0 {

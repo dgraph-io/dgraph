@@ -36,6 +36,7 @@ type stringFilter struct {
 	match     matchFunc
 	ineqValue types.Val
 	eqVals    []types.Val
+	tokName   string
 }
 
 func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.List {
@@ -92,15 +93,7 @@ func ineqMatch(value types.Val, filter stringFilter) bool {
 }
 
 func tokenizeValue(value types.Val, filter stringFilter) []string {
-	var tokName string
-	switch filter.funcType {
-	case standardFn:
-		tokName = "term"
-	case fullTextSearchFn:
-		tokName = "fulltext"
-	}
-
-	tokenizer, found := tok.GetTokenizer(tokName)
+	tokenizer, found := tok.GetTokenizer(filter.tokName)
 	// tokenizer was used in previous stages of query processing, it has to be available
 	x.AssertTrue(found)
 

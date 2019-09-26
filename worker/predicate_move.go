@@ -54,7 +54,10 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	pk := x.Parse(kvs[0].Key)
+	pk, err := x.Parse(kvs[0].Key)
+	if err != nil {
+		return err
+	}
 	return schema.Load(pk.Attr)
 }
 
@@ -63,16 +66,22 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	n := groups().Node
 	proposal := &pb.Proposal{}
 	size := 0
-	var pk *x.ParsedKey
+	var pk x.ParsedKey
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
-			if pk == nil {
+			if len(pk.Attr) == 0 {
 				// This only happens once.
-				pk = x.Parse(kv.Key)
+				var err error
+				pk, err = x.Parse(kv.Key)
+				if err != nil {
+					return err
+				}
+
 				if !pk.IsSchema() {
 					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
 				}
+
 				// Delete on all nodes.
 				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)

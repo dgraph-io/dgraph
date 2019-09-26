@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,7 @@ func TestParseNQuads(t *testing.T) {
 		# this line is a comment
 		_:a <join> _:b .
 	`
-	nqs, err := parseNQuads([]byte(nquads))
+	nqs, err := chunker.ParseRDFs([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
@@ -56,9 +57,15 @@ func TestParseNQuads(t *testing.T) {
 	}, nqs)
 }
 
+func TestValNquads(t *testing.T) {
+	nquads := `uid(m) <name> val(f) .`
+	_, err := chunker.ParseRDFs([]byte(nquads))
+	require.NoError(t, err)
+}
+
 func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
-	nqs, err := parseNQuads([]byte(nquads))
+	nqs, err := chunker.ParseRDFs([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
@@ -68,7 +75,7 @@ func TestParseNQuadsWindowsNewline(t *testing.T) {
 
 func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
-	nqs, err := parseNQuads([]byte(nquads))
+	nqs, err := chunker.ParseRDFs([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", x.Star, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}),
@@ -100,7 +107,7 @@ func TestValidateKeys(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			nq, err := parseNQuads([]byte(tc.nquad))
+			nq, err := chunker.ParseRDFs([]byte(tc.nquad))
 			require.NoError(t, err)
 
 			err = validateKeys(nq[0])

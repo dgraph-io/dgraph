@@ -23,7 +23,8 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,6 +50,30 @@ func TestParseCountValError(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
+}
+
+func TestParseQueryNamedQuery(t *testing.T) {
+	query := `
+query works() {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryNameQueryWithoutBrackers(t *testing.T) {
+	query := `
+query works {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
 }
 
 func TestParseVarError(t *testing.T) {
@@ -972,6 +997,103 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Multiple variables not allowed in a function")
+}
+
+func TestLenFunctionWithMultipleVariableError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(gt(len(a, b), 10)) {
+		 name
+		}
+	}
+`
+	// Multiple vars not allowed.
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple variables not allowed in len function")
+}
+
+func TestLenFunctionInsideUidError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(uid(len(a), 10)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "len function only allowed inside inequality")
+}
+
+func TestLenFunctionWithNoVariable(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(len(), 10) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got empty attr for function")
+}
+
+func TestLenAsSecondArgumentError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(10, len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved. We should validate function names from a
+	// whitelist.
+	require.Error(t, err)
+}
+
+func TestCountWithLenFunctionError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(count(name), len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved.
+	require.Error(t, err)
 }
 
 func TestParseQueryWithVarInIneq(t *testing.T) {
@@ -3021,6 +3143,22 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 	require.Equal(t, "SchooL", res.Query[0].Children[0].GroupbyAttrs[1].Alias)
 }
 
+func TestParseGroupbyWithAliasForError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(first: 10, SchooL: school) {
+				count(uid)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(), "Can't use keyword first as alias in groupby")
+}
+
 func TestParseGroupbyError(t *testing.T) {
 	// predicates not allowed inside groupby.
 	query := `
@@ -4042,7 +4180,7 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
 }
 
 func TestAggRoot1(t *testing.T) {
@@ -4341,10 +4479,11 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 }
 
 func parseNquads(b []byte) ([]*api.NQuad, error) {
+	var lexer lex.Lexer
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
-		if err == rdf.ErrEmpty {
+		nq, err := chunker.ParseRDF(string(line), &lexer)
+		if err == chunker.ErrEmpty {
 			continue
 		}
 		if err != nil {
@@ -4367,8 +4506,9 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	mu, err := ParseMutation(m)
+	req, err := ParseMutation(m)
 	require.NoError(t, err)
+	mu := req.Mutations[0]
 	require.NotNil(t, mu)
 	sets, err := parseNquads(mu.SetNquads)
 	require.NoError(t, err)
@@ -4663,58 +4803,4 @@ func TestTypeFilterInPredicate(t *testing.T) {
 
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
-}
-
-func TestTypeInPredicate(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				name
-			}
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
-
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
-}
-
-func TestMultipleTypeDirectives(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				pet @type(Animal) {
-					name
-				}
-			}
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
-
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "pet", gq.Query[0].Children[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
 }

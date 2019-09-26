@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +48,7 @@ func TestQueries(t *testing.T) {
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg := z.DgraphClient(z.SockAddr)
+	dg := testutil.DgraphClient(testutil.SockAddr)
 
 	files, err := ioutil.ReadDir(queryDir)
 	x.CheckfNoTrace(err)
@@ -59,35 +59,36 @@ func TestQueries(t *testing.T) {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
+		t.Run(file.Name(), func(t *testing.T) {
+			filename := path.Join(queryDir, file.Name())
+			reader, cleanup := chunker.FileReader(filename)
+			bytes, err := ioutil.ReadAll(reader)
+			x.CheckfNoTrace(err)
+			contents := string(bytes[:])
+			cleanup()
 
-		filename := path.Join(queryDir, file.Name())
-		reader, cleanup := chunker.FileReader(filename)
-		bytes, err := ioutil.ReadAll(reader)
-		x.CheckfNoTrace(err)
-		contents := string(bytes[:])
-		cleanup()
+			// The test query and expected result are separated by a delimiter.
+			bodies := strings.SplitN(contents, "\n---\n", 2)
 
-		// The test query and expected result are separated by a delimiter.
-		bodies := strings.SplitN(contents, "\n---\n", 2)
+			// If a query takes too long to run, it probably means dgraph is stuck and there's
+			// no point in waiting longer or trying more tests.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			resp, err := dg.NewTxn().Query(ctx, bodies[0])
+			cancel()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("aborting test due to query timeout")
+			}
+			require.NoError(t, err)
 
-		// If a query takes too long to run, it probably means dgraph is stuck and there's
-		// no point in waiting longer or trying more tests.
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		resp, err := dg.NewTxn().Query(ctx, bodies[0])
-		cancel()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Fatal("aborting test due to query timeout")
-		}
-		require.NoError(t, err)
+			t.Logf("running %s", file.Name())
+			if *savedir != "" {
+				savepath = path.Join(*savedir, file.Name())
+			}
 
-		t.Logf("running %s", file.Name())
-		if *savedir != "" {
-			savepath = path.Join(*savedir, file.Name())
-		}
-
-		if !z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
-			diffs++
-		}
+			if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
+				diffs++
+			}
+		})
 	}
 
 	if *savedir != "" && diffs > 0 {

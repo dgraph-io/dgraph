@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,19 +31,25 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 }
 
 func TestXidmap(t *testing.T) {
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
 	withDB(t, func(db *badger.DB) {
 		xidmap := New(conn, db)
 
-		uida := xidmap.AssignUid("a")
-		require.Equal(t, uida, xidmap.AssignUid("a"))
+		uida, isNew := xidmap.AssignUid("a")
+		require.True(t, isNew)
+		uidaNew, isNew := xidmap.AssignUid("a")
+		require.Equal(t, uida, uidaNew)
+		require.False(t, isNew)
 
-		uidb := xidmap.AssignUid("b")
+		uidb, isNew := xidmap.AssignUid("b")
 		require.True(t, uida != uidb)
-		require.Equal(t, uidb, xidmap.AssignUid("b"))
+		require.True(t, isNew)
+		uidbnew, isNew := xidmap.AssignUid("b")
+		require.Equal(t, uidb, uidbnew)
+		require.False(t, isNew)
 
 		to := xidmap.AllocateUid() + uint64(1e6+3)
 		xidmap.BumpTo(to)
@@ -54,8 +60,12 @@ func TestXidmap(t *testing.T) {
 		xidmap = nil
 
 		xidmap2 := New(conn, db)
-		require.Equal(t, uida, xidmap2.AssignUid("a"))
-		require.Equal(t, uidb, xidmap2.AssignUid("b"))
+		uida2, isNew := xidmap2.AssignUid("a")
+		require.Equal(t, uida, uida2)
+		require.False(t, isNew)
+		uidb2, isNew := xidmap2.AssignUid("b")
+		require.Equal(t, uidb, uidb2)
+		require.False(t, isNew)
 	})
 }
 
@@ -87,7 +97,7 @@ func TestXidmapMemory(t *testing.T) {
 		}
 	}()
 
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
@@ -113,7 +123,7 @@ func TestXidmapMemory(t *testing.T) {
 }
 
 func BenchmarkXidmap(b *testing.B) {
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	x.Check(err)
 	x.AssertTrue(conn != nil)
 

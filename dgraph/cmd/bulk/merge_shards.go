@@ -26,12 +26,17 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	mapShardDir    = "map_output"
+	reduceShardDir = "shards"
+)
+
 func mergeMapShardsIntoReduceShards(opt options) {
-	mapShards := shardDirs(opt.TmpDir)
+	mapShards := shardDirs(filepath.Join(opt.TmpDir, mapShardDir))
 
 	var reduceShards []string
 	for i := 0; i < opt.ReduceShards; i++ {
-		shardDir := filepath.Join(opt.TmpDir, "shards", fmt.Sprintf("shard_%d", i))
+		shardDir := filepath.Join(opt.TmpDir, reduceShardDir, fmt.Sprintf("shard_%d", i))
 		x.Check(os.MkdirAll(shardDir, 0755))
 		reduceShards = append(reduceShards, shardDir)
 	}
@@ -47,14 +52,14 @@ func mergeMapShardsIntoReduceShards(opt options) {
 	}
 }
 
-func shardDirs(tmpDir string) []string {
-	dir, err := os.Open(filepath.Join(tmpDir, "shards"))
+func shardDirs(d string) []string {
+	dir, err := os.Open(d)
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
 	dir.Close()
 	for i, shard := range shards {
-		shards[i] = filepath.Join(tmpDir, "shards", shard)
+		shards[i] = filepath.Join(d, shard)
 	}
 
 	// Allow largest shards to be shuffled first.
@@ -68,7 +73,7 @@ func filenamesInTree(dir string) []string {
 		if err != nil {
 			return err
 		}
-		if strings.HasSuffix(path, ".map") {
+		if strings.HasSuffix(path, ".gz") {
 			fnames = append(fnames, path)
 		}
 		return nil

@@ -32,6 +32,9 @@ import (
 // since ACL is only supported in the enterprise version.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+	if err := x.HealthCheck(); err != nil {
+		return nil, err
+	}
 
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
@@ -57,7 +60,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	// always allow access
 	return nil
 }

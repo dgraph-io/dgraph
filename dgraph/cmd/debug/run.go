@@ -119,7 +119,8 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 			continue
 		}
 		lastKey = append(lastKey[:0], item.Key()...)
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
 			continue
 		}
@@ -255,7 +256,8 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 			continue
 		}
 
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		if !pk.IsData() {
 			continue
 		}
@@ -347,7 +349,8 @@ func jepsen(db *badger.DB) {
 
 func history(lookup []byte, itr *badger.Iterator) {
 	var buf bytes.Buffer
-	pk := x.Parse(lookup)
+	pk, err := x.Parse(lookup)
+	x.Check(err)
 	fmt.Fprintf(&buf, "==> key: %x. PK: %+v\n", lookup, pk)
 	for ; itr.Valid(); itr.Next() {
 		item := itr.Item()
@@ -493,7 +496,8 @@ func printKeys(db *badger.DB) {
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		var buf bytes.Buffer
 
 		// Don't use a switch case here. Because multiple of these can be true. In particular,

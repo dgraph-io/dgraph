@@ -42,10 +42,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, http.MethodPost) {
 		return
 	}
-	if !Alpha.Conf.GetBool("enterprise_features") {
-		x.SetStatus(w,
-			"You must enable Dgraph enterprise features first. "+
-				"Restart Dgraph Alpha with --enterprise_features",
+	if !worker.EnterpriseEnabled() {
+		x.SetStatus(w, "You must enable enterprise features first. "+
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
 			"Backup failed.")
 		return
 	}
@@ -85,7 +84,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	req := pb.BackupRequest{
 		ReadTs:       ts.ReadOnly,
 		Destination:  destination,
-		UnixTs:       time.Now().UTC().Format("20060102.150405"),
+		UnixTs:       time.Now().UTC().Format("20060102.150405.000"),
 		AccessKey:    accessKey,
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,

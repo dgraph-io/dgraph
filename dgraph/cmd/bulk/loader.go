@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -50,7 +49,7 @@ type options struct {
 	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
-	MapBufSize       int64
+	MapBufSize       uint64
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumReducers      int
@@ -190,8 +189,7 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType)
-			x.Check(chunker.Begin(r))
+			chunker := chunker.NewChunker(loadType, 1000)
 			for {
 				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
@@ -203,7 +201,6 @@ func (ld *loader) mapStage() {
 					x.Check(err)
 				}
 			}
-			x.Check(chunker.End(r))
 		}(file)
 	}
 	x.Check(thr.Finish())
@@ -217,7 +214,6 @@ func (ld *loader) mapStage() {
 	}
 	x.Check(ld.xids.Flush())
 	ld.xids = nil
-	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {

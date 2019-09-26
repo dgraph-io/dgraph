@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestPlugins(t *testing.T) {
@@ -90,7 +90,7 @@ func TestPlugins(t *testing.T) {
 			txn := cluster.client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
-			z.CompareJSON(t, test.wantResult, string(reply.GetJson()))
+			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
 
@@ -130,6 +130,24 @@ func TestPlugins(t *testing.T) {
 				{ "q": [
 					{ "word": "beta" },
 					{ "word": "beat" }
+				]}`,
+			},
+		},
+	)
+
+	suite(
+		"word: string @index(anagram) @lang .",
+		`[
+			{ "word@en": "airmen", "word@fr": "no match" },
+			{ "word@en": "no match", "word@fr": "marine" }
+		]`,
+		[]testCase{
+			{`
+				{ q(func: allof(word@en, anagram, "remain")) {
+					word: word@en
+				}}`, `
+				{ "q": [
+					{ "word": "airmen" }
 				]}`,
 			},
 		},

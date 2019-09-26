@@ -43,19 +43,20 @@ function Usage {
 
 options:
 
-    -h --help       output this help message
-    -u --unit       run unit tests only
-    -c --cluster    run unit tests and custom cluster test
-    -f --full       run all tests
-       --oss        run tests with 'oss' tagging
-    -v --verbose    run tests in verbose mode
-    -n --no-cache   re-run test even if previous result is in cache
+    -h --help         output this help message
+    -u --unit         run unit tests only
+    -c --cluster      run unit tests and custom cluster test
+    -C --cluster-only run custom cluster tests only
+    -f --full         run all tests (unit, custom cluster, and systest tests)
+    -F --systest-only run systest tests only
+       --oss          run tests with 'oss' tagging
+    -v --verbose      run tests in verbose mode
+    -n --no-cache     re-run test even if previous result is in cache
+       --short        run tests with -short=true
 
 notes:
 
-    Specifying pkg_regex implies -c.
-
-    Tests are always run with -short=true."
+    Specifying pkg_regex implies -c."
 }
 
 function Info {
@@ -107,7 +108,7 @@ function Run {
     set -o pipefail
     echo -en "...\r"
     if IsCi; then
-        go test -v ${GO_TEST_OPTS[*]} $@ | go-test-teamcity
+        go test -json -v ${GO_TEST_OPTS[*]} $@
         return
     fi
     go test ${GO_TEST_OPTS[*]} $@ \
@@ -160,21 +161,22 @@ function RunCustomClusterTests {
 #
 
 ARGS=$(getopt -n$ME -o"hucCfFvn" \
-              -l"help,unit,cluster,cluster-only,full,full-only,oss,verbose,no-cache" -- "$@") \
+              -l"help,unit,cluster,cluster-only,full,systest-only,oss,verbose,no-cache,short" -- "$@") \
     || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -h|--help)         Usage; exit 0                 ;;
-        -u|--unit)         TEST_SET="unit"               ;;
-        -c|--cluster)      TEST_SET="unit:cluster"       ;;
-        -C|--cluster-only) TEST_SET="cluster"            ;;
-        -f|--full)         TEST_SET="unit:cluster:full"  ;;
-        -F|--full-only)    TEST_SET="full"               ;;
-        -v|--verbose)      GO_TEST_OPTS+=( "-v" )        ;;
-        -n|--no-cache)     GO_TEST_OPTS+=( "-count=1" )  ;;
-           --oss)          GO_TEST_OPTS+=( "-tags=oss" ) ;;
-        --)                shift; break                  ;;
+        -h|--help)         Usage; exit 0                   ;;
+        -u|--unit)         TEST_SET="unit"                 ;;
+        -c|--cluster)      TEST_SET="unit:cluster"         ;;
+        -C|--cluster-only) TEST_SET="cluster"              ;;
+        -f|--full)         TEST_SET="unit:cluster:systest" ;;
+        -F|--systest-only) TEST_SET="systest"              ;;
+        -v|--verbose)      GO_TEST_OPTS+=( "-v" )          ;;
+        -n|--no-cache)     GO_TEST_OPTS+=( "-count=1" )    ;;
+           --oss)          GO_TEST_OPTS+=( "-tags=oss" )   ;;
+           --short)        GO_TEST_OPTS+=( "-short=true" ) ;;
+        --)                shift; break                    ;;
     esac
     shift
 done
@@ -197,7 +199,6 @@ if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
-        GO_TEST_OPTS+=( "-short=true" )
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
@@ -237,7 +238,7 @@ if [[ :${TEST_SET}: == *:cluster:* ]]; then
     fi
 fi
 
-if [[ :${TEST_SET}: == *:full:* ]]; then
+if [[ :${TEST_SET}: == *:systest:* ]]; then
     Info "Running small load test"
     RunCmd ./contrib/scripts/load-test.sh || TestFailed
 

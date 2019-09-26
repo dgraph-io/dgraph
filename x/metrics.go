@@ -26,9 +26,10 @@ import (
 	"go.opencensus.io/trace"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
-	"contrib.go.opencensus.io/exporter/prometheus"
+	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/golang/glog"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -59,9 +60,6 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	// NumGoRoutines records the current number of goroutines being executed by Dgraph.
-	NumGoRoutines = stats.Int64("goroutines_total",
-		"Number of goroutines", stats.UnitDimensionless)
 	// MemoryInUse records the current amount of used memory by Dgraph.
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
@@ -164,13 +162,6 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        NumGoRoutines.Name(),
-			Measure:     NumGoRoutines,
-			Description: NumGoRoutines.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
 			Name:        MemoryInUse.Name(),
 			Measure:     MemoryInUse,
 			Description: MemoryInUse.Description(),
@@ -230,7 +221,8 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
-	pe, err := prometheus.NewExporter(prometheus.Options{
+	pe, err := oc_prom.NewExporter(oc_prom.Options{
+		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})

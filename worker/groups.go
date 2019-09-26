@@ -953,3 +953,11 @@ func (g *groupi) processOracleDeltaStream() {
 		}
 	}
 }
+
+// EnterpriseEnabled returns whether enterprise features can be used or not.
+func EnterpriseEnabled() bool {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return g.state.GetLicense().GetEnabled()
+}
