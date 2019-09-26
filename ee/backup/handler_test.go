@@ -30,7 +30,7 @@ func TestGetHandler(t *testing.T) {
 		{in: "something", out: nil},
 	}
 	for _, tc := range tests {
-		actual := getHandler(tc.in)
+		actual := getHandler(tc.in, nil)
 		require.Equal(t, tc.out, actual)
 	}
 }
