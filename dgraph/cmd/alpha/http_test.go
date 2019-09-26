@@ -211,6 +211,9 @@ func runWithRetries(method, contentType, url string, body string) (
 			Endpoint:   addr + "/login",
 			RefreshJwt: grootRefreshJwt,
 		})
+		if err != nil {
+			return nil, nil, err
+		}
 
 		// create a new request since the previous request would have been closed upon the err
 		retryReq, err := createRequest(method, contentType, url, body)
@@ -531,7 +534,7 @@ func TestHttpCompressionSupport(t *testing.T) {
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "1ms", false, false)
+	data, _, err = queryWithGz(q1, "application/graphql+-", "", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
@@ -632,7 +635,7 @@ func TestDebugSupport(t *testing.T) {
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "1ms", false, false)
+	data, _, err = queryWithGz(q1, "application/graphql+-", "true", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 

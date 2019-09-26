@@ -956,7 +956,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
-	uids := &pb.List{}
+	var uids *pb.List
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1171,7 +1171,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	uids := &pb.List{}
+	var uids *pb.List
 	switch {
 	case !typ.IsScalar():
 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
