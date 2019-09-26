@@ -76,6 +76,7 @@ func NewRuntime(fp string, t *trie.Trie) (*Runtime, error) {
 
 	log.Debug("[NewRuntime]", "index", index)
 	log.Debug("[NewRuntime]", "runtimeCtx", runtimeCtx)
+	//nolint:gosec
 	data := unsafe.Pointer(&index)
 	instance.SetContextData(data)
 

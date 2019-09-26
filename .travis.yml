@@ -32,12 +32,18 @@ cache:
 before_cache:
   - rm -f ./trie/failing_test_data
 
-before_script:
-  - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-  - chmod +x ./cc-test-reporter
-  - ./cc-test-reporter before-build
+matrix:
+  include:
+    - name: "Unit Tests"
+      before_script:
+        - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+        - chmod +x ./cc-test-reporter
+        - ./cc-test-reporter before-build
+      script: ./scripts/ci.sh
+      after_script:
+        - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
+    - name: "Golang-ci Linter"
+      before_script:
+        - go install github.com/golangci/golangci-lint/cmd/golangci-lint
+      script: golangci-lint run ./... -c .golangci.yml
 
-script: ./scripts/ci.sh
-
-after_script:
-  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT

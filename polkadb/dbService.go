@@ -1,8 +1,8 @@
 package polkadb
 
-import "path/filepath"
-
 import (
+	"path/filepath"
+
 	log "github.com/ChainSafe/log15"
 )
 
