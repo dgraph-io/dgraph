@@ -220,5 +220,5 @@ type Query {
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(id: ID!): DeletePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 }

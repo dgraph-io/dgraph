@@ -697,7 +697,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -806,7 +806,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -818,11 +818,8 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
-				Name: "id",
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   true,
-				},
+				Name: "filter",
+				Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: true},
 			},
 		},
 	}

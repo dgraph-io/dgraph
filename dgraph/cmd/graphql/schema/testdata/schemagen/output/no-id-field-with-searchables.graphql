@@ -88,6 +88,10 @@ type AddPostPayload {
 	post: Post
 }
 
+type DeletePostPayload {
+	msg: String
+}
+
 #######################
 # Generated Enums
 #######################
@@ -131,4 +135,5 @@ type Query {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 }

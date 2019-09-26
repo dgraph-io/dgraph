@@ -204,6 +204,6 @@ type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(id: ID!): DeleteAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: GenreInput!): AddGenrePayload
 }
