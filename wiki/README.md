@@ -32,31 +32,6 @@ Now you can make changes to the docs and see them being updated instantly thanks
 
 Depending on what branch you are on, some code examples will dynamically change. For instance, go-grpc code examples will have different import path depending on branch name.
 
-
-## Runnable
-
-### Custom example
-
-Pass custom Go-GRPC example to the runnable by passing a `customExampleGoGRPC` to the `runnable` shortcode.
-
-```
-{{< runnable
-  customExampleGoGRPC="this\nis\nan example"
->}}{
-  director(func:allofterms(name, "steven spielberg")) {
-    name@en
-    director.film (orderdesc: initial_release_date) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-```
-
-We cannot pass multiline string as an argument to a shortcode. Therefore, we
-have to make the whole custom example in a single line string by replacing newlines with `\n`.
-
 ### Deployment
 
 Run `./scripts/build.sh` in a tmux window. The script polls `dgraph-io/dgraph` every one minute
