@@ -33,7 +33,7 @@ import (
 
 // Validator is the sub-command for validating input files which can later be
 // used with bulk/live loader to insert data into dgraph.
-var Validator x.SubCommand
+var Validate x.SubCommand
 
 type options struct {
 	DataFiles     string
@@ -44,17 +44,17 @@ type options struct {
 }
 
 func init() {
-	Validator.Cmd = &cobra.Command{
-		Use:   "validator",
-		Short: "Validate input file",
+	Validate.Cmd = &cobra.Command{
+		Use:   "validate",
+		Short: "Validate input files",
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Validator.Conf).Stop()
+			defer x.StartProfile(Validate.Conf).Stop()
 			run()
 		},
 	}
-	Validator.EnvPrefix = "VALIDATOR"
+	Validate.EnvPrefix = "VALIDATOR"
 
-	flag := Validator.Cmd.Flags()
+	flag := Validate.Cmd.Flags()
 	flag.StringP("files", "f", "",
 		"Location of *.rdf(.gz) or *.json(.gz) files(s) to validate.")
 	flag.String("format", "",
@@ -63,9 +63,9 @@ func init() {
 
 func run() {
 	opt := options{
-		DataFiles:     Validator.Conf.GetString("files"),
-		NumGoroutines: Validator.Conf.GetInt("num_go_routines"),
-		DataFormat:    Validator.Conf.GetString("format"),
+		DataFiles:     Validate.Conf.GetString("files"),
+		NumGoroutines: Validate.Conf.GetInt("num_go_routines"),
+		DataFormat:    Validate.Conf.GetString("format"),
 	}
 
 	x.PrintVersion()
@@ -92,6 +92,7 @@ func run() {
 	}
 
 	validatorWg.Wait()
+	glog.Infoln("Input file validation complete.")
 }
 
 func validateDataFile(file string, loadType chunker.InputFormat, validatorWg *sync.WaitGroup) {

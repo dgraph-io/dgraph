@@ -73,7 +73,7 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &counter.Increment, &migrate.Migrate, &validator.Validator,
+	&debug.Debug, &counter.Increment, &migrate.Migrate, &validator.Validate,
 }
 
 func initCmds() {
