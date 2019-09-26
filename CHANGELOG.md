@@ -232,8 +232,7 @@ at the predicate-level.
 - Don't create ACL predicates when the ACL feature is not turned on. ([#2924][])
 - Add HTTP API for ACL commands, pinning ACL predicates to group 1. ([#2951][])
 - ACL: Using type to distinguish user and group. ([#3124][])
-- REVIEWTODO: Fix the aclCache race condition by initializing it on definition ([#3141][])
--  Reduce the value of ACL TTLs to reduce the test running time. ([#3164][])
+- Reduce the value of ACL TTLs to reduce the test running time. ([#3164][])
   - Adds `--acl_cache_ttl` flag.
 - Fix panic when deleting a user or group that does not exist. ([#3218][])
 - ACL over TLS. ([#3207][])
