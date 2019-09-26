@@ -1815,14 +1815,14 @@ the following definitions:
 
 ```
 type Animal {
-    name: string
-    species: uid
-    dob: datetime
+    name
+    species
+    dob
 }
 
 type Pet {
-    owner: uid
-    veterinarian: uid
+    owner
+    veterinarian
 }
 ```
 
@@ -1857,6 +1857,26 @@ Query Example: Harry Potter movies, with each actor and characters played.  With
   HP(func: allofterms(name@en, "Harry Potter")) @cascade {
     name@en
     starring{
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name@en, "Warwick")){
+            name@en
+         }
+    }
+  }
+}
+{{< /runnable >}}
+
+You can apply `@cascade` on inner query blocks as well.
+{{< runnable >}}
+{
+  HP(func: allofterms(name@en, "Harry Potter")) {
+    name@en
+    genre {
+      name@en
+    }
+    starring @cascade {
         performance.character {
           name@en
         }
@@ -2375,11 +2395,11 @@ Types are defined using a GraphQL-like syntax. For example:
 
 ```
 type Student {
-  name: string
-  dob: datetime
-  home_address: string
-  year: int
-  friends: [uid]
+  name
+  dob
+  home_address
+  year
+  friends
 }
 ```
 
@@ -2407,11 +2427,11 @@ different.
 
 ```
 type Student {
-  student_name: string
+  student_name
 }
 
 type Textbook {
-  textbook_name: string
+  textbook_name
 }
 
 student_name: string @index(exact) .
