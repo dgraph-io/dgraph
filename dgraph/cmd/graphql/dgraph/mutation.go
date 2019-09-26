@@ -31,6 +31,7 @@ const (
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
 type MutationRewriter interface {
 	Rewrite(m schema.Mutation) (interface{}, error)
+	RewriteDelete(m schema.Mutation) (string, string, error)
 }
 
 type mutationRewriter struct{}
@@ -73,11 +74,17 @@ func NewMutationRewriter() MutationRewriter {
 func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 	if m.MutationType() != schema.AddMutation &&
-		m.MutationType() != schema.UpdateMutation {
+		m.MutationType() != schema.UpdateMutation &&
+		m.MutationType() != schema.DeleteMutation {
 		return nil,
 			gqlerror.Errorf(
 				"internal error - call to build Dgraph mutation for %s mutation type",
 				m.MutationType())
+	}
+
+	if m.MutationType() == schema.DeleteMutation {
+
+		return nil, nil
 	}
 
 	// ATM mutations aren't very deep.  At worst, a mutation can be one object with
@@ -158,6 +165,20 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		gqlerror.Errorf(
 			"internal error - call to build Dgraph mutation with input of unrecognized type; " +
 				"this indicates a GraphQL validation error.")
+}
+
+func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (string, string, error) {
+
+	if m.MutationType() != schema.DeleteMutation {
+		return "", "", gqlerror.Errorf(
+			"internal error - call to build Dgraph mutation for %s mutation type",
+			m.MutationType())
+	}
+
+	q := rewriteAsQuery(m)
+	str := asString(q)
+	fmt.Println(str)
+	return "", "", nil
 }
 
 func getUpdUID(m schema.Mutation) (uint64, error) {

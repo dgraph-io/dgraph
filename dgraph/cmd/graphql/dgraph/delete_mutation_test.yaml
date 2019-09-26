@@ -1,0 +1,43 @@
+-
+  name: "Delete mutation with ids"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter)
+    }
+  gqlvariables: |
+    { "filter":
+      { "ids": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":["Author"],
+      "Author.name":"A.N. Author",
+      "Author.dob":"2000-01-01",
+      "Author.posts":[]
+    }
+  dgraphquery: |
+
+-
+  name: "Delete mutation with multiple filters"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter)
+    }
+  gqlvariables: |
+    { "filter":
+      {
+        "ids": ["0x1", "0x2"],
+        "name": { "eq": "A.N. Author" },
+        "dob": { "eq": "2000-01-01" }
+      }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgraphmuation: |
+    { "uid":"_:newnode",
+      "dgraph.type":["Author"],
+      "Author.name":"A.N. Author",
+      "Author.dob":"2000-01-01",
+      "Author.posts":[]
+    }
+  dgraphquery: |

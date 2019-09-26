@@ -410,10 +410,12 @@ func deleteCountry(
 	expectedErrors []*x.GqlError) {
 
 	deleteCountryParams := &GraphQLParams{
-		Query: `mutation deleteCountry($del: ID!) {
-			deleteCountry(id: $del) { msg }
+		Query: `mutation deleteCountry($filter: CountryFilter!) {
+			deleteCountry(filter: $filter) { msg }
 		}`,
-		Variables: map[string]interface{}{"del": countryID},
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": []string{countryID},
+		}},
 	}
 
 	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -506,9 +508,9 @@ func TestManyMutations(t *testing.T) {
 		Variables: map[string]interface{}{
 			"name1": "Testland1", "del": newCountry.ID, "name2": "Testland2"},
 	}
-	multiMutationExpected := `{ 
+	multiMutationExpected := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland1" } },
-		"deleteCountry" : { "msg": "Deleted" }, 
+		"deleteCountry" : { "msg": "Deleted" },
 		"add2": { "country": { "id": "_UID_", "name": "Testland2" } }
 	}`
 
@@ -578,7 +580,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"del": newAuthor.ID},
 	}
-	expectedData := `{ 
+	expectedData := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland" } },
 		"deleteCountry" : null
 	}`

@@ -45,6 +45,7 @@ import (
 type Client interface {
 	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
+	Do(ctx context.Context, req *dgoapi.Request) error
 	DeleteNode(ctx context.Context, uid uint64) error
 	AssertType(ctx context.Context, uid uint64, typ string) error
 }
@@ -172,4 +173,11 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 	}
 
 	return nil
+}
+
+// Do is used to make a request to Dgraph. It can be used for doing a query,
+// mutation or conditional upserts.
+func (dg *dgraph) Do(ctx context.Context, req *dgoapi.Request) error {
+	err := dg.Do(ctx, req)
+	return schema.GQLWrapf(err, "unable to make do request")
 }
