@@ -88,7 +88,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 		}
 
 		dgQuery := rewriteAsGet(gqlQuery, uid)
-		addTypeFilter(dgQuery, gqlQuery.Type())
+		addTypeFilter(dgQuery, gqlQuery.Type().Name())
 
 		return dgQuery, nil
 
@@ -151,9 +151,9 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	if ids := idFilter(field); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, field.Type())
+		addTypeFunc(dgQuery, field.Type().Name())
 	}
-	addFilter(dgQuery, field)
+	addFilter(dgQuery, field, field.Type().Name())
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
@@ -161,11 +161,11 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	return dgQuery
 }
 
-func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
+func addTypeFilter(q *gql.GraphQuery, typ string) {
 	thisFilter := &gql.FilterTree{
 		Func: &gql.Function{
 			Name: "type",
-			Args: []gql.Arg{{Value: typ.Name()}},
+			Args: []gql.Arg{{Value: typ}},
 		},
 	}
 
@@ -186,10 +186,10 @@ func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
 	}
 }
 
-func addTypeFunc(q *gql.GraphQuery, typ schema.Type) {
+func addTypeFunc(q *gql.GraphQuery, typ string) {
 	q.Func = &gql.Function{
 		Name: "type",
-		Args: []gql.Arg{{Value: typ.Name()}},
+		Args: []gql.Arg{{Value: typ}},
 	}
 
 }
@@ -214,7 +214,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			child.Attr = f.DgraphPredicate()
 		}
 
-		addFilter(child, f)
+		addFilter(child, f, f.Type().Name())
 		addOrder(child, f)
 		addPagination(child, f)
 
@@ -284,7 +284,7 @@ func idFilter(field schema.Field) []uint64 {
 	return convertIDs(idsSlice)
 }
 
-func addFilter(q *gql.GraphQuery, field schema.Field) {
+func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
 	if !ok {
 		return
@@ -301,9 +301,9 @@ func addFilter(q *gql.GraphQuery, field schema.Field) {
 		// If id was present as a filter,
 		delete(filter, "ids")
 	}
-	q.Filter = buildFilter(field.Type(), filter)
+	q.Filter = buildFilter(typ, filter)
 	if filterAtRoot {
-		addTypeFilter(q, field.Type())
+		addTypeFilter(q, typ)
 	}
 }
 
@@ -333,7 +333,7 @@ func addFilter(q *gql.GraphQuery, field schema.Field) {
 // ATM those will probably generate junk that might cause a Dgraph error.  And
 // bubble back to the user as a GraphQL error when the query fails. Really,
 // they should fail query validation and never get here.
-func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree {
+func buildFilter(typ string, filter map[string]interface{}) *gql.FilterTree {
 
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
@@ -392,7 +392,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
+							{Value: typ + "." + field},
 							{Value: maybeQuoteArg(fn, val)},
 						},
 					},
@@ -415,7 +415,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
+							{Value: typ + "." + field},
 							{Value: fmt.Sprintf("%v", dgFunc)},
 						},
 					},

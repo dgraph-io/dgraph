@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
@@ -60,8 +61,8 @@ type Author {
 	id: ID!
 	name: String!
 	dob: DateTime
-	postsRequired: [Post!]!	
-	postsElmntRequired: [Post!]	
+	postsRequired: [Post!]!
+	postsElmntRequired: [Post!]
 	postsNullable: [Post]
 	postsNullableListRequired: [Post]!
 }
@@ -125,6 +126,10 @@ func (dg *dgraphClient) DeleteNode(ctx context.Context, uid uint64) error {
 }
 
 func (dg *dgraphClient) AssertType(ctx context.Context, uid uint64, typ string) error {
+	return nil
+}
+
+func (dg *dgraphClient) Do(ctx context.Context, req *dgoapi.Request) error {
 	return nil
 }
 
@@ -241,13 +246,13 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ 
-				{ "title": "A Post", 
-				"text": "Some text", 
+			queryResponse: `{ "post" : [
+				{ "title": "A Post",
+				"text": "Some text",
 				"author": { "name": "A.N. Author" } } ] }`,
-			expected: `{ "addPost": { "post" : 
-				{ "title": "A Post", 
-				"text": "Some text", 
+			expected: `{ "addPost": { "post" :
+				{ "title": "A Post",
+				"text": "Some text",
 				"author": { "name": "A.N. Author", "dob": null } } } }`,
 		},
 		"Add mutation triggers GraphQL error propagation": {
@@ -255,9 +260,9 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ 
-				{ "title": "A Post", 
-				"text": "Some text", 
+			queryResponse: `{ "post" : [
+				{ "title": "A Post",
+				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "addPost": { "post" : null } }`,
 			errors: gqlerror.List{&gqlerror.Error{
@@ -306,13 +311,13 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ 
-				{ "title": "A Post", 
-				"text": "Some text", 
+			queryResponse: `{ "post" : [
+				{ "title": "A Post",
+				"text": "Some text",
 				"author": { "name": "A.N. Author" } } ] }`,
-			expected: `{ "updatePost": { "post" : 
-				{ "title": "A Post", 
-				"text": "Some text", 
+			expected: `{ "updatePost": { "post" :
+				{ "title": "A Post",
+				"text": "Some text",
 				"author": { "name": "A.N. Author", "dob": null } } } }`,
 		},
 		"Update Mutation triggers GraphQL error propagation": {
@@ -320,9 +325,9 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ { 
-				"title": "A Post", 
-				"text": "Some text", 
+			queryResponse: `{ "post" : [ {
+				"title": "A Post",
+				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "updatePost": { "post" : null } }`,
 			errors: gqlerror.List{&gqlerror.Error{

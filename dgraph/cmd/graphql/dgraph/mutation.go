@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
@@ -167,7 +168,23 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 				"this indicates a GraphQL validation error.")
 }
 
-func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (string, string, error) {
+func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
+	dgQuery := &gql.GraphQuery{
+		Attr: m.ResponseName(),
+	}
+
+	if ids := idFilter(m); ids != nil {
+		addUIDFunc(dgQuery, ids)
+	} else {
+		addTypeFunc(dgQuery, m.MutatedTypeName())
+	}
+	addFilter(dgQuery, m, m.MutatedTypeName())
+
+	return dgQuery
+}
+
+func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mutation string,
+	err error) {
 
 	if m.MutationType() != schema.DeleteMutation {
 		return "", "", gqlerror.Errorf(
@@ -175,10 +192,10 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (string, string, e
 			m.MutationType())
 	}
 
-	q := rewriteAsQuery(m)
-	str := asString(q)
-	fmt.Println(str)
-	return "", "", nil
+	q := rewriteMutationAsQuery(m)
+	query = asString(q)
+	fmt.Println(query)
+	return query, "", nil
 }
 
 func getUpdUID(m schema.Mutation) (uint64, error) {
