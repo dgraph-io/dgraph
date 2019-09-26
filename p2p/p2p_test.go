@@ -27,7 +27,7 @@ import (
 )
 
 func startNewService(t *testing.T, cfg *Config) *Service {
-	node, err := NewService(cfg)
+	node, err := NewService(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestService_PeerCount(t *testing.T) {
 		Port:        7002,
 	}
 
-	sa, err := NewService(testServiceConfigA)
+	sa, err := NewService(testServiceConfigA, nil)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
@@ -93,7 +93,7 @@ func TestService_PeerCount(t *testing.T) {
 		Port:        7003,
 	}
 
-	sb, err := NewService(testServiceConfigB)
+	sb, err := NewService(testServiceConfigB, nil)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
@@ -128,7 +128,7 @@ func TestSend(t *testing.T) {
 		Port:        7004,
 	}
 
-	sa, err := NewService(testServiceConfigA)
+	sa, err := NewService(testServiceConfigA, nil)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
@@ -146,7 +146,7 @@ func TestSend(t *testing.T) {
 		Port:        7005,
 	}
 
-	sb, err := NewService(testServiceConfigB)
+	sb, err := NewService(testServiceConfigB, nil)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}

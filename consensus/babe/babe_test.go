@@ -114,7 +114,7 @@ func TestCalculateThreshold_AuthorityWeights(t *testing.T) {
 
 func TestRunLottery(t *testing.T) {
 	rt := newRuntime(t)
-	babesession := NewBabeSession([32]byte{}, [64]byte{}, rt)
+	babesession := NewSession([32]byte{}, [64]byte{}, rt)
 	babesession.authorityIndex = 0
 	babesession.authorityWeights = []uint64{1, 1, 1}
 	conf := &BabeConfiguration{
@@ -156,7 +156,7 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 
 func TestStartupData(t *testing.T) {
 	rt := newRuntime(t)
-	babesession := NewBabeSession([32]byte{}, [64]byte{}, rt)
+	babesession := NewSession([32]byte{}, [64]byte{}, rt)
 	res, err := babesession.startupData()
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestStartupData(t *testing.T) {
 
 func TestEpoch(t *testing.T) {
 	rt := newRuntime(t)
-	babesession := NewBabeSession([32]byte{}, [64]byte{}, rt)
+	babesession := NewSession([32]byte{}, [64]byte{}, rt)
 	res, err := babesession.epoch()
 	if err != nil {
 		t.Fatal(err)

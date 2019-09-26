@@ -14,13 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package types
 
 import (
 	"math/big"
 
 	"github.com/ChainSafe/gossamer/common"
 )
+
+// Extrinsic is a generic transaction whose format is verified in the runtime
+type Extrinsic []byte
 
 // Block defines a state block
 type Block struct {
@@ -34,7 +37,7 @@ type BlockHeader struct {
 	Number         *big.Int
 	StateRoot      common.Hash
 	ExtrinsicsRoot common.Hash
-	Digest         []byte
+	Digest         []byte // any additional block info eg. logs, seal
 	// TODO: Not part of spec, can potentially remove
 	Hash common.Hash
 }

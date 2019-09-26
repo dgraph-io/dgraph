@@ -26,8 +26,8 @@ import (
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
-// BabeSession contains the VRF keys for the validator
-type BabeSession struct {
+// Session contains the VRF keys for the validator
+type Session struct {
 	vrfPublicKey  VrfPublicKey
 	vrfPrivateKey VrfPrivateKey
 	rt            *runtime.Runtime
@@ -45,9 +45,9 @@ type BabeSession struct {
 	txQueue *tx.PriorityQueue
 }
 
-// NewBabeSession returns a new Babe session using the provided VRF keys and runtime
-func NewBabeSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime) *BabeSession {
-	return &BabeSession{
+// NewSession returns a new Babe session using the provided VRF keys and runtime
+func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime) *Session {
+	return &Session{
 		vrfPublicKey:  pubkey,
 		vrfPrivateKey: privkey,
 		rt:            rt,
@@ -55,8 +55,13 @@ func NewBabeSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runt
 	}
 }
 
+// PushToTxQueue adds a ValidTransaction to BABE's transaction queue
+func (b *Session) PushToTxQueue(vt *tx.ValidTransaction) {
+	b.txQueue.Insert(vt)
+}
+
 // sets the slot lottery threshold for the current epoch
-func (b *BabeSession) setEpochThreshold() error {
+func (b *Session) setEpochThreshold() error {
 	var err error
 	if b.config == nil {
 		return errors.New("cannot set threshold: no babe config")
@@ -72,7 +77,7 @@ func (b *BabeSession) setEpochThreshold() error {
 
 // runs the slot lottery for a specific slot
 // returns true if validator is authorized to produce a block for that slot, false otherwise
-func (b *BabeSession) runLottery(slot uint64) (bool, error) {
+func (b *Session) runLottery(slot uint64) (bool, error) {
 	if slot < b.epochData.StartSlot {
 		return false, errors.New("slot is not in this epoch")
 	}
@@ -93,7 +98,7 @@ func (b *BabeSession) runLottery(slot uint64) (bool, error) {
 	return output_int.Cmp(b.epochThreshold) > 0, nil
 }
 
-func (b *BabeSession) vrfSign(slot uint64) ([]byte, error) {
+func (b *Session) vrfSign(slot uint64) ([]byte, error) {
 	// TOOD: return VRF output and proof
 	// sign b.epochData.Randomness and slot
 	out := make([]byte, 32)

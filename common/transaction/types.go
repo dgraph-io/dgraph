@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/core/types"
 )
 
 type Pool map[common.Hash]*ValidTransaction
@@ -23,6 +24,14 @@ type Validity struct {
 }
 
 type ValidTransaction struct {
-	// extrinsic common.Extrinsic
-	validity Validity
+	extrinsic *types.Extrinsic
+	validity  *Validity
+}
+
+// NewValidTransaction creates a new ValidTransaction contains an extrinsic and Validity
+func NewValidTransaction(extrinsic *types.Extrinsic, validity *Validity) *ValidTransaction {
+	return &ValidTransaction{
+		extrinsic: extrinsic,
+		validity:  validity,
+	}
 }

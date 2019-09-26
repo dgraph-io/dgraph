@@ -25,6 +25,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
+	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
@@ -64,9 +65,20 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	var srvcs []services.Service
 
+	// set up message channel for p2p -> core.Service
+	msgChan := make(chan p2p.Message)
+
+	// TODO: trie and runtime
+
+	// TODO: BABE
+
+	// core.Service
+	coreSrvc := core.NewService(nil, nil, msgChan)
+	srvcs = append(srvcs, coreSrvc)
+
 	// P2P
 	setBootstrapNodes(ctx, fig.P2pCfg)
-	p2pSrvc := createP2PService(fig.P2pCfg)
+	p2pSrvc := createP2PService(fig.P2pCfg, msgChan)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// DB
@@ -155,8 +167,8 @@ func getDatabaseDir(ctx *cli.Context, fig *cfg.Config) string {
 }
 
 // createP2PService starts a p2p network layer from provided config
-func createP2PService(fig *p2p.Config) *p2p.Service {
-	srvc, err := p2p.NewService(fig)
+func createP2PService(fig *p2p.Config, msgChan chan<- p2p.Message) *p2p.Service {
+	srvc, err := p2p.NewService(fig, msgChan)
 	if err != nil {
 		log.Error("error starting p2p", "err", err.Error())
 	}

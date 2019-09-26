@@ -21,7 +21,7 @@ import (
 )
 
 // gets the startup data for Babe from the runtime
-func (b *BabeSession) startupData() (*BabeConfiguration, error) {
+func (b *Session) startupData() (*BabeConfiguration, error) {
 	ret, err := b.rt.Exec("BabeApi_startup_data", 1, 0)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (b *BabeSession) startupData() (*BabeConfiguration, error) {
 }
 
 // gets the current epoch data from the runtime
-func (b *BabeSession) epoch() (*Epoch, error) {
+func (b *Session) epoch() (*Epoch, error) {
 	ret, err := b.rt.Exec("BabeApi_epoch", 1, 0)
 	if err != nil {
 		return nil, err

@@ -22,21 +22,21 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/core"
+	"github.com/ChainSafe/gossamer/core/types"
 	db "github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
 )
 
 var zeroHash, _ = common.HexToHash("0x00")
 
-func createGenesisBlock() core.Block {
-	return core.Block{
-		Header: core.BlockHeader{
+func createGenesisBlock() types.Block {
+	return types.Block{
+		Header: types.BlockHeader{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
 			Hash:       common.Hash{0x00},
 		},
-		Body: core.BlockBody{},
+		Body: types.BlockBody{},
 	}
 }
 
@@ -68,13 +68,13 @@ func createFlatTree(t *testing.T, depth int) *BlockTree {
 			t.Error(err)
 		}
 
-		block := core.Block{
-			Header: core.BlockHeader{
+		block := types.Block{
+			Header: types.BlockHeader{
 				ParentHash: previousHash,
 				Hash:       hash,
 				Number:     big.NewInt(int64(i)),
 			},
-			Body: core.BlockBody{},
+			Body: types.BlockBody{},
 		}
 
 		bt.AddBlock(block)
@@ -104,13 +104,13 @@ func TestBlockTree_GetBlock(t *testing.T) {
 func TestBlockTree_AddBlock(t *testing.T) {
 	bt := createFlatTree(t, 1)
 
-	block := core.Block{
-		Header: core.BlockHeader{
+	block := types.Block{
+		Header: types.BlockHeader{
 			ParentHash: common.Hash{0x01},
 			Number:     nil,
 			Hash:       common.Hash{0x02},
 		},
-		Body: core.BlockBody{},
+		Body: types.BlockBody{},
 	}
 
 	bt.AddBlock(block)
@@ -155,13 +155,13 @@ func TestBlockTree_LongestPath(t *testing.T) {
 	bt := createFlatTree(t, 3)
 
 	// Insert a block to create a competing path
-	extraBlock := core.Block{
-		Header: core.BlockHeader{
+	extraBlock := types.Block{
+		Header: types.BlockHeader{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(1),
 			Hash:       common.Hash{0xAB},
 		},
-		Body: core.BlockBody{},
+		Body: types.BlockBody{},
 	}
 
 	bt.AddBlock(extraBlock)
@@ -187,7 +187,7 @@ func TestBlockTree_LongestPath(t *testing.T) {
 //	bt := createFlatTree(t, 1)
 //
 //	// Insert a block to create a competing path
-//	extraBlock := core.Block{
+//	extraBlock := types.Block{
 //		SlotNumber:   nil,
 //		ParentHash: zeroHash,
 //		Number:  big.NewInt(1),

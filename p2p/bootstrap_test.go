@@ -99,7 +99,7 @@ func TestNoBootstrap(t *testing.T) {
 		Port:        7006,
 	}
 
-	sa, err := NewService(testServiceConfigA)
+	sa, err := NewService(testServiceConfigA, nil)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}

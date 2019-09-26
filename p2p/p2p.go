@@ -54,6 +54,7 @@ type Service struct {
 	dhtConfig      kaddht.BootstrapConfig
 	bootstrapNodes []peer.AddrInfo
 	mdns           discovery.Service
+	msgChan        chan<- Message
 	noBootstrap    bool
 }
 
@@ -67,7 +68,7 @@ type Config struct {
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
-func NewService(conf *Config) (*Service, error) {
+func NewService(conf *Config, msgChan chan<- Message) (*Service, error) {
 	ctx := context.Background()
 	opts, err := conf.buildOpts()
 	if err != nil {
@@ -78,8 +79,6 @@ func NewService(conf *Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	h.SetStreamHandler(ProtocolPrefix, handleStream)
 
 	dstore := dsync.MutexWrap(ds.NewMapDatastore())
 	dht := kaddht.NewDHT(ctx, h, dstore)
@@ -118,7 +117,11 @@ func NewService(conf *Config) (*Service, error) {
 		bootstrapNodes: bootstrapNodes,
 		noBootstrap:    conf.NoBootstrap,
 		mdns:           mdns,
+		msgChan:        msgChan,
 	}
+
+	h.SetStreamHandler(ProtocolPrefix, s.handleStream)
+
 	return s, err
 }
 
@@ -323,7 +326,7 @@ func (s *Service) getExistingStream(p peer.ID) net.Stream {
 
 // handles stream; reads message length, message type, and decodes message based on type
 // TODO: implement all message types; send message back to peer when we get a message; gossip for certain message types
-func handleStream(stream net.Stream) {
+func (s *Service) handleStream(stream net.Stream) {
 	defer func() {
 		if err := stream.Close(); err != nil {
 			log.Error("fail to close stream", "error", err)
@@ -366,6 +369,8 @@ func handleStream(stream net.Stream) {
 	}
 
 	log.Debug("got message", "peer", stream.Conn().RemotePeer(), "type", msgType, "msg", msg.String())
+
+	s.msgChan <- msg
 }
 
 // Peers returns connected peers

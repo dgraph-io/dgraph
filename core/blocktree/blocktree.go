@@ -23,7 +23,7 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/core"
+	"github.com/ChainSafe/gossamer/core/types"
 	log "github.com/ChainSafe/log15"
 	"github.com/disiqueira/gotree"
 )
@@ -39,7 +39,7 @@ type BlockTree struct {
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
-func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BlockDB) *BlockTree {
+func NewBlockTreeFromGenesis(genesis types.Block, db *polkadb.BlockDB) *BlockTree {
 	head := &node{
 		hash:     genesis.Header.Hash,
 		number:   genesis.Header.Number,
@@ -57,7 +57,7 @@ func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BlockDB) *BlockTree
 
 // AddBlock inserts the block as child of its parent node
 // Note: Assumes block has no children
-func (bt *BlockTree) AddBlock(block core.Block) {
+func (bt *BlockTree) AddBlock(block types.Block) {
 	parent := bt.GetNode(block.Header.ParentHash)
 	// Check if it already exists
 	// TODO: Can shortcut this by checking DB

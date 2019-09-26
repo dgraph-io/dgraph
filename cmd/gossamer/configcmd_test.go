@@ -156,7 +156,7 @@ func TestGetDatabaseDir(t *testing.T) {
 
 func TestCreateP2PService(t *testing.T) {
 	_, cfgClone := createTempConfigFile()
-	srv := createP2PService(cfgClone.P2pCfg)
+	srv := createP2PService(cfgClone.P2pCfg, nil)
 
 	if srv == nil {
 		t.Fatalf("failed to create p2p service")
