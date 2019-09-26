@@ -502,7 +502,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		if req.StartTs == 0 {
 			req.StartTs = posting.Oracle().MaxAssigned()
 		}
-		queryRequest.Cache = worker.NoTxnCache
+		queryRequest.Cache = worker.NoCache
 	}
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
