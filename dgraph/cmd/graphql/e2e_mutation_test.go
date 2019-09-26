@@ -434,10 +434,14 @@ func deleteAuthor(
 	expectedErrors []*x.GqlError) {
 
 	deleteAuthorParams := &GraphQLParams{
-		Query: `mutation deleteAuthor($del: ID!) {
-			deleteAuthor(id: $del) { msg }
+		Query: `mutation deleteAuthor($filter: AuthorFilter!) {
+			deleteAuthor(filter: $filter) { msg }
 		}`,
-		Variables: map[string]interface{}{"del": authorID},
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{
+				"ids": []string{authorID},
+			},
+		},
 	}
 
 	gqlResponse := deleteAuthorParams.ExecuteAsPost(t, graphqlURL)
@@ -456,10 +460,12 @@ func deletePost(
 	expectedErrors []*x.GqlError) {
 
 	deletePostParams := &GraphQLParams{
-		Query: `mutation deletePost($del: ID!) {
-			deletePost(id: $del) { msg }
+		Query: `mutation deletePost($filter: PostFilter!) {
+			deletePost(filter: $filter) { msg }
 		}`,
-		Variables: map[string]interface{}{"del": postID},
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": []string{postID},
+		}},
 	}
 
 	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
@@ -472,6 +478,9 @@ func deletePost(
 }
 
 func TestDeleteWrongID(t *testing.T) {
+	t.Skip()
+	// Skipping the test for now because wrong type of node while deleting is not an error.
+	// Modify the test to have some other mutation that fails.
 	newCountry := addCountry(t)
 	newAuthor := addAuthor(t, newCountry.ID)
 
@@ -488,7 +497,7 @@ func TestDeleteWrongID(t *testing.T) {
 func TestManyMutations(t *testing.T) {
 	newCountry := addCountry(t)
 	multiMutationParams := &GraphQLParams{
-		Query: `mutation addCountries($name1: String!, $del: ID!, $name2: String!) {
+		Query: `mutation addCountries($name1: String!, $filter: CountryFilter!, $name2: String!) {
 			add1: addCountry(input: { name: $name1 }) {
 				country {
 					id
@@ -496,7 +505,7 @@ func TestManyMutations(t *testing.T) {
 				}
 			}
 
-			deleteCountry(id: $del) { msg }
+			deleteCountry(filter: $filter) { msg }
 
 			add2: addCountry(input: { name: $name2 }) {
 				country {
@@ -506,7 +515,8 @@ func TestManyMutations(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"name1": "Testland1", "del": newCountry.ID, "name2": "Testland2"},
+			"name1": "Testland1", "filter": map[string]interface{}{
+				"ids": []string{newCountry.ID}}, "name2": "Testland2"},
 	}
 	multiMutationExpected := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland1" } },
@@ -554,6 +564,9 @@ func TestManyMutations(t *testing.T) {
 // so there should be no field for it in the result - that's different to a field
 // that starts execution, like `deleteCountry`, but fails.
 func TestManyMutationsWithError(t *testing.T) {
+	// Skipping the test for now because wrong type of node while deleting is not an error.
+	// Modify the test to have some other mutation that fails.
+	t.Skip()
 	newCountry := addCountry(t)
 	newAuthor := addAuthor(t, newCountry.ID)
 
@@ -561,7 +574,7 @@ func TestManyMutationsWithError(t *testing.T) {
 	// deleteCountry - should fail (given uid is not a Country)
 	// add2 - is never executed
 	multiMutationParams := &GraphQLParams{
-		Query: `mutation addCountries($del: ID!) {
+		Query: `mutation addCountries($del: ID!, filter: PostFilter!) {
 			add1: addCountry(input: { name: "Testland" }) {
 				country {
 					id
@@ -569,7 +582,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				}
 			}
 
-			deleteCountry(id: $del) { msg }
+			deleteCountry(filter: $filter) { msg }
 
 			add2: addCountry(input: { name: "abc" }) {
 				country {

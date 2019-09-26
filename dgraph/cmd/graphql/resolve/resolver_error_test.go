@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
@@ -120,16 +119,12 @@ func (dg *dgraphClient) Mutate(ctx context.Context, val interface{}) (map[string
 	return dg.assigned, nil
 }
 
-func (dg *dgraphClient) DeleteNode(ctx context.Context, uid uint64) error {
+func (dg *dgraphClient) DeleteNodes(ctx context.Context, query, mutation string) error {
 	// Not needed in testing responses
 	return nil
 }
 
 func (dg *dgraphClient) AssertType(ctx context.Context, uid uint64, typ string) error {
-	return nil
-}
-
-func (dg *dgraphClient) Do(ctx context.Context, req *dgoapi.Request) error {
 	return nil
 }
 

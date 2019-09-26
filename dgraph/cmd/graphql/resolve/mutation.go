@@ -194,13 +194,13 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 			mr.mutation.MutationType())
 	}
 
-	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	query, mut, err := mr.mutationRewriter.RewriteDelete(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
 	}
 
-	_, err = mr.dgraph.Mutate(ctx, mut)
+	err = mr.dgraph.DeleteNodes(ctx, query, mut)
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())

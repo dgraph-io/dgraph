@@ -19,7 +19,6 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -45,8 +44,7 @@ import (
 type Client interface {
 	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
-	Do(ctx context.Context, req *dgoapi.Request) error
-	DeleteNode(ctx context.Context, uid uint64) error
+	DeleteNodes(ctx context.Context, query, mutation string) error
 	AssertType(ctx context.Context, uid uint64, typ string) error
 }
 
@@ -110,8 +108,8 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 	return resp.GetUids(), schema.GQLWrapf(err, "couldn't execute mutation")
 }
 
-// DeleteNode deletes a single node from the graph.
-func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
+// DeleteNodes deletes nodes from the graph based on the result of the filter query.
+func (dg *dgraph) DeleteNodes(ctx context.Context, query, mutation string) error {
 	// TODO: Note this simple cut that just removes it's outgoing edges.
 	// If we are to do referential integrity or ensuring the type constraints
 	// on the nodes, or cascading deletes, then a whole bunch more needs to be
@@ -121,12 +119,15 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 	// we'd remove the node and if that caused any errors in the graph, that
 	// would be picked up and handled as GraphQL errors in future queries, etc.
 
-	mu := &dgoapi.Mutation{
+	req := &dgoapi.Request{
+		Query:     query,
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<%#x> * * .", uid)),
+		Mutations: []*dgoapi.Mutation{{
+			DelNquads: []byte(mutation),
+		}},
 	}
 
-	_, err := dg.client.NewTxn().Mutate(ctx, mu)
+	_, err := dg.client.NewTxn().Do(ctx, req)
 	return err
 }
 
