@@ -170,6 +170,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
+		Var:  "x",
 		Attr: m.ResponseName(),
 	}
 
@@ -194,8 +195,10 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mut
 
 	q := rewriteMutationAsQuery(m)
 	query = asString(q)
-	fmt.Println(query)
-	return query, "", nil
+	// The query stores the result of the filter variable in a variable called x, so we need to
+	// send a delete mutation with the same variable.
+	mutation = `uid(x) * * .`
+	return query, mutation, nil
 }
 
 func getUpdUID(m schema.Mutation) (uint64, error) {

@@ -152,12 +152,11 @@ func TestDeleteMutationRewriting(t *testing.T) {
 			require.NoError(t, err)
 
 			mut := test.GetMutation(t, op)
-
-			q, _, err := rewriterToTest.RewriteDelete(mut)
+			q, m, err := rewriterToTest.RewriteDelete(mut)
 
 			test.RequireJSONEq(t, tcase.Error, err)
 			if tcase.Error == nil {
-				// test.RequireJSONEqStr(t, tcase.DgraphMutation, m)
+				require.Equal(t, tcase.DgraphMutation, m)
 				require.Equal(t, tcase.DgraphQuery, q)
 			}
 		})
