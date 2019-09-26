@@ -75,17 +75,11 @@ func NewMutationRewriter() MutationRewriter {
 func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 	if m.MutationType() != schema.AddMutation &&
-		m.MutationType() != schema.UpdateMutation &&
-		m.MutationType() != schema.DeleteMutation {
+		m.MutationType() != schema.UpdateMutation {
 		return nil,
 			gqlerror.Errorf(
 				"internal error - call to build Dgraph mutation for %s mutation type",
 				m.MutationType())
-	}
-
-	if m.MutationType() == schema.DeleteMutation {
-
-		return nil, nil
 	}
 
 	// ATM mutations aren't very deep.  At worst, a mutation can be one object with
