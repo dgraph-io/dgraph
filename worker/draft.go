@@ -152,6 +152,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
+		posting.ClearEntireListCache()
 		return posting.DeleteData()
 	}
 
@@ -159,6 +160,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
+		posting.ClearEntireListCache()
 
 		if err := posting.DeleteAll(); err != nil {
 			return err

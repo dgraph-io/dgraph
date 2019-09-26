@@ -156,13 +156,14 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore    *badger.DB
 	closer    *y.Closer
+	cacheMutex sync.Mutex
 	listCache *ristretto.Cache
 )
 
-// Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
-	pstore = ps
-	closer = y.NewCloser(1)
+func createListCache() error {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+
 	var err error
 	listCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
@@ -170,6 +171,15 @@ func Init(ps *badger.DB) {
 		BufferItems: 64,
 		Metrics:     true,
 	})
+	return err
+}
+
+// Init initializes the posting lists package, the in memory and dirty list hash.
+func Init(ps *badger.DB) {
+	pstore = ps
+	closer = y.NewCloser(1)
+
+	err := createListCache()
 	x.Check(err)
 	go func() {
 		if listCache == nil {
@@ -182,6 +192,7 @@ func Init(ps *badger.DB) {
 			glog.Infof(m.String())
 		}
 	}()
+
 	go updateMemoryMetrics(closer)
 }
 

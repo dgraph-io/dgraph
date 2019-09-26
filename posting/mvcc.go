@@ -128,6 +128,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+// TODO(martinmr): Need a fast way of deleting the entire cache.
+// Maybe rebuilding the cache from scratch would work.
+func ClearEntireListCache() {
+	createListCache()
+}
+
 func ClearListCache(key []byte) {
 	listCache.Del(key)
 }
