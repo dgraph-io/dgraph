@@ -108,11 +108,11 @@ func FindDataFiles(str string, ext []string) []string {
 
 // IsMissingOrEmptyDir returns true if the path either does not exist
 // or is a directory that is empty.
-func IsMissingOrEmptyDir(path string) (bool, error) {
+func IsMissingOrEmptyDir(path string) (_ bool, err error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil
+			return true, err
 		}
 		return false, err
 	}
@@ -122,10 +122,15 @@ func IsMissingOrEmptyDir(path string) (bool, error) {
 	}
 
 	file, err := os.Open(path)
-	defer file.Close()
 	if err != nil {
 		return false, err
 	}
+	defer func() {
+        cerr := file.Close()
+        if err == nil {
+            err = cerr
+        }
+    }()
 
 	_, err = file.Readdir(1)
 	if err == nil {
