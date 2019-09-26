@@ -695,7 +695,8 @@ func (qs *queryState) handleUidPostings(
 
 const (
 	UseTxnCache = iota
-	NoTxnCache
+	// NoCache indicates no caches should be used
+	NoCache
 )
 
 // processTask processes the query, accumulates and returns the result.
@@ -729,9 +730,8 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	if qs.cache == nil {
-		qs.cache = posting.NewLocalCache(q.ReadTs)
-	}
+	// For now, remove the query level cache. It is causing contention for queries with high
+	// fan-out.
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
