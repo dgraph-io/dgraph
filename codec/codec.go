@@ -139,7 +139,7 @@ func (d *Decoder) unpackBlock() []uint64 {
 			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
 			// decoding and expects it to be of length >= 4 at all the stages. Padding
 			// with zero to make sure length is always >= 4.
-			encData = append(encData, 0, 0, 0)
+			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
