@@ -136,7 +136,7 @@ Dgraph Live Loader / Dgraph Bulk Loader
 - Update live loader flag help text. ([#3278][])
 - Improve reporting of aborts and retries during live load. ([#3313][])
 - Remove xidmap storage on disk from bulk loader.
-- Optimize XidtoUID map used by live and bulk loader.
+- Optimize XidtoUID map used by live and bulk loader. ([#2998][])
 - Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. ([#3004][], [#3045][]) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. ([18277872f][])
 - Use StreamWriter in bulk loader. ([#3542][], [#3635][], [#3649][])
 - Add timestamps during bulk/live load. ([#3287][])
