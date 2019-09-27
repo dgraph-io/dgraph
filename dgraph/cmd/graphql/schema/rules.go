@@ -255,6 +255,29 @@ func searchableMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 		possibleSearchables[len(possibleSearchables)-1])
 }
 
+func apolloKeyValidation(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	// FIXME: really, there's more to this.  It should probably check that the key
+	// makes sense for the type etc.
+
+	// actually, actually ... this'll never get called because there's nothing
+	// for type directives yet
+	return nil
+}
+
+func apolloExternalValidation(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	// FIXME: what's required here??  ... not sure what's required for it to be
+	// 'valid' at this point
+	return nil
+}
+
 func isScalar(s string) bool {
 	_, ok := scalarToDgraph[s]
 	return ok

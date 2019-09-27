@@ -33,6 +33,10 @@ const (
 	searchableDirective = "searchable"
 	searchableArg       = "by"
 
+	apolloKeyDirective      = "key"
+	apolloExternalDirective = "external"
+	apolloExtendsDirective  = "extends"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
@@ -105,6 +109,20 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+}
+`
+
+	apolloFederationExtras = `
+directive @key(fields: String!) on OBJECT | INTERFACE
+directive @extends on OBJECT | INTERFACE
+directive @external on OBJECT | FIELD_DEFINITION
+directive @requires(fields: String!) on FIELD_DEFINITION
+directive @provides(fields: String!) on FIELD_DEFINITION
+
+scalar _Any
+
+type _Service {
+  sdl: String
 }
 `
 )
@@ -188,9 +206,18 @@ var scalarToDgraph = map[string]string{
 	"DateTime": "dateTime",
 }
 
+// FIXME: really they shouldn't be in the schema at all.
+// some directives don't make sense in the final schema
+var skipDirectiveWhenPrinting = map[string]bool{
+	inverseDirective:    true,
+	searchableDirective: true,
+}
+
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchableDirective: searchableValidation,
+	inverseDirective:        hasInverseValidation,
+	searchableDirective:     searchableValidation,
+	apolloKeyDirective:      apolloKeyValidation,
+	apolloExternalDirective: apolloExternalValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -244,6 +271,47 @@ func expandSchema(doc *ast.SchemaDocument) {
 				defn.Fields = append(fields, defn.Fields...)
 			}
 		}
+	}
+
+	for _, defn := range docExtras.Definitions {
+		doc.Definitions = append(doc.Definitions, defn)
+	}
+
+	for _, dir := range docExtras.Directives {
+		doc.Directives = append(doc.Directives, dir)
+	}
+
+	expandSchemaWithApolloFederation(doc)
+}
+
+func expandSchemaWithApolloFederation(doc *ast.SchemaDocument) {
+
+	var apolloKeyTypes []string
+	for _, def := range doc.Definitions {
+		if def.Directives.ForName(apolloKeyDirective) != nil {
+			apolloKeyTypes = append(apolloKeyTypes, def.Name)
+		}
+	}
+
+	// Nothing to do, this is not a schema expected to be using in Apollo Federation
+	if len(apolloKeyTypes) == 0 {
+		return
+	}
+
+	// There are Apollo federation directives in the schema, so add those
+	// types to 'union _Entity'
+	// e.g
+	// union _Entity = Review | User | Product
+
+	var apolloExtras strings.Builder
+	apolloExtras.WriteString("union _Entity = ")
+	apolloExtras.WriteString(strings.Join(apolloKeyTypes, " | "))
+	apolloExtras.WriteString("\n")
+	apolloExtras.WriteString(apolloFederationExtras)
+
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloExtras.String()})
+	if gqlErr != nil {
+		panic(gqlErr)
 	}
 
 	for _, defn := range docExtras.Definitions {
@@ -330,6 +398,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		Name:        "Query",
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
+	addApolloQueries(sch)
 
 	sch.Mutation = &ast.Definition{
 		Kind:        ast.Object,
@@ -881,6 +950,7 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 		if isIDField(defn, fld) {
 			// Deepcopy is not required because we don't modify values other than nonull
 			newFld := *fld
+			newFld.Directives = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -922,6 +992,9 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	direcArgs := make([]string, len(direcs))
 
 	for idx, dir := range direcs {
+		if skipDirectiveWhenPrinting[dir.Name] {
+			continue
+		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
 	}
 
@@ -988,7 +1061,10 @@ func generateObjectString(typ *ast.Definition) string {
 		return fmt.Sprintf("type %s implements %s {\n%s}\n", typ.Name, interfaces,
 			genFieldsString(typ.Fields))
 	}
-	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("type %s%s {\n%s}\n",
+		typ.Name,
+		genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateScalarString(typ *ast.Definition) string {
@@ -1005,7 +1081,7 @@ func generateScalarString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
-func Stringify(schema *ast.Schema, originalTypes []string) string {
+func Stringify(schema *ast.Schema, originalTypes []string, keepApolloExtras bool) string {
 	var sch, original, object, input, enum strings.Builder
 
 	if schema.Types == nil {
@@ -1038,6 +1114,20 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	for _, defn := range docExtras.Definitions {
 		printed[defn.Name] = true
 	}
+
+	// These get added separately
+	printed["Query"] = true
+	printed["Mutation"] = true
+
+	// If this is an apollo schema, we'll add all those bits as a single string
+	apolloExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloFederationExtras})
+	if gqlErr != nil {
+		panic(gqlErr)
+	}
+	for _, defn := range apolloExtras.Definitions {
+		printed[defn.Name] = true
+	}
+	printed["_Entity"] = true
 
 	// schema.Types is all type names (types, inputs, enums, etc.).
 	// The original schema defs have already been printed, and everything in
@@ -1080,9 +1170,38 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	sch.WriteString("#######################\n# Generated Inputs\n#######################\n\n")
 	sch.WriteString(input.String())
 	sch.WriteString("#######################\n# Generated Query\n#######################\n\n")
-	sch.WriteString(generateObjectString(schema.Query) + "\n")
+	qry := schema.Query
+	if !keepApolloExtras {
+		// got to remove
+		// extend type Query {
+		// 	_entities(representations: [_Any!]!): [_Entity]!
+		// 	_service: _Service!
+		// }
+
+		var newQueryFields ast.FieldList
+		for _, fld := range qry.Fields {
+			if fld.Name == "_entities" || fld.Name == "_service" {
+				continue
+			}
+			newQueryFields = append(newQueryFields, fld)
+		}
+
+		qry = &ast.Definition{
+			Name:   "Query",
+			Fields: newQueryFields,
+		}
+	}
+	sch.WriteString(generateObjectString(qry) + "\n")
 	sch.WriteString("#######################\n# Generated Mutations\n#######################\n\n")
 	sch.WriteString(generateObjectString(schema.Mutation))
+
+	if containsApolloKeyTypes(schema) && keepApolloExtras {
+		sch.WriteString("#######################\n# Apollo Federation\n#######################\n\n")
+		sch.WriteString("union _Entity = ")
+		sch.WriteString(strings.Join(schema.Types["_Entity"].Types, " | "))
+		sch.WriteString("\n")
+		sch.WriteString(apolloFederationExtras)
+	}
 
 	return sch.String()
 }
@@ -1102,4 +1221,53 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 	}
 
 	return errs
+}
+
+// addApolloQueries :
+// For Apollo federation, need to add
+//
+// _entities(representations: [_Any!]!): [_Entity]!
+// _service: _Service!
+//
+// only if this is a Schema with Apollo Federation directives
+func addApolloQueries(sch *ast.Schema) {
+
+	if !containsApolloKeyTypes(sch) {
+		return
+	}
+
+	sch.Query.Fields = append(sch.Query.Fields,
+		&ast.FieldDefinition{
+			Name: "_entities",
+			Type: &ast.Type{
+				Elem:    &ast.Type{NamedType: "_Entity"},
+				NonNull: true,
+			},
+			Arguments: []*ast.ArgumentDefinition{
+				&ast.ArgumentDefinition{
+					Name: "representations",
+					Type: &ast.Type{
+						Elem:    &ast.Type{NamedType: "_Any", NonNull: true},
+						NonNull: true,
+					},
+				},
+			},
+		})
+
+	sch.Query.Fields = append(sch.Query.Fields,
+		&ast.FieldDefinition{
+			Name: "_service",
+			Type: &ast.Type{
+				NamedType: "_Service",
+			},
+		})
+}
+
+func containsApolloKeyTypes(schema *ast.Schema) bool {
+	for _, typDef := range schema.Types {
+		if typDef.Directives.ForName(apolloKeyDirective) != nil {
+			return true
+		}
+	}
+	return false
 }

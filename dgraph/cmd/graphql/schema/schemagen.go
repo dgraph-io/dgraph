@@ -41,7 +41,7 @@ type handler struct {
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.originalDefs)
+	return Stringify(s.completeSchema, s.originalDefs, true)
 }
 
 func (s *handler) DGSchema() string {
