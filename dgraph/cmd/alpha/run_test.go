@@ -807,7 +807,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	require.True(t, ok)
 	switch n1 := n1.(type) {
 	case json.Number:
-		require.True(t, strings.Index(n1.String(), ".") < 0)
+		require.False(t, strings.Contains(n1.String(), "."))
 		i, err := n1.Int64()
 		require.NoError(t, err)
 		require.Equal(t, int64(9007199254740995), i)
@@ -819,7 +819,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	require.True(t, ok)
 	switch n2 := n2.(type) {
 	case json.Number:
-		require.True(t, strings.Index(n2.String(), ".") >= 0)
+		require.True(t, strings.Contains(n2.String(), "."))
 		f, err := n2.Float64()
 		require.NoError(t, err)
 		require.Equal(t, 9007199254740995.0, f)
