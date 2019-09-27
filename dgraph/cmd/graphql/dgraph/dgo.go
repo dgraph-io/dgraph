@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
-	"github.com/vektah/gqlparser/gqlerror"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
@@ -45,7 +44,6 @@ type Client interface {
 	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
 	DeleteNodes(ctx context.Context, query, mutation string) error
-	AssertType(ctx context.Context, uid uint64, typ string) error
 }
 
 type dgraph struct {
@@ -129,56 +127,4 @@ func (dg *dgraph) DeleteNodes(ctx context.Context, query, mutation string) error
 
 	_, err := dg.client.NewTxn().Do(ctx, req)
 	return err
-}
-
-// AssertType checks if uid is of type typ.  It returns nil if the type assertion
-// holds, and an error if something goes wrong.
-func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error {
-
-	q := &gql.GraphQuery{
-		Attr: "checkID",
-		Func: &gql.Function{
-			Name: "uid",
-			UID:  []uint64{uid},
-		},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: typ}},
-			},
-		},
-		Children: []*gql.GraphQuery{
-			{
-				Attr: "uid",
-			},
-		},
-	}
-
-	resp, err := dg.Query(ctx, q)
-	if err != nil {
-		return schema.GQLWrapf(err, "unable to type check id")
-	}
-
-	var decode struct {
-		CheckID []struct {
-			UID string
-		}
-	}
-	if err := json.Unmarshal(resp, &decode); err != nil {
-		glog.Errorf("[%s] Failed to unmarshal typecheck query : %+v", api.RequestID(ctx), err)
-		return schema.GQLWrapf(err, "unable to type check id")
-	}
-
-	if len(decode.CheckID) != 1 {
-		return gqlerror.Errorf("Node with id %#x is not of type %s", uid, typ)
-	}
-
-	return nil
-}
-
-// Do is used to make a request to Dgraph. It can be used for doing a query,
-// mutation or conditional upserts.
-func (dg *dgraph) Do(ctx context.Context, req *dgoapi.Request) error {
-	err := dg.Do(ctx, req)
-	return schema.GQLWrapf(err, "unable to make do request")
 }
