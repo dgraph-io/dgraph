@@ -180,7 +180,6 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 
 func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mutation string,
 	err error) {
-
 	if m.MutationType() != schema.DeleteMutation {
 		return "", "", gqlerror.Errorf(
 			"internal error - call to build Dgraph mutation for %s mutation type",
@@ -189,6 +188,7 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mut
 
 	q := rewriteMutationAsQuery(m)
 	query = asString(q)
+	fmt.Println(query)
 	// The query stores the result of the filter variable in a variable called x, so we need to
 	// send a delete mutation with the same variable.
 	mutation = `uid(x) * * .`

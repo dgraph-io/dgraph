@@ -391,21 +391,80 @@ func updateCountry(t *testing.T, updCountry *country) {
 	}
 }
 
-func TestDeleteMutation(t *testing.T) {
+func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	country := addCountry(t)
+	anotherCountry := addCountry(t)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		deleteCountry(t, country.ID, deleteCountryExpected, nil)
+		filter := map[string]interface{}{"ids": []string{country.ID}}
+		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
 	t.Run("check Country is deleted", func(t *testing.T) {
 		requireCountry(t, country.ID, nil)
+		requireCountry(t, anotherCountry.ID, nil)
 	})
+}
+
+func TestDeleteMutationWithSingleId(t *testing.T) {
+	country := addCountry(t)
+	anotherCountry := addCountry(t)
+	t.Run("delete Country", func(t *testing.T) {
+		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
+		filter := map[string]interface{}{"ids": []string{country.ID}}
+		deleteCountry(t, filter, deleteCountryExpected, nil)
+	})
+
+	// In this case anotherCountry shouldn't be deleted.
+	t.Run("check Country is deleted", func(t *testing.T) {
+		requireCountry(t, country.ID, nil)
+		requireCountry(t, anotherCountry.ID, anotherCountry)
+	})
+}
+
+func TestDeleteMutationByName(t *testing.T) {
+	country := addCountry(t)
+	anotherCountry := addCountry(t)
+	anotherCountry.Name = "New country"
+	updateCountry(t, anotherCountry)
+
+	t.Run("delete Country", func(t *testing.T) {
+		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
+		deleteCountryByName(t, anotherCountry.Name, deleteCountryExpected, nil)
+	})
+
+	// In this case anotherCountry shouldn't be deleted.
+	t.Run("check Country is deleted", func(t *testing.T) {
+		requireCountry(t, country.ID, nil)
+		requireCountry(t, anotherCountry.ID, anotherCountry)
+	})
+}
+
+func deleteCountryByName(t *testing.T,
+	name string,
+	deleteCountryExpected string,
+	expectedErrors []*x.GqlError) {
+	deleteCountryParams := &GraphQLParams{
+		Query: `mutation deleteCountry($filter: CountryFilter!) {
+			deleteCountry(filter: $filter ) { msg }
+		}`,
+		Variables: map[string]interface{}{"name": map[string]interface{}{
+			"regexp": name,
+		}},
+	}
+
+	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
+	fmt.Println("resp: ", string(gqlResponse.Data))
+	require.JSONEq(t, deleteCountryExpected, string(gqlResponse.Data))
+
+	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func deleteCountry(
 	t *testing.T,
-	countryID string,
+	filter map[string]interface{},
 	deleteCountryExpected string,
 	expectedErrors []*x.GqlError) {
 
@@ -413,13 +472,10 @@ func deleteCountry(
 		Query: `mutation deleteCountry($filter: CountryFilter!) {
 			deleteCountry(filter: $filter) { msg }
 		}`,
-		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"ids": []string{countryID},
-		}},
+		Variables: map[string]interface{}{"filter": filter},
 	}
 
 	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
-
 	require.JSONEq(t, deleteCountryExpected, string(gqlResponse.Data))
 
 	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
@@ -489,7 +545,8 @@ func TestDeleteWrongID(t *testing.T) {
 		&x.GqlError{Message: `input: couldn't complete deleteCountry because ` +
 			fmt.Sprintf(`input: Node with id %s is not of type Country`, newAuthor.ID)}}
 
-	deleteCountry(t, newAuthor.ID, expectedData, expectedErrors)
+	filter := map[string]interface{}{"ids": []string{newAuthor.ID}}
+	deleteCountry(t, filter, expectedData, expectedErrors)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
 }
@@ -713,7 +770,8 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 		}
 
 		for _, country := range countries {
-			deleteCountry(t, country.ID, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
+			filter := map[string]interface{}{"ids": []string{country.ID}}
+			deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
 		}
 	})
 }
