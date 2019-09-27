@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/status"
 )
 
 // Error constants representing different types of errors.
@@ -121,7 +122,7 @@ func ShouldCrash(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := grpc.ErrorDesc(err)
+	errStr := status.Convert(err).Message()
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
