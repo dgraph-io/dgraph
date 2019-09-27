@@ -19,7 +19,6 @@ package resolve
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -200,8 +199,6 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
 	}
-	fmt.Println(query)
-	fmt.Println(mut)
 
 	err = mr.dgraph.DeleteNodes(ctx, query, mut)
 	if err != nil {

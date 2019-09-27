@@ -396,7 +396,7 @@ func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	anotherCountry := addCountry(t)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		filter := map[string]interface{}{"ids": []string{country.ID}}
+		filter := map[string]interface{}{"ids": []string{country.ID, anotherCountry.ID}}
 		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
@@ -428,9 +428,14 @@ func TestDeleteMutationByName(t *testing.T) {
 	anotherCountry.Name = "New country"
 	updateCountry(t, anotherCountry)
 
+	deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 	t.Run("delete Country", func(t *testing.T) {
-		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		deleteCountryByName(t, anotherCountry.Name, deleteCountryExpected, nil)
+		filter := map[string]interface{}{
+			"name": map[string]interface{}{
+				"regexp": "/" + country.Name + "/",
+			},
+		}
+		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
 	// In this case anotherCountry shouldn't be deleted.
@@ -438,28 +443,10 @@ func TestDeleteMutationByName(t *testing.T) {
 		requireCountry(t, country.ID, nil)
 		requireCountry(t, anotherCountry.ID, anotherCountry)
 	})
-}
-
-func deleteCountryByName(t *testing.T,
-	name string,
-	deleteCountryExpected string,
-	expectedErrors []*x.GqlError) {
-	deleteCountryParams := &GraphQLParams{
-		Query: `mutation deleteCountry($filter: CountryFilter!) {
-			deleteCountry(filter: $filter ) { msg }
-		}`,
-		Variables: map[string]interface{}{"name": map[string]interface{}{
-			"regexp": name,
-		}},
-	}
-
-	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
-	fmt.Println("resp: ", string(gqlResponse.Data))
-	require.JSONEq(t, deleteCountryExpected, string(gqlResponse.Data))
-
-	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-		t.Errorf("errors mismatch (-want +got):\n%s", diff)
-	}
+	t.Run("cleanup", func(t *testing.T) {
+		filter := map[string]interface{}{"ids": []string{anotherCountry.ID}}
+		deleteCountry(t, filter, deleteCountryExpected, nil)
+	})
 }
 
 func deleteCountry(
