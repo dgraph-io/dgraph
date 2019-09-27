@@ -46,6 +46,8 @@ const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
 	SchemaQuery          QueryType    = "schema"
+	ApolloServiceQuery   QueryType    = "apolloService"
+	ApolloEntityQuery    QueryType    = "apolloEntity"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -59,6 +61,8 @@ const (
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
+	Type(name string) Type
+	AsAstSchema() *ast.Schema
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -170,6 +174,24 @@ type fieldDefinition struct {
 
 type mutation field
 type query field
+
+// FIXME: hack
+func (s *schema) AsAstSchema() *ast.Schema {
+	return s.schema
+}
+
+func (s *schema) Type(name string) Type {
+	defn := s.schema.Types[name]
+
+	if defn == nil {
+		return nil
+	}
+
+	return &astType{
+		typ:      &ast.Type{NamedType: defn.Name},
+		inSchema: s.schema,
+	}
+}
 
 func (o *operation) IsQuery() bool {
 	return o.op.Operation == ast.Query
@@ -322,9 +344,17 @@ func (f *field) SelectionSet() (flds []Field) {
 }
 
 func (f *field) Location() *Location {
+
+	line := -1
+	column := -1
+	if f.field.Position != nil {
+		line = f.field.Position.Line
+		column = f.field.Position.Column
+	}
+
 	return &Location{
-		Line:   f.field.Position.Line,
-		Column: f.field.Position.Column}
+		Line:   line,
+		Column: column}
 }
 
 func (f *field) DgraphPredicate() string {
@@ -379,6 +409,10 @@ func (q *query) QueryType() QueryType {
 		return SchemaQuery
 	case strings.HasPrefix(q.Name(), "query"):
 		return FilterQuery
+	case q.Name() == "_service":
+		return ApolloServiceQuery
+	case q.Name() == "_entities":
+		return ApolloEntityQuery
 	default:
 		return NotSupportedQuery
 	}
@@ -598,4 +632,51 @@ func (t *astType) IDField() FieldDefinition {
 
 func (t *astType) Interfaces() []string {
 	return t.inSchema.Types[t.typ.Name()].Interfaces
+}
+
+// IdQueryWithSelections ... does some stuff FIXME:
+func IdQueryWithSelections(typeName, alias string, op Operation, ids []uint64, selections []Field) Query {
+
+	var idChildren ast.ChildValueList
+	for _, uid := range ids {
+		idChildren = append(idChildren,
+			&ast.ChildValue{
+				Name: "",
+				Value: &ast.Value{
+					Kind: ast.StringValue,
+					Raw:  fmt.Sprintf("%#x", uid)}})
+	}
+
+	var selectionSet ast.SelectionSet
+	for _, sel := range selections {
+		// FIXME: dirty cast :-)
+		selField := sel.(*field)
+		selectionSet = append(selectionSet, selField.field)
+	}
+
+	// FIXME: more dirty casts :-)
+	oper := op.(*operation)
+
+	fld := &ast.Field{
+		Name:  "query" + typeName,
+		Alias: alias,
+		Arguments: ast.ArgumentList{
+			&ast.Argument{
+				Name: "filter",
+				Value: &ast.Value{
+					Kind: ast.ObjectValue,
+					Children: ast.ChildValueList{&ast.ChildValue{
+						Name: "ids",
+						Value: &ast.Value{
+							Kind:     ast.ListValue,
+							Children: idChildren,
+							ExpectedType: &ast.Type{Elem: &ast.Type{
+								NamedType: "ID", NonNull: true}}}}},
+					ExpectedType: &ast.Type{NamedType: typeName + "Filter"}}}},
+		SelectionSet: selectionSet,
+		Definition:   oper.inSchema.Query.Fields.ForName("query" + typeName)}
+
+	qry := &query{field: fld, op: oper, sel: nil}
+
+	return qry
 }
