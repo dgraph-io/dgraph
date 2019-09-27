@@ -19,6 +19,7 @@ to understand how to run and work with Dgraph.
   - [Running a mutation](#running-a-mutation)
   - [Running a query](#running-a-query)
   - [Running an Upsert: Query + Mutation](#running-an-upsert-query--mutation)
+  - [Running Conditional Upsert](#running-conditional-upsert)
   - [Committing a transaction](#committing-a-transaction)
   - [Setting Metadata Headers](#setting-metadata-headers)
 - [Development](#development)
@@ -211,9 +212,9 @@ fmt.Printf("%s\n", res.Json)
 
 ### Running an Upsert: Query + Mutation
 
-The `txn.doRequest` function allows you to run upserts consisting of one query and
+The `txn.Do` function allows you to run upserts consisting of one query and
 one mutation. Variables can be defined in the query and used in the mutation.
-You could also use `txn.doRequest` to perform a query followed by a mutation.
+You could also use `txn.Do` to perform a query followed by a mutation.
 
 To know more about upsert, we highly recommend going through the docs
 at https://docs.dgraph.io/mutations/#upsert-block.
@@ -232,8 +233,36 @@ req := &api.Request{
   CommitNow:true,
 }
 
-
 // Update email only if matching uid found.
+if _, err := dg.NewTxn().Do(ctx, req); err != nil {
+  log.Fatal(err)
+}
+```
+
+### Running Conditional Upsert
+
+The upsert block also allows specifying a conditional mutation block using an `@if` directive.
+The mutation is executed only when the specified condition is true. If the condition is false,
+the mutation is silently ignored.
+
+See more about Conditional Upsert [Here](https://docs.dgraph.io/mutations/#conditional-upsert).
+
+```go
+query = `
+  query {
+      user as var(func: eq(email, "wrong_email@dgraph.io"))
+  }`
+mu := &api.Mutation{
+  Cond: `@if(eq(len(user), 1))`, // Only mutate if "wrong_email@dgraph.io" belongs to single user.
+  SetNquads: []byte(`uid(user) <email> "correct_email@dgraph.io" .`),
+}
+req := &api.Request{
+  Query: query,
+  Mutations: []*api.Mutation{mu},
+  CommitNow:true,
+}
+
+// Update email only if exactly one matching uid is found.
 if _, err := dg.NewTxn().Do(ctx, req); err != nil {
   log.Fatal(err)
 }
