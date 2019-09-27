@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgo/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // WriteFileSync is the same as bufio.WriteFile, but syncs the data before closing.
@@ -106,33 +107,46 @@ func FindDataFiles(str string, ext []string) []string {
 	return list
 }
 
+// ErrMissingDir is thrown by IsMissingOrEmptyDir if the given path is a
+// missing or empty directory.
+var ErrMissingDir = errors.Errorf("missing or empty directory")
+
 // IsMissingOrEmptyDir returns true if the path either does not exist
 // or is a directory that is empty.
-func IsMissingOrEmptyDir(path string) (bool, error) {
-	fi, err := os.Stat(path)
+func IsMissingOrEmptyDir(path string) (err error) {
+	var fi os.FileInfo
+	fi, err = os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil
+			err = ErrMissingDir
+			return
 		}
-		return false, err
+		return
 	}
 
 	if !fi.IsDir() {
-		return false, nil
+		return
 	}
 
-	file, err := os.Open(path)
-	defer file.Close()
+	var file *os.File
+	file, err = os.Open(path)
 	if err != nil {
-		return false, err
+		return
 	}
+	defer func() {
+		cerr := file.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = file.Readdir(1)
 	if err == nil {
-		return false, nil
+		return
 	} else if err != io.EOF {
-		return false, err
+		return
 	}
 
-	return true, nil
+	err = ErrMissingDir
+	return
 }
