@@ -51,7 +51,7 @@ type queueItem struct {
 
 var pathPool = sync.Pool{
 	New: func() interface{} {
-		return []pathInfo{}
+		return &[]pathInfo{}
 	},
 }
 
@@ -357,17 +357,18 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				continue
 			}
 
-			curPath := pathPool.Get().([]pathInfo)
-			if cap(curPath) < len(item.path.route)+1 {
+			curPath := pathPool.Get().(*[]pathInfo)
+			if cap(*curPath) < len(item.path.route)+1 {
 				// We can't use it due to insufficient capacity. Put it back.
 				pathPool.Put(curPath)
-				curPath = make([]pathInfo, len(item.path.route)+1)
+				newSlice := make([]pathInfo, len(item.path.route)+1)
+				curPath = &newSlice
 			} else {
 				// Use the curPath from pathPool. Set length appropriately.
-				curPath = curPath[:len(item.path.route)+1]
+				*curPath = (*curPath)[:len(item.path.route)+1]
 			}
-			n := copy(curPath, item.path.route)
-			curPath[n] = pathInfo{
+			n := copy(*curPath, item.path.route)
+			(*curPath)[n] = pathInfo{
 				uid:   toUid,
 				attr:  info.attr,
 				facet: info.facet,
@@ -376,12 +377,12 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				uid:  toUid,
 				cost: item.cost + cost,
 				hop:  item.hop + 1,
-				path: route{route: curPath},
+				path: route{route: *curPath},
 			}
 			heap.Push(&pq, node)
 		}
 		// Return the popped nodes path to pool.
-		pathPool.Put(item.path.route)
+		pathPool.Put(&item.path.route)
 	}
 
 	next <- false
