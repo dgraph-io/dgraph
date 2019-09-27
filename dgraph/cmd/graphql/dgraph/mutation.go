@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	createdNode = "newnode"
+	createdNode            = "newnode"
+	deleteMutationQueryVar = "x"
+	deleteUidVarMutation   = `uid(x) * * .`
 )
 
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
@@ -163,8 +165,9 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 }
 
 func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
+	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
-		Var:  "x",
+		Var:  deleteMutationQueryVar,
 		Attr: m.ResponseName(),
 	}
 
@@ -174,7 +177,6 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 		addTypeFunc(dgQuery, m.MutatedTypeName())
 	}
 	addFilter(dgQuery, m, m.MutatedTypeName())
-
 	return dgQuery
 }
 
@@ -190,7 +192,7 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mut
 	query = asString(q)
 	// The query stores the result of the filter variable in a variable called x, so we need to
 	// send a delete mutation with the same variable.
-	mutation = `uid(x) * * .`
+	mutation = deleteUidVarMutation
 	return query, mutation, nil
 }
 

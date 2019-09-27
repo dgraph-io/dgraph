@@ -317,7 +317,7 @@ func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
 // filter: { title: { anyofterms: "GraphQL" }, and: { not: { ... } } }
 // etc
 //
-// typ is the GraphQL type we are filtering on, and is needed to turn for example
+// typ is the name of the GraphQL type we are filtering on, and is needed to turn for example
 // title (the GraphQL field) into Post.title (to Dgraph predicate).
 //
 // buildFilter turns any one filter object into a conjunction
