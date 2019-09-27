@@ -51,12 +51,12 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
-	req                      *pb.BackupRequest
+	creds                    *Credentials
 	uri                      *url.URL
 }
 
-func (h *s3Handler) credentialsInRequest() bool {
-	return h.req.GetAccessKey() != "" && h.req.GetSecretKey() != ""
+func (h *s3Handler) hasCredentials() bool {
+	return h.creds.accessKey != "" && h.creds.secretKey != ""
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -70,9 +70,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	var creds credentials.Value
-	if h.req.GetAnonymous() {
+	if h.creds.anonymous {
 		// No need to setup credentials.
-	} else if !h.credentialsInRequest() {
+	} else if !h.hasCredentials() {
 		var provider credentials.Provider
 		switch uri.Scheme {
 		case "s3":
@@ -101,9 +101,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		// with no credentials will be made.
 		creds, _ = provider.Retrieve() // error is always nil
 	} else {
-		creds.AccessKeyID = h.req.GetAccessKey()
-		creds.SecretAccessKey = h.req.GetSecretKey()
-		creds.SessionToken = h.req.GetSessionToken()
+		creds.AccessKeyID = h.creds.accessKey
+		creds.SecretAccessKey = h.creds.secretKey
+		creds.SessionToken = h.creds.sessionToken
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
@@ -200,7 +200,6 @@ func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
-	h.req = req
 	mc, err := h.setup(uri)
 	if err != nil {
 		return err
@@ -215,7 +214,6 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 func (h *s3Handler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
-	h.req = req
 	mc, err := h.setup(uri)
 	if err != nil {
 		return err

@@ -96,7 +96,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	handler, err := backup.NewUriHandler(uri)
+	handler, err := backup.NewUriHandler(uri, backup.GetCredentialsFromRequest(&req))
 	if err != nil {
 		return err
 	}
