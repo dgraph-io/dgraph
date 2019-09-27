@@ -166,12 +166,12 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 // It gets us the correct type to add to a filter in case of a deleteMutation.
 func trimTypeName(typ schema.Type) string {
 	const (
-		delete  = "Delete"
+		del     = "Delete"
 		payload = "Payload"
 	)
 	typName := typ.Name()
-	if strings.HasPrefix(typName, delete) && strings.HasSuffix(typName, payload) {
-		typName = strings.TrimSuffix(strings.TrimPrefix(typName, delete), payload)
+	if strings.HasPrefix(typName, del) && strings.HasSuffix(typName, payload) {
+		typName = strings.TrimSuffix(strings.TrimPrefix(typName, del), payload)
 	}
 	return typName
 }
