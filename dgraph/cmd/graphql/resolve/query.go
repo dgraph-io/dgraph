@@ -18,6 +18,8 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -56,6 +58,101 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 			res.data = resp[1 : len(resp)-1]
 		}
 		return res
+	}
+
+	if qr.query.QueryType() == schema.ApolloServiceQuery {
+		// Just print back the SDL
+		// why does it work like this and not return a schema introspection query?
+
+		type sdl struct {
+			Sdl string `json:"sdl"`
+		}
+
+		js, err := json.Marshal(struct {
+			Service *sdl `json:"_service"`
+		}{
+			Service: &sdl{Sdl: schema.Stringify(qr.schema.AsAstSchema(), nil, false)},
+		})
+		if err != nil {
+			res.err = schema.GQLWrapf(err, "mashal response for Apollo _service query")
+			return res
+		}
+		res.data = js[1 : len(js)-1]
+		return res
+	}
+
+	if qr.query.QueryType() == schema.ApolloEntityQuery {
+
+		// {
+		//   "query": query ($_representations: [_Any!]!) {
+		// 	  _entities(representations: $_representations) {
+		// 		... on Product {
+		// 			reviews {
+		// 				 body
+		// 			}
+		// 		}
+		// 	  }
+		//   },
+		//   "variables": {
+		//     "_representations": [
+		//       {
+		//         "__typename": "Product",
+		//         "upc": "B00005N5PF"
+		//       },
+		//       ...
+		//     ]
+		//   }
+		// }
+
+		// let's assume for now that all those representations are from the same type
+		// so I unmarshal, compile an ID list, and then run an ids query against that
+		// type name
+		//
+		// so what I really do is replace query with my ids query ... and
+		// make the variables the empty map?
+		// take '... on Product {' ---and-make---> 'queryProduct(filter: { ids: [ ... ] } { ... } )
+
+		representations, ok := qr.query.ArgValue("representations").([]interface{})
+		if !ok {
+			// ... all the errorz
+		}
+
+		var ids []uint64
+		var typ schema.Type
+
+		for _, r := range representations {
+			rep, ok := r.(map[string]interface{})
+			if !ok {
+				// ... all the errorz
+				continue
+			}
+
+			typename, ok := rep["__typename"].(string)
+
+			if !ok {
+				continue
+			}
+
+			typ = qr.schema.Type(typename)
+			idFld := typ.IDField()
+
+			id, ok := rep[idFld.Name()].(string)
+			if !ok {
+				continue
+			}
+
+			uid, err := strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				continue
+			}
+
+			ids = append(ids, uid)
+		}
+
+		selections := qr.query.SelectionSet() //[0].SelectionSet()
+
+		// rewrite the query and fall through to the normal query processing
+		qr.query = schema.IdQueryWithSelections(typ.Name(), "_entities", qr.operation, ids, selections)
 	}
 
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
