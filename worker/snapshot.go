@@ -164,6 +164,12 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 	if n == nil {
 		return conn.ErrNoNode
 	}
+
+	raftNode := n.Raft()
+	if raftNode == nil {
+		return conn.ErrNoNode
+	}
+
 	// Indicate that we're streaming right now. Used to cancel
 	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
 	// have already proposed a snapshot, which it can apply while this streaming
@@ -185,7 +191,7 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 	glog.Infof("Got StreamSnapshot request: %+v\n", snap)
 	if err := doStreamSnapshot(snap, stream); err != nil {
 		glog.Errorf("While streaming snapshot: %v. Reporting failure.", err)
-		n.Raft().ReportSnapshot(snap.Context.GetId(), raft.SnapshotFailure)
+		raftNode.ReportSnapshot(snap.Context.GetId(), raft.SnapshotFailure)
 		return err
 	}
 	glog.Infof("Stream snapshot: OK")
