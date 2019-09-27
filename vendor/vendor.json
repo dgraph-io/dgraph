@@ -519,10 +519,6 @@
 			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"path": "github.com/dgraph-io/dgo/v2/protos/api",
-			"revision": "c7185a6e3ceaaedcc2c0def303a684470470594a"
-		},
-		{
 			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",
 			"path": "github.com/dgraph-io/ristretto/z",
 			"revision": "eb48d2f7ca30f7560340ff99eccf24c756d42c2b",
