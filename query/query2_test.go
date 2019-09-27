@@ -1764,7 +1764,7 @@ func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
 				friend {
 					n: name
 					dob
-					friend @normalize { # It would appear as if @normalize isn't here.
+					friend @normalize { # This would be ignored.
 						fn : name
 					}
 				}
