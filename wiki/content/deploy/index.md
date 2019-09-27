@@ -1204,7 +1204,7 @@ See the `initContainers` configuration in
 [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
 to learn more.
 
-## More about Dgraph
+## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 
