@@ -1916,7 +1916,7 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 }
 {{< /runnable >}}
 
-You can also apply `@normalize` on nested query blocks. It will work similarly but only flatten the result of nested query block where `@normalize` has been applied.
+You can also apply `@normalize` on nested query blocks. It will work similarly but only flatten the result of the nested query block where `@normalize` has been applied.
 {{< runnable >}}
 {
   director(func:allofterms(name@en, "steven spielberg")) {
