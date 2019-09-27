@@ -200,8 +200,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
-	err = mr.dgraph.DeleteNodes(ctx, query, mut)
-	if err != nil {
+	if err = mr.dgraph.DeleteNodes(ctx, query, mut); err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
 		return res
