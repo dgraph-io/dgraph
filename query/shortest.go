@@ -37,7 +37,7 @@ type pathInfo struct {
 }
 
 type route struct {
-	route       []pathInfo
+	route       *[]pathInfo
 	totalWeight float64
 }
 
@@ -284,7 +284,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
-		path: route{route: []pathInfo{{uid: sg.Params.From}}},
+		path: route{route: &[]pathInfo{{uid: sg.Params.From}}},
 	}
 	heap.Push(&pq, srcNode)
 
@@ -358,16 +358,16 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			curPath := pathPool.Get().(*[]pathInfo)
-			if cap(*curPath) < len(item.path.route)+1 {
+			if cap(*curPath) < len(*item.path.route)+1 {
 				// We can't use it due to insufficient capacity. Put it back.
 				pathPool.Put(curPath)
-				newSlice := make([]pathInfo, len(item.path.route)+1)
+				newSlice := make([]pathInfo, len(*item.path.route)+1)
 				curPath = &newSlice
 			} else {
 				// Use the curPath from pathPool. Set length appropriately.
-				*curPath = (*curPath)[:len(item.path.route)+1]
+				*curPath = (*curPath)[:len(*item.path.route)+1]
 			}
-			n := copy(*curPath, item.path.route)
+			n := copy(*curPath, *item.path.route)
 			(*curPath)[n] = pathInfo{
 				uid:   toUid,
 				attr:  info.attr,
@@ -377,12 +377,12 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				uid:  toUid,
 				cost: item.cost + cost,
 				hop:  item.hop + 1,
-				path: route{route: *curPath},
+				path: route{route: curPath},
 			}
 			heap.Push(&pq, node)
 		}
 		// Return the popped nodes path to pool.
-		pathPool.Put(&item.path.route)
+		pathPool.Put(item.path.route)
 	}
 
 	next <- false
@@ -392,7 +392,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, nil
 	}
 	var res []uint64
-	for _, it := range kroutes[0].route {
+	for _, it := range *kroutes[0].route {
 		res = append(res, it.uid)
 	}
 	sg.DestUIDs.Uids = res
@@ -642,26 +642,26 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		shortestSg.pathMeta = &pathMetadata{
 			weight: it.totalWeight,
 		}
-		curUid := it.route[0].uid
+		curUid := (*it.route)[0].uid
 		shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
 		shortestSg.DestUIDs = &pb.List{Uids: []uint64{curUid}}
 		shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 		curNode := shortestSg
 		i := 0
-		for ; i < len(it.route)-1; i++ {
-			curUid := it.route[i].uid
-			childUid := it.route[i+1].uid
+		for ; i < len(*it.route)-1; i++ {
+			curUid := (*it.route)[i].uid
+			childUid := (*it.route)[i+1].uid
 			node := new(SubGraph)
 			node.Params = params{
 				Shortest: true,
 			}
-			if it.route[i+1].facet != nil {
+			if (*it.route)[i+1].facet != nil {
 				// For consistent later processing.
 				node.Params.Facet = &pb.FacetParams{}
 			}
-			node.Attr = it.route[i+1].attr
-			node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{it.route[i+1].facet}}}
+			node.Attr = (*it.route)[i+1].attr
+			node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{(*it.route)[i+1].facet}}}
 			node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
 			node.DestUIDs = &pb.List{Uids: []uint64{childUid}}
 			node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
@@ -674,7 +674,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		node.Params = params{
 			Shortest: true,
 		}
-		uid := it.route[i].uid
+		uid := (*it.route)[i].uid
 		node.SrcUIDs = &pb.List{Uids: []uint64{uid}}
 		node.uidMatrix = []*pb.List{{Uids: []uint64{uid}}}
 		curNode.Children = append(curNode.Children, node)
