@@ -55,7 +55,7 @@ type s3Handler struct {
 	uri                      *url.URL
 }
 
-func (h *s3Handler) overrideCredentials() bool {
+func (h *s3Handler) hasCredentials() bool {
 	return h.creds.accessKey != "" && h.creds.secretKey != ""
 }
 
@@ -72,7 +72,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	var creds credentials.Value
 	if h.creds.anonymous {
 		// No need to setup credentials.
-	} else if !h.overrideCredentials() {
+	} else if !h.hasCredentials() {
 		var provider credentials.Provider
 		switch uri.Scheme {
 		case "s3":
