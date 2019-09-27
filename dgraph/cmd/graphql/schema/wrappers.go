@@ -546,7 +546,20 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	pt := parentType(t.inSchema, t.inSchema.Types[t.typ.Name()], fld)
+	const (
+		delete  = "Delete"
+		payload = "Payload"
+	)
+
+	typName := t.Name()
+	// This isn't the most clean solution but something that fits in with the current
+	// implementation. When we get a deleteXYZ mutation which has a response type of
+	// DeleteTypePayload, to find the actual type we trim the prefix and suffix.
+	// TODO - Do all this as part of pre-processing and remove special handling here.
+	if strings.HasPrefix(typName, delete) && strings.HasSuffix(typName, payload) {
+		typName = strings.TrimSuffix(strings.TrimPrefix(typName, delete), payload)
+	}
+	pt := parentType(t.inSchema, t.inSchema.Types[typName], fld)
 	return fmt.Sprintf("%s.%s", pt, fld)
 }
 

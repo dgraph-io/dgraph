@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
@@ -88,7 +89,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 		}
 
 		dgQuery := rewriteAsGet(gqlQuery, uid)
-		addTypeFilter(dgQuery, gqlQuery.Type().Name())
+		addTypeFilter(dgQuery, gqlQuery.Type())
 
 		return dgQuery, nil
 
@@ -153,7 +154,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	} else {
 		addTypeFunc(dgQuery, field.Type().Name())
 	}
-	addFilter(dgQuery, field, field.Type().Name())
+	addFilter(dgQuery, field)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
@@ -161,11 +162,25 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	return dgQuery
 }
 
-func addTypeFilter(q *gql.GraphQuery, typ string) {
+// trimTypeName trims Delete from the beginning and Payload from the end of a type name.
+// It gets us the correct type to add to a filter in case of a deleteMutation.
+func trimTypeName(typ schema.Type) string {
+	const (
+		delete  = "Delete"
+		payload = "Payload"
+	)
+	typName := typ.Name()
+	if strings.HasPrefix(typName, delete) && strings.HasSuffix(typName, payload) {
+		typName = strings.TrimSuffix(strings.TrimPrefix(typName, delete), payload)
+	}
+	return typName
+}
+
+func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 	thisFilter := &gql.FilterTree{
 		Func: &gql.Function{
 			Name: "type",
-			Args: []gql.Arg{{Value: typ}},
+			Args: []gql.Arg{{Value: trimTypeName(typ)}},
 		},
 	}
 
@@ -214,7 +229,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			child.Attr = f.DgraphPredicate()
 		}
 
-		addFilter(child, f, f.Type().Name())
+		addFilter(child, f)
 		addOrder(child, f)
 		addPagination(child, f)
 
@@ -284,7 +299,7 @@ func idFilter(field schema.Field) []uint64 {
 	return convertIDs(idsSlice)
 }
 
-func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
+func addFilter(q *gql.GraphQuery, field schema.Field) {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
 	if !ok {
 		return
@@ -301,9 +316,9 @@ func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
 		// If id was present as a filter,
 		delete(filter, "ids")
 	}
-	q.Filter = buildFilter(typ, filter)
+	q.Filter = buildFilter(field.Type(), filter)
 	if filterAtRoot {
-		addTypeFilter(q, typ)
+		addTypeFilter(q, field.Type())
 	}
 }
 
@@ -317,7 +332,7 @@ func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
 // filter: { title: { anyofterms: "GraphQL" }, and: { not: { ... } } }
 // etc
 //
-// typ is the name of the GraphQL type we are filtering on, and is needed to turn for example
+// typ is the GraphQL type we are filtering on, and is needed to turn for example
 // title (the GraphQL field) into Post.title (to Dgraph predicate).
 //
 // buildFilter turns any one filter object into a conjunction
@@ -333,7 +348,7 @@ func addFilter(q *gql.GraphQuery, field schema.Field, typ string) {
 // ATM those will probably generate junk that might cause a Dgraph error.  And
 // bubble back to the user as a GraphQL error when the query fails. Really,
 // they should fail query validation and never get here.
-func buildFilter(typ string, filter map[string]interface{}) *gql.FilterTree {
+func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree {
 
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
@@ -392,7 +407,7 @@ func buildFilter(typ string, filter map[string]interface{}) *gql.FilterTree {
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: typ + "." + field},
+							{Value: typ.DgraphPredicate(field)},
 							{Value: maybeQuoteArg(fn, val)},
 						},
 					},
@@ -415,7 +430,7 @@ func buildFilter(typ string, filter map[string]interface{}) *gql.FilterTree {
 					Func: &gql.Function{
 						Name: fn,
 						Args: []gql.Arg{
-							{Value: typ + "." + field},
+							{Value: typ.DgraphPredicate(field)},
 							{Value: fmt.Sprintf("%v", dgFunc)},
 						},
 					},
