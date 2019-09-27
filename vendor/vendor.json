@@ -459,6 +459,12 @@
 			"revisionTime": "2016-10-10T02:54:55Z"
 		},
 		{
+			"checksumSHA1": "N/MvPrQIpEVKucnUWrtm9VQ7/CU=",
+			"path": "github.com/creachadair/misctools/sizeof",
+			"revision": "4c938d6077e47ed42f6e7d6c8794b54e236dd23d",
+			"revisionTime": "2019-09-22T01:07:03Z"
+		},
+		{
 			"checksumSHA1": "Lf3uUXTkKK5DJ37BxQvxO1Fq+K8=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "6d212800a42e8ab5c146b8ace3490ee17e5225f9",
@@ -531,10 +537,16 @@
 			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",
+			"checksumSHA1": "MpYZmKWcCVetnDwrhoDzI4sCXm8=",
+			"path": "github.com/dgraph-io/ristretto",
+			"revision": "7334f6ae60a8b5310307ac9cc92d70a295162b18",
+			"revisionTime": "2019-09-26T23:18:36Z"
+		},
+		{
+			"checksumSHA1": "fp+NtBZPTvGfWtsxZWUQct/e0ZM=",
 			"path": "github.com/dgraph-io/ristretto/z",
-			"revision": "eb48d2f7ca30f7560340ff99eccf24c756d42c2b",
-			"revisionTime": "2019-09-03T06:43:22Z"
+			"revision": "7334f6ae60a8b5310307ac9cc92d70a295162b18",
+			"revisionTime": "2019-09-26T23:18:36Z"
 		},
 		{
 			"checksumSHA1": "blOHP3HPYU+IeV6yWCalQuuM+zE=",
@@ -717,16 +729,16 @@
 			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
-			"checksumSHA1": "4gKrTOaoNvbAgDCVfSLd6J77oPw=",
-			"path": "github.com/golang/snappy",
-			"revision": "ff6b7dc882cf4cfba7ee0b9f7dcc1ac096c554aa",
-			"revisionTime": "2019-09-04T06:34:54Z"
-		},
-		{
 			"checksumSHA1": "L3HoHVqp2EaBSOqBxB7l0PTyu7g=",
 			"path": "github.com/golang/snappy",
 			"revision": "2a8bb927dd31d8daada140a5d09578521ce5c36a",
 			"revisionTime": "2019-02-18T23:22:22Z"
+		},
+		{
+			"checksumSHA1": "4gKrTOaoNvbAgDCVfSLd6J77oPw=",
+			"path": "github.com/golang/snappy",
+			"revision": "ff6b7dc882cf4cfba7ee0b9f7dcc1ac096c554aa",
+			"revisionTime": "2019-09-04T06:34:54Z"
 		},
 		{
 			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",
