@@ -95,6 +95,56 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
 }
 
+func BenchmarkNormalizePerformance(b *testing.B) {
+	nodeHeight := 3
+	treeDepth := 3
+
+	b.Run("Old Normalize", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			root := (&fastJsonNode{}).New("_root_")
+			fillNode(root.(*fastJsonNode), nodeHeight, treeDepth)
+
+			b.StartTimer()
+			_, _ = root.(*fastJsonNode).normalize()
+			b.StopTimer()
+		}
+	})
+
+	b.Run("New Normalize", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			root := (&fastJsonNode{}).New("_root_")
+			rootChild := root.New("_rootchild")
+			root.AddListChild("_rootchild_", rootChild)
+			fillNode(rootChild.(*fastJsonNode), nodeHeight, treeDepth)
+			rootChild.(*fastJsonNode).isNormalized = true
+
+			b.StartTimer()
+			_ = normalizeResult(rootChild.(*fastJsonNode), root.(*fastJsonNode), 0)
+			b.StopTimer()
+		}
+	})
+
+	fmt.Println("done")
+}
+
+func fillNode(node *fastJsonNode, nodeHeight, treeDepth int) {
+	if treeDepth <= 0 {
+		return
+	}
+
+	i := 0
+	for ; i < nodeHeight/2; i++ {
+		node.AddValue(fmt.Sprintf("Attribute %d", i), types.ValueForType(types.StringID))
+	}
+
+	for ; i < nodeHeight; i++ {
+		child := node.New(fmt.Sprintf("Child%d", i))
+		node.AddListChild(fmt.Sprintf("Child%d", i), child)
+		node.AddValue(fmt.Sprintf("Attribute %d", i), types.ValueForType(types.StringID))
+		fillNode(child.(*fastJsonNode), nodeHeight, treeDepth-1)
+	}
+}
+
 func TestNormalizeJSONUid1(t *testing.T) {
 	// Set default normalize limit.
 	x.Config.NormalizeNodeLimit = 1e4
