@@ -93,7 +93,7 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map.gz", fileNum),
 	)
-	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 }
 

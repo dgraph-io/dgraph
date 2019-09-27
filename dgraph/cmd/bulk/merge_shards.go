@@ -37,7 +37,7 @@ func mergeMapShardsIntoReduceShards(opt options) {
 	var reduceShards []string
 	for i := 0; i < opt.ReduceShards; i++ {
 		shardDir := filepath.Join(opt.TmpDir, reduceShardDir, fmt.Sprintf("shard_%d", i))
-		x.Check(os.MkdirAll(shardDir, 0755))
+		x.Check(os.MkdirAll(shardDir, 0750))
 		reduceShards = append(reduceShards, shardDir)
 	}
 

@@ -120,7 +120,7 @@ func initCmds() {
 		// ensures that it is owned by the user instead, so it can be cleaned up without
 		// requiring root when using a bind volume (i.e. a mounted host directory).
 		if cwd := rootConf.GetString("cwd"); cwd != "" {
-			err := os.Mkdir(cwd, 0777)
+			err := os.Mkdir(cwd, 0750)
 			if err != nil && !os.IsExist(err) {
 				x.Fatalf("unable to create directory: %v", err)
 			}
