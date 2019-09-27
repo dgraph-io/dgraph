@@ -2135,3 +2135,61 @@ func TestQueryMultipleTypes(t *testing.T) {
 	{"name":"Person", "fields":[{"name":"name", "type": "string"},
 		{"name":"pet", "type":"Animal"}]}]}}`, js)
 }
+
+func TestRegexInFilterNoDataOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: has(nonExistent)) @filter(regexp(make, /.*han/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestRegexInFilterIndexedPredOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: regexp(name, /.*nonExistent/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestMultiRegexInFilter(t *testing.T) {
+	query := `
+		{
+			q(func: has(full_name)) @filter(regexp(full_name, /.*michonne/i) OR regexp(name, /.*michonne/i)) {
+				expand(_all_)
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Michonne"}]}}`, res)
+}
+
+func TestMultiRegexInFilter2(t *testing.T) {
+	query := `
+		{
+			q(func: has(firstName)) @filter(regexp(firstName, /.*han/i) OR regexp(lastName, /.*han/i)) {
+				firstName
+				lastName
+			}
+		}
+	`
+
+	// run 20 times ensure that there is no data race
+	// https://github.com/dgraph-io/dgraph/issues/4030
+	for i := 0; i < 20; i++ {
+		res := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)
+	}
+}
