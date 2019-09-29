@@ -407,23 +407,24 @@ func TestDeleteMutationWithMultipleIds(t *testing.T) {
 }
 
 func TestDeleteMutationWithSingleId(t *testing.T) {
-	country := addCountry(t)
+	newCountry := addCountry(t)
 	anotherCountry := addCountry(t)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		filter := map[string]interface{}{"ids": []string{country.ID}}
+		filter := map[string]interface{}{"ids": []string{newCountry.ID}}
 		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, country.ID, nil)
+		requireCountry(t, newCountry.ID, nil)
 		requireCountry(t, anotherCountry.ID, anotherCountry)
 	})
+	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
 
 func TestDeleteMutationByName(t *testing.T) {
-	country := addCountry(t)
+	newCountry := addCountry(t)
 	anotherCountry := addCountry(t)
 	anotherCountry.Name = "New country"
 	updateCountry(t, anotherCountry)
@@ -432,7 +433,7 @@ func TestDeleteMutationByName(t *testing.T) {
 	t.Run("delete Country", func(t *testing.T) {
 		filter := map[string]interface{}{
 			"name": map[string]interface{}{
-				"regexp": "/" + country.Name + "/",
+				"regexp": "/" + newCountry.Name + "/",
 			},
 		}
 		deleteCountry(t, filter, deleteCountryExpected, nil)
@@ -440,13 +441,10 @@ func TestDeleteMutationByName(t *testing.T) {
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, country.ID, nil)
+		requireCountry(t, newCountry.ID, nil)
 		requireCountry(t, anotherCountry.ID, anotherCountry)
 	})
-	t.Run("cleanup", func(t *testing.T) {
-		filter := map[string]interface{}{"ids": []string{anotherCountry.ID}}
-		deleteCountry(t, filter, deleteCountryExpected, nil)
-	})
+	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
 
 func deleteCountry(
@@ -523,7 +521,8 @@ func deletePost(
 func TestDeleteWrongID(t *testing.T) {
 	t.Skip()
 	// Skipping the test for now because wrong type of node while deleting is not an error.
-	// Modify the test to have some other mutation that fails.
+	// After Dgraph returns the number of nodes modified from upsert, modify this test to check
+	// count of nodes modified is 0.
 	newCountry := addCountry(t)
 	newAuthor := addAuthor(t, newCountry.ID)
 
