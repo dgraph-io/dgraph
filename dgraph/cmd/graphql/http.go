@@ -17,10 +17,13 @@
 package graphql
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"mime"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -60,6 +63,19 @@ type graphqlHandler struct {
 	schema       *ast.Schema
 }
 
+func getOutWriter(w http.ResponseWriter, r *http.Request) io.Writer {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out
+}
+
 // ServeHTTP handles GraphQL queries and mutations that get resolved
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
@@ -75,9 +91,11 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
+	out := getOutWriter(w, r)
+
 	rh := gh.resolverForRequest(r)
 	res := rh.Resolve(ctx)
-	if _, err := res.WriteTo(w); err != nil {
+	if _, err := res.WriteTo(out); err != nil {
 		glog.Error(err)
 	}
 }
@@ -86,12 +104,31 @@ func (gh *graphqlHandler) isValid() bool {
 	return !(gh == nil || gh.schema == nil || gh.dgraphClient == nil)
 }
 
+type gzreadCloser struct {
+	*gzip.Reader
+	io.Closer
+}
+
+func (gz gzreadCloser) Close() error {
+	return gz.Closer.Close()
+}
+
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
 	rr = resolve.New(
 		schema.AsSchema(gh.schema),
 		dgraph.AsDgraph(gh.dgraphClient),
 		dgraph.NewQueryRewriter(),
 		dgraph.NewMutationRewriter())
+
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		r.Header.Del("Content-Length")
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			rr.WithError(gqlerror.Errorf("Unable to parse gzip"))
+			return
+		}
+		r.Body = gzreadCloser{zr, r.Body}
+	}
 
 	switch r.Method {
 	case http.MethodGet:
