@@ -435,17 +435,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func concreteType(types []interface{}, interfaceTyp string) string {
-	// TODO - Check if this logic works for types that implement multiple interfaces.
-	for _, typ := range types {
-		styp := typ.(string)
-		if styp != interfaceTyp {
-			return styp
-		}
-	}
-	return ""
-}
-
 // completeObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 //
@@ -489,12 +478,12 @@ func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, 
 	buf.WriteRune('{')
 
 	dgraphTypes, _ := res["dgraph.type"].([]interface{})
-	inputType := concreteType(dgraphTypes, typ.Name())
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
 
+		inputType := f.ConcreteType(dgraphTypes)
 		// If typ is an interface, and dgraphTypes contains another type, then we ignore
 		// fields which don't start with that type. This would happen when multiple
 		// fragments (belonging to different types) are requested within a query for an interface.
