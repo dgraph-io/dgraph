@@ -18,9 +18,11 @@ package graphql
 
 import (
 	"encoding/json"
+	"fmt"
 	"mime"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -95,8 +97,20 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 
 	switch r.Method {
 	case http.MethodGet:
-		// TODO: fill gqlReq in from parameters
-		rr.WithError(gqlerror.Errorf("GraphQL on HTTP GET not yet implemented"))
+		query := r.URL.Query()
+		rQuery := query.Get("query")
+		rVariables := query.Get("variables")
+		rOperationName := query.Get("operationName")
+
+		ln := fmt.Sprintf(`{"query" : "%s", "variables": "%s", "operationName": "%s"}`,
+			rQuery, rVariables, rOperationName)
+
+		if err := json.NewDecoder(strings.NewReader(ln)).Decode(&rr.GqlReq); err != nil {
+			rr.WithError(
+				gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
+			return
+		}
+
 		return
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
