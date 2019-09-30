@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -800,7 +800,7 @@ upsert {
 	doUpsert := func(wg *sync.WaitGroup) {
 		defer wg.Done()
 		for i := 0; i < 10; i++ {
-			err := y.ErrAborted
+			err := dgo.ErrAborted
 			for err != nil && strings.Contains(err.Error(), "Transaction has been aborted. Please retry") {
 				_, _, _, err = mutationWithTs(m, "application/rdf", false, true, 0)
 			}

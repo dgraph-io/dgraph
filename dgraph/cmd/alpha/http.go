@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -454,7 +454,7 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 
 	_, err := worker.CommitOverNetwork(context.Background(), tc)
 	switch err {
-	case y.ErrAborted:
+	case dgo.ErrAborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",

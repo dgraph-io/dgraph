@@ -30,10 +30,11 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -527,7 +528,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 	if !req.CommitNow {
-		if err == y.ErrConflict {
+		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
 
@@ -546,9 +547,9 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		resp.Txn.Aborted = true
 		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
 
-		if err == y.ErrConflict {
+		if err == zero.ErrConflict {
 			// We have already aborted the transaction, so the error message should reflect that.
-			return resp, y.ErrAborted
+			return resp, dgo.ErrAborted
 		}
 
 		return resp, err
@@ -560,7 +561,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	cts, err := worker.CommitOverNetwork(ctx, ctxn)
 	span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
 	if err != nil {
-		if err == y.ErrAborted {
+		if err == dgo.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
 			resp.Txn.Aborted = true
 		}
@@ -1020,7 +1021,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
-	if err == y.ErrAborted {
+	if err == dgo.ErrAborted {
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
