@@ -310,7 +310,7 @@ data.
 To login, send a POST request to `/login` with the userid and password. For example, to log in as the root user groot:
 
 ```sh
-$ curl localhost:8080/login -d '{
+$ curl -X POST localhost:8080/login -d '{
   "userid": "groot",
   "password": "password"
 }'
@@ -330,9 +330,9 @@ The response includes the access and refresh JWTs which are used for the authent
 You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header.
 
 ```sh
-$ curl -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/query -d '...'
-$ curl -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/mutate -d '...'
-$ curl -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/alter -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/query -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/mutate -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/alter -d '...'
 ```
 
 The refresh token can be used in the `/login` POST body to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
