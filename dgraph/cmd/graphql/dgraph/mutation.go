@@ -21,16 +21,20 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
 const (
-	createdNode = "newnode"
+	createdNode            = "newnode"
+	deleteMutationQueryVar = "x"
+	deleteUidVarMutation   = `uid(x) * * .`
 )
 
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
 type MutationRewriter interface {
 	Rewrite(m schema.Mutation) (interface{}, error)
+	RewriteDelete(m schema.Mutation) (string, string, error)
 }
 
 type mutationRewriter struct{}
@@ -158,6 +162,38 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		gqlerror.Errorf(
 			"internal error - call to build Dgraph mutation with input of unrecognized type; " +
 				"this indicates a GraphQL validation error.")
+}
+
+func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
+	// The query needs to assign the results to a variable, so that the mutation can use them.
+	dgQuery := &gql.GraphQuery{
+		Var:  deleteMutationQueryVar,
+		Attr: m.ResponseName(),
+	}
+
+	if ids := idFilter(m); ids != nil {
+		addUIDFunc(dgQuery, ids)
+	} else {
+		addTypeFunc(dgQuery, m.MutatedTypeName())
+	}
+	addFilter(dgQuery, m)
+	return dgQuery
+}
+
+func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mutation string,
+	err error) {
+	if m.MutationType() != schema.DeleteMutation {
+		return "", "", gqlerror.Errorf(
+			"internal error - call to build Dgraph mutation for %s mutation type",
+			m.MutationType())
+	}
+
+	q := rewriteMutationAsQuery(m)
+	query = asString(q)
+	// The query stores the result of the filter variable in a variable called x, so we need to
+	// send a delete mutation with the same variable.
+	mutation = deleteUidVarMutation
+	return query, mutation, nil
 }
 
 func getUpdUID(m schema.Mutation) (uint64, error) {

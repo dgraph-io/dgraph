@@ -38,6 +38,9 @@ func asString(query *gql.GraphQuery) string {
 
 func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root bool) {
 	b.WriteString(prefix)
+	if query.Var != "" {
+		b.WriteString(fmt.Sprintf("%s as ", query.Var))
+	}
 	if query.Alias != "" {
 		b.WriteString(query.Alias)
 		b.WriteString(" : ")

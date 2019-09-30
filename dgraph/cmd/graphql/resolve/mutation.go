@@ -194,23 +194,14 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 			mr.mutation.MutationType())
 	}
 
-	uid, err := mr.mutation.IDArgValue()
+	query, mut, err := mr.mutationRewriter.RewriteDelete(mr.mutation)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
-			api.RequestID(ctx), mr.mutation.Name())
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res
 	}
 
-	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
-	if err != nil {
-		return &resolved{
-			err: schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())}
-	}
-
-	err = mr.dgraph.DeleteNode(ctx, uid)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
-		// FIXME: ^^ also add the GraphQL path etc to link properly to the operation
+	if err = mr.dgraph.DeleteNodes(ctx, query, mut); err != nil {
+		res.err = schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
 		return res
 	}
 
