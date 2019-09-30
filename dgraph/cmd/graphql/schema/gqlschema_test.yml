@@ -204,7 +204,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type X; Field y: has the @searchable directive but the argument day doesn't
           apply to field type String.  Searchable day applies to fields of type DateTime. Fields
-          of type String are searchable by exact, fulltext, hash, term and trigram.",
+          of type String are searchable by exact, fulltext, hash, term and regexp.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -216,7 +216,7 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @searchable bogus isn't valid.Fields of type
-          String are searchable by exact, fulltext, hash, term and trigram.",
+          String are searchable by exact, fulltext, hash, term and regexp.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -338,7 +338,7 @@ valid_schemas:
         strExact: String @searchable(by: exact)
         strTerm: String @searchable(by: term)
         strFulltext: String @searchable(by: fulltext)
-        strTrigram: String @searchable(by: trigram)
+        strTrigram: String @searchable(by: regexp)
         dt: DateTime @searchable
         dtYear: DateTime @searchable(by: year)
         dtMonth: DateTime @searchable(by: month)

@@ -61,7 +61,7 @@ const (
 			"predicate": "Country.name",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["trigram"]
+			"tokenizer": ["regexp"]
 		},
 		{
 			"predicate": "Post.author",

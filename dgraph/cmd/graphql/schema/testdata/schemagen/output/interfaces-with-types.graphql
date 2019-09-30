@@ -52,7 +52,7 @@ enum DgraphIndex {
 	exact
 	term
 	fulltext
-	trigram
+	regexp
 	year
 	month
 	day

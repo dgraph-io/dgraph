@@ -1,6 +1,6 @@
 type Country {
         id: ID!
-        name: String! @searchable(by: "trigram")
+        name: String! @searchable(by: "regexp")
 }
 
 type Author {

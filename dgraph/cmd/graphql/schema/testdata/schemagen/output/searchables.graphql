@@ -6,7 +6,7 @@ type Post {
 	postID: ID!
 	title: String! @searchable(by: term)
 	text: String @searchable(by: fulltext)
-	tags: [String] @searchable(by: trigram)
+	tags: [String] @searchable(by: regexp)
 	tagsHash: [String] @searchable(by: hash)
 	tagsExact: [String] @searchable(by: exact)
 	publishByYear: DateTime @searchable(by: year)
@@ -39,7 +39,7 @@ enum DgraphIndex {
 	exact
 	term
 	fulltext
-	trigram
+	regexp
 	year
 	month
 	day
