@@ -913,9 +913,57 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	droidID := addDroid(t)
 	updateCharacter(t, humanID)
 
-	queryCharacterParams := &GraphQLParams{
-		Query: `query {
-		queryCharacter {
+	t.Run("test query all characters", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+			queryCharacter {
+			  name
+			  appearsIn
+			  ... on Human {
+				starships {
+					name
+					length
+				}
+				totalCredits
+			  }
+			  ... on Droid {
+				primaryFunction
+			  }
+			}
+		  }`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+			"queryCharacter": [
+			  {
+				"name": "Han Solo",
+				"appearsIn": "EMPIRE",
+				"starships": [
+				  {
+					"name": "Millennium Falcon",
+					"length": 2
+				  }
+				],
+				"totalCredits": 10
+			  },
+			  {
+				"name": "R2-D2",
+				"appearsIn": "EMPIRE",
+				"primaryFunction": "Robot"
+			  }
+			]
+		  }`
+
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query characters by name", func(t *testing.T) {
+		queryCharacterByNameParams := &GraphQLParams{
+			Query: `query {
+		queryCharacter(filter: { name: { eq: "Han Solo" } }) {
 		  name
 		  appearsIn
 		  ... on Human {
@@ -930,12 +978,12 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		  }
 		}
 	  }`,
-	}
+		}
 
-	gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
 
-	expected := `{
+		expected := `{
 		"queryCharacter": [
 		  {
 			"name": "Han Solo",
@@ -947,16 +995,84 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 			  }
 			],
 			"totalCredits": 10
-		  },
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query all humans", func(t *testing.T) {
+		queryHumanParams := &GraphQLParams{
+			Query: `query {
+		queryHuman {
+		  name
+		  appearsIn
+		  starships {
+			name
+			length
+		  }
+		  totalCredits
+		}
+	  }`,
+		}
+
+		gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryHuman": [
 		  {
-			"name": "R2-D2",
+			"name": "Han Solo",
 			"appearsIn": "EMPIRE",
-			"primaryFunction": "Robot"
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query humans by name", func(t *testing.T) {
+		queryHumanParamsByName := &GraphQLParams{
+			Query: `query {
+		queryHuman(filter: { name: { eq: "Han Solo" } }) {
+		  name
+		  appearsIn
+		  starships {
+			name
+			length
+		  }
+		  totalCredits
+		}
+	  }`,
+		}
+
+		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryHuman": [
+		  {
+			"name": "Han Solo",
+			"appearsIn": "EMPIRE",
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
 		  }
 		]
 	  }`
 
-	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
