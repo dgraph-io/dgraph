@@ -1021,6 +1021,85 @@ Result:
 }
 ```
 
+### JSON Upsert Example
+
+Let's consider those previous [examples](#example) but instead of `rdf`, we will be using `json`.
+
+The first example was to update the `name` information of an existing user and if
+the user doesn't exist, we create a user and update `email` and `name` information.
+
+It can be achieved using the following:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set": {
+    "uid": uid(v),
+    "name": "first last",
+    "email": "user@company1.io"
+  }
+}
+' | jq
+```
+
+The result if any user with the specified `email` was found :
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "uid(v)": "0x2"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+The result if the no user with the specified `email` was found :
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+The second example was to add the `age` information for the same user having the same email `user@company1.io`.
+
+We can achieve it using the following:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
 ## Conditional Upsert
 
 The upsert block also allows specifying a conditional mutation block using an `@if`
