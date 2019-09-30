@@ -61,7 +61,6 @@ type outputNode interface {
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64, attr string)
-	SetNormalize(isNormalized bool)
 	IsEmpty() bool
 
 	addCountAtRoot(*SubGraph)
@@ -79,13 +78,12 @@ func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonN
 }
 
 type fastJsonNode struct {
-	attr         string
-	order        int // relative ordering (for sorted results)
-	isChild      bool
-	scalarVal    []byte
-	attrs        []*fastJsonNode
-	list         bool
-	isNormalized bool // true for the nodes with `@normalize` directive and all it's children.
+	attr      string
+	order     int // relative ordering (for sorted results)
+	isChild   bool
+	scalarVal []byte
+	attrs     []*fastJsonNode
+	list      bool
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -143,10 +141,6 @@ func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 
 func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
-}
-
-func (fj *fastJsonNode) SetNormalize(isNormalized bool) {
-	fj.isNormalized = isNormalized
 }
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -334,11 +328,8 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(fj.attrs) && childNode.attr == fj.attrs[ci].attr {
-			normalized, err := fj.attrs[ci].normalize()
-			if err != nil {
-				return nil, err
-			}
-			childSlice = append(childSlice, normalized...)
+			normalized := fj.attrs[ci].attrs
+			childSlice = append(childSlice, normalized)
 			ci++
 		}
 		// Merging with parent.
@@ -475,15 +466,21 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		}
 
 		hasChild = true
+		if !sg.Params.Normalize {
+			fj.AddListChild(sg.Params.Alias, n1)
+			continue
+		}
 
-		fj.AddListChild(sg.Params.Alias, n1)
-	}
+		// Lets normalize the response now.
+		normalized, err := n1.(*fastJsonNode).normalize()
+		if err != nil {
+			return err
+		}
 
-	// fj is a dummy node, it doesn't have any parent. So passing nil
-	// for parent and 0 for childIdx. Since we are not setting isNormalized
-	// in dummy node, we can safely call normalizeResult for fj.
-	if err := normalizeResult(fj, nil, 0); err != nil {
-		return err
+		for _, c := range normalized {
+			fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
+		}
+
 	}
 
 	if !hasChild {
@@ -615,7 +612,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		sg.Params.ParentIds = append(sg.Params.ParentIds, uid)
 	}
 
-	dst.SetNormalize(sg.Params.Normalize)
 	var invalidUids map[uint64]bool
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
@@ -712,7 +708,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						uc.SetUID(childUID, "uid")
 					}
 					if pc.List {
-						dst.AddListChild(fieldName, uc)
+						if pc.Params.Normalize {
+							normalized, err := uc.(*fastJsonNode).normalize()
+							if err != nil {
+								return err
+							}
+
+							for _, c := range normalized {
+								dst.AddListChild(fieldName,
+									&fastJsonNode{attrs: c})
+							}
+						} else {
+							dst.AddListChild(fieldName, uc)
+						}
 					} else {
 						dst.AddMapChild(fieldName, uc, false)
 					}
@@ -809,40 +817,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			Value: sg.pathMeta.weight,
 		}
 		dst.AddValue("_weight_", totalWeight)
-	}
-
-	return nil
-}
-
-// normalizeResult function recursively flattens inner nodes. If isNormalized is set
-// for a node, it removes the node from it's parent and attaches it's normalized attributes.
-// It doesn't do recursive call for nodes whose isNormalized is set.
-func normalizeResult(node, parent *fastJsonNode, childIdx int) error {
-	if node.isNormalized {
-		attrList, err := node.normalize()
-		if err != nil {
-			return err
-		}
-
-		// A small optimization. Instead of removing element from slice, we are replacing it
-		// with one of the node that we intend to attach to parent.
-		parent.attrs[childIdx] = &fastJsonNode{
-			attr:    node.attr,
-			attrs:   attrList[0],
-			isChild: node.isChild,
-		}
-		for _, attrs := range attrList[1:] {
-			parent.attrs = append(parent.attrs,
-				&fastJsonNode{attr: node.attr, attrs: attrs, isChild: node.isChild})
-		}
-
-		return nil
-	}
-
-	for idx, child := range node.attrs {
-		if err := normalizeResult(child, node, idx); err != nil {
-			return err
-		}
 	}
 
 	return nil
