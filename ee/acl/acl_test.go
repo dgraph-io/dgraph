@@ -435,7 +435,9 @@ func TestPredicateRegex(t *testing.T) {
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	createAccountAndData(t, dg)
+	dg = testutil.DgraphClient(testutil.SockAddr)
 
 	// Without logging in, the anonymous user should be evaluated as if the user does not
 	// belong to any group, and access should be granted if there is no ACL rule defined
