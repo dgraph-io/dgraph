@@ -966,15 +966,25 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	// Delete everything
 	multiMutationParams := &GraphQLParams{
-		Query: `mutation cleanup($starshipID: ID!, $humanID: ID!, $droidID: ID!) {
-		deleteStarship(id: $starshipID) { msg }
+		Query: `mutation cleanup($starshipFilter: StarshipFilter!, $humanFilter: HumanFilter!,
+			$droidFilter: DroidFilter!) {
+		deleteStarship(filter: $starshipFilter) { msg }
 
-		deleteHuman(id: $humanID) { msg }
+		deleteHuman(filter: $humanFilter) { msg }
 
-		deleteDroid(id: $droidID) { msg }
+		deleteDroid(filter: $droidFilter) { msg }
 	}`,
 		Variables: map[string]interface{}{
-			"starshipID": starshipID, "humanID": humanID, "droidID": droidID},
+			"starshipFilter": map[string]interface{}{
+				"ids": []string{starshipID},
+			},
+			"humanFilter": map[string]interface{}{
+				"ids": []string{humanID},
+			},
+			"droidFilter": map[string]interface{}{
+				"ids": []string{droidID},
+			},
+		},
 	}
 	multiMutationExpected := `{
 	"deleteStarship": { "msg": "Deleted" },
