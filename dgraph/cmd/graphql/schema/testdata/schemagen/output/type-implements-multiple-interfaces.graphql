@@ -145,6 +145,7 @@ enum HumanOrderable {
 #######################
 
 input CharacterFilter {
+	ids: [ID!]
 	name: StringExactFilter
 	and: CharacterFilter
 	or: CharacterFilter
@@ -168,6 +169,7 @@ input EmployeeOrder {
 }
 
 input HumanFilter {
+	ids: [ID!]
 	name: StringExactFilter
 	and: HumanFilter
 	or: HumanFilter
@@ -233,8 +235,8 @@ type Query {
 
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(id: ID!): DeleteCharacterPayload
+	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
 	addHuman(input: HumanInput!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(id: ID!): DeleteHumanPayload
+	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }

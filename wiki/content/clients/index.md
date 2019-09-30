@@ -319,23 +319,23 @@ op.Schema = `
 	dob: datetime .
 
 type Person {
-  name: string
-  age: int
-  dob: string
-  married: bool
-  raw: string
-  friends: [Person]
-  loc: [Loc]
-  school: [Institution]
+  name
+  age
+  dob
+  married
+  raw
+  friends
+  loc
+  school
  }
 
 type Loc {
-  type: string
-  coords: float
+  type
+  coords
  }
 
 type Institution {
-  name: string
+  name
  }
 
 `

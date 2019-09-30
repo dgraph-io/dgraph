@@ -713,3 +713,72 @@ func TestIncludeAndSkipDirective(t *testing.T) {
 	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
+
+func TestQueryByMultipleIds(t *testing.T) {
+	posts := allPosts(t)
+	ids := make([]string, 0, len(posts))
+	for _, post := range posts {
+		ids = append(ids, post.PostID)
+	}
+
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": ids,
+		}},
+	}
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	if diff := cmp.Diff(posts, result.QueryPost); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestQueryByMultipleInvalidIds(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"ids": []string{"foo", "bar"},
+		}},
+	}
+	// Since the ids are invalid and can't be converted to uint64, the query sent to Dgraph should
+	// have func: uid() at root and should return 0 results.
+
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.Equal(t, `{"queryPost":[]}`, string(gqlResponse.Data))
+	var result struct {
+		QueryPost []*post
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(result.QueryPost))
+}

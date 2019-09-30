@@ -124,6 +124,11 @@ input PatchPost {
 	postType: PostType
 }
 
+input PostFilter {
+	ids: [ID!]
+	not: PostFilter
+}
+
 input PostInput {
 	title: String!
 	text: String
@@ -151,7 +156,7 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################
@@ -161,5 +166,5 @@ type Query {
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(id: ID!): DeletePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 }

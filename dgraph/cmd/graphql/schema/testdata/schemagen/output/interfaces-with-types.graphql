@@ -188,6 +188,7 @@ enum StarshipOrderable {
 #######################
 
 input CharacterFilter {
+	ids: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode
 	and: CharacterFilter
@@ -206,6 +207,7 @@ input CharacterRef {
 }
 
 input DroidFilter {
+	ids: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode
 	and: DroidFilter
@@ -231,6 +233,7 @@ input DroidRef {
 }
 
 input HumanFilter {
+	ids: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode
 	and: HumanFilter
@@ -283,6 +286,7 @@ input PatchStarship {
 }
 
 input StarshipFilter {
+	ids: [ID!]
 	name: StringTermFilter
 	and: StarshipFilter
 	or: StarshipFilter
@@ -345,14 +349,14 @@ type Query {
 
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(id: ID!): DeleteCharacterPayload
+	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
 	addHuman(input: HumanInput!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(id: ID!): DeleteHumanPayload
+	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 	addDroid(input: DroidInput!): AddDroidPayload
 	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
-	deleteDroid(id: ID!): DeleteDroidPayload
+	deleteDroid(filter: DroidFilter!): DeleteDroidPayload
 	addStarship(input: StarshipInput!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
-	deleteStarship(id: ID!): DeleteStarshipPayload
+	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }

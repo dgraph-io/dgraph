@@ -52,6 +52,30 @@ func TestParseCountValError(t *testing.T) {
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
 }
 
+func TestParseQueryNamedQuery(t *testing.T) {
+	query := `
+query works() {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryNameQueryWithoutBrackers(t *testing.T) {
+	query := `
+query works {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func TestParseVarError(t *testing.T) {
 	query := `
 	{

@@ -19,10 +19,8 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/vektah/gqlparser/gqlerror"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
@@ -45,8 +43,7 @@ import (
 type Client interface {
 	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
-	DeleteNode(ctx context.Context, uid uint64) error
-	AssertType(ctx context.Context, uid uint64, typ string) error
+	DeleteNodes(ctx context.Context, query, mutation string) error
 }
 
 type dgraph struct {
@@ -109,8 +106,8 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 	return resp.GetUids(), schema.GQLWrapf(err, "couldn't execute mutation")
 }
 
-// DeleteNode deletes a single node from the graph.
-func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
+// DeleteNodes deletes nodes from the graph based on the result of the filter query.
+func (dg *dgraph) DeleteNodes(ctx context.Context, query, mutation string) error {
 	// TODO: Note this simple cut that just removes it's outgoing edges.
 	// If we are to do referential integrity or ensuring the type constraints
 	// on the nodes, or cascading deletes, then a whole bunch more needs to be
@@ -120,56 +117,14 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 	// we'd remove the node and if that caused any errors in the graph, that
 	// would be picked up and handled as GraphQL errors in future queries, etc.
 
-	mu := &dgoapi.Mutation{
+	req := &dgoapi.Request{
+		Query:     query,
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<%#x> * * .", uid)),
+		Mutations: []*dgoapi.Mutation{{
+			DelNquads: []byte(mutation),
+		}},
 	}
 
-	_, err := dg.client.NewTxn().Mutate(ctx, mu)
+	_, err := dg.client.NewTxn().Do(ctx, req)
 	return err
-}
-
-// AssertType checks if uid is of type typ.  It returns nil if the type assertion
-// holds, and an error if something goes wrong.
-func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error {
-
-	q := &gql.GraphQuery{
-		Attr: "checkID",
-		Func: &gql.Function{
-			Name: "uid",
-			UID:  []uint64{uid},
-		},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: typ}},
-			},
-		},
-		Children: []*gql.GraphQuery{
-			{
-				Attr: "uid",
-			},
-		},
-	}
-
-	resp, err := dg.Query(ctx, q)
-	if err != nil {
-		return schema.GQLWrapf(err, "unable to type check id")
-	}
-
-	var decode struct {
-		CheckID []struct {
-			UID string
-		}
-	}
-	if err := json.Unmarshal(resp, &decode); err != nil {
-		glog.Errorf("[%s] Failed to unmarshal typecheck query : %+v", api.RequestID(ctx), err)
-		return schema.GQLWrapf(err, "unable to type check id")
-	}
-
-	if len(decode.CheckID) != 1 {
-		return gqlerror.Errorf("Node with id %#x is not of type %s", uid, typ)
-	}
-
-	return nil
 }

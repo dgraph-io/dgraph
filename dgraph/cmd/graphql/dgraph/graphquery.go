@@ -38,6 +38,9 @@ func asString(query *gql.GraphQuery) string {
 
 func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root bool) {
 	b.WriteString(prefix)
+	if query.Var != "" {
+		b.WriteString(fmt.Sprintf("%s as ", query.Var))
+	}
 	if query.Alias != "" {
 		b.WriteString(query.Alias)
 		b.WriteString(" : ")
@@ -71,17 +74,30 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	b.WriteString("\n")
 }
 
+func writeUidFunc(b *strings.Builder, uids []uint64) {
+	b.WriteString("uid(")
+	for i, uid := range uids {
+		if i != 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(fmt.Sprintf("%#x", uid))
+	}
+	b.WriteString(")")
+}
+
 // writeRoot writes the root function as well as any ordering and paging
 // specified in q.
 //
-// Only uid(0x123) and type(...) functions are supported at root.
+// Only uid(0x123, 0x124) and type(...) functions are supported at root.
 func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	if q.Func == nil {
 		return
 	}
 
-	if q.Func.Name == "uid" && len(q.Func.UID) == 1 {
-		b.WriteString(fmt.Sprintf("(func: uid(%#x))", q.Func.UID[0]))
+	if q.Func.Name == "uid" {
+		b.WriteString("(func: ")
+		writeUidFunc(b, q.Func.UID)
+		b.WriteString(")")
 	} else if q.Func.Name == "type" && len(q.Func.Args) == 1 {
 		b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value))
 		writeOrderAndPage(b, q, true)
@@ -94,7 +110,9 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		return
 	}
 
-	if len(f.Args) == 1 {
+	if f.Name == "uid" {
+		writeUidFunc(b, f.UID)
+	} else if len(f.Args) == 1 {
 		b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value))
 	} else if len(f.Args) == 2 {
 		b.WriteString(fmt.Sprintf("%s(%s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value))

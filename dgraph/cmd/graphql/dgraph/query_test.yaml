@@ -737,3 +737,120 @@
         movies : Director.movies
       }
     }
+
+-
+  name: "Filter with ids uses uid func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Filter with ids inside and argument doesn't use uid func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((uid(0x1, 0x2) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Filter with ids and not translates correctly.."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { not: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(NOT (uid(0x1, 0x2))) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Deep filter with ids"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { ids: ["0x1", "0x2"], and: { title: { anyofterms: "GraphQL" } }}) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((anyofterms(Post.title, "GraphQL") AND uid(0x1, 0x2))) {
+          title : Post.title
+        }
+      }
+    }
+
+-
+  name: "Deep filter with ids in not key"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" }, not: { ids: ["0x1", "0x2"] } }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((NOT (uid(0x1, 0x2)) AND anyofterms(Post.title, "GraphQL"))) {
+          title : Post.title
+        }
+      }
+    }
+
+-
+  name: "Filter with no valid ids construct the right query with type func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid()) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Filter with ids only includes valid ids in dgquery."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+      }
+    }

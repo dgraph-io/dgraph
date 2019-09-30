@@ -2,11 +2,8 @@
 # Input Schema
 #######################
 
-type Message {
-	id: ID!
-	content: String!
-	author: String
-	datePosted: DateTime
+type Post {
+	content: String! @searchable
 }
 
 #######################
@@ -87,62 +84,41 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddMessagePayload {
-	message: Message
+type AddPostPayload {
+	post: Post
 }
 
-type DeleteMessagePayload {
+type DeletePostPayload {
 	msg: String
-}
-
-type UpdateMessagePayload {
-	message: Message
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum MessageOrderable {
+enum PostOrderable {
 	content
-	author
-	datePosted
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input MessageFilter {
-	ids: [ID!]
-	not: MessageFilter
+input PostFilter {
+	content: StringTermFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
-input MessageInput {
+input PostInput {
 	content: String!
-	author: String
-	datePosted: DateTime
 }
 
-input MessageOrder {
-	asc: MessageOrderable
-	desc: MessageOrderable
-	then: MessageOrder
-}
-
-input MessageRef {
-	id: ID!
-}
-
-input PatchMessage {
-	content: String
-	author: String
-	datePosted: DateTime
-}
-
-input UpdateMessageInput {
-	id: ID!
-	patch: PatchMessage!
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
 }
 
 #######################
@@ -150,8 +126,7 @@ input UpdateMessageInput {
 #######################
 
 type Query {
-	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################
@@ -159,7 +134,6 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: MessageInput!): AddMessagePayload
-	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
-	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
+	addPost(input: PostInput!): AddPostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 }
