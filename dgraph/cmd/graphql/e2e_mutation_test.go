@@ -945,15 +945,12 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 				"length": 2
 			  }
 			],
-			"primaryFunction": null,
 			"totalCredits": 10
 		  },
 		  {
 			"name": "R2-D2",
 			"appearsIn": "EMPIRE",
-			"primaryFunction": "Robot",
-			"starships": [],
-			"totalCredits": null
+			"primaryFunction": "Robot"
 		  }
 		]
 	  }`

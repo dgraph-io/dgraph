@@ -84,6 +84,7 @@ type Field interface {
 	SelectionSet() []Field
 	Location() *Location
 	DgraphPredicate() string
+	InterfaceType() bool
 }
 
 // TODO: Location will be swapped with the the one the x soon when errors
@@ -282,6 +283,10 @@ func (f *field) Type() Type {
 	}
 }
 
+func (f *field) InterfaceType() bool {
+	return f.op.inSchema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
+}
+
 func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
 	typ := objDef.Name
 	pi := parentInterface(sch, objDef, fname)
@@ -388,6 +393,10 @@ func (q *query) DgraphPredicate() string {
 	return (*field)(q).dgraphPred
 }
 
+func (q *query) InterfaceType() bool {
+	return (*field)(q).InterfaceType()
+}
+
 func (m *mutation) Name() string {
 	return (*field)(m).Name()
 }
@@ -410,6 +419,10 @@ func (m *mutation) Include() bool {
 
 func (m *mutation) Type() Type {
 	return (*field)(m).Type()
+}
+
+func (m *mutation) InterfaceType() bool {
+	return (*field)(m).InterfaceType()
 }
 
 func (m *mutation) IDArgValue() (uint64, error) {

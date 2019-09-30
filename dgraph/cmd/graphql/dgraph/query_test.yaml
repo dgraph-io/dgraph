@@ -704,6 +704,7 @@
   dgquery: |-
     query {
       queryCharacter(func: type(Character)) {
+        dgraph.type
         id : uid
         name : Character.name
         female : Human.female
@@ -730,6 +731,7 @@
   dgquery: |-
     query {
       queryCharacter(func: type(Character)) {
+        dgraph.type
         id : uid
         name : Character.name
         female : Human.female
