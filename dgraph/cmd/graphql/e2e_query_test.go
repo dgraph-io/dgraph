@@ -636,19 +636,19 @@ func postTest(t *testing.T, filter interface{}, expected []*post) {
 
 func TestSkipDirective(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
-		Query: `query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
+		Query: `query ($skipPost: Boolean!, $skipName: Boolean!) {
 			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
-				name @skip(if: $skipFalse)
+				name @skip(if: $skipName)
 				dob
 				reputation
-				posts @skip(if: $skipTrue) {
+				posts @skip(if: $skipPost) {
 					title
 				}
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"skipTrue":  true,
-			"skipFalse": false,
+			"skipPost": true,
+			"skipName": false,
 		},
 	}
 
@@ -662,18 +662,18 @@ func TestSkipDirective(t *testing.T) {
 
 func TestIncludeDirective(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
-		Query: `query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
+		Query: `query ($includeName: Boolean!, $includePost: Boolean!) {
 			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
-			  name @include(if: $includeTrue)
+			  name @include(if: $includeName)
 			  dob
-			  posts @include(if: $includeFalse) {
+			  posts @include(if: $includePost) {
 				title
 			  }
 			}
 		  }`,
 		Variables: map[string]interface{}{
-			"includeTrue":  true,
-			"includeFalse": false,
+			"includeName": true,
+			"includePost": false,
 		},
 	}
 
