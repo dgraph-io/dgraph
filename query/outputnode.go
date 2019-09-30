@@ -476,11 +476,9 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		if err != nil {
 			return err
 		}
-
 		for _, c := range normalized {
 			fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
 		}
-
 	}
 
 	if !hasChild {
@@ -708,6 +706,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						uc.SetUID(childUID, "uid")
 					}
 					if pc.List {
+						// We will normalize at each level instead of
+						// calling normalize after pretraverse.
+						// Now normalize() only flattens one level,
+						// the expectation is that it's children have
+						// already been normalized.
 						if pc.Params.Normalize {
 							normalized, err := uc.(*fastJsonNode).normalize()
 							if err != nil {
