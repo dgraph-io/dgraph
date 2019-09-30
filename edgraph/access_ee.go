@@ -678,6 +678,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
+	isSchemaQuery := parsedReq != nil && parsedReq.Schema != nil
+
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		if err == nil {
@@ -689,8 +691,13 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 				return nil
 			}
 		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
+			// Do not allow schema queries unless the user has logged in.
+			if isSchemaQuery {
+				return status.Error(codes.Unauthenticated, err.Error())
+			}
+
+			// Otherwise, treat the user as an anonymous guest who has not joined any group yet.
+			// Such a user can still get access to predicates that have no ACL rule defined.
 		} else {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
