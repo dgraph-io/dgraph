@@ -827,6 +827,7 @@ func addHuman(t *testing.T, starshipID string) string {
 		}`,
 		Variables: map[string]interface{}{"human": map[string]interface{}{
 			"name":         "Han",
+			"ename":        "Han_employee",
 			"totalCredits": 10,
 			"appearsIn":    []string{"EMPIRE"},
 			"starships": []map[string]interface{}{{

@@ -92,6 +92,10 @@ const (
 			"type": "string"
 		  },
 		  {
+			"predicate": "Employee.ename",
+			"type": "string"
+		  },
+		  {
 			"predicate": "Human.starships",
 			"type": "uid",
 			"list": true
@@ -258,6 +262,19 @@ const (
 		  },
 		  {
 			"fields": [
+			  {
+				"name": "Employee.ename",
+				"type": "string"
+			  }
+			],
+			"name": "Employee"
+		  },
+		  {
+			"fields": [
+			  {
+				"name": "Employee.ename",
+				"type": "string"
+			  },
 			  {
 				"name": "Character.name",
 				"type": "string"

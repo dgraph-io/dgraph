@@ -30,13 +30,17 @@ enum PostType {
         Opinion
 }
 
+interface Employee {
+        ename: String!
+}
+
 interface Character {
         id: ID!
         name: String! @searchable(by: exact)
         appearsIn: [Episode!] @searchable
 }
 
-type Human implements Character {
+type Human implements Character & Employee {
         starships: [Starship]
         totalCredits: Float
 }
