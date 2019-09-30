@@ -133,78 +133,78 @@ invalid_schemas:
     ]
 
   -
-    name: "ID is not searchable"
+    name: "ID is not search"
     input: |
       type X {
-        id: ID! @searchable
+        id: ID! @search
       }
       type Y {
-        id: ID! @searchable(by: term)
+        id: ID! @search(by: term)
       }
     errlist: [
-      {"message": "Type X; Field id: has the @searchable directive but fields of type ID are
-          not searchable.",
+      {"message": "Type X; Field id: has the @search directive but fields of type ID are
+          not search.",
       "locations":[{"line":2, "column":12}]},
-      {"message": "Type Y; Field id: has the @searchable directive but the argument term doesn't
+      {"message": "Type Y; Field id: has the @search directive but the argument term doesn't
           apply to field type ID.  Searchable term applies to fields of type String. Fields of type
-          ID are not searchable.",
+          ID are not search.",
       "locations":[{"line":5, "column":12}]}
       ]
 
   -
-    name: "Searchable will error on un-searchableType"
+    name: "Searchable will error on un-searchType"
     input: |
       type X {
-        y: Y @searchable
+        y: Y @search
       }
       type Y {
         y: String
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but fields of type Y
-          are not searchable.",
+      {"message": "Type X; Field y: has the @search directive but fields of type Y
+          are not search.",
       "locations":[{"line":2, "column":9}]}
       ]
 
   -
-    name: "Searchable (with arg) will error on un-searchableType"
+    name: "Searchable (with arg) will error on un-searchType"
     input: |
       type X {
-        y: Y @searchable(by: term)
+        y: Y @search(by: term)
       }
       type Y {
         y: String
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
           apply to field type Y.  Searchable term applies to fields of type String. Fields of
-          type Y are not searchable.",
+          type Y are not search.",
       "locations":[{"line":2, "column":9}]}
       ]
 
   -
-    name: "Searchable with wrong arg with error on default searchable type"
+    name: "Searchable with wrong arg with error on default search type"
     input: |
       type X {
-        y: Int @searchable(by: term)
+        y: Int @search(by: term)
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
           apply to field type Int.  Searchable term applies to fields of type String. Fields of
-          type Int are searchable by just @searchable.",
+          type Int are search by just @search.",
       "locations":[{"line":2, "column":11}]}
       ]
 
   -
-    name: "Searchable with wrong arg with error on searchable type"
+    name: "Searchable with wrong arg with error on search type"
     input: |
       type X {
-        y: String @searchable(by: day)
+        y: String @search(by: day)
       }
     errlist: [
-      {"message": "Type X; Field y: has the @searchable directive but the argument day doesn't
+      {"message": "Type X; Field y: has the @search directive but the argument day doesn't
           apply to field type String.  Searchable day applies to fields of type DateTime. Fields
-          of type String are searchable by exact, fulltext, hash, term and trigram.",
+          of type String are search by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -212,11 +212,11 @@ invalid_schemas:
     name: "Searchable doesn't accept bogus args"
     input: |
       type X {
-        y: String @searchable(by: bogus)
+        y: String @search(by: bogus)
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @searchable bogus isn't valid.Fields of type
-          String are searchable by exact, fulltext, hash, term and trigram.",
+      {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
+          String are search by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -324,30 +324,30 @@ valid_schemas:
       }
 
   -
-    name: "Correct searchable types"
+    name: "Correct search types"
     input: |
       type X {
-        int1: Int @searchable
-        int2: Int @searchable(by: int)
-        float1: Float @searchable
-        float2: Float @searchable(by: float)
-        bool1: Boolean @searchable
-        bool2: Boolean @searchable(by: bool)
-        str: String @searchable
-        strHash: String @searchable(by: hash)
-        strExact: String @searchable(by: exact)
-        strTerm: String @searchable(by: term)
-        strFulltext: String @searchable(by: fulltext)
-        strTrigram: String @searchable(by: trigram)
-        dt: DateTime @searchable
-        dtYear: DateTime @searchable(by: year)
-        dtMonth: DateTime @searchable(by: month)
-        dtDay: DateTime @searchable(by: day)
-        dtHour: DateTime @searchable(by: hour)
-        enumFld: E @searchable
-        req: String! @searchable(by: term)
-        list: [Int] @searchable
-        reqList: [DateTime!]! @searchable
+        int1: Int @search
+        int2: Int @search(by: int)
+        float1: Float @search
+        float2: Float @search(by: float)
+        bool1: Boolean @search
+        bool2: Boolean @search(by: bool)
+        str: String @search
+        strHash: String @search(by: hash)
+        strExact: String @search(by: exact)
+        strTerm: String @search(by: term)
+        strFulltext: String @search(by: fulltext)
+        strTrigram: String @search(by: trigram)
+        dt: DateTime @search
+        dtYear: DateTime @search(by: year)
+        dtMonth: DateTime @search(by: month)
+        dtDay: DateTime @search(by: day)
+        dtHour: DateTime @search(by: hour)
+        enumFld: E @search
+        req: String! @search(by: term)
+        list: [Int] @search
+        reqList: [DateTime!]! @search
       }
       enum E {
         A
