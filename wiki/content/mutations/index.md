@@ -1023,10 +1023,9 @@ Result:
 
 ### JSON Upsert Example
 
-Let's consider those previous [examples](#example) but instead of `rdf`, we will be using `json`.
+Let's consider those previous [examples](#example) but, instead of `rdf`, we are going to use `json`.
 
-The first example was to update the `name` information of an existing user and if
-the user doesn't exist, we create a user and update `email` and `name` information.
+The first example is to update the `name` information of an existing user, and if the user doesn't exist, we create a user and update `email` and `name` information.
 
 It can be achieved using the following:
 
@@ -1043,7 +1042,7 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 ' | jq
 ```
 
-The result if any user with the specified `email` was found :
+The result if we find any user with the specified `email` :
 
 ```json
 {
@@ -1058,7 +1057,7 @@ The result if any user with the specified `email` was found :
 }
 ```
 
-The result if the no user with the specified `email` was found :
+The result if we find no user with the specified `email` :
 
 ```json
 {
@@ -1071,9 +1070,9 @@ The result if the no user with the specified `email` was found :
 }
 ```
 
-The second example was to add the `age` information for the same user having the same email `user@company1.io`.
+The second example is to add the `age` of the same user (`user@company1.io`).
 
-We can achieve it using the following:
+We add the age for the user using the following `curl` request:
 
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
