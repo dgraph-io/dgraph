@@ -160,12 +160,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
-// and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
-	req, err := params.createGQLPost(url)
-	require.NoError(t, err)
-
+// Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
+// and executes the request
+func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
@@ -176,12 +173,45 @@ func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLRes
 	requireContainsRequestID(t, result)
 
 	return result
+
+}
+
+// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
+// and executes the request to url.
+func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLPost(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
 }
 
 // ExecuteAsGet builds a HTTP GET request from the GraphQL input structure
 // and executes the request to url.
-func (params *GraphQLParams) ExecuteAsGet(url string) ([]byte, error) {
-	return nil, errors.New("GET not yet supported")
+func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLGet(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
+}
+
+func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	q.Add("query", params.Query)
+	q.Add("operationName", params.OperationName)
+
+	variableString, err := json.Marshal(params.Variables)
+	if err != nil {
+		return nil, err
+	}
+	q.Add("variables", string(variableString))
+
+	req.URL.RawQuery = q.Encode()
+	return req, nil
 }
 
 func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
