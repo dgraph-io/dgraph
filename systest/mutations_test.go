@@ -1456,7 +1456,7 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 	// Create a string that has more than than 2^16 chars.
 	var b strings.Builder
 	for i := 0; i < 10000; i++ {
-		b.WriteString("abcdefg")
+		x.Check2(b.WriteString("abcdefg"))
 	}
 	largePred := b.String()
 

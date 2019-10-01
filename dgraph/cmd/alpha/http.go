@@ -254,11 +254,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var out bytes.Buffer
 	writeEntry := func(key string, js []byte) {
-		out.WriteRune('"')
-		out.WriteString(key)
-		out.WriteRune('"')
-		out.WriteRune(':')
-		out.Write(js)
+		x.Check2(out.WriteRune('"'))
+		x.Check2(out.WriteString(key))
+		x.Check2(out.WriteRune('"'))
+		x.Check2(out.WriteRune(':'))
+		x.Check2(out.Write(js))
 	}
 
 	e := query.Extensions{
@@ -271,11 +271,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out.WriteRune('{')
+	x.Check2(out.WriteRune('{'))
 	writeEntry("data", resp.Json)
-	out.WriteRune(',')
+	x.Check2(out.WriteRune(','))
 	writeEntry("extensions", js)
-	out.WriteRune('}')
+	x.Check2(out.WriteRune('}'))
 
 	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,

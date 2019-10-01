@@ -98,28 +98,28 @@ func (*rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
-			batch.Write(slc)
+			x.Check2(batch.Write(slc))
 			return batch, err
 		}
 		if err == bufio.ErrBufferFull {
 			// This should only happen infrequently.
-			batch.Write(slc)
+			x.Check2(batch.Write(slc))
 			var str string
 			str, err = r.ReadString('\n')
 			if err == io.EOF {
-				batch.WriteString(str)
+				x.Check2(batch.WriteString(str))
 				return batch, err
 			}
 			if err != nil {
 				return nil, err
 			}
-			batch.WriteString(str)
+			x.Check2(batch.WriteString(str))
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		batch.Write(slc)
+		x.Check2(batch.Write(slc))
 	}
 	return batch, nil
 }
@@ -168,11 +168,11 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	}
 
 	out := new(bytes.Buffer)
-	out.WriteRune('[')
+	x.Check2(out.WriteRune('['))
 	hasMapsBefore := false
 	for out.Len() < 1e5 {
 		if hasMapsBefore {
-			out.WriteRune(',')
+			x.Check2(out.WriteRune(','))
 		}
 		if err := jc.consumeMap(r, out); err != nil {
 			return nil, err
@@ -187,7 +187,7 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.Errorf("JSON file ends abruptly, expecting ]")
 			}
 
-			out.WriteRune(']')
+			x.Check2(out.WriteRune(']'))
 			return out, io.EOF
 		} else if err != nil {
 			return nil, err
@@ -203,7 +203,7 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.New("Not all of JSON file consumed")
 			}
 
-			out.WriteRune(']')
+			x.Check2(out.WriteRune(']'))
 			return out, io.EOF
 		}
 
@@ -216,7 +216,7 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 			return nil, errors.Errorf("JSON map is followed by illegal rune \"%c\"", ch)
 		}
 	}
-	out.WriteRune(']')
+	x.Check2(out.WriteRune(']'))
 	return out, nil
 }
 

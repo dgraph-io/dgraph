@@ -195,10 +195,10 @@ func (n nodeSlice) Swap(i, j int) {
 }
 
 func (fj *fastJsonNode) writeKey(out *bytes.Buffer) {
-	out.WriteRune('"')
-	out.WriteString(fj.attr)
-	out.WriteRune('"')
-	out.WriteRune(':')
+	x.Check2(out.WriteRune('"'))
+	x.Check2(out.WriteString(fj.attr))
+	x.Check2(out.WriteRune('"'))
+	x.Check2(out.WriteRune(':'))
 }
 
 func (fj *fastJsonNode) encode(out *bytes.Buffer) {
@@ -209,7 +209,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 
 	i := 0
 	if i < len(fj.attrs) {
-		out.WriteRune('{')
+		x.Check2(out.WriteRune('{'))
 		cur := fj.attrs[i]
 		i++
 		cnt := 1
@@ -228,7 +228,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				if cur.attr == next.attr {
 					if cnt == 1 {
 						cur.writeKey(out)
-						out.WriteRune('[')
+						x.Check2(out.WriteRune('['))
 						inArray = true
 					}
 					cur.encode(out)
@@ -237,7 +237,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 					if cnt == 1 {
 						cur.writeKey(out)
 						if cur.isChild || cur.list {
-							out.WriteRune('[')
+							x.Check2(out.WriteRune('['))
 							inArray = true
 						}
 					}
@@ -248,7 +248,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 					}
 					cnt = 1
 				}
-				out.WriteRune(',')
+				x.Check2(out.WriteRune(','))
 
 				cur = next
 			} else {
@@ -256,18 +256,18 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 					cur.writeKey(out)
 				}
 				if (cur.isChild || cur.list) && !inArray {
-					out.WriteRune('[')
+					x.Check2(out.WriteRune('['))
 				}
 				cur.encode(out)
 				if cnt != 1 || (cur.isChild || cur.list) {
-					out.WriteRune(']')
+					x.Check2(out.WriteRune(']'))
 				}
 				break
 			}
 		}
-		out.WriteRune('}')
+		x.Check2(out.WriteRune('}'))
 	} else {
-		out.Write(fj.scalarVal)
+		x.Check2(out.Write(fj.scalarVal))
 	}
 }
 

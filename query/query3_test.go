@@ -2094,7 +2094,8 @@ func TestMaxPredicateSize(t *testing.T) {
 	// Create a string that has more than than 2^16 chars.
 	var b strings.Builder
 	for i := 0; i < 10000; i++ {
-		b.WriteString("abcdefg")
+		_, err := b.WriteString("abcdefg")
+		require.NoError(t, err)
 	}
 	largePred := b.String()
 

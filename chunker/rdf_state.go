@@ -521,7 +521,7 @@ func isPnCharsBase(r rune) bool {
 	case r >= 0x37F && r <= 0x1FFF:
 	case r >= 0x200C && r <= 0x200D:
 	case r >= 0x2070 && r <= 0x218F:
-	case r >= 0x2C00 && r <= 0X2FEF:
+	case r >= 0x2C00 && r <= 0x2FEF:
 	case r >= 0x3001 && r <= 0xD7FF:
 	case r >= 0xF900 && r <= 0xFDCF:
 	case r >= 0xFDF0 && r <= 0xFFFD:
