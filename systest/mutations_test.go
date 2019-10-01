@@ -1574,8 +1574,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	query := `schema(type: Person) {}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"default"}]}]}`, string(resp.Json))
+	testutil.CompareJSON(t, `{"types":[{"name":"Person", "fields":["name"]}]}`, string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,

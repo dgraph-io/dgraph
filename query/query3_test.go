@@ -2119,21 +2119,16 @@ func TestQueryUnknownType(t *testing.T) {
 	require.JSONEq(t, `{"data": {}}`, js)
 }
 
-// TODO(martinmr): Change type query representation since the type of a field is no longer
-// relevant.
 func TestQuerySingleType(t *testing.T) {
 	query := `schema(type: Person) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"default"}, {"name":"pet", "type":"default"}]}]}}`,
-		js)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Person","fields":["name", "pet"]}]}}`, js)
 }
 
 func TestQueryMultipleTypes(t *testing.T) {
 	query := `schema(type: [Person, Animal]) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
-		"fields":[{"name":"name", "type":"default"}]},
-	{"name":"Person", "fields":[{"name":"name", "type": "default"},
-		{"name":"pet", "type":"default"}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"types":[
+		{"name":"Animal","fields":["name"]},
+		{"name":"Person", "fields":["name", "pet"]}]}}`, js)
 }
