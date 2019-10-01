@@ -3,26 +3,26 @@
 
 type Country {
         id: ID!
-        name: String! @searchable(by: "trigram")
+        name: String! @search(by: "trigram")
 }
 
 type Author {
         id: ID!
-        name: String! @searchable(by: "hash")
-        dob: DateTime @searchable
-        reputation: Float @searchable
+        name: String! @search(by: "hash")
+        dob: DateTime @search
+        reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: "author")
 }
 
 type Post {
         postID: ID!
-        title: String! @searchable(by: "term")
-        text: String @searchable(by: "fulltext")
-        tags: [String] @searchable(by: "exact")
-        numLikes: Int @searchable
-        isPublished: Boolean @searchable
-        postType: PostType @searchable
+        title: String! @search(by: "term")
+        text: String @search(by: "fulltext")
+        tags: [String] @search(by: "exact")
+        numLikes: Int @search
+        isPublished: Boolean @search
+        postType: PostType @search
         author: Author! @hasInverse(field: "posts")
 }
 
@@ -34,7 +34,7 @@ enum PostType {
 
 interface Character {
         id: ID!
-        name: String! @searchable
+        name: String! @search
 }
 
 interface Employee {
