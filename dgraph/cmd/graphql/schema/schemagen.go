@@ -156,14 +156,32 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 }
 
 func DgraphMapping(sch *ast.Schema) map[string]string {
+	const (
+		del     = "Delete"
+		payload = "Payload"
+	)
+
 	dgraphPredicate := make(map[string]string)
 	for _, inputTyp := range sch.Types {
-		if inputTyp.BuiltIn || inputTyp.Kind != ast.Object {
+		if inputTyp.BuiltIn || inputTyp.Name == "query" || inputTyp.Name == "mutation" ||
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
+		}
+
+		originalTyp := inputTyp
+		inputTypeName := inputTyp.Name
+		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
+			inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+			inputTyp = sch.Types[inputTypeName]
 		}
 		// TODO - This also includes Update, Delete and Add type payload objects. Also interfaces.
 		for _, fld := range inputTyp.Fields {
-			dgraphPredicate[inputTyp.Name+fld.Name] = inputTyp.Name + "." + fld.Name
+			typName := inputTypeName
+			parentInt := parentInterface(sch, inputTyp, fld.Name)
+			if parentInt != "" {
+				typName = parentInt
+			}
+			dgraphPredicate[originalTyp.Name+fld.Name] = typName + "." + fld.Name
 		}
 	}
 	return dgraphPredicate

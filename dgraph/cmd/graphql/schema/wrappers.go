@@ -59,7 +59,6 @@ const (
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
-	DgraphPredicate(typeName, fieldName string) string
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -138,8 +137,9 @@ type FieldDefinition interface {
 }
 
 type astType struct {
-	typ      *ast.Type
-	inSchema *ast.Schema
+	typ             *ast.Type
+	inSchema        *ast.Schema
+	dgraphPredicate map[string]string
 }
 
 type schema struct {
@@ -158,10 +158,9 @@ type operation struct {
 }
 
 type field struct {
-	field      *ast.Field
-	op         *operation
-	sel        ast.Selection
-	dgraphPred string
+	field *ast.Field
+	op    *operation
+	sel   ast.Selection
 }
 
 type fieldDefinition struct {
@@ -216,10 +215,6 @@ func (o *operation) Mutations() (ms []Mutation) {
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema, dgraphPredicate map[string]string) Schema {
 	return &schema{schema: s, dgraphPredicate: dgraphPredicate}
-}
-
-func (s schema) DgraphPredicate(typName, fieldName string) string {
-	return s.dgraphPredicate[typName+fieldName]
 }
 
 func responseName(f *ast.Field) string {
@@ -283,8 +278,9 @@ func (f *field) IDArgValue() (uint64, error) {
 
 func (f *field) Type() Type {
 	return &astType{
-		typ:      f.field.Definition.Type,
-		inSchema: f.op.inSchema.schema,
+		typ:             f.field.Definition.Type,
+		inSchema:        f.op.inSchema.schema,
+		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
 }
 
@@ -300,11 +296,9 @@ func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
-			pt := parentType(f.op.inSchema.schema, fld.ObjectDefinition, fld.Name)
 			flds = append(flds, &field{
-				field:      fld,
-				op:         f.op,
-				dgraphPred: pt + "." + fld.Name,
+				field: fld,
+				op:    f.op,
 			})
 		}
 		if fragment, ok := s.(*ast.InlineFragment); ok {
@@ -313,11 +307,9 @@ func (f *field) SelectionSet() (flds []Field) {
 			// within a query for an interface.
 			for _, s := range fragment.SelectionSet {
 				if fld, ok := s.(*ast.Field); ok {
-					pt := parentType(f.op.inSchema.schema, fld.ObjectDefinition, fld.Name)
 					flds = append(flds, &field{
-						field:      fld,
-						op:         f.op,
-						dgraphPred: pt + "." + fld.Name,
+						field: fld,
+						op:    f.op,
 					})
 				}
 			}
@@ -391,7 +383,7 @@ func (q *query) QueryType() QueryType {
 }
 
 func (q *query) DgraphPredicate() string {
-	return (*field)(q).dgraphPred
+	return (*field)(q).DgraphPredicate()
 }
 
 func (m *mutation) Name() string {
@@ -473,7 +465,7 @@ func (m *mutation) MutationType() MutationType {
 }
 
 func (m *mutation) DgraphPredicate() string {
-	return (*field)(m).dgraphPred
+	return (*field)(m).DgraphPredicate()
 }
 
 func (t *astType) Field(name string) FieldDefinition {
@@ -552,21 +544,7 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	const (
-		del     = "Delete"
-		payload = "Payload"
-	)
-
-	typName := t.Name()
-	// This isn't the most clean solution but something that fits in with the current
-	// implementation. When we get a deleteXYZ mutation which has a response type of
-	// DeleteTypePayload, to find the actual type we trim the prefix and suffix.
-	// TODO - Do all this as part of pre-processing and remove special handling here.
-	if strings.HasPrefix(typName, del) && strings.HasSuffix(typName, payload) {
-		typName = strings.TrimSuffix(strings.TrimPrefix(typName, del), payload)
-	}
-	pt := parentType(t.inSchema, t.inSchema.Types[typName], fld)
-	return fmt.Sprintf("%s.%s", pt, fld)
+	return t.dgraphPredicate[t.Name()+fld]
 }
 
 func (t *astType) String() string {
