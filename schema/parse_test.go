@@ -480,6 +480,56 @@ func TestParseTypeDuplicateFields(t *testing.T) {
 	require.Contains(t, err.Error(), "Duplicate fields with name: name")
 }
 
+func TestOldTypeFormat(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+			name: [string!]!
+			address: string!
+			children: [Person]
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "name",
+			},
+			{
+				Predicate: "address",
+			},
+			{
+				Predicate: "children",
+			},
+		},
+	}, result.Types[0])
+}
+
+func TestOldAndNewTypeFormat(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+			name: [string!]!
+			address
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "name",
+			},
+			{
+				Predicate: "address",
+			},
+		},
+	}, result.Types[0])
+}
+
 func TestParseTypeErrMissingNewLine(t *testing.T) {
 	reset()
 	_, err := Parse(`
