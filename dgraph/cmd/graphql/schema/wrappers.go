@@ -59,6 +59,7 @@ const (
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
+	DgraphPredicate(typeName, fieldName string) string
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -142,7 +143,8 @@ type astType struct {
 }
 
 type schema struct {
-	schema *ast.Schema
+	schema          *ast.Schema
+	dgraphPredicate map[string]string
 }
 
 type operation struct {
@@ -152,7 +154,7 @@ type operation struct {
 	// The fields below are used by schema introspection queries.
 	query    string
 	doc      *ast.QueryDocument
-	inSchema *ast.Schema
+	inSchema *schema
 }
 
 type field struct {
@@ -212,8 +214,12 @@ func (o *operation) Mutations() (ms []Mutation) {
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
-	return &schema{schema: s}
+func AsSchema(s *ast.Schema, dgraphPredicate map[string]string) Schema {
+	return &schema{schema: s, dgraphPredicate: dgraphPredicate}
+}
+
+func (s schema) DgraphPredicate(typName, fieldName string) string {
+	return s.dgraphPredicate[typName+fieldName]
 }
 
 func responseName(f *ast.Field) string {
@@ -278,7 +284,7 @@ func (f *field) IDArgValue() (uint64, error) {
 func (f *field) Type() Type {
 	return &astType{
 		typ:      f.field.Definition.Type,
-		inSchema: f.op.inSchema,
+		inSchema: f.op.inSchema.schema,
 	}
 }
 
@@ -294,7 +300,7 @@ func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
-			pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
+			pt := parentType(f.op.inSchema.schema, fld.ObjectDefinition, fld.Name)
 			flds = append(flds, &field{
 				field:      fld,
 				op:         f.op,
@@ -307,7 +313,7 @@ func (f *field) SelectionSet() (flds []Field) {
 			// within a query for an interface.
 			for _, s := range fragment.SelectionSet {
 				if fld, ok := s.(*ast.Field); ok {
-					pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
+					pt := parentType(f.op.inSchema.schema, fld.ObjectDefinition, fld.Name)
 					flds = append(flds, &field{
 						field:      fld,
 						op:         f.op,
@@ -328,7 +334,7 @@ func (f *field) Location() *Location {
 }
 
 func (f *field) DgraphPredicate() string {
-	return f.dgraphPred
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name+f.Name()]
 }
 
 func (q *query) Name() string {

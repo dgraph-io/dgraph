@@ -167,14 +167,17 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	gqlschema, gqlErr := validator.ValidateSchemaDocument(doc)
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
+	dgraphPredicate := schema.DgraphMapping(gqlSchema)
+
 	handler := &graphqlHandler{
-		dgraphClient: dgraphClient,
-		schema:       gqlschema,
+		dgraphClient:    dgraphClient,
+		schema:          gqlSchema,
+		dgraphPredicate: dgraphPredicate,
 	}
 
 	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))

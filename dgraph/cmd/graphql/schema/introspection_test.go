@@ -177,7 +177,7 @@ func TestIntrospectionQuery(t *testing.T) {
 		require.NotNil(t, op)
 
 		queries := oper.Queries()
-		resp, err := Introspect(oper, queries[0], AsSchema(sch))
+		resp, err := Introspect(oper, queries[0], AsSchema(sch, DgraphMapping(sch)))
 		require.NoError(t, err)
 
 		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
@@ -233,7 +233,7 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 	require.NotNil(t, op)
 
 	queries := oper.Queries()
-	resp, err := Introspect(oper, queries[0], AsSchema(sch))
+	resp, err := Introspect(oper, queries[0], AsSchema(sch, DgraphMapping(sch)))
 	require.NoError(t, err)
 
 	fname := "testdata/introspection/output/type_complex_object_name_filter.json"
@@ -271,7 +271,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	}
 
 	queries := oper.Queries()
-	resp, err := Introspect(oper, queries[0], AsSchema(sch))
+	resp, err := Introspect(oper, queries[0], AsSchema(sch, DgraphMapping(sch)))
 	require.NoError(t, err)
 
 	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")

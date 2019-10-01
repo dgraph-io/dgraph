@@ -95,7 +95,7 @@ func NewHandler(input string) (Handler, error) {
 
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
-		if strings.HasPrefix(defn.Name, "__") {
+		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
@@ -138,6 +138,7 @@ func NewHandler(input string) (Handler, error) {
 // }
 //
 // calling parentInterface on the fieldName name with type definition for B, would return A.
+// TODO - Remove this and use the dgraphPredicate map defined above.
 func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
 	if len(typDef.Interfaces) == 0 {
 		return ""
@@ -152,6 +153,20 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 		}
 	}
 	return ""
+}
+
+func DgraphMapping(sch *ast.Schema) map[string]string {
+	dgraphPredicate := make(map[string]string)
+	for _, inputTyp := range sch.Types {
+		if inputTyp.BuiltIn || inputTyp.Kind != ast.Object {
+			continue
+		}
+		// TODO - This also includes Update, Delete and Add type payload objects. Also interfaces.
+		for _, fld := range inputTyp.Fields {
+			dgraphPredicate[inputTyp.Name+fld.Name] = inputTyp.Name + "." + fld.Name
+		}
+	}
+	return dgraphPredicate
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
