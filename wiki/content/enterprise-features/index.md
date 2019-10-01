@@ -300,4 +300,45 @@ ACL  : {name  7}
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
 first log in through a user. A sample code using the dgo client can be found
-[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
+[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go).
+
+### Access Data Using Curl
+
+Dgraph's HTTP API also supports authenticated operations to access ACL-protected
+data.
+
+To login, send a POST request to `/login` with the userid and password. For example, to log in as the root user groot:
+
+```sh
+$ curl -X POST localhost:8080/login -d '{
+  "userid": "groot",
+  "password": "password"
+}'
+```
+
+Response:
+```
+{
+  "data": {
+    "accessJWT": "<accessJWT>",
+    "refreshJWT": "<refreshJWT>"
+  }
+}
+```
+The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
+
+You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header.
+
+```sh
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/query -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/mutate -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/alter -d '...'
+```
+
+The refresh token can be used in the `/login` POST body to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
+
+```sh
+$ curl -X POST localhost:8080/login -d '{
+  "refresh_token": "<refreshJWT>"
+}'
+```
