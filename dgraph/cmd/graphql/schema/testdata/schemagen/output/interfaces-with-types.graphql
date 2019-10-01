@@ -4,25 +4,25 @@
 
 interface Character {
 	id: ID!
-	name: String! @search(by: exact)
+	name: String! @searchable(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 }
 
 type Human implements Character {
 	id: ID!
-	name: String! @search(by: exact)
+	name: String! @searchable(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
 
 type Droid implements Character {
 	id: ID!
-	name: String! @search(by: exact)
+	name: String! @searchable(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
 	primaryFunction: String
 }
 
@@ -34,7 +34,7 @@ enum Episode {
 
 type Starship {
 	id: ID!
-	name: String! @search(by: term)
+	name: String! @searchable(by: term)
 	length: Float
 }
 
@@ -60,7 +60,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

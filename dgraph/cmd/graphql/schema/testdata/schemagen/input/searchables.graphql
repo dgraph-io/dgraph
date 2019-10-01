@@ -1,21 +1,21 @@
 type Post {
 	postID: ID!
-	title: String! @search(by: term)
-	text: String @search(by: fulltext)
+	title: String! @searchable(by: term)
+	text: String @searchable(by: fulltext)
 
-	tags: [String] @search(by: trigram)
-	tagsHash: [String] @search(by: hash)
-	tagsExact: [String] @search(by: exact)
+	tags: [String] @searchable(by: trigram)
+	tagsHash: [String] @searchable(by: hash)
+	tagsExact: [String] @searchable(by: exact)
 
-	publishByYear: DateTime @search(by: year)
-	publishByMonth: DateTime @search(by: month)
-	publishByDay: DateTime @search(by: day)
-	publishByHour: DateTime @search(by: hour)
+	publishByYear: DateTime @searchable(by: year)
+	publishByMonth: DateTime @searchable(by: month)
+	publishByDay: DateTime @searchable(by: day)
+	publishByHour: DateTime @searchable(by: hour)
 
-	numLikes: Int @search
-	score: Float @search
-	isPublished: Boolean @search
-	postType: PostType @search
+	numLikes: Int @searchable
+	score: Float @searchable
+	isPublished: Boolean @searchable
+	postType: PostType @searchable
 }
 
 enum PostType {

@@ -189,16 +189,16 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	return true
 }
 
-func searchValidation(
+func searchableValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
 
-	arg := dir.Arguments.ForName(searchArg)
+	arg := dir.Arguments.ForName(searchableArg)
 	if arg == nil {
 		// If there's no arg, then it can be an enum or has to be a scalar that's
-		// not ID. The schema generation will add the default search
+		// not ID. The schema generation will add the default searchable
 		// for that type.
 		if sch.Types[field.Type.Name()].Kind == ast.Enum ||
 			(sch.Types[field.Type.Name()].Kind == ast.Scalar && !isIDField(typ, field)) {
@@ -207,34 +207,34 @@ func searchValidation(
 
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: has the @search directive but fields of type %s "+
-				"are not search.",
+			"Type %s; Field %s: has the @searchable directive but fields of type %s "+
+				"are not searchable.",
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearchables[arg.Value.Raw]; !ok {
+	if searchable, ok := supportedSearchables[arg.Value.Raw]; !ok {
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: the argument to @search %s isn't valid."+
+			"Type %s; Field %s: the argument to @searchable %s isn't valid."+
 				"Fields of type %s are %s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
+			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchableMessage(sch, field))
 
-	} else if search != field.Type.Name() {
+	} else if searchable != field.Type.Name() {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: has the @search directive but the argument %s "+
+			"Type %s; Field %s: has the @searchable directive but the argument %s "+
 				"doesn't apply to field type %s.  Searchable %[3]s applies to fields of type %[5]s. "+
 				"Fields of type %[4]s are %[6]s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearchables[arg.Value.Raw], searchMessage(sch, field))
+			supportedSearchables[arg.Value.Raw], searchableMessage(sch, field))
 	}
 
 	return nil
 }
 
-func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
+func searchableMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	var possibleSearchables []string
 	for name, typ := range supportedSearchables {
 		if typ == field.Type.Name() {
@@ -243,14 +243,14 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	}
 
 	if len(possibleSearchables) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
-		return "search by just @search"
+		return "searchable by just @searchable"
 	} else if len(possibleSearchables) == 0 {
-		return "not search"
+		return "not searchable"
 	}
 
 	sort.Strings(possibleSearchables)
 	return fmt.Sprintf(
-		"search by %s and %s",
+		"searchable by %s and %s",
 		strings.Join(possibleSearchables[:len(possibleSearchables)-1], ", "),
 		possibleSearchables[len(possibleSearchables)-1])
 }

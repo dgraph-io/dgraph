@@ -1,26 +1,26 @@
 type Country {
         id: ID!
-        name: String! @search(by: "trigram")
+        name: String! @searchable(by: "trigram")
 }
 
 type Author {
         id: ID!
-        name: String! @search(by: "hash")
-        dob: DateTime @search
-        reputation: Float @search
+        name: String! @searchable(by: "hash")
+        dob: DateTime @searchable
+        reputation: Float @searchable
         country: Country
         posts: [Post!] @hasInverse(field: "author")
 }
 
 type Post {
         postID: ID!
-        title: String! @search(by: "term")
-        text: String @search(by: "fulltext")
-        tags: [String] @search(by: "exact")
-        topic: String @search(by: "exact")
-        numLikes: Int @search
-        isPublished: Boolean @search
-        postType: PostType @search
+        title: String! @searchable(by: "term")
+        text: String @searchable(by: "fulltext")
+        tags: [String] @searchable(by: "exact")
+        topic: String @searchable(by: "exact")
+        numLikes: Int @searchable
+        isPublished: Boolean @searchable
+        postType: PostType @searchable
         author: Author! @hasInverse(field: "posts")
 }
 

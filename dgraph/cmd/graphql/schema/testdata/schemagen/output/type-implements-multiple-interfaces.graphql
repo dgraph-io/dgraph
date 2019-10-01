@@ -4,7 +4,7 @@
 
 interface Character {
 	id: ID!
-	name: String! @search(by: exact)
+	name: String! @searchable(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 }
 
@@ -17,7 +17,7 @@ type Human implements Character & Employee {
 	employeeId: String!
 	title: String!
 	id: ID!
-	name: String! @search(by: exact)
+	name: String! @searchable(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
 }
@@ -44,7 +44,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

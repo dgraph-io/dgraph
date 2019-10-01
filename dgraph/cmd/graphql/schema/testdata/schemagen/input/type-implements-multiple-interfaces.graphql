@@ -1,6 +1,6 @@
 interface Character {
     id: ID!
-    name: String! @search(by: exact)
+    name: String! @searchable(by: exact)
     friends: [Character]
 }
 
