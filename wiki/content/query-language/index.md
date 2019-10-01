@@ -2438,8 +2438,6 @@ student_name: string @index(exact) .
 textbook_name: string @lang @index(fulltext) .
 ```
 
-Types also support lists like `friends: [uid]` or `tags: [string]`.
-
 Altering the schema for a type that already exists, overwrites the existing
 definition.
 

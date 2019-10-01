@@ -192,38 +192,38 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 
 const testSchema = `
 type Person {
-	name: string
-	pet: Animal
+	name
+	pet
 }
 
 type Animal {
-	name: string
+	name
 }
 
 type CarModel {
-	make: string
-	model: string
-	year: int
-	previous_model: CarModel
+	make
+	model
+	year
+	previous_model
 }
 
 type SchoolInfo {
-	name: string
-	abbr: string
-	school: [uid]
-	district: [uid]
-	state: [uid]
-	county: [uid]
+	name
+	abbr
+	school
+	district
+	state
+	county
 }
 
 type User {
-	name: string
-	password: password
+	name
+	password
 }
 
 type Node {
-	node: uid
-	name: string
+	node
+	name
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
