@@ -18,6 +18,10 @@ func (q *PriorityQueue) Pop() *ValidTransaction {
 	return head.data
 }
 
+func (q *PriorityQueue) Peek() *ValidTransaction {
+	return q.head.data
+}
+
 // Insert traverses the list and places a valid transaction with priority p directly before the
 // first node with priority p-1. If there are other nodes with priority p, the new node is placed
 // behind them.
@@ -29,8 +33,8 @@ func (q *PriorityQueue) Insert(vt *ValidTransaction) {
 	}
 
 	for ; curr != nil; curr = curr.child {
-		currPriority := curr.data.validity.priority
-		if vt.validity.priority > currPriority {
+		currPriority := curr.data.Validity.Priority
+		if vt.Validity.Priority > currPriority {
 			newNode := &node{
 				data:   vt,
 				parent: curr.parent,

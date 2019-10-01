@@ -32,8 +32,7 @@ type Session struct {
 	vrfPrivateKey VrfPrivateKey
 	rt            *runtime.Runtime
 
-	config    *BabeConfiguration
-	epochData *Epoch
+	config *BabeConfiguration
 
 	authorityIndex uint64
 
@@ -60,6 +59,10 @@ func (b *Session) PushToTxQueue(vt *tx.ValidTransaction) {
 	b.txQueue.Insert(vt)
 }
 
+func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
+	return b.txQueue.Peek()
+}
+
 // sets the slot lottery threshold for the current epoch
 func (b *Session) setEpochThreshold() error {
 	var err error
@@ -78,10 +81,6 @@ func (b *Session) setEpochThreshold() error {
 // runs the slot lottery for a specific slot
 // returns true if validator is authorized to produce a block for that slot, false otherwise
 func (b *Session) runLottery(slot uint64) (bool, error) {
-	if slot < b.epochData.StartSlot {
-		return false, errors.New("slot is not in this epoch")
-	}
-
 	output, err := b.vrfSign(slot)
 	if err != nil {
 		return false, err

@@ -21,22 +21,19 @@ type VrfPublicKey [32]byte
 type VrfPrivateKey [64]byte
 
 // BabeConfiguration contains the starting data needed for Babe
+// see: https://github.com/paritytech/substrate/blob/426c26b8bddfcdbaf8d29f45b128e0864b57de1c/core/consensus/babe/primitives/src/lib.rs#L132
 type BabeConfiguration struct {
-	SlotDuration         uint64
-	C1                   uint64 // (1-(c1/c2)) is the probability of a slot being empty
-	C2                   uint64
-	MedianRequiredBlocks uint64
+	SlotDuration       uint64
+	EpochLength        uint64
+	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
+	C2                 uint64
+	GenesisAuthorities []AuthorityData
+	Randomness         byte
+	SecondarySlots     bool
 }
 
-// TODO: change to Schnorrkel public key
-type AuthorityId [32]byte
-
-// Epoch contains the data for an epoch
-type Epoch struct {
-	EpochIndex     uint64
-	StartSlot      uint64
-	Duration       uint64      // Slot duration in milliseconds
-	Authorities    AuthorityId // Schnorrkel public key of authority
-	Randomness     byte
-	SecondarySlots bool
+type AuthorityData struct {
+	// TODO: change to Schnorrkel public key
+	AuthorityId     [32]byte
+	AuthorityWeight uint64
 }

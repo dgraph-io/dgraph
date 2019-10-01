@@ -8,19 +8,19 @@ import (
 func TestPriorityQueue(t *testing.T) {
 	tests := []*ValidTransaction{
 		{
-			validity: &Validity{priority: 1},
+			Validity: &Validity{Priority: 1},
 		},
 		{
-			validity: &Validity{priority: 3},
+			Validity: &Validity{Priority: 3},
 		},
 		{
-			validity: &Validity{priority: 2},
+			Validity: &Validity{Priority: 2},
 		},
 		{
-			validity: &Validity{priority: 17},
+			Validity: &Validity{Priority: 17},
 		},
 		{
-			validity: &Validity{priority: 2},
+			Validity: &Validity{Priority: 2},
 		},
 	}
 
@@ -42,19 +42,19 @@ func TestPriorityQueue(t *testing.T) {
 func TestPriorityQueueAgain(t *testing.T) {
 	tests := []*ValidTransaction{
 		{
-			validity: &Validity{priority: 2},
+			Validity: &Validity{Priority: 2},
 		},
 		{
-			validity: &Validity{priority: 3},
+			Validity: &Validity{Priority: 3},
 		},
 		{
-			validity: &Validity{priority: 2},
+			Validity: &Validity{Priority: 2},
 		},
 		{
-			validity: &Validity{priority: 3},
+			Validity: &Validity{Priority: 3},
 		},
 		{
-			validity: &Validity{priority: 1},
+			Validity: &Validity{Priority: 1},
 		},
 	}
 

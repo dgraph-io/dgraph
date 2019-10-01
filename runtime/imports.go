@@ -43,12 +43,16 @@ package runtime
 // extern int32_t ext_local_storage_get(void *context, int32_t kind, int32_t key, int32_t keyLen, int32_t valueLen);
 // extern int32_t ext_local_storage_compare_and_set(void *context, int32_t kind, int32_t key, int32_t keyLen, int32_t oldValue, int32_t oldValueLen, int32_t newValue, int32_t newValueLen);
 // extern int32_t ext_sr25519_public_keys(void *context, int32_t idData, int32_t resultLen);
+// extern int32_t ext_ed25519_public_keys(void *context, int32_t idData, int32_t resultLen);
 // extern int32_t ext_network_state(void *context, int32_t writtenOut);
 // extern int32_t ext_sr25519_sign(void *context, int32_t idData, int32_t pubkeyData, int32_t msgData, int32_t msgLen, int32_t out);
+// extern int32_t ext_ed25519_sign(void *context, int32_t idData, int32_t pubkeyData, int32_t msgData, int32_t msgLen, int32_t out);
 // extern int32_t ext_submit_transaction(void *context, int32_t data, int32_t len);
 // extern void ext_local_storage_set(void *context, int32_t kind, int32_t key, int32_t keyLen, int32_t value, int32_t valueLen);
 // extern void ext_ed25519_generate(void *context, int32_t idData, int32_t seed, int32_t seedLen, int32_t out);
 // extern void ext_sr25519_generate(void *context, int32_t idData, int32_t seed, int32_t seedLen, int32_t out);
+// extern void ext_set_child_storage(void *context, int32_t storageKeyData, int32_t storageKeyLen, int32_t keyData, int32_t keyLen, int32_t valueData, int32_t valueLen);
+// extern int32_t ext_get_child_storage_into(void *context, int32_t storageKeyData, int32_t storageKeyLen, int32_t keyData, int32_t keyLen, int32_t valueData, int32_t valueLen, int32_t valueOffset);
 import "C"
 
 import (
@@ -183,6 +187,16 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	}
 }
 
+//export ext_set_child_storage
+func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen int32) {
+	return
+}
+
+//export ext_get_child_storage_into
+func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen, valueOffset int32) int32 {
+	return 0
+}
+
 // returns the trie root in the memory location `resultPtr`
 //export ext_storage_root
 func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
@@ -259,7 +273,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 // deletes the trie entry with key at memory location `keyData` with length `keyLen`
 //export ext_clear_storage
 func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
-	log.Debug("[ext_sr25519_verify] executing...")
+	log.Debug("[ext_clear_storage] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -424,9 +438,21 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 	log.Debug("[ext_sr25519_generate] executing...")
 }
 
+//export ext_ed25519_public_keys
+func ext_ed25519_public_keys(context unsafe.Pointer, idData, resultLen int32) int32 {
+	log.Debug("[ext_ed25519_public_keys] executing...")
+	return 0
+}
+
 //export ext_sr25519_public_keys
 func ext_sr25519_public_keys(context unsafe.Pointer, idData, resultLen int32) int32 {
 	log.Debug("[ext_sr25519_public_keys] executing...")
+	return 0
+}
+
+//export ext_ed25519_sign
+func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLen, out int32) int32 {
+	log.Debug("[ext_ed25519_sign] executing...")
 	return 0
 }
 
@@ -598,6 +624,10 @@ func registerImports() (*wasm.Imports, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, err = imports.Append("ext_ed25519_public_keys", ext_ed25519_public_keys, C.ext_ed25519_public_keys)
+	if err != nil {
+		return nil, err
+	}
 	_, err = imports.Append("ext_sr25519_public_keys", ext_sr25519_public_keys, C.ext_sr25519_public_keys)
 	if err != nil {
 		return nil, err
@@ -607,6 +637,10 @@ func registerImports() (*wasm.Imports, error) {
 		return nil, err
 	}
 	_, err = imports.Append("ext_sr25519_sign", ext_sr25519_sign, C.ext_sr25519_sign)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_ed25519_sign", ext_ed25519_sign, C.ext_ed25519_sign)
 	if err != nil {
 		return nil, err
 	}
@@ -627,6 +661,14 @@ func registerImports() (*wasm.Imports, error) {
 		return nil, err
 	}
 	_, err = imports.Append("ext_twox_64", ext_twox_64, C.ext_twox_64)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_set_child_storage", ext_set_child_storage, C.ext_set_child_storage)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_get_child_storage_into", ext_get_child_storage_into, C.ext_get_child_storage_into)
 	if err != nil {
 		return nil, err
 	}

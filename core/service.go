@@ -61,7 +61,10 @@ func (s *Service) start(e chan error) {
 		case p2p.TransactionMsgType:
 			// process tx
 		case p2p.BlockAnnounceMsgType:
+			// get extrinsics by sending BlockRequest message
 			// process block
+		case p2p.BlockResponseMsgType:
+			// process response
 		default:
 			log.Error("core service", "error", "got unsupported message type")
 		}
@@ -93,19 +96,11 @@ func (s *Service) ProcessTransaction(e types.Extrinsic) error {
 
 // ProcessBlock attempts to add a block to the chain by calling `core_execute_block`
 // if the block is validated, it is stored in the block DB and becomes part of the canonical chain
-func (s *Service) ProcessBlock(b *types.BlockHeader) error {
-	return nil
-}
-
-// runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction
-// and returns *Validity
-func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
-	ret, err := s.rt.Exec("TaggedTransactionQueue_validate_transaction", 1, 0)
+func (s *Service) ProcessBlock(b *types.Block) error {
+	enc, err := scale.Encode(b)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	v := new(tx.Validity)
-	_, err = scale.Decode(ret, v)
-	return v, err
+	err = s.validateBlock(enc)
+	return err
 }

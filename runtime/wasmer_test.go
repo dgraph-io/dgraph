@@ -33,8 +33,8 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
-const POLKADOT_RUNTIME_FP string = "../polkadot_runtime.wasm"
-const POLKADOT_RUNTIME_URL string = "https://github.com/w3f/polkadot-re-tests/blob/master/polkadot-runtime/polkadot_runtime.compact.wasm?raw=true"
+const POLKADOT_RUNTIME_FP string = "../substrate_test_runtime.compact.wasm"
+const POLKADOT_RUNTIME_URL string = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
 
 // getRuntimeBlob checks if the polkadot runtime wasm file exists and if not, it fetches it from github
 func getRuntimeBlob() (n int64, err error) {
@@ -92,12 +92,13 @@ func newRuntime(t *testing.T) (*Runtime, error) {
 }
 
 func TestExecVersion(t *testing.T) {
+	// https://github.com/paritytech/substrate/blob/7b1d822446982013fa5b7ad5caff35ca84f8b7d0/core/test-runtime/src/lib.rs#L73
 	expected := &Version{
-		Spec_name:         []byte("kusama"),
-		Impl_name:         []byte("parity-kusama"),
+		Spec_name:         []byte("test"),
+		Impl_name:         []byte("parity-test"),
 		Authoring_version: 1,
-		Spec_version:      1002,
-		Impl_version:      0,
+		Spec_version:      1,
+		Impl_version:      1,
 	}
 
 	r, err := newRuntime(t)

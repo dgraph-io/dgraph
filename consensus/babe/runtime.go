@@ -20,9 +20,9 @@ import (
 	scale "github.com/ChainSafe/gossamer/codec"
 )
 
-// gets the startup data for Babe from the runtime
-func (b *Session) startupData() (*BabeConfiguration, error) {
-	ret, err := b.rt.Exec("BabeApi_startup_data", 1, 0)
+// gets the configuration data for Babe from the runtime
+func (b *Session) configurationFromRuntime() (*BabeConfiguration, error) {
+	ret, err := b.rt.Exec("BabeApi_configuration", 1, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -30,16 +30,4 @@ func (b *Session) startupData() (*BabeConfiguration, error) {
 	bc := new(BabeConfiguration)
 	_, err = scale.Decode(ret, bc)
 	return bc, err
-}
-
-// gets the current epoch data from the runtime
-func (b *Session) epoch() (*Epoch, error) {
-	ret, err := b.rt.Exec("BabeApi_epoch", 1, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	e := new(Epoch)
-	_, err = scale.Decode(ret, e)
-	return e, err
 }

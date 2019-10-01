@@ -297,12 +297,20 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 		v = reflect.ValueOf(t)
 	}
 
+	if v.Len() == 0 {
+		return t, nil
+	}
+
 	var err error
 	var o interface{}
 
 	length, err := sd.DecodeInteger()
 	if err != nil {
 		return nil, err
+	}
+
+	if length == 0 {
+		return t, nil
 	}
 
 	for i := 0; i < int(length); i++ {

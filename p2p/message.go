@@ -273,6 +273,7 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	return nil
 }
 
+// BlockAnnounceMessage is a state block header
 type BlockAnnounceMessage common.BlockHeader
 
 func (bm *BlockAnnounceMessage) GetType() int {
@@ -379,7 +380,7 @@ func (tm *TransactionMessage) Encode() ([]byte, error) {
 	return append([]byte{TransactionMsgType}, encodedMessage...), err
 }
 
-//Decodes the message into a TransactionMessage, it assumes the type byte han been removed
+// Decodes the message into a TransactionMessage, it assumes the type byte han been removed
 func (tm *TransactionMessage) Decode(r io.Reader) error {
 	sd := scale.Decoder{Reader: r}
 	decodedMessage, err := sd.Decode([]byte{})

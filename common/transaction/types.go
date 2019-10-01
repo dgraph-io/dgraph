@@ -12,26 +12,33 @@ type Queue interface {
 	Insert(vt *ValidTransaction)
 }
 
-type TransactionTag []byte
-
 // see: https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/sr-primitives/src/transaction_validity.rs#L178
 type Validity struct {
-	priority uint64
-	// requires  []TransactionTag
-	// provides  []TransactionTag
-	// longevity uint64
-	// propagate bool
+	Priority  uint64
+	Requires  [][]byte
+	Provides  [][]byte
+	Longevity uint64
+	Propagate bool
+}
+
+func NewValidity(priority uint64, requires, provides [][]byte, longevity uint64, propagate bool) *Validity {
+	return &Validity{
+		Priority:  priority,
+		Requires:  requires,
+		Provides:  provides,
+		Longevity: longevity,
+		Propagate: propagate,
+	}
 }
 
 type ValidTransaction struct {
-	extrinsic *types.Extrinsic
-	validity  *Validity
+	Extrinsic *types.Extrinsic
+	Validity  *Validity
 }
 
-// NewValidTransaction creates a new ValidTransaction contains an extrinsic and Validity
 func NewValidTransaction(extrinsic *types.Extrinsic, validity *Validity) *ValidTransaction {
 	return &ValidTransaction{
-		extrinsic: extrinsic,
-		validity:  validity,
+		Extrinsic: extrinsic,
+		Validity:  validity,
 	}
 }

@@ -295,6 +295,7 @@ var decodeTupleTests = []decodeTupleTest{
 }
 
 var decodeArrayTests = []decodeArrayTest{
+	{val: []byte{}, t: [][]byte{}, output: [][]byte{}},
 	{val: []byte{0x00}, t: []int{}, output: []int{}},
 	{val: []byte{0x04, 0x04}, t: make([]int, 1), output: []int{1}},
 	{val: []byte{0x10, 0x04, 0x08, 0x0c, 0x10}, t: make([]int, 4), output: []int{1, 2, 3, 4}},
