@@ -264,7 +264,7 @@ func rewriteObject(
 		var err error
 
 		fieldDef := typ.Field(field)
-		fieldName := fmt.Sprintf("%s.%s", fieldDef.ParentType(), field)
+		fieldName := typ.DgraphPredicate(field)
 
 		switch val := val.(type) {
 		case map[string]interface{}:

@@ -138,7 +138,6 @@ func NewHandler(input string) (Handler, error) {
 // }
 //
 // calling parentInterface on the fieldName name with type definition for B, would return A.
-// TODO - Remove this and use the dgraphPredicate map defined above.
 func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
 	if len(typDef.Interfaces) == 0 {
 		return ""
