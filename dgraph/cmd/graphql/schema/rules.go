@@ -212,7 +212,7 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearchs[arg.Value.Raw]; !ok {
+	if search, ok := supportedSearchArgs[arg.Value.Raw]; !ok {
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
@@ -228,7 +228,7 @@ func searchValidation(
 				"doesn't apply to field type %s.  Search %[3]s applies to fields of type %[5]s. "+
 				"Fields of type %[4]s are %[6]s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearchs[arg.Value.Raw], searchMessage(sch, field))
+			supportedSearchArgs[arg.Value.Raw], searchMessage(sch, field))
 	}
 
 	return nil
@@ -236,7 +236,7 @@ func searchValidation(
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	var possibleSearchs []string
-	for name, typ := range supportedSearchs {
+	for name, typ := range supportedSearchArgs {
 		if typ == field.Type.Name() {
 			possibleSearchs = append(possibleSearchs, name)
 		}

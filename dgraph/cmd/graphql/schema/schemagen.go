@@ -206,7 +206,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						if arg != nil {
 							indexStr = fmt.Sprintf(" @index(%s)", arg.Value.Raw)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchs[f.Type.Name()])
+							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchArgs[f.Type.Name()])
 						}
 					}
 

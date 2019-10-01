@@ -129,7 +129,7 @@ type directiveValidator func(
 
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
-var supportedSearchs = map[string]string{
+var supportedSearchArgs = map[string]string{
 	"int":      "Int",
 	"float":    "Float",
 	"bool":     "Boolean",
@@ -146,7 +146,7 @@ var supportedSearchs = map[string]string{
 
 // GraphQL scalar type -> default Dgraph index (/search)
 // used if the schema specifies @search without an arg
-var defaultSearchs = map[string]string{
+var defaultSearchArgs = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
 	"Float":    "float",
@@ -524,7 +524,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if search := getSearch(fld); search != "" {
+		if search := getSearchArgs(fld); search != "" {
 			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
@@ -564,12 +564,12 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearch(fld) != "" || isID(fld) })
+		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" || isID(fld) })
 }
 
 func hasSearchs(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearch(fld) != "" })
+		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" })
 }
 
 func hasOrderables(defn *ast.Definition) bool {
@@ -592,15 +592,15 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
-// getSearch returns the name of the search applied to fld, or ""
+// getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
-func getSearch(fld *ast.FieldDefinition) string {
+func getSearchArgs(fld *ast.FieldDefinition) string {
 	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
 		return ""
 	}
 	if len(search.Arguments) == 0 {
-		if search, ok := defaultSearchs[fld.Type.Name()]; ok {
+		if search, ok := defaultSearchArgs[fld.Type.Name()]; ok {
 			return search
 		}
 		// it's an enum - always has exact index
