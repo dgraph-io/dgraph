@@ -516,7 +516,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
-			Cascade:        sg.Params.Cascade,
+			Cascade:        gchild.Cascade || sg.Params.Cascade,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
@@ -868,6 +868,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 		sg.Params.Langs = nil
 	}
+	// count is to limit how many results we want.
+	first := calculateFirstN(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -881,12 +883,48 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
+		First:        first,
 	}
 
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
 	return out, nil
+}
+
+// calculateFirstN returns the count of result we need to proceed query further down.
+func calculateFirstN(sg *SubGraph) int32 {
+	// by default count is zero. (zero will retrive all the results)
+	count := math.MaxInt32
+	// In order to limit we have to make sure that the this level met the following conditions
+	// - No Filter (We can't filter until we have all the uids)
+	// {
+	//   q(func: has(name), first:1)@filter(eq(father, "schoolboy")) {
+	//     name
+	//     father
+	//   }
+	// }
+	// - No Ordering (We need all the results to do the sorting)
+	// {
+	//   q(func: has(name), first:1, orderasc: name) {
+	//     name
+	//   }
+	// }
+	// - should be has function (Right now, I'm doing it for has, later it can be extended)
+	// {
+	//   q(func: has(name), first:1) {
+	//     name
+	//   }
+	// }
+	isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
+		isSupportedFunction {
+		// Offset also added because, we need n results to trim the offset.
+		if sg.Params.Count != 0 {
+			count = sg.Params.Count + sg.Params.Offset
+		}
+	}
+	return int32(count)
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
@@ -1250,7 +1288,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !sg.Params.Cascade {
+		if !child.Params.Cascade {
 			continue
 		}
 

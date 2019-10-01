@@ -329,9 +329,11 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
 	require.NoError(t, err)

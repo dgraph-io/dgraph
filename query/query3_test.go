@@ -2090,37 +2090,6 @@ func TestTypeFilterUnknownType(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
-func TestTypeDirectiveInPredicate(t *testing.T) {
-	query := `
-		{
-			me(func: uid(0x2)) {
-				enemy @type(Person) {
-					name
-				}
-			}
-		}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret"}, {"name":"Leonard"}]}]}}`, js)
-}
-
-func TestMultipleTypeDirectivesInPredicate(t *testing.T) {
-	query := `
-		{
-			me(func: uid(0x2)) {
-				enemy @type(Person) {
-					name
-					pet @type(Animal) {
-						name
-					}
-				}
-			}
-		}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret", "pet":[{"name":"Bear"}]}, {"name":"Leonard"}]}]}}`, js)
-}
-
 func TestMaxPredicateSize(t *testing.T) {
 	// Create a string that has more than than 2^16 chars.
 	var b strings.Builder

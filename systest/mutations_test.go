@@ -29,7 +29,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -1634,7 +1633,7 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 			mu.SetJson = []byte(`{"uid": "_:b", "friend": [{"uid": "` + id + `"}]}`)
 			for i := 0; i < 10; i++ {
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err == nil || err != y.ErrAborted {
+				if err == nil || err != dgo.ErrAborted {
 					break
 				}
 			}

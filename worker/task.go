@@ -911,7 +911,8 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 
 	return langForFunc(langs) != "." &&
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
-			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn)
+			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
+			srcFn.fnType == customIndexFn)
 }
 
 func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
@@ -955,7 +956,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
-	uids := &pb.List{}
+	var uids *pb.List
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1170,7 +1171,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	uids := &pb.List{}
+	var uids *pb.List
 	switch {
 	case !typ.IsScalar():
 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -1388,9 +1389,20 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	case hasFn:
 		// Dont do anything, as filtering based on lang is already
 		// done above.
-	case fullTextSearchFn, standardFn:
+	case fullTextSearchFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
+		filter.tokName = "fulltext"
+		filtered = matchStrings(filtered, values, filter)
+	case standardFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "term"
+		filtered = matchStrings(filtered, values, filter)
+	case customIndexFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = arg.q.SrcFunc.Args[0]
 		filtered = matchStrings(filtered, values, filter)
 	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
@@ -2029,6 +2041,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)
+			// We'll stop fetching if we fetch the required count.
+			if len(result.Uids) >= int(q.First) {
+				break
+			}
 			continue
 		}
 
@@ -2041,6 +2057,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 			return err
 		} else if !empty {
 			result.Uids = append(result.Uids, pk.Uid)
+			// We'll stop fetching if we fetch the required count.
+			if len(result.Uids) >= int(q.First) {
+				break
+			}
 		}
 
 		if len(result.Uids)%100000 == 0 {
