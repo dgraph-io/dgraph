@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
@@ -475,10 +476,25 @@ func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, 
 	comma := ""
 
 	buf.WriteRune('{')
+
+	dgraphTypes, _ := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
+
+		inputType := f.ConcreteType(dgraphTypes)
+		// If typ is an interface, and dgraphTypes contains another type, then we ignore
+		// fields which don't start with that type. This would happen when multiple
+		// fragments (belonging to different types) are requested within a query for an interface.
+
+		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
+		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
+		if inputType != "" && !strings.HasPrefix(f.DgraphPredicate(), typ.Name()) &&
+			!strings.HasPrefix(f.DgraphPredicate(), inputType) {
+			continue
+		}
+
 		buf.WriteString(comma)
 		buf.WriteRune('"')
 		buf.WriteString(f.ResponseName())

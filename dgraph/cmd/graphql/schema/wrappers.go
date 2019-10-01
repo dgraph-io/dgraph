@@ -84,6 +84,9 @@ type Field interface {
 	SelectionSet() []Field
 	Location() *Location
 	DgraphPredicate() string
+	// InterfaceType tells us whether this field represents a GraphQL Interface.
+	InterfaceType() bool
+	ConcreteType(types []interface{}) string
 }
 
 // TODO: Location will be swapped with the the one the x soon when errors
@@ -282,6 +285,10 @@ func (f *field) Type() Type {
 	}
 }
 
+func (f *field) InterfaceType() bool {
+	return f.op.inSchema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
+}
+
 func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
 	typ := objDef.Name
 	pi := parentInterface(sch, objDef, fname)
@@ -329,6 +336,21 @@ func (f *field) Location() *Location {
 
 func (f *field) DgraphPredicate() string {
 	return f.dgraphPred
+}
+
+func (f *field) ConcreteType(dgraphTypes []interface{}) string {
+	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
+	// and not an Interface object.
+	for _, typ := range dgraphTypes {
+		styp, ok := typ.(string)
+		if !ok {
+			continue
+		}
+		if f.op.inSchema.Types[styp].Kind == ast.Object {
+			return styp
+		}
+	}
+	return ""
 }
 
 func (q *query) Name() string {
@@ -388,6 +410,14 @@ func (q *query) DgraphPredicate() string {
 	return (*field)(q).dgraphPred
 }
 
+func (q *query) InterfaceType() bool {
+	return (*field)(q).InterfaceType()
+}
+
+func (q *query) ConcreteType(dgraphTypes []interface{}) string {
+	return (*field)(q).ConcreteType(dgraphTypes)
+}
+
 func (m *mutation) Name() string {
 	return (*field)(m).Name()
 }
@@ -410,6 +440,10 @@ func (m *mutation) Include() bool {
 
 func (m *mutation) Type() Type {
 	return (*field)(m).Type()
+}
+
+func (m *mutation) InterfaceType() bool {
+	return (*field)(m).InterfaceType()
 }
 
 func (m *mutation) IDArgValue() (uint64, error) {
@@ -468,6 +502,10 @@ func (m *mutation) MutationType() MutationType {
 
 func (m *mutation) DgraphPredicate() string {
 	return (*field)(m).dgraphPred
+}
+
+func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
+	return (*field)(m).ConcreteType(dgraphTypes)
 }
 
 func (t *astType) Field(name string) FieldDefinition {
