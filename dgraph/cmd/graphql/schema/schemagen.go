@@ -154,7 +154,7 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return ""
 }
 
-func DgraphMapping(sch *ast.Schema) map[string]string {
+func dgraphMapping(sch *ast.Schema) map[string]string {
 	const (
 		del     = "Delete"
 		payload = "Payload"

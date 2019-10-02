@@ -136,7 +136,10 @@ type astType struct {
 }
 
 type schema struct {
-	schema          *ast.Schema
+	schema *ast.Schema
+	// dgraphPredicate gives us the dgraph predicate corresponding to a key where the key is
+	// typeName + fieldName. It is pre-computed so that runtime queries and mutations can look it
+	// up quickly.
 	dgraphPredicate map[string]string
 }
 
@@ -208,7 +211,8 @@ func (o *operation) Mutations() (ms []Mutation) {
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema, dgraphPredicate map[string]string) Schema {
+func AsSchema(s *ast.Schema) Schema {
+	dgraphPredicate := dgraphMapping(s)
 	return &schema{schema: s, dgraphPredicate: dgraphPredicate}
 }
 
