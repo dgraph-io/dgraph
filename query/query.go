@@ -1832,7 +1832,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(types)
-			preds = getPredicatesFromTypes(types)
 			rpreds, err := getReversePredicates(ctx, preds)
 			if err != nil {
 				return out, err
