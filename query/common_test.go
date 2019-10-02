@@ -268,6 +268,8 @@ number                         : int @index(int) .
 district                       : [uid] .
 state                          : [uid] .
 county                         : [uid] .
+firstName                      : string .
+lastName                       : string .
 `
 
 func populateCluster() {
@@ -552,6 +554,18 @@ func populateCluster() {
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
 		<202> <dgraph.type> "CarModel" .
+
+		# data for regexp testing
+		_:luke <firstName> "Luke" .
+		_:luke <lastName> "Skywalker" .
+		_:leia <firstName> "Princess" .
+		_:leia <lastName> "Leia" .
+		_:han <firstName> "Han" .
+		_:han <lastName> "Solo" .
+		_:har <firstName> "Harrison" .
+		_:har <lastName> "Ford" .
+		_:ss <firstName> "Steven" .
+		_:ss <lastName> "Spielberg" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
