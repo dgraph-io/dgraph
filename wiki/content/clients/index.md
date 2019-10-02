@@ -853,3 +853,25 @@ $ curl localhost:8080/health
 ```
 
 Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
+
+### Run a query as a JSON object
+
+The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables" (Check the [Graphql Variables]({{< relref "query-language/index.md#graphql-variables" >}})).
+
+This query
+```
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    uid
+    name
+    balance
+  }
+}
+```
+Should be escaped to this:
+
+```sh
+curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d '{
+    "query": "{\n balances(func: anyofterms(name, \"Alice Bob\")) {\n uid\n name\n balance\n }\n }"
+}' | python -m json.tool | jq
+```
