@@ -575,7 +575,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		schs, err := GetSchemaOverNetwork(context.Background(),
 			&pb.SchemaRequest{Predicates: fields})
 		if err != nil {
-			errors.Errorf("Cannot retrieve predicate information for fields in type %s",
+			return errors.Errorf("Cannot retrieve predicate information for fields in type %s",
 				t.TypeName)
 		}
 
