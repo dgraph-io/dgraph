@@ -858,7 +858,8 @@ Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
 
 The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables". The JSON format is required to set [GraphQL Variables]({{< relref "query-language/index.md#graphql-variables" >}}) with the HTTP API.
 
-This query
+This query:
+
 ```
 {
   balances(func: anyofterms(name, "Alice Bob")) {
@@ -868,6 +869,7 @@ This query
   }
 }
 ```
+
 Should be escaped to this:
 
 ```sh
