@@ -207,8 +207,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		// Mutations, unlike queries, are handled serially and the results are
 		// not independent: e.g. if one mutation errors, we don't run the
 		// remaining mutations.
+		allSuccessful := true
+
 		for _, m := range op.Mutations() {
-			if r.resp.Errors != nil {
+			if !allSuccessful {
 				r.WithError(
 					gqlerror.Errorf("mutation %s not executed because of previous error",
 						m.ResponseName()))
@@ -222,12 +224,13 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
 			}
-			res := mr.resolve(ctx)
+			var res *resolved
+			res, allSuccessful = mr.resolve(ctx)
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
 		}
 	case op.IsSubscription():
-		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
+		schema.ErrorResponsef("Subscriptions not yet supported")
 	}
 
 	return r.resp
