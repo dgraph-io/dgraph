@@ -531,10 +531,10 @@
 			"revisionTime": "2019-08-23T04:17:19Z"
 		},
 		{
-			"checksumSHA1": "Dq1EzaB9/bQoYpviCBAZk6iZJN4=",
+			"checksumSHA1": "fqTl/govK4lq3d3evjRr/BksN0c=",
 			"path": "github.com/dgraph-io/ristretto",
-			"revision": "884587df5238b905fdf4762d8f270afdd03c80ab",
-			"revisionTime": "2019-09-25T17:03:43Z"
+			"revision": "3728a3602187257db967c1744a7ff5a1b4627080",
+			"revisionTime": "2019-10-02T00:58:18Z"
 		},
 		{
 			"checksumSHA1": "fp+NtBZPTvGfWtsxZWUQct/e0ZM=",

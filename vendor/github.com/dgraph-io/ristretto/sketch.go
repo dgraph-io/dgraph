@@ -88,6 +88,13 @@ func (s *cmSketch) Reset() {
 	}
 }
 
+// Clear zeroes all counters.
+func (s *cmSketch) Clear() {
+	for _, r := range s.rows {
+		r.clear()
+	}
+}
+
 func (s *cmSketch) string() string {
 	var state string
 	for i := range s.rows {
@@ -126,6 +133,13 @@ func (r cmRow) reset() {
 	// halve each counter
 	for i := range r {
 		r[i] = (r[i] >> 1) & 0x77
+	}
+}
+
+func (r cmRow) clear() {
+	// zero each counter
+	for i := range r {
+		r[i] = 0
 	}
 }
 

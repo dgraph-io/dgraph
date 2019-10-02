@@ -28,6 +28,11 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 )
 
+const (
+	// TODO: find the optimal value for this or make it configurable
+	setBufSize = 32 * 1024
+)
+
 // Cache is a thread-safe implementation of a hashmap with a TinyLFU admission
 // policy and a Sampled LFU eviction policy. You can use the same Cache instance
 // from as many goroutines as you want.
@@ -51,6 +56,10 @@ type Cache struct {
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
 	keyToHash func(interface{}) uint64
+	// stop is used to stop the processItems goroutine
+	stop chan struct{}
+	// cost calculates cost from a value
+	cost func(value interface{}) int64
 }
 
 // Config is passed to NewCache for creating new Cache instances.
@@ -90,14 +99,26 @@ type Config struct {
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
 	KeyToHash func(key interface{}) uint64
+	// Cost evaluates a value and outputs a corresponding cost. This function
+	// is ran after Set is called for a new item or an item update with a cost
+	// param of 0.
+	Cost func(value interface{}) int64
 }
+
+type itemFlag byte
+
+const (
+	itemNew itemFlag = iota
+	itemDelete
+	itemUpdate
+)
 
 // item is passed to setBuf so items can eventually be added to the cache
 type item struct {
-	key  uint64
-	val  interface{}
-	cost int64
-	del  bool
+	flag  itemFlag
+	key   uint64
+	value interface{}
+	cost  int64
 }
 
 // NewCache returns a new Cache instance and any configuration errors, if any.
@@ -118,21 +139,22 @@ func NewCache(config *Config) (*Cache, error) {
 			Consumer: policy,
 			Capacity: config.BufferItems,
 		}),
-		// TODO: size configuration for this? like BufferItems but for setBuf?
-		setBuf:    make(chan *item, 32*1024),
+		setBuf:    make(chan *item, setBufSize),
 		onEvict:   config.OnEvict,
 		keyToHash: config.KeyToHash,
+		stop:      make(chan struct{}),
+		cost:      config.Cost,
+	}
+	if cache.keyToHash == nil {
+		cache.keyToHash = z.KeyToHash
 	}
 	if config.Metrics {
 		cache.collectMetrics()
 	}
-	// We can possibly make this configurable. But having 2 goroutines
-	// processing this seems sufficient for now.
-	//
-	// TODO: Allow a way to stop these goroutines.
-	for i := 0; i < 2; i++ {
-		go cache.processItems()
-	}
+	// NOTE: benchmarks seem to show that performance decreases the more
+	//       goroutines we have running cache.processItems(), so 1 should
+	//       usually be sufficient
+	go cache.processItems()
 	return cache, nil
 }
 
@@ -143,7 +165,7 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 	if c == nil {
 		return nil, false
 	}
-	hash := c.keyHash(key)
+	hash := c.keyToHash(key)
 	c.getBuf.Push(hash)
 	val, ok := c.store.Get(hash)
 	if ok {
@@ -154,36 +176,36 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 	return val, ok
 }
 
-// keyHash generates the hash for a given key using the cutom keyToHash function, if provided.
-// Otherwise it generates the hash using the z.KeyToHash funcion.
-func (c *Cache) keyHash(key interface{}) uint64 {
-	if c.keyToHash != nil {
-		return c.keyToHash(key)
-	}
-	return z.KeyToHash(key)
-}
-
 // Set attempts to add the key-value item to the cache. If it returns false,
 // then the Set was dropped and the key-value item isn't added to the cache. If
 // it returns true, there's still a chance it could be dropped by the policy if
 // its determined that the key-value item isn't worth keeping, but otherwise the
 // item will be added and other items will be evicted in order to make room.
-func (c *Cache) Set(key interface{}, val interface{}, cost int64) bool {
+//
+// To dynamically evaluate the items cost using the Config.Coster function, set
+// the cost parameter to 0 and Coster will be ran when needed in order to find
+// the items true cost.
+func (c *Cache) Set(key, value interface{}, cost int64) bool {
 	if c == nil {
 		return false
 	}
-	hash := c.keyHash(key)
-	// TODO: Add a c.store.UpdateIfPresent here. This would catch any value updates and avoid having
-	// to push the key in setBuf.
-
-	// attempt to add the (possibly) new item to the setBuf where it will later
-	// be processed by the policy and evaluated
+	i := &item{
+		flag:  itemNew,
+		key:   c.keyToHash(key),
+		value: value,
+		cost:  cost,
+	}
+	// attempt to immediately update hashmap value and set flag to update so the
+	// cost is eventually updated
+	if c.store.Update(i.key, i.value) {
+		i.flag = itemUpdate
+	}
+	// attempt to send item to policy
 	select {
-	case c.setBuf <- &item{key: hash, val: val, cost: cost}:
+	case c.setBuf <- i:
 		return true
 	default:
-		// drop the set and avoid blocking
-		c.stats.Add(dropSets, hash, 1)
+		c.stats.Add(dropSets, i.key, 1)
 		return false
 	}
 }
@@ -193,34 +215,72 @@ func (c *Cache) Del(key interface{}) {
 	if c == nil {
 		return
 	}
-	c.setBuf <- &item{key: c.keyHash(key), del: true}
+	c.setBuf <- &item{
+		flag: itemDelete,
+		key:  c.keyToHash(key),
+	}
 }
 
 // Close stops all goroutines and closes all channels.
-func (c *Cache) Close() {}
+func (c *Cache) Close() {
+	// block until processItems goroutine is returned
+	c.stop <- struct{}{}
+	close(c.stop)
+	close(c.setBuf)
+	c.policy.Close()
+}
+
+// Clear empties the hashmap and zeroes all policy counters. Note that this is
+// not an atomic operation (but that shouldn't be a problem as it's assumed that
+// Set/Get calls won't be occurring until after this).
+func (c *Cache) Clear() {
+	// block until processItems goroutine is returned
+	c.stop <- struct{}{}
+	// swap out the setBuf channel
+	c.setBuf = make(chan *item, setBufSize)
+	// clear value hashmap and policy data
+	c.policy.Clear()
+	c.store.Clear()
+	// only reset metrics if they're enabled
+	if c.stats != nil {
+		c.collectMetrics()
+	}
+	// restart processItems goroutine
+	go c.processItems()
+}
 
 // processItems is ran by goroutines processing the Set buffer.
 func (c *Cache) processItems() {
-	for item := range c.setBuf {
-		if item.del {
-			c.policy.Del(item.key)
-			c.store.Del(item.key)
-			continue
-		}
-		victims, added := c.policy.Add(item.key, item.cost)
-		if added {
-			// item was accepted by the policy, so add to the hashmap
-			c.store.Set(item.key, item.val)
-		}
-		// delete victims that are no longer worthy of being in the cache
-		for _, victim := range victims {
-			// eviction callback
-			if c.onEvict != nil {
-				victim.val, _ = c.store.Get(victim.key)
-				c.onEvict(victim.key, victim.val, victim.cost)
+	for {
+		select {
+		case i := <-c.setBuf:
+			// calculate item cost value if new or update
+			if i.cost == 0 && c.cost != nil && i.flag != itemDelete {
+				i.cost = c.cost(i.value)
 			}
-			// delete from hashmap
-			c.store.Del(victim.key)
+			switch i.flag {
+			case itemNew:
+				if victims, added := c.policy.Add(i.key, i.cost); added {
+					// item was accepted by the policy, so add to the hashmap
+					c.store.Set(i.key, i.value)
+					// delete victims
+					for _, victim := range victims {
+						// TODO: make Get-Delete atomic
+						if c.onEvict != nil {
+							victim.value, _ = c.store.Get(victim.key)
+							c.onEvict(victim.key, victim.value, victim.cost)
+						}
+						c.store.Del(victim.key)
+					}
+				}
+			case itemUpdate:
+				c.policy.Update(i.key, i.cost)
+			case itemDelete:
+				c.policy.Del(i.key)
+				c.store.Del(i.key)
+			}
+		case <-c.stop:
+			return
 		}
 	}
 }
@@ -232,6 +292,9 @@ func (c *Cache) collectMetrics() {
 
 // Metrics returns statistics about cache performance.
 func (c *Cache) Metrics() *metrics {
+	if c == nil {
+		return nil
+	}
 	return c.stats
 }
 
