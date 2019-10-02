@@ -164,7 +164,6 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 
 // trimTypeName trims Delete from the beginning and Payload from the end of a type name.
 // It gets us the correct type to add to a filter in case of a deleteMutation.
-// TODO - Remove this function. Get this from cache.
 func trimTypeName(typ schema.Type) string {
 	const (
 		del     = "Delete"
