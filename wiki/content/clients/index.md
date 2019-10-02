@@ -856,7 +856,7 @@ Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
 
 ### Run a query as a JSON object
 
-The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables" (Check the [Graphql Variables]({{< relref "query-language/index.md#graphql-variables" >}})).
+The HTTP API also accepts requests in JSON format. For queries you can use the keys "query" and "variables" (Check the [Graphql Variables]({{< relref "query-language/index.md#graphql-variables" >}})).
 
 This query
 ```
