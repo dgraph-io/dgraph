@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -795,4 +796,372 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 			deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
 		}
 	})
+}
+
+type starship struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Length float64 `json:"length"`
+}
+
+func addStarship(t *testing.T) *starship {
+	addStarshipParams := &GraphQLParams{
+		Query: `mutation addStarship($starship: StarshipInput!) {
+			addStarship(input: $starship) {
+				starship {
+					id
+					name
+					length
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{"starship": map[string]interface{}{
+			"name":   "Millennium Falcon",
+			"length": 2,
+		}},
+	}
+
+	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
+		"starship":{
+			"name":"Millennium Falcon",
+			"length":2
+		}
+	}}`)
+
+	var expected, result struct {
+		AddStarship struct {
+			Starship *starship
+		}
+	}
+	err := json.Unmarshal([]byte(addStarshipExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddStarship.Starship.ID)
+
+	opt := cmpopts.IgnoreFields(starship{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddStarship.Starship
+}
+
+func addHuman(t *testing.T, starshipID string) string {
+	addHumanParams := &GraphQLParams{
+		Query: `mutation addHuman($human: HumanInput!) {
+			addHuman(input: $human) {
+				human {
+					id
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{"human": map[string]interface{}{
+			"name":         "Han",
+			"ename":        "Han_employee",
+			"totalCredits": 10,
+			"appearsIn":    []string{"EMPIRE"},
+			"starships": []map[string]interface{}{{
+				"id": starshipID,
+			}},
+		}},
+	}
+
+	gqlResponse := addHumanParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		AddHuman struct {
+			Human struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddHuman.Human.ID)
+	return result.AddHuman.Human.ID
+}
+
+func addDroid(t *testing.T) string {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addDroid($droid: DroidInput!) {
+			addDroid(input: $droid) {
+				droid {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"droid": map[string]interface{}{
+			"name":            "R2-D2",
+			"primaryFunction": "Robot",
+			"appearsIn":       []string{"EMPIRE"},
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		AddDroid struct {
+			Droid struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddDroid.Droid.ID)
+	return result.AddDroid.Droid.ID
+}
+
+func updateCharacter(t *testing.T, id string) {
+	updateCharacterParams := &GraphQLParams{
+		Query: `mutation updateCharacter($character: UpdateCharacterInput!) {
+			updateCharacter(input: $character) {
+				character {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"character": map[string]interface{}{
+			"id": id,
+			"patch": map[string]interface{}{
+				"name": "Han Solo",
+			},
+		}},
+	}
+
+	gqlResponse := updateCharacterParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func TestQueryInterfaceAfterAddMutation(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test query all characters", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+			queryCharacter {
+			  name
+			  appearsIn
+			  ... on Human {
+				starships {
+					name
+					length
+				}
+				totalCredits
+			  }
+			  ... on Droid {
+				primaryFunction
+			  }
+			}
+		  }`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+			"queryCharacter": [
+			  {
+				"name": "Han Solo",
+				"appearsIn": "EMPIRE",
+				"starships": [
+				  {
+					"name": "Millennium Falcon",
+					"length": 2
+				  }
+				],
+				"totalCredits": 10
+			  },
+			  {
+				"name": "R2-D2",
+				"appearsIn": "EMPIRE",
+				"primaryFunction": "Robot"
+			  }
+			]
+		  }`
+
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query characters by name", func(t *testing.T) {
+		queryCharacterByNameParams := &GraphQLParams{
+			Query: `query {
+		queryCharacter(filter: { name: { eq: "Han Solo" } }) {
+		  name
+		  appearsIn
+		  ... on Human {
+			starships {
+				name
+				length
+			}
+			totalCredits
+		  }
+		  ... on Droid {
+			primaryFunction
+		  }
+		}
+	  }`,
+		}
+
+		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name": "Han Solo",
+			"appearsIn": "EMPIRE",
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query all humans", func(t *testing.T) {
+		queryHumanParams := &GraphQLParams{
+			Query: `query {
+		queryHuman {
+		  name
+		  appearsIn
+		  starships {
+			name
+			length
+		  }
+		  totalCredits
+		}
+	  }`,
+		}
+
+		gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryHuman": [
+		  {
+			"name": "Han Solo",
+			"appearsIn": "EMPIRE",
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query humans by name", func(t *testing.T) {
+		queryHumanParamsByName := &GraphQLParams{
+			Query: `query {
+		queryHuman(filter: { name: { eq: "Han Solo" } }) {
+		  name
+		  appearsIn
+		  starships {
+			name
+			length
+		  }
+		  totalCredits
+		}
+	  }`,
+		}
+
+		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryHuman": [
+		  {
+			"name": "Han Solo",
+			"appearsIn": "EMPIRE",
+			"starships": [
+			  {
+				"name": "Millennium Falcon",
+				"length": 2
+			  }
+			],
+			"totalCredits": 10
+		  }
+		]
+	  }`
+
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
+func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
+	// Delete everything
+	multiMutationParams := &GraphQLParams{
+		Query: `mutation cleanup($starshipFilter: StarshipFilter!, $humanFilter: HumanFilter!,
+			$droidFilter: DroidFilter!) {
+		deleteStarship(filter: $starshipFilter) { msg }
+
+		deleteHuman(filter: $humanFilter) { msg }
+
+		deleteDroid(filter: $droidFilter) { msg }
+	}`,
+		Variables: map[string]interface{}{
+			"starshipFilter": map[string]interface{}{
+				"ids": []string{starshipID},
+			},
+			"humanFilter": map[string]interface{}{
+				"ids": []string{humanID},
+			},
+			"droidFilter": map[string]interface{}{
+				"ids": []string{droidID},
+			},
+		},
+	}
+	multiMutationExpected := `{
+	"deleteStarship": { "msg": "Deleted" },
+	"deleteHuman" : { "msg": "Deleted" },
+	"deleteDroid": { "msg": "Deleted" }
+}`
+
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		DeleteStarhip struct {
+			Msg string
+		}
+		DeleteHuman struct {
+			Msg string
+		}
+		DeleteDroid struct {
+			Msg string
+		}
+	}
+
+	err := json.Unmarshal([]byte(multiMutationExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
