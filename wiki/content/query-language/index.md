@@ -1800,10 +1800,6 @@ There are four ways to use the `expand` function.
 * If `_all_` is passed as an argument to `expand()`, all the predicates for each
   node at that level are retrieved. More levels can be specified in a nested
   fashion under `expand()`.
-* If `_forward_` is passed as an argument to `expand()`, all predicates for each
-  node at that level (minus any reverse predicates) are retrieved.
-* If `_reverse_` is passed as an argument to `expand()`, only the reverse
-  predicates at each node in that level are retrieved.
 
 The last three keywords require that the nodes have types. Dgraph will look 
 for all the types that have been assigned to a node,
@@ -2509,8 +2505,7 @@ err := c.Alter(context.Background(), &api.Operation{
 ### Expand queries and types
 
 Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
-`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
-nodes to expand have types.
+`expand(_all_)`) require that the nodes to be expanded have types.
 
 ## Facets : Edge attributes
 

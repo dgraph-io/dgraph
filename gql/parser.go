@@ -2802,10 +2802,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
 				case "_all_":
 					child.Expand = "_all_"
-				case "_forward_":
-					child.Expand = "_forward_"
-				case "_reverse_":
-					child.Expand = "_reverse_"
 				default:
 					return item.Errorf("Invalid argument %v in expand()", item.Val)
 				}

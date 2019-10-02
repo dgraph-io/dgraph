@@ -160,34 +160,6 @@ func TestParseQueryListPred1(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestParseQueryExpandForward(t *testing.T) {
-	query := `
-	{
-		var(func: uid( 0x0a)) {
-			friends {
-				expand(_forward_)
-			}
-		}
-	}
-`
-	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-}
-
-func TestParseQueryExpandReverse(t *testing.T) {
-	query := `
-	{
-		var(func: uid( 0x0a)) {
-			friends {
-				expand(_reverse_)
-			}
-		}
-	}
-`
-	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-}
-
 func TestParseQueryAliasListPred(t *testing.T) {
 	query := `
 	{
