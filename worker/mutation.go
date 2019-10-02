@@ -210,11 +210,7 @@ func createSchema(attr string, typ types.TypeID) {
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
-	if err := checkType(update); err != nil {
-		return err
-	}
 	current := *update
-
 	schema.State().SetType(update.TypeName, current)
 	return updateType(update.TypeName, *update)
 }
@@ -321,32 +317,6 @@ func checkSchema(s *pb.SchemaUpdate) error {
 				" while there is data for pred: %s", s.Predicate)
 		}
 	}
-	return nil
-}
-
-func checkType(t *pb.TypeUpdate) error {
-	if len(t.TypeName) == 0 {
-		return errors.Errorf("Type name must be specified in type update")
-	}
-
-	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
-			return errors.Errorf("Field in type definition must have a name")
-		}
-
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
-			return errors.Errorf("Field with value type OBJECT must specify the name of the object type")
-		}
-
-		if field.Directive != pb.SchemaUpdate_NONE {
-			return errors.Errorf("Field in type definition cannot have a directive")
-		}
-
-		if len(field.Tokenizer) > 0 {
-			return errors.Errorf("Field in type definition cannot have tokenizers")
-		}
-	}
-
 	return nil
 }
 
@@ -551,6 +521,9 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
+	if err := verifyTypes(ctx, m); err != nil {
+		return tctx, err
+	}
 	mutationMap, err := populateMutationMap(m)
 	if err != nil {
 		return tctx, err
@@ -582,6 +555,68 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	}
 	close(resCh)
 	return tctx, e
+}
+
+func verifyTypes(ctx context.Context, m *pb.Mutations) error {
+	preds := make(map[string]struct{})
+	for _, sup := range m.Schema {
+		preds[sup.Predicate] = struct{}{}
+	}
+
+	for _, t := range m.Types {
+		if len(t.TypeName) == 0 {
+			return errors.Errorf("Type name must be specified in type update")
+		}
+
+		fields := make([]string, len(t.Fields))
+		for i, field := range t.Fields {
+			fields[i] = field.Predicate
+		}
+		schs, err := GetSchemaOverNetwork(context.Background(),
+			&pb.SchemaRequest{Predicates: fields})
+		if err != nil {
+			errors.Errorf("Cannot retrieve predicate information for fields in type %s",
+				t.TypeName)
+		}
+
+		schemaSet := make(map[string]struct{})
+		for _, schemaNode := range schs {
+			schemaSet[schemaNode.Predicate] = struct{}{}
+		}
+
+		// Verify all the fields in the type are already on the schema or come included in
+		// this request.
+		for _, field := range fields {
+			_, inSchema := schemaSet[field]
+			_, inRequest := preds[field]
+			if !inSchema && !inRequest {
+				return errors.Errorf(
+					"Schema does not contain a matching predicate for field %s in type %s",
+					field, t.TypeName)
+			}
+		}
+
+		for _, field := range t.Fields {
+			if len(field.Predicate) == 0 {
+				return errors.Errorf("Field in type definition must have a name")
+			}
+
+			if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+				return errors.Errorf(
+					"Field with value type OBJECT must specify the name of the object type")
+			}
+
+			if field.Directive != pb.SchemaUpdate_NONE {
+				return errors.Errorf("Field in type definition cannot have a directive")
+			}
+
+			if len(field.Tokenizer) > 0 {
+				return errors.Errorf("Field in type definition cannot have tokenizers")
+			}
+		}
+	}
+
+	return nil
 }
 
 // CommitOverNetwork makes a proxy call to Zero to commit or abort a transaction.

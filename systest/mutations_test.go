@@ -832,6 +832,9 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
+		to: [uid] .
+		name: string .
+
 		type Node {
 			to
 			name
@@ -1564,6 +1567,8 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
+			name: string .
+
 			type Person {
 				name
 			}

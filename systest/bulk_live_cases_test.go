@@ -270,6 +270,8 @@ func TestCountIndex(t *testing.T) {
 
 func TestLoadTypes(t *testing.T) {
 	s := newSuite(t, `
+	name: string .
+
 	type Person {
 		name
 	}
