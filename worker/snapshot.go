@@ -161,9 +161,10 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
 	n := groups().Node
-	if n == nil {
+	if n == nil || n.Raft() == nil {
 		return conn.ErrNoNode
 	}
+
 	// Indicate that we're streaming right now. Used to cancel
 	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
 	// have already proposed a snapshot, which it can apply while this streaming
