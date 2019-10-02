@@ -136,16 +136,16 @@ Dgraph Live Loader / Dgraph Bulk Loader
 - Update live loader flag help text. ([#3278][])
 - Improve reporting of aborts and retries during live load. ([#3313][])
 - Remove xidmap storage on disk from bulk loader.
-- Optimize XidtoUID map used by live and bulk loader.
+- Optimize XidtoUID map used by live and bulk loader. ([#2998][])
 - Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. ([#3004][], [#3045][]) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. ([18277872f][])
-- Use StreamWriter in bulk loader. ([#3542][]) ([#3635][], [#3649][])
+- Use StreamWriter in bulk loader. ([#3542][], [#3635][], [#3649][])
 - Add timestamps during bulk/live load. ([#3287][])
 - Use initial schema during bulk load. ([#3333][])
 - Adding the verbose flag to suppress excessive logging in live loader. ([#3560][])
 - Fix user meta of schema and type entries in bulk loader. ([#3628][])
 - Check that all data files passed to bulk loader exist. ([#3681][])
 - Handle non-list UIDs predicates in bulk loader. [#3659][]
-- Use sync.Pool for MapEntries in bulk loader. ([#3763][], 802ec4c39)
+- Use sync.Pool for MapEntries in bulk loader. ([#3763][], [802ec4c39][])
 
 Dgraph Increment Tool
 
@@ -232,8 +232,7 @@ at the predicate-level.
 - Don't create ACL predicates when the ACL feature is not turned on. ([#2924][])
 - Add HTTP API for ACL commands, pinning ACL predicates to group 1. ([#2951][])
 - ACL: Using type to distinguish user and group. ([#3124][])
-- REVIEWTODO: Fix the aclCache race condition by initializing it on definition ([#3141][])
--  Reduce the value of ACL TTLs to reduce the test running time. ([#3164][])
+- Reduce the value of ACL TTLs to reduce the test running time. ([#3164][])
   - Adds `--acl_cache_ttl` flag.
 - Fix panic when deleting a user or group that does not exist. ([#3218][])
 - ACL over TLS. ([#3207][])
@@ -562,6 +561,7 @@ Tracing
 [3271f64e0]: https://github.com/dgraph-io/dgraph/commit/3271f64e0
 [63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
 [18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
+[802ec4c39]: https://github.com/dgraph-io/dgraph/commit/802ec4c39
 
 ## 1.0.18 - [Unreleased]
 [Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...release/v1.0
@@ -571,6 +571,7 @@ Tracing
 - Preserve the order of entries in a mutation if multiple versions of the same
   edge are found. This addresses the mutation re-ordering change ([#2987][]) from v1.0.15.
 - Fixing the zero client in live loader to avoid using TLS. Fixes [#3919][]. ([#3936][])
+- Remove query cache which is causing contention. (#4071)
 
 [#3919]: https://github.com/dgraph-io/dgraph/issues/3919
 [#3936]: https://github.com/dgraph-io/dgraph/issues/3936

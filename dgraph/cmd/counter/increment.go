@@ -119,7 +119,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		txn = dg.NewTxn()
 	}
 	defer func() {
-		if err := txn.Discard(nil); err != nil {
+		if err := txn.Discard(context.Background()); err != nil {
 			fmt.Printf("Discarding transaction failed: %+v\n", err)
 		}
 	}()

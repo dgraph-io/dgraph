@@ -137,9 +137,11 @@ func (d *Decoder) unpackBlock() []uint64 {
 	for uint32(len(d.uids)) < block.NumUids {
 		if len(encData) < 17 {
 			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
-			// decoding and expects it to be of length >= 4 at all the stages. Padding
-			// with zero to make sure length is always >= 4.
-			encData = append(encData, 0, 0, 0)
+			// decoding and expects it to be of length >= 4 at all the stages.
+			// The SSE code tries to read 16 bytes past the header(1 byte).
+			// So we are padding encData to increase its length to 17 bytes.
+			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
+			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
 		}
 
 		groupvarint.Decode4(tmpUids, encData)

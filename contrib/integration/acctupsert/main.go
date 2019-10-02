@@ -29,9 +29,8 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -124,7 +123,7 @@ func upsert(c *dgo.Dgraph, acc account) {
 		if err == nil {
 			atomic.AddUint64(&successCount, 1)
 			return
-		} else if err == y.ErrAborted {
+		} else if err == dgo.ErrAborted {
 			// pass
 		} else {
 			fmt.Printf("ERROR: %v", err)

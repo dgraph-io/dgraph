@@ -85,18 +85,41 @@ type UriHandler interface {
 	ReadManifest(string, *Manifest) error
 }
 
+// Credentials holds the credentials needed to perform a backup operation.
+// If these credentials are missing the default credentials will be used.
+type Credentials struct {
+	accessKey    string
+	secretKey    string
+	sessionToken string
+	anonymous    bool
+}
+
+// GetCredentialsFromRequest extracts the credentials from a backup request.
+func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
+	return &Credentials{
+		accessKey:    req.GetAccessKey(),
+		secretKey:    req.GetSecretKey(),
+		sessionToken: req.GetSessionToken(),
+		anonymous:    req.GetAnonymous(),
+	}
+}
+
 // getHandler returns a UriHandler for the URI scheme.
-func getHandler(scheme string) UriHandler {
+func getHandler(scheme string, creds *Credentials) UriHandler {
 	switch scheme {
 	case "file", "":
 		return &fileHandler{}
 	case "minio", "s3":
-		return &s3Handler{}
+		return &s3Handler{
+			creds: creds,
+		}
 	}
 	return nil
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
+// If the passed credentials are not nil, they will be used to override the
+// default credentials (only for backups to minio or S3).
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -119,8 +142,8 @@ func getHandler(scheme string) UriHandler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func NewUriHandler(uri *url.URL) (UriHandler, error) {
-	h := getHandler(uri.Scheme)
+func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
+	h := getHandler(uri.Scheme, creds)
 	if h == nil {
 		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
@@ -144,7 +167,8 @@ func Load(location, backupId string, fn loadFn) (since uint64, err error) {
 		return 0, err
 	}
 
-	h := getHandler(uri.Scheme)
+	// TODO(martinmr): allow overriding credentials during restore.
+	h := getHandler(uri.Scheme, nil)
 	if h == nil {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
@@ -159,7 +183,8 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 		return nil, err
 	}
 
-	h := getHandler(uri.Scheme)
+	// TODO(martinmr): allow overriding credentials while listing manifests.
+	h := getHandler(uri.Scheme, nil)
 	if h == nil {
 		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}

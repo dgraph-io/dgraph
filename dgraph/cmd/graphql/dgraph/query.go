@@ -210,6 +210,14 @@ func addTypeFunc(q *gql.GraphQuery, typ string) {
 }
 
 func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
+	// Only add dgraph.type as a child if this field is an interface type and has some children.
+	// dgraph.type would later be used in completeObject as different objects in the resulting
+	// JSON would return different fields based on their concrete type.
+	if field.InterfaceType() && len(field.SelectionSet()) > 0 {
+		q.Children = append(q.Children, &gql.GraphQuery{
+			Attr: "dgraph.type",
+		})
+	}
 	for _, f := range field.SelectionSet() {
 		if f.Skip() || !f.Include() {
 			continue
