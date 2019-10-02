@@ -558,7 +558,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 }
 
 func verifyTypes(ctx context.Context, m *pb.Mutations) error {
-	preds := make(map[string]struct{})
+	preds := make(map[string]struct{}, len(m.Schema))
 	for _, sup := range m.Schema {
 		preds[sup.Predicate] = struct{}{}
 	}
@@ -572,14 +572,13 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		for i, field := range t.Fields {
 			fields[i] = field.Predicate
 		}
-		schs, err := GetSchemaOverNetwork(context.Background(),
-			&pb.SchemaRequest{Predicates: fields})
+		schs, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
 		if err != nil {
 			return errors.Errorf("Cannot retrieve predicate information for fields in type %s",
 				t.TypeName)
 		}
 
-		schemaSet := make(map[string]struct{})
+		schemaSet := make(map[string]struct{}, len(schs))
 		for _, schemaNode := range schs {
 			schemaSet[schemaNode.Predicate] = struct{}{}
 		}
