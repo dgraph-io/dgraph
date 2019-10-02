@@ -21,14 +21,18 @@ package graphql
 // dataset and mutating and leaving unexpected data will result in flaky tests.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 // TestAddMutation tests that add mutations work as expected.  There's a few angles
@@ -523,6 +527,9 @@ func TestDeleteWrongID(t *testing.T) {
 	// Skipping the test for now because wrong type of node while deleting is not an error.
 	// After Dgraph returns the number of nodes modified from upsert, modify this test to check
 	// count of nodes modified is 0.
+	//
+	// FIXME: Test cases : with a wrongID, a malformed ID "blah", and maybe a filter that
+	// doesn't match anything.
 	newCountry := addCountry(t)
 	newAuthor := addAuthor(t, newCountry.ID)
 
@@ -598,7 +605,6 @@ func TestManyMutations(t *testing.T) {
 	cleanUp(t, []*country{result.Add1.Country, result.Add2.Country}, []*author{}, []*post{})
 }
 
-
 // After a successful mutation, the following query is executed.  That query can
 // contain any depth or filtering that makes sense for the schema.
 //
@@ -664,6 +670,114 @@ func TestMutationWithDeepFilter(t *testing.T) {
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor},
 		[]*post{newPost, result.AddPost.Post})
+}
+
+// TestManyMutationsWithError : If there are multiple mutations and an error
+// occurs in the mutation, then then following mutations aren't executed.  That's
+// tested by TestManyMutationsWithError in the resolver tests.
+//
+// However, there can also be an error in the query following a mutation, but
+// that shouldn't stop the following mutations because the actual mutation
+// went through without error.
+func TestManyMutationsWithQueryError(t *testing.T) {
+	newCountry := addCountry(t)
+
+	// delete the country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", newCountry.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	// add1 - should succeed
+	// add2 - should succeed and also return an error (country doesn't have a name)
+	// add3 - should succeed
+	multiMutationParams := &GraphQLParams{
+		Query: `mutation addCountries($countryID: ID!) {
+			add1: addAuthor(input: { name: "A. N. Author", country: { id: $countryID }}) {
+				author {
+					id
+					name
+					country {
+						id
+					}
+				}
+			}
+
+			add2: addAuthor(input: { name: "Ann Other Author", country: { id: $countryID }}) {
+				author {
+					id
+					name
+					country {
+						id
+						name
+					}
+				}
+			}
+
+			add3: addCountry(input: { name: "abc" }) {
+				country {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"countryID": newCountry.ID},
+	}
+	expectedData := fmt.Sprintf(`{
+		"add1": { "author": { "id": "_UID_", "name": "A. N. Author", "country": { "id": "%s" } } },
+		"add2": { "author": { "id": "_UID_", "name": "Ann Other Author", "country": null } },
+		"add3": { "country": { "id": "_UID_", "name": "abc" } }
+	}`, newCountry.ID)
+
+	expectedErrors := []*x.GqlError{
+		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
+			`in result from Dgraph.  GraphQL error propagation triggered.`,
+			Locations: []x.Location{{Line: 18, Column: 7}},
+			Path:      []interface{}{"author", "country", "name"}}}
+
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+
+	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+	}
+
+	var expected, result struct {
+		Add1 struct {
+			Author *author
+		}
+		Add2 struct {
+			Author *author
+		}
+		Add3 struct {
+			Country *country
+		}
+	}
+	err = json.Unmarshal([]byte(expectedData), &expected)
+	require.NoError(t, err)
+
+	fmt.Println(string(gqlResponse.Data))
+
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	opt1 := cmpopts.IgnoreFields(author{}, "ID")
+	opt2 := cmpopts.IgnoreFields(country{}, "ID")
+	if diff := cmp.Diff(expected, result, opt1, opt2); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t,
+		[]*country{newCountry, result.Add3.Country},
+		[]*author{result.Add1.Author, result.Add2.Author},
+		[]*post{})
 }
 
 func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*post) {
