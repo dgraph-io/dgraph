@@ -174,7 +174,7 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedTypeName())
+		addTypeFunc(dgQuery, m.MutatedType().Name())
 	}
 	addFilter(dgQuery, m)
 	return dgQuery

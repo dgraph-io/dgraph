@@ -124,68 +124,6 @@ func NewHandler(input string) (Handler, error) {
 	}, nil
 }
 
-// parentInterface returns the name of an interface that a field belonging to a type definition
-// typDef inherited from. If there is no such interface, then it returns an empty string.
-//
-// Given the following schema
-// interface A {
-//   name: String
-// }
-//
-// type B implements A {
-//	 name: String
-//   age: Int
-// }
-//
-// calling parentInterface on the fieldName name with type definition for B, would return A.
-func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
-	if len(typDef.Interfaces) == 0 {
-		return ""
-	}
-
-	for _, iface := range typDef.Interfaces {
-		interfaceDef := sch.Types[iface]
-		for _, interfaceField := range interfaceDef.Fields {
-			if fieldName == interfaceField.Name {
-				return iface
-			}
-		}
-	}
-	return ""
-}
-
-func dgraphMapping(sch *ast.Schema) map[string]string {
-	const (
-		del     = "Delete"
-		payload = "Payload"
-	)
-
-	dgraphPredicate := make(map[string]string)
-	for _, inputTyp := range sch.Types {
-		if inputTyp.BuiltIn || inputTyp.Name == "query" || inputTyp.Name == "mutation" ||
-			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
-			continue
-		}
-
-		originalTyp := inputTyp
-		inputTypeName := inputTyp.Name
-		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
-			inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
-			inputTyp = sch.Types[inputTypeName]
-		}
-		// TODO - This also includes Update, Delete and Add type payload objects. Also interfaces.
-		for _, fld := range inputTyp.Fields {
-			typName := inputTypeName
-			parentInt := parentInterface(sch, inputTyp, fld.Name)
-			if parentInt != "" {
-				typName = parentInt
-			}
-			dgraphPredicate[originalTyp.Name+fld.Name] = typName + "." + fld.Name
-		}
-	}
-	return dgraphPredicate
-}
-
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
