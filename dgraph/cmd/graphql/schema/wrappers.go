@@ -157,6 +157,9 @@ type field struct {
 	field *ast.Field
 	op    *operation
 	sel   ast.Selection
+	// arguments contains the computed values for arguments taking into account the values
+	// for the GraphQL variables supplied in the query.
+	arguments map[string]interface{}
 }
 
 type fieldDefinition struct {
@@ -232,8 +235,11 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) ArgValue(name string) interface{} {
-	// FIXME: cache ArgumentMap ?
-	return f.field.ArgumentMap(f.op.vars)[name]
+	if f.arguments == nil {
+		// Compute and cache the map first time this function is called for a field.
+		f.arguments = f.field.ArgumentMap(f.op.vars)
+	}
+	return f.arguments[name]
 }
 
 func (f *field) Skip() bool {
