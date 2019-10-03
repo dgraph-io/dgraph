@@ -252,6 +252,8 @@ func dgraphMapping(sch *ast.Schema) map[string]string {
 
 	dgraphPredicate := make(map[string]string)
 	for _, inputTyp := range sch.Types {
+		// We only want to consider input types (object and interface) defined by the user as part
+		// of the schema hence we ignore BuiltIn, query and mutation types.
 		if inputTyp.BuiltIn || inputTyp.Name == "query" || inputTyp.Name == "mutation" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
@@ -273,12 +275,12 @@ func dgraphMapping(sch *ast.Schema) map[string]string {
 				typName = parentInt
 			}
 			// 1. For types which don't inherit from an interface the key, value would be.
-			//    typName + fldName => typName.fldName
+			//    typName-fldName => typName.fldName
 			// 2. For types which inherit fields from an interface
-			//    typName + fldName => interfaceName.fldName
+			//    typName-fldName => interfaceName.fldName
 			// 3. For DeleteTypePayload type
-			//    DeleteTypePayload + fldName => typName.fldName
-			dgraphPredicate[originalTyp.Name+fld.Name] = typName + "." + fld.Name
+			//    DeleteTypePayload-fldName => typName.fldName
+			dgraphPredicate[originalTyp.Name+"-"+fld.Name] = typName + "." + fld.Name
 		}
 	}
 	return dgraphPredicate
@@ -289,7 +291,7 @@ func mutatedTypeMapping(s *ast.Schema, dgraphPredicate map[string]string) map[st
 		return nil
 	}
 
-	m := make(map[string]*astType)
+	m := make(map[string]*astType, len(s.Mutation.Fields))
 	for _, field := range s.Mutation.Fields {
 		mutatedTypeName := ""
 		switch {
@@ -306,6 +308,8 @@ func mutatedTypeMapping(s *ast.Schema, dgraphPredicate map[string]string) map[st
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
 		def := s.Types["Update"+mutatedTypeName+"Payload"]
+		// Accessing 0th element should be safe to do as according to the spec an object must define
+		// one or more fields.
 		typ := def.Fields[0].Type
 		// This would contain mapping of mutation field name to the Type()
 		// for e.g. addPost => astType for Post
@@ -431,7 +435,7 @@ func (f *field) Location() *Location {
 }
 
 func (f *field) DgraphPredicate() string {
-	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name+f.Name()]
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name+"-"+f.Name()]
 }
 
 func (f *field) ConcreteType(dgraphTypes []interface{}) string {
@@ -665,7 +669,7 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	return t.dgraphPredicate[t.Name()+fld]
+	return t.dgraphPredicate[t.Name()+"-"+fld]
 }
 
 func (t *astType) String() string {
