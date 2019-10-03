@@ -225,10 +225,12 @@ func TestGzipCompressionHeader(t *testing.T) {
 	req.Header.Set("Content-Encoding", "gzip")
 
 	resData, err := runGQLRequest(req)
+	resData, _ = gUnzipData(resData)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
-	require.NotNil(t, err)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Unable to parse gzip")
 }
 
 // This tests that if a req's body is compressed but the
@@ -248,12 +250,15 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
+	req.Header.Del("Accept-Encoding")
 
 	resData, err := runGQLRequest(req)
+	resData, _ = gUnzipData(resData)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
-	require.NotNil(t, err)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
