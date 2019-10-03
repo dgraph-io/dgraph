@@ -139,7 +139,7 @@ invalid_schemas:
         id: ID! @searchable
       }
       type Y {
-        id: ID! @searchable(by: term)
+        id: ID! @searchable(by: [term])
       }
     errlist: [
       {"message": "Type X; Field id: has the @searchable directive but fields of type ID are
@@ -170,7 +170,7 @@ invalid_schemas:
     name: "Searchable (with arg) will error on un-searchableType"
     input: |
       type X {
-        y: Y @searchable(by: term)
+        y: Y @searchable(by: [term])
       }
       type Y {
         y: String
@@ -186,7 +186,7 @@ invalid_schemas:
     name: "Searchable with wrong arg with error on default searchable type"
     input: |
       type X {
-        y: Int @searchable(by: term)
+        y: Int @searchable(by: [term])
       }
     errlist: [
       {"message": "Type X; Field y: has the @searchable directive but the argument term doesn't
@@ -199,7 +199,7 @@ invalid_schemas:
     name: "Searchable with wrong arg with error on searchable type"
     input: |
       type X {
-        y: String @searchable(by: day)
+        y: String @searchable(by: [day])
       }
     errlist: [
       {"message": "Type X; Field y: has the @searchable directive but the argument day doesn't
@@ -212,7 +212,7 @@ invalid_schemas:
     name: "Searchable doesn't accept bogus args"
     input: |
       type X {
-        y: String @searchable(by: bogus)
+        y: String @searchable(by: [bogus])
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @searchable bogus isn't valid.Fields of type
@@ -328,24 +328,24 @@ valid_schemas:
     input: |
       type X {
         int1: Int @searchable
-        int2: Int @searchable(by: int)
+        int2: Int @searchable(by: [int])
         float1: Float @searchable
-        float2: Float @searchable(by: float)
+        float2: Float @searchable(by: [float])
         bool1: Boolean @searchable
-        bool2: Boolean @searchable(by: bool)
+        bool2: Boolean @searchable(by: [bool])
         str: String @searchable
-        strHash: String @searchable(by: hash)
-        strExact: String @searchable(by: exact)
-        strTerm: String @searchable(by: term)
-        strFulltext: String @searchable(by: fulltext)
-        strTrigram: String @searchable(by: trigram)
+        strHash: String @searchable(by: [hash])
+        strExact: String @searchable(by: [exact])
+        strTerm: String @searchable(by: [term])
+        strFulltext: String @searchable(by: [fulltext])
+        strTrigram: String @searchable(by: [trigram, fulltext])
         dt: DateTime @searchable
-        dtYear: DateTime @searchable(by: year)
-        dtMonth: DateTime @searchable(by: month)
-        dtDay: DateTime @searchable(by: day)
-        dtHour: DateTime @searchable(by: hour)
+        dtYear: DateTime @searchable(by: [year, month])
+        dtMonth: DateTime @searchable(by: [month])
+        dtDay: DateTime @searchable(by: [day])
+        dtHour: DateTime @searchable(by: [hour])
         enumFld: E @searchable
-        req: String! @searchable(by: term)
+        req: String! @searchable(by: [term])
         list: [Int] @searchable
         reqList: [DateTime!]! @searchable
       }

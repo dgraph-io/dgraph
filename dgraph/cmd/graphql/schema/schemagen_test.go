@@ -130,110 +130,110 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 	}{
 		"String searchables don't apply to Int": {schema: `
 			type X {
-				str1: Int @searchable(by: hash)
-				str2: Int @searchable(by: exact)
-				str3: Int @searchable(by: term)
-				str4: Int @searchable(by: fulltext)
-				str5: Int @searchable(by: trigram)
+				str1: Int @searchable(by: [hash])
+				str2: Int @searchable(by: [exact])
+				str3: Int @searchable(by: [term])
+				str4: Int @searchable(by: [fulltext])
+				str5: Int @searchable(by: [trigram])
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to Float": {schema: `
 			type X {
-				str1: Float @searchable(by: hash)
-				str2: Float @searchable(by: exact)
-				str3: Float @searchable(by: term)
-				str4: Float @searchable(by: fulltext)
-				str5: Float @searchable(by: trigram)
+				str1: Float @searchable(by: [hash])
+				str2: Float @searchable(by: [exact])
+				str3: Float @searchable(by: [term])
+				str4: Float @searchable(by: [fulltext])
+				str5: Float @searchable(by: [trigram])
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to Boolean": {schema: `
 			type X {
-				str1: Boolean @searchable(by: hash)
-				str2: Boolean @searchable(by: exact)
-				str3: Boolean @searchable(by: term)
-				str4: Boolean @searchable(by: fulltext)
-				str5: Boolean @searchable(by: trigram)
+				str1: Boolean @searchable(by: [hash])
+				str2: Boolean @searchable(by: [exact])
+				str3: Boolean @searchable(by: [term])
+				str4: Boolean @searchable(by: [fulltext])
+				str5: Boolean @searchable(by: [trigram])
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to DateTime": {schema: `
 			type X {
-				str1: DateTime @searchable(by: hash)
-				str2: DateTime @searchable(by: exact)
-				str3: DateTime @searchable(by: term)
-				str4: DateTime @searchable(by: fulltext)
-				str5: DateTime @searchable(by: trigram)
+				str1: DateTime @searchable(by: [hash])
+				str2: DateTime @searchable(by: [exact])
+				str3: DateTime @searchable(by: [term])
+				str4: DateTime @searchable(by: [fulltext])
+				str5: DateTime @searchable(by: [trigram])
 			}`,
 			expectedErrors: 5},
 		"DateTime searchables don't apply to Int": {schema: `
 			type X {
-				dt1: Int @searchable(by: year)
-				dt2: Int @searchable(by: month)
-				dt3: Int @searchable(by: day)
-				dt4: Int @searchable(by: hour)
+				dt1: Int @searchable(by: [year])
+				dt2: Int @searchable(by: [month])
+				dt3: Int @searchable(by: [day])
+				dt4: Int @searchable(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searchables don't apply to Float": {schema: `
 			type X {
-				dt1: Float @searchable(by: year)
-				dt2: Float @searchable(by: month)
-				dt3: Float @searchable(by: day)
-				dt4: Float @searchable(by: hour)
+				dt1: Float @searchable(by: [year])
+				dt2: Float @searchable(by: [month])
+				dt3: Float @searchable(by: [day])
+				dt4: Float @searchable(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searchables don't apply to Boolean": {schema: `
 			type X {
-				dt1: Boolean @searchable(by: year)
-				dt2: Boolean @searchable(by: month)
-				dt3: Boolean @searchable(by: day)
-				dt4: Boolean @searchable(by: hour)
+				dt1: Boolean @searchable(by: [year])
+				dt2: Boolean @searchable(by: [month])
+				dt3: Boolean @searchable(by: [day])
+				dt4: Boolean @searchable(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searchables don't apply to String": {schema: `
 			type X {
-				dt1: String @searchable(by: year)
-				dt2: String @searchable(by: month)
-				dt3: String @searchable(by: day)
-				dt4: String @searchable(by: hour)
+				dt1: String @searchable(by: [year])
+				dt2: String @searchable(by: [month])
+				dt3: String @searchable(by: [day])
+				dt4: String @searchable(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"Int searchables only appy to Int": {schema: `
 			type X {
-				i1: Float @searchable(by: int)
-				i2: Boolean @searchable(by: int)
-				i3: String @searchable(by: int)
-				i4: DateTime @searchable(by: int)
+				i1: Float @searchable(by: [int])
+				i2: Boolean @searchable(by: [int])
+				i3: String @searchable(by: [int])
+				i4: DateTime @searchable(by: [int])
 			}`,
 			expectedErrors: 4},
 		"Float searchables only appy to Float": {schema: `
 			type X {
-				f1: Int @searchable(by: float)
-				f2: Boolean @searchable(by: float)
-				f3: String @searchable(by: float)
-				f4: DateTime @searchable(by: float)
+				f1: Int @searchable(by: [float])
+				f2: Boolean @searchable(by: [float])
+				f3: String @searchable(by: [float])
+				f4: DateTime @searchable(by: [float])
 			}`,
 			expectedErrors: 4},
 		"Boolean searchables only appy to Boolean": {schema: `
 			type X {
-				b1: Int @searchable(by: bool)
-				b2: Float @searchable(by: bool)
-				b3: String @searchable(by: bool)
-				b4: DateTime @searchable(by: bool)
+				b1: Int @searchable(by: [bool])
+				b2: Float @searchable(by: [bool])
+				b3: String @searchable(by: [bool])
+				b4: DateTime @searchable(by: [bool])
 			}`,
 			expectedErrors: 4},
 		"Enums can only have no arg searchable": {schema: `
 			type X {
-				e1: E @searchable(by: int)
-				e2: E @searchable(by: float)
-				e3: E @searchable(by: bool)
-				e4: E @searchable(by: year)
-				e5: E @searchable(by: month)
-				e6: E @searchable(by: day)
-				e7: E @searchable(by: hour)
-				e8: E @searchable(by: hash)
-				e9: E @searchable(by: exact)
-				e10: E @searchable(by: term)
-				e11: E @searchable(by: fulltext)
-				e12: E @searchable(by: trigram)
+				e1: E @searchable(by: [int])
+				e2: E @searchable(by: [float])
+				e3: E @searchable(by: [bool])
+				e4: E @searchable(by: [year])
+				e5: E @searchable(by: [month])
+				e6: E @searchable(by: [day])
+				e7: E @searchable(by: [hour])
+				e8: E @searchable(by: [hash])
+				e9: E @searchable(by: [exact])
+				e10: E @searchable(by: [term])
+				e11: E @searchable(by: [fulltext])
+				e12: E @searchable(by: [trigram])
 			}
 			enum E {
 				A
