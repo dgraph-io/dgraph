@@ -314,7 +314,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	//    { }  --->  { "q": null }
 
 	var errs x.GqlErrorList
-	errLoc := field.Location()
 
 	nullResponse := func() []byte {
 		var buf bytes.Buffer
@@ -331,7 +330,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 					"This probably indicates a bug in the Dgraph GraphQL layer.  " +
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
-				WithLocations(errLoc)
+				WithLocations(field.Location())
 	}
 
 	// Dgraph should only return {} or a JSON object.  Also,
@@ -346,7 +345,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
 		return nullResponse(),
-			schema.GQLWrapLocationf(err, errLoc, "couldn't unmarshal Dgraph result")
+			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
 	}
 
 	switch val := valToComplete[field.ResponseName()].(type) {
@@ -383,7 +382,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
 								"The first item in the list was used to produce the result. "+
 								"Logged as a potential bug; see the API log for more details.",
-						field.Name(), field.Type().String()).WithLocations(errLoc))
+						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
 			valToComplete[field.ResponseName()] = internalVal
@@ -654,12 +653,10 @@ func mismatched(
 	field schema.Field,
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
-	errLoc := field.Location()
-
 	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), "+
 		"but its type is %s.\n"+
 		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
-		field.Name(), errLoc.Line, errLoc.Column, field.Type().Name())
+		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
 	gqlErr := &x.GqlError{
 		Message: "Dgraph returned a list, but GraphQL was expecting just one item.  " +
@@ -667,7 +664,7 @@ func mismatched(
 			"probably a mismatch between GraphQL and Dgraph schemas.  " +
 			"The value was resolved as null (which may trigger GraphQL error propagation) " +
 			"and as much other data as possible returned.",
-		Locations: []x.Location{{Line: errLoc.Line, Column: errLoc.Column}},
+		Locations: []x.Location{field.Location()},
 		Path:      copyPath(path),
 	}
 
