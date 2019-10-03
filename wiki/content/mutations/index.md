@@ -926,21 +926,6 @@ Result:
 }
 ```
 
-You can achieved the same result with `json` using the following:
-
-```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
-{
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
-  "set": {
-    "uid": uid(v),
-    "name": "first last",
-    "email": "user@company1.io"
-  }
-}
-' | jq
-```
-
 The query part of the upsert block stores the UID of the user with the provided email
 in the variable `v`. The mutation part then extracts the UID from variable `v`, and
 stores the `name` and `email` information in the database. If the user exists,
@@ -959,6 +944,21 @@ created. Note that the `uids` map is empty in the response when the mutation is 
   },
   "extensions": {...}
 }
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set": {
+    "uid": uid(v),
+    "name": "first last",
+    "email": "user@company1.io"
+  }
+}
+' | jq
 ```
 
 Now, we want to add the `age` information for the same user having the same email
@@ -993,7 +993,11 @@ Result:
 }
 ```
 
-You can achieved the same result with `json` using the following:
+Here, the query block queries for a user with `email` as `user@company1.io`. It stores
+the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user by extracting the uid from the variable `v` using `uid` function.
+
+We can achieve the same result using `json` dataset as follows:
 
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
@@ -1006,10 +1010,6 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 }
 ' | jq
 ```
-
-Here, the query block queries for a user with `email` as `user@company1.io`. It stores
-the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function.
 
 If we want to execute the mutation only when the user exists, we could use
 [Conditional Upsert]({{< relref "#conditional-upsert" >}}).
