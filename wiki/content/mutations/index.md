@@ -926,13 +926,28 @@ Result:
 }
 ```
 
+You can achieved the same result with `json` using the following:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set": {
+    "uid": uid(v),
+    "name": "first last",
+    "email": "user@company1.io"
+  }
+}
+' | jq
+```
+
 The query part of the upsert block stores the UID of the user with the provided email
-in the variable `v`. The mutation part then extracts the UID from variable `v` and
+in the variable `v`. The mutation part then extracts the UID from variable `v`, and
 stores the `name` and `email` information in the database. If the user exists,
 the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
-If we run the same mutation again, the data would just be overwritten and no new uid is
+If we run the same mutation again, the data would just be overwritten, and no new uid is
 created. Note that the `uids` map is empty in the response when the mutation is executed again:
 
 ```json
@@ -978,6 +993,20 @@ Result:
 }
 ```
 
+You can achieved the same result with `json` using the following:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}
+' | jq
+```
+
 Here, the query block queries for a user with `email` as `user@company1.io`. It stores
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
 user by extracting the uid from the variable `v` using `uid` function.
@@ -1003,84 +1032,6 @@ upsert {
       uid(v) <email> * .
       uid(v) <age> * .
     }
-  }
-}
-' | jq
-```
-
-Result:
-
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {}
-  },
-  "extensions": {...}
-}
-```
-
-### JSON Upsert Example
-
-Let's consider those previous [examples](#example) but, instead of `rdf`, we are going to use `json`.
-
-The first example is to update the `name` information of an existing user, and if the user doesn't exist, we create a user and update `email` and `name` information.
-
-It can be achieved using the following:
-
-```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
-{
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
-  "set": {
-    "uid": uid(v),
-    "name": "first last",
-    "email": "user@company1.io"
-  }
-}
-' | jq
-```
-
-The result if we find any user with the specified `email` :
-
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {
-      "uid(v)": "0x2"
-    }
-  },
-  "extensions": {...}
-}
-```
-
-The result if we find no user with the specified `email` :
-
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {}
-  },
-  "extensions": {...}
-}
-```
-
-The second example is to add the `age` of the same user (`user@company1.io`).
-
-We add the age for the user using the following `curl` request:
-
-```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
-{
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
-  "set":{
-    "uid": "uid(v)",
-    "age": "28"
   }
 }
 ' | jq
