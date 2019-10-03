@@ -30,10 +30,11 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -527,7 +528,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 	if !req.CommitNow {
-		if err == y.ErrConflict {
+		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
 
@@ -546,9 +547,9 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		resp.Txn.Aborted = true
 		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
 
-		if err == y.ErrConflict {
+		if err == zero.ErrConflict {
 			// We have already aborted the transaction, so the error message should reflect that.
-			return resp, y.ErrAborted
+			return resp, dgo.ErrAborted
 		}
 
 		return resp, err
@@ -560,7 +561,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	cts, err := worker.CommitOverNetwork(ctx, ctxn)
 	span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
 	if err != nil {
-		if err == y.ErrAborted {
+		if err == dgo.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
 			resp.Txn.Aborted = true
 		}
@@ -665,7 +666,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		}
 	}
 
-	updateMutations(gmu, varToUID)
+	updateUIDInMutations(gmu, varToUID)
+	updateValInMutations(gmu, qr)
 	return l, nil
 }
 
@@ -673,7 +675,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 func findVars(gmu *gql.Mutation) []string {
 	vars := make(map[string]struct{})
 	updateVars := func(s string) {
-		if strings.HasPrefix(s, "uid(") {
+		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
 			vars[varName] = struct{}{}
 		}
@@ -698,10 +700,97 @@ func findVars(gmu *gql.Mutation) []string {
 	return varsList
 }
 
-// updateMutations does following transformations:
+// updateValInNQuads picks the val() from object and replaces it with its value
+// Assumption is that Subject can contain UID, whereas Object can contain Val
+// If val(variable) exists in a query, but the values are not there for the variable,
+// it will ignore the mutation silently.
+func updateValInNQuads(nquads []*api.NQuad, req query.Request) []*api.NQuad {
+	getNewVals := func(s string) (map[uint64]types.Val, bool) {
+		if strings.HasPrefix(s, "val(") {
+			varName := s[4 : len(s)-1]
+			if vals, ok := req.Vars[varName]; ok {
+				return vals.Vals, true
+			}
+			return nil, true
+		}
+		return nil, false
+	}
+
+	getValue := func(key uint64, uidToVal map[uint64]types.Val) (types.Val, bool) {
+		val, ok := uidToVal[key]
+		if ok {
+			return val, true
+		}
+
+		// Check if the variable is aggregate variable
+		// Only 0 key would exist for aggregate variable
+		val, ok = uidToVal[0]
+		return val, ok
+	}
+
+	newNQuads := nquads[:0]
+	for _, nq := range nquads {
+		// Check if the nquad contains a val() in Object or not.
+		// If not then, keep the mutation and continue
+		uidToVal, found := getNewVals(nq.ObjectId)
+		if !found {
+			newNQuads = append(newNQuads, nq)
+			continue
+		}
+
+		// uid(u) <amount> val(amt)
+		// For each NQuad, we need to convert the val(variable_name)
+		// to *api.Value before applying the mutation. For that, first
+		// we convert key to uint64 and get the UID to Value map from
+		// the result of the query.
+		if nq.Subject[0] == '_' {
+			// UID is of format "_:uid(u)". Ignore silently
+			continue
+		}
+
+		key, err := strconv.ParseUint(nq.Subject, 0, 64)
+		if err != nil {
+			// Key conversion failed, ignoring the nquad. Ideally,
+			// it shouldn't happen as this is the result of a query.
+			glog.Errorf("Conversion of subject %s failed. Error: %s",
+				nq.Subject, err.Error())
+			continue
+		}
+
+		// Get the value to the corresponding UID(key) from the query result
+		nq.ObjectId = ""
+		val, ok := getValue(key, uidToVal)
+		if !ok {
+			continue
+		}
+
+		// Convert the value from types.Val to *api.Value
+		nq.ObjectValue, err = types.ObjectValue(val.Tid, val.Value)
+		if err != nil {
+			// Value conversion failed, ignoring the nquad. Ideally,
+			// it shouldn't happen as this is the result of a query.
+			glog.Errorf("Conversion of %s failed for %d subject. Error: %s",
+				nq.ObjectId, key, err.Error())
+			continue
+		}
+
+		newNQuads = append(newNQuads, nq)
+	}
+	return newNQuads
+}
+
+// updateValInMuations does following transformations:
+// 0x123 <amount> val(v) -> 0x123 <amount> 13.0
+func updateValInMutations(gmu *gql.Mutation, req query.Request) {
+	gmu.Del = updateValInNQuads(gmu.Del, req)
+	gmu.Set = updateValInNQuads(gmu.Set, req)
+}
+
+// updateUIDInMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+
+func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
@@ -932,7 +1021,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
-	if err == y.ErrAborted {
+	if err == dgo.ErrAborted {
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}

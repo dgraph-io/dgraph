@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,6 +80,7 @@ func TestSystem(t *testing.T) {
 	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
+	t.Run("reverse count index", wrap(ReverseCountIndex))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -831,8 +833,8 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
 		type Node {
-			to: uid
-			name: string
+			to
+			name
 		}
 `
 
@@ -1563,7 +1565,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
 			type Person {
-				name: string
+				name
 			}
 		`,
 	}))
@@ -1573,7 +1575,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+		"fields":[{"name":"name", "type":"default"}]}]}`, string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
@@ -1593,4 +1595,61 @@ func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DropValue must not be empty")
+}
+
+func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
+	// This test checks that we consider reverse count index keys while doing conflict detection
+	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count @reverse .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	mu := &api.Mutation{
+		CommitNow: true,
+	}
+	mu.SetJson = []byte(`{"name": "Alice"}`)
+	assigned, err := c.NewTxn().Mutate(ctx, mu)
+	require.NoError(t, err)
+
+	first := ""
+	for _, uid := range assigned.Uids {
+		first = uid
+		break
+	}
+	require.NotEmpty(t, first)
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, id string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			mu := &api.Mutation{
+				CommitNow: true,
+			}
+			mu.SetJson = []byte(`{"uid": "_:b", "friend": [{"uid": "` + id + `"}]}`)
+			for i := 0; i < 10; i++ {
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err == nil || err != dgo.ErrAborted {
+					break
+				}
+			}
+
+			require.Equal(t, 1, len(assigned.Uids))
+		}(c, first, &wg)
+	}
+	wg.Wait()
+
+	q := `{
+  me(func: eq(count(~friend), 10)) {
+	  name
+	  count(~friend)
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
 }

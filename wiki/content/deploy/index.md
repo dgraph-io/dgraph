@@ -1204,7 +1204,7 @@ See the `initContainers` configuration in
 [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
 to learn more.
 
-## More about Dgraph
+## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 
@@ -1742,38 +1742,6 @@ operating system and how much is actively in use.
  `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
  `dgraph_memory_proc_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
 
-### LRU Cache Metrics
-
-The LRU cache metrics let you track on how well the posting list cache is being used.
-
-You can track `dgraph_lru_capacity_bytes`, `dgraph_lru_evicted_total`, and `dgraph_max_list_bytes`
-(see the [Data Metrics]({{< relref "#data-metrics" >}})) to determine if the cache size should be
-adjusted. A high number of evictions can indicate a large posting list that repeatedly is inserted
-and evicted from the cache due to insufficient sizing. The LRU cache size can be tuned with the option
-`--lru_mb`.
-
- Metrics                     | Description
- -------                     | -----------
- `dgraph_lru_hits_total`     | Total number of cache hits for posting lists in Dgraph.
- `dgraph_lru_miss_total`     | Total number of cache misses for posting lists in Dgraph.
- `dgraph_lru_race_total`     | Total number of cache races when getting posting lists in Dgraph.
- `dgraph_lru_evicted_total`  | Total number of posting lists evicted from LRU cache.
- `dgraph_lru_capacity_bytes` | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
- `dgraph_lru_keys_total`     | Total number of keys in the LRU cache.
- `dgraph_lru_size_bytes`     | Size in bytes of the LRU cache.
-
-### Data Metrics
-
-The data metrics let you track the [posting list]({{< ref "/design-concepts/index.md#posting-list"
->}}) store.
-
- Metrics                          | Description
- -------                          | -----------
- `dgraph_max_list_bytes`          | Max posting list size in bytes.
- `dgraph_max_list_length`         | The largest number of postings stored in a posting list seen so far.
- `dgraph_posting_writes_total`    | Total number of posting list writes to disk.
- `dgraph_read_bytes_total`        | Total bytes read from Dgraph.
-
 ### Activity Metrics
 
 The activity metrics let you track the mutations, queries, and proposals of an Dgraph instance.
@@ -1803,13 +1771,6 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
  `go_memstats_gc_cpu_fraction`  | The fraction of this program's available CPU time used by the GC since the program started.
  `go_memstats_heap_idle_bytes`  | Number of heap bytes waiting to be used.
  `go_memstats_heap_inuse_bytes` | Number of heap bytes that are in use.
-
-### Unused Metrics
-
- Metrics                          | Description
- -------                          | -----------
- `dgraph_dirtymap_keys_total`     | Unused.
- `dgraph_posting_reads_total`     | Unused.
 
 ## Tracing
 
@@ -1894,12 +1855,19 @@ can be initiated using the `--whitelist` flag on `dgraph alpha`.
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
-{{% notice "note" %}}An export file would be created on only the server which is the leader for a group
-and not on followers.{{% /notice %}}
+This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
-This triggers an export of all the groups spread across the entire cluster. Each Alpha leader for
-a group writes output as a gzipped file to the export directory specified on startup by `--export`.
-If any of the groups fail, the entire export process is considered failed and an error is returned.
+1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
+2. For every other group, its group's export data is stored with the Alpha leader of that group. 
+
+It is up to the user to retrieve the right export files from the Alphas in the
+cluster. Dgraph does not copy all files to the Alpha that initiated the export.
+The user must also ensure that there is sufficient space on disk to store the
+export.
+
+Each Alpha leader for a group writes output as a gzipped file to the export
+directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
+entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
 `format` URL parameter. For example:
@@ -1909,8 +1877,6 @@ $ curl 'localhost:8080/admin/export?format=json'
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
-
-{{% notice "note" %}}It is up to the user to retrieve the right export files from the Alphas in the cluster. Dgraph does not copy files to the Alpha that initiated the export.{{% /notice %}}
 
 ### Shutdown Database
 

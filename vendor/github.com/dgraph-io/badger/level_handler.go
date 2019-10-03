@@ -21,6 +21,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dgryski/go-farm"
+
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
@@ -231,9 +233,10 @@ func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
 	tables, decr := s.getTableForKey(key)
 	keyNoTs := y.ParseKey(key)
 
+	hash := farm.Fingerprint64(keyNoTs)
 	var maxVs y.ValueStruct
 	for _, th := range tables {
-		if th.DoesNotHave(keyNoTs) {
+		if th.DoesNotHave(hash) {
 			y.NumLSMBloomHits.Add(s.strLevel, 1)
 			continue
 		}

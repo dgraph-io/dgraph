@@ -465,70 +465,58 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "O8YSP9f+dH/BlJMH5yK5hff0VG8=",
+			"checksumSHA1": "nztM5OYLZA5UhtlAkVemis1eRP4=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
 			"checksumSHA1": "On87ObyZ4RLZWWmDtW2M5gY997I=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
 			"checksumSHA1": "SHnr7a5ZSRsyrAT8Nw1AxDs1UXw=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
 			"checksumSHA1": "zWLyKFwJcRNWzpvE+QDrsqi9UlE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
-			"checksumSHA1": "X0uJEOHMIiJ/jUiGqhl62o+f0z0=",
+			"checksumSHA1": "cnBwJqnn60NE2pa1hvffhbg2E8Q=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
 			"checksumSHA1": "JxUxrgSrNNTqbX3tqzh3dQIG+uU=",
 			"path": "github.com/dgraph-io/badger/trie",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
-			"checksumSHA1": "pfK0K0RIzPJ4NZ+B27kgq6as/ew=",
+			"checksumSHA1": "d7+Tg5zhOvzE1lUzK2a+NGLTRAc=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "fbcd608981982d2d8c1612d310ac491d01dbde96",
-			"revisionTime": "2019-09-03T19:46:48Z"
+			"revision": "cbdef65095c7c34544963f31eb1f7867c49d6725",
+			"revisionTime": "2019-09-17T13:39:22Z"
 		},
 		{
-			"checksumSHA1": "gM1B8ixG+lBNstwPe0UDzOA2gcA=",
+			"checksumSHA1": "P4mj7iuJqa7kzIFZeUge++vBMio=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
-			"revisionTime": "2019-08-23T04:17:19Z"
+			"revision": "3023b82002fbe97830e4ba09dcbfadb46f222a3d",
+			"revisionTime": "2019-09-27T11:14:46Z"
 		},
 		{
 			"checksumSHA1": "uqaDtfgqoIrGWhQXY6ROB2IeumU=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
-			"revisionTime": "2019-08-23T04:17:19Z"
-		},
-		{
-			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
-			"path": "github.com/dgraph-io/dgo/x",
-			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
-			"revisionTime": "2019-08-23T04:17:19Z"
-		},
-		{
-			"checksumSHA1": "fbUFVBBiWFs0vdtTSmNkf5xpdDk=",
-			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "dd13326bfd542ec1528349e96224fb932044906d",
-			"revisionTime": "2019-08-23T04:17:19Z"
+			"revision": "494963eb946a0ad9a9180521a62082fdbf6ee41b",
+			"revisionTime": "2019-09-19T14:32:58Z"
 		},
 		{
 			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",
@@ -717,6 +705,12 @@
 			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
+			"checksumSHA1": "4gKrTOaoNvbAgDCVfSLd6J77oPw=",
+			"path": "github.com/golang/snappy",
+			"revision": "ff6b7dc882cf4cfba7ee0b9f7dcc1ac096c554aa",
+			"revisionTime": "2019-09-04T06:34:54Z"
+		},
+		{
 			"checksumSHA1": "L3HoHVqp2EaBSOqBxB7l0PTyu7g=",
 			"path": "github.com/golang/snappy",
 			"revision": "2a8bb927dd31d8daada140a5d09578521ce5c36a",
@@ -811,6 +805,12 @@
 			"path": "github.com/hashicorp/hcl/json/token",
 			"revision": "23c074d0eceb2b8a5bfdbb271ab780cde70f05a8",
 			"revisionTime": "2017-10-17T18:19:29Z"
+		},
+		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
 		},
 		{
 			"checksumSHA1": "fPE6hs5I61ZEXc54kkSoFaafqOk=",

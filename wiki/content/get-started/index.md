@@ -215,11 +215,17 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 {
   set {
    _:luke <name> "Luke Skywalker" .
+   _:luke <dgraph.type> "Person" .
    _:leia <name> "Princess Leia" .
+   _:leia <dgraph.type> "Person" .
    _:han <name> "Han Solo" .
+   _:han <dgraph.type> "Person" .
    _:lucas <name> "George Lucas" .
+   _:lucas <dgraph.type> "Person" .
    _:irvin <name> "Irvin Kernshner" .
+   _:irvin <dgraph.type> "Person" .
    _:richard <name> "Richard Marquand" .
+   _:richard <dgraph.type> "Person" .
 
    _:sw1 <name> "Star Wars: Episode IV - A New Hope" .
    _:sw1 <release_date> "1977-05-25" .
@@ -229,6 +235,7 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
    _:sw1 <starring> _:leia .
    _:sw1 <starring> _:han .
    _:sw1 <director> _:lucas .
+   _:sw1 <dgraph.type> "Film" .
 
    _:sw2 <name> "Star Wars: Episode V - The Empire Strikes Back" .
    _:sw2 <release_date> "1980-05-21" .
@@ -238,6 +245,7 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
    _:sw2 <starring> _:leia .
    _:sw2 <starring> _:han .
    _:sw2 <director> _:irvin .
+   _:sw2 <dgraph.type> "Film" .
 
    _:sw3 <name> "Star Wars: Episode VI - Return of the Jedi" .
    _:sw3 <release_date> "1983-05-25" .
@@ -247,11 +255,13 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
    _:sw3 <starring> _:leia .
    _:sw3 <starring> _:han .
    _:sw3 <director> _:richard .
+   _:sw3 <dgraph.type> "Film" .
 
    _:st1 <name> "Star Trek: The Motion Picture" .
    _:st1 <release_date> "1979-12-07" .
    _:st1 <revenue> "139000000" .
    _:st1 <running_time> "132" .
+   _:st1 <dgraph.type> "Film" .
   }
 }
 ' | python -m json.tool | less
@@ -270,6 +280,20 @@ curl localhost:8080/alter -XPOST -d $'
   release_date: datetime @index(year) .
   revenue: float .
   running_time: int .
+
+  type Person {
+    name
+  }
+
+  type Film {
+    name
+    release_date
+    revenue
+    running_time
+    starring
+    director
+  }
+
 ' | python -m json.tool | less
 ```
 

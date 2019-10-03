@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -62,11 +61,11 @@ type options struct {
 	useCompression bool
 	newUids        bool
 	verbose        bool
+	httpAddr       string
 }
 
 var (
-	opt    options
-	tlsCfg *tls.Config
+	opt options
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
 )
@@ -102,6 +101,7 @@ func init() {
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
@@ -154,7 +154,7 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
-	uid := l.alloc.AssignUid(val)
+	uid, _ := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
@@ -241,7 +241,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	}
 
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, tlsCfg, false)
+	connzero, err := x.SetupConnection(opt.zero, nil, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)
@@ -278,10 +278,11 @@ func run() error {
 		useCompression: Live.Conf.GetBool("use_compression"),
 		newUids:        Live.Conf.GetBool("new_uids"),
 		verbose:        Live.Conf.GetBool("verbose"),
+		httpAddr:       Live.Conf.GetString("http"),
 	}
 	go func() {
-		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			glog.Errorf("Error while starting HTTP server in port 6060: %+v", err)
+		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
+			glog.Errorf("Error while starting HTTP server: %+v", err)
 		}
 	}()
 	ctx := context.Background()

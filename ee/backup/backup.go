@@ -97,7 +97,7 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 		return &emptyRes, err
 	}
 
-	handler, err := NewUriHandler(uri)
+	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return &emptyRes, err
 	}
@@ -169,7 +169,7 @@ func (pr *Processor) CompleteBackup(ctx context.Context, manifest *Manifest) err
 		return err
 	}
 
-	handler, err := NewUriHandler(uri)
+	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return err
 	}

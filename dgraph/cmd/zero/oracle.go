@@ -114,7 +114,7 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	defer o.Unlock()
 
 	if o.hasConflict(src) {
-		return errConflict
+		return ErrConflict
 	}
 	for _, k := range src.Keys {
 		o.keyCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
@@ -283,7 +283,8 @@ func (o *Oracle) MaxPending() uint64 {
 	return o.maxAssigned
 }
 
-var errConflict = errors.New("Transaction conflict")
+// ErrConflict is returned when commit couldn't succeed due to conflicts.
+var ErrConflict = errors.New("Transaction conflict")
 
 // proposeTxn proposes a txn update, and then updates src to reflect the state
 // of the commit after proposal is run.

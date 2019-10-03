@@ -36,8 +36,8 @@ import (
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
-	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -262,13 +262,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return dy.ErrConflict
+		return zero.ErrConflict
 	}
 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
-	sort.Slice(m.Edges, func(i, j int) bool {
+	// It is possible that the user gives us multiple versions of the same edge, one with no facets
+	// and another with facets. In that case, use stable sort to maintain the ordering given to us
+	// by the user.
+	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
+	// different goroutines.
+	sort.SliceStable(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
 		if ei.GetAttr() != ej.GetAttr() {
@@ -403,6 +408,7 @@ func (n *node) processRollups() {
 			return
 		case readTs = <-n.rollupCh:
 		case <-tick.C:
+			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
 			if readTs <= last {
 				break // Break out of the select case.
 			}
@@ -691,6 +697,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
 						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+							"snapshotAfter:%d snap:%v", first, chk, chk-first,
+							x.WorkerConfig.SnapshotAfter, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -1274,7 +1283,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
 	}
-	if snapshotIdx <= 0 {
+	if snapshotIdx == 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
 		snapshotIdx = lastEntry.Index

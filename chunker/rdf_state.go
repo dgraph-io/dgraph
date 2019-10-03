@@ -136,10 +136,11 @@ func lexText(l *lex.Lexer) lex.StateFn {
 				l.Depth = atSubject
 			}
 
-		// TODO(Aman): add support for more functions here.
-		case r == 'u':
+		// This should happen when there is either UID or Val function.
+		// Hence, we are just checking for u or v
+		case r == 'u' || r == 'v':
 			if l.Depth != atSubject && l.Depth != atObject {
-				return l.Errorf("Unexpected char 'u'")
+				return l.Errorf("Unexpected char '%c'", r)
 			}
 			l.Backup()
 			l.Emit(itemText)
@@ -147,6 +148,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 
 		case isSpace(r):
 			continue
+
 		default:
 			l.Errorf("Invalid input: %c at lexText", r)
 		}
@@ -422,12 +424,18 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 func lexVariable(l *lex.Lexer) lex.StateFn {
 	var r rune
 
-	// TODO(Aman): add support for more functions here.
-	for _, c := range "uid" {
+	functionName := "uid"
+	if r = l.Next(); r == 'v' {
+		functionName = "val"
+	}
+	l.Backup()
+
+	for _, c := range functionName {
 		if r = l.Next(); r != c {
 			return l.Errorf("Unexpected char '%c' when parsing uid keyword", r)
 		}
 	}
+
 	if l.Depth == atObject {
 		l.Emit(itemObjectFunc)
 	} else if l.Depth == atSubject {
@@ -438,6 +446,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	if r = l.Next(); r != '(' {
 		return l.Errorf("Expected '(' after uid keyword, found: '%c'", r)
 	}
+
 	l.Emit(itemLeftRound)
 	l.IgnoreRun(isSpace)
 
@@ -454,7 +463,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != ')' {
-		return l.Errorf("Expected ')' while reading uid func, found: '%c'", r)
+		return l.Errorf("Expected ')' while reading function found: '%c'", r)
 	}
 	l.Emit(itemRightRound)
 	l.Depth++
@@ -512,7 +521,7 @@ func isPnCharsBase(r rune) bool {
 	case r >= 0x37F && r <= 0x1FFF:
 	case r >= 0x200C && r <= 0x200D:
 	case r >= 0x2070 && r <= 0x218F:
-	case r >= 0x2C00 && r <= 0X2FEF:
+	case r >= 0x2C00 && r <= 0x2FEF:
 	case r >= 0x3001 && r <= 0xD7FF:
 	case r >= 0xF900 && r <= 0xFDCF:
 	case r >= 0xFDF0 && r <= 0xFFFD:

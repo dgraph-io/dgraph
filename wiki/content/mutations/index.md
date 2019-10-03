@@ -384,7 +384,7 @@ To run a `delete` mutation:
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   delete {
-    # Example: Alice's UID is 0x56f33
+    # Example: The UID of Alice is 0x56f33
     <0x56f33> <name> * .
   }
 }'

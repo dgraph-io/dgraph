@@ -89,12 +89,12 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
-		"shards",
+		mapShardDir,
 		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map.gz", fileNum),
 	)
-	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
+	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
 func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
@@ -241,8 +241,8 @@ func (m *mapper) uid(xid string) uint64 {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid := m.xids.AssignUid(xid)
-	if !m.opt.StoreXids {
+	uid, isNew := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {

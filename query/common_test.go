@@ -192,19 +192,19 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 
 const testSchema = `
 type Person {
-	name: string
-	pet: Animal
+	name
+	pet
 }
 
 type Animal {
-	name: string
+	name
 }
 
 type CarModel {
-	make: string
-	model: string
-	year: int
-	previous_model: CarModel
+	make
+	model
+	year
+	previous_model
 }
 
 type Object {
@@ -212,22 +212,22 @@ type Object {
 }
 
 type SchoolInfo {
-	name: string
-	abbr: string
-	school: [uid]
-	district: [uid]
-	state: [uid]
-	county: [uid]
+	name
+	abbr
+	school
+	district
+	state
+	county
 }
 
 type User {
-	name: string
-	password: password
+	name
+	password
 }
 
 type Node {
-	node: uid
-	name: string
+	node
+	name
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
@@ -268,6 +268,8 @@ previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
 number                         : int @index(int) .
+firstName                      : string .
+lastName                       : string .
 `
 
 func populateCluster() {
@@ -554,6 +556,18 @@ func populateCluster() {
 		<202> <model> "プリウス"@jp .
 		<202> <dgraph.type> "CarModel" .
 		<202> <dgraph.type> "Object" .
+
+		# data for regexp testing
+		_:luke <firstName> "Luke" .
+		_:luke <lastName> "Skywalker" .
+		_:leia <firstName> "Princess" .
+		_:leia <lastName> "Leia" .
+		_:han <firstName> "Han" .
+		_:han <lastName> "Solo" .
+		_:har <firstName> "Harrison" .
+		_:har <lastName> "Ford" .
+		_:ss <firstName> "Steven" .
+		_:ss <lastName> "Spielberg" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

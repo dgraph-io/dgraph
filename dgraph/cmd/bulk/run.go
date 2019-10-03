@@ -28,11 +28,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
 
@@ -178,12 +176,13 @@ func run() {
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
 	if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
-		missingOrEmpty, err := x.IsMissingOrEmptyDir(opt.OutDir)
-		x.CheckfNoTrace(err)
-		if !missingOrEmpty {
+		err := x.IsMissingOrEmptyDir(opt.OutDir)
+		if err == nil {
 			fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
 				" Use --replace_out to overwrite it.\n")
 			os.Exit(1)
+		} else if err != x.ErrMissingDir {
+			x.CheckfNoTrace(err)
 		}
 	}
 
@@ -203,27 +202,6 @@ func run() {
 	if opt.CleanupTmp {
 		defer os.RemoveAll(opt.TmpDir)
 	}
-
-	// Bulk loader can take up a lot of RAM. So, run GC often.
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		var lastNum uint32
-		var ms runtime.MemStats
-		for range ticker.C {
-			runtime.ReadMemStats(&ms)
-			fmt.Printf("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse),
-				humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
-			if ms.NumGC > lastNum {
-				// GC was already run by the Go runtime. No need to run it again.
-				lastNum = ms.NumGC
-			} else {
-				runtime.GC()
-				lastNum = ms.NumGC + 1
-			}
-		}
-	}()
 
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
