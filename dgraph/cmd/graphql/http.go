@@ -117,7 +117,6 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 		dgraph.NewMutationRewriter())
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
-		r.Header.Del("Content-Length")
 		zr, err := gzip.NewReader(r.Body)
 		if err != nil {
 			rr.WithError(gqlerror.Errorf("Unable to parse gzip"))

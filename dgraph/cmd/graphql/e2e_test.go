@@ -206,6 +206,57 @@ func gZipData(data []byte) (compressedData []byte, err error) {
 	return
 }
 
+// This tests that if a request has gzip header but the body is
+// not compressed, then it should return an error
+func TestGzipCompressionHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+		AcceptEncoding:  false,
+		ContentEncoding: false,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resData, err := runGQLRequest(req)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, err)
+}
+
+// This tests that if a req's body is compressed but the
+// header is not present, then it should return an error
+func TestGzipCompressionNoHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+		AcceptEncoding:  false,
+		ContentEncoding: true,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	req.Header.Del("Content-Encoding")
+
+	resData, err := runGQLRequest(req)
+	fmt.Println(err)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, err)
+}
+
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
 func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
