@@ -358,6 +358,9 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			curPath := pathPool.Get().(*[]pathInfo)
+			if curPath == nil {
+				return nil, errors.Errorf("Sync pool returned a nil pointer")
+			}
 			if cap(*curPath) < len(*item.path.route)+1 {
 				// We can't use it due to insufficient capacity. Put it back.
 				pathPool.Put(curPath)
