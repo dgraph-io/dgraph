@@ -25,10 +25,10 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/gqlerror"
 	"gopkg.in/yaml.v2"
 )
 
@@ -57,7 +57,7 @@ type QueryCase struct {
 	Explanation string
 	Response    string // Dgraph json response
 	Expected    string // Expected data from Resolve()
-	Errors      gqlerror.List
+	Errors      x.GqlErrorList
 }
 
 var testGQLSchema = `
@@ -159,7 +159,10 @@ func TestResolver(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			resp := resolve(gqlSchema, tcase.GQLQuery, tcase.Response)
 
-			test.RequireJSONEq(t, tcase.Errors, resp.Errors)
+			if diff := cmp.Diff(tcase.Errors, resp.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+
 			require.JSONEq(t, tcase.Expected, resp.Data.String(), tcase.Explanation)
 		})
 	}
@@ -246,7 +249,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		mutResponse   map[string]string
 		queryResponse string
 		expected      string
-		errors        gqlerror.List
+		errors        x.GqlErrorList
 	}{
 		"Add mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
@@ -271,10 +274,10 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "addPost": { "post" : null } }`,
-			errors: gqlerror.List{&gqlerror.Error{
+			errors: x.GqlErrorList{&x.GqlError{
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
-				Locations: []gqlerror.Location{{Column: 6, Line: 7}},
+				Locations: []x.Location{{Column: 6, Line: 7}},
 				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
@@ -311,7 +314,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		mutResponse   map[string]string
 		queryResponse string
 		expected      string
-		errors        gqlerror.List
+		errors        x.GqlErrorList
 	}{
 		"Update Mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
@@ -336,10 +339,10 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "updatePost": { "post" : null } }`,
-			errors: gqlerror.List{&gqlerror.Error{
+			errors: x.GqlErrorList{&x.GqlError{
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
-				Locations: []gqlerror.Location{{Column: 6, Line: 7}},
+				Locations: []x.Location{{Column: 6, Line: 7}},
 				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
@@ -397,7 +400,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		mutResponse   map[string]string
 		queryResponse string
 		expected      string
-		errors        gqlerror.List
+		errors        x.GqlErrorList
 	}{
 		"Dgraph fail": {
 			explanation:   "a Dgraph, network or error in rewritten query failed the mutation",
@@ -408,11 +411,13 @@ func TestManyMutationsWithError(t *testing.T) {
 				"add1": { "post": { "title": "A Post" } },
 				"add2" : null
 			}`,
-			errors: gqlerror.List{
-				&gqlerror.Error{Message: `input: mutation addPost failed because ` +
-					`input: Dgraph mutation failed because _bad stuff happend_`},
-				&gqlerror.Error{Message: `mutation add3 was not executed because of ` +
-					`a previous error`}},
+			errors: x.GqlErrorList{
+				&x.GqlError{Message: `mutation addPost failed because ` +
+					`Dgraph query failed because _bad stuff happend_`,
+					Locations: []x.Location{{Line: 6, Column: 4}}},
+				&x.GqlError{Message: `mutation add3 was not executed because of ` +
+					`a previous error`,
+					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 		"Rewriting error": {
 			explanation:   "The reference ID is not a uint64, so can't be converted to a uid",
@@ -423,11 +428,12 @@ func TestManyMutationsWithError(t *testing.T) {
 				"add1": { "post": { "title": "A Post" } },
 				"add2" : null
 			}`,
-			errors: gqlerror.List{
-				&gqlerror.Error{Message: `input: couldn't rewrite mutation because ` +
-					`input: ID argument (hi) was not able to be parsed`},
-				&gqlerror.Error{Message: `mutation add3 was not executed because of ` +
-					`a previous error`}},
+			errors: x.GqlErrorList{
+				&x.GqlError{Message: `couldn't rewrite mutation because ` +
+					`ID argument (hi) was not able to be parsed`},
+				&x.GqlError{Message: `mutation add3 was not executed because of ` +
+					`a previous error`,
+					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 	}
 
