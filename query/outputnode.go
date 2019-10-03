@@ -298,7 +298,11 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range fj.attrs {
-		if a.isChild {
+		// When we call addMapChild it tries to find whether there is already a node with
+		// attribute same as attribute argument of addMapChild. If it doesn't find any such
+		// node, it creates a node with isChild = false. In those cases normalize fails.
+		// So we are using len(a.attrs) > 0 instead of a.isChild
+		if len(a.attrs) > 0 {
 			cnt++
 		}
 	}
@@ -314,7 +318,8 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	// merged with children later.
 	attrs := make([]*fastJsonNode, 0, len(fj.attrs)-cnt)
 	for _, a := range fj.attrs {
-		if !a.isChild {
+		// Check comment at previous occurrence of len(a.attrs) > 0
+		if len(a.attrs) == 0 {
 			attrs = append(attrs, a)
 		}
 	}
@@ -322,7 +327,8 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 
 	for ci := 0; ci < len(fj.attrs); {
 		childNode := fj.attrs[ci]
-		if !childNode.isChild {
+		// Check comment at previous occurrence of len(a.attrs) > 0
+		if len(childNode.attrs) == 0 {
 			ci++
 			continue
 		}
@@ -705,30 +711,37 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
-					if pc.List {
+					if pc.Params.Normalize {
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
 						// Now normalize() only flattens one level,
 						// the expectation is that it's children have
 						// already been normalized.
-						if pc.Params.Normalize {
-							normalized, err := uc.(*fastJsonNode).normalize()
-							if err != nil {
-								return err
-							}
+						normalized, err := uc.(*fastJsonNode).normalize()
+						if err != nil {
+							return err
+						}
 
+						if pc.List {
 							for _, c := range normalized {
-								dst.AddListChild(fieldName,
-									&fastJsonNode{attrs: c})
+								dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
 							}
 						} else {
-							dst.AddListChild(fieldName, uc)
+							for _, c := range normalized {
+								dst.AddMapChild(fieldName, &fastJsonNode{attrs: c}, false)
+							}
 						}
+
 					} else {
-						dst.AddMapChild(fieldName, uc, false)
+						if pc.List {
+							dst.AddListChild(fieldName, uc)
+						} else {
+							dst.AddMapChild(fieldName, uc, false)
+						}
 					}
 				}
 			}
+
 			if pc.Params.UidCount && !(pc.Params.UidCountAlias == "" && pc.Params.Normalize) {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
