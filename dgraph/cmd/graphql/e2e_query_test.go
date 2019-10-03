@@ -36,7 +36,9 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 				name
 			}
 		}`,
-		Variables: map[string]interface{}{"regexp": regexp},
+		Variables:       map[string]interface{}{"regexp": regexp},
+		AcceptEncoding:  false,
+		ContentEncoding: true,
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -66,6 +68,8 @@ func TestQueryByType(t *testing.T) {
 				name
 			}
 		}`,
+		AcceptEncoding:  true,
+		ContentEncoding: true,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -98,6 +102,8 @@ func TestOrderAtRoot(t *testing.T) {
 				name
 			}
 		}`,
+		AcceptEncoding:  true,
+		ContentEncoding: false,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -126,6 +132,8 @@ func TestPageAtRoot(t *testing.T) {
 				name
 			}
 		}`,
+		AcceptEncoding:  false,
+		ContentEncoding: false,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -162,6 +170,8 @@ func TestHashSearch(t *testing.T) {
 				dob
 			}
 		}`,
+		AcceptEncoding:  true,
+		ContentEncoding: true,
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -193,6 +203,8 @@ func allPosts(t *testing.T) []*post {
 				postType
 			}
 		}`,
+		AcceptEncoding:  true,
+		ContentEncoding: true,
 	}
 	gqlResponse := queryAuthorParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)

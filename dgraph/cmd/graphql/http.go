@@ -63,19 +63,6 @@ type graphqlHandler struct {
 	schema       *ast.Schema
 }
 
-func getOutWriter(w http.ResponseWriter, r *http.Request) io.Writer {
-	var out io.Writer = w
-
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
-	return out
-}
-
 // ServeHTTP handles GraphQL queries and mutations that get resolved
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
@@ -91,7 +78,16 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
-	out := getOutWriter(w, r)
+	var out io.Writer = w
+
+	// If the reciever accepts gzip, then we would update the writer
+	// and send gzipped content instead.
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
 
 	rh := gh.resolverForRequest(r)
 	res := rh.Resolve(ctx)

@@ -18,9 +18,11 @@ package graphql
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -68,9 +70,11 @@ const (
 // called variables. If the query contains several named operations, an operationName query
 // parameter can be used to control which one should be executed."
 type GraphQLParams struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query           string                 `json:"query"`
+	OperationName   string                 `json:"operationName"`
+	Variables       map[string]interface{} `json:"variables"`
+	AcceptEncoding  bool
+	ContentEncoding bool
 }
 
 // GraphQLResponse GraphQL response structure.
@@ -160,6 +164,48 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func gUnzipData(data []byte) (resData []byte, err error) {
+	b := bytes.NewBuffer(data)
+
+	var r io.Reader
+	r, err = gzip.NewReader(b)
+	if err != nil {
+		return
+	}
+
+	var resB bytes.Buffer
+	_, err = resB.ReadFrom(r)
+	if err != nil {
+		return
+	}
+
+	resData = resB.Bytes()
+
+	return
+}
+
+func gZipData(data []byte) (compressedData []byte, err error) {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+
+	_, err = gz.Write(data)
+	if err != nil {
+		return
+	}
+
+	if err = gz.Flush(); err != nil {
+		return
+	}
+
+	if err = gz.Close(); err != nil {
+		return
+	}
+
+	compressedData = b.Bytes()
+
+	return
+}
+
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
 func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
@@ -170,7 +216,12 @@ func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLRes
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
-	err = json.Unmarshal(res, &result)
+	resData := res
+	if params.AcceptEncoding {
+		resData, err = gUnzipData(res)
+		require.NoError(t, err)
+	}
+	err = json.Unmarshal(resData, &result)
 	require.NoError(t, err)
 
 	requireContainsRequestID(t, result)
@@ -190,11 +241,22 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	data := body
+	if params.ContentEncoding {
+		data, _ = gZipData(body)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if params.ContentEncoding {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+	if params.AcceptEncoding {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 
 	return req, nil
 }
