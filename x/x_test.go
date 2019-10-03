@@ -94,3 +94,34 @@ func TestValidateAddress(t *testing.T) {
 		}
 	})
 }
+
+func TestGqlError(t *testing.T) {
+	tests := map[string]struct {
+		err error
+		req string
+	}{
+		"GqlError": {
+			err: GqlErrorf("A GraphQL error"),
+			req: "A GraphQL error",
+		},
+		"GqlError with a location": {
+			err: GqlErrorf("A GraphQL error").WithLocations(Location{Line: 1, Column: 8}),
+			req: "A GraphQL error (Locations: [{Line: 1, Column: 8}])",
+		},
+		"GqlError with many locations": {
+			err: GqlErrorf("A GraphQL error").
+				WithLocations(Location{Line: 1, Column: 2}, Location{Line: 1, Column: 8}),
+			req: "A GraphQL error (Locations: [{Line: 1, Column: 2}, {Line: 1, Column: 8}])",
+		},
+		"GqlErrorList": {
+			err: GqlErrorList{GqlErrorf("A GraphQL error"), GqlErrorf("Another GraphQL error")},
+			req: "A GraphQL error\nAnother GraphQL error\n",
+		},
+	}
+
+	for name, tcase := range tests {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tcase.req, tcase.err.Error())
+		})
+	}
+}
