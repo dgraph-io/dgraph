@@ -81,6 +81,7 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
+	t.Run("type predicate check", wrap(TypePredicateCheck))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1657,4 +1658,34 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
+}
+
+func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
+	// Reject schema updates if the types have missing predicates.
+
+	// Update is rejected because name is not in the schema.
+	op := &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+	}
+	`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Update is accepted because name is not in the schema but is present in the same
+	// update.
+	op = &api.Operation{}
+	op.Schema = `
+	name: string .
+
+	type Person {
+		name
+	}
+	`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
 }

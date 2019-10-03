@@ -558,36 +558,43 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 }
 
 func verifyTypes(ctx context.Context, m *pb.Mutations) error {
+	// Create a set of all the predicates included in this schema request.
 	preds := make(map[string]struct{}, len(m.Schema))
 	for _, sup := range m.Schema {
 		preds[sup.Predicate] = struct{}{}
 	}
 
+	// Create a set of all the predicates already present in the schema.
+	schemaSet := make(map[string]struct{})
 	for _, t := range m.Types {
 		if len(t.TypeName) == 0 {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
-		fields := make([]string, len(t.Fields))
-		for i, field := range t.Fields {
-			fields[i] = field.Predicate
+		fields := make([]string, 0)
+		for _, field := range t.Fields {
+			if _, ok := preds[field.Predicate]; !ok {
+				fields = append(fields, field.Predicate)
+			}
 		}
+
 		schs, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
 		if err != nil {
 			return errors.Errorf("Cannot retrieve predicate information for fields in type %s",
 				t.TypeName)
 		}
 
-		schemaSet := make(map[string]struct{}, len(schs))
 		for _, schemaNode := range schs {
 			schemaSet[schemaNode.Predicate] = struct{}{}
 		}
+	}
 
+	for _, t := range m.Types {
 		// Verify all the fields in the type are already on the schema or come included in
 		// this request.
-		for _, field := range fields {
-			_, inSchema := schemaSet[field]
-			_, inRequest := preds[field]
+		for _, field := range t.Fields {
+			_, inSchema := schemaSet[field.Predicate]
+			_, inRequest := preds[field.Predicate]
 			if !inSchema && !inRequest {
 				return errors.Errorf(
 					"Schema does not contain a matching predicate for field %s in type %s",
@@ -595,23 +602,32 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 			}
 		}
 
-		for _, field := range t.Fields {
-			if len(field.Predicate) == 0 {
-				return errors.Errorf("Field in type definition must have a name")
-			}
+		if err := typeSanityCheck(t); err != nil {
+			return err
+		}
+	}
 
-			if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
-				return errors.Errorf(
-					"Field with value type OBJECT must specify the name of the object type")
-			}
+	return nil
+}
 
-			if field.Directive != pb.SchemaUpdate_NONE {
-				return errors.Errorf("Field in type definition cannot have a directive")
-			}
+// typeSanityCheck performs basic sanity checks on the given type update.
+func typeSanityCheck(t *pb.TypeUpdate) error {
+	for _, field := range t.Fields {
+		if len(field.Predicate) == 0 {
+			return errors.Errorf("Field in type definition must have a name")
+		}
 
-			if len(field.Tokenizer) > 0 {
-				return errors.Errorf("Field in type definition cannot have tokenizers")
-			}
+		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+			return errors.Errorf(
+				"Field with value type OBJECT must specify the name of the object type")
+		}
+
+		if field.Directive != pb.SchemaUpdate_NONE {
+			return errors.Errorf("Field in type definition cannot have a directive")
+		}
+
+		if len(field.Tokenizer) > 0 {
+			return errors.Errorf("Field in type definition cannot have tokenizers")
 		}
 	}
 
