@@ -63,7 +63,6 @@ type mutationResolver struct {
 }
 
 const (
-	createdNode       = "newnode"
 	mutationFailed    = false
 	mutationSucceeded = true
 )
