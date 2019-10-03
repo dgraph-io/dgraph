@@ -129,7 +129,7 @@ func (dg *dgraphClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byt
 func (dg *dgraphClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
 	dg.failMutation--
 	if dg.failMutation == 0 {
-		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
+		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
 	}
 	return dg.assigned, nil
 }
@@ -410,7 +410,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			}`,
 			errors: gqlerror.List{
 				&gqlerror.Error{Message: `input: mutation addPost failed because ` +
-					`input: Dgraph query failed because _bad stuff happend_`},
+					`input: Dgraph mutation failed because _bad stuff happend_`},
 				&gqlerror.Error{Message: `mutation add3 was not executed because of ` +
 					`a previous error`}},
 		},

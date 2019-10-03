@@ -673,7 +673,7 @@ func TestMutationWithDeepFilter(t *testing.T) {
 		[]*post{newPost, result.AddPost.Post})
 }
 
-// TestManyMutationsWithError : If there are multiple mutations and an error
+// TestManyMutationsWithQueryError : If there are multiple mutations and an error
 // occurs in the mutation, then then following mutations aren't executed.  That's
 // tested by TestManyMutationsWithError in the resolver tests.
 //
@@ -763,8 +763,6 @@ func TestManyMutationsWithQueryError(t *testing.T) {
 	}
 	err = json.Unmarshal([]byte(expectedData), &expected)
 	require.NoError(t, err)
-
-	fmt.Println(string(gqlResponse.Data))
 
 	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)

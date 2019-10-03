@@ -63,7 +63,9 @@ type mutationResolver struct {
 }
 
 const (
-	createdNode = "newnode"
+	createdNode       = "newnode"
+	mutationFailed    = false
+	mutationSucceeded = true
 )
 
 // resolve a single mutation, returning the result of resolving the mutation and
@@ -128,7 +130,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	default:
 		return &resolved{
 			err: gqlerror.Errorf(
-				"Only add, delete and update mutations are implemented")}, true
+				"Only add, delete and update mutations are implemented")}, mutationFailed
 	}
 
 	var b bytes.Buffer
@@ -158,31 +160,31 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) (*resolved, boo
 	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res, false
+		return res, mutationFailed
 	}
 
 	assigned, err := mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
-		return res, false
+		return res, mutationFailed
 	}
 
 	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
 			mr.mutation.Name())
-		return res, true
+		return res, mutationSucceeded
 	}
 
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
 			mr.mutation.Name())
-		return res, true
+		return res, mutationSucceeded
 	}
 
 	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
-	return res, true
+	return res, mutationSucceeded
 }
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) (*resolved, bool) {
@@ -198,14 +200,14 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) (*resolve
 	query, mut, err := mr.mutationRewriter.RewriteDelete(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res, false
+		return res, mutationFailed
 	}
 
 	if err = mr.dgraph.DeleteNodes(ctx, query, mut); err != nil {
 		res.err = schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
-		return res, false
+		return res, mutationFailed
 	}
 
 	res.data = []byte(`{ "msg": "Deleted" }`)
-	return res, true
+	return res, mutationSucceeded
 }
