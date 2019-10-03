@@ -160,6 +160,36 @@ func TestParseQueryListPred1(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseQueryExpandForward(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(_forward_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _forward_ has been deprecated")
+}
+
+func TestParseQueryExpandReverse(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(_reverse_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _reverse_ has been deprecated")
+}
+
 func TestParseQueryAliasListPred(t *testing.T) {
 	query := `
 	{
