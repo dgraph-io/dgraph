@@ -54,7 +54,6 @@ schemas:
         p: Int
         pList: [Int]
         q: Boolean
-        qList: [Boolean]
         r: String
         rList: [String]
         s: DateTime
@@ -68,7 +67,6 @@ schemas:
         X.p: int
         X.pList: [int]
         X.q: bool
-        X.qList: [bool]
         X.r: string
         X.rList: [string]
         X.s: dateTime
@@ -79,7 +77,6 @@ schemas:
       X.p: int .
       X.pList: [int] .
       X.q: bool .
-      X.qList: [bool] .
       X.r: string .
       X.rList: [string] .
       X.s: dateTime .
@@ -92,13 +89,17 @@ schemas:
     input: |
       type X {
         e: E
+        f: [E]
       }
       enum E { A }
     output: |
       type X {
         X.e: string
+        X.f: [string]
       }
       X.e: string @index(exact) .
+      X.f: [string] @index(exact) .
+
 
   -
     name: "Searchable indexes are correct"

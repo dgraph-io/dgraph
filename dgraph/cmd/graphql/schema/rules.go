@@ -118,6 +118,13 @@ func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
 		)
 	}
 
+	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
+	if field.Type.Elem != nil && field.Type.Elem.Name() == "Boolean" &&
+		field.Type.NamedType == "" {
+		return gqlerror.ErrorPosf(
+			field.Position, "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.")
+	}
+
 	return nil
 }
 

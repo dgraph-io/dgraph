@@ -215,9 +215,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
 					}
 				case ast.Enum:
-					fmt.Fprintf(&typeDef, "  %s.%s: string\n", typName, f.Name)
+					typStr = fmt.Sprintf(
+						"%s%s%s",
+						prefix, "string", suffix,
+					)
+					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", typName, f.Name)
+						fmt.Fprintf(&preds, "%s.%s: %s @index(exact) .\n", typName, f.Name, typStr)
 					}
 				}
 			}
