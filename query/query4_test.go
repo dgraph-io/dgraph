@@ -291,7 +291,7 @@ func TestTypeExpandAll(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Ford","model":"Focus","year":2008},
+		{"make":"Ford","model":"Focus","year":2008, "~previous_model": [{"uid":"0xc9"}]},
 		{"make":"Ford","model":"Focus","year":2009, "previous_model": {"uid":"0xc8"}}
 	]}}`, js)
 }

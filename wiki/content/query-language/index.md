@@ -1821,8 +1821,8 @@ type Pet {
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
-the node has (`Animal` and `Pet`). Then it will get the definitions of 
-`Animal` and `Pet` and build a list of predicates.
+the node has (`Animal` and `Pet`). Then it will get the definitions of `Animal`
+and `Pet` and build a list of predicates from their type definitions.
 
 ```
 name
