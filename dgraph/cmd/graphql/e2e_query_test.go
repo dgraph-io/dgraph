@@ -253,6 +253,7 @@ func TestManyQueries(t *testing.T) {
 		tags
 		isPublished
 		postType
+		numLikes
 	}
 	`
 
@@ -296,6 +297,7 @@ func TestQueriesWithError(t *testing.T) {
 		tags
 		isPublished
 		postType
+		numLikes
 	}
 	`
 
