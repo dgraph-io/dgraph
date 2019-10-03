@@ -67,6 +67,7 @@ const (
 			"predicate": "Character.appearsIn",
 			"type": "string",
 			"index": true,
+			"list": true,
 			"tokenizer": [
 			  "exact"
 			]
@@ -229,7 +230,7 @@ const (
 			  },
 			  {
 				"name": "Character.appearsIn",
-				"type": "string"
+				"type": "[string]"
 			  }
 			],
 			"name": "Character"
@@ -251,7 +252,7 @@ const (
 			  },
 			  {
 				"name": "Character.appearsIn",
-				"type": "string"
+				"type": "[string]"
 			  },
 			  {
 				"name": "Droid.primaryFunction",
@@ -281,7 +282,7 @@ const (
 			  },
 			  {
 				"name": "Character.appearsIn",
-				"type": "string"
+				"type": "[string]"
 			  },
 			  {
 				"name": "Human.starships",
