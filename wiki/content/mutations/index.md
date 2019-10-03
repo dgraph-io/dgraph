@@ -1050,6 +1050,21 @@ Result:
 }
 ```
 
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}
+' | jq
+```
+
 ## Conditional Upsert
 
 The upsert block also allows specifying a conditional mutation block using an `@if`
@@ -1090,4 +1105,19 @@ upsert {
   }
 }
 ' | jq
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "cond": "@if(lt(len(v), 100) AND gt(len(v), 50))",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}' | jq
 ```
