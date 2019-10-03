@@ -940,7 +940,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 			"queryCharacter": [
 			  {
 				"name": "Han Solo",
-				"appearsIn": "EMPIRE",
+				"appearsIn": ["EMPIRE"],
 				"starships": [
 				  {
 					"name": "Millennium Falcon",
@@ -951,7 +951,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 			  },
 			  {
 				"name": "R2-D2",
-				"appearsIn": "EMPIRE",
+				"appearsIn": ["EMPIRE"],
 				"primaryFunction": "Robot"
 			  }
 			]
@@ -987,7 +987,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		"queryCharacter": [
 		  {
 			"name": "Han Solo",
-			"appearsIn": "EMPIRE",
+			"appearsIn": ["EMPIRE"],
 			"starships": [
 			  {
 				"name": "Millennium Falcon",
@@ -1023,7 +1023,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		"queryHuman": [
 		  {
 			"name": "Han Solo",
-			"appearsIn": "EMPIRE",
+			"appearsIn": ["EMPIRE"],
 			"starships": [
 			  {
 				"name": "Millennium Falcon",
@@ -1059,7 +1059,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		"queryHuman": [
 		  {
 			"name": "Han Solo",
-			"appearsIn": "EMPIRE",
+			"appearsIn": ["EMPIRE"],
 			"starships": [
 			  {
 				"name": "Millennium Falcon",
