@@ -21,40 +21,85 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/gqlerror"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// Note: the formatting of these will change after https://github.com/dgraph-io/dgraph/pull/3728.
-// ATM, we are using github.com/vektah/gqlparser/gqlerror GraphQL errors which doesn't print
-// Error() so nice.  After #3728, we'll add our own Error() around our GraphQL error and this
-// will print without the "input: " etc
-
-func TestGQLWrapf(t *testing.T) {
-	tests := []struct {
-		err error
-		msg string
-		req string
+func TestGQLWrapf_Error(t *testing.T) {
+	tests := map[string]struct {
+		err  error
+		msg  string
+		args []interface{}
+		req  string
 	}{
-		{err: errors.New("An error occured"),
+		"wrap one error": {err: errors.New("An error occurred"),
 			msg: "mutation failed",
-			req: "input: mutation failed because An error occured"},
-		{err: GQLWrapf(errors.New("A Dgraph error occured"), "couldn't check ID type"),
+			req: "mutation failed because An error occurred"},
+		"wrap multiple errors": {
+			err: GQLWrapf(errors.New("A Dgraph error occurred"), "couldn't check ID type"),
 			msg: "delete mutation failed",
-			req: "input: delete mutation failed because input: couldn't check ID type because A Dgraph error occured"},
-		{err: gqlerror.Errorf("of bad GraphQL input"),
+			req: "delete mutation failed because couldn't check ID type because " +
+				"A Dgraph error occurred"},
+		"wrap an x.GqlError": {err: x.GqlErrorf("of bad GraphQL input"),
 			msg: "couldn't generate query",
-			req: "input: couldn't generate query because input: of bad GraphQL input"},
-		{err: gqlerror.ErrorLocf("F", 1, 2, "input bad here"),
-			msg: "couldn't generate query",
-			req: "input:1: couldn't generate query because F:1: input bad here"},
+			req: "couldn't generate query because of bad GraphQL input"},
+		"wrap and format": {err: errors.New("an error occurred"),
+			msg:  "couldn't generate %s for %s",
+			args: []interface{}{"query", "you"},
+			req:  "couldn't generate query for you because an error occurred"},
 	}
 
-	for _, tt := range tests {
-		got := GQLWrapf(tt.err, tt.msg).Error()
-		assert.Equal(t, tt.req, got)
+	for name, tcase := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tcase.req, GQLWrapf(tcase.err, tcase.msg, tcase.args...).Error())
+		})
+	}
+}
+
+func TestGQLWrapLocationf_Error(t *testing.T) {
+
+	// Wrapped errors don't print the Location into the error message
+	// To get out put with the location printed into the error, you'd
+	// AsGQLErrors(err).Error()
+
+	tests := map[string]struct {
+		err  error
+		msg  string
+		args []interface{}
+		loc  x.Location
+		req  string
+	}{
+		"wrap one error": {err: errors.New("An error occurred"),
+			msg: "mutation failed",
+			loc: x.Location{Line: 1, Column: 2},
+			req: "mutation failed because An error occurred"},
+		"wrap multiple errors": {
+			err: GQLWrapf(errors.New("A Dgraph error occurred"), "couldn't check ID type"),
+			msg: "delete mutation failed",
+			loc: x.Location{Line: 1, Column: 2},
+			req: "delete mutation failed because couldn't check ID type because " +
+				"A Dgraph error occurred"},
+		"wrap an x.GqlError with location": {err: x.GqlErrorf("of bad GraphQL input").
+			WithLocations(x.Location{Line: 1, Column: 8}),
+			msg: "couldn't generate query",
+			loc: x.Location{Line: 1, Column: 2},
+			req: "couldn't generate query because of bad GraphQL input"},
+		"wrap and format": {err: errors.New("an error occurred"),
+			msg:  "couldn't generate %s for %s",
+			args: []interface{}{"query", "you"},
+			loc:  x.Location{Line: 1, Column: 2},
+			req:  "couldn't generate query for you because an error occurred"},
+	}
+
+	for name, tcase := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t,
+				tcase.req,
+				GQLWrapLocationf(tcase.err, tcase.loc, tcase.msg, tcase.args...).Error())
+		})
 	}
 }
 
@@ -69,7 +114,7 @@ func TestGQLWrapf_IsAlwaysgqlableError(t *testing.T) {
 		{GQLWrapf(errors.New("An error occured"), "mutation failed")},
 		{GQLWrapf(GQLWrapf(errors.New("A Dgraph error occured"), "couldn't check ID type"),
 			"delete mutation failed")},
-		{GQLWrapf(gqlerror.Errorf("of bad GraphQL input"), "couldn't generate query")},
+		{GQLWrapf(x.GqlErrorf("of bad GraphQL input"), "couldn't generate query")},
 	}
 
 	for _, tt := range tests {
@@ -79,27 +124,69 @@ func TestGQLWrapf_IsAlwaysgqlableError(t *testing.T) {
 }
 
 func TestAsGQLErrors(t *testing.T) {
-	tests := []struct {
+	tests := map[string]struct {
 		err error
 		req string
 	}{
-		{err: errors.New("An error occured"),
-			req: `[{"message": "An error occured"}]`},
-		{err: GQLWrapf(errors.New("A Dgraph error occured"), "couldn't check ID type"),
-			req: `[{"message": "input: couldn't check ID type because A Dgraph error occured"}]`},
-		{err: gqlerror.Errorf("A GraphQL error"),
+		"just an error": {err: errors.New("An error occurred"),
+			req: `[{"message": "An error occurred"}]`},
+		"wrap an error": {
+			err: GQLWrapf(errors.New("A Dgraph error occurred"), "couldn't check ID type"),
+			req: `[{"message": "couldn't check ID type because A Dgraph error occurred"}]`},
+		"an x.GqlError": {err: x.GqlErrorf("A GraphQL error"),
 			req: `[{"message": "A GraphQL error"}]`},
-		{err: gqlerror.ErrorLocf("", 1, 2, "A GraphQL error at a location"),
-			req: `[{"message": "A GraphQL error at a location", "locations": [{"column":2, "line":1}]}]`},
-		{err: gqlerror.List{gqlerror.Errorf("A GraphQL error"), gqlerror.Errorf("Another GraphQL error")},
+		"an x.GqlError with a location": {err: x.GqlErrorf("A GraphQL error at a location").
+			WithLocations(x.Location{Line: 1, Column: 2}),
+			req: `[{
+				"message": "A GraphQL error at a location", 
+				"locations": [{"column":2, "line":1}]}]`},
+		"wrap an x.GqlError with a location": {
+			err: GQLWrapf(x.GqlErrorf("this error has a location").
+				WithLocations(x.Location{Line: 1, Column: 2}), "this error didn't need a location"),
+			req: `[{
+				"message": "this error didn't need a location because this error has a location",
+				"locations": [{"column":2, "line":1}]}]`},
+		"GQLWrapLocationf": {err: GQLWrapLocationf(x.GqlErrorf("this error didn't have a location"),
+			x.Location{Line: 1, Column: 8},
+			"there's one location"),
+			req: `[{
+				"message": "there's one location because this error didn't have a location",
+				"locations": [{"column":8, "line":1}]}]`},
+		"GQLWrapLocationf wrapping a location": {
+			err: GQLWrapLocationf(x.GqlErrorf("this error also had a location").
+				WithLocations(x.Location{Line: 1, Column: 2}), x.Location{Line: 1, Column: 8},
+				"there's two locations"),
+			req: `[{
+				"message": "there's two locations because this error also had a location",
+				"locations": [{"column":2, "line":1}, {"column":8, "line":1}]}]`},
+		"an x.GqlErrorList": {
+			err: x.GqlErrorList{
+				x.GqlErrorf("A GraphQL error"),
+				x.GqlErrorf("Another GraphQL error").WithLocations(x.Location{Line: 1, Column: 2})},
+			req: `[
+				{"message":"A GraphQL error"}, 
+				{"message":"Another GraphQL error", "locations": [{"column":2, "line":1}]}]`},
+		"a gql parser error": {
+			err: gqlerror.Errorf("A GraphQL error"),
+			req: `[{"message": "A GraphQL error"}]`},
+		"a gql parser error with a location": {
+			err: &gqlerror.Error{
+				Message:   "A GraphQL error",
+				Locations: []gqlerror.Location{{Line: 1, Column: 2}}},
+			req: `[{"message": "A GraphQL error", "locations": [{"column":2, "line":1}]}]`},
+		"a list of gql parser errors": {
+			err: gqlerror.List{
+				gqlerror.Errorf("A GraphQL error"), gqlerror.Errorf("Another GraphQL error")},
 			req: `[{"message":"A GraphQL error"}, {"message":"Another GraphQL error"}]`},
 	}
 
-	for _, tt := range tests {
-		gqlErrs, err := json.Marshal(AsGQLErrors(tt.err))
-		require.NoError(t, err)
+	for name, tcase := range tests {
+		t.Run(name, func(t *testing.T) {
+			gqlErrs, err := json.Marshal(AsGQLErrors(tcase.err))
+			require.NoError(t, err)
 
-		assert.JSONEq(t, tt.req, string(gqlErrs))
+			assert.JSONEq(t, tcase.req, string(gqlErrs))
+		})
 	}
 }
 
