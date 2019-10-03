@@ -1176,7 +1176,7 @@ that have the same first_name sort them by last_name in descending order.
 
 ```
 {
-  me(func: eq(type, "Person", orderasc: first_name, orderdesc: last_name)) {
+  me(func: type("Person"), orderasc: first_name, orderdesc: last_name) {
     first_name
     last_name
   }
