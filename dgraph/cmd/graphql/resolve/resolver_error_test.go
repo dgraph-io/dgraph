@@ -413,7 +413,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			}`,
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `mutation addPost failed because ` +
-					`Dgraph query failed because _bad stuff happend_`,
+					`Dgraph mutation failed because _bad stuff happend_`,
 					Locations: []x.Location{{Line: 6, Column: 4}}},
 				&x.GqlError{Message: `mutation add3 was not executed because of ` +
 					`a previous error`,
