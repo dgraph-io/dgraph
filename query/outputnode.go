@@ -295,12 +295,17 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	return mergedList, nil
 }
 
+// normalize returns all attributes of fj and the attributes of all attributes of fj (if any).
 func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range fj.attrs {
-		// When we call addMapChild it tries to find whether there is already a node with
-		// attribute same as attribute argument of addMapChild. If it doesn't find any such
-		// node, it creates a node with isChild = false. In those cases normalize fails.
+		// Here we are counting all non scalar attributes of fj. If there are any such
+		// attributes, we will flatten it, otherwise we will return all attributes.
+
+		// When we call addMapChild it tries to find whether there is already a attribute
+		// with attribute same as attribute argument of addMapChild. If it doesn't find any
+		// such attribute, it creates an attribute with isChild = false. In those cases
+		// sometimes cnt remains zero  and normalize returns attributes without flattening.
 		// So we are using len(a.attrs) > 0 instead of a.isChild
 		if len(a.attrs) > 0 {
 			cnt++
@@ -334,8 +339,7 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(fj.attrs) && childNode.attr == fj.attrs[ci].attr {
-			normalized := fj.attrs[ci].attrs
-			childSlice = append(childSlice, normalized)
+			childSlice = append(childSlice, fj.attrs[ci].attrs)
 			ci++
 		}
 		// Merging with parent.
@@ -717,17 +721,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						// Now normalize() only flattens one level,
 						// the expectation is that it's children have
 						// already been normalized.
-						normalized, err := uc.(*fastJsonNode).normalize()
+						normAttrs, err := uc.(*fastJsonNode).normalize()
 						if err != nil {
 							return err
 						}
 
 						if pc.List {
-							for _, c := range normalized {
+							for _, c := range normAttrs {
 								dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
 							}
 						} else {
-							for _, c := range normalized {
+							for _, c := range normAttrs {
 								dst.AddMapChild(fieldName, &fastJsonNode{attrs: c}, false)
 							}
 						}
