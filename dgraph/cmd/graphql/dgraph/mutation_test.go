@@ -24,8 +24,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/gqlerror"
 	"gopkg.in/yaml.v2"
 )
 
@@ -44,7 +44,7 @@ type TestCase struct {
 	Explanation    string
 	DgraphMutation string
 	DgraphQuery    string
-	Error          *gqlerror.Error
+	Error          *x.GqlError
 }
 
 func TestMutationRewriting(t *testing.T) {
