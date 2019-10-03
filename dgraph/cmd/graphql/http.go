@@ -106,6 +106,10 @@ type gzreadCloser struct {
 }
 
 func (gz gzreadCloser) Close() error {
+	err := gz.Reader.Close()
+	if err != nil {
+		return err
+	}
 	return gz.Closer.Close()
 }
 

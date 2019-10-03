@@ -250,7 +250,6 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	req.Header.Del("Content-Encoding")
 
 	resData, err := runGQLRequest(req)
-	fmt.Println(err)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
