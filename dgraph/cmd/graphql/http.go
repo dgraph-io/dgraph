@@ -107,7 +107,9 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 
 		switch mediaType {
 		case "application/json":
-			if err = json.NewDecoder(r.Body).Decode(&rr.GqlReq); err != nil {
+			d := json.NewDecoder(r.Body)
+			d.UseNumber()
+			if err = d.Decode(&rr.GqlReq); err != nil {
 				rr.WithError(
 					gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
 				return

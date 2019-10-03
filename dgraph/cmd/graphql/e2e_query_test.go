@@ -419,43 +419,41 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 	}
 }
 
-// FIXME: Int is currently not working in API.  It's because it doesn't deserialize properly.
-// We just need to look at the expected type and make sure it's an in.  There's a card in Asana.
-// func TestIntFilters(t *testing.T) {
-// 	cases := map[string]struct {
-// 		Filter   interface{}
-// 		Expected []*post
-// 	}{
-// 		"less than": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"lt": 87}},
-// 			Expected: []*post{
-// 				{Title: "GraphQL in Dgraph doco"},
-// 				{Title: "Random post"}}},
-// 		"less or equal": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"le": 87}},
-// 			Expected: []*post{
-// 				{Title: "GraphQL in Dgraph doco"},
-// 				{Title: "Learning GraphQL in Dgraph"},
-// 				{Title: "Random post"}}},
-// 		"equal": {
-// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"eq": 87}},
-// 			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
-// 		"greater or equal": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"ge": 87}},
-// 			Expected: []*post{
-// 				{Title: "Introducing GraphQL in Dgraph"},
-// 				{Title: "Learning GraphQL in Dgraph"}}},
-// 		"greater than": {
-// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
-// 			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
-// 	}
+func TestIntFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"lt": 87}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Random post"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"le": 87}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"eq": 87}},
+			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"ge": 87}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+	}
 
-// 	for name, test := range cases {
-// 		t.Run(name, func(t *testing.T) {
-// 			postTest(t, test.Filter, test.Expected)
-// 		})
-// 	}
-// }
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
 
 func TestBooleanFilters(t *testing.T) {
 	cases := map[string]struct {
