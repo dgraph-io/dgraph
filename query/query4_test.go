@@ -260,6 +260,16 @@ func TestNoResultsGroupBy(t *testing.T) {
 	require.JSONEq(t, `{"data": {}}`, js)
 }
 
+func TestTemp(t *testing.T) {
+	query := `{
+		q(func: uid(0x01)) {
+			total: count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
 func TestNoResultsOrder(t *testing.T) {
 	query := `{
 		q(func: has(nonexistent_pred), orderasc: name) {
