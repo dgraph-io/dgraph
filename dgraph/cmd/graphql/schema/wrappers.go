@@ -134,15 +134,17 @@ type FieldDefinition interface {
 type astType struct {
 	typ             *ast.Type
 	inSchema        *ast.Schema
-	dgraphPredicate map[string]string
+	dgraphPredicate map[string]map[string]string
 }
 
 type schema struct {
 	schema *ast.Schema
-	// dgraphPredicate gives us the dgraph predicate corresponding to a key where the key is
-	// typeName + fieldName. It is pre-computed so that runtime queries and mutations can look it
+	// dgraphPredicate gives us the dgraph predicate corresponding to a typeName + fieldName.
+	// It is pre-computed so that runtime queries and mutations can look it
 	// up quickly.
-	dgraphPredicate map[string]string
+	// The key for the first map are the type names. The second map has a mapping of the
+	// fieldName => dgraphPredicate.
+	dgraphPredicate map[string]map[string]string
 	// Map of mutation field name to mutated type.
 	mutatedType map[string]*astType
 }
@@ -244,13 +246,13 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return ""
 }
 
-func dgraphMapping(sch *ast.Schema) map[string]string {
+func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
 		del     = "Delete"
 		payload = "Payload"
 	)
 
-	dgraphPredicate := make(map[string]string)
+	dgraphPredicate := make(map[string]map[string]string)
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
@@ -260,6 +262,7 @@ func dgraphMapping(sch *ast.Schema) map[string]string {
 		}
 
 		originalTyp := inputTyp
+		dgraphPredicate[originalTyp.Name] = make(map[string]string)
 		inputTypeName := inputTyp.Name
 
 		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
@@ -274,19 +277,19 @@ func dgraphMapping(sch *ast.Schema) map[string]string {
 			if parentInt != "" {
 				typName = parentInt
 			}
-			// 1. For types which don't inherit from an interface the key, value would be.
-			//    typName-fldName => typName.fldName
+			// 1. For types which don't inherit from an interface the keys, value would be.
+			//    typName,fldName => typName.fldName
 			// 2. For types which inherit fields from an interface
-			//    typName-fldName => interfaceName.fldName
+			//    typName,fldName => interfaceName.fldName
 			// 3. For DeleteTypePayload type
-			//    DeleteTypePayload-fldName => typName.fldName
-			dgraphPredicate[originalTyp.Name+"-"+fld.Name] = typName + "." + fld.Name
+			//    DeleteTypePayload,fldName => typName.fldName
+			dgraphPredicate[originalTyp.Name][fld.Name] = typName + "." + fld.Name
 		}
 	}
 	return dgraphPredicate
 }
 
-func mutatedTypeMapping(s *ast.Schema, dgraphPredicate map[string]string) map[string]*astType {
+func mutatedTypeMapping(s *ast.Schema, dgraphPredicate map[string]map[string]string) map[string]*astType {
 	if s.Mutation == nil {
 		return nil
 	}
@@ -435,7 +438,7 @@ func (f *field) Location() *Location {
 }
 
 func (f *field) DgraphPredicate() string {
-	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name+"-"+f.Name()]
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
 func (f *field) ConcreteType(dgraphTypes []interface{}) string {
@@ -669,7 +672,7 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	return t.dgraphPredicate[t.Name()+"-"+fld]
+	return t.dgraphPredicate[t.Name()][fld]
 }
 
 func (t *astType) String() string {
