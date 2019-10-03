@@ -291,6 +291,17 @@ invalid_schemas:
       "locations":[{"line":2, "column":3}]}
       ]
 
+  -
+    name: "List of Boolean is not allowed"
+    input: |
+      type X {
+        q: [Boolean]
+      }
+    errlist: [
+      {"message": "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.",
+      "locations":[{"line":2, "column":3}]}
+      ]
+
 
 valid_schemas:
   -
