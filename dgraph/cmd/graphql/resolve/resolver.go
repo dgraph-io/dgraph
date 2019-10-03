@@ -154,7 +154,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		if err != nil {
 			glog.Infof("Failed to marshal variables for logging : %s", err)
 		}
-		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n", reqID, r.GqlReq.Query, string(b))
+		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+			reqID, r.GqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
