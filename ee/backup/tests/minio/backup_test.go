@@ -299,12 +299,12 @@ func copyToLocalFs(t *testing.T) {
 
 		// Get all the files in that folder and
 		lsCh2 := make(chan struct{})
-		defer close(lsCh2)
 		objectCh2 := mc.ListObjectsV2(bucketName, "", true, lsCh2)
 		for object := range objectCh2 {
 			require.NoError(t, object.Err)
 			dstFile := backupDir + "/" + object.Key
 			mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
 		}
+		close(lsCh2)
 	}
 }

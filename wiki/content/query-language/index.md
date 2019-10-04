@@ -1176,7 +1176,7 @@ that have the same first_name sort them by last_name in descending order.
 
 ```
 {
-  me(func: eq(type, "Person", orderasc: first_name, orderdesc: last_name)) {
+  me(func: type("Person"), orderasc: first_name, orderdesc: last_name) {
     first_name
     last_name
   }
@@ -2437,8 +2437,6 @@ type Textbook {
 student_name: string @index(exact) .
 textbook_name: string @lang @index(fulltext) .
 ```
-
-Types also support lists like `friends: [uid]` or `tags: [string]`.
 
 Altering the schema for a type that already exists, overwrites the existing
 definition.

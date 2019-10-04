@@ -1226,15 +1226,15 @@ func TestListTypeSchemaChange(t *testing.T) {
 func TestDeleteAllSP2(t *testing.T) {
 	s := `
 	type Node12345 {
-		nodeType: string
-		name: string
-		date: dateTime
-		weight: float
-		weightUnit: string
-		lifeLoad: int
-		stressLevel: int
-		plan: string
-		postMortem: string
+		nodeType
+		name
+		date
+		weight
+		weightUnit
+		lifeLoad
+		stressLevel
+		plan
+		postMortem
 	}
 	`
 	require.NoError(t, dropAll())
