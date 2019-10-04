@@ -1811,7 +1811,7 @@ the server which has IP address as `192.168.1.1`.
 
 By default, you can perform mutation operations for any existing or non-existing predicates. You can make use of `--mutations` flag to set the restriction, which is by default set to `allow`.
 
-You can set ``--mutations` option to `disallow` to disable the mutations.
+You can set `--mutations` option to `disallow` to disable the mutations.
 
 ```sh
 dgraph alpha --mutations disallow ...
