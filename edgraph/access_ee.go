@@ -432,6 +432,35 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
+func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operation) error {
+	for _, pred := range preds {
+		err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp)
+		if err != nil {
+			logAccess(&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: aclOp,
+				allowed:   false,
+			})
+
+			var op string
+			switch aclOp {
+			case acl.Modify:
+				op = "alter"
+			case acl.Write:
+				op = "mutate"
+			case acl.Read:
+				op = "query"
+			}
+
+			return status.Error(codes.PermissionDenied,
+				fmt.Sprintf("unauthorized to %s the predicate: %v", op, err))
+		}
+	}
+	return nil
+}
+
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
@@ -486,22 +515,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Modify)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Modify,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to alter the predicate: %v", err))
-			}
-		}
-		return nil
+		err = authorizePreds(userId, groupIds, preds, acl.Modify)
+		return err
 	}
 
 	err := doAuthorizeAlter()
@@ -527,7 +542,7 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 		predsMap[nquad.Predicate] = struct{}{}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -581,6 +596,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 			if userId == x.GrootId {
 				// groot is allowed to mutate anything except the permission of the acl predicates
+
+				// Why Not?? Also what about other users. What if other users
+				// try to mutate ACL predicates ?
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
 				}
@@ -593,22 +611,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Write)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Write,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to mutate the predicate: %v", err))
-			}
-		}
-		return nil
+		err = authorizePreds(userId, groupIds, preds, acl.Write)
+		return err
 	}
 
 	err := doAuthorizeMutation()
@@ -643,7 +647,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -695,22 +699,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Read)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Read,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to query the predicate: %v", err))
-			}
-		}
-		return nil
+		err = authorizePreds(userId, groupIds, preds, acl.Read)
+		return err
 	}
 
 	err := doAuthorizeQuery()
