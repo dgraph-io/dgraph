@@ -24,9 +24,9 @@ Graph databases optimize internal data representation to be able to do graph ope
 
 Dgraph supports [GraphQL+-]({{< relref "query-language/index.md#graphql">}}),
 a variation of [GraphQL](https://graphql.org/), a query language created by
-Facebook. GraphQL allows results to be produced in a subgraph format, which has
-rich semantics. Also, GraphQL supports schema validation which is useful to
-ensure data correctness during both input and output.
+Facebook. 
+GraphQL+-, as GraphQL itself, allows results to be produced as subgraph rather than lists.
+Schema validation is also useful to ensure data correctness during both input and output.
 
 ### Scalability
 
