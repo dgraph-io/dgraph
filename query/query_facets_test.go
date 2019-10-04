@@ -77,7 +77,7 @@ func populateClusterWithFacets() {
 	facetSetupDone = true
 }
 
-func TestFacetWithVarLE(t *testing.T) {
+func TestFacetWithVarLe(t *testing.T) {
 	populateClusterWithFacets()
 
 	query := `
@@ -98,7 +98,7 @@ func TestFacetWithVarLE(t *testing.T) {
 		js)
 }
 
-func TestFacetWithVarGT(t *testing.T) {
+func TestFacetWithVarGt(t *testing.T) {
 	populateClusterWithFacets()
 
 	query := `
