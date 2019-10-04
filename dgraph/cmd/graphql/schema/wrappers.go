@@ -92,7 +92,6 @@ type Mutation interface {
 	Field
 	MutationType() MutationType
 	MutatedType() Type
-	MutatedTypeName() string
 	QueryField() Field
 }
 
@@ -124,19 +123,24 @@ type FieldDefinition interface {
 	Type() Type
 	IsID() bool
 	Inverse() (Type, FieldDefinition)
-	// If the field was defined as part of an interface and is inherited from it
-	// in a type definition, this function would return the name of the interface.
-	// Otherwise it returns the name of the object type that the field belongs to.
-	ParentType() string
 }
 
 type astType struct {
-	typ      *ast.Type
-	inSchema *ast.Schema
+	typ             *ast.Type
+	inSchema        *ast.Schema
+	dgraphPredicate map[string]map[string]string
 }
 
 type schema struct {
 	schema *ast.Schema
+	// dgraphPredicate gives us the dgraph predicate corresponding to a typeName + fieldName.
+	// It is pre-computed so that runtime queries and mutations can look it
+	// up quickly.
+	// The key for the first map are the type names. The second map has a mapping of the
+	// fieldName => dgraphPredicate.
+	dgraphPredicate map[string]map[string]string
+	// Map of mutation field name to mutated type.
+	mutatedType map[string]*astType
 }
 
 type operation struct {
@@ -146,20 +150,21 @@ type operation struct {
 	// The fields below are used by schema introspection queries.
 	query    string
 	doc      *ast.QueryDocument
-	inSchema *ast.Schema
+	inSchema *schema
 }
 
 type field struct {
-	field      *ast.Field
-	op         *operation
-	sel        ast.Selection
-	dgraphPred string
+	field *ast.Field
+	op    *operation
+	sel   ast.Selection
+	// arguments contains the computed values for arguments taking into account the values
+	// for the GraphQL variables supplied in the query.
+	arguments map[string]interface{}
 }
 
 type fieldDefinition struct {
-	fieldDef   *ast.FieldDefinition
-	inSchema   *ast.Schema
-	parentType string
+	fieldDef *ast.FieldDefinition
+	inSchema *ast.Schema
 }
 
 type mutation field
@@ -205,9 +210,120 @@ func (o *operation) Mutations() (ms []Mutation) {
 	return
 }
 
+// parentInterface returns the name of an interface that a field belonging to a type definition
+// typDef inherited from. If there is no such interface, then it returns an empty string.
+//
+// Given the following schema
+// interface A {
+//   name: String
+// }
+//
+// type B implements A {
+//	 name: String
+//   age: Int
+// }
+//
+// calling parentInterface on the fieldName name with type definition for B, would return A.
+func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
+	if len(typDef.Interfaces) == 0 {
+		return ""
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		for _, interfaceField := range interfaceDef.Fields {
+			if fieldName == interfaceField.Name {
+				return iface
+			}
+		}
+	}
+	return ""
+}
+
+func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
+	const (
+		del     = "Delete"
+		payload = "Payload"
+	)
+
+	dgraphPredicate := make(map[string]map[string]string)
+	for _, inputTyp := range sch.Types {
+		// We only want to consider input types (object and interface) defined by the user as part
+		// of the schema hence we ignore BuiltIn, query and mutation types.
+		if inputTyp.BuiltIn || inputTyp.Name == "query" || inputTyp.Name == "mutation" ||
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
+			continue
+		}
+
+		originalTyp := inputTyp
+		dgraphPredicate[originalTyp.Name] = make(map[string]string)
+		inputTypeName := inputTyp.Name
+
+		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
+			// For DeleteTypePayload, inputTyp should be Type.
+			inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+			inputTyp = sch.Types[inputTypeName]
+		}
+
+		for _, fld := range inputTyp.Fields {
+			typName := inputTypeName
+			parentInt := parentInterface(sch, inputTyp, fld.Name)
+			if parentInt != "" {
+				typName = parentInt
+			}
+			// 1. For types which don't inherit from an interface the keys, value would be.
+			//    typName,fldName => typName.fldName
+			// 2. For types which inherit fields from an interface
+			//    typName,fldName => interfaceName.fldName
+			// 3. For DeleteTypePayload type
+			//    DeleteTypePayload,fldName => typName.fldName
+			dgraphPredicate[originalTyp.Name][fld.Name] = typName + "." + fld.Name
+		}
+	}
+	return dgraphPredicate
+}
+
+func mutatedTypeMapping(s *ast.Schema,
+	dgraphPredicate map[string]map[string]string) map[string]*astType {
+	if s.Mutation == nil {
+		return nil
+	}
+
+	m := make(map[string]*astType, len(s.Mutation.Fields))
+	for _, field := range s.Mutation.Fields {
+		mutatedTypeName := ""
+		switch {
+		case strings.HasPrefix(field.Name, "add"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "add")
+		case strings.HasPrefix(field.Name, "update"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "update")
+		case strings.HasPrefix(field.Name, "delete"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "delete")
+		default:
+		}
+		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
+		// for UpdateTPayload and get the type from the first field. There is no direct way to get
+		// the type from the definition of an object. We use Update and not Add here because
+		// Interfaces only have Update.
+		def := s.Types["Update"+mutatedTypeName+"Payload"]
+		// Accessing 0th element should be safe to do as according to the spec an object must define
+		// one or more fields.
+		typ := def.Fields[0].Type
+		// This would contain mapping of mutation field name to the Type()
+		// for e.g. addPost => astType for Post
+		m[field.Name] = &astType{typ, s, dgraphPredicate}
+	}
+	return m
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) Schema {
-	return &schema{schema: s}
+	dgraphPredicate := dgraphMapping(s)
+	return &schema{
+		schema:          s,
+		dgraphPredicate: dgraphPredicate,
+		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
+	}
 }
 
 func responseName(f *ast.Field) string {
@@ -230,8 +346,11 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) ArgValue(name string) interface{} {
-	// FIXME: cache ArgumentMap ?
-	return f.field.ArgumentMap(f.op.vars)[name]
+	if f.arguments == nil {
+		// Compute and cache the map first time this function is called for a field.
+		f.arguments = f.field.ArgumentMap(f.op.vars)
+	}
+	return f.arguments[name]
 }
 
 func (f *field) Skip() bool {
@@ -273,32 +392,22 @@ func (f *field) IDArgValue() (uint64, error) {
 
 func (f *field) Type() Type {
 	return &astType{
-		typ:      f.field.Definition.Type,
-		inSchema: f.op.inSchema,
+		typ:             f.field.Definition.Type,
+		inSchema:        f.op.inSchema.schema,
+		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
 }
 
 func (f *field) InterfaceType() bool {
-	return f.op.inSchema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
-}
-
-func parentType(sch *ast.Schema, objDef *ast.Definition, fname string) string {
-	typ := objDef.Name
-	pi := parentInterface(sch, objDef, fname)
-	if pi != "" {
-		typ = pi
-	}
-	return typ
+	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
 }
 
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
-			pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
 			flds = append(flds, &field{
-				field:      fld,
-				op:         f.op,
-				dgraphPred: pt + "." + fld.Name,
+				field: fld,
+				op:    f.op,
 			})
 		}
 		if fragment, ok := s.(*ast.InlineFragment); ok {
@@ -307,11 +416,9 @@ func (f *field) SelectionSet() (flds []Field) {
 			// within a query for an interface.
 			for _, s := range fragment.SelectionSet {
 				if fld, ok := s.(*ast.Field); ok {
-					pt := parentType(f.op.inSchema, fld.ObjectDefinition, fld.Name)
 					flds = append(flds, &field{
-						field:      fld,
-						op:         f.op,
-						dgraphPred: pt + "." + fld.Name,
+						field: fld,
+						op:    f.op,
 					})
 				}
 			}
@@ -328,7 +435,7 @@ func (f *field) Location() x.Location {
 }
 
 func (f *field) DgraphPredicate() string {
-	return f.dgraphPred
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
 func (f *field) ConcreteType(dgraphTypes []interface{}) string {
@@ -339,7 +446,7 @@ func (f *field) ConcreteType(dgraphTypes []interface{}) string {
 		if !ok {
 			continue
 		}
-		if f.op.inSchema.Types[styp].Kind == ast.Object {
+		if f.op.inSchema.schema.Types[styp].Kind == ast.Object {
 			return styp
 		}
 	}
@@ -400,7 +507,7 @@ func (q *query) QueryType() QueryType {
 }
 
 func (q *query) DgraphPredicate() string {
-	return (*field)(q).dgraphPred
+	return (*field)(q).DgraphPredicate()
 }
 
 func (q *query) InterfaceType() bool {
@@ -468,16 +575,7 @@ func (m *mutation) ResponseName() string {
 // the actual node mutated as a field.
 func (m *mutation) MutatedType() Type {
 	// ATM there's a single field in the mutation payload.
-	// TODO: Need a better way to get this by convention??
-	return m.SelectionSet()[0].Type()
-}
-
-func (m *mutation) MutatedTypeName() string {
-	if m.MutationType() == DeleteMutation {
-		prefix := strings.TrimSuffix(m.Type().Name(), "Payload")
-		return strings.TrimPrefix(prefix, "Delete")
-	}
-	return m.MutatedType().Name()
+	return m.op.inSchema.mutatedType[m.Name()]
 }
 
 func (m *mutation) MutationType() MutationType {
@@ -494,7 +592,7 @@ func (m *mutation) MutationType() MutationType {
 }
 
 func (m *mutation) DgraphPredicate() string {
-	return (*field)(m).dgraphPred
+	return (*field)(m).DgraphPredicate()
 }
 
 func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
@@ -502,12 +600,10 @@ func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
 }
 
 func (t *astType) Field(name string) FieldDefinition {
-	typ := t.inSchema.Types[t.Name()]
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef:   t.inSchema.Types[t.Name()].Fields.ForName(name),
-		inSchema:   t.inSchema,
-		parentType: parentType(t.inSchema, typ, name),
+		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
+		inSchema: t.inSchema,
 	}
 }
 
@@ -529,10 +625,6 @@ func (fd *fieldDefinition) Type() Type {
 		typ:      fd.fieldDef.Type,
 		inSchema: fd.inSchema,
 	}
-}
-
-func (fd *fieldDefinition) ParentType() string {
-	return fd.parentType
 }
 
 func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
@@ -577,21 +669,7 @@ func (t *astType) ListType() Type {
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
 // type's field fld.  Mostly this will be type_name.field_name,.
 func (t *astType) DgraphPredicate(fld string) string {
-	const (
-		del     = "Delete"
-		payload = "Payload"
-	)
-
-	typName := t.Name()
-	// This isn't the most clean solution but something that fits in with the current
-	// implementation. When we get a deleteXYZ mutation which has a response type of
-	// DeleteTypePayload, to find the actual type we trim the prefix and suffix.
-	// TODO - Do all this as part of pre-processing and remove special handling here.
-	if strings.HasPrefix(typName, del) && strings.HasSuffix(typName, payload) {
-		typName = strings.TrimSuffix(strings.TrimPrefix(typName, del), payload)
-	}
-	pt := parentType(t.inSchema, t.inSchema.Types[typName], fld)
-	return fmt.Sprintf("%s.%s", pt, fld)
+	return t.dgraphPredicate[t.Name()][fld]
 }
 
 func (t *astType) String() string {

@@ -65,6 +65,6 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		vars:     vars,
 		query:    req.Query,
 		doc:      doc,
-		inSchema: s.schema,
+		inSchema: s,
 	}, nil
 }

@@ -100,7 +100,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	}
 }
 
-// FromMutation rewrites the query part of aGraphQL mutation into a Dgraph query.
+// FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
 func (qr *queryRewriter) FromMutationResult(
 	gqlMutation schema.Mutation,
 	uids map[string]string) (*gql.GraphQuery, error) {
@@ -110,7 +110,7 @@ func (qr *queryRewriter) FromMutationResult(
 		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
 		if err != nil {
 			return nil, schema.GQLWrapf(err,
-				"recieved %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
 				uids[createdNode])
 		}
 
