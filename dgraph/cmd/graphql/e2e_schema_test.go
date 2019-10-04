@@ -351,6 +351,8 @@ const (
 
 func TestDgraphSchema(t *testing.T) {
 
+	t.Skip()
+
 	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
