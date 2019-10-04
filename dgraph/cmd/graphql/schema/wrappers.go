@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -39,6 +39,7 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+// Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
@@ -79,18 +80,11 @@ type Field interface {
 	Include() bool
 	Type() Type
 	SelectionSet() []Field
-	Location() *Location
+	Location() x.Location
 	DgraphPredicate() string
 	// InterfaceType tells us whether this field represents a GraphQL Interface.
 	InterfaceType() bool
 	ConcreteType(types []interface{}) string
-}
-
-// TODO: Location will be swapped with the the one the x soon when errors
-// are swapped from gqlparser errors to x.
-type Location struct {
-	Line   int
-	Column int
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -378,17 +372,19 @@ func (f *field) Include() bool {
 func (f *field) IDArgValue() (uint64, error) {
 	idArg := f.ArgValue(IDArgName)
 	if idArg == nil {
+		pos := f.field.GetPosition()
 		return 0,
-			gqlerror.ErrorPosf(f.field.GetPosition(),
-				"ID argument not available on field %s", f.Name())
+			x.GqlErrorf("ID argument not available on field %s", f.Name()).
+				WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
 	}
 
 	id, ok := idArg.(string)
 	uid, err := strconv.ParseUint(id, 0, 64)
 
 	if !ok || err != nil {
-		err = gqlerror.ErrorPosf(f.field.GetPosition(),
-			"ID argument (%s) of %s was not able to be parsed", id, f.Name())
+		pos := f.field.GetPosition()
+		err = x.GqlErrorf("ID argument (%s) of %s was not able to be parsed", id, f.Name()).
+			WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
 	}
 
 	return uid, err
@@ -432,8 +428,8 @@ func (f *field) SelectionSet() (flds []Field) {
 	return
 }
 
-func (f *field) Location() *Location {
-	return &Location{
+func (f *field) Location() x.Location {
+	return x.Location{
 		Line:   f.field.Position.Line,
 		Column: f.field.Position.Column}
 }
@@ -489,7 +485,7 @@ func (q *query) SelectionSet() []Field {
 	return (*field)(q).SelectionSet()
 }
 
-func (q *query) Location() *Location {
+func (q *query) Location() x.Location {
 	return (*field)(q).Location()
 }
 
@@ -564,7 +560,7 @@ func (m *mutation) QueryField() Field {
 	return m.SelectionSet()[0]
 }
 
-func (m *mutation) Location() *Location {
+func (m *mutation) Location() x.Location {
 	return (*field)(m).Location()
 }
 

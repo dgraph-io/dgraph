@@ -164,7 +164,9 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) (*resolved, boo
 
 	assigned, err := mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
+		res.err = schema.GQLWrapLocationf(err,
+			mr.mutation.Location(),
+			"mutation %s failed", mr.mutation.Name())
 		return res, mutationFailed
 	}
 

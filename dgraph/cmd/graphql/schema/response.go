@@ -19,12 +19,12 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // GraphQL spec on response is here:
@@ -35,13 +35,7 @@ import (
 
 // Response represents a GraphQL response
 type Response struct {
-	// Dgraph response type (x.go) is similar, should I be leaning on that?
-	// ATM, no, cause I'm trying to follow the spec really closely, e.g:
-	// - spec error format is different to x.errRes
-	// - I think we should mostly return 200 status code
-	// - for spec we need to return errors and data in same response
-
-	Errors     gqlerror.List
+	Errors     x.GqlErrorList
 	Data       bytes.Buffer
 	Extensions *Extensions
 }
@@ -52,20 +46,20 @@ type Extensions struct {
 	RequestID string `json:"requestID,omitempty"`
 }
 
-// ErrorResponsef returns a Response containing a single GraphQL error with a
-// message obtained by Sprintf-ing the argugments
-func ErrorResponsef(format string, args ...interface{}) *Response {
+// ErrorResponse formats an error as a list of GraphQL errors and builds
+// a response with that error list and no data.  Because it doesn't add data, it
+// should be used before starting execution - GraphQL spec requires no data if an
+// error is detected before execution begins.
+func ErrorResponse(err error, requestID string) *Response {
 	return &Response{
-		Errors: gqlerror.List{gqlerror.Errorf(format, args...)},
+		Errors:     AsGQLErrors(err),
+		Extensions: &Extensions{RequestID: requestID},
 	}
 }
 
-// ErrorResponse formats an error as a list of GraphQL errors and builds
-// a response with that error list and no data.
-func ErrorResponse(err error) *Response {
-	return &Response{
-		Errors: AsGQLErrors(err),
-	}
+// WithError generates GraphQL errors from err and records those in r.
+func (r *Response) WithError(err error) {
+	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 
 // AddData adds p to r's data buffer.  If p is empty, the call has no effect.
@@ -96,13 +90,13 @@ func (r *Response) AddData(p []byte) {
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if r == nil {
 		i, err := w.Write([]byte(
-			`{ "errors": [ { "message": "Internal error - no response to write." } ], ` +
-				` "data": null }`))
+			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
+				` "data": null, "extensions": { "requestID": "unknown request ID" } }`))
 		return int64(i), err
 	}
 
 	js, err := json.Marshal(struct {
-		Errors     gqlerror.List   `json:"errors,omitempty"`
+		Errors     []*x.GqlError   `json:"errors,omitempty"`
 		Data       json.RawMessage `json:"data,omitempty"`
 		Extensions *Extensions     `json:"extensions,omitempty"`
 	}{
@@ -112,9 +106,17 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	})
 
 	if err != nil {
+		var reqID string
+		if r.Extensions != nil {
+			reqID = r.Extensions.RequestID
+		} else {
+			reqID = "unknown request ID"
+		}
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("%+v", errors.Wrap(err, msg))
-		js = []byte(`{ "errors": [ { "message": "` + msg + `" } ], "data": null }`)
+		glog.Errorf("[%s] %+v", reqID, errors.Wrap(err, msg))
+		js = []byte(fmt.Sprintf(
+			`{ "errors": [{"message": "%s"}], "data": null, "extensions": { "requestID": "%s" } }`,
+			msg, reqID))
 	}
 
 	i, err := w.Write(js)

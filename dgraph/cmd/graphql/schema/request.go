@@ -17,8 +17,9 @@
 package schema
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 )
@@ -37,7 +38,7 @@ type Request struct {
 // operation, all GraphQL errors encountered are returned.
 func (s *schema) Operation(req *Request) (Operation, error) {
 	if req == nil || req.Query == "" {
-		return nil, gqlerror.Errorf("no query string supplied in request")
+		return nil, errors.New("no query string supplied in request")
 	}
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: req.Query})
@@ -52,7 +53,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 
 	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {
-		return nil, gqlerror.Errorf("unable to find operation to resolve")
+		return nil, errors.New("unable to find operation to resolve")
 	}
 
 	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)

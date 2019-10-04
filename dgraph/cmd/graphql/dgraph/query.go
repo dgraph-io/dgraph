@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/pkg/errors"
 )
 
 // QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query, and
@@ -96,7 +96,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	case schema.FilterQuery:
 		return rewriteAsQuery(gqlQuery), nil
 	default:
-		return nil, gqlerror.Errorf("unimplemented query type %s", gqlQuery.QueryType())
+		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
 }
 
@@ -125,7 +125,7 @@ func (qr *queryRewriter) FromMutationResult(
 		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
 
 	default:
-		return nil, gqlerror.Errorf("can't rewrite %s mutations to Dgraph query",
+		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
 			gqlMutation.MutationType())
 	}
 }
