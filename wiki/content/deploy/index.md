@@ -1807,6 +1807,22 @@ dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third R
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
 
+### Restrict Mutation Operations
+
+By default, you can perform mutation operations for any existing or non-existing predicates. You can make use of `--mutations` flag to set the restriction, which is by default set to `allow`.
+
+You can set ``--mutations` option to `disallow` to disable the mutations.
+
+```sh
+dgraph alpha --mutation disallow ...
+```
+
+You can set ``--mutations` option to `strict` to limit mutations to only existing predicates in the schema, and disable mutations of unknown predicates.
+
+```sh
+dgraph alpha --mutation strict ...
+```
+
 ### Secure Alter Operations
 
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
