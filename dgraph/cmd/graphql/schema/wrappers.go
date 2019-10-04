@@ -289,7 +289,8 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	return dgraphPredicate
 }
 
-func mutatedTypeMapping(s *ast.Schema, dgraphPredicate map[string]map[string]string) map[string]*astType {
+func mutatedTypeMapping(s *ast.Schema,
+	dgraphPredicate map[string]map[string]string) map[string]*astType {
 	if s.Mutation == nil {
 		return nil
 	}
