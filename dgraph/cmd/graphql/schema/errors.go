@@ -139,8 +139,7 @@ func GQLWrapLocationf(err error, loc x.Location, format string, args ...interfac
 	if gqlable, ok = wrapped.(*gqlableError); !ok {
 		panic("GQLWrapf didn't result in a gqlableError")
 	}
-	gqlable.gqlErr.Locations =
-		append(gqlable.gqlErr.Locations, loc)
+	gqlable.gqlErr.Locations = append(gqlable.gqlErr.Locations, loc)
 
 	return gqlable
 }

@@ -111,8 +111,8 @@ func TestGQLWrapf_IsAlwaysgqlableError(t *testing.T) {
 	tests := []struct {
 		err error
 	}{
-		{GQLWrapf(errors.New("An error occured"), "mutation failed")},
-		{GQLWrapf(GQLWrapf(errors.New("A Dgraph error occured"), "couldn't check ID type"),
+		{GQLWrapf(errors.New("An error occurred"), "mutation failed")},
+		{GQLWrapf(GQLWrapf(errors.New("A Dgraph error occurred"), "couldn't check ID type"),
 			"delete mutation failed")},
 		{GQLWrapf(x.GqlErrorf("of bad GraphQL input"), "couldn't generate query")},
 	}

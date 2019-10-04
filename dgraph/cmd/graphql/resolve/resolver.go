@@ -328,7 +328,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 			api.RequestID(ctx), string(dgResult))
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
-					"This probably indicates a bug in the Dgraph GraphQL layer.  " +
+				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
 				WithLocations(field.Location())
 	}
@@ -380,8 +380,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				errs = append(errs,
 					x.GqlErrorf(
 						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-								"The first item in the list was used to produce the result. "+
-								"Logged as a potential bug; see the API log for more details.",
+							"The first item in the list was used to produce the result. "+
+							"Logged as a potential bug; see the API log for more details.",
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
@@ -547,7 +547,7 @@ func completeValue(
 			}
 
 			gqlErr := x.GqlErrorf(
-					"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
+				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
 					"GraphQL error propagation triggered.", field.Name(), field.Type()).
 				WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
@@ -562,8 +562,8 @@ func completeValue(
 		json, err := json.Marshal(val)
 		if err != nil {
 			gqlErr := x.GqlErrorf(
-					"Error marshalling value for field '%s' (type %s).  "+
-						"Resolved as null (which may trigger GraphQL error propagation) ",
+				"Error marshalling value for field '%s' (type %s).  "+
+					"Resolved as null (which may trigger GraphQL error propagation) ",
 				field.Name(), field.Type()).
 				WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
