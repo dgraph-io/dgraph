@@ -2645,7 +2645,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 			sg := req.Subgraphs[idx]
-
 			// Check the list for the requires variables.
 			if !canExecute(idx) {
 				continue
