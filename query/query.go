@@ -1864,11 +1864,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			} else {
 				types := strings.Split(child.Params.Expand, ",")
 				preds = getPredicatesFromTypes(types)
-				rpreds, err := getReversePredicates(ctx, preds)
-				if err != nil {
-					return out, err
-				}
-				preds = append(preds, rpreds...)
 			}
 		}
 		preds = uniquePreds(preds)
@@ -1879,7 +1874,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				Attr:   pred,
 			}
 			temp.Params = child.Params
-			temp.Params.ExpandAll = child.Params.Expand == "_all_"
+			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
+			// are removed
+			temp.Params.ExpandAll = child.Params.Expand != "_reverse_" &&
+				child.Params.Expand != "_forward_"
 			temp.Params.ParentVars = make(map[string]varValue)
 			for k, v := range child.Params.ParentVars {
 				temp.Params.ParentVars[k] = v
@@ -2647,6 +2645,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 			sg := req.Subgraphs[idx]
+
 			// Check the list for the requires variables.
 			if !canExecute(idx) {
 				continue

@@ -4832,3 +4832,23 @@ func TestTypeFilterInPredicate(t *testing.T) {
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
 }
+
+func TestParseExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: has(name)) {
+			expand(Person,Animal) {
+				uid
+			}
+		}
+	}
+`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "expand", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "Person,Animal", gq.Query[0].Children[0].Expand)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
+	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
+}

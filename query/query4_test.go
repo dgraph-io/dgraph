@@ -341,23 +341,26 @@ func TestTypeExpandLang(t *testing.T) {
 func TestTypeExpandExplicitType(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
-			expand(Object)
+			expand(Object) {
+				uid
+			}
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q":[
-		{"name":"Car"}]}}`, js)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Car"}]}}`, js)
 }
 
 func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
-			expand(CarModel, Object)
+			expand(CarModel, Object) {
+				uid
+			}
 		}
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"name": "Car", "make":"Toyota","model":"Prius", "year":2009}]}}`, js)
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
 }
 
 // Test Related to worker based pagination.

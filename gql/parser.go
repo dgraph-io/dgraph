@@ -2194,6 +2194,7 @@ loop:
 		item := it.Item()
 		switch item.Typ {
 		case itemRightRound:
+			it.Prev()
 			break loop
 		case itemComma:
 			if expectArg {
