@@ -115,7 +115,7 @@ func TestGqlError(t *testing.T) {
 		},
 		"GqlErrorList": {
 			err: GqlErrorList{GqlErrorf("A GraphQL error"), GqlErrorf("Another GraphQL error")},
-			req: "A GraphQL error\nAnother GraphQL error\n",
+			req: "A GraphQL error\nAnother GraphQL error",
 		},
 	}
 

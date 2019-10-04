@@ -190,9 +190,11 @@ func (gqlErr *GqlError) Error() string {
 
 func (errList GqlErrorList) Error() string {
 	var buf bytes.Buffer
-	for _, gqlErr := range errList {
+	for i, gqlErr := range errList {
+		if i > 0 {
+			buf.WriteByte('\n')
+		}
 		buf.WriteString(gqlErr.Error())
-		buf.WriteByte('\n')
 	}
 	return buf.String()
 }
