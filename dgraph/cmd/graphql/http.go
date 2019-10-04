@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
@@ -57,7 +56,7 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
-	schema       *ast.Schema
+	schema       schema.Schema
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved
@@ -88,7 +87,7 @@ func (gh *graphqlHandler) isValid() bool {
 
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
 	rr = resolve.New(
-		schema.AsSchema(gh.schema),
+		gh.schema,
 		dgraph.AsDgraph(gh.dgraphClient),
 		dgraph.NewQueryRewriter(),
 		dgraph.NewMutationRewriter())

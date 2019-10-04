@@ -174,7 +174,7 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedTypeName())
+		addTypeFunc(dgQuery, m.MutatedType().Name())
 	}
 	addFilter(dgQuery, m)
 	return dgQuery
@@ -264,7 +264,7 @@ func rewriteObject(
 		var err error
 
 		fieldDef := typ.Field(field)
-		fieldName := fmt.Sprintf("%s.%s", fieldDef.ParentType(), field)
+		fieldName := typ.DgraphPredicate(field)
 
 		switch val := val.(type) {
 		case map[string]interface{}:
