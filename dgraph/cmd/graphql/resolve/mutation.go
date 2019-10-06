@@ -134,7 +134,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 
 	// Mutations have an extra element to their result path.  Because the mutation
 	// always looks like `addBlaa(...) { blaa { ... } }` and what's resolved above
-	// is the `blaa { ... }`, both the result and any error paths need a prefox
+	// is the `blaa { ... }`, both the result and any error paths need a prefix
 	// of `addBlaa`
 	var b bytes.Buffer
 	b.WriteRune('"')
