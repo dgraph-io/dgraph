@@ -132,10 +132,6 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 				"Only add, delete and update mutations are implemented")}, mutationFailed
 	}
 
-	// Mutations have an extra element to their result path.  Because the mutation
-	// always looks like `addBlaa(...) { blaa { ... } }` and what's resolved above
-	// is the `blaa { ... }`, both the result and any error paths need a prefox
-	// of `addBlaa`
 	var b bytes.Buffer
 	b.WriteRune('"')
 	b.WriteString(mr.mutation.ResponseName())
@@ -145,18 +141,8 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	} else {
 		b.WriteString("null")
 	}
+
 	res.data = b.Bytes()
-
-	resErrs := schema.AsGQLErrors(res.err)
-	var errs x.GqlErrorList = make([]*x.GqlError, len(resErrs))
-	for i, err := range resErrs {
-		if len(err.Path) > 0 {
-			err.Path = append([]interface{}{mr.mutation.ResponseName()}, err.Path...)
-		}
-		errs[i] = err
-	}
-	res.err = errs
-
 	return res, mutationSucceeded
 }
 
