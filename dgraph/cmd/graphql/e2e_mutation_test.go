@@ -746,7 +746,7 @@ func TestManyMutationsWithQueryError(t *testing.T) {
 		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
 			`in result from Dgraph.  GraphQL error propagation triggered.`,
 			Locations: []x.Location{{Line: 18, Column: 7}},
-			Path:      []interface{}{"author", "country", "name"}}}
+			Path:      []interface{}{"add2", "author", "country", "name"}}}
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
 
