@@ -278,7 +278,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"addPost", "post", "author", "name"}}},
+				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
 
@@ -343,7 +343,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"updatePost", "post", "author", "name"}}},
+				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
 
