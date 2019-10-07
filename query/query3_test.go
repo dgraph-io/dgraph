@@ -2122,15 +2122,17 @@ func TestQueryUnknownType(t *testing.T) {
 func TestQuerySingleType(t *testing.T) {
 	query := `schema(type: Person) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"name":"Person","fields":["name", "pet"]}]}}`, js)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
+		"fields":[{"name":"name"}, {"name":"pet"}]}]}}`,
+		js)
 }
 
 func TestQueryMultipleTypes(t *testing.T) {
 	query := `schema(type: [Person, Animal]) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[
-		{"name":"Animal","fields":["name"]},
-		{"name":"Person", "fields":["name", "pet"]}]}}`, js)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
+		"fields":[{"name":"name"}]},
+	{"name":"Person", "fields":[{"name":"name"}, {"name":"pet"}]}]}}`, js)
 }
 
 func TestRegexInFilterNoDataOnRoot(t *testing.T) {

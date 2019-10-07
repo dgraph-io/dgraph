@@ -1244,10 +1244,12 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 	for _, typ := range types {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
-		fields := make([]string, len(typ.Fields))
+		fields := make([]map[string]string, len(typ.Fields))
 
 		for i, field := range typ.Fields {
-			fields[i] = field.Predicate
+			m := make(map[string]string, 1)
+			m["name"] = field.Predicate
+			fields[i] = m
 		}
 		typeMap["fields"] = fields
 
