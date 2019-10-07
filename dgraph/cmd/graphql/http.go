@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"encoding/json"
+	"fmt"
 	"mime"
 	"net/http"
 	"runtime/debug"
@@ -104,19 +105,14 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 	switch r.Method {
 	case http.MethodGet:
 		query := r.URL.Query()
-		var schm schema.Request
-		schm.Query = query.Get("query")
-		schm.OperationName = query.Get("operationName")
+		rr.GqlReq = &schema.Request{}
+		rr.GqlReq.Query = query.Get("query")
+		rr.GqlReq.OperationName = query.Get("operationName")
 		variables := query.Get("variables")
 
-		if err := json.NewDecoder(strings.NewReader(variables)).Decode(&schm.Variables); err != nil {
-			rr.WithError(
-				gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
-			return
+		if err := json.NewDecoder(strings.NewReader(variables)).Decode(&rr.GqlReq.Variables); err != nil {
+			return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 		}
-
-		rr.GqlReq = &schm
-		return
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
