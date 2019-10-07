@@ -135,6 +135,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str3: Int @searchable(by: term)
 				str4: Int @searchable(by: fulltext)
 				str5: Int @searchable(by: trigram)
+				str6: Int @searchable(by: regexp)
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to Float": {schema: `
@@ -144,6 +145,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str3: Float @searchable(by: term)
 				str4: Float @searchable(by: fulltext)
 				str5: Float @searchable(by: trigram)
+				str6: Float @searchable(by: regexp)
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to Boolean": {schema: `
@@ -153,6 +155,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str3: Boolean @searchable(by: term)
 				str4: Boolean @searchable(by: fulltext)
 				str5: Boolean @searchable(by: trigram)
+				str6: Boolean @searchable(by: regexp)
 			}`,
 			expectedErrors: 5},
 		"String searchables don't apply to DateTime": {schema: `
@@ -162,6 +165,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str3: DateTime @searchable(by: term)
 				str4: DateTime @searchable(by: fulltext)
 				str5: DateTime @searchable(by: trigram)
+				str6: DateTime @searchable(by: regexp)
 			}`,
 			expectedErrors: 5},
 		"DateTime searchables don't apply to Int": {schema: `
@@ -234,6 +238,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				e10: E @searchable(by: term)
 				e11: E @searchable(by: fulltext)
 				e12: E @searchable(by: trigram)
+				e13: E @searchable(by: regexp)
 			}
 			enum E {
 				A

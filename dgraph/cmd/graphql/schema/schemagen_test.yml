@@ -116,6 +116,7 @@ schemas:
         s4: String @searchable(by: term)
         s5: String @searchable(by: fulltext)
         s6: String @searchable(by: trigram)
+        s7: String @searchable(by: regexp)
         dt1: DateTime @searchable
         dt2: DateTime @searchable(by: year)
         dt3: DateTime @searchable(by: month)
@@ -157,6 +158,7 @@ schemas:
       X.s4: string @index(term) .
       X.s5: string @index(fulltext) .
       X.s6: string @index(trigram) .
+      X.s7: string @index(trigram)
       X.dt1: dateTime @index(year) .
       X.dt2: dateTime @index(year) .
       X.dt3: dateTime @index(month) .

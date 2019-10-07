@@ -34,7 +34,7 @@ enum PostType {
 
 interface Character {
         id: ID!
-        name: String! @searchable
+        name: String! @searchable(by: "regexp")
 }
 
 interface Employee {
