@@ -73,6 +73,8 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 }
 
+type RunExecuteFunction func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
+
 // GraphQLResponse GraphQL response structure.
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
 type GraphQLResponse struct {
@@ -192,6 +194,14 @@ func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResp
 	require.NoError(t, err)
 
 	return params.Execute(t, req)
+}
+
+func RunExecuteGet(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsGet(t, url)
+}
+
+func RunExecutePost(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsPost(t, url)
 }
 
 func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
