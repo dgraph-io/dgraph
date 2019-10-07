@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -2109,6 +2110,53 @@ func TestNormalizeDirectiveMultipleQuery(t *testing.T) {
 				]
 			}
 		}`, js)
+}
+
+func TestNormalizeDirectiveListAndNonListChild1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				newfriend @normalize { # Results of this subquery will be normalized
+					fn: newname
+					newfriend @normalize  {
+						ffn: newname
+					}
+				}
+				boss @normalize {
+					bn: newname
+					newfriend {
+						bfn: newname
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
+}
+
+func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				newfriend @normalize { # Results of this subquery will be normalized
+					fn: newname
+					boss @normalize {
+						bn: newname
+						newfriend {
+							bfn: newname
+						}
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
 }
 
 func TestNearPoint(t *testing.T) {
