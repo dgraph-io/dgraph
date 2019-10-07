@@ -1,0 +1,88 @@
+-
+  name: "Unknown root field"
+  gqlrequest: |
+    query {
+      getAuthorszzz(id: "0x1") { name }
+    }
+  gqlvariables: 
+    { }
+  errors:
+    [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean \"getAuthor\"?",
+      "locations": [ { "line": 2, "column": 3 } ] } ]
+    
+-
+  name: "Unknown field"
+  gqlrequest: |
+    query {
+      getAuthor(id: "0x1") { 
+        namezzz 
+      }
+    }
+  gqlvariables: 
+    { }
+  errors:
+    [ { "message": "Cannot query field \"namezzz\" on type \"Author\". Did you mean \"name\"?",
+      "locations": [ { "line": 3, "column": 5 } ] } ]
+
+-
+  name: "Undefined variable"
+  gqlrequest: |
+    query {
+      getAuthor(id: $theID) { name }
+    }
+  gqlvariables: 
+    { }
+  errors:
+    [ { "message": "Variable \"$theID\" is not defined.",
+      "locations": [ { "line": 2, "column": 17 } ] } ]
+
+-
+  name: "input of wrong type"
+  gqlrequest: |
+    query {
+      queryAuthor(filter: { reputation: { le: "hi there" } }) { name }
+    }
+  gqlvariables: 
+    { }
+  errors:
+    [ { "message": "Expected type Float, found \"hi there\".",
+      "locations": [ { "line": 2, "column": 44 } ] } ]
+
+-
+  name: "unkown variable type"
+  gqlrequest: |
+    query queryAuthor($filter: AuthorFiltarzzz!) {
+      queryAuthor(filter: $filter) { name }
+    }
+  gqlvariables: 
+    { "filter": "type was wrong" }
+  errors:
+    [ { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position 
+        expecting type \"AuthorFilter\".",
+      "locations": [ { "line": 2, "column": 23 } ] },
+      { "message": "Unknown type \"AuthorFiltarzzz\".",
+      "locations": [ { "line": 1, "column": 1 } ] } ]
+
+-
+  name: "variable of wrong type"
+  gqlrequest: |
+    query queryAuthor($filter: AuthorFilter!) {
+      queryAuthor(filter: $filter) { name }
+    }
+  gqlvariables: 
+    { "filter": 57 }
+  errors:
+    [ { "message": "must be defined",
+      "path": [ "variable", "filter"] } ]
+
+-
+  name: "variable field of wrong type"
+  gqlrequest: |
+    query queryAuthor($filter: AuthorFilter!) {
+      queryAuthor(filter: $filter) { name }
+    }
+  gqlvariables: 
+    { "filter": { "reputation": { le: "hi there" } } }
+  errors:
+    [ { "message": "must be defined",
+      "path": [ "variable", "filter"] } ]
