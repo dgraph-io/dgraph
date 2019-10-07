@@ -573,8 +573,13 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		}
 
 		for _, field := range t.Fields {
-			if _, ok := preds[field.Predicate]; !ok {
-				fields = append(fields, field.Predicate)
+			fieldName := field.Predicate
+			if len(fieldName) > 0 && fieldName[0] == '~' {
+				fieldName = fieldName[1:len(fieldName)]
+			}
+
+			if _, ok := preds[fieldName]; !ok {
+				fields = append(fields, fieldName)
 			}
 		}
 	}
@@ -592,12 +597,17 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		// Verify all the fields in the type are already on the schema or come included in
 		// this request.
 		for _, field := range t.Fields {
-			_, inSchema := schemaSet[field.Predicate]
-			_, inRequest := preds[field.Predicate]
+			fieldName := field.Predicate
+			if len(fieldName) > 0 && fieldName[0] == '~' {
+				fieldName = fieldName[1:len(fieldName)]
+			}
+
+			_, inSchema := schemaSet[fieldName]
+			_, inRequest := preds[fieldName]
 			if !inSchema && !inRequest {
 				return errors.Errorf(
 					"Schema does not contain a matching predicate for field %s in type %s",
-					field, t.TypeName)
+					field.Predicate, t.TypeName)
 			}
 		}
 

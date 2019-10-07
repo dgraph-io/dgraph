@@ -1686,4 +1686,29 @@ func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
 	ctx = context.Background()
 	err = c.Alter(ctx, op)
 	require.NoError(t, err)
+
+	// Type with reverse predicate is not accepted if the original predicate does not exist.
+	op = &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Type with reverse predicate is accepted if the original predicate exists.
+	op = &api.Operation{}
+	op.Schema = `
+	parent: [uid] @reverse .
+
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
 }
