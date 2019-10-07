@@ -139,6 +139,7 @@ schemas:
         X.s4: string
         X.s5: string
         X.s6: string
+        X.s7: string
         X.dt1: dateTime
         X.dt2: dateTime
         X.dt3: dateTime

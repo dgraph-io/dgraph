@@ -137,7 +137,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str5: Int @searchable(by: trigram)
 				str6: Int @searchable(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searchables don't apply to Float": {schema: `
 			type X {
 				str1: Float @searchable(by: hash)
@@ -147,7 +147,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str5: Float @searchable(by: trigram)
 				str6: Float @searchable(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searchables don't apply to Boolean": {schema: `
 			type X {
 				str1: Boolean @searchable(by: hash)
@@ -157,7 +157,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str5: Boolean @searchable(by: trigram)
 				str6: Boolean @searchable(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searchables don't apply to DateTime": {schema: `
 			type X {
 				str1: DateTime @searchable(by: hash)
@@ -167,7 +167,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 				str5: DateTime @searchable(by: trigram)
 				str6: DateTime @searchable(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"DateTime searchables don't apply to Int": {schema: `
 			type X {
 				dt1: Int @searchable(by: year)
@@ -243,7 +243,7 @@ func TestOnlyCorrectSearchablesWork(t *testing.T) {
 			enum E {
 				A
 			}`,
-			expectedErrors: 12},
+			expectedErrors: 13},
 	}
 
 	for name, test := range tests {
