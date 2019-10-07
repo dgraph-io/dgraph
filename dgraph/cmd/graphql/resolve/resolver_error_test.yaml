@@ -251,8 +251,8 @@
   expected: |
     { "getAuthor": { "name": "A.N. Author" } }
   errors:
-    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one item. 
-          The first item in the list was used to produce the result. 
+    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one 
+          item.  The first item in the list was used to produce the result. 
           Logged as a potential bug; see the API log for more details.",
         "locations": [ { "column":3, "line":2 } ] } ]
 
@@ -270,7 +270,7 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { "message": "input:2: Internal error (couldn't unmarshal Dgraph result) 
+    [ { "message": "couldn't unmarshal Dgraph result 
           because invalid character 's' looking for beginning of object key string" ,
         "locations": [ { "column":3, "line":2 } ] } ]
 

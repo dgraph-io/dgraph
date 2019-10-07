@@ -22,7 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -79,7 +79,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 	if m.MutationType() != schema.AddMutation &&
 		m.MutationType() != schema.UpdateMutation {
 		return nil,
-			gqlerror.Errorf(
+			errors.Errorf(
 				"internal error - call to build Dgraph mutation for %s mutation type",
 				m.MutationType())
 	}
@@ -153,15 +153,13 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		// GraphQL validation means we shouldn't get here till those bulk mutations
 		// are added to the schema.
 		return nil,
-			gqlerror.Errorf(
-				"internal error - call to build a list of mutations, but that " +
-					"isn't supported yet.")
+			errors.New("call to build a list of mutations, but that isn't supported yet")
 	}
 
 	return nil,
-		gqlerror.Errorf(
-			"internal error - call to build Dgraph mutation with input of unrecognized type; " +
-				"this indicates a GraphQL validation error.")
+		errors.New(
+			"tried to build Dgraph mutation with input of unrecognized type; " +
+				"this indicates a GraphQL validation error")
 }
 
 func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
@@ -174,7 +172,7 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedTypeName())
+		addTypeFunc(dgQuery, m.MutatedType().Name())
 	}
 	addFilter(dgQuery, m)
 	return dgQuery
@@ -183,7 +181,7 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mutation string,
 	err error) {
 	if m.MutationType() != schema.DeleteMutation {
-		return "", "", gqlerror.Errorf(
+		return "", "", errors.Errorf(
 			"internal error - call to build Dgraph mutation for %s mutation type",
 			m.MutationType())
 	}
@@ -208,8 +206,7 @@ func asUID(val interface{}) (uint64, error) {
 	uid, err := strconv.ParseUint(id, 0, 64)
 
 	if !ok || err != nil {
-		return 0, gqlerror.Errorf(
-			"ID argument (%s) was not able to be parsed", id)
+		return 0, errors.Errorf("ID argument (%s) was not able to be parsed", id)
 	}
 
 	return uid, nil
@@ -264,7 +261,7 @@ func rewriteObject(
 		var err error
 
 		fieldDef := typ.Field(field)
-		fieldName := fmt.Sprintf("%s.%s", fieldDef.ParentType(), field)
+		fieldName := typ.DgraphPredicate(field)
 
 		switch val := val.(type) {
 		case map[string]interface{}:

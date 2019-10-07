@@ -176,12 +176,13 @@ func run() {
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
 	if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
-		missingOrEmpty, err := x.IsMissingOrEmptyDir(opt.OutDir)
-		x.CheckfNoTrace(err)
-		if !missingOrEmpty {
+		err := x.IsMissingOrEmptyDir(opt.OutDir)
+		if err == nil {
 			fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
 				" Use --replace_out to overwrite it.\n")
 			os.Exit(1)
+		} else if err != x.ErrMissingDir {
+			x.CheckfNoTrace(err)
 		}
 	}
 

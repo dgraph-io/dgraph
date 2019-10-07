@@ -35,18 +35,19 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/ssh/terminal"
-
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/trace"
+	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/status"
 )
 
 // Error constants representing different types of errors.
@@ -122,7 +123,7 @@ func ShouldCrash(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := grpc.ErrorDesc(err)
+	errStr := status.Convert(err).Message()
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
@@ -158,8 +159,63 @@ type Location struct {
 	Column int `json:"column,omitempty"`
 }
 
+// GqlErrorList is a list of GraphQL errors as would be found in a response.
+type GqlErrorList []*GqlError
+
 type queryRes struct {
-	Errors []GqlError `json:"errors"`
+	Errors GqlErrorList `json:"errors"`
+}
+
+func (gqlErr *GqlError) Error() string {
+	var buf bytes.Buffer
+	if gqlErr == nil {
+		return ""
+	}
+
+	buf.WriteString(gqlErr.Message)
+
+	if len(gqlErr.Locations) > 0 {
+		buf.WriteString(" (Locations: [")
+		for i, loc := range gqlErr.Locations {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(fmt.Sprintf("{Line: %v, Column: %v}", loc.Line, loc.Column))
+		}
+		buf.WriteString("])")
+	}
+
+	return buf.String()
+}
+
+func (errList GqlErrorList) Error() string {
+	var buf bytes.Buffer
+	for i, gqlErr := range errList {
+		if i > 0 {
+			buf.WriteByte('\n')
+		}
+		buf.WriteString(gqlErr.Error())
+	}
+	return buf.String()
+}
+
+// GqlErrorf returns a new GqlError with the message and args Sprintf'ed as the
+// GqlError's Message.
+func GqlErrorf(message string, args ...interface{}) *GqlError {
+	return &GqlError{
+		Message: fmt.Sprintf(message, args...),
+	}
+}
+
+// WithLocations adds a list of locations to a GqlError and returns the same
+// GqlError (fluent style).
+func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
+	if gqlErr == nil {
+		return nil
+	}
+
+	gqlErr.Locations = append(gqlErr.Locations, locs...)
+	return gqlErr
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
@@ -168,7 +224,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
-	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
+	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
@@ -198,8 +254,8 @@ func AddCorsHeaders(w http.ResponseWriter) {
 
 // QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
-	Errors []GqlError `json:"errors"`
-	Data   *string    `json:"data"`
+	Errors GqlErrorList `json:"errors"`
+	Data   *string      `json:"data"`
 }
 
 // SetStatusWithData sets the errors in the response and ensures that the data key
@@ -210,7 +266,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr QueryResWithData
 	ext := make(map[string]interface{})
 	ext["code"] = code
-	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
+	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
