@@ -91,3 +91,26 @@ Example: Get all actors from a Steven Spielberg movie sorted alphabetically. The
   }
 }
 {{< /runnable >}}
+
+## Obtain unique results by using variables
+
+To obtain unique results, assign the node's edge to a variable.
+The variable can now be used to iterate over the unique nodes.
+
+Example: Get all the unique genre from all of the movies directed by Steven Spielberg.
+
+{{< runnable >}}
+{
+  var(func: eq(name@en, "Steven Spielberg")) {
+    director.film {
+      genres as genre {
+        name@.
+      }
+    }
+  }
+
+  q(func: uid(genres)) {
+    name@.
+  }
+}
+{{< /runnable >}}
