@@ -146,6 +146,10 @@ var supportedSearchables = map[string]string{
 	"hour":     "DateTime",
 }
 
+var searchArgToDraphIndex = map[string]string{
+	"regexp": "trigram",
+}
+
 // GraphQL scalar type -> default Dgraph index (/searchable)
 // used if the schema specifies @searchable without an arg
 var defaultSearchables = map[string]string{

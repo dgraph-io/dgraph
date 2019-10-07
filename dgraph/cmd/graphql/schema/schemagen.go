@@ -205,8 +205,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						arg := searchable.Arguments.ForName(searchableArg)
 						if arg != nil {
 							indexStr = fmt.Sprintf(" @index(%s)", arg.Value.Raw)
-							if arg.Value.Raw == "regexp" {
-								indexStr = fmt.Sprintf(" @index(%s)", "trigram")
+							if val, ok := searchArgToDraphIndex[arg.Value.Raw]; ok {
+								indexStr = fmt.Sprintf(" @index(%s)", val)
 							}
 						} else {
 							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchables[f.Type.Name()])
