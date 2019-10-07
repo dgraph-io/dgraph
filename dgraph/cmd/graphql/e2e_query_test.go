@@ -36,9 +36,7 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 				name
 			}
 		}`,
-		Variables:       map[string]interface{}{"regexp": regexp},
-		AcceptEncoding:  false,
-		ContentEncoding: true,
+		Variables: map[string]interface{}{"regexp": regexp},
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -61,15 +59,32 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
+func TestGzipCompression(t *testing.T) {
+	r := []bool{false, true}
+	for _, acceptEncoding := range r {
+		for _, contentEncoding := range r {
+			t.Run(fmt.Sprintf("TestQueryByType AcceptEncoding=%t ContentEncoding=%t",
+				acceptEncoding, contentEncoding), func(t *testing.T) {
+
+				queryByType(t, acceptEncoding, contentEncoding)
+			})
+		}
+	}
+}
+
 func TestQueryByType(t *testing.T) {
+	queryByType(t, true, true)
+}
+
+func queryByType(t *testing.T, acceptEncoding, contentEncoding bool) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
 				name
 			}
 		}`,
-		AcceptEncoding:  true,
-		ContentEncoding: true,
+		AcceptEncoding:  acceptEncoding,
+		ContentEncoding: contentEncoding,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -102,8 +117,6 @@ func TestOrderAtRoot(t *testing.T) {
 				name
 			}
 		}`,
-		AcceptEncoding:  true,
-		ContentEncoding: false,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -132,8 +145,6 @@ func TestPageAtRoot(t *testing.T) {
 				name
 			}
 		}`,
-		AcceptEncoding:  false,
-		ContentEncoding: false,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -170,8 +181,6 @@ func TestHashSearch(t *testing.T) {
 				dob
 			}
 		}`,
-		AcceptEncoding:  true,
-		ContentEncoding: true,
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -203,8 +212,6 @@ func allPosts(t *testing.T) []*post {
 				postType
 			}
 		}`,
-		AcceptEncoding:  true,
-		ContentEncoding: true,
 	}
 	gqlResponse := queryAuthorParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)

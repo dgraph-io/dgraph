@@ -225,7 +225,6 @@ func TestGzipCompressionHeader(t *testing.T) {
 	req.Header.Set("Content-Encoding", "gzip")
 
 	resData, err := runGQLRequest(req)
-	resData, _ = gUnzipData(resData)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
@@ -250,10 +249,7 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
-	req.Header.Del("Accept-Encoding")
-
 	resData, err := runGQLRequest(req)
-	resData, _ = gUnzipData(resData)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
@@ -309,8 +305,11 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 	if params.ContentEncoding {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
+
 	if params.AcceptEncoding {
 		req.Header.Set("Accept-Encoding", "gzip")
+	} else {
+		req.Header.Set("Accept-Encoding", "identity")
 	}
 
 	return req, nil
