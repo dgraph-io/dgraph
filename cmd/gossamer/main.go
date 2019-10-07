@@ -18,6 +18,7 @@ package main
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	log "github.com/ChainSafe/log15"
@@ -37,6 +38,9 @@ var (
 		utils.RpcHostFlag,
 		utils.RpcModuleFlag,
 	}
+	cliFlags = []cli.Flag{
+		utils.VerbosityFlag,
+	}
 )
 
 // init initializes CLI
@@ -52,6 +56,7 @@ func init() {
 	}
 	app.Flags = append(app.Flags, nodeFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
+	app.Flags = append(app.Flags, cliFlags...)
 }
 
 func main() {
@@ -61,15 +66,35 @@ func main() {
 	}
 }
 
+func startLogger(ctx *cli.Context) error {
+	logger := log.Root()
+	handler := logger.GetHandler()
+	var lvl log.Lvl
+
+	if lvlToInt, err := strconv.Atoi(ctx.String(utils.VerbosityFlag.Name)); err == nil {
+		lvl = log.Lvl(lvlToInt)
+	} else if lvl, err = log.LvlFromString(ctx.String(utils.VerbosityFlag.Name)); err != nil {
+		return err
+	}
+	log.Root().SetHandler(log.LvlFilterHandler(lvl, handler))
+
+	return nil
+}
+
 // gossamer is the main entrypoint into the gossamer system
 func gossamer(ctx *cli.Context) error {
-	srvlog := log.New(log.Ctx{"blockchain": "gossamer"})
+
+	err := startLogger(ctx)
+	if err != nil {
+		return err
+	}
+
 	node, _, err := makeNode(ctx)
 	if err != nil {
 		// TODO: Need to manage error propagation and exit smoothly
 		log.Error("error making node", "err", err)
 	}
-	srvlog.Info("🕸️Starting node...")
+	log.Info("🕸️Starting node...")
 	node.Start()
 
 	return nil

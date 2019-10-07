@@ -59,4 +59,10 @@ var (
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
 		Value: "",
 	}
+	// cli service settings
+	VerbosityFlag = cli.StringFlag{
+		Name:  "verbosity",
+		Usage: "Supports levels crit (silent) to trce (trace)",
+		Value: "info",
+	}
 )
