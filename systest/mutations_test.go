@@ -1668,8 +1668,7 @@ func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
 	op.Schema = `
 	type Person {
 		name
-	}
-	`
+	}`
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
 	require.Error(t, err)
@@ -1683,8 +1682,7 @@ func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
 
 	type Person {
 		name
-	}
-	`
+	}`
 	ctx = context.Background()
 	err = c.Alter(ctx, op)
 	require.NoError(t, err)

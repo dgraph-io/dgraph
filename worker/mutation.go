@@ -560,33 +560,32 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates included in this schema request.
 	preds := make(map[string]struct{}, len(m.Schema))
-	for _, sup := range m.Schema {
-		preds[sup.Predicate] = struct{}{}
+	for _, schemaUpdate := range m.Schema {
+		preds[schemaUpdate.Predicate] = struct{}{}
 	}
 
 	// Create a set of all the predicates already present in the schema.
 	schemaSet := make(map[string]struct{})
+	fields := make([]string, 0)
 	for _, t := range m.Types {
 		if len(t.TypeName) == 0 {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
-		fields := make([]string, 0)
 		for _, field := range t.Fields {
 			if _, ok := preds[field.Predicate]; !ok {
 				fields = append(fields, field.Predicate)
 			}
 		}
+	}
 
-		schs, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
-		if err != nil {
-			return errors.Errorf("Cannot retrieve predicate information for fields in type %s",
-				t.TypeName)
-		}
-
-		for _, schemaNode := range schs {
-			schemaSet[schemaNode.Predicate] = struct{}{}
-		}
+	// Retrieve the schema for those predicates.
+	schs, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
+	if err != nil {
+		return errors.Errorf("Cannot retrieve predicate information")
+	}
+	for _, schemaNode := range schs {
+		schemaSet[schemaNode.Predicate] = struct{}{}
 	}
 
 	for _, t := range m.Types {
