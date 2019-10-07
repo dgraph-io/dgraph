@@ -120,7 +120,9 @@ func addCountry(t *testing.T, runExecuteFunction requestExecutor) *country {
 
 // requireCountry enforces that node with ID uid in the GraphQL store is of type
 // Country and is value expectedCountry.
-func requireCountry(t *testing.T, uid string, expectedCountry *country, runExecuteFunction requestExecutor) {
+func requireCountry(t *testing.T, uid string, expectedCountry *country,
+	runExecuteFunction requestExecutor) {
+
 	params := &GraphQLParams{
 		Query: `query getCountry($id: ID!) {
 			getCountry(id: $id) {
