@@ -151,7 +151,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 			d := json.NewDecoder(r.Body)
 			d.UseNumber()
 			if err = d.Decode(&rr.GqlReq); err != nil {
-				return nil, errors.Wrap(err, "not a valid GraphQL request body")
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
