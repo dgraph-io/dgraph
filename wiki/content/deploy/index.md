@@ -1809,20 +1809,22 @@ the server which has IP address as `192.168.1.1`.
 
 ### Restrict Mutation Operations
 
-By default, you can perform mutation operations for any existing or non-existing predicates.
-You can make use of `--mutations` flag to set the restriction which is set to `allow` by default.
+By default, you can perform mutation operations for any predicate.
+You can make use of `--mutations` flag to set restrictions on mutation operations,
+which is set to `allow` by default.
 
 You can set `--mutations` option to `disallow` to disable the mutations.
 
 ```sh
-dgraph alpha --mutations disallow ...
+dgraph alpha --mutations disallow
 ```
 
-You can set `--mutations` option to `strict` to limit mutations to only existing predicates
-in the schema and disable mutations of unknown predicates.
+You can set `--mutations` option to `strict` for limiting mutations to only
+existing predicates in the schema and disable mutations of unknown predicates.
+The `strict` mode enforces a strict schema.
 
 ```sh
-dgraph alpha --mutations strict ...
+dgraph alpha --mutations strict
 ```
 
 ### Secure Alter Operations
