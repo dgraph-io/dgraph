@@ -46,7 +46,7 @@ func incrementInLoop(t *testing.T, dg *dgo.Dgraph, M int) int {
 	for i := 0; i < M; i++ {
 		cnt, err := process(dg, conf)
 		if err != nil {
-			if strings.Index(err.Error(), "Transaction has been aborted") >= 0 {
+			if strings.Contains(err.Error(), "Transaction has been aborted") {
 				// pass
 			} else {
 				t.Logf("Error while incrementing: %v\n", err)

@@ -167,14 +167,14 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	gqlschema, gqlErr := validator.ValidateSchemaDocument(doc)
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
-		schema:       gqlschema,
+		schema:       schema.AsSchema(gqlSchema),
 	}
 
 	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))

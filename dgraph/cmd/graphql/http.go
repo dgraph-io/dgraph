@@ -19,6 +19,7 @@ package graphql
 import (
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -34,8 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/pkg/errors"
 )
 
 func recoveryHandler(next http.Handler) http.Handler {
@@ -46,7 +46,9 @@ func recoveryHandler(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
 					api.RequestID(r.Context()), string(debug.Stack()))
-				rr := schema.ErrorResponsef("Internal Server Error")
+				rr := schema.ErrorResponse(
+					errors.New("Internal Server Error"),
+					api.RequestID(r.Context()))
 				w.Header().Set("Content-Type", "application/json")
 				if _, err := rr.WriteTo(w); err != nil {
 					glog.Error(err)
@@ -60,7 +62,7 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
-	schema       *ast.Schema
+	schema       schema.Schema
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved
@@ -89,10 +91,16 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		out = gzw
 	}
 
-	rh := gh.resolverForRequest(r)
-	res := rh.Resolve(ctx)
+	var res *schema.Response
+	rh, err := gh.resolverForRequest(r)
+	if err != nil {
+		res = schema.ErrorResponse(err, api.RequestID(ctx))
+	} else {
+		res = rh.Resolve(ctx)
+	}
+
 	if _, err := res.WriteTo(out); err != nil {
-		glog.Error(err)
+		glog.Error(fmt.Sprintf("[%s]", api.RequestID(ctx)), err)
 	}
 }
 
@@ -113,9 +121,9 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
-	rr = resolve.New(
-		schema.AsSchema(gh.schema),
+func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestResolver, error) {
+	rr := resolve.New(
+		gh.schema,
 		dgraph.AsDgraph(gh.dgraphClient),
 		dgraph.NewQueryRewriter(),
 		dgraph.NewMutationRewriter())
@@ -123,8 +131,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := gzip.NewReader(r.Body)
 		if err != nil {
-			rr.WithError(gqlerror.Errorf("Unable to parse gzip"))
-			return
+			return nil, errors.Wrap(err, "Unable to parse gzip")
 		}
 		r.Body = gzreadCloser{zr, r.Body}
 	}
@@ -132,34 +139,31 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 	switch r.Method {
 	case http.MethodGet:
 		// TODO: fill gqlReq in from parameters
-		rr.WithError(gqlerror.Errorf("GraphQL on HTTP GET not yet implemented"))
-		return
+		return nil, errors.New("GraphQL on HTTP GET not yet implemented")
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			rr.WithError(gqlerror.Errorf("Unable to parse media type: %s", err))
-			return
+			return nil, errors.Wrap(err, "unable to parse media type")
 		}
 
 		switch mediaType {
 		case "application/json":
-			if err = json.NewDecoder(r.Body).Decode(&rr.GqlReq); err != nil {
-				rr.WithError(
-					gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
-				return
+			d := json.NewDecoder(r.Body)
+			d.UseNumber()
+			if err = d.Decode(&rr.GqlReq); err != nil {
+				return nil, errors.Wrap(err, "not a valid GraphQL request body")
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json
 			// content type ..."
-			rr.WithError(gqlerror.Errorf(
-				"Unrecognised Content-Type.  Please use application/json for GraphQL requests"))
-			return
+			return nil, errors.New(
+				"Unrecognised Content-Type.  Please use application/json for GraphQL requests")
 		}
 	default:
-		rr.WithError(gqlerror.Errorf(
-			"Unrecognised request method.  Please use GET or POST for GraphQL requests"))
-		return
+		return nil,
+			errors.New("Unrecognised request method.  Please use GET or POST for GraphQL requests")
 	}
-	return
+
+	return rr, nil
 }

@@ -95,7 +95,7 @@ func NewHandler(input string) (Handler, error) {
 
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
-		if strings.HasPrefix(defn.Name, "__") {
+		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
@@ -122,36 +122,6 @@ func NewHandler(input string) (Handler, error) {
 		completeSchema: sch,
 		originalDefs:   defns,
 	}, nil
-}
-
-// parentInterface returns the name of an interface that a field belonging to a type definition
-// typDef inherited from. If there is no such interface, then it returns an empty string.
-//
-// Given the following schema
-// interface A {
-//   name: String
-// }
-//
-// type B implements A {
-//	 name: String
-//   age: Int
-// }
-//
-// calling parentInterface on the fieldName name with type definition for B, would return A.
-func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
-	if len(typDef.Interfaces) == 0 {
-		return ""
-	}
-
-	for _, iface := range typDef.Interfaces {
-		interfaceDef := sch.Types[iface]
-		for _, interfaceField := range interfaceDef.Fields {
-			if fieldName == interfaceField.Name {
-				return iface
-			}
-		}
-	}
-	return ""
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
@@ -215,9 +185,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
 					}
 				case ast.Enum:
-					fmt.Fprintf(&typeDef, "  %s.%s: string\n", typName, f.Name)
+					typStr = fmt.Sprintf(
+						"%s%s%s",
+						prefix, "string", suffix,
+					)
+					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", typName, f.Name)
+						fmt.Fprintf(&preds, "%s.%s: %s @index(exact) .\n", typName, f.Name, typStr)
 					}
 				}
 			}

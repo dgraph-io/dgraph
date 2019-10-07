@@ -927,12 +927,12 @@ Result:
 ```
 
 The query part of the upsert block stores the UID of the user with the provided email
-in the variable `v`. The mutation part then extracts the UID from variable `v` and
+in the variable `v`. The mutation part then extracts the UID from variable `v`, and
 stores the `name` and `email` information in the database. If the user exists,
 the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
-If we run the same mutation again, the data would just be overwritten and no new uid is
+If we run the same mutation again, the data would just be overwritten, and no new uid is
 created. Note that the `uids` map is empty in the response when the mutation is executed again:
 
 ```json
@@ -944,6 +944,21 @@ created. Note that the `uids` map is empty in the response when the mutation is 
   },
   "extensions": {...}
 }
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set": {
+    "uid": uid(v),
+    "name": "first last",
+    "email": "user@company1.io"
+  }
+}
+' | jq
 ```
 
 Now, we want to add the `age` information for the same user having the same email
@@ -982,6 +997,20 @@ Here, the query block queries for a user with `email` as `user@company1.io`. It 
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
 user by extracting the uid from the variable `v` using `uid` function.
 
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}
+' | jq
+```
+
 If we want to execute the mutation only when the user exists, we could use
 [Conditional Upsert]({{< relref "#conditional-upsert" >}}).
 
@@ -1019,6 +1048,21 @@ Result:
   },
   "extensions": {...}
 }
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}
+' | jq
 ```
 
 ## Conditional Upsert
@@ -1061,4 +1105,19 @@ upsert {
   }
 }
 ' | jq
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "cond": "@if(lt(len(v), 100) AND gt(len(v), 50))",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}' | jq
 ```

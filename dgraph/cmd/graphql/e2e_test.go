@@ -104,7 +104,7 @@ type post struct {
 	Title       string
 	Text        string
 	Tags        []string
-	NulLikes    int
+	NumLikes    int
 	IsPublished bool
 	PostType    string
 	Author      author

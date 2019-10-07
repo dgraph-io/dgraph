@@ -2119,11 +2119,13 @@ func TestQueryUnknownType(t *testing.T) {
 	require.JSONEq(t, `{"data": {}}`, js)
 }
 
+// TODO(martinmr): Change type query representation since the type of a field is no longer
+// relevant.
 func TestQuerySingleType(t *testing.T) {
 	query := `schema(type: Person) {}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}, {"name":"pet", "type":"Animal"}]}]}}`,
+		"fields":[{"name":"name", "type":"default"}, {"name":"pet", "type":"default"}]}]}}`,
 		js)
 }
 
@@ -2131,7 +2133,65 @@ func TestQueryMultipleTypes(t *testing.T) {
 	query := `schema(type: [Person, Animal]) {}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
-		"fields":[{"name":"name", "type":"string"}]},
-	{"name":"Person", "fields":[{"name":"name", "type": "string"},
-		{"name":"pet", "type":"Animal"}]}]}}`, js)
+		"fields":[{"name":"name", "type":"default"}]},
+	{"name":"Person", "fields":[{"name":"name", "type": "default"},
+		{"name":"pet", "type":"default"}]}]}}`, js)
+}
+
+func TestRegexInFilterNoDataOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: has(nonExistent)) @filter(regexp(make, /.*han/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestRegexInFilterIndexedPredOnRoot(t *testing.T) {
+	query := `
+		{
+			q(func: regexp(name, /.*nonExistent/i)) {
+				uid
+				firstName
+				lastName
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[]}}`, res)
+}
+
+func TestMultiRegexInFilter(t *testing.T) {
+	query := `
+		{
+			q(func: has(full_name)) @filter(regexp(full_name, /.*michonne/i) OR regexp(name, /.*michonne/i)) {
+				expand(_all_)
+			}
+		}
+	`
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Michonne"}]}}`, res)
+}
+
+func TestMultiRegexInFilter2(t *testing.T) {
+	query := `
+		{
+			q(func: has(firstName)) @filter(regexp(firstName, /.*han/i) OR regexp(lastName, /.*han/i)) {
+				firstName
+				lastName
+			}
+		}
+	`
+
+	// run 20 times ensure that there is no data race
+	// https://github.com/dgraph-io/dgraph/issues/4030
+	for i := 0; i < 20; i++ {
+		res := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)
+	}
 }

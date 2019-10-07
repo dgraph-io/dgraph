@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	dschema "github.com/dgraph-io/dgraph/schema"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -55,6 +56,8 @@ func TestDGSchemaGen(t *testing.T) {
 				if diff := cmp.Diff(sch.Output, dgSchema); diff != "" {
 					t.Errorf("schema mismatch (-want +got):\n%s", diff)
 				}
+				_, err := dschema.Parse(dgSchema)
+				require.NoError(t, err)
 			})
 		}
 	}
