@@ -195,7 +195,7 @@ func searchValidation(
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
 
-	arg := dir.Arguments.ForName(searchArg)
+	arg := dir.Arguments.ForName(searchArgs)
 	if arg == nil {
 		// If there's no arg, then it can be an enum or has to be a scalar that's
 		// not ID. The schema generation will add the default search
@@ -208,51 +208,51 @@ func searchValidation(
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but fields of type %s "+
-				"are not search.",
+				"can't have the @search directive.",
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearchArgs[arg.Value.Raw]; !ok {
+	if search, ok := supportedSearches[arg.Value.Raw]; !ok {
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: the argument to @search %s isn't valid."+
-				"Fields of type %s are %s.",
+				"Fields of type %s %s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
 
 	} else if search != field.Type.Name() {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
-				"doesn't apply to field type %s.  Search %[3]s applies to fields of type %[5]s. "+
-				"Fields of type %[4]s are %[6]s.",
+				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
+				"Fields of type %[4]s %[6]s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearchArgs[arg.Value.Raw], searchMessage(sch, field))
+			supportedSearches[arg.Value.Raw], searchMessage(sch, field))
 	}
 
 	return nil
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
-	var possibleSearchs []string
-	for name, typ := range supportedSearchArgs {
+	var possibleSearchArgs []string
+	for name, typ := range supportedSearches {
 		if typ == field.Type.Name() {
-			possibleSearchs = append(possibleSearchs, name)
+			possibleSearchArgs = append(possibleSearchArgs, name)
 		}
 	}
 
-	if len(possibleSearchs) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
-		return "search by just @search"
-	} else if len(possibleSearchs) == 0 {
-		return "not search"
+	if len(possibleSearchArgs) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
+		return "are searchable by just @search"
+	} else if len(possibleSearchArgs) == 0 {
+		return "can't have the @search directive"
 	}
 
-	sort.Strings(possibleSearchs)
+	sort.Strings(possibleSearchArgs)
 	return fmt.Sprintf(
-		"search by %s and %s",
-		strings.Join(possibleSearchs[:len(possibleSearchs)-1], ", "),
-		possibleSearchs[len(possibleSearchs)-1])
+		"can have @search by %s and %s",
+		strings.Join(possibleSearchArgs[:len(possibleSearchArgs)-1], ", "),
+		possibleSearchArgs[len(possibleSearchArgs)-1])
 }
 
 func isScalar(s string) bool {

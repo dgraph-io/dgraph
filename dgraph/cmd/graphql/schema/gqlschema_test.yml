@@ -133,7 +133,7 @@ invalid_schemas:
     ]
 
   -
-    name: "ID is not search"
+    name: "ID can't have the @search directive"
     input: |
       type X {
         id: ID! @search
@@ -142,17 +142,17 @@ invalid_schemas:
         id: ID! @search(by: term)
       }
     errlist: [
-      {"message": "Type X; Field id: has the @search directive but fields of type ID are
-          not search.",
+      {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
       "locations":[{"line":2, "column":12}]},
       {"message": "Type Y; Field id: has the @search directive but the argument term doesn't
-          apply to field type ID.  Search term applies to fields of type String. Fields of type
-          ID are not search.",
+          apply to field type ID.  Search by term applies to fields of type String. Fields of type
+          ID can't have the @search directive.",
       "locations":[{"line":5, "column":12}]}
       ]
 
   -
-    name: "Search will error on un-searchType"
+    name: "Search will error on type that can't have the @search"
     input: |
       type X {
         y: Y @search
@@ -162,12 +162,12 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but fields of type Y
-          are not search.",
+          can't have the @search directive.",
       "locations":[{"line":2, "column":9}]}
       ]
 
   -
-    name: "Search (with arg) will error on un-searchType"
+    name: "Search (with arg) will error that can't have the @search"
     input: |
       type X {
         y: Y @search(by: term)
@@ -177,8 +177,8 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
-          apply to field type Y.  Search term applies to fields of type String. Fields of
-          type Y are not search.",
+          apply to field type Y.  Search by term applies to fields of type String. Fields of
+          type Y can't have the @search directive.",
       "locations":[{"line":2, "column":9}]}
       ]
 
@@ -190,8 +190,8 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
-          apply to field type Int.  Search term applies to fields of type String. Fields of
-          type Int are search by just @search.",
+          apply to field type Int.  Search by term applies to fields of type String. Fields of
+          type Int are searchable by just @search.",
       "locations":[{"line":2, "column":11}]}
       ]
 
@@ -203,8 +203,8 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument day doesn't
-          apply to field type String.  Search day applies to fields of type DateTime. Fields
-          of type String are search by exact, fulltext, hash, term and trigram.",
+          apply to field type String.  Search by day applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -216,7 +216,7 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
-          String are search by exact, fulltext, hash, term and trigram.",
+          String can have @search by exact, fulltext, hash, term and trigram.",
       "locations":[{"line":2, "column":14}]}
       ]
 

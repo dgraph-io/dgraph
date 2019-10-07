@@ -202,11 +202,11 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					indexStr := ""
 					search := f.Directives.ForName(searchDirective)
 					if search != nil {
-						arg := search.Arguments.ForName(searchArg)
+						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
 							indexStr = fmt.Sprintf(" @index(%s)", arg.Value.Raw)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchArgs[f.Type.Name()])
+							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
 						}
 					}
 

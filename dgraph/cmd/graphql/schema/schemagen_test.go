@@ -123,12 +123,12 @@ func TestSchemas(t *testing.T) {
 // that shouldn't work - i.e. we'll never accept a search where we don't
 // expect one.  It's too annoying to have all the errors for this, so It just
 // makes sure that there are as many errors as cases.
-func TestOnlyCorrectSearchsWork(t *testing.T) {
+func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 	tests := map[string]struct {
 		schema         string
 		expectedErrors int
 	}{
-		"String searchs don't apply to Int": {schema: `
+		"String searches don't apply to Int": {schema: `
 			type X {
 				str1: Int @search(by: hash)
 				str2: Int @search(by: exact)
@@ -137,7 +137,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				str5: Int @search(by: trigram)
 			}`,
 			expectedErrors: 5},
-		"String searchs don't apply to Float": {schema: `
+		"String searches don't apply to Float": {schema: `
 			type X {
 				str1: Float @search(by: hash)
 				str2: Float @search(by: exact)
@@ -146,7 +146,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				str5: Float @search(by: trigram)
 			}`,
 			expectedErrors: 5},
-		"String searchs don't apply to Boolean": {schema: `
+		"String searches don't apply to Boolean": {schema: `
 			type X {
 				str1: Boolean @search(by: hash)
 				str2: Boolean @search(by: exact)
@@ -155,7 +155,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				str5: Boolean @search(by: trigram)
 			}`,
 			expectedErrors: 5},
-		"String searchs don't apply to DateTime": {schema: `
+		"String searches don't apply to DateTime": {schema: `
 			type X {
 				str1: DateTime @search(by: hash)
 				str2: DateTime @search(by: exact)
@@ -164,7 +164,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				str5: DateTime @search(by: trigram)
 			}`,
 			expectedErrors: 5},
-		"DateTime searchs don't apply to Int": {schema: `
+		"DateTime searches don't apply to Int": {schema: `
 			type X {
 				dt1: Int @search(by: year)
 				dt2: Int @search(by: month)
@@ -172,7 +172,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				dt4: Int @search(by: hour)
 			}`,
 			expectedErrors: 4},
-		"DateTime searchs don't apply to Float": {schema: `
+		"DateTime searches don't apply to Float": {schema: `
 			type X {
 				dt1: Float @search(by: year)
 				dt2: Float @search(by: month)
@@ -180,7 +180,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				dt4: Float @search(by: hour)
 			}`,
 			expectedErrors: 4},
-		"DateTime searchs don't apply to Boolean": {schema: `
+		"DateTime searches don't apply to Boolean": {schema: `
 			type X {
 				dt1: Boolean @search(by: year)
 				dt2: Boolean @search(by: month)
@@ -188,7 +188,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				dt4: Boolean @search(by: hour)
 			}`,
 			expectedErrors: 4},
-		"DateTime searchs don't apply to String": {schema: `
+		"DateTime searches don't apply to String": {schema: `
 			type X {
 				dt1: String @search(by: year)
 				dt2: String @search(by: month)
@@ -196,7 +196,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				dt4: String @search(by: hour)
 			}`,
 			expectedErrors: 4},
-		"Int searchs only appy to Int": {schema: `
+		"Int searches only appy to Int": {schema: `
 			type X {
 				i1: Float @search(by: int)
 				i2: Boolean @search(by: int)
@@ -204,7 +204,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				i4: DateTime @search(by: int)
 			}`,
 			expectedErrors: 4},
-		"Float searchs only appy to Float": {schema: `
+		"Float searches only appy to Float": {schema: `
 			type X {
 				f1: Int @search(by: float)
 				f2: Boolean @search(by: float)
@@ -212,7 +212,7 @@ func TestOnlyCorrectSearchsWork(t *testing.T) {
 				f4: DateTime @search(by: float)
 			}`,
 			expectedErrors: 4},
-		"Boolean searchs only appy to Boolean": {schema: `
+		"Boolean searches only appy to Boolean": {schema: `
 			type X {
 				b1: Int @search(by: bool)
 				b2: Float @search(by: bool)

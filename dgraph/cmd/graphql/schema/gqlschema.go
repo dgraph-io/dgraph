@@ -31,7 +31,7 @@ const (
 	inverseArg       = "field"
 
 	searchDirective = "search"
-	searchArg       = "by"
+	searchArgs      = "by"
 
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
@@ -129,7 +129,7 @@ type directiveValidator func(
 
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
-var supportedSearchArgs = map[string]string{
+var supportedSearches = map[string]string{
 	"int":      "Int",
 	"float":    "Float",
 	"bool":     "Boolean",
@@ -146,7 +146,7 @@ var supportedSearchArgs = map[string]string{
 
 // GraphQL scalar type -> default Dgraph index (/search)
 // used if the schema specifies @search without an arg
-var defaultSearchArgs = map[string]string{
+var defaultSearches = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
 	"Float":    "float",
@@ -189,8 +189,8 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchDirective: searchValidation,
+	inverseDirective: hasInverseValidation,
+	searchDirective:  searchValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -432,7 +432,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
-// defn that are search.  For example, if there's another type
+// defn that can be searched.  For example, if there's another type
 // `type R { ... f: String @search(by: term) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
@@ -567,11 +567,6 @@ func hasFilterable(defn *ast.Definition) bool {
 		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" || isID(fld) })
 }
 
-func hasSearchs(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" })
-}
-
 func hasOrderables(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
@@ -600,13 +595,13 @@ func getSearchArgs(fld *ast.FieldDefinition) string {
 		return ""
 	}
 	if len(search.Arguments) == 0 {
-		if search, ok := defaultSearchArgs[fld.Type.Name()]; ok {
+		if search, ok := defaultSearches[fld.Type.Name()]; ok {
 			return search
 		}
 		// it's an enum - always has exact index
 		return "exact"
 	}
-	return search.Arguments.ForName(searchArg).Value.Raw
+	return search.Arguments.ForName(searchArgs).Value.Raw
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.
