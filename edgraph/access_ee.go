@@ -434,8 +434,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 
 func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operation) error {
 	for _, pred := range preds {
-		err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp)
-		if err != nil {
+		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
 			logAccess(&accessEntry{
 				userId:    userId,
 				groups:    groupIds,
@@ -445,12 +444,12 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 			})
 
 			var op string
-			switch aclOp {
-			case acl.Modify:
+			switch aclOp.Name {
+			case acl.OpModify:
 				op = "alter"
-			case acl.Write:
+			case acl.OpWrite:
 				op = "mutate"
-			case acl.Read:
+			case acl.OpRead:
 				op = "query"
 			}
 
@@ -515,8 +514,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
-		err = authorizePreds(userId, groupIds, preds, acl.Modify)
-		return err
+		return authorizePreds(userId, groupIds, preds, acl.Modify)
 	}
 
 	err := doAuthorizeAlter()
@@ -596,9 +594,6 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 			if userId == x.GrootId {
 				// groot is allowed to mutate anything except the permission of the acl predicates
-
-				// Why Not?? Also what about other users. What if other users
-				// try to mutate ACL predicates ?
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
 				}
@@ -611,8 +606,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		err = authorizePreds(userId, groupIds, preds, acl.Write)
-		return err
+		return authorizePreds(userId, groupIds, preds, acl.Write)
 	}
 
 	err := doAuthorizeMutation()
@@ -699,8 +693,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		err = authorizePreds(userId, groupIds, preds, acl.Read)
-		return err
+		return authorizePreds(userId, groupIds, preds, acl.Read)
 	}
 
 	err := doAuthorizeQuery()
