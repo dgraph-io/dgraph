@@ -327,12 +327,12 @@ Response:
 ```
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
-You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header.
+You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. For example:
 
 ```sh
-$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/query -d '...'
-$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/mutate -d '...'
-$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8180/alter -d '...'
+$ curl -X POST -H 'Content-Type: application/graphql+-' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/query -d '...'
+$ curl -X POST -H 'Content-Type: application/json' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/mutate -d '...'
+$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/alter -d '...'
 ```
 
 The refresh token can be used in the `/login` POST body to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
