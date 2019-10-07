@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -2134,7 +2133,65 @@ func TestNormalizeDirectiveListAndNonListChild1(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"newfriend": [
+							{
+								"ffn": "P5",
+								"fn": "P2"
+							},
+							{
+								"ffn": "P6",
+								"fn": "P2"
+							},
+							{
+								"ffn": "P7",
+								"fn": "P3"
+							},
+							{
+								"ffn": "P8",
+								"fn": "P3"
+							}
+						],
+						"boss": [
+							{
+								"bfn": "P9",
+								"bn": "P4"
+							},
+							{
+								"bfn": "P10",
+								"bn": "P4"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"newfriend": [
+							{
+								"fn": "P5"
+							},
+							{
+								"fn": "P6"
+							}
+						],
+						"boss": [
+							{
+								"bfn": "P11",
+								"bn": "P10"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
 }
 
 func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
@@ -2156,7 +2213,42 @@ func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"newfriend": [
+							{
+								"bfn": "P11",
+								"bn": "P10",
+								"fn": "P2"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10",
+								"fn": "P2"
+							},
+							{
+								"fn": "P3"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"newfriend": [
+							{
+								"fn": "P5"
+							},
+							{
+								"fn": "P6"
+							}
+						]
+					}
+				]
+			}
+		}`)
 }
 
 func TestNearPoint(t *testing.T) {
