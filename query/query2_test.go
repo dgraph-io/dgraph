@@ -2248,7 +2248,7 @@ func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
 					}
 				]
 			}
-		}`)
+		}`, js)
 }
 
 func TestNearPoint(t *testing.T) {

@@ -295,7 +295,7 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	return mergedList, nil
 }
 
-// normalize returns all attributes of fj and the attributes of all attributes of fj (if any).
+// normalize returns all attributes of fj and its children (if any).
 func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range fj.attrs {
@@ -303,7 +303,7 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		// attributes, we will flatten it, otherwise we will return all attributes.
 
 		// When we call addMapChild it tries to find whether there is already a attribute
-		// with attribute same as attribute argument of addMapChild. If it doesn't find any
+		// with attr field same as attribute argument of addMapChild. If it doesn't find any
 		// such attribute, it creates an attribute with isChild = false. In those cases
 		// sometimes cnt remains zero  and normalize returns attributes without flattening.
 		// So we are using len(a.attrs) > 0 instead of a.isChild
@@ -787,13 +787,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 								dst.AddMapChild(fieldName, &fastJsonNode{attrs: c}, false)
 							}
 						}
-
+						continue
+					}
+					if pc.List {
+						dst.AddListChild(fieldName, uc)
 					} else {
-						if pc.List {
-							dst.AddListChild(fieldName, uc)
-						} else {
-							dst.AddMapChild(fieldName, uc, false)
-						}
+						dst.AddMapChild(fieldName, uc, false)
 					}
 				}
 			}
