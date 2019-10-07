@@ -677,6 +677,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if sg.Params.IgnoreReflex {
 				pc.Params.ParentIds = sg.Params.ParentIds
 			}
+
+			var addAsList bool
+			for _, ch := range pc.Children {
+				addAsList = addAsList || ch.List
+			}
+
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
@@ -726,7 +732,53 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 							return err
 						}
 
-						if pc.List {
+						// addList means atleat one of the children are of
+						// list type.Example below explains need of addList.
+						// Schema:
+						// ```
+						//     name: string @index(exact) .
+						//     friend: [uid] .
+						//     boss: uid .
+						// ```
+						// Data
+						// ```
+						//     <3> <name> "3" .
+						//     <4> <name> "4" .
+						//     <1> <boss> <2>
+						//     <2> <friend> <3>
+						//     <2> <friend> <4>
+						// ```
+						// Query
+						// ```
+						// {
+						//     me(func: uid(0x01)) {
+						//         boss {
+						//             friend {
+						//                 n: name
+						//             }
+						//         }
+						//     }
+						// }
+						// ```
+						// Expected output
+						// ```
+						// "me": [
+						//  {
+						//    "boss": [
+						//     {
+						//       "n": "P9"
+						//     },
+						//     {
+						//       "n": "P10"
+						//     }
+						//    ]
+						//  }
+						// ]
+						// ```
+						// boss is of type uid, but since friend is its
+						// child which is of type [uid], all the results
+						// are returned as list.
+						if pc.List || addAsList {
 							for _, c := range normAttrs {
 								dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
 							}
