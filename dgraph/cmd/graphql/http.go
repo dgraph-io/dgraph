@@ -110,7 +110,10 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 		rr.GqlReq.OperationName = query.Get("operationName")
 		variables := query.Get("variables")
 
-		if err := json.NewDecoder(strings.NewReader(variables)).Decode(&rr.GqlReq.Variables); err != nil {
+		d := json.NewDecoder(strings.NewReader(variables))
+		d.UseNumber()
+
+		if err := d.Decode(&rr.GqlReq.Variables); err != nil {
 			return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 		}
 	case http.MethodPost:

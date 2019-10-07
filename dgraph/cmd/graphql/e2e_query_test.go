@@ -407,7 +407,7 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
-	gqlResponse := queryParams.ExecuteAsGet(t, graphqlURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
