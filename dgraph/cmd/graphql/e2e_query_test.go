@@ -59,38 +59,6 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
-func TestGetQueryByType(t *testing.T) {
-	queryCountry := &GraphQLParams{
-		Query: `query {
-			queryCountry {
-				name
-			}
-		}`,
-	}
-
-	gqlResponse := queryCountry.ExecuteAsGet(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	var expected, result struct {
-		QueryCountry []*country
-	}
-	expected.QueryCountry = []*country{
-		&country{Name: "Angola"},
-		&country{Name: "Bangladesh"},
-		&country{Name: "Mozambique"},
-	}
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	sort.Slice(result.QueryCountry, func(i, j int) bool {
-		return result.QueryCountry[i].Name < result.QueryCountry[j].Name
-	})
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func TestQueryByType(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
@@ -439,7 +407,7 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
-	gqlResponse := queryParams.ExecuteAsGet(t, graphqlURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {

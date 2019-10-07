@@ -230,7 +230,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author) {
 		}`,
 		Variables: map[string]interface{}{"id": authorID},
 	}
-	gqlResponse := params.ExecuteAsGet(t, graphqlURL)
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {
@@ -295,7 +295,7 @@ func addPost(t *testing.T, authorID, countryID string) *post {
 		}
 	} }`, authorID, countryID)
 
-	gqlResponse := addPostParams.ExecuteAsGet(t, graphqlURL)
+	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
