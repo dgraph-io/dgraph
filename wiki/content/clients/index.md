@@ -60,6 +60,8 @@ The Go client communicates with the server on the gRPC port (default value 9080)
 The client can be obtained in the usual way via `go get`:
 
 ```sh
+# Requires at least Go 1.11
+export GO111MODULE=on
 go get -u -v github.com/dgraph-io/dgo/v2
 ```
 
@@ -352,6 +354,7 @@ dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 // In the example below new nodes for Alice, Bob and Charlie and school are created (since they
 // dont have a Uid).
 p := Person{
+    Uid:     "_:alice",
 	Name:    "Alice",
 	Age:     26,
 	Married: true,
@@ -388,7 +391,7 @@ if err != nil {
 }
 
 // Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
-variables := map[string]string{"$id": assigned.Uids["blank-0"]}
+variables := map[string]string{"$id": assigned.Uids["alice"]}
 q := `query Me($id: string){
 	me(func: uid($id)) {
 		name
