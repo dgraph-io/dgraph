@@ -1237,37 +1237,6 @@ func validatePredName(name string) error {
 	return nil
 }
 
-// formatField takes a SchemaUpdate representing a field in a type and converts
-// it into a map containing keys for the type name and the type.
-func formatField(field *pb.SchemaUpdate) map[string]string {
-	fieldMap := make(map[string]string)
-	fieldMap["name"] = field.Predicate
-	typ := ""
-	if field.List {
-		typ += "["
-	}
-
-	if field.ValueType == pb.Posting_OBJECT {
-		typ += field.ObjectTypeName
-	} else {
-		typeId := types.TypeID(field.ValueType)
-		typ += typeId.Name()
-	}
-
-	if field.NonNullable {
-		typ += "!"
-	}
-	if field.List {
-		typ += "]"
-	}
-	if field.NonNullableList {
-		typ += "!"
-	}
-	fieldMap["type"] = typ
-
-	return fieldMap
-}
-
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
 func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
@@ -1275,12 +1244,14 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 	for _, typ := range types {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
-		typeMap["fields"] = make([]map[string]string, 0)
+		fields := make([]map[string]string, len(typ.Fields))
 
-		for _, field := range typ.Fields {
-			fieldMap := formatField(field)
-			typeMap["fields"] = append(typeMap["fields"].([]map[string]string), fieldMap)
+		for i, field := range typ.Fields {
+			m := make(map[string]string, 1)
+			m["name"] = field.Predicate
+			fields[i] = m
 		}
+		typeMap["fields"] = fields
 
 		res = append(res, typeMap)
 	}
