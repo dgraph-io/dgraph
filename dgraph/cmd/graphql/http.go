@@ -108,13 +108,15 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 		rr.GqlReq = &schema.Request{}
 		rr.GqlReq.Query = query.Get("query")
 		rr.GqlReq.OperationName = query.Get("operationName")
-		variables := query.Get("variables")
+		variables, ok := query["variables"]
 
-		d := json.NewDecoder(strings.NewReader(variables))
-		d.UseNumber()
+		if ok {
+			d := json.NewDecoder(strings.NewReader(variables[0]))
+			d.UseNumber()
 
-		if err := d.Decode(&rr.GqlReq.Variables); err != nil {
-			return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+			if err := d.Decode(&rr.GqlReq.Variables); err != nil {
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+			}
 		}
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

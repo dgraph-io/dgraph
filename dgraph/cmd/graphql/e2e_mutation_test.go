@@ -45,10 +45,10 @@ import (
 // These really need to run as one test because the created uid from the Country
 // needs to flow to the author, etc.
 func TestAddMutation(t *testing.T) {
-	AddMutation(t, RunExecutePost)
+	AddMutation(t, postExecutor)
 }
 
-func AddMutation(t *testing.T, runExecuteFunction RunExecuteFunction) {
+func AddMutation(t *testing.T, runExecuteFunction requestExecutor) {
 	var newCountry *country
 	var newAuthor *author
 	var newPost *post
@@ -78,7 +78,7 @@ func AddMutation(t *testing.T, runExecuteFunction RunExecuteFunction) {
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
-func addCountry(t *testing.T, runExecuteFunction RunExecuteFunction) *country {
+func addCountry(t *testing.T, runExecuteFunction requestExecutor) *country {
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($name: String!) {
 			addCountry(input: { name: $name }) {
@@ -120,7 +120,7 @@ func addCountry(t *testing.T, runExecuteFunction RunExecuteFunction) *country {
 
 // requireCountry enforces that node with ID uid in the GraphQL store is of type
 // Country and is value expectedCountry.
-func requireCountry(t *testing.T, uid string, expectedCountry *country, runExecuteFunction RunExecuteFunction) {
+func requireCountry(t *testing.T, uid string, expectedCountry *country, runExecuteFunction requestExecutor) {
 	params := &GraphQLParams{
 		Query: `query getCountry($id: ID!) {
 			getCountry(id: $id) {
@@ -144,7 +144,9 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country, runExecu
 	}
 }
 
-func addAuthor(t *testing.T, countryUID string, runExecuteFunction RunExecuteFunction) *author {
+func addAuthor(t *testing.T, countryUID string,
+	runExecuteFunction requestExecutor) *author {
+
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AuthorInput!) {
 			addAuthor(input: $author) {
@@ -204,7 +206,9 @@ func addAuthor(t *testing.T, countryUID string, runExecuteFunction RunExecuteFun
 	return result.AddAuthor.Author
 }
 
-func requireAuthor(t *testing.T, authorID string, expectedAuthor *author, runExecuteFunction RunExecuteFunction) {
+func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
+	runExecuteFunction requestExecutor) {
+
 	params := &GraphQLParams{
 		Query: `query getAuthor($id: ID!) {
 			getAuthor(id: $id) {
@@ -234,7 +238,9 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author, runExe
 	}
 }
 
-func addPost(t *testing.T, authorID, countryID string, runExecuteFunction RunExecuteFunction) *post {
+func addPost(t *testing.T, authorID, countryID string,
+	runExecuteFunction requestExecutor) *post {
+
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: PostInput!) {
 			addPost(input: $post) {
@@ -308,7 +314,9 @@ func addPost(t *testing.T, authorID, countryID string, runExecuteFunction RunExe
 	return result.AddPost.Post
 }
 
-func requirePost(t *testing.T, postID string, expectedPost *post, runExecuteFunction RunExecuteFunction) {
+func requirePost(t *testing.T, postID string, expectedPost *post,
+	runExecuteFunction requestExecutor) {
+
 	params := &GraphQLParams{
 		Query: `query getPost($id: ID!)  {
 			getPost(id: $id) {
@@ -346,7 +354,7 @@ func requirePost(t *testing.T, postID string, expectedPost *post, runExecuteFunc
 }
 
 func TestUpdateMutation(t *testing.T) {
-	newCountry := addCountry(t, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
 	newCountry.Name = "updated name"
 
 	t.Run("update Country", func(t *testing.T) {
@@ -354,7 +362,7 @@ func TestUpdateMutation(t *testing.T) {
 	})
 
 	t.Run("check updated Country", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, newCountry, RunExecutePost)
+		requireCountry(t, newCountry.ID, newCountry, postExecutor)
 	})
 
 	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
@@ -391,8 +399,8 @@ func updateCountry(t *testing.T, updCountry *country) {
 }
 
 func TestDeleteMutationWithMultipleIds(t *testing.T) {
-	country := addCountry(t, RunExecutePost)
-	anotherCountry := addCountry(t, RunExecutePost)
+	country := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 		filter := map[string]interface{}{"ids": []string{country.ID, anotherCountry.ID}}
@@ -400,14 +408,14 @@ func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	})
 
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, country.ID, nil, RunExecutePost)
-		requireCountry(t, anotherCountry.ID, nil, RunExecutePost)
+		requireCountry(t, country.ID, nil, postExecutor)
+		requireCountry(t, anotherCountry.ID, nil, postExecutor)
 	})
 }
 
 func TestDeleteMutationWithSingleId(t *testing.T) {
-	newCountry := addCountry(t, RunExecutePost)
-	anotherCountry := addCountry(t, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 		filter := map[string]interface{}{"ids": []string{newCountry.ID}}
@@ -416,15 +424,15 @@ func TestDeleteMutationWithSingleId(t *testing.T) {
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, RunExecutePost)
-		requireCountry(t, anotherCountry.ID, anotherCountry, RunExecutePost)
+		requireCountry(t, newCountry.ID, nil, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
 	})
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
 
 func TestDeleteMutationByName(t *testing.T) {
-	newCountry := addCountry(t, RunExecutePost)
-	anotherCountry := addCountry(t, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
 	anotherCountry.Name = "New country"
 	updateCountry(t, anotherCountry)
 
@@ -440,8 +448,8 @@ func TestDeleteMutationByName(t *testing.T) {
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, RunExecutePost)
-		requireCountry(t, anotherCountry.ID, anotherCountry, RunExecutePost)
+		requireCountry(t, newCountry.ID, nil, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
 	})
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
@@ -525,8 +533,8 @@ func TestDeleteWrongID(t *testing.T) {
 	//
 	// FIXME: Test cases : with a wrongID, a malformed ID "blah", and maybe a filter that
 	// doesn't match anything.
-	newCountry := addCountry(t, RunExecutePost)
-	newAuthor := addAuthor(t, newCountry.ID, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	expectedData := `{ "deleteCountry": null }`
 	expectedErrors := []*x.GqlError{
@@ -540,7 +548,7 @@ func TestDeleteWrongID(t *testing.T) {
 }
 
 func TestManyMutations(t *testing.T) {
-	newCountry := addCountry(t, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation addCountries($name1: String!, $filter: CountryFilter!, $name2: String!) {
 			add1: addCountry(input: { name: $name1 }) {
@@ -594,7 +602,7 @@ func TestManyMutations(t *testing.T) {
 	}
 
 	t.Run("country deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, RunExecutePost)
+		requireCountry(t, newCountry.ID, nil, postExecutor)
 	})
 
 	cleanUp(t, []*country{result.Add1.Country, result.Add2.Country}, []*author{}, []*post{})
@@ -608,11 +616,11 @@ func TestManyMutations(t *testing.T) {
 // author's posts.
 func TestMutationWithDeepFilter(t *testing.T) {
 
-	newCountry := addCountry(t, RunExecutePost)
-	newAuthor := addAuthor(t, newCountry.ID, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	// Make sure they have a post not found by the filter
-	newPost := addPost(t, newAuthor.ID, newCountry.ID, RunExecutePost)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: PostInput!) {
@@ -675,7 +683,7 @@ func TestMutationWithDeepFilter(t *testing.T) {
 // that shouldn't stop the following mutations because the actual mutation
 // went through without error.
 func TestManyMutationsWithQueryError(t *testing.T) {
-	newCountry := addCountry(t, RunExecutePost)
+	newCountry := addCountry(t, postExecutor)
 
 	// delete the country's name.
 	// The schema states type Country `{ ... name: String! ... }`

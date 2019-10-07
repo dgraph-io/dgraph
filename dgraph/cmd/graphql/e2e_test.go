@@ -73,7 +73,7 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 }
 
-type RunExecuteFunction func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
+type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
 
 // GraphQLResponse GraphQL response structure.
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
@@ -163,7 +163,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGetRequest(t *testing.T) {
-	AddMutation(t, RunExecuteGet)
+	AddMutation(t, getExecutor)
 }
 
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
@@ -200,11 +200,11 @@ func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResp
 	return params.Execute(t, req)
 }
 
-func RunExecuteGet(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+func getExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
 	return params.ExecuteAsGet(t, url)
 }
 
-func RunExecutePost(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+func postExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
 	return params.ExecuteAsPost(t, url)
 }
 
