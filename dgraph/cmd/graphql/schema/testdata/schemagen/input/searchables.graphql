@@ -3,7 +3,7 @@ type Post {
 	title: String! @searchable(by: term)
 	text: String @searchable(by: fulltext)
 
-	tags: [String] @searchable(by: regexp)
+	tags: [String] @searchable(by: trigram)
 	tagsHash: [String] @searchable(by: hash)
 	tagsExact: [String] @searchable(by: exact)
 

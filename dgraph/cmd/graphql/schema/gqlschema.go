@@ -47,7 +47,7 @@ enum DgraphIndex {
 	exact
 	term
 	fulltext
-	regexp
+	trigram
 	year
 	month
 	day
@@ -137,7 +137,7 @@ var supportedSearchables = map[string]string{
 	"exact":    "String",
 	"term":     "String",
 	"fulltext": "String",
-	"regexp":   "String",
+	"trigram":  "String",
 	"year":     "DateTime",
 	"month":    "DateTime",
 	"day":      "DateTime",
@@ -172,7 +172,7 @@ var builtInFilters = map[string]string{
 	"day":      "DateTimeFilter",
 	"hour":     "DateTimeFilter",
 	"term":     "StringTermFilter",
-	"regexp":   "StringRegExpFilter",
+	"trigram":  "StringRegExpFilter",
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",

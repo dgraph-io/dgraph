@@ -61,7 +61,7 @@ initial_release_date : datetime @index(year) .
 rating               : [uid] @reverse .
 country              : [uid] @reverse .
 loc                  : geo @index(geo) .
-name                 : string @index(hash, fulltext, regexp) .
+name                 : string @index(hash, fulltext, trigram) .
 starring             : [uid] @count .
 _share_hash_         : string @index(exact) .
 ' 21million.rdf.gz
