@@ -19,7 +19,6 @@ package resolve
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -162,30 +161,14 @@ func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) (*resolve
 		return res, mutationFailed
 	}
 
-	resp, err := mr.dgraph.ConditionalMutate(ctx, query, mut)
+	_, err = mr.dgraph.ConditionalMutate(ctx, query, mut)
 	if err != nil {
 		res.err = schema.GQLWrapLocationf(err,
 			mr.mutation.Location(),
 			"mutation %s failed", mr.mutation.Name())
 		return res, mutationFailed
 	}
-	fmt.Println("resp: ", string(resp))
-
-	// dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
-	// if err != nil {
-	// 	res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
-	// 		mr.mutation.Name())
-	// 	return res, mutationSucceeded
-	// }
-
-	// resp, err := mr.dgraph.Query(ctx, dgQuery)
-	// if err != nil {
-	// 	res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
-	// 		mr.mutation.Name())
-	// 	return res, mutationSucceeded
-	// }
-
-	// res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
+	// TODO - Get mutated uids from Dgraph and use them in the following query.
 	return res, mutationSucceeded
 }
 
