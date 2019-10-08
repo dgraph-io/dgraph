@@ -329,6 +329,7 @@ symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : uid .
 number                         : int @index(int) .
+node                           : uid .
 `
 
 	err := schema.ParseBytes([]byte(schemaStr), 1)
@@ -673,4 +674,7 @@ number                         : int @index(int) .
 	addEdgeToUID(t, "office.room", 4001, 4002, nil)
 	addEdgeToUID(t, "office.room", 4001, 4003, nil)
 	addEdgeToUID(t, "office.room", 4001, 4004, nil)
+
+	addEdgeToValue(t, "name", 11100, "expand", nil)
+	addEdgeToUID(t, "node", 11100, 11100, nil)
 }
