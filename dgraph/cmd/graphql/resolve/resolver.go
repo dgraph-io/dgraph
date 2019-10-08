@@ -234,7 +234,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			resp.AddData(res.data)
 		}
 	case op.IsSubscription():
-		resp.WithError(errors.New("Subscriptions not yet supported."))
+		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
 	}
 
 	return resp
