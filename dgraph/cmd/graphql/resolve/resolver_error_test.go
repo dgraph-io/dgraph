@@ -415,8 +415,8 @@ func TestManyMutationsWithError(t *testing.T) {
 				&x.GqlError{Message: `mutation addPost failed because ` +
 					`Dgraph mutation failed because _bad stuff happend_`,
 					Locations: []x.Location{{Line: 6, Column: 4}}},
-				&x.GqlError{Message: `mutation add3 was not executed because of ` +
-					`a previous error`,
+				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
+					`a previous error.`,
 					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 		"Rewriting error": {
@@ -429,10 +429,10 @@ func TestManyMutationsWithError(t *testing.T) {
 				"add2" : null
 			}`,
 			errors: x.GqlErrorList{
-				&x.GqlError{Message: `couldn't rewrite mutation because ` +
+				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
 					`ID argument (hi) was not able to be parsed`},
-				&x.GqlError{Message: `mutation add3 was not executed because of ` +
-					`a previous error`,
+				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
+					`a previous error.`,
 					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 	}
