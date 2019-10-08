@@ -19,11 +19,8 @@ package p2p
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
-	mrand "math/rand"
 	"time"
 
 	"github.com/ChainSafe/gossamer/common"
@@ -32,7 +29,6 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	host "github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -60,15 +56,6 @@ type Service struct {
 	blockRespRec     map[string]bool
 	blockAnnounceRec map[string]bool
 	txMessageRec     map[string]bool
-}
-
-// Config is used to configure a p2p service
-type Config struct {
-	BootstrapNodes []string
-	Port           int
-	RandSeed       int64
-	NoBootstrap    bool
-	NoMdns         bool
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
@@ -171,8 +158,9 @@ func (s *Service) start(e chan error) {
 	// Now we can build a full multiaddress to reach this host
 	// by encapsulating both addresses:
 	addrs := s.host.Addrs()
+	log.Info("You can be reached on the following addresses:")
 	for _, addr := range addrs {
-		log.Info("address can be reached", "hostAddr", addr.Encapsulate(s.hostAddr))
+		log.Info(addr.Encapsulate(s.hostAddr).String())
 	}
 
 	log.Info("listening for connections...")
@@ -314,51 +302,10 @@ func (s *Service) Ctx() context.Context {
 	return s.ctx
 }
 
-func (sc *Config) buildOpts() ([]libp2p.Option, error) {
-	ip := "0.0.0.0"
-
-	priv, err := generateKey(sc.RandSeed)
-	if err != nil {
-		return nil, err
-	}
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, sc.Port))
-	if err != nil {
-		return nil, err
-	}
-
-	connMgr := ConnManager{}
-
-	return []libp2p.Option{
-		libp2p.ListenAddrs(addr),
-		libp2p.DisableRelay(),
-		libp2p.Identity(priv),
-		libp2p.NATPortMap(),
-		libp2p.Ping(true),
-		libp2p.ConnectionManager(connMgr),
-	}, nil
-}
-
-// generateKey generates a libp2p private key which is used for secure messaging
-func generateKey(seed int64) (crypto.PrivKey, error) {
-	// If the seed is zero, use real cryptographic randomness. Otherwise, use a
-	// deterministic randomness source to make generated keys stay the same
-	// across multiple runs
-	var r io.Reader
-	if seed == 0 {
-		r = rand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(seed))
-	}
-
-	// Generate a key pair for this host. We will use it at least
-	// to obtain a valid host ID.
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
-	if err != nil {
-		return nil, err
-	}
-
-	return priv, nil
+// PeerCount returns the number of connected peers
+func (s *Service) PeerCount() int {
+	peers := s.host.Network().Peers()
+	return len(peers)
 }
 
 // getExistingStream gets an existing stream for a peer that uses ProtocolPrefix
@@ -437,12 +384,6 @@ func (s *Service) handleStream(stream net.Stream) {
 // Peers returns connected peers
 func (s *Service) Peers() []string {
 	return PeerIdToStringArray(s.host.Network().Peers())
-}
-
-// PeerCount returns the number of connected peers
-func (s *Service) PeerCount() int {
-	peers := s.host.Network().Peers()
-	return len(peers)
 }
 
 // ID returns the ID of the node

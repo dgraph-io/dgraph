@@ -78,6 +78,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	// P2P
 	setBootstrapNodes(ctx, fig.P2pCfg)
+	setNoBootstrap(ctx, fig.P2pCfg)
 	p2pSrvc := createP2PService(fig.P2pCfg, msgChan)
 	srvcs = append(srvcs, p2pSrvc)
 
@@ -86,7 +87,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	dataDir := getDatabaseDir(ctx, fig)
 	dbSrv, err := polkadb.NewDatabaseService(dataDir)
 	if err != nil {
-		log.Crit("error creating DB service", "error", err)
+		return nil, nil, err
 	}
 	// append DBs to services registrar
 	srvcs = append(srvcs, dbSrv)
@@ -98,6 +99,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	// RPC
 	setRpcModules(ctx, fig.RpcCfg)
 	setRpcHost(ctx, fig.RpcCfg)
+	setRpcPort(ctx, fig.RpcCfg)
 	rpcSrvr := rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig.RpcCfg)
 
 	return dot.NewDot(srvcs, rpcSrvr), fig, nil
@@ -191,6 +193,18 @@ func setBootstrapNodes(ctx *cli.Context, fig *p2p.Config) {
 	}
 }
 
+// setNoBootsrap sets config to flag value if true, or default value if not set in config
+func setNoBootstrap(ctx *cli.Context, fig *p2p.Config) {
+	if off := ctx.GlobalBool(utils.NoBootstrapFlag.Name); off {
+		fig.NoBootstrap = true
+		return
+	} else if fig.NoBootstrap == true {
+		return // set in config, dont use defaults
+	} else {
+		fig.NoBootstrap = cfg.DefaultNoBootstrap
+	}
+}
+
 // setRpcModules checks the context for rpc modes and applies them to `cfg`, unless some are already set
 func setRpcModules(ctx *cli.Context, fig *rpc.Config) {
 	var strs []string
@@ -215,6 +229,18 @@ func setRpcHost(ctx *cli.Context, fig *rpc.Config) {
 		return
 	} else {
 		fig.Host = cfg.DefaultRpcHttpHost
+	}
+}
+
+// setRpcPort checks the context for a port and applies it to `cfg`, unless one is already set
+func setRpcPort(ctx *cli.Context, fig *rpc.Config) {
+	if port := ctx.GlobalUint(utils.RpcPortFlag.Name); port != 0 {
+		fig.Port = uint32(port)
+		return
+	} else if fig.Port != 0 {
+		return
+	} else {
+		fig.Port = cfg.DefaultRpcHttpPort
 	}
 }
 

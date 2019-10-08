@@ -59,6 +59,11 @@ var (
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
 		Value: "",
 	}
+
+	NoBootstrapFlag = cli.BoolFlag{
+		Name:  "nobootstrap",
+		Usage: "Disables p2p bootstrapping",
+	}
 	// cli service settings
 	VerbosityFlag = cli.StringFlag{
 		Name:  "verbosity",

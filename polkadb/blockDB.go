@@ -1,9 +1,5 @@
 package polkadb
 
-import (
-	log "github.com/ChainSafe/log15"
-)
-
 // BlockDB stores block's in an underlying Database
 type BlockDB struct {
 	Db Database
@@ -13,7 +9,6 @@ type BlockDB struct {
 func NewBlockDB(dataDir string) (*BlockDB, error) {
 	db, err := NewBadgerDB(dataDir)
 	if err != nil {
-		log.Crit("error instantiating BlockDB", "error", err)
 		return nil, err
 	}
 

@@ -31,6 +31,10 @@ var (
 		utils.DataDirFlag,
 		configFileFlag,
 	}
+	p2pFlags = []cli.Flag{
+		utils.BootnodesFlag,
+		utils.NoBootstrapFlag,
+	}
 	rpcFlags = []cli.Flag{
 		utils.RpcEnabledFlag,
 		utils.RpcListenAddrFlag,
@@ -55,13 +59,14 @@ func init() {
 		dumpConfigCommand,
 	}
 	app.Flags = append(app.Flags, nodeFlags...)
+	app.Flags = append(app.Flags, p2pFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, cliFlags...)
 }
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
-		log.Error("error starting app", "output", os.Stderr, "err", err)
+		log.Error("error starting app", "err", err)
 		os.Exit(1)
 	}
 }
@@ -92,7 +97,7 @@ func gossamer(ctx *cli.Context) error {
 	node, _, err := makeNode(ctx)
 	if err != nil {
 		// TODO: Need to manage error propagation and exit smoothly
-		log.Error("error making node", "err", err)
+		return err
 	}
 	log.Info("🕸️Starting node...")
 	node.Start()

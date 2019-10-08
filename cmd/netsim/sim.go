@@ -32,7 +32,6 @@ func NewSimulator(num int) (sim *Simulator, err error) {
 	bootnodeCfg := &p2p.Config{
 		BootstrapNodes: nil,
 		Port:           5000,
-		RandSeed:       0,
 		NoBootstrap:    false,
 		NoMdns:         false,
 	}

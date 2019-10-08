@@ -2,8 +2,6 @@ package polkadb
 
 import (
 	"path/filepath"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // Start...
@@ -43,13 +41,11 @@ func NewDatabaseService(file string) (*DbService, error) {
 
 	stateDb, err := NewStateDB(stateDataDir)
 	if err != nil {
-		log.Crit("failed to instantiate StateDB", "error", err)
 		return nil, err
 	}
 
 	blockDb, err := NewBlockDB(blockDataDir)
 	if err != nil {
-		log.Crit("failed to instantiate BlockDB", "error", err)
 		return nil, err
 	}
 

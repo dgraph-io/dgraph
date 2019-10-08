@@ -47,7 +47,7 @@ func (s *Service) bootstrapConnect() error {
 		wg.Add(1)
 		go func(p peer.AddrInfo) {
 			defer wg.Done()
-			log.Info("bootstrap attempt", "host", s.host.ID(), "peer", p.ID)
+			log.Debug("bootstrap attempt", "host", s.host.ID(), "peer", p.ID)
 
 			s.host.Peerstore().AddAddrs(p.ID, p.Addrs, ps.PermanentAddrTTL)
 			if err = s.host.Connect(s.ctx, p); err != nil {

@@ -39,15 +39,15 @@ type Config struct {
 func NewBadgerDB(file string) (*BadgerDB, error) {
 	opts := badger.DefaultOptions(file)
 	opts.ValueDir = file
+	opts.Logger = nil
 	opts.WithSyncWrites(false)
 	opts.WithNumCompactors(20)
 
 	if err := os.MkdirAll(file, os.ModePerm); err != nil {
-		log.Crit("err creating directory for DB ", err)
+		return nil, err
 	}
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Crit("err opening DB directory", err)
 		return nil, err
 	}
 

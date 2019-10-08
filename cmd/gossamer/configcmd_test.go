@@ -252,6 +252,32 @@ func TestSetRpcHost(t *testing.T) {
 	}
 }
 
+func TestSetNoBootstrap(t *testing.T) {
+	_, cfgClone := createTempConfigFile()
+
+	app := cli.NewApp()
+	app.Writer = ioutil.Discard
+	tc := []struct {
+		name     string
+		value    bool
+		expected bool
+	}{
+		{"nobootstrap", true, true},
+	}
+
+	for _, c := range tc {
+		set := flag.NewFlagSet(c.name, 0)
+		set.Bool(c.name, c.value, "")
+		context := cli.NewContext(nil, set, nil)
+
+		setNoBootstrap(context, cfgClone.P2pCfg)
+
+		if cfgClone.P2pCfg.NoBootstrap != c.expected {
+			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, cfgClone.P2pCfg.NoBootstrap, c.expected)
+		}
+	}
+}
+
 func TestStrToMods(t *testing.T) {
 	strs := []string{"test1", "test2"}
 	mods := strToMods(strs)
