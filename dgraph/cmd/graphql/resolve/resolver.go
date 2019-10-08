@@ -176,6 +176,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
+				defer api.PanicHandler(api.RequestID(ctx),
+					func(err error) {
+						allResolved[storeAt] = &resolved{err: err}
+					})
 
 				allResolved[storeAt] = (&queryResolver{
 					query:         q,
@@ -197,15 +201,24 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			resp.AddData(res.data)
 		}
 	case op.IsMutation():
-		// Mutations, unlike queries, are handled serially and the results are
-		// not independent: e.g. if one mutation errors, we don't run the
-		// remaining mutations.
+		// A mutation operation can contain any number of mutation fields.  Those should be executed
+		// serially.
+		// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
+		//
+		// The spec is ambiguous about what to do in the case of errors during that serial execution
+		// - apparently deliberately so; see this comment from Lee Byron:
+		// https://github.com/graphql/graphql-spec/issues/277#issuecomment-385588590
+		// and clarification
+		// https://github.com/graphql/graphql-spec/pull/438
+		//
+		// A reasonable interpretation of that is to stop a list of mutations after the first error -
+		// which seems like the natural semantics and is what we enforce here.
 		allSuccessful := true
 
 		for _, m := range op.Mutations() {
 			if !allSuccessful {
 				resp.WithError(x.GqlErrorf(
-					"mutation %s was not executed because of a previous error",
+					"Mutation %s was not executed because of a previous error.",
 					m.ResponseName()).
 					WithLocations(m.Location()))
 
@@ -225,7 +238,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			resp.AddData(res.data)
 		}
 	case op.IsSubscription():
-		resp.WithError(errors.New("Subscriptions not yet supported"))
+		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
 	}
 
 	return resp
