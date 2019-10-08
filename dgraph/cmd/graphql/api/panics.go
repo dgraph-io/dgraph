@@ -28,13 +28,13 @@ import (
 //
 // If PanicHandler recovers from a panic, it logs a stack trace, creates an error
 // and applies fn to the error.
-func PanicHandler(reqestID string, fn func(error)) {
+func PanicHandler(requestID string, fn func(error)) {
 	if err := recover(); err != nil {
-		glog.Errorf("[%s] panic: %s.\n trace: %s", reqestID, err, string(debug.Stack()))
+		glog.Errorf("[%s] panic: %s.\n trace: %s", requestID, err, string(debug.Stack()))
 
 		fn(errors.Errorf("[%s] Internal Server Error - a panic was trapped.  "+
 			"This indicates a bug in the GraphQL server.  A stack trace was logged.  "+
 			"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-			reqestID))
+			requestID))
 	}
 }

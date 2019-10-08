@@ -34,7 +34,7 @@ import (
 // bug triggers a panic.  Here, this is mocked up with httptest and a dgraph package
 // that just panics.
 //
-// Not really an e2e test cause it uses httptest and mocs up a panicing Dgraph, but
+// Not really an e2e test cause it uses httptest and mocks up a panicing Dgraph, but
 // uses all the e2e infrastructure.
 func TestPanicCatcher(t *testing.T) {
 
