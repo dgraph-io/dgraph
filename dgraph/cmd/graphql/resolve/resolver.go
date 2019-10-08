@@ -176,6 +176,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
+				defer api.PanicHandler(api.RequestID(ctx),
+					func(err error) {
+						allResolved[storeAt] = &resolved{err: err}
+					})
 
 				allResolved[storeAt] = (&queryResolver{
 					query:         q,
