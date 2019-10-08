@@ -429,7 +429,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				"add2" : null
 			}`,
 			errors: x.GqlErrorList{
-				&x.GqlError{Message: `couldn't rewrite mutation because ` +
+				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
 					`ID argument (hi) was not able to be parsed`},
 				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
 					`a previous error.`,
