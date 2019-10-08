@@ -139,6 +139,13 @@ func (dg *dgraphClient) DeleteNodes(ctx context.Context, query, mutation string)
 	return nil
 }
 
+func (dg *dgraphClient) ConditionalMutate(ctx context.Context,
+	query string,
+	mutation interface{}) ([]byte, error) {
+	// Not needed in testing responses
+	return nil, nil
+}
+
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
 // of "null", errors and error propagation).  Exact JSON result (e.g. order) doesn't
 // matter here - that makes for easier to format and read tests for these many cases.

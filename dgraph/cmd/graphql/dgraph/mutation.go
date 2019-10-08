@@ -137,6 +137,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (string, interface{}, er
 				query = asString(gqlQuery)
 				srcUIDs = []string{fmt.Sprintf("uid(%s)", mutationQueryVar)}
 			} else {
+				// TODO - These requests should also have type filter on them.
 				for _, uid := range uids {
 					srcUIDs = append(srcUIDs, fmt.Sprintf("%#x", uid))
 				}
@@ -180,6 +181,20 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (string, interface{}, er
 				"this indicates a GraphQL validation error")
 }
 
+func extractFilter(m schema.Mutation) map[string]interface{} {
+	var filter map[string]interface{}
+	mutationType := m.MutationType()
+	if mutationType == schema.UpdateMutation {
+		input, ok := m.ArgValue("input").(map[string]interface{})
+		if ok {
+			filter, _ = input["filter"].(map[string]interface{})
+		}
+	} else if mutationType == schema.DeleteMutation {
+		filter, _ = m.ArgValue("filter").(map[string]interface{})
+	}
+	return filter
+}
+
 func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
@@ -192,7 +207,9 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	} else {
 		addTypeFunc(dgQuery, m.MutatedType().Name())
 	}
-	addFilter(dgQuery, m)
+
+	filter := extractFilter(m)
+	addFilter(dgQuery, m, filter)
 	return dgQuery
 }
 

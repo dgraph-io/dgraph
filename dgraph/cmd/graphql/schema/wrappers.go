@@ -243,6 +243,7 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
+		update  = "Update"
 		del     = "Delete"
 		payload = "Payload"
 	)
@@ -260,9 +261,15 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		dgraphPredicate[originalTyp.Name] = make(map[string]string)
 		inputTypeName := inputTyp.Name
 
-		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
-			// For DeleteTypePayload, inputTyp should be Type.
-			inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+		if (strings.HasPrefix(inputTypeName, update) || strings.HasPrefix(inputTypeName, del)) &&
+			strings.HasSuffix(inputTypeName, payload) {
+			// For UpdateTypePayload and DeleteTypePayload, inputTyp should be Type.
+			if strings.HasPrefix(inputTypeName, update) {
+				inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, update),
+					payload)
+			} else if strings.HasPrefix(inputTypeName, del) {
+				inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+			}
 			inputTyp = sch.Types[inputTypeName]
 		}
 

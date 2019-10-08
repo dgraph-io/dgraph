@@ -75,12 +75,13 @@ func TestMutationRewriting(t *testing.T) {
 
 			mut := test.GetMutation(t, op)
 
-			jsonMut, err := rewriterToTest.Rewrite(mut)
+			query, jsonMut, err := rewriterToTest.Rewrite(mut)
 
 			if tcase.Error != nil || err != nil {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				test.RequireJSONEqStr(t, tcase.DgraphMutation, jsonMut)
+				require.Equal(t, tcase.DgraphQuery, query)
 			}
 		})
 	}
