@@ -113,11 +113,11 @@ type DeleteHumanPayload {
 }
 
 type UpdateCharacterPayload {
-	character: Character
+	character: [Character]
 }
 
 type UpdateHumanPayload {
-	human: Human
+	human: [Human]
 }
 
 #######################

@@ -96,7 +96,7 @@ type DeleteMessagePayload {
 }
 
 type UpdateMessagePayload {
-	message: Message
+	message: [Message]
 }
 
 #######################

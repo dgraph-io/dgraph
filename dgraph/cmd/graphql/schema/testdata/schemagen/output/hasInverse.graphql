@@ -107,11 +107,11 @@ type DeletePostPayload {
 }
 
 type UpdateAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type UpdatePostPayload {
-	post: Post
+	post: [Post]
 }
 
 #######################

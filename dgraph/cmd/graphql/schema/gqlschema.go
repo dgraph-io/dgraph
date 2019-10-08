@@ -695,7 +695,9 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 			&ast.FieldDefinition{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
-					NamedType: defn.Name,
+					Elem: &ast.Type{
+						NamedType: defn.Name,
+					},
 				},
 			},
 		},

@@ -102,7 +102,7 @@ type DeletePostPayload {
 }
 
 type UpdatePostPayload {
-	post: Post
+	post: [Post]
 }
 
 #######################

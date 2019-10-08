@@ -113,7 +113,7 @@ type DeleteAuthorPayload {
 }
 
 type UpdateAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 #######################

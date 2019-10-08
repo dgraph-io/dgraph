@@ -106,9 +106,9 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-		var srcUID string
+		var srcUIDs []string
 		if m.MutationType() == schema.AddMutation {
-			srcUID = "_:" + createdNode
+			srcUIDs = []string{"_:" + createdNode}
 		} else {
 			// TODO - Update this comment below to reflect new filters.
 			// must be schema.UpdateMutation, so the mutation payload came in like
@@ -127,20 +127,25 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			// HACK HACK - Fix it.
-			srcUID = fmt.Sprintf("%#x", uids[0])
+			for _, uid := range uids {
+				srcUIDs = append(srcUIDs, fmt.Sprintf("%#x", uid))
+			}
 		}
 
-		res, err := rewriteObject(mutatedType, nil, srcUID, val)
-		if err != nil {
-			return nil, err
-		}
+		res := make([]interface{}, 0, len(srcUIDs))
+		for _, srcUID := range srcUIDs {
+			obj, err := rewriteObject(mutatedType, nil, srcUID, val)
+			if err != nil {
+				return nil, err
+			}
 
-		res["uid"] = srcUID
-		if m.MutationType() == schema.AddMutation {
-			dgraphTypes := []string{mutatedType.Name()}
-			dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
-			res["dgraph.type"] = dgraphTypes
+			obj["uid"] = srcUID
+			if m.MutationType() == schema.AddMutation {
+				dgraphTypes := []string{mutatedType.Name()}
+				dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
+				obj["dgraph.type"] = dgraphTypes
+			}
+			res = append(res, obj)
 		}
 
 		return res, nil
@@ -199,9 +204,12 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mut
 func getUpdUIDs(m schema.Mutation) ([]uint64, error) {
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	filter := val[schema.FilterArgName].(map[string]interface{})
-	idArg := filter["ids"].([]interface{})
+	idArg := filter["ids"]
+	if idArg == nil {
+		return nil, nil
+	}
 
-	return asUIDs(idArg)
+	return asUIDs(idArg.([]interface{}))
 }
 
 func asUIDs(vals []interface{}) ([]uint64, error) {

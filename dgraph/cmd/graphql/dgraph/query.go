@@ -88,7 +88,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 			return nil, err
 		}
 
-		dgQuery := rewriteAsGet(gqlQuery, uid)
+		dgQuery := rewriteAsGet(gqlQuery, []uint64{uid})
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
 		return dgQuery, nil
@@ -114,16 +114,15 @@ func (qr *queryRewriter) FromMutationResult(
 				uids[createdNode])
 		}
 
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
+		return rewriteAsGet(gqlMutation.QueryField(), []uint64{uid}), nil
 
 	case schema.UpdateMutation:
-		uid, err := getUpdUIDs(gqlMutation)
+		uids, err := getUpdUIDs(gqlMutation)
 		if err != nil {
 			return nil, err
 		}
 
-		// HACK HACK
-		return rewriteAsGet(gqlMutation.QueryField(), uid[0]), nil
+		return rewriteAsGet(gqlMutation.QueryField(), uids), nil
 
 	default:
 		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
@@ -131,12 +130,12 @@ func (qr *queryRewriter) FromMutationResult(
 	}
 }
 
-func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
+func rewriteAsGet(field schema.Field, uids []uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 		Func: &gql.Function{
 			Name: "uid",
-			UID:  []uint64{uid},
+			UID:  uids,
 		},
 	}
 

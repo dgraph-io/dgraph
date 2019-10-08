@@ -18,12 +18,12 @@
   explanation: "A uid and type should get injected and all data transformed to
     underlying Dgraph edge names"
   dgraphmutation: |
-    { "uid":"_:newnode",
+    [{ "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.dob":"2000-01-01",
       "Author.posts":[]
-    }
+    }]
 
 -
   name: "Add Mutation with embedded value"
@@ -38,11 +38,11 @@
   explanation: "The input should be used for the mutation, with a uid and type getting
     injected and all data transformed to underlying Dgraph edge names"
   dgraphmutation: |
-    { "uid":"_:newnode",
+    [{ "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
-    }
+    }]
 
 -
   name: "Add Mutation with mixed vars and embedded value"
@@ -59,11 +59,11 @@
   explanation: "The input and variables should be used for the mutation, with a uid and type
     getting injected and all data transformed to underlying Dgraph edge names"
   dgraphmutation: |
-    { "uid":"_:newnode",
+    [{ "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
-    }
+    }]
 
 -
   name: "Add mutation with reference"
@@ -85,12 +85,12 @@
   explanation: "The reference to country should get transformed to 'uid' for the
     Dgraph JSON mutation"
   dgraphmutation: |
-    { "uid":"_:newnode",
+    [{ "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.country": { "uid": "0x123" },
       "Author.posts":[]
-    }
+    }]
 
 -
   name: "Add mutation with invalid reference"
@@ -133,7 +133,7 @@
   explanation: "The reference to the author node should be transformed to include
     a new 'posts' edge."
   dgraphmutation: |
-    { "uid" : "_:newnode",
+    [{ "uid" : "_:newnode",
       "dgraph.type" : ["Post"],
       "Post.title" : "Exciting post",
       "Post.text" : "A really good post",
@@ -141,14 +141,14 @@
         "uid" : "0x2",
         "Author.posts" : { "uid": "_:newnode" }
       }
-    }
+    }]
 
 -
   name: "Update mutation with variables"
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
-        post {
+        posts {
           postId
         }
       }
@@ -165,9 +165,9 @@
     }
   explanation: "The update patch should get rewritten into the Dgraph mutation"
   dgraphmutation: |
-    { "uid" : "0x123",
+    [{ "uid" : "0x123",
       "Post.text": "updated text"
-    }
+    }]
 
 -
   name: "Add mutation for a type that implements an interface"
@@ -191,13 +191,13 @@
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
-    { "uid" : "_:newnode",
+    [{ "uid" : "_:newnode",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
       "Human.female": true,
       "dgraph.type": ["Human", "Character", "Employee"]
-    }
+    }]
 
 
 -
@@ -205,7 +205,7 @@
   gqlmutation: |
     mutation updateHuman($patch: UpdateHumanInput!) {
       updateHuman(input: $patch) {
-        human {
+        humans {
           name
           dob
           female
@@ -227,19 +227,19 @@
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
-    { "uid" : "0x123",
+    [{ "uid" : "0x123",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
       "Human.female": true
-    }
+    }]
 
 -
   name: "Update mutation for an interface"
   gqlmutation: |
     mutation {
       updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
-        character {
+        characters {
           id
           name
         }
@@ -247,7 +247,7 @@
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
-    { "uid" : "0x123",
+    [{ "uid" : "0x123",
       "Character.name": "Bob"
-    }
+    }]
 
