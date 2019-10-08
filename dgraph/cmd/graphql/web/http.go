@@ -47,13 +47,13 @@ func GraphQLHTTPHandler(
 	queryRewriter dgraph.QueryRewriter,
 	mutationRewriter dgraph.MutationRewriter) http.Handler {
 
-	return api.WithRequestID(recoveryHandler(
+	return api.WithRequestID(recoveryHandler(commonHeaders(
 		&graphqlHandler{
 			schema:           schema,
 			dgraphClient:     dgraphClient,
 			queryRewriter:    queryRewriter,
 			mutationRewriter: mutationRewriter,
-		}))
+		})))
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved
