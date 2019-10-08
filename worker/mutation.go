@@ -559,37 +559,41 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 
 func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates included in this schema request.
-	preds := make(map[string]struct{}, len(m.Schema))
+	reqPredSet := make(map[string]struct{}, len(m.Schema))
 	for _, schemaUpdate := range m.Schema {
-		preds[schemaUpdate.Predicate] = struct{}{}
+		reqPredSet[schemaUpdate.Predicate] = struct{}{}
 	}
 
 	// Create a set of all the predicates already present in the schema.
-	schemaSet := make(map[string]struct{})
-	fields := make([]string, 0)
+	var fields []string
 	for _, t := range m.Types {
 		if len(t.TypeName) == 0 {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
+		if err := typeSanityCheck(t); err != nil {
+			return err
+		}
+
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if len(fieldName) > 0 && fieldName[0] == '~' {
+			if fieldName[0] == '~' {
 				fieldName = fieldName[1:len(fieldName)]
 			}
 
-			if _, ok := preds[fieldName]; !ok {
+			if _, ok := reqPredSet[fieldName]; !ok {
 				fields = append(fields, fieldName)
 			}
 		}
 	}
 
 	// Retrieve the schema for those predicates.
-	schs, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
+	schemas, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
 	if err != nil {
-		return errors.Errorf("Cannot retrieve predicate information")
+		return errors.Wrapf(err, "cannot retrieve predicate information")
 	}
-	for _, schemaNode := range schs {
+	schemaSet := make(map[string]struct{})
+	for _, schemaNode := range schemas {
 		schemaSet[schemaNode.Predicate] = struct{}{}
 	}
 
@@ -598,21 +602,17 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		// this request.
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if len(fieldName) > 0 && fieldName[0] == '~' {
+			if fieldName[0] == '~' {
 				fieldName = fieldName[1:len(fieldName)]
 			}
 
 			_, inSchema := schemaSet[fieldName]
-			_, inRequest := preds[fieldName]
+			_, inRequest := reqPredSet[fieldName]
 			if !inSchema && !inRequest {
 				return errors.Errorf(
 					"Schema does not contain a matching predicate for field %s in type %s",
 					field.Predicate, t.TypeName)
 			}
-		}
-
-		if err := typeSanityCheck(t); err != nil {
-			return err
 		}
 	}
 
