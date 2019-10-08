@@ -228,6 +228,7 @@ type Node {
 
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
+abbr                           : string .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
 film.film.initial_release_date : dateTime @index(year) .
@@ -264,6 +265,9 @@ previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
 number                         : int @index(int) .
+district                       : [uid] .
+state                          : [uid] .
+county                         : [uid] .
 firstName                      : string .
 lastName                       : string .
 `

@@ -210,11 +210,7 @@ func createSchema(attr string, typ types.TypeID) {
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
-	if err := checkType(update); err != nil {
-		return err
-	}
 	current := *update
-
 	schema.State().SetType(update.TypeName, current)
 	return updateType(update.TypeName, *update)
 }
@@ -321,32 +317,6 @@ func checkSchema(s *pb.SchemaUpdate) error {
 				" while there is data for pred: %s", s.Predicate)
 		}
 	}
-	return nil
-}
-
-func checkType(t *pb.TypeUpdate) error {
-	if len(t.TypeName) == 0 {
-		return errors.Errorf("Type name must be specified in type update")
-	}
-
-	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
-			return errors.Errorf("Field in type definition must have a name")
-		}
-
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
-			return errors.Errorf("Field with value type OBJECT must specify the name of the object type")
-		}
-
-		if field.Directive != pb.SchemaUpdate_NONE {
-			return errors.Errorf("Field in type definition cannot have a directive")
-		}
-
-		if len(field.Tokenizer) > 0 {
-			return errors.Errorf("Field in type definition cannot have tokenizers")
-		}
-	}
-
 	return nil
 }
 
@@ -551,6 +521,9 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
+	if err := verifyTypes(ctx, m); err != nil {
+		return tctx, err
+	}
 	mutationMap, err := populateMutationMap(m)
 	if err != nil {
 		return tctx, err
@@ -582,6 +555,92 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	}
 	close(resCh)
 	return tctx, e
+}
+
+func verifyTypes(ctx context.Context, m *pb.Mutations) error {
+	// Create a set of all the predicates included in this schema request.
+	reqPredSet := make(map[string]struct{}, len(m.Schema))
+	for _, schemaUpdate := range m.Schema {
+		reqPredSet[schemaUpdate.Predicate] = struct{}{}
+	}
+
+	// Create a set of all the predicates already present in the schema.
+	var fields []string
+	for _, t := range m.Types {
+		if len(t.TypeName) == 0 {
+			return errors.Errorf("Type name must be specified in type update")
+		}
+
+		if err := typeSanityCheck(t); err != nil {
+			return err
+		}
+
+		for _, field := range t.Fields {
+			fieldName := field.Predicate
+			if fieldName[0] == '~' {
+				fieldName = fieldName[1:]
+			}
+
+			if _, ok := reqPredSet[fieldName]; !ok {
+				fields = append(fields, fieldName)
+			}
+		}
+	}
+
+	// Retrieve the schema for those predicates.
+	schemas, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: fields})
+	if err != nil {
+		return errors.Wrapf(err, "cannot retrieve predicate information")
+	}
+	schemaSet := make(map[string]struct{})
+	for _, schemaNode := range schemas {
+		schemaSet[schemaNode.Predicate] = struct{}{}
+	}
+
+	for _, t := range m.Types {
+		// Verify all the fields in the type are already on the schema or come included in
+		// this request.
+		for _, field := range t.Fields {
+			fieldName := field.Predicate
+			if fieldName[0] == '~' {
+				fieldName = fieldName[1:]
+			}
+
+			_, inSchema := schemaSet[fieldName]
+			_, inRequest := reqPredSet[fieldName]
+			if !inSchema && !inRequest {
+				return errors.Errorf(
+					"Schema does not contain a matching predicate for field %s in type %s",
+					field.Predicate, t.TypeName)
+			}
+		}
+	}
+
+	return nil
+}
+
+// typeSanityCheck performs basic sanity checks on the given type update.
+func typeSanityCheck(t *pb.TypeUpdate) error {
+	for _, field := range t.Fields {
+		if len(field.Predicate) == 0 {
+			return errors.Errorf("Field in type definition must have a name")
+		}
+
+		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+			return errors.Errorf(
+				"Field with value type OBJECT must specify the name of the object type")
+		}
+
+		if field.Directive != pb.SchemaUpdate_NONE {
+			return errors.Errorf("Field in type definition cannot have a directive")
+		}
+
+		if len(field.Tokenizer) > 0 {
+			return errors.Errorf("Field in type definition cannot have tokenizers")
+		}
+	}
+
+	return nil
 }
 
 // CommitOverNetwork makes a proxy call to Zero to commit or abort a transaction.

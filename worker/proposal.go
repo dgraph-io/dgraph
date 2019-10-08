@@ -159,6 +159,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				return err
 			}
 		}
+
 		for _, schema := range proposal.Mutations.Schema {
 			if err := checkTablet(schema.Predicate); err != nil {
 				return err
@@ -167,11 +168,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				return err
 			}
 			noTimeout = true
-		}
-		for _, typ := range proposal.Mutations.Types {
-			if err := checkType(typ); err != nil {
-				return err
-			}
 		}
 	}
 
