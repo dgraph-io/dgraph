@@ -189,7 +189,6 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 
 //export ext_set_child_storage
 func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen int32) {
-	return
 }
 
 //export ext_get_child_storage_into

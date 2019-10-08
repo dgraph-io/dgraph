@@ -6,7 +6,6 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/ChainSafe/log15 v1.0.0
 	github.com/OneOfOne/xxhash v1.2.5
-	github.com/btcsuite/btcd v0.0.0-20190605094302-a0d1e3e36d50 // indirect
 	github.com/dgraph-io/badger v1.6.0-rc1
 	github.com/disiqueira/gotree v1.0.0
 	github.com/filecoin-project/go-leb128 v0.0.0-20190212224330-8d79a5489543
@@ -22,7 +21,6 @@ require (
 	github.com/libp2p/go-libp2p v0.2.0
 	github.com/libp2p/go-libp2p-core v0.0.6
 	github.com/libp2p/go-libp2p-kad-dht v0.1.1
-	github.com/libp2p/go-libp2p-peer v0.2.0
 	github.com/libp2p/go-libp2p-peerstore v0.1.2-0.20190621130618-cfa9bb890c1a // indirect
 	github.com/libp2p/go-libp2p-swarm v0.1.1 // indirect
 	github.com/mattn/go-isatty v0.0.9 // indirect

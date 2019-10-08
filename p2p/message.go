@@ -52,6 +52,7 @@ type Message interface {
 	Decode(io.Reader) error
 	String() string
 	GetType() int
+	Id() string
 }
 
 // DecodeMessage accepts a raw message including the type indicator byte and decodes it to its specific message type
@@ -127,10 +128,15 @@ func (sm *StatusMessage) Decode(r io.Reader) error {
 	return err
 }
 
+// Returns an empty string to ensure we don't rebroadcast it
+func (sm *StatusMessage) Id() string {
+	return ""
+}
+
 // for optionals, if first byte is 0, then it is None
 // otherwise it is Some
 type BlockRequestMessage struct {
-	Id            uint64
+	ID            uint64
 	RequestedData byte
 	StartingBlock []byte // first byte 0 = block hash (32 byte), first byte 1 = block number (int64)
 	EndBlockHash  *optional.Hash
@@ -145,7 +151,7 @@ func (bm *BlockRequestMessage) GetType() int {
 // String formats a BlockRequestMessage as a string
 func (bm *BlockRequestMessage) String() string {
 	return fmt.Sprintf("BlockRequestMessage Id=%d RequestedData=%d StartingBlock=0x%x EndBlockHash=0x%s Direction=%d Max=%s",
-		bm.Id,
+		bm.ID,
 		bm.RequestedData,
 		bm.StartingBlock,
 		bm.EndBlockHash.String(),
@@ -158,7 +164,7 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 	encMsg := []byte{BlockRequestMsgType}
 
 	encId := make([]byte, 8)
-	binary.LittleEndian.PutUint64(encId, bm.Id)
+	binary.LittleEndian.PutUint64(encId, bm.ID)
 	encMsg = append(encMsg, encId...)
 
 	encMsg = append(encMsg, bm.RequestedData)
@@ -198,7 +204,7 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	var err error
 
-	bm.Id, err = readUint64(r)
+	bm.ID, err = readUint64(r)
 	if err != nil {
 		return err
 	}
@@ -273,6 +279,11 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	return nil
 }
 
+// Id Returns the ID of the block
+func (bm *BlockRequestMessage) Id() string {
+	return string(bm.ID)
+}
+
 // BlockAnnounceMessage is a state block header
 type BlockAnnounceMessage common.BlockHeader
 
@@ -305,8 +316,22 @@ func (bm *BlockAnnounceMessage) Decode(r io.Reader) error {
 	return err
 }
 
+// Id returns the hash of the block
+func (bm *BlockAnnounceMessage) Id() string {
+	// scale encode each extrinsic
+	encMsg, err := bm.Encode()
+	if err != nil {
+		return ""
+	}
+	hash, err := common.Blake2bHash(encMsg)
+	if err != nil {
+		return ""
+	}
+	return hash.String()
+}
+
 type BlockResponseMessage struct {
-	Id   uint64
+	ID   uint64
 	Data []byte // TODO: change this to BlockData type
 }
 
@@ -316,7 +341,7 @@ func (bm *BlockResponseMessage) GetType() int {
 
 // String formats a BlockResponseMessage as a string
 func (bm *BlockResponseMessage) String() string {
-	return fmt.Sprintf("BlockResponseMessage Id=%d Data=%x", bm.Id, bm.Data)
+	return fmt.Sprintf("BlockResponseMessage Id=%d Data=%x", bm.ID, bm.Data)
 }
 
 // Encode encodes a block response message using SCALE and appends the type byte to the start
@@ -324,7 +349,7 @@ func (bm *BlockResponseMessage) Encode() ([]byte, error) {
 	encMsg := []byte{BlockResponseMsgType}
 
 	encId := make([]byte, 8)
-	binary.LittleEndian.PutUint64(encId, bm.Id)
+	binary.LittleEndian.PutUint64(encId, bm.ID)
 	encMsg = append(encMsg, encId...)
 
 	return append(encMsg, bm.Data...), nil
@@ -333,7 +358,7 @@ func (bm *BlockResponseMessage) Encode() ([]byte, error) {
 // Decodes the message into a BlockResponseMessage, it assumes the type byte has been removed
 func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 	var err error
-	bm.Id, err = readUint64(r)
+	bm.ID, err = readUint64(r)
 	if err != nil {
 		return err
 	}
@@ -348,6 +373,11 @@ func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// Id returns the Id of BlockResponseMessage
+func (bm *BlockResponseMessage) Id() string {
+	return string(bm.ID)
 }
 
 type TransactionMessage struct {
@@ -400,6 +430,20 @@ func (tm *TransactionMessage) Decode(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// Id returns the Hash of TransactionMessage
+func (tm *TransactionMessage) Id() string {
+	// scale encode each extrinsic
+	encMsg, err := tm.Encode()
+	if err != nil {
+		return ""
+	}
+	hash, err := common.Blake2bHash(encMsg)
+	if err != nil {
+		return ""
+	}
+	return hash.String()
 }
 
 func readByte(r io.Reader) (byte, error) {

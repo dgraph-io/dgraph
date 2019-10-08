@@ -103,7 +103,7 @@ func TestDecodeMessageBlockRequest(t *testing.T) {
 	}
 
 	expected := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: append([]byte{0}, genesisHash...),
 		EndBlockHash:  optional.NewHash(true, endBlock),
@@ -132,7 +132,7 @@ func TestDecodeMessageBlockResponse(t *testing.T) {
 	}
 
 	expected := &BlockResponseMessage{
-		Id:   7,
+		ID:   7,
 		Data: []byte{0},
 	}
 
@@ -204,7 +204,7 @@ func TestEncodeBlockRequestMessage_BlockHash(t *testing.T) {
 	}
 
 	bm := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: append([]byte{0}, genesisHash...),
 		EndBlockHash:  optional.NewHash(true, endBlock),
@@ -242,7 +242,7 @@ func TestEncodeBlockRequestMessage_BlockNumber(t *testing.T) {
 	}
 
 	bm := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: []byte{1, 1},
 		EndBlockHash:  optional.NewHash(true, endBlock),
@@ -288,7 +288,7 @@ func TestDecodeBlockRequestMessage_BlockNumber(t *testing.T) {
 	}
 
 	expected := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: []byte{1, 1, 0, 0, 0, 0, 0, 0, 0},
 		EndBlockHash:  optional.NewHash(true, endBlock),
@@ -322,7 +322,7 @@ func TestEncodeBlockRequestMessage_NoOptionals(t *testing.T) {
 	}
 
 	bm := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: append([]byte{0}, genesisHash...),
 		EndBlockHash:  optional.NewHash(false, common.Hash{}),
@@ -361,7 +361,7 @@ func TestDecodeBlockRequestMessage_NoOptionals(t *testing.T) {
 	}
 
 	expected := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: append([]byte{0}, genesisHash...),
 		EndBlockHash:  optional.NewHash(false, common.Hash{}),
@@ -383,7 +383,7 @@ func TestEncodeBlockResponseMessage(t *testing.T) {
 	}
 
 	bm := &BlockResponseMessage{
-		Id:   7,
+		ID:   7,
 		Data: []byte{0},
 	}
 
@@ -413,7 +413,7 @@ func TestDecodeBlockResponseMessage(t *testing.T) {
 	}
 
 	expected := &BlockResponseMessage{
-		Id:   7,
+		ID:   7,
 		Data: []byte{0},
 	}
 

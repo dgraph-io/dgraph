@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -190,7 +191,7 @@ func TestSend(t *testing.T) {
 	}
 
 	bm := &BlockRequestMessage{
-		Id:            7,
+		ID:            7,
 		RequestedData: 1,
 		StartingBlock: []byte{1, 1},
 		EndBlockHash:  optional.NewHash(true, endBlock),
@@ -213,4 +214,129 @@ func TestSend(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("Did not receive message from %s", sa.hostAddr)
 	}
+}
+
+func TestGossiping(t *testing.T) {
+
+	//Start node A
+	nodeConfigA := &Config{
+		BootstrapNodes: nil,
+		Port:           7000,
+		NoBootstrap:    true,
+		NoMdns:         true,
+	}
+
+	nodeA, err := NewService(nodeConfigA, nil)
+	if err != nil {
+		t.Fatalf("Could not start p2p service: %s", err)
+	}
+
+	defer nodeA.Stop()
+
+	nodeA_Addr := nodeA.FullAddrs()[0]
+
+	//Start node B
+	nodeConfigB := &Config{
+		BootstrapNodes: []string{
+			nodeA_Addr.String(),
+		},
+		Port:   7001,
+		NoMdns: true,
+	}
+
+	msgChanB := make(chan Message)
+	nodeB, err := NewService(nodeConfigB, msgChanB)
+	if err != nil {
+		t.Fatalf("Could not start p2p service: %s", err)
+	}
+
+	defer nodeB.Stop()
+
+	nodeB_Addr := nodeB.FullAddrs()[0]
+
+	//Connect node A & node B
+	err = nodeB.bootstrapConnect()
+	if err != nil {
+		t.Errorf("Start error :%s", err)
+	}
+
+	//Start node C
+	nodeConfigC := &Config{
+		BootstrapNodes: []string{
+			nodeB_Addr.String(),
+		},
+		Port:   7002,
+		NoMdns: true,
+	}
+
+	msgChanC := make(chan Message)
+	nodeC, err := NewService(nodeConfigC, msgChanC)
+	if err != nil {
+		t.Fatalf("Could not start p2p service: %s", err)
+	}
+
+	defer nodeC.Stop()
+
+	//Connect node B & node C
+	err = nodeC.bootstrapConnect()
+	if err != nil {
+		t.Errorf("Start error :%s", err)
+	}
+
+	// Meaningless hash
+	endBlock, err := common.HexToHash("0xfd19d9ebac759c993fd2e05a1cff9e757d8741c2704c8682c15b5503496b6aa1")
+	if err != nil {
+		t.Errorf("Can't convert hex to hash")
+	}
+
+	// Create mock BlockRequestMessage to broadcast
+	bm := &BlockRequestMessage{
+		ID:            7,
+		RequestedData: 1,
+		StartingBlock: []byte{1, 1},
+		EndBlockHash:  optional.NewHash(true, endBlock),
+		Direction:     1,
+		Max:           optional.NewUint32(true, 1),
+	}
+
+	nodeA.Broadcast(bm)
+
+	// Check returned values from channels in the 2 other nodes
+	select {
+	case res := <-msgChanB:
+		bmEnc, err := bm.Encode()
+		if err != nil {
+			t.Fatalf("Can't decode original message")
+		}
+		resEnc, err := res.Encode()
+		if err != nil {
+			t.Fatalf("Can't decode returned message")
+		}
+
+		// Compare the byte arrays of the original & returned message
+		if !reflect.DeepEqual(bmEnc, resEnc) {
+			t.Fatalf("Didn't receive the correct message")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Did not receive message from %s", nodeA.hostAddr)
+	}
+	select {
+	case res := <-msgChanC:
+		bmEnc, err := bm.Encode()
+		if err != nil {
+			t.Fatalf("Can't decode original message")
+		}
+		resEnc, err := res.Encode()
+		if err != nil {
+			t.Fatalf("Can't decode returned message")
+		}
+
+		// Compare the byte arrays of the original & returned message
+		if !reflect.DeepEqual(bmEnc, resEnc) {
+			t.Fatalf("Didn't receive the correct message")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Did not receive message from %s", nodeB.hostAddr)
+	}
+
 }
