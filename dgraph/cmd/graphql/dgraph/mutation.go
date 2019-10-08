@@ -26,14 +26,14 @@ import (
 )
 
 const (
-	createdNode            = "newnode"
-	deleteMutationQueryVar = "x"
-	deleteUidVarMutation   = `uid(x) * * .`
+	createdNode          = "newnode"
+	mutationQueryVar     = "x"
+	deleteUidVarMutation = `uid(x) * * .`
 )
 
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
 type MutationRewriter interface {
-	Rewrite(m schema.Mutation) (interface{}, error)
+	Rewrite(m schema.Mutation) (string, interface{}, error)
 	RewriteDelete(m schema.Mutation) (string, string, error)
 }
 
@@ -74,11 +74,11 @@ func NewMutationRewriter() MutationRewriter {
 //   "Author.country": { "uid": "0x123" },
 //   "Author.posts":[]
 // }
-func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
-
+func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (string, interface{}, error) {
+	query := ""
 	if m.MutationType() != schema.AddMutation &&
 		m.MutationType() != schema.UpdateMutation {
-		return nil,
+		return query, nil,
 			errors.Errorf(
 				"internal error - call to build Dgraph mutation for %s mutation type",
 				m.MutationType())
@@ -125,10 +125,21 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 			uids, err := getUpdUIDs(m)
 			if err != nil {
-				return nil, err
+				return query, nil, err
 			}
-			for _, uid := range uids {
-				srcUIDs = append(srcUIDs, fmt.Sprintf("%#x", uid))
+			if uids == nil {
+				// If the user didn't supply the ids filter, but supplied other filters we
+				// construct a query from those.
+				gqlQuery := rewriteMutationAsQuery(m)
+				gqlQuery.Children = append(gqlQuery.Children, &gql.GraphQuery{
+					Attr: "uid",
+				})
+				query = asString(gqlQuery)
+				srcUIDs = []string{fmt.Sprintf("uid(%s)", mutationQueryVar)}
+			} else {
+				for _, uid := range uids {
+					srcUIDs = append(srcUIDs, fmt.Sprintf("%#x", uid))
+				}
 			}
 		}
 
@@ -136,7 +147,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		for _, srcUID := range srcUIDs {
 			obj, err := rewriteObject(mutatedType, nil, srcUID, val)
 			if err != nil {
-				return nil, err
+				return query, nil, err
 			}
 
 			obj["uid"] = srcUID
@@ -148,7 +159,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 			res = append(res, obj)
 		}
 
-		return res, nil
+		return query, res, nil
 	case []interface{}:
 		// TODO: we don't yet have a bulk mutation that takes a list of mutations
 		// like
@@ -159,11 +170,11 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		//
 		// GraphQL validation means we shouldn't get here till those bulk mutations
 		// are added to the schema.
-		return nil,
+		return query, nil,
 			errors.New("call to build a list of mutations, but that isn't supported yet")
 	}
 
-	return nil,
+	return query, nil,
 		errors.New(
 			"tried to build Dgraph mutation with input of unrecognized type; " +
 				"this indicates a GraphQL validation error")
@@ -172,7 +183,7 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
-		Var:  deleteMutationQueryVar,
+		Var:  mutationQueryVar,
 		Attr: m.ResponseName(),
 	}
 

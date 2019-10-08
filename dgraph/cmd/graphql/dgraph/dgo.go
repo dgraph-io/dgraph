@@ -19,6 +19,7 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -43,6 +44,7 @@ import (
 type Client interface {
 	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
+	ConditionalMutate(ctx context.Context, query string, mutation interface{}) ([]byte, error)
 	DeleteNodes(ctx context.Context, query, mutation string) error
 }
 
@@ -104,6 +106,32 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 
 	resp, err := dg.client.NewTxn().Mutate(ctx, mu)
 	return resp.GetUids(), schema.GQLWrapf(err, "couldn't execute mutation")
+}
+
+func (dg *dgraph) ConditionalMutate(ctx context.Context,
+	query string,
+	mutation interface{}) ([]byte, error) {
+	b, err := json.Marshal(mutation)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't marshal mutation")
+	}
+
+	if glog.V(3) {
+		glog.Infof("[%s] Executing Dgraph upsert : \n%s\nwith set - %s\n",
+			api.RequestID(ctx), query, string(b))
+	}
+
+	req := &dgoapi.Request{
+		Query:     query,
+		CommitNow: true,
+		Mutations: []*dgoapi.Mutation{{
+			SetJson: b,
+		}},
+	}
+
+	resp, err := dg.client.NewTxn().Do(ctx, req)
+	fmt.Println("json: ", resp.GetJson())
+	return resp.GetJson(), err
 }
 
 // DeleteNodes deletes nodes from the graph based on the result of the filter query.

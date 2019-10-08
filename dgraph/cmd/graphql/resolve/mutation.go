@@ -19,6 +19,7 @@ package resolve
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -120,12 +121,11 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	var mutationSucceeded bool
 	switch mr.mutation.MutationType() {
 	case schema.AddMutation:
-		res, mutationSucceeded = mr.resolveMutation(ctx)
+		res, mutationSucceeded = mr.resolveAddMutation(ctx)
 	case schema.DeleteMutation:
 		res, mutationSucceeded = mr.resolveDeleteMutation(ctx)
 	case schema.UpdateMutation:
-		// TODO: this should typecheck the input before resolving (like delete does)
-		res, mutationSucceeded = mr.resolveMutation(ctx)
+		res, mutationSucceeded = mr.resolveUpdateMutation(ctx)
 	default:
 		return &resolved{
 			err: gqlerror.Errorf(
@@ -146,7 +146,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	return res, mutationSucceeded
 }
 
-func (mr *mutationResolver) resolveMutation(ctx context.Context) (*resolved, bool) {
+func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) (*resolved, bool) {
 	res := &resolved{}
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveMutation")
@@ -156,7 +156,50 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) (*resolved, boo
 			mr.mutation.MutationType())
 	}
 
-	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	query, mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	if err != nil {
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
+		return res, mutationFailed
+	}
+
+	resp, err := mr.dgraph.ConditionalMutate(ctx, query, mut)
+	if err != nil {
+		res.err = schema.GQLWrapLocationf(err,
+			mr.mutation.Location(),
+			"mutation %s failed", mr.mutation.Name())
+		return res, mutationFailed
+	}
+	fmt.Println("resp: ", string(resp))
+
+	// dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
+	// if err != nil {
+	// 	res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
+	// 		mr.mutation.Name())
+	// 	return res, mutationSucceeded
+	// }
+
+	// resp, err := mr.dgraph.Query(ctx, dgQuery)
+	// if err != nil {
+	// 	res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+	// 		mr.mutation.Name())
+	// 	return res, mutationSucceeded
+	// }
+
+	// res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
+	return res, mutationSucceeded
+}
+
+func (mr *mutationResolver) resolveAddMutation(ctx context.Context) (*resolved, bool) {
+	res := &resolved{}
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveMutation")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
+			mr.mutation.MutationType())
+	}
+
+	_, mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
 		return res, mutationFailed

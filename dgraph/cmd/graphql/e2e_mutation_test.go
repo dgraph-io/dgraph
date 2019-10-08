@@ -387,7 +387,6 @@ func nameRegexFilter(name string) map[string]interface{} {
 }
 
 func TestUpdateMutationByName(t *testing.T) {
-	t.Skip()
 	// Create two countries, update name of the first. Then do a conditional mutation which
 	// should only update the name of the second country.
 	newCountry := addCountry(t)
