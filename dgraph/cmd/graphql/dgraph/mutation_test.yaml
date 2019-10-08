@@ -148,7 +148,7 @@
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
-        posts {
+        post {
           postId
         }
       }
@@ -205,7 +205,7 @@
   gqlmutation: |
     mutation updateHuman($patch: UpdateHumanInput!) {
       updateHuman(input: $patch) {
-        humans {
+        human {
           name
           dob
           female
@@ -239,7 +239,7 @@
   gqlmutation: |
     mutation {
       updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
-        characters {
+        character {
           id
           name
         }
