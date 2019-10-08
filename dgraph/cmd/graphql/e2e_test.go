@@ -218,6 +218,11 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
+	// Cors headers should be set
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
+	}
+
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
