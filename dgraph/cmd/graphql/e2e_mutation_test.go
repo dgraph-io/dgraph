@@ -446,7 +446,6 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 }
 
 func updateCountryByName(t *testing.T, filter map[string]interface{}, updCountry *country) {
-	t.Skip()
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
 			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
