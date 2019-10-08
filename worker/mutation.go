@@ -578,7 +578,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
 			if fieldName[0] == '~' {
-				fieldName = fieldName[1:len(fieldName)]
+				fieldName = fieldName[1:]
 			}
 
 			if _, ok := reqPredSet[fieldName]; !ok {
@@ -603,7 +603,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
 			if fieldName[0] == '~' {
-				fieldName = fieldName[1:len(fieldName)]
+				fieldName = fieldName[1:]
 			}
 
 			_, inSchema := schemaSet[fieldName]
