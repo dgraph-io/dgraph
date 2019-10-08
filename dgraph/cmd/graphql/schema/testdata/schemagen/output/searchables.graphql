@@ -200,7 +200,7 @@ input PostRef {
 }
 
 input UpdatePostInput {
-	postID: ID!
+	filter: PostFilter!
 	patch: PatchPost!
 }
 

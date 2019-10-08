@@ -394,7 +394,7 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -402,7 +402,13 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.InputObject,
 		Name: "Update" + defn.Name + "Input",
 		Fields: append(
-			getIDField(defn),
+			ast.FieldList{&ast.FieldDefinition{
+				Name: "filter",
+				Type: &ast.Type{
+					NamedType: defn.Name + "Filter",
+					NonNull:   true,
+				},
+			}},
 			&ast.FieldDefinition{
 				Name: "patch",
 				Type: &ast.Type{
@@ -415,7 +421,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addPatchType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -782,7 +788,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 

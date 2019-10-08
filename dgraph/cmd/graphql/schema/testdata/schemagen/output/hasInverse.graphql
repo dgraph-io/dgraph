@@ -157,12 +157,12 @@ input PostRef {
 }
 
 input UpdateAuthorInput {
-	id: ID!
+	filter: AuthorFilter!
 	patch: PatchAuthor!
 }
 
 input UpdatePostInput {
-	id: ID!
+	filter: PostFilter!
 	patch: PatchPost!
 }
 

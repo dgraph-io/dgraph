@@ -141,7 +141,7 @@ input PatchMessage {
 }
 
 input UpdateMessageInput {
-	id: ID!
+	filter: MessageFilter!
 	patch: PatchMessage!
 }
 

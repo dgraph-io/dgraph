@@ -181,7 +181,7 @@ input PostOrder {
 }
 
 input UpdateAuthorInput {
-	id: ID
+	filter: AuthorFilter!
 	patch: PatchAuthor!
 }
 

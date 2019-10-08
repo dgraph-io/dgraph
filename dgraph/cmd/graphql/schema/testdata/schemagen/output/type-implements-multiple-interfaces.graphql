@@ -208,12 +208,12 @@ input PatchHuman {
 }
 
 input UpdateCharacterInput {
-	id: ID!
+	filter: CharacterFilter!
 	patch: PatchCharacter!
 }
 
 input UpdateHumanInput {
-	id: ID!
+	filter: HumanFilter!
 	patch: PatchHuman!
 }
 

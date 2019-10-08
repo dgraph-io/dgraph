@@ -309,22 +309,22 @@ input StarshipRef {
 }
 
 input UpdateCharacterInput {
-	id: ID!
+	filter: CharacterFilter!
 	patch: PatchCharacter!
 }
 
 input UpdateDroidInput {
-	id: ID!
+	filter: DroidFilter!
 	patch: PatchDroid!
 }
 
 input UpdateHumanInput {
-	id: ID!
+	filter: HumanFilter!
 	patch: PatchHuman!
 }
 
 input UpdateStarshipInput {
-	id: ID!
+	filter: StarshipFilter!
 	patch: PatchStarship!
 }
 

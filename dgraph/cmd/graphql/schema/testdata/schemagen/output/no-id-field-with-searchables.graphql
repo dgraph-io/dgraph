@@ -104,6 +104,10 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input PatchPost {
+	content: String
+}
+
 input PostFilter {
 	content: StringTermFilter
 	and: PostFilter
@@ -121,6 +125,11 @@ input PostOrder {
 	then: PostOrder
 }
 
+input UpdatePostInput {
+	filter: PostFilter!
+	patch: PatchPost!
+}
+
 #######################
 # Generated Query
 #######################
@@ -135,5 +144,6 @@ type Query {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
