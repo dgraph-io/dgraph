@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +211,11 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 	// GraphQL server should always return OK, even when there are errors
 	if status := resp.StatusCode; status != http.StatusOK {
 		return nil, errors.Errorf("unexpected status code: %v", status)
+	}
+
+	// GraphQL server should always set "Content-Type" to "application/json"
+	if strings.ToLower(resp.Header.Get("Content-Type")) != "application/json" {
+		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
 	defer resp.Body.Close()
