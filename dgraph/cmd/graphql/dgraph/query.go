@@ -117,12 +117,13 @@ func (qr *queryRewriter) FromMutationResult(
 		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
 
 	case schema.UpdateMutation:
-		uid, err := getUpdUID(gqlMutation)
+		uid, err := getUpdUIDs(gqlMutation)
 		if err != nil {
 			return nil, err
 		}
 
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
+		// HACK HACK
+		return rewriteAsGet(gqlMutation.QueryField(), uid[0]), nil
 
 	default:
 		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",

@@ -373,7 +373,7 @@ func TestUpdateMutation(t *testing.T) {
 func updateCountry(t *testing.T, updCountry *country) {
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($id: ID!, $newName: String!) {
-			updateCountry(input: { id: $id, patch: { name: $newName } }) {
+			updateCountry(input: { filter: { ids: [$id] }, patch: { name: $newName } }) {
 				country {
 					id
 					name
@@ -933,7 +933,9 @@ func updateCharacter(t *testing.T, id string) {
 			}
 		}`,
 		Variables: map[string]interface{}{"character": map[string]interface{}{
-			"id": id,
+			"filter": map[string]interface{}{
+				"ids": []string{id},
+			},
 			"patch": map[string]interface{}{
 				"name": "Han Solo",
 			},

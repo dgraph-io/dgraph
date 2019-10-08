@@ -110,23 +110,25 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		if m.MutationType() == schema.AddMutation {
 			srcUID = "_:" + createdNode
 		} else {
+			// TODO - Update this comment below to reflect new filters.
 			// must be schema.UpdateMutation, so the mutation payload came in like
 			// { id: 0x123, patch { ... the actual changes ... } }
 			// it's that "patch" object that needs to be built into the mutation.
 			//
 			// Patch can't be nil, schema gen builds updates with inputs like
 			// input UpdateAuthorInput {
-			// 	id: ID!
+			// 	filter: AuthorFilter!
 			// 	patch: PatchAuthor!
 			// }
 			// If patch were nil, validation would have failed.
 			val = val["patch"].(map[string]interface{})
 
-			uid, err := getUpdUID(m)
+			uids, err := getUpdUIDs(m)
 			if err != nil {
 				return nil, err
 			}
-			srcUID = fmt.Sprintf("%#x", uid)
+			// HACK HACK - Fix it.
+			srcUID = fmt.Sprintf("%#x", uids[0])
 		}
 
 		res, err := rewriteObject(mutatedType, nil, srcUID, val)
@@ -194,22 +196,31 @@ func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mut
 	return query, mutation, nil
 }
 
-func getUpdUID(m schema.Mutation) (uint64, error) {
+func getUpdUIDs(m schema.Mutation) ([]uint64, error) {
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
-	idArg := val[m.MutatedType().IDField().Name()]
+	filter := val[schema.FilterArgName].(map[string]interface{})
+	idArg := filter["ids"].([]interface{})
 
-	return asUID(idArg)
+	return asUIDs(idArg)
 }
 
-func asUID(val interface{}) (uint64, error) {
-	id, ok := val.(string)
-	uid, err := strconv.ParseUint(id, 0, 64)
-
-	if !ok || err != nil {
-		return 0, errors.Errorf("ID argument (%s) was not able to be parsed", id)
+func asUIDs(vals []interface{}) ([]uint64, error) {
+	if vals == nil {
+		return nil, nil
 	}
 
-	return uid, nil
+	uids := make([]uint64, 0, len(vals))
+	for _, val := range vals {
+		id, ok := val.(string)
+		uid, err := strconv.ParseUint(id, 0, 64)
+
+		if !ok || err != nil {
+			return nil, errors.Errorf("ID argument (%s) was not able to be parsed", id)
+		}
+		uids = append(uids, uid)
+	}
+
+	return uids, nil
 }
 
 // We are processing a mutation and got to an object obj like
@@ -284,7 +295,7 @@ func rewriteObject(
 			if fieldDef.IsID() {
 				fieldName = "uid"
 
-				_, err := asUID(val)
+				_, err := asUIDs([]interface{}{val})
 				if err != nil {
 					return nil, err
 				}

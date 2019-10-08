@@ -52,6 +52,7 @@ const (
 	IDType                            = "ID"
 	IDArgName                         = "id"
 	InputArgName                      = "input"
+	FilterArgName                     = "filter"
 )
 
 // Schema represents a valid GraphQL schema

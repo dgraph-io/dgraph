@@ -155,7 +155,9 @@
     }
   gqlvariables: |
     { "patch":
-      { "postID": "0x123",
+      { "filter": {
+          "ids": ["0x123"]
+        },
         "patch": {
           "text": "updated text"
         }
@@ -213,7 +215,9 @@
   gqlvariables: |
     { "patch":
       {
-        "id": "0x123",
+        "filter": {
+          "ids": ["0x123"]
+        },
         "patch": { "name": "Bob",
           "dob": "2000-01-01",
           "female": true,
@@ -234,7 +238,7 @@
   name: "Update mutation for an interface"
   gqlmutation: |
     mutation {
-      updateCharacter(input: {id: "0x123", patch: {name:"Bob"}}) {
+      updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
         character {
           id
           name

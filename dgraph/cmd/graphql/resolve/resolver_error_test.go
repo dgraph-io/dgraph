@@ -297,7 +297,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 
 func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		updatePost(input: { id: "0x1", patch: { text: "Some more text" } }) {
+		updatePost(input: { filter: { ids: ["0x1"] }, patch: { text: "Some more text" } }) {
 			post {
 				title
 				text
@@ -388,7 +388,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			add2: addPost(input: {title: "A Post", text: "Some text", author: {id: $id}}) {
 				post { title }
 			}
-			
+
 			add3: addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
 				post { title }
 			}
