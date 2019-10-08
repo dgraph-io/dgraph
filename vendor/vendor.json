@@ -519,10 +519,16 @@
 			"revisionTime": "2019-09-19T14:32:58Z"
 		},
 		{
-			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",
+			"checksumSHA1": "f02sF4ckmaWVlh+JhGm4pHm8CnY=",
+			"path": "github.com/dgraph-io/ristretto",
+			"revision": "f823dc4a5031a0404648c7e004c65d37bdf3f38d",
+			"revisionTime": "2019-10-04T19:56:02Z"
+		},
+		{
+			"checksumSHA1": "fp+NtBZPTvGfWtsxZWUQct/e0ZM=",
 			"path": "github.com/dgraph-io/ristretto/z",
-			"revision": "eb48d2f7ca30f7560340ff99eccf24c756d42c2b",
-			"revisionTime": "2019-09-03T06:43:22Z"
+			"revision": "884587df5238b905fdf4762d8f270afdd03c80ab",
+			"revisionTime": "2019-09-25T17:03:43Z"
 		},
 		{
 			"checksumSHA1": "blOHP3HPYU+IeV6yWCalQuuM+zE=",

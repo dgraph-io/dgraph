@@ -18,23 +18,23 @@ package z
 
 // KeyToHash interprets the type of key and converts it to a uint64 hash.
 func KeyToHash(key interface{}) uint64 {
-	switch key.(type) {
+	switch k := key.(type) {
 	case uint64:
-		return key.(uint64)
+		return k
 	case string:
-		return MemHashString(key.(string))
+		return MemHashString(k)
 	case []byte:
-		return MemHash(key.([]byte))
+		return MemHash(k)
 	case byte:
-		return MemHash([]byte{key.(byte)})
+		return MemHash([]byte{k})
 	case int:
-		return uint64(key.(int))
+		return uint64(k)
 	case int32:
-		return uint64(key.(int32))
+		return uint64(k)
 	case uint32:
-		return uint64(key.(uint32))
+		return uint64(k)
 	case int64:
-		return uint64(key.(int64))
+		return uint64(k)
 	default:
 		panic("Key type not supported")
 	}
