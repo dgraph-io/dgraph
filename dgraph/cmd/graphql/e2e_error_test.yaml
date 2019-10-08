@@ -14,15 +14,13 @@
   name: "Unknown field"
   gqlrequest: |
     query {
-      getAuthor(id: "0x1") { 
-        namezzz 
-      }
+      getAuthor(id: "0x1") { namezzz }
     }
   gqlvariables: 
     { }
   errors:
     [ { "message": "Cannot query field \"namezzz\" on type \"Author\". Did you mean \"name\"?",
-      "locations": [ { "line": 3, "column": 5 } ] } ]
+      "locations": [ { "line": 2, "column": 26 } ] } ]
 
 -
   name: "Undefined variable"
@@ -49,7 +47,7 @@
       "locations": [ { "line": 2, "column": 44 } ] } ]
 
 -
-  name: "unkown variable type"
+  name: "unknown variable type"
   gqlrequest: |
     query queryAuthor($filter: AuthorFiltarzzz!) {
       queryAuthor(filter: $filter) { name }
