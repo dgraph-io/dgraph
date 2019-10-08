@@ -19,7 +19,6 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -130,7 +129,6 @@ func (dg *dgraph) ConditionalMutate(ctx context.Context,
 	}
 
 	resp, err := dg.client.NewTxn().Do(ctx, req)
-	fmt.Println("json: ", resp.GetJson())
 	return resp.GetJson(), err
 }
 
