@@ -150,7 +150,7 @@ func TestSend(t *testing.T) {
 		Port:        7005,
 	}
 
-	msgChan := make(chan Message)
+	msgChan := make(chan []byte)
 	sb, err := NewService(testServiceConfigB, msgChan)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
@@ -244,7 +244,7 @@ func TestGossiping(t *testing.T) {
 		NoMdns: true,
 	}
 
-	msgChanB := make(chan Message)
+	msgChanB := make(chan []byte)
 	nodeB, err := NewService(nodeConfigB, msgChanB)
 	if err != nil {
 		t.Fatalf("Could not start p2p service: %s", err)
@@ -269,7 +269,7 @@ func TestGossiping(t *testing.T) {
 		NoMdns: true,
 	}
 
-	msgChanC := make(chan Message)
+	msgChanC := make(chan []byte)
 	nodeC, err := NewService(nodeConfigC, msgChanC)
 	if err != nil {
 		t.Fatalf("Could not start p2p service: %s", err)
@@ -308,13 +308,9 @@ func TestGossiping(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Can't decode original message")
 		}
-		resEnc, err := res.Encode()
-		if err != nil {
-			t.Fatalf("Can't decode returned message")
-		}
 
 		// Compare the byte arrays of the original & returned message
-		if !reflect.DeepEqual(bmEnc, resEnc) {
+		if !reflect.DeepEqual(bmEnc, res) {
 			t.Fatalf("Didn't receive the correct message")
 		}
 	case <-time.After(10 * time.Second):
@@ -326,13 +322,9 @@ func TestGossiping(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Can't decode original message")
 		}
-		resEnc, err := res.Encode()
-		if err != nil {
-			t.Fatalf("Can't decode returned message")
-		}
 
 		// Compare the byte arrays of the original & returned message
-		if !reflect.DeepEqual(bmEnc, resEnc) {
+		if !reflect.DeepEqual(bmEnc, res) {
 			t.Fatalf("Didn't receive the correct message")
 		}
 	case <-time.After(10 * time.Second):

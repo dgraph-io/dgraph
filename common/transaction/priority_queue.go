@@ -19,6 +19,9 @@ func (q *PriorityQueue) Pop() *ValidTransaction {
 }
 
 func (q *PriorityQueue) Peek() *ValidTransaction {
+	if q.head == nil {
+		return nil
+	}
 	return q.head.data
 }
 

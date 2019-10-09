@@ -50,7 +50,7 @@ type Service struct {
 	dhtConfig        kaddht.BootstrapConfig
 	bootstrapNodes   []peer.AddrInfo
 	mdns             discovery.Service
-	msgChan          chan<- Message
+	msgChan          chan<- []byte
 	noBootstrap      bool
 	blockReqRec      map[string]bool
 	blockRespRec     map[string]bool
@@ -59,7 +59,7 @@ type Service struct {
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
-func NewService(conf *Config, msgChan chan<- Message) (*Service, error) {
+func NewService(conf *Config, msgChan chan<- []byte) (*Service, error) {
 	ctx := context.Background()
 	opts, err := conf.buildOpts()
 	if err != nil {
@@ -180,6 +180,10 @@ func (s *Service) Stop() <-chan error {
 	err = s.dht.Close()
 	if err != nil {
 		e <- err
+	}
+
+	if s.msgChan != nil {
+		close(s.msgChan)
 	}
 
 	return e
@@ -352,7 +356,7 @@ func (s *Service) handleStream(stream net.Stream) {
 	}
 
 	// read entire message
-	rawMsg, err := rw.Reader.Peek(int(length) - 1)
+	rawMsg, err := rw.Reader.Peek(int(length))
 	if err != nil {
 		log.Error("failed to read message", "err", err)
 		return
@@ -369,6 +373,8 @@ func (s *Service) handleStream(stream net.Stream) {
 
 	log.Debug("got message", "peer", stream.Conn().RemotePeer(), "type", msgType, "msg", msg.String())
 
+	s.msgChan <- rawMsg
+
 	// Rebroadcast all messages except for status messages
 	if msg.GetType() != StatusMsgType {
 		err = s.Broadcast(msg)
@@ -377,8 +383,6 @@ func (s *Service) handleStream(stream net.Stream) {
 			return
 		}
 	}
-
-	s.msgChan <- msg
 }
 
 // Peers returns connected peers

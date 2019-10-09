@@ -16,13 +16,13 @@ type Config struct {
 	// Peers used for bootstrapping
 	BootstrapNodes []string
 	// Listening port
-	Port           int
+	Port int
 	// If 0, random host ID will be generated; If non-0, deterministic ID will be produced
-	RandSeed       int64
+	RandSeed int64
 	// Disable bootstrapping altogether. BootstrapNodes has no effect over this.
-	NoBootstrap    bool
+	NoBootstrap bool
 	// Disables MDNS discovery
-	NoMdns         bool
+	NoMdns bool
 }
 
 func (c *Config) buildOpts() ([]libp2p.Option, error) {
