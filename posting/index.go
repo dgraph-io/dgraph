@@ -395,7 +395,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
+	// This following call is pretty slow.
+	// ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err

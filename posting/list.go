@@ -22,7 +22,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"sync"
 
 	"github.com/dgryski/go-farm"
 
@@ -280,7 +279,8 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	p := postingPool.Get().(*pb.Posting)
+	p := new(pb.Posting)
+	// p := postingPool.Get().(*pb.Posting)
 	*p = pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
@@ -396,25 +396,25 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
-var postingPool = &sync.Pool{
-	New: func() interface{} {
-		return &pb.Posting{}
-	},
-}
+// var postingPool = &sync.Pool{
+// 	New: func() interface{} {
+// 		return &pb.Posting{}
+// 	},
+// }
 
-func (l *List) release() {
-	fromList := func(list *pb.PostingList) {
-		for _, p := range list.GetPostings() {
-			postingPool.Put(p)
-		}
-	}
-	fromList(l.plist)
-	for _, plist := range l.mutationMap {
-		fromList(plist)
-	}
-	l.plist = nil
-	l.mutationMap = nil
-}
+// func (l *List) release() {
+// 	fromList := func(list *pb.PostingList) {
+// 		for _, p := range list.GetPostings() {
+// 			postingPool.Put(p)
+// 		}
+// 	}
+// 	fromList(l.plist)
+// 	for _, plist := range l.mutationMap {
+// 		fromList(plist)
+// 	}
+// 	l.plist = nil
+// 	l.mutationMap = nil
+// }
 
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
@@ -437,6 +437,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		mpost.Uid = t.ValueId
 	}
 	l.updateMutationLayer(mpost)
+	return nil
+	// HACK: Skip conflict key detection.
 
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta

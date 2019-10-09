@@ -18,7 +18,6 @@ package edgraph
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -524,9 +523,13 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	}
 
 	m := &pb.Mutations{Edges: edges, StartTs: req.StartTs}
-	span.Annotatef(nil, "Applying mutations: %+v", m)
+	if span != nil {
+		span.Annotatef(nil, "Applying mutations: %+v", m)
+	}
 	resp.Txn, err = query.ApplyMutations(ctx, m)
-	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+	if span != nil {
+		span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+	}
 	if !req.CommitNow {
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
@@ -589,7 +592,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	upsertQuery := req.Query
 	needVars := findVars(gmu)
 	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
-	varName := fmt.Sprintf("__dgraph%d__", rand.Int())
+	varName := "__dgraph" + string(rand.Int()) + "__"
+	// varName := fmt.Sprintf("__dgraph%d__", rand.Int())
 	if isCondUpsert {
 		// @if in upsert is same as @filter in the query
 		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)

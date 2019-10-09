@@ -113,11 +113,12 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 // Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
-	defer func() {
-		if err := w.db.Sync(); err != nil {
-			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
-		}
-	}()
+	// HACK: Do not call sync.
+	// defer func() {
+	// if err := w.db.Sync(); err != nil {
+	// 	glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
+	// }
+	// }()
 	w.wg.Wait()
 	select {
 	case err := <-w.che:
