@@ -512,7 +512,9 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		return resp, err
 	}
 	parsingTime += l.Parsing
-	if len(varToUID) > 0 {
+	if x.IsDebugRequest(ctx) && len(varToUID) > 0 {
+		// There could be a lot of these uids which could blow up the response size, specially for
+		// bulk mutations, hence only return them when Debug is set to true.
 		resp.Mutated = make(map[string]*api.Uids, len(varToUID))
 		for v, uids := range varToUID {
 			resp.Mutated[v] = &api.Uids{
