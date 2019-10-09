@@ -922,10 +922,12 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "email"))
 	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 0, len(mr.mutated))
 
 	// Trying again, should be a NOOP
-	_, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.mutated))
 
 	// query should return the wrong name
 	q1 := `
@@ -959,6 +961,8 @@ upsert {
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 1, len(mr.mutated["v"]))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -989,6 +993,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, 0, len(mr.mutated))
 
 	// query should return the wrong name
 	q1 := `
@@ -1019,6 +1024,8 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 1, len(mr.mutated["v"]))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1080,6 +1087,8 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "color"))
 	require.False(t, contains(mr.preds, "works_for"))
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 2, len(mr.mutated["u"]))
 
 	q2 := `
 {
@@ -1113,8 +1122,11 @@ upsert {
     }
   }
 }`
-	_, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.mutated))
+	require.Equal(t, 2, len(mr.mutated["c1"]))
+	require.Equal(t, 2, len(mr.mutated["c2"]))
 
 	// The following mutation should have no effect on the state of the database
 	m4 := `
@@ -1134,8 +1146,9 @@ upsert {
     }
   }
 }`
-	_, err = mutationWithTs(m4, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.mutated))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1204,8 +1217,11 @@ upsert {
     }
   }
 }`
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.mutated))
+	require.Equal(t, 1, len(mr.mutated["u1"]))
+	require.Equal(t, 1, len(mr.mutated["u3"]))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)

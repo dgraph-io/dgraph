@@ -513,7 +513,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	}
 	parsingTime += l.Parsing
 	if len(varToUID) > 0 {
-		resp.Mutated = make(map[string]*api.Uids)
+		resp.Mutated = make(map[string]*api.Uids, len(varToUID))
 		for v, uids := range varToUID {
 			resp.Mutated[v] = &api.Uids{
 				Uids: uids,
@@ -676,6 +676,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 	updateUIDInMutations(gmu, varToUID)
 	updateValInMutations(gmu, qr)
+	// varToUID is returned to the client, lets delete the dummy var that we put in there.
+	delete(varToUID, varName)
 	return l, varToUID, nil
 }
 
