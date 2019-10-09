@@ -138,7 +138,7 @@ type searchTypeIndex struct {
 var supportedSearches = map[string]searchTypeIndex{
 	"int":      {"Int", "int"},
 	"float":    {"Float", "float"},
-	"bool":     {"Boolean", "boolean"},
+	"bool":     {"Boolean", "bool"},
 	"hash":     {"String", "hash"},
 	"exact":    {"String", "exact"},
 	"term":     {"String", "term"},

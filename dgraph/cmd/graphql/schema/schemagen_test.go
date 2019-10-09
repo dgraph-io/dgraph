@@ -133,42 +133,42 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 	}{
 		"String searches don't apply to Int": {schema: `
 			type X {
-				str1: Int @searche(by: hash)
-				str2: Int @searche(by: exact)
-				str3: Int @searche(by: term)
-				str4: Int @searche(by: fulltext)
-				str5: Int @searche(by: trigram)
-				str6: Int @searche(by: regexp)
+				str1: Int @search(by: hash)
+				str2: Int @search(by: exact)
+				str3: Int @search(by: term)
+				str4: Int @search(by: fulltext)
+				str5: Int @search(by: trigram)
+				str6: Int @search(by: regexp)
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to Float": {schema: `
 			type X {
-				str1: Float @searche(by: hash)
-				str2: Float @searche(by: exact)
-				str3: Float @searche(by: term)
-				str4: Float @searche(by: fulltext)
-				str5: Float @searche(by: trigram)
-				str6: Float @searche(by: regexp)
+				str1: Float @search(by: hash)
+				str2: Float @search(by: exact)
+				str3: Float @search(by: term)
+				str4: Float @search(by: fulltext)
+				str5: Float @search(by: trigram)
+				str6: Float @search(by: regexp)
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to Boolean": {schema: `
 			type X {
-				str1: Boolean @searche(by: hash)
-				str2: Boolean @searche(by: exact)
-				str3: Boolean @searche(by: term)
-				str4: Boolean @searche(by: fulltext)
-				str5: Boolean @searche(by: trigram)
-				str6: Boolean @searche(by: regexp)
+				str1: Boolean @search(by: hash)
+				str2: Boolean @search(by: exact)
+				str3: Boolean @search(by: term)
+				str4: Boolean @search(by: fulltext)
+				str5: Boolean @search(by: trigram)
+				str6: Boolean @search(by: regexp)
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to DateTime": {schema: `
 			type X {
-				str1: DateTime @searche(by: hash)
-				str2: DateTime @searche(by: exact)
-				str3: DateTime @searche(by: term)
-				str4: DateTime @searche(by: fulltext)
-				str5: DateTime @searche(by: trigram)
-				str6: DateTime @searche(by: regexp)
+				str1: DateTime @search(by: hash)
+				str2: DateTime @search(by: exact)
+				str3: DateTime @search(by: term)
+				str4: DateTime @search(by: fulltext)
+				str5: DateTime @search(by: trigram)
+				str6: DateTime @search(by: regexp)
 			}`,
 			expectedErrors: 6},
 		"DateTime searches don't apply to Int": {schema: `

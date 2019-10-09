@@ -235,7 +235,7 @@ func searchValidation(
 				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
 				"Fields of type %[4]s %[6]s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearches[arg.Value.Raw], searchMessage(sch, field))
+			supportedSearches[arg.Value.Raw].gqlType, searchMessage(sch, field))
 	}
 
 	return nil
