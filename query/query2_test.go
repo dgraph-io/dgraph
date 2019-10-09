@@ -2251,6 +2251,66 @@ func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
 		}`, js)
 }
 
+func TestNormalizeDirectiveListAndNonListChild3(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				boss @normalize { # Results of this subquery will be normalized
+					bn: newname
+					newfriend @normalize {
+						bfn: newname
+						newfriend {
+							bffn: newname
+						}
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"boss": [
+							{
+								"bfn": "P9",
+								"bn": "P4"
+							},
+							{
+								"bffn": "P11",
+								"bfn": "P10",
+								"bn": "P4"
+							},
+							{
+								"bffn": "P12",
+								"bfn": "P10",
+								"bn": "P4"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"boss": [
+							{
+								"bfn": "P11",
+								"bn": "P10"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
 func TestNearPoint(t *testing.T) {
 
 	query := `{

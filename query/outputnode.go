@@ -678,11 +678,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				pc.Params.ParentIds = sg.Params.ParentIds
 			}
 
-			var addAsList bool
-			for _, ch := range pc.Children {
-				addAsList = addAsList || ch.List
-			}
-
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
@@ -732,60 +727,34 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 							return err
 						}
 
-						// addList means atleat one of the children are of
-						// list type.Example below explains need of addList.
-						// Schema:
-						// ```
-						//     name: string @index(exact) .
-						//     friend: [uid] .
-						//     boss: uid .
-						// ```
-						// Data
-						// ```
-						//     <3> <name> "3" .
-						//     <4> <name> "4" .
-						//     <1> <boss> <2>
-						//     <2> <friend> <3>
-						//     <2> <friend> <4>
-						// ```
-						// Query
-						// ```
-						// {
-						//     me(func: uid(0x01)) {
-						//         boss {
-						//             friend {
-						//                 n: name
-						//             }
-						//         }
-						//     }
-						// }
-						// ```
-						// Expected output
-						// ```
-						// "me": [
-						//  {
-						//    "boss": [
-						//     {
-						//       "n": "P9"
-						//     },
-						//     {
-						//       "n": "P10"
-						//     }
-						//    ]
-						//  }
-						// ]
-						// ```
-						// boss is of type uid, but since friend is its
-						// child which is of type [uid], all the results
-						// are returned as list.
-						if pc.List || addAsList {
-							for _, c := range normAttrs {
-								dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
-							}
-						} else {
-							for _, c := range normAttrs {
-								dst.AddMapChild(fieldName, &fastJsonNode{attrs: c}, false)
-							}
+						for _, c := range normAttrs {
+							// Adding as list child irrespective of the type of pc
+							// (list or non-list), otherwise result might be inconsistent or might
+							// depend on children and grandchildren of pc. Consider the case:
+							// 	boss: uid .
+							// 	friend: [uid] .
+							// 	name: string .
+							// For query like:
+							// {
+							// 	me(func: uid(0x1)) {
+							// 		boss @normalize {
+							// 			name
+							// 		}
+							// 	}
+							// }
+							// boss will be non list type in response, but for query like:
+							// {
+							// 	me(func: uid(0x1)) {
+							// 		boss @normalize {
+							// 			friend {
+							// 				name
+							// 			}
+							// 		}
+							// 	}
+							// }
+							// boss should be of list type because there can be mutliple friends of
+							// boss.
+							dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
 						}
 						continue
 					}
