@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package web
 
 import (
 	"compress/gzip"
@@ -23,13 +23,11 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"runtime/debug"
 	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
@@ -38,31 +36,27 @@ import (
 	"github.com/pkg/errors"
 )
 
-func recoveryHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			// This function makes sure that we recover from panics during execution of the request
-			// and return appropriate error to the user.
-			if err := recover(); err != nil {
-				glog.Errorf("panic: %s while executing request with ID: %s, trace: %s", err,
-					api.RequestID(r.Context()), string(debug.Stack()))
-				rr := schema.ErrorResponse(
-					errors.New("Internal Server Error"),
-					api.RequestID(r.Context()))
-				w.Header().Set("Content-Type", "application/json")
-				if _, err := rr.WriteTo(w); err != nil {
-					glog.Error(err)
-				}
-			}
-		}()
-
-		next.ServeHTTP(w, r)
-	})
+type graphqlHandler struct {
+	schema           schema.Schema
+	dgraphClient     dgraph.Client
+	queryRewriter    dgraph.QueryRewriter
+	mutationRewriter dgraph.MutationRewriter
 }
 
-type graphqlHandler struct {
-	dgraphClient *dgo.Dgraph
-	schema       schema.Schema
+// GraphQLHTTPHandler returns a http.Handler that serves GraphQL.
+func GraphQLHTTPHandler(
+	schema schema.Schema,
+	dgraphClient dgraph.Client,
+	queryRewriter dgraph.QueryRewriter,
+	mutationRewriter dgraph.MutationRewriter) http.Handler {
+
+	return api.WithRequestID(recoveryHandler(
+		&graphqlHandler{
+			schema:           schema,
+			dgraphClient:     dgraphClient,
+			queryRewriter:    queryRewriter,
+			mutationRewriter: mutationRewriter,
+		}))
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved
@@ -105,7 +99,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (gh *graphqlHandler) isValid() bool {
-	return !(gh == nil || gh.schema == nil || gh.dgraphClient == nil)
+	return !(gh == nil || gh.schema == nil || gh.dgraphClient == nil ||
+		gh.queryRewriter == nil || gh.mutationRewriter == nil)
 }
 
 type gzreadCloser struct {
@@ -122,11 +117,7 @@ func (gz gzreadCloser) Close() error {
 }
 
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestResolver, error) {
-	rr := resolve.New(
-		gh.schema,
-		dgraph.AsDgraph(gh.dgraphClient),
-		dgraph.NewQueryRewriter(),
-		dgraph.NewMutationRewriter())
+	rr := resolve.New(gh.schema, gh.dgraphClient, gh.queryRewriter, gh.mutationRewriter)
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := gzip.NewReader(r.Body)
@@ -166,4 +157,21 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 	}
 
 	return rr, nil
+}
+
+func recoveryHandler(next http.Handler) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqID := api.RequestID(r.Context())
+		defer api.PanicHandler(reqID,
+			func(err error) {
+				rr := schema.ErrorResponse(err, reqID)
+				w.Header().Set("Content-Type", "application/json")
+				if _, err = rr.WriteTo(w); err != nil {
+					glog.Errorf("[%s] %s", reqID, err)
+				}
+			})
+
+		next.ServeHTTP(w, r)
+	})
 }
