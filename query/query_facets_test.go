@@ -77,6 +77,47 @@ func populateClusterWithFacets() {
 	facetSetupDone = true
 }
 
+func TestFacetsVarAllofterms(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(31)) {
+				name
+				friend @facets(allofterms(games, "football basketball hockey")) {
+					name
+					uid
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"friend":[{"name":"Daryl Dixon","uid":"0x19"}],"name":"Andrea"}]}}`,
+		js)
+}
+
+func TestFacetsWithVarEq(t *testing.T) {
+	populateClusterWithFacets()
+	// find family of 1
+	query := `
+		query works($family : bool = true){
+			me(func: uid(1)) {
+				name
+				friend @facets(eq(family, $family)) {
+					name
+					uid
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19", "name": "Daryl Dixon"}],"name":"Michonne"}]}}`,
+		js)
+}
+
 func TestFacetWithVarLe(t *testing.T) {
 	populateClusterWithFacets()
 
