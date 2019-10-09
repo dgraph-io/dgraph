@@ -76,6 +76,8 @@ type GraphQLParams struct {
 	gzipEncoding  bool
 }
 
+type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
+
 // GraphQLResponse GraphQL response structure.
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
 type GraphQLResponse struct {
@@ -243,12 +245,34 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
 
-// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
-// and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
-	req, err := params.createGQLPost(url)
+func TestGetRequest(t *testing.T) {
+	AddMutation(t, getExecutor)
+}
+
+func TestGetQueryEmptyVariable(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+		acceptGzip:   false,
+		gzipEncoding: false,
+	}
+	req, err := queryCountry.createGQLGet(graphqlURL)
 	require.NoError(t, err)
 
+	q := req.URL.Query()
+	q.Del("variables")
+	req.URL.RawQuery = q.Encode()
+
+	res := queryCountry.Execute(t, req)
+	require.Nil(t, res.Errors)
+}
+
+// Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
+// and executes the request
+func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
@@ -264,12 +288,53 @@ func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLRes
 	requireContainsRequestID(t, result)
 
 	return result
+
+}
+
+// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
+// and executes the request to url.
+func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLPost(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
 }
 
 // ExecuteAsGet builds a HTTP GET request from the GraphQL input structure
 // and executes the request to url.
-func (params *GraphQLParams) ExecuteAsGet(url string) ([]byte, error) {
-	return nil, errors.New("GET not yet supported")
+func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLGet(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
+}
+
+func getExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsGet(t, url)
+}
+
+func postExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsPost(t, url)
+}
+
+func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	q.Add("query", params.Query)
+	q.Add("operationName", params.OperationName)
+
+	variableString, err := json.Marshal(params.Variables)
+	if err != nil {
+		return nil, err
+	}
+	q.Add("variables", string(variableString))
+
+	req.URL.RawQuery = q.Encode()
+	return req, nil
 }
 
 func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
