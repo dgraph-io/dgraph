@@ -603,6 +603,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) (err error) {
 	if err == errNoJwt {
 		// treat the user as an anonymous guest who has not joined any group yet
 		// such a user can still get access to predicates that have no ACL rule defined
+		userId = "anonymous"
 	} else if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	} else {
@@ -664,7 +665,7 @@ func logAccess(log *accessEntry) {
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) (err error) {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -673,27 +674,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
-	doAuthorizeQuery := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
-			userId = userData[0]
-			groupIds = userData[1:]
-
-			if userId == x.GrootId {
-				// groot is allowed to query anything
-				return nil
-			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
-		}
-
-		return authorizePreds(userId, groupIds, preds, acl.Read)
-	}
-
-	err := doAuthorizeQuery()
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
@@ -704,5 +684,22 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 		}).String())
 	}
 
-	return err
+	userData, err := extractUserAndGroups(ctx)
+	if err == errNoJwt {
+		// treat the user as an anonymous guest who has not joined any group yet
+		// such a user can still get access to predicates that have no ACL rule defined
+		userId = "anonymous"
+	} else if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
+	} else {
+		userId = userData[0]
+		groupIds = userData[1:]
+
+		if userId == x.GrootId {
+			// groot is allowed to query anything
+			return nil
+		}
+	}
+
+	return authorizePreds(userId, groupIds, preds, acl.Read)
 }
