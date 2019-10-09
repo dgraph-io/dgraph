@@ -1813,15 +1813,15 @@ By default, you can perform mutation operations for any predicate.
 You can make use of `--mutations` flag to set restrictions on mutation operations,
 which is set to `allow` by default.
 
-You can set `--mutations` option to `disallow` to disable the mutations.
+Use `--mutations disallow` to disable all mutations.
 
 ```sh
 dgraph alpha --mutations disallow
 ```
 
-You can set `--mutations` option to `strict` for limiting mutations to only
-existing predicates in the schema and disable mutations of unknown predicates.
-The `strict` mode enforces a strict schema.
+Enforce a strict schema by setting `--mutations strict`. This allows only mutations
+on predicates already in the schema. This allows only mutations on predicates already
+in the schema.
 
 ```sh
 dgraph alpha --mutations strict
