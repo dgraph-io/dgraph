@@ -28,6 +28,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
@@ -698,6 +699,32 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, err
 }
 
+// ContextKey is used to set options in the context object.
+type ContextKey int
+
+const (
+	// DebugKey is the key used to toggle debug mode.
+	DebugKey ContextKey = iota
+)
+
+func isDebug(ctx context.Context) bool {
+	var debug bool
+
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		// md is a map[string][]string
+		if len(md["debug"]) > 0 {
+			// We ignore the error here, because in error case,
+			// debug would be false which is what we want.
+			debug, _ = strconv.ParseBool(md["debug"][0])
+		}
+	}
+
+	// HTTP passes information about debug as query parameter which is attached to context.
+	d, _ := ctx.Value(DebugKey).(bool)
+	return debug || d
+}
+
 func (sg *SubGraph) populate(uids []uint64) error {
 	// Put sorted entries in matrix.
 	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
@@ -717,7 +744,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		Alias:            gq.Alias,
 		Cascade:          gq.Cascade,
-		GetUid:           x.IsDebugRequest(ctx),
+		GetUid:           isDebug(ctx),
 		IgnoreReflex:     gq.IgnoreReflex,
 		IsEmpty:          gq.IsEmpty,
 		Langs:            gq.Langs,

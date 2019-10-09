@@ -207,7 +207,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), x.DebugKey, isDebugMode)
+	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
 	ctx = attachAccessJwt(ctx, r)
 
 	if queryTimeout != 0 {
@@ -289,11 +289,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isDebugMode, err := parseBool(r, "debug")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
 	commitNow, err := parseBool(r, "commitNow")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -366,8 +361,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	req.StartTs = startTs
 	req.CommitNow = commitNow
 
-	ctx := context.WithValue(context.Background(), x.DebugKey, isDebugMode)
-	ctx = attachAccessJwt(ctx, r)
+	ctx := attachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())

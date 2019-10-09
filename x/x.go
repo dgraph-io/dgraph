@@ -46,7 +46,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -55,9 +54,6 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
-
-// ContextKey is used to set options in the context object.
-type ContextKey int
 
 const (
 	// Success is equivalent to the HTTP 200 error code.
@@ -112,9 +108,6 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
 `
-
-	// DebugKey is the key used to toggle debug mode.
-	DebugKey ContextKey = iota
 )
 
 var (
@@ -711,25 +704,4 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
 	return nil
-}
-
-// IsDebugRequest lets the client get debug information
-// 1. It allows the user to get uid for every node in a query without specifiying the uid predicate.
-// 2. To get the list of mutated uids for a upsert operation.
-func IsDebugRequest(ctx context.Context) bool {
-	var debug bool
-
-	// gRPC client passes information about debug as metadata.
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		// md is a map[string][]string
-		if len(md["debug"]) > 0 {
-			// We ignore the error here, because in error case,
-			// debug would be false which is what we want.
-			debug, _ = strconv.ParseBool(md["debug"][0])
-		}
-	}
-
-	// HTTP passes information about debug as query parameter which is attached to context.
-	d, _ := ctx.Value(DebugKey).(bool)
-	return debug || d
 }
