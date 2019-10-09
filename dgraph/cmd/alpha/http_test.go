@@ -168,8 +168,7 @@ type mutationResponse struct {
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mutationResponse, error) {
 
-	params := make([]string, 3)
-	params = append(params, "debug=true")
+	params := make([]string, 2)
 	if ts != 0 {
 		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
 	}
