@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
-	"runtime/debug"
 	"strings"
 
 	"github.com/golang/glog"
