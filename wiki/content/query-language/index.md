@@ -3155,6 +3155,16 @@ query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
 }
 {{< /runnable >}}
 
+We also support variable substituion in facets now.
+{{< runnable vars="{\"$name\": \"Alice\"}" >}}
+query test($name: string = "Alice") {
+  data(func: eq(name, $name)) {
+    friend @facets(eq(close, true)) {
+      name
+    }
+  }
+}
+{{</ runnable >}}
 
 {{% notice "note" %}}
 If you want to input a list of uids as a GraphQL variable value, you can have the variable as string type and
