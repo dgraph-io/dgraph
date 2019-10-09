@@ -29,7 +29,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -834,8 +833,8 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
 		type Node {
-			to: uid
-			name: string
+			to
+			name
 		}
 `
 
@@ -1566,7 +1565,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
 			type Person {
-				name: string
+				name
 			}
 		`,
 	}))
@@ -1576,7 +1575,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+		"fields":[{"name":"name", "type":"default"}]}]}`, string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
@@ -1634,7 +1633,7 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 			mu.SetJson = []byte(`{"uid": "_:b", "friend": [{"uid": "` + id + `"}]}`)
 			for i := 0; i < 10; i++ {
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err == nil || err != y.ErrAborted {
+				if err == nil || err != dgo.ErrAborted {
 					break
 				}
 			}

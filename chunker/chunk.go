@@ -28,8 +28,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/errors"
 )

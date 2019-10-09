@@ -54,7 +54,6 @@ schemas:
         p: Int
         pList: [Int]
         q: Boolean
-        qList: [Boolean]
         r: String
         rList: [String]
         s: DateTime
@@ -68,7 +67,6 @@ schemas:
         X.p: int
         X.pList: [int]
         X.q: bool
-        X.qList: [bool]
         X.r: string
         X.rList: [string]
         X.s: dateTime
@@ -79,7 +77,6 @@ schemas:
       X.p: int .
       X.pList: [int] .
       X.q: bool .
-      X.qList: [bool] .
       X.r: string .
       X.rList: [string] .
       X.s: dateTime .
@@ -92,37 +89,41 @@ schemas:
     input: |
       type X {
         e: E
+        f: [E]
       }
       enum E { A }
     output: |
       type X {
         X.e: string
+        X.f: [string]
       }
       X.e: string @index(exact) .
+      X.f: [string] @index(exact) .
+
 
   -
-    name: "Searchable indexes are correct"
+    name: "Search indexes are correct"
     input: |
       type X {
-        i1: Int @searchable
-        i2: Int @searchable(by: int)
-        f1: Float @searchable
-        f2: Float @searchable(by: float)
-        b1: Boolean @searchable
-        b2: Boolean @searchable(by: bool)
-        s1: String @searchable
-        s2: String @searchable(by: hash)
-        s3: String @searchable(by: exact)
-        s4: String @searchable(by: term)
-        s5: String @searchable(by: fulltext)
-        s6: String @searchable(by: trigram)
-        s7: String @searchable(by: regexp)
-        dt1: DateTime @searchable
-        dt2: DateTime @searchable(by: year)
-        dt3: DateTime @searchable(by: month)
-        dt4: DateTime @searchable(by: day)
-        dt5: DateTime @searchable(by: hour)
-        e: E @searchable
+        i1: Int @search
+        i2: Int @search(by: int)
+        f1: Float @search
+        f2: Float @search(by: float)
+        b1: Boolean @search
+        b2: Boolean @search(by: bool)
+        s1: String @search
+        s2: String @search(by: hash)
+        s3: String @search(by: exact)
+        s4: String @search(by: term)
+        s5: String @search(by: fulltext)
+        s6: String @search(by: trigram)
+        s7: String @search(by: regexp)
+        dt1: DateTime @search
+        dt2: DateTime @search(by: year)
+        dt3: DateTime @search(by: month)
+        dt4: DateTime @search(by: day)
+        dt5: DateTime @search(by: hour)
+        e: E @search
       }
       enum E { A }
     output: |
@@ -172,10 +173,10 @@ schemas:
     input: |
       interface A {
         id: ID!
-        name: String! @searchable(by: exact)
+        name: String! @search(by: exact)
       }
       type B implements A {
-        correct: Boolean @searchable
+        correct: Boolean @search
       }
       type C implements A {
         dob: DateTime!

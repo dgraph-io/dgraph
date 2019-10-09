@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
 const (
@@ -93,7 +92,6 @@ type RequestResolver struct {
 	dgraph           dgraph.Client
 	queryRewriter    dgraph.QueryRewriter
 	mutationRewriter dgraph.MutationRewriter
-	resp             *schema.Response
 }
 
 // A resolved is the result of resolving a single query or mutation.
@@ -114,15 +112,9 @@ func New(
 	return &RequestResolver{
 		Schema:           s,
 		dgraph:           dg,
-		resp:             &schema.Response{},
 		queryRewriter:    queryRewriter,
 		mutationRewriter: mutRewriter,
 	}
-}
-
-// WithError generates GraphQL errors from err and records those in r.
-func (r *RequestResolver) WithError(err error) {
-	r.resp.Errors = append(r.resp.Errors, schema.AsGQLErrors(err)...)
 }
 
 // Resolve processes r.GqlReq and returns a GraphQL response.
@@ -134,27 +126,27 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
 
-	r.resp.Extensions = &schema.Extensions{
-		RequestID: api.RequestID(ctx),
-	}
+	reqID := api.RequestID(ctx)
 
 	if r == nil {
-		glog.Errorf("Call to Resolve with nil RequestResolver")
-		r.WithError(errors.New("Internal error"))
+		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", reqID)
+		return schema.ErrorResponse(errors.New("Internal error"), reqID)
 	}
 
 	if r.Schema == nil {
-		glog.Errorf("Call to Resolve with no schema")
-		r.WithError(errors.New("Internal error"))
+		glog.Errorf("[%s] Call to Resolve with no schema", reqID)
+		return schema.ErrorResponse(errors.New("Internal error"), reqID)
 	}
 
 	op, err := r.Schema.Operation(r.GqlReq)
 	if err != nil {
-		r.WithError(err)
+		return schema.ErrorResponse(err, reqID)
 	}
 
-	if r.resp.Errors != nil {
-		return r.resp
+	resp := &schema.Response{
+		Extensions: &schema.Extensions{
+			RequestID: reqID,
+		},
 	}
 
 	if glog.V(3) {
@@ -162,7 +154,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		if err != nil {
 			glog.Infof("Failed to marshal variables for logging : %s", err)
 		}
-		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", r.GqlReq.Query, string(b))
+		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+			reqID, r.GqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
@@ -183,6 +176,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
+				defer api.PanicHandler(api.RequestID(ctx),
+					func(err error) {
+						allResolved[storeAt] = &resolved{err: err}
+					})
 
 				allResolved[storeAt] = (&queryResolver{
 					query:         q,
@@ -200,18 +197,31 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
-			r.WithError(res.err)
-			r.resp.AddData(res.data)
+			resp.WithError(res.err)
+			resp.AddData(res.data)
 		}
 	case op.IsMutation():
-		// Mutations, unlike queries, are handled serially and the results are
-		// not independent: e.g. if one mutation errors, we don't run the
-		// remaining mutations.
+		// A mutation operation can contain any number of mutation fields.  Those should be executed
+		// serially.
+		// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
+		//
+		// The spec is ambiguous about what to do in the case of errors during that serial execution
+		// - apparently deliberately so; see this comment from Lee Byron:
+		// https://github.com/graphql/graphql-spec/issues/277#issuecomment-385588590
+		// and clarification
+		// https://github.com/graphql/graphql-spec/pull/438
+		//
+		// A reasonable interpretation of that is to stop a list of mutations after the first error -
+		// which seems like the natural semantics and is what we enforce here.
+		allSuccessful := true
+
 		for _, m := range op.Mutations() {
-			if r.resp.Errors != nil {
-				r.WithError(
-					gqlerror.Errorf("mutation %s not executed because of previous error",
-						m.ResponseName()))
+			if !allSuccessful {
+				resp.WithError(x.GqlErrorf(
+					"Mutation %s was not executed because of a previous error.",
+					m.ResponseName()).
+					WithLocations(m.Location()))
+
 				continue
 			}
 
@@ -222,15 +232,16 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				mutationRewriter: r.mutationRewriter,
 				queryRewriter:    r.queryRewriter,
 			}
-			res := mr.resolve(ctx)
-			r.WithError(res.err)
-			r.resp.AddData(res.data)
+			var res *resolved
+			res, allSuccessful = mr.resolve(ctx)
+			resp.WithError(res.err)
+			resp.AddData(res.data)
 		}
 	case op.IsSubscription():
-		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
+		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
 	}
 
-	return r.resp
+	return resp
 }
 
 // Once a result has been returned from Dgraph, that result needs to be worked
@@ -251,7 +262,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 //    got back a null/error, then that's fine, just set it to null.  But if we asked
 //    for something non-nullable and got a null/error, then the object we are building
 //    is in an error state, and we should propagate that up to it's parent, and so
-//    on, untill we reach a nullable field, or the top level.
+//    on, until we reach a nullable field, or the top level.
 //
 // The completeXYZ() functions below essentially covers the value completion alg from
 // https://graphql.github.io/graphql-spec/June2018/#sec-Value-Completion.
@@ -259,7 +270,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
 // and the spec requirements for response
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response.
-
+//
 // There's three basic types to consider here: GraphQL object types (equals json
 // objects in the result), list types (equals lists of objects or scalars), and
 // values (either scalar values, lists or objects).
@@ -295,8 +306,11 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // if there's no result, or
 //   { "query-name": ... }
 // if there is a result.
+//
+// Returned errors are generally lists of errors resulting from the value completion
+// algorithm that may emit multiple errors
 func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte) (
-	[]byte, gqlerror.List) {
+	[]byte, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "completeDgraphResult")
 	defer stop()
@@ -312,8 +326,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	//
 	//    { }  --->  { "q": null }
 
-	var errs gqlerror.List
-	errLoc := field.Location()
+	var errs x.GqlErrorList
 
 	nullResponse := func() []byte {
 		var buf bytes.Buffer
@@ -323,16 +336,14 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		return buf.Bytes()
 	}
 
-	dgraphError := func() ([]byte, gqlerror.List) {
+	dgraphError := func() ([]byte, error) {
 		glog.Errorf("[%s] Could not process Dgraph result : \n%s",
 			api.RequestID(ctx), string(dgResult))
-		return nullResponse(), gqlerror.List{
-			&gqlerror.Error{
-				Message: "Couldn't process result from Dgraph.  " +
-					"This probably indicates a bug in the Dgraph GraphQL layer.  " +
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-			}}
+		return nullResponse(),
+			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
+				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
+				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
+				WithLocations(field.Location())
 	}
 
 	// Dgraph should only return {} or a JSON object.  Also,
@@ -346,9 +357,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 			api.RequestID(ctx),
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
-		return nullResponse(), schema.AsGQLErrors(
-			schema.GQLWrapLocationf(err, errLoc.Line, errLoc.Column,
-				"Internal error (couldn't unmarshal Dgraph result)"))
+		return nullResponse(),
+			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
 	}
 
 	switch val := valToComplete[field.ResponseName()].(type) {
@@ -375,19 +385,17 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Errorf("[%s] Got a list result from Dgraph when expecting a one-item list.\n"+
-					"GraphQL query was : %s\nDgraph Result was : %s\n",
-					api.RequestID(ctx), api.QueryString(ctx), string(dgResult))
+				glog.Errorf("[%s] Got a list of length %v from Dgraph when expecting a "+
+					"one-item list.\n"+
+					"GraphQL query was : %s\n",
+					api.RequestID(ctx), len(val), api.QueryString(ctx))
 
 				errs = append(errs,
-					&gqlerror.Error{
-						Message: fmt.Sprintf(
-							"Dgraph returned a list, but %s (type %s) was expecting just one item. "+
-								"The first item in the list was used to produce the result. "+
-								"Logged as a potential bug; see the API log for more details.",
-							field.Name(), field.Type().String()),
-						Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-					})
+					x.GqlErrorf(
+						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
+							"The first item in the list was used to produce the result. "+
+							"Logged as a potential bug; see the API log for more details.",
+						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
 			valToComplete[field.ResponseName()] = internalVal
@@ -424,11 +432,11 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// This isn't really an observable GraphQL error, so no need to add anything
 		// to the payload of errors for the result.
 		glog.Errorf("[%s] Top level completeObject didn't return a result.  "+
-			"That's only possible if the query result it non-nullable.  "+
+			"That's only possible if the query result is non-nullable.  "+
 			"There's something wrong in the GraphQL schema.  \n"+
-			"GraphQL query was : %s\nDgraph Result was : %s\n",
-			api.RequestID(ctx), api.QueryString(ctx), string(dgResult))
-		return nullResponse(), errs
+			"GraphQL query was : %s\n",
+			api.RequestID(ctx), api.QueryString(ctx))
+		return nullResponse(), append(errs, gqlErrs...)
 	}
 
 	return completed, append(errs, gqlErrs...)
@@ -467,18 +475,36 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 //
 // if "dob" were non-nullable (maybe it's type is DateTime!), then the result is
 // nil and the error propagates to the enclosing level.
-func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, res map[string]interface{}) (
-	[]byte, gqlerror.List) {
+func completeObject(
+	path []interface{},
+	typ schema.Type,
+	fields []schema.Field,
+	res map[string]interface{}) ([]byte, x.GqlErrorList) {
 
-	var errs gqlerror.List
+	var errs x.GqlErrorList
 	var buf bytes.Buffer
 	comma := ""
 
 	buf.WriteRune('{')
+
+	dgraphTypes, _ := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
+
+		inputType := f.ConcreteType(dgraphTypes)
+		// If typ is an interface, and dgraphTypes contains another type, then we ignore
+		// fields which don't start with that type. This would happen when multiple
+		// fragments (belonging to different types) are requested within a query for an interface.
+
+		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
+		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
+		if inputType != "" && !strings.HasPrefix(f.DgraphPredicate(), typ.Name()) &&
+			!strings.HasPrefix(f.DgraphPredicate(), inputType) {
+			continue
+		}
+
 		buf.WriteString(comma)
 		buf.WriteRune('"')
 		buf.WriteString(f.ResponseName())
@@ -502,7 +528,10 @@ func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, 
 
 // completeValue applies the value completion algorithm to a single value, which
 // could turn out to be a list or object or scalar value.
-func completeValue(path []interface{}, field schema.Field, val interface{}) ([]byte, gqlerror.List) {
+func completeValue(
+	path []interface{},
+	field schema.Field,
+	val interface{}) ([]byte, x.GqlErrorList) {
 
 	switch val := val.(type) {
 	case map[string]interface{}:
@@ -530,15 +559,13 @@ func completeValue(path []interface{}, field schema.Field, val interface{}) ([]b
 				return []byte("null"), nil
 			}
 
-			errLoc := field.Location()
-			gqlErr := &gqlerror.Error{
-				Message: fmt.Sprintf(
-					"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
-						"GraphQL error propagation triggered.", field.Name(), field.Type()),
-				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      copyPath(path),
-			}
-			return nil, gqlerror.List{gqlErr}
+			gqlErr := x.GqlErrorf(
+				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
+					"GraphQL error propagation triggered.", field.Name(), field.Type()).
+				WithLocations(field.Location())
+			gqlErr.Path = copyPath(path)
+
+			return nil, x.GqlErrorList{gqlErr}
 		}
 
 		// val is a scalar
@@ -547,21 +574,18 @@ func completeValue(path []interface{}, field schema.Field, val interface{}) ([]b
 		// we just unmarshaled this val.
 		json, err := json.Marshal(val)
 		if err != nil {
-			errLoc := field.Location()
-			gqlErr := &gqlerror.Error{
-				Message: fmt.Sprintf(
-					"Error marshalling value for field '%s' (type %s).  "+
-						"Resolved as null (which may trigger GraphQL error propagation) ",
-					field.Name(), field.Type()),
-				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      copyPath(path),
-			}
+			gqlErr := x.GqlErrorf(
+				"Error marshalling value for field '%s' (type %s).  "+
+					"Resolved as null (which may trigger GraphQL error propagation) ",
+				field.Name(), field.Type()).
+				WithLocations(field.Location())
+			gqlErr.Path = copyPath(path)
 
 			if field.Type().Nullable() {
-				return []byte("null"), gqlerror.List{gqlErr}
+				return []byte("null"), x.GqlErrorList{gqlErr}
 			}
 
-			return nil, gqlerror.List{gqlErr}
+			return nil, x.GqlErrorList{gqlErr}
 		}
 
 		return json, nil
@@ -585,9 +609,13 @@ func completeValue(path []interface{}, field schema.Field, val interface{}) ([]b
 //
 // If the list has non-nullable elements (a type like [T!]) and any of those
 // elements resolve to null, then the whole list is crushed to null.
-func completeList(path []interface{}, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
+func completeList(
+	path []interface{},
+	field schema.Field,
+	values []interface{}) ([]byte, x.GqlErrorList) {
+
 	var buf bytes.Buffer
-	var errs gqlerror.List
+	var errs x.GqlErrorList
 	comma := ""
 
 	if field.Type().ListType() == nil {
@@ -633,20 +661,23 @@ func completeList(path []interface{}, field schema.Field, values []interface{}) 
 	return buf.Bytes(), errs
 }
 
-func mismatched(path []interface{}, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
-	errLoc := field.Location()
+func mismatched(
+	path []interface{},
+	field schema.Field,
+	values []interface{}) ([]byte, x.GqlErrorList) {
 
-	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), but its type is %s.\n"+
-		"That could indicate the Dgraph schema doesn't match the GraphQL schema."+
-		field.Name(), errLoc.Line, errLoc.Column, field.Type().Name())
+	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), "+
+		"but its type is %s.\n"+
+		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
+		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
-	gqlErr := &gqlerror.Error{
+	gqlErr := &x.GqlError{
 		Message: "Dgraph returned a list, but GraphQL was expecting just one item.  " +
 			"This indicates an internal error - " +
 			"probably a mismatch between GraphQL and Dgraph schemas.  " +
 			"The value was resolved as null (which may trigger GraphQL error propagation) " +
 			"and as much other data as possible returned.",
-		Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
+		Locations: []x.Location{field.Location()},
 		Path:      copyPath(path),
 	}
 

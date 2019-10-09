@@ -26,6 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
+
 	"github.com/dgraph-io/dgo"
 	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -41,7 +44,6 @@ import (
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -167,17 +169,17 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	gqlschema, gqlErr := validator.ValidateSchemaDocument(doc)
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	handler := &graphqlHandler{
-		dgraphClient: dgraphClient,
-		schema:       gqlschema,
-	}
-
-	http.Handle("/graphql", recoveryHandler(api.WithRequestID(handler)))
+	http.Handle("/graphql",
+		web.GraphQLHTTPHandler(
+			schema.AsSchema(gqlSchema),
+			dgraph.AsDgraph(dgraphClient),
+			dgraph.NewQueryRewriter(),
+			dgraph.NewMutationRewriter()))
 
 	trace.ApplyConfig(trace.Config{
 		DefaultSampler:             trace.ProbabilitySampler(GraphQL.Conf.GetFloat64("trace")),

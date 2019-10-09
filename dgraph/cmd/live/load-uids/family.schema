@@ -1,11 +1,11 @@
 type FamilyMember {
-    name: string
-    age: int
-    role: string
-    aka: string
-    carries: string
-    parent_to: [FamilyMember]
-    sibling_of: [FamilyMember]
+    name
+    age
+    role
+    aka
+    carries
+    parent_to
+    sibling_of
 }
 
 name:string @index(term) .

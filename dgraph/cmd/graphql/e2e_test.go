@@ -77,7 +77,7 @@ type GraphQLParams struct {
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
 type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
-	Errors     []*x.GqlError          `json:"errors,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
@@ -100,7 +100,7 @@ type post struct {
 	Title       string
 	Text        string
 	Tags        []string
-	NulLikes    int
+	NumLikes    int
 	IsPublished bool
 	PostType    string
 	Author      author

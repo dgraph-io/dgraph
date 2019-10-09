@@ -30,8 +30,8 @@ const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
 
-	searchableDirective = "searchable"
-	searchableArg       = "by"
+	searchDirective = "search"
+	searchArgs      = "by"
 
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
@@ -56,7 +56,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -112,7 +112,7 @@ input StringHashFilter {
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
 // generated directly for the bool field / enum.  E.g. if
-// `type T { b: Boolean @searchable }`,
+// `type T { b: Boolean @search }`,
 // then the filter allows `filter: {b: true}`.  That's better than having
 // `input BooleanFilter { eq: Boolean }`, which would require writing
 // `filter: {b: {eq: true}}`.
@@ -128,9 +128,9 @@ type directiveValidator func(
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error
 
-// searchable arg -> supported GraphQL type
+// search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
-var supportedSearchables = map[string]string{
+var supportedSearches = map[string]string{
 	"int":      "Int",
 	"float":    "Float",
 	"bool":     "Boolean",
@@ -150,9 +150,9 @@ var searchArgToDraphIndex = map[string]string{
 	"regexp": "trigram",
 }
 
-// GraphQL scalar type -> default Dgraph index (/searchable)
-// used if the schema specifies @searchable without an arg
-var defaultSearchables = map[string]string{
+// GraphQL scalar type -> default Dgraph index (/search)
+// used if the schema specifies @search without an arg
+var defaultSearches = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
 	"Float":    "float",
@@ -196,8 +196,8 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchableDirective: searchableValidation,
+	inverseDirective: hasInverseValidation,
+	searchDirective:  searchValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -439,8 +439,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
-// defn that are searchable.  For example, if there's another type
-// `type R { ... f: String @searchable(by: term) ... }`
+// defn that can be searched.  For example, if there's another type
+// `type R { ... f: String @search(by: term) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -531,8 +531,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if searchable := getSearchable(fld); searchable != "" {
-			filterTypeName := builtInFilters[searchable]
+		if search := getSearchArgs(fld); search != "" {
+			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
 				// Instead we allow to write `fieldName: enumValue` in the filter.
@@ -571,12 +571,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" || isID(fld) })
-}
-
-func hasSearchables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" })
+		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" || isID(fld) })
 }
 
 func hasOrderables(defn *ast.Definition) bool {
@@ -599,21 +594,21 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
-// getSearchable returns the name of the searchable applied to fld, or ""
-// if fld doesn't have a searchable directive.
-func getSearchable(fld *ast.FieldDefinition) string {
-	search := fld.Directives.ForName(searchableDirective)
+// getSearchArgs returns the name of the search applied to fld, or ""
+// if fld doesn't have a search directive.
+func getSearchArgs(fld *ast.FieldDefinition) string {
+	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
 		return ""
 	}
 	if len(search.Arguments) == 0 {
-		if searchable, ok := defaultSearchables[fld.Type.Name()]; ok {
-			return searchable
+		if search, ok := defaultSearches[fld.Type.Name()]; ok {
+			return search
 		}
 		// it's an enum - always has exact index
 		return "exact"
 	}
-	return search.Arguments.ForName(searchableArg).Value.Raw
+	return search.Arguments.ForName(searchArgs).Value.Raw
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.

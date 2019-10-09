@@ -3,7 +3,7 @@
 #######################
 
 type Post {
-	content: String! @searchable
+	content: String! @search
 }
 
 #######################
@@ -29,7 +29,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

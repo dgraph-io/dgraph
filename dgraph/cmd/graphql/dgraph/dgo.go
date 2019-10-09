@@ -117,6 +117,11 @@ func (dg *dgraph) DeleteNodes(ctx context.Context, query, mutation string) error
 	// we'd remove the node and if that caused any errors in the graph, that
 	// would be picked up and handled as GraphQL errors in future queries, etc.
 
+	if glog.V(3) {
+		glog.Infof("[%s] Executing Dgraph upsert : \n%s\nwith delete - %s\n",
+			api.RequestID(ctx), query, mutation)
+	}
+
 	req := &dgoapi.Request{
 		Query:     query,
 		CommitNow: true,
