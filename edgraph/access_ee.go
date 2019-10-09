@@ -462,7 +462,7 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
-func authorizeAlter(ctx context.Context, op *api.Operation) error {
+func authorizeAlter(ctx context.Context, op *api.Operation) (err error) {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -487,49 +487,45 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	var userId string
 	var groupIds []string
+	span := otrace.FromContext(ctx)
+	if span != nil {
+		defer func() {
+			span.Annotatef(nil, (&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: acl.Modify,
+				allowed:   err == nil,
+			}).String())
+		}()
+	}
 
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
-	doAuthorizeAlter := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
-			userId = userData[0]
-			groupIds = userData[1:]
+	userData, err := extractUserAndGroups(ctx)
+	if err == errNoJwt {
+		// treat the user as an anonymous guest who has not joined any group yet
+		// such a user can still get access to predicates that have no ACL rule defined, per the
+		// fail open approach
+		userId = "anonymous"
+	} else if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
+	} else {
+		userId = userData[0]
+		groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				return nil
-			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined, per the
-			// fail open approach
-			userId = "anonymous"
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
+		if userId == x.GrootId {
+			return nil
 		}
-
-		// if we get here, we know the user is not Groot.
-		if isDropAll(op) || op.DropOp == api.Operation_DATA {
-			return errors.Errorf(
-				"only Groot is allowed to drop all data, but the current user is %s", userId)
-		}
-
-		return authorizePreds(userId, groupIds, preds, acl.Modify)
 	}
 
-	err := doAuthorizeAlter()
-	span := otrace.FromContext(ctx)
-	if span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Modify,
-			allowed:   err == nil,
-		}).String())
+	// if we get here, we know the user is not Groot.
+	if isDropAll(op) || op.DropOp == api.Operation_DATA {
+		return errors.Errorf(
+			"only Groot is allowed to drop all data, but the current user is %s", userId)
 	}
 
-	return err
+	return authorizePreds(userId, groupIds, preds, acl.Modify)
 }
 
 // parsePredsFromMutation returns a union set of all the predicate names in the input nquads
@@ -675,13 +671,15 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) (err error) {
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Read,
-			allowed:   err == nil,
-		}).String())
+		defer func() {
+			span.Annotatef(nil, (&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: acl.Read,
+				allowed:   err == nil,
+			}).String())
+		}()
 	}
 
 	userData, err := extractUserAndGroups(ctx)
