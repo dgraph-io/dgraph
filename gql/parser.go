@@ -413,6 +413,11 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			return err
 		}
 	}
+	if gq.FacetsFilter != nil {
+		if err := substituteVariablesFilter(gq.FacetsFilter, vmap); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
