@@ -609,7 +609,6 @@ func populateCluster() {
 		<502> <boss> <510> .
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
->>>>>>> Add test case for non list uid type
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
