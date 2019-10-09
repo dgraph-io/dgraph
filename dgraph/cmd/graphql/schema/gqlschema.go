@@ -128,26 +128,27 @@ type directiveValidator func(
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error
 
-// search arg -> supported GraphQL type
-// == supported Dgraph index -> GraphQL type it applies to
-var supportedSearches = map[string]string{
-	"int":      "Int",
-	"float":    "Float",
-	"bool":     "Boolean",
-	"hash":     "String",
-	"exact":    "String",
-	"term":     "String",
-	"fulltext": "String",
-	"trigram":  "String",
-	"regexp":   "String",
-	"year":     "DateTime",
-	"month":    "DateTime",
-	"day":      "DateTime",
-	"hour":     "DateTime",
+type searchTypeIndex struct {
+	gqlType string
+	dgIndex string
 }
 
-var searchArgToDraphIndex = map[string]string{
-	"regexp": "trigram",
+// search arg -> supported GraphQL type
+// == supported Dgraph index -> GraphQL type it applies to
+var supportedSearches = map[string]searchTypeIndex{
+	"int":      {"Int", "int"},
+	"float":    {"Float", "float"},
+	"bool":     {"Boolean", "boolean"},
+	"hash":     {"String", "hash"},
+	"exact":    {"String", "exact"},
+	"term":     {"String", "term"},
+	"fulltext": {"String", "fulltext"},
+	"trigram":  {"String", "trigram"},
+	"regexp":   {"String", "trigram"},
+	"year":     {"DateTime", "year"},
+	"month":    {"DateTime", "month"},
+	"day":      {"DateTime", "day"},
+	"hour":     {"DateTime", "hour"},
 }
 
 // GraphQL scalar type -> default Dgraph index (/search)
