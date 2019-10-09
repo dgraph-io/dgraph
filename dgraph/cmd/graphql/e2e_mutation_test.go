@@ -48,7 +48,7 @@ func TestAddMutation(t *testing.T) {
 	AddMutation(t, postExecutor)
 }
 
-func AddMutation(t *testing.T, runExecuteFunction requestExecutor) {
+func AddMutation(t *testing.T, executeRequest requestExecutor) {
 	var newCountry *country
 	var newAuthor *author
 	var newPost *post
@@ -56,29 +56,29 @@ func AddMutation(t *testing.T, runExecuteFunction requestExecutor) {
 	// Add single object :
 	// Country is a single object not linked to anything else.
 	// So only need to check that it gets added as expected.
-	newCountry = addCountry(t, runExecuteFunction)
+	newCountry = addCountry(t, executeRequest)
 
 	// addCountry() asserts that the mutation response was as expected.
 	// Let's also check that what's in the DB is what we expect.
-	requireCountry(t, newCountry.ID, newCountry, runExecuteFunction)
+	requireCountry(t, newCountry.ID, newCountry, executeRequest)
 
 	// Add object with reference to existing object :
 	// An Author links to an existing country.  So need to check that the author
 	// was added and that it has the link to the right Country.
-	newAuthor = addAuthor(t, newCountry.ID, runExecuteFunction)
-	requireAuthor(t, newAuthor.ID, newAuthor, runExecuteFunction)
+	newAuthor = addAuthor(t, newCountry.ID, executeRequest)
+	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
 
 	// Add with @hasInverse :
 	// Posts link to an Author and the Author has a link back to all their Posts.
 	// So need to check that the Post was added to the right Author
 	// AND that the Author's posts now includes the new post.
-	newPost = addPost(t, newAuthor.ID, newCountry.ID, runExecuteFunction)
-	requirePost(t, newPost.PostID, newPost, runExecuteFunction)
+	newPost = addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+	requirePost(t, newPost.PostID, newPost, executeRequest)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
-func addCountry(t *testing.T, runExecuteFunction requestExecutor) *country {
+func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($name: String!) {
 			addCountry(input: { name: $name }) {
@@ -93,7 +93,7 @@ func addCountry(t *testing.T, runExecuteFunction requestExecutor) *country {
 	addCountryExpected := `
 		{ "addCountry": { "country": { "id": "_UID_", "name": "Testland" } } }`
 
-	gqlResponse := runExecuteFunction(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
@@ -121,7 +121,7 @@ func addCountry(t *testing.T, runExecuteFunction requestExecutor) *country {
 // requireCountry enforces that node with ID uid in the GraphQL store is of type
 // Country and is value expectedCountry.
 func requireCountry(t *testing.T, uid string, expectedCountry *country,
-	runExecuteFunction requestExecutor) {
+	executeRequest requestExecutor) {
 
 	params := &GraphQLParams{
 		Query: `query getCountry($id: ID!) {
@@ -132,7 +132,7 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country,
 		}`,
 		Variables: map[string]interface{}{"id": uid},
 	}
-	gqlResponse := runExecuteFunction(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, graphqlURL, params)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {
@@ -147,7 +147,7 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country,
 }
 
 func addAuthor(t *testing.T, countryUID string,
-	runExecuteFunction requestExecutor) *author {
+	executeRequest requestExecutor) *author {
 
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AuthorInput!) {
@@ -185,7 +185,7 @@ func addAuthor(t *testing.T, countryUID string,
 		}
 	} }`, countryUID)
 
-	gqlResponse := runExecuteFunction(t, graphqlURL, addAuthorParams)
+	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
@@ -209,7 +209,7 @@ func addAuthor(t *testing.T, countryUID string,
 }
 
 func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
-	runExecuteFunction requestExecutor) {
+	executeRequest requestExecutor) {
 
 	params := &GraphQLParams{
 		Query: `query getAuthor($id: ID!) {
@@ -226,7 +226,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 		}`,
 		Variables: map[string]interface{}{"id": authorID},
 	}
-	gqlResponse := runExecuteFunction(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, graphqlURL, params)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {
@@ -241,7 +241,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 }
 
 func addPost(t *testing.T, authorID, countryID string,
-	runExecuteFunction requestExecutor) *post {
+	executeRequest requestExecutor) *post {
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: PostInput!) {
@@ -293,7 +293,7 @@ func addPost(t *testing.T, authorID, countryID string,
 		}
 	} }`, authorID, countryID)
 
-	gqlResponse := runExecuteFunction(t, graphqlURL, addPostParams)
+	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
@@ -317,7 +317,7 @@ func addPost(t *testing.T, authorID, countryID string,
 }
 
 func requirePost(t *testing.T, postID string, expectedPost *post,
-	runExecuteFunction requestExecutor) {
+	executeRequest requestExecutor) {
 
 	params := &GraphQLParams{
 		Query: `query getPost($id: ID!)  {
@@ -341,7 +341,7 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 		Variables: map[string]interface{}{"id": postID},
 	}
 
-	gqlResponse := runExecuteFunction(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, graphqlURL, params)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {

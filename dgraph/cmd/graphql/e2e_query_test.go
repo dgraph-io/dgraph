@@ -59,26 +59,6 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
-func TestGetQueryEmptyVariable(t *testing.T) {
-	queryCountry := &GraphQLParams{
-		Query: `query {
-			queryCountry {
-				name
-			}
-		}`,
-	}
-
-	req, err := queryCountry.createGQLGet(graphqlURL)
-	require.NoError(t, err)
-
-	q := req.URL.Query()
-	q.Del("variables")
-	req.URL.RawQuery = q.Encode()
-
-	res := queryCountry.Execute(t, req)
-	require.Nil(t, res.Errors)
-}
-
 func TestQueryByType(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {

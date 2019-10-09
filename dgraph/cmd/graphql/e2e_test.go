@@ -166,6 +166,26 @@ func TestGetRequest(t *testing.T) {
 	AddMutation(t, getExecutor)
 }
 
+func TestGetQueryEmptyVariable(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+
+	req, err := queryCountry.createGQLGet(graphqlURL)
+	require.NoError(t, err)
+
+	q := req.URL.Query()
+	q.Del("variables")
+	req.URL.RawQuery = q.Encode()
+
+	res := queryCountry.Execute(t, req)
+	require.Nil(t, res.Errors)
+}
+
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
