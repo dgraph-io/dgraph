@@ -460,7 +460,7 @@ func deleteCountry(
 	t *testing.T,
 	filter map[string]interface{},
 	deleteCountryExpected string,
-	expectedErrors []*x.GqlError) {
+	expectedErrors x.GqlErrorList) {
 
 	deleteCountryParams := &GraphQLParams{
 		Query: `mutation deleteCountry($filter: CountryFilter!) {
@@ -481,7 +481,7 @@ func deleteAuthor(
 	t *testing.T,
 	authorID string,
 	deleteAuthorExpected string,
-	expectedErrors []*x.GqlError) {
+	expectedErrors x.GqlErrorList) {
 
 	deleteAuthorParams := &GraphQLParams{
 		Query: `mutation deleteAuthor($filter: AuthorFilter!) {
@@ -507,7 +507,7 @@ func deletePost(
 	t *testing.T,
 	postID string,
 	deletePostExpected string,
-	expectedErrors []*x.GqlError) {
+	expectedErrors x.GqlErrorList) {
 
 	deletePostParams := &GraphQLParams{
 		Query: `mutation deletePost($filter: PostFilter!) {
@@ -539,7 +539,7 @@ func TestDeleteWrongID(t *testing.T) {
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	expectedData := `{ "deleteCountry": null }`
-	expectedErrors := []*x.GqlError{
+	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: `input: couldn't complete deleteCountry because ` +
 			fmt.Sprintf(`input: Node with id %s is not of type Country`, newAuthor.ID)}}
 
@@ -742,11 +742,11 @@ func TestManyMutationsWithQueryError(t *testing.T) {
 		"add3": { "country": { "id": "_UID_", "name": "abc" } }
 	}`, newCountry.ID)
 
-	expectedErrors := []*x.GqlError{
+	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
 			`in result from Dgraph.  GraphQL error propagation triggered.`,
 			Locations: []x.Location{{Line: 18, Column: 7}},
-			Path:      []interface{}{"author", "country", "name"}}}
+			Path:      []interface{}{"add2", "author", "country", "name"}}}
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
 

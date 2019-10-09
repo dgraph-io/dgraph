@@ -60,7 +60,7 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 
 	dgQuery, err := qr.queryRewriter.Rewrite(qr.query)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite query")
+		res.err = schema.GQLWrapf(err, "couldn't rewrite query %s", qr.query.ResponseName())
 		return res
 	}
 

@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -71,50 +71,6 @@ const (
 // a bool where true indicates that the mutation itself succeeded and false indicates
 // that some error prevented the actual mutation.
 func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
-	// A mutation operation can contain any number of mutation fields.  Those should be executed
-	// serially.
-	// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
-	//
-	// The spec is ambigous about what to do in the case of errors during that serial execution
-	// - apparently deliberatly so; see this comment from Lee Byron:
-	// https://github.com/graphql/graphql-spec/issues/277#issuecomment-385588590
-	// and clarification
-	// https://github.com/graphql/graphql-spec/pull/438
-	//
-	// A reasonable interpretation of that is to stop a list of mutations after the first error -
-	// which seems like the natural semantics and is what we enforce here.
-	//
-	// What we aren't following the exact semantics for is the error propagation.
-	// According to the spec
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Executing-Selection-Sets,
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
-	// and the commentry here:
-	// https://github.com/graphql/graphql-spec/issues/277
-	//
-	// If we had a schema with:
-	//
-	// type Mutation {
-	// 	 push(val: Int!): Int!
-	// }
-	//
-	// and then ran operation:
-	//
-	//  mutation {
-	// 	  one: push(val: 1)
-	// 	  thirteen: push(val: 13)
-	// 	  two: push(val: 2)
-	//  }
-	//
-	// if `push(val: 13)` fails with an error, then only errors should be returned from the whole
-	// mutation` - because the result value is ! and one of them failed, the error should propagate
-	// to the entire operation. That is, even though `push(val: 1)` succeeded and we already
-	// calculated its result value, we should squash that and return null data and an error.
-	// (nothing in GraphQL says where any transaction or persistence boundries lie)
-	//
-	// We aren't doing that below - we aren't even inspecting if the result type is !.  For now,
-	// we'll return any data we've already calculated and following errors.  However:
-	// TODO: we should be picking through all results and propagating errors according to spec
-	// TODO: and, we should have all mutation return types not have ! so we avoid the above
 
 	var res *resolved
 	var mutationSucceeded bool
@@ -128,12 +84,19 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 		res, mutationSucceeded = mr.resolveMutation(ctx)
 	default:
 		return &resolved{
-			err: gqlerror.Errorf(
-				"Only add, delete and update mutations are implemented")}, mutationFailed
+			err: errors.Errorf(
+				"Mutation %s was not executed because only add, delete and update "+
+					"mutations are implemented.", mr.mutation.Name())}, mutationFailed
 	}
 
+	// Mutations should have an extra element to their result path.  Because the mutation
+	// always looks like `addFoo(...) { foo { ... } }` and what's resolved above
+	// is the `foo { ... }` part, so both the result and any error paths need a prefix
+	// of `addFoo` added.
+
+	// Add prefix to result
 	var b bytes.Buffer
-	b.WriteRune('"')
+	b.WriteString("\"")
 	b.WriteString(mr.mutation.ResponseName())
 	b.WriteString(`": `)
 	if len(res.data) > 0 {
@@ -141,8 +104,17 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	} else {
 		b.WriteString("null")
 	}
-
 	res.data = b.Bytes()
+
+	// Add prefix to all error paths
+	resErrs := schema.AsGQLErrors(res.err)
+	for _, err := range resErrs {
+		if len(err.Path) > 0 {
+			err.Path = append([]interface{}{mr.mutation.ResponseName()}, err.Path...)
+		}
+	}
+	res.err = resErrs
+
 	return res, mutationSucceeded
 }
 
@@ -158,28 +130,27 @@ func (mr *mutationResolver) resolveMutation(ctx context.Context) (*resolved, boo
 
 	mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s", mr.mutation.Name())
 		return res, mutationFailed
 	}
 
 	assigned, err := mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
-		res.err = schema.GQLWrapLocationf(err,
-			mr.mutation.Location(),
-			"mutation %s failed", mr.mutation.Name())
+		res.err = schema.GQLWrapLocationf(
+			err, mr.mutation.Location(), "mutation %s failed", mr.mutation.Name())
 		return res, mutationFailed
 	}
 
 	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
+		res.err = schema.GQLWrapf(err, "couldn't rewrite query for mutation %s",
 			mr.mutation.Name())
 		return res, mutationSucceeded
 	}
 
 	resp, err := mr.dgraph.Query(ctx, dgQuery)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
+		res.err = schema.GQLWrapf(err, "mutation %s succeeded but query failed",
 			mr.mutation.Name())
 		return res, mutationSucceeded
 	}
@@ -200,7 +171,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) (*resolve
 
 	query, mut, err := mr.mutationRewriter.RewriteDelete(mr.mutation)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
+		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s", mr.mutation.Name())
 		return res, mutationFailed
 	}
 

@@ -60,11 +60,11 @@ func NewHandler(input string) (Handler, error) {
 	// valid GraphQL schema: e.g. we allow an input schema file like
 	//
 	// type T {
-	//   f: Int @searchable
+	//   f: Int @search
 	// }
 	//
 	// But, that's not valid GraphQL unless there's also definitions of scalars
-	// (Int, String, etc) and definitions of the directives (@searchable, etc).
+	// (Int, String, etc) and definitions of the directives (@search, etc).
 	// We don't want to make the user have those in their file and then we have
 	// to check that they've made the right definitions, etc, etc.
 	//
@@ -170,13 +170,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					)
 
 					indexStr := ""
-					searchable := f.Directives.ForName(searchableDirective)
-					if searchable != nil {
-						arg := searchable.Arguments.ForName(searchableArg)
+					search := f.Directives.ForName(searchDirective)
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
 							indexStr = fmt.Sprintf(" @index(%s)", arg.Value.Raw)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearchables[f.Type.Name()])
+							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
 						}
 					}
 
