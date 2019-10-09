@@ -512,14 +512,19 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		return resp, err
 	}
 	parsingTime += l.Parsing
-	if x.IsDebugRequest(ctx) && len(varToUID) > 0 {
+	if len(varToUID) > 0 {
 		// There could be a lot of these uids which could blow up the response size, specially for
-		// bulk mutations, hence only return them when Debug is set to true.
+		// bulk mutations, hence only return the first million.
+		numUids := 0
 		resp.Mutated = make(map[string]*api.Uids, len(varToUID))
 		for v, uids := range varToUID {
+			if numUids+len(uids) > 1e6 {
+				continue
+			}
 			resp.Mutated[v] = &api.Uids{
 				Uids: uids,
 			}
+			numUids += len(uids)
 		}
 	}
 
@@ -587,6 +592,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 }
 
 // doQueryInUpsert processes the query in upsert block.
+// It return the latency and a map of variables => [ uids ...] used in the mutation.
 func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	*query.Latency, map[string][]string, error) {
 
@@ -651,6 +657,9 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		return nil, nil, errors.Errorf("upsert query block has no variables")
 	}
 
+	// varToUID contains a map of variable name to the uids corresponding to it.
+	// It is used later for constructing set and delete mutations by replacing variables
+	// with the actual uids they correspond to.
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	varToUID := make(map[string][]string)
 	for name, v := range qr.Vars {
@@ -678,7 +687,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 	updateUIDInMutations(gmu, varToUID)
 	updateValInMutations(gmu, qr)
-	// varToUID is returned to the client, lets delete the dummy var that we put in there.
+	// varToUID is returned to the client, lets delete the dummy var that we put in there for
+	// evaluating the conditional upsert.
 	delete(varToUID, varName)
 	return l, varToUID, nil
 }
@@ -803,10 +813,13 @@ func updateValInMutations(gmu *gql.Mutation, req query.Request) {
 //   * uid(v) -> _:uid(v)  -- Otherwise
 
 func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+	// usedMutationVars keeps track of variables that are used in mutations.
+	usedMutationVars := make(map[string]bool)
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
 			if uids, ok := varToUID[varName]; ok {
+				usedMutationVars[varName] = true
 				return uids
 			}
 
@@ -858,6 +871,12 @@ func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 			for _, o := range newObs {
 				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
 			}
+		}
+	}
+	for v := range varToUID {
+		// We only want to return the vars which are used in the mutation.
+		if _, ok := usedMutationVars[v]; !ok {
+			delete(varToUID, v)
 		}
 	}
 	gmu.Set = gmuSet

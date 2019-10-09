@@ -164,8 +164,10 @@ func TestUpsertExampleJSON(t *testing.T) {
   ]
 }
 `
-	_, err := mutationWithTs(m1, "application/json", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 3, len(mr.mutated["u"]))
 
 	q1 := `
 {
@@ -1565,8 +1567,10 @@ upsert {
 	// parsed correctly by the val function.
 	// User3 doesn't have all the fields. This test also ensures
 	// that val works when not all records have the values
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 3, len(mr.mutated["u"]))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1856,8 +1860,10 @@ upsert {
     }
   }
 }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 3, len(mr.mutated["u"]))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes := `
@@ -1901,8 +1907,9 @@ upsert {
     }
   }
 }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.mutated))
 }
 
 func TestUpsertBulkUpdateBranch(t *testing.T) {
@@ -1937,6 +1944,7 @@ amount: float .`))
 upsert {
   query {
     u as var(func: has(branch))
+
   }
 
   mutation {
@@ -1945,8 +1953,10 @@ upsert {
     }
   }
 }`
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 3, len(mr.mutated["u"]))
 
 	q2 := `
 {
@@ -1976,8 +1986,10 @@ upsert {
     }
   }
 }`
-	_, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.mutated))
+	require.Equal(t, 3, len(mr.mutated["u"]))
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -2032,4 +2044,47 @@ upsert {
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "count(~game_answer)")
+}
+
+func TestUpsertVarOnlyUsedInQuery(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: float .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
+  }
+}`
+
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// Bulk Update: update everyone's branch
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(branch))
+
+    me(func: uid(u)) {
+      branch
+    }
+  }
+
+  mutation {
+    set {
+      _:a <branch> "Fuller Street, SF" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	// The uid variable is only used in the query and not in mutation and hene shouldn't be part
+	// of mutated.
+	require.Equal(t, 0, len(mr.mutated))
 }
