@@ -509,14 +509,14 @@
 		{
 			"checksumSHA1": "P4mj7iuJqa7kzIFZeUge++vBMio=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "3023b82002fbe97830e4ba09dcbfadb46f222a3d",
-			"revisionTime": "2019-09-27T11:14:46Z"
+			"revision": "6c381c9859530e2c74782424622b8fe298c8a04d",
+			"revisionTime": "2019-10-02T19:27:24Z"
 		},
 		{
-			"checksumSHA1": "uqaDtfgqoIrGWhQXY6ROB2IeumU=",
+			"checksumSHA1": "SMSHrlLMZrtv0wvKUxFjka5zN7A=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "494963eb946a0ad9a9180521a62082fdbf6ee41b",
-			"revisionTime": "2019-09-19T14:32:58Z"
+			"revision": "6c381c9859530e2c74782424622b8fe298c8a04d",
+			"revisionTime": "2019-10-02T19:27:24Z"
 		},
 		{
 			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",

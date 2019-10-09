@@ -507,11 +507,19 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	}
 	annotateStartTs(span, req.StartTs)
 
-	l, err := doQueryInUpsert(ctx, req, gmu)
+	l, varToUID, err := doQueryInUpsert(ctx, req, gmu)
 	if err != nil {
 		return resp, err
 	}
 	parsingTime += l.Parsing
+	if len(varToUID) > 0 {
+		resp.Mutated = make(map[string]*api.Uids)
+		for v, uids := range varToUID {
+			resp.Mutated[v] = &api.Uids{
+				Uids: uids,
+			}
+		}
+	}
 
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
@@ -578,11 +586,11 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 
 // doQueryInUpsert processes the query in upsert block.
 func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
-	*query.Latency, error) {
+	*query.Latency, map[string][]string, error) {
 
 	l := &query.Latency{}
 	if req.Query == "" {
-		return l, nil
+		return l, nil, nil
 	}
 
 	mu := req.Mutations[0]
@@ -622,23 +630,23 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	}, needVars)
 	l.Parsing += time.Since(startParsingTime)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
 	}
 	if err := validateQuery(parsedReq.Query); err != nil {
-		return nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
 	}
 
 	if err := authorizeQuery(ctx, &parsedReq); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: req.StartTs}
 	if err := qr.ProcessQuery(ctx); err != nil {
-		return nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
 	}
 
 	if len(qr.Vars) <= 0 {
-		return nil, errors.Errorf("upsert query block has no variables")
+		return nil, nil, errors.Errorf("upsert query block has no variables")
 	}
 
 	// If a variable doesn't have any UID, we generate one ourselves later.
@@ -662,13 +670,13 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		if !isMut {
 			gmu.Set = nil
 			gmu.Del = nil
-			return l, nil
+			return l, nil, nil
 		}
 	}
 
 	updateUIDInMutations(gmu, varToUID)
 	updateValInMutations(gmu, qr)
-	return l, nil
+	return l, varToUID, nil
 }
 
 // findVars finds all the variables used in mutation block

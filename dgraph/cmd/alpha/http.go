@@ -387,6 +387,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
+	if len(resp.Mutated) > 0 {
+		mutated := make(map[string][]string)
+		// Flatten the mutated map so that it is easier to parse for the client.
+		for v, uids := range resp.Mutated {
+			mutated[v] = uids.GetUids()
+		}
+		mp["mutated"] = mutated
+	}
 	response["data"] = mp
 
 	js, err := json.Marshal(response)
