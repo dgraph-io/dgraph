@@ -36,8 +36,8 @@ interface Employee {
 
 interface Character {
         id: ID!
-        name: String! @searchable(by: exact)
-        appearsIn: [Episode!] @searchable
+        name: String! @search(by: exact)
+        appearsIn: [Episode!] @search
 }
 
 type Human implements Character & Employee {
@@ -57,6 +57,6 @@ enum Episode {
 
 type Starship {
         id: ID!
-        name: String! @searchable(by: term)
+        name: String! @search(by: term)
         length: Float
 }
