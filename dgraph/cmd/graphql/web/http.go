@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -94,8 +95,20 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 
 	switch r.Method {
 	case http.MethodGet:
-		// TODO: fill gqlReq in from parameters
-		return nil, errors.New("GraphQL on HTTP GET not yet implemented")
+		query := r.URL.Query()
+		rr.GqlReq = &schema.Request{}
+		rr.GqlReq.Query = query.Get("query")
+		rr.GqlReq.OperationName = query.Get("operationName")
+		variables, ok := query["variables"]
+
+		if ok {
+			d := json.NewDecoder(strings.NewReader(variables[0]))
+			d.UseNumber()
+
+			if err := d.Decode(&rr.GqlReq.Variables); err != nil {
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+			}
+		}
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
