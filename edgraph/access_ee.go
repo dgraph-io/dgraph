@@ -500,8 +500,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) (err error) {
 		}()
 	}
 
-	// doAuthorizeAlter checks if alter of all the predicates are allowed
-	// as a byproduct, it also sets the userId, groups variables
+	// Check if alter of all the predicates are allowed also set the userId, groups variables
 	userData, err := extractUserAndGroups(ctx)
 	if err == errNoJwt {
 		// treat the user as an anonymous guest who has not joined any group yet
@@ -593,8 +592,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) (err error) {
 		}()
 	}
 
-	// doAuthorizeMutation checks if modification of all the predicates are allowed
-	// as a byproduct, it also sets the userId and groups
+	// Check if modification of all the predicates are allowed and set the userId and groups
 	userData, err := extractUserAndGroups(ctx)
 	if err == errNoJwt {
 		// treat the user as an anonymous guest who has not joined any group yet
