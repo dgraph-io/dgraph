@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/pkg/errors"
 )
 
 // QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query, and
@@ -96,11 +96,11 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	case schema.FilterQuery:
 		return rewriteAsQuery(gqlQuery), nil
 	default:
-		return nil, gqlerror.Errorf("unimplemented query type %s", gqlQuery.QueryType())
+		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
 }
 
-// FromMutation rewrites the query part of aGraphQL mutation into a Dgraph query.
+// FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
 func (qr *queryRewriter) FromMutationResult(
 	gqlMutation schema.Mutation,
 	uids map[string]string) (*gql.GraphQuery, error) {
@@ -110,7 +110,7 @@ func (qr *queryRewriter) FromMutationResult(
 		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
 		if err != nil {
 			return nil, schema.GQLWrapf(err,
-				"recieved %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
 				uids[createdNode])
 		}
 
@@ -125,7 +125,7 @@ func (qr *queryRewriter) FromMutationResult(
 		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
 
 	default:
-		return nil, gqlerror.Errorf("can't rewrite %s mutations to Dgraph query",
+		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
 			gqlMutation.MutationType())
 	}
 }
@@ -210,6 +210,14 @@ func addTypeFunc(q *gql.GraphQuery, typ string) {
 }
 
 func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
+	// Only add dgraph.type as a child if this field is an interface type and has some children.
+	// dgraph.type would later be used in completeObject as different objects in the resulting
+	// JSON would return different fields based on their concrete type.
+	if field.InterfaceType() && len(field.SelectionSet()) > 0 {
+		q.Children = append(q.Children, &gql.GraphQuery{
+			Attr: "dgraph.type",
+		})
+	}
 	for _, f := range field.SelectionSet() {
 		if f.Skip() || !f.Include() {
 			continue

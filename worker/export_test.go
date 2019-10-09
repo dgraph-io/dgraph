@@ -52,22 +52,13 @@ var personType = &pb.TypeUpdate{
 	TypeName: "Person",
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate:   "name",
-			ValueType:   pb.Posting_STRING,
-			NonNullable: true,
+			Predicate: "name",
 		},
 		{
-			Predicate:       "friend",
-			ValueType:       pb.Posting_UID,
-			List:            true,
-			NonNullable:     true,
-			NonNullableList: true,
+			Predicate: "friend",
 		},
 		{
-			Predicate:      "friend_not_served",
-			ValueType:      pb.Posting_OBJECT,
-			List:           true,
-			ObjectTypeName: "Person",
+			Predicate: "friend_not_served",
 		},
 	},
 }
@@ -338,9 +329,11 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
 	require.NoError(t, err)

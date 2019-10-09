@@ -172,7 +172,7 @@ func TestTxnRead4(t *testing.T) {
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish2"}`, uid))
-	assigned, err = txn3.Mutate(context.Background(), mu)
+	_, err = txn3.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}

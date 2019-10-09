@@ -253,6 +253,7 @@ func TestManyQueries(t *testing.T) {
 		tags
 		isPublished
 		postType
+		numLikes
 	}
 	`
 
@@ -296,6 +297,7 @@ func TestQueriesWithError(t *testing.T) {
 		tags
 		isPublished
 		postType
+		numLikes
 	}
 	`
 
@@ -419,43 +421,41 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 	}
 }
 
-// FIXME: Int is currently not working in API.  It's because it doesn't deserialize properly.
-// We just need to look at the expected type and make sure it's an in.  There's a card in Asana.
-// func TestIntFilters(t *testing.T) {
-// 	cases := map[string]struct {
-// 		Filter   interface{}
-// 		Expected []*post
-// 	}{
-// 		"less than": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"lt": 87}},
-// 			Expected: []*post{
-// 				{Title: "GraphQL in Dgraph doco"},
-// 				{Title: "Random post"}}},
-// 		"less or equal": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"le": 87}},
-// 			Expected: []*post{
-// 				{Title: "GraphQL in Dgraph doco"},
-// 				{Title: "Learning GraphQL in Dgraph"},
-// 				{Title: "Random post"}}},
-// 		"equal": {
-// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"eq": 87}},
-// 			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
-// 		"greater or equal": {
-// 			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"ge": 87}},
-// 			Expected: []*post{
-// 				{Title: "Introducing GraphQL in Dgraph"},
-// 				{Title: "Learning GraphQL in Dgraph"}}},
-// 		"greater than": {
-// 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
-// 			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
-// 	}
+func TestIntFilters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"lt": 87}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Random post"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"le": 87}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"eq": 87}},
+			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"numLikes": map[string]interface{}{"ge": 87}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+	}
 
-// 	for name, test := range cases {
-// 		t.Run(name, func(t *testing.T) {
-// 			postTest(t, test.Filter, test.Expected)
-// 		})
-// 	}
-// }
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
 
 func TestBooleanFilters(t *testing.T) {
 	cases := map[string]struct {
@@ -632,6 +632,86 @@ func postTest(t *testing.T, filter interface{}, expected []*post) {
 	if diff := cmp.Diff(expected, result.QueryPost); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func TestSkipDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($skipPost: Boolean!, $skipName: Boolean!) {
+			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
+				name @skip(if: $skipName)
+				dob
+				reputation
+				posts @skip(if: $skipPost) {
+					title
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"skipPost": true,
+			"skipName": false,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author",
+		"dob":"1988-01-01T00:00:00Z","reputation":8.9}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
+
+func TestIncludeDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($includeName: Boolean!, $includePost: Boolean!) {
+			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
+			  name @include(if: $includeName)
+			  dob
+			  posts @include(if: $includePost) {
+				title
+			  }
+			}
+		  }`,
+		Variables: map[string]interface{}{
+			"includeName": true,
+			"includePost": false,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author","dob":"1988-01-01T00:00:00Z"}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
+
+func TestIncludeAndSkipDirective(t *testing.T) {
+	getAuthorParams := &GraphQLParams{
+		Query: `query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
+			$skipFalse: Boolean!) {
+			queryAuthor (filter: { name: { eq: "Ann Other Author" } }) {
+			  dob @include(if: $includeFalse) @skip(if: $skipFalse)
+			  reputation @include(if: $includeFalse) @skip(if: $skipTrue)
+			  name @include(if: $includeTrue) @skip(if: $skipFalse)
+			  posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10)
+			    @include(if: $includeTrue) @skip(if: $skipTrue) {
+				title
+				tags
+			  }
+			}
+		  }`,
+		Variables: map[string]interface{}{
+			"includeFalse": false,
+			"includeTrue":  true,
+			"skipFalse":    false,
+			"skipTrue":     true,
+		},
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
 func TestQueryByMultipleIds(t *testing.T) {

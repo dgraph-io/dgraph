@@ -1,8 +1,8 @@
 interface Character {
     id: ID!
-    name: String! @searchable(by: exact)
+    name: String! @search(by: exact)
     friends: [Character]
-    appearsIn: [Episode!]! @searchable
+    appearsIn: [Episode!]! @search
 }
 
 type Human implements Character {
@@ -22,6 +22,6 @@ enum Episode {
 
 type Starship {
     id: ID!
-    name: String! @searchable(by: term)
+    name: String! @search(by: term)
     length: Float
 }
