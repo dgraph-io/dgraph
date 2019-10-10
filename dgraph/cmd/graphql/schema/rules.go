@@ -228,14 +228,14 @@ func searchValidation(
 				"Fields of type %s %s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
 
-	} else if search != field.Type.Name() {
+	} else if search.gqlType != field.Type.Name() {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
 				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
 				"Fields of type %[4]s %[6]s.",
 			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearches[arg.Value.Raw], searchMessage(sch, field))
+			supportedSearches[arg.Value.Raw].gqlType, searchMessage(sch, field))
 	}
 
 	return nil
@@ -244,7 +244,7 @@ func searchValidation(
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	var possibleSearchArgs []string
 	for name, typ := range supportedSearches {
-		if typ == field.Type.Name() {
+		if typ.gqlType == field.Type.Name() {
 			possibleSearchArgs = append(possibleSearchArgs, name)
 		}
 	}
