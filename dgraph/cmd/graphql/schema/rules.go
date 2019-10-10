@@ -196,6 +196,16 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	return true
 }
 
+func getAllSearchArgs(val *ast.Value) []string {
+	res := make([]string, len(val.Children))
+
+	for i, child := range val.Children {
+		res[i] = child.Value.Raw
+	}
+
+	return res
+}
+
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -219,23 +229,32 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearches[arg.Value.Raw]; !ok {
-		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	if arg.Value.Raw != "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: the argument to @search %s isn't valid."+
-				"Fields of type %s %s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
+			"User didn't supply an array")
+	}
 
-	} else if search.gqlType != field.Type.Name() {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: has the @search directive but the argument %s "+
-				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
-				"Fields of type %[4]s %[6]s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearches[arg.Value.Raw].gqlType, searchMessage(sch, field))
+	searchArgs := getAllSearchArgs(arg.Value)
+	for _, searchArg := range searchArgs {
+		if search, ok := supportedSearches[searchArg]; !ok {
+			// This check can be removed once gqlparser bug
+			// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: the argument to @search %s isn't valid."+
+					"Fields of type %s %s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
+
+		} else if search.gqlType != field.Type.Name() {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the @search directive but the argument %s "+
+					"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
+					"Fields of type %[4]s %[6]s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(),
+				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+		}
 	}
 
 	return nil

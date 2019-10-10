@@ -1,16 +1,16 @@
 type Post {
 	postID: ID!
-	title: String! @search(by: term)
-	text: String @search(by: fulltext)
+	title: String! @search(by: [term])
+	text: String @search(by: [fulltext])
 
-	tags: [String] @search(by: trigram)
-	tagsHash: [String] @search(by: hash)
-	tagsExact: [String] @search(by: exact)
+	tags: [String] @search(by: [trigram])
+	tagsHash: [String] @search(by: [hash])
+	tagsExact: [String] @search(by: [exact])
 
-	publishByYear: DateTime @search(by: year)
-	publishByMonth: DateTime @search(by: month)
-	publishByDay: DateTime @search(by: day)
-	publishByHour: DateTime @search(by: hour)
+	publishByYear: DateTime @search(by: [year])
+	publishByMonth: DateTime @search(by: [month])
+	publishByDay: DateTime @search(by: [day])
+	publishByHour: DateTime @search(by: [hour])
 
 	numLikes: Int @search
 	score: Float @search

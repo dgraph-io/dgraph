@@ -56,7 +56,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -441,7 +441,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
 // defn that can be searched.  For example, if there's another type
-// `type R { ... f: String @search(by: term) ... }`
+// `type R { ... f: String @search(by: [term]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -532,8 +532,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if search := getSearchArgs(fld); search != "" {
-			filterTypeName := builtInFilters[search]
+		if search := getSearchArgs(fld); search[0] != "" {
+			filterTypeName := builtInFilters[search[0]]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
 				// Instead we allow to write `fieldName: enumValue` in the filter.
@@ -572,7 +572,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" || isID(fld) })
+		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld)[0] != "" || isID(fld) })
 }
 
 func hasOrderables(defn *ast.Definition) bool {
@@ -597,19 +597,19 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
-func getSearchArgs(fld *ast.FieldDefinition) string {
+func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
-		return ""
+		return []string{""}
 	}
 	if len(search.Arguments) == 0 {
 		if search, ok := defaultSearches[fld.Type.Name()]; ok {
-			return search
+			return []string{search}
 		}
 		// it's an enum - always has exact index
-		return "exact"
+		return []string{"exact"}
 	}
-	return search.Arguments.ForName(searchArgs).Value.Raw
+	return getAllSearchArgs(search.Arguments.ForName(searchArgs).Value)
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.
