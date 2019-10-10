@@ -818,17 +818,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 // calculateMetrics populates the given map with the number of uids are gathered for each
 // attributes.
 func calculateMetrics(sg *SubGraph, metrics map[string]int) {
-	// we'll calcuate only destination because this are the uid gathered by this subgraph.
-	// srcUid is given by parent graph so we don't take that in account. But here we may miss
-	// some results, because if any filters applied those uids are gone.
+	// we'll calculate srcUid of the each attribute. because, these are number of uids
+	// processed by this attribute.
 	prev := metrics[sg.Attr]
 	// QUESTION: @manish @pawan: should I add destuid or length of posting list?.
-	prev = prev + len(sg.DestUIDs.GetUids())
-	// DestUIDs will be zero if there is any value matrix so including that
-	// as well.
-	for _, valList := range sg.valueMatrix {
-		prev = prev + len(valList.GetValues())
-	}
+	prev = prev + len(sg.SrcUIDs.GetUids())
 	metrics[sg.Attr] = prev
 
 	// add all the uids gathered by filters
