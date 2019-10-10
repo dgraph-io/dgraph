@@ -65,7 +65,6 @@ func GraphQLHTTPHandler(
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
