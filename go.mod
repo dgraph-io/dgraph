@@ -16,6 +16,7 @@ require (
 	github.com/d4l3k/messagediff v1.2.1 // indirect
 	github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7
 	github.com/dgraph-io/dgo/v2 v2.1.0
+	github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
