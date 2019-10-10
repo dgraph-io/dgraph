@@ -299,10 +299,10 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range fj.attrs {
-		// Here we are counting all non scalar attributes of fj. If there are any such
+		// Here we are counting all non-scalar attributes of fj. If there are any such
 		// attributes, we will flatten it, otherwise we will return all attributes.
 
-		// When we call addMapChild it tries to find whether there is already a attribute
+		// When we call addMapChild it tries to find whether there is already an attribute
 		// with attr field same as attribute argument of addMapChild. If it doesn't find any
 		// such attribute, it creates an attribute with isChild = false. In those cases
 		// sometimes cnt remains zero  and normalize returns attributes without flattening.
@@ -720,7 +720,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
 						// Now normalize() only flattens one level,
-						// the expectation is that it's children have
+						// the expectation is that its children have
 						// already been normalized.
 						normAttrs, err := uc.(*fastJsonNode).normalize()
 						if err != nil {
