@@ -196,16 +196,6 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	return true
 }
 
-func getAllSearchArgs(val *ast.Value) []string {
-	res := make([]string, len(val.Children))
-
-	for i, child := range val.Children {
-		res[i] = child.Value.Raw
-	}
-
-	return res
-}
-
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -235,7 +225,7 @@ func searchValidation(
 			"User didn't supply an array")
 	}
 
-	searchArgs := getAllSearchArgs(arg.Value)
+	searchArgs := getSearchArgs(field)
 	for _, searchArg := range searchArgs {
 		if search, ok := supportedSearches[searchArg]; !ok {
 			// This check can be removed once gqlparser bug

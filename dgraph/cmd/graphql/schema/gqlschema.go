@@ -609,7 +609,15 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		// it's an enum - always has exact index
 		return []string{"exact"}
 	}
-	return getAllSearchArgs(search.Arguments.ForName(searchArgs).Value)
+
+	val := search.Arguments.ForName(searchArgs).Value
+	res := make([]string, len(val.Children))
+
+	for i, child := range val.Children {
+		res[i] = child.Value.Raw
+	}
+
+	return res
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.
