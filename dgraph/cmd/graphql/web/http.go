@@ -178,7 +178,16 @@ func recoveryHandler(next http.Handler) http.Handler {
 			func(err error) {
 				rr := schema.ErrorResponse(err, reqID)
 				w.Header().Set("Content-Type", "application/json")
-				if _, err = rr.WriteTo(w); err != nil {
+				var out io.Writer = w
+
+				if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+					w.Header().Set("Content-Encoding", "gzip")
+					gzw := gzip.NewWriter(w)
+					defer gzw.Close()
+					out = gzw
+				}
+
+				if _, err = rr.WriteTo(out); err != nil {
 					glog.Errorf("[%s] %s", reqID, err)
 				}
 			})
