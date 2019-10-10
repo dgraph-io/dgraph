@@ -97,7 +97,7 @@ upsert {
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, 1, len(mr.mutationVars))
-	uids, ok := mr.mutationVars["v"]
+	uids, ok := mr.mutationVars["uid(v)"]
 	require.True(t, ok)
 	require.Equal(t, 1, len(uids))
 	require.True(t, contains(mr.preds, "name"))
@@ -167,7 +167,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 3, len(mr.mutationVars["u"]))
+	require.Equal(t, 3, len(mr.mutationVars["uid(u)"]))
 
 	q1 := `
 {
@@ -454,7 +454,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u)"]))
 
 	q1 := `
 {
@@ -487,7 +487,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u1"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u1)"]))
 
 	q2 := `
 {
@@ -543,8 +543,8 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u1"]))
-	require.Equal(t, 1, len(mr.mutationVars["u2"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u2)"]))
 
 	q1 := `
 {
@@ -579,8 +579,8 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u1"]))
-	require.Equal(t, 1, len(mr.mutationVars["u2"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u2)"]))
 
 	q2 := `
 {
@@ -702,8 +702,8 @@ friend: uid @reverse .`))
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u1"]))
-	require.Equal(t, 1, len(mr.mutationVars["u2"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u2)"]))
 
 	q1 := `
 {
@@ -964,7 +964,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "name"))
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["v"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(v)"]))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1027,7 +1027,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	require.True(t, len(mr.keys) == 0)
 	require.True(t, contains(mr.preds, "name"))
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["v"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(v)"]))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1090,7 +1090,7 @@ upsert {
 	require.True(t, contains(mr.preds, "color"))
 	require.False(t, contains(mr.preds, "works_for"))
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 2, len(mr.mutationVars["u"]))
+	require.Equal(t, 2, len(mr.mutationVars["uid(u)"]))
 
 	q2 := `
 {
@@ -1127,8 +1127,8 @@ upsert {
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(mr.mutationVars))
-	require.Equal(t, 2, len(mr.mutationVars["c1"]))
-	require.Equal(t, 2, len(mr.mutationVars["c2"]))
+	require.Equal(t, 2, len(mr.mutationVars["uid(c1)"]))
+	require.Equal(t, 2, len(mr.mutationVars["uid(c2)"]))
 
 	// The following mutation should have no effect on the state of the database
 	m4 := `
@@ -1222,8 +1222,8 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(mr.mutationVars))
-	require.Equal(t, 1, len(mr.mutationVars["u1"]))
-	require.Equal(t, 1, len(mr.mutationVars["u3"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.mutationVars["uid(u3)"]))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1570,7 +1570,7 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 3, len(mr.mutationVars["u"]))
+	require.Equal(t, 3, len(mr.mutationVars["uid(u)"]))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1863,7 +1863,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 3, len(mr.mutationVars["u"]))
+	require.Equal(t, 3, len(mr.mutationVars["uid(u)"]))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes := `
@@ -1956,7 +1956,7 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 3, len(mr.mutationVars["u"]))
+	require.Equal(t, 3, len(mr.mutationVars["uid(u)"]))
 
 	q2 := `
 {
@@ -1989,7 +1989,7 @@ upsert {
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.mutationVars))
-	require.Equal(t, 3, len(mr.mutationVars["u"]))
+	require.Equal(t, 3, len(mr.mutationVars["uid(u)"]))
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)

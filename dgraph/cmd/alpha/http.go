@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -391,7 +392,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		mutationVars := make(map[string][]string)
 		// Flatten the mutated map so that it is easier to parse for the client.
 		for v, uids := range resp.MutationVars {
-			mutationVars[v] = uids.GetUids()
+			mutationVars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
 		}
 		mp["mutation_vars"] = mutationVars
 	}
