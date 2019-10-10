@@ -17,9 +17,11 @@
 package dgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/pkg/errors"
@@ -33,15 +35,20 @@ const (
 
 // MutationRewriter can transform a GraphQL mutation into a Dgraph JSON mutation.
 type MutationRewriter interface {
-	Rewrite(m schema.Mutation) (interface{}, error)
-	RewriteDelete(m schema.Mutation) (string, string, error)
+	Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error)
 }
 
 type mutationRewriter struct{}
+type deleteRewriter struct{}
 
 // NewMutationRewriter returns new mutation rewriter.
 func NewMutationRewriter() MutationRewriter {
 	return &mutationRewriter{}
+}
+
+// NewDeleteRewriter returns new mutation rewriter.
+func NewDeleteRewriter() MutationRewriter {
+	return &deleteRewriter{}
 }
 
 // Rewrite takes a GraphQL schema.Mutation and rewrites it to a struct representing
@@ -74,13 +81,14 @@ func NewMutationRewriter() MutationRewriter {
 //   "Author.country": { "uid": "0x123" },
 //   "Author.posts":[]
 // }
-func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
+func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (
+	*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	if m.MutationType() != schema.AddMutation &&
 		m.MutationType() != schema.UpdateMutation {
-		return nil,
+		return nil, nil,
 			errors.Errorf(
-				"internal error - call to build Dgraph mutation for %s mutation type",
+				"(internal error) call to build add/update Dgraph mutation for %s mutation type",
 				m.MutationType())
 	}
 
@@ -124,14 +132,14 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 
 			uid, err := getUpdUID(m)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			srcUID = fmt.Sprintf("%#x", uid)
 		}
 
 		res, err := rewriteObject(mutatedType, nil, srcUID, val)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		res["uid"] = srcUID
@@ -141,7 +149,12 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 			res["dgraph.type"] = dgraphTypes
 		}
 
-		return res, nil
+		mutationJSON, err := json.Marshal(res)
+		return nil,
+			[]*dgoapi.Mutation{{
+				SetJson: mutationJSON,
+			}},
+			schema.GQLWrapf(err, "failed to rewrite mutation payload")
 	case []interface{}:
 		// TODO: we don't yet have a bulk mutation that takes a list of mutations
 		// like
@@ -152,13 +165,14 @@ func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (interface{}, error) {
 		//
 		// GraphQL validation means we shouldn't get here till those bulk mutations
 		// are added to the schema.
-		return nil,
-			errors.New("call to build a list of mutations, but that isn't supported yet")
+		return nil, nil,
+			errors.New("(internal error) call to build a list of mutations, but that " +
+				"isn't supported yet")
 	}
 
-	return nil,
+	return nil, nil,
 		errors.New(
-			"tried to build Dgraph mutation with input of unrecognized type; " +
+			"(internal error) tried to build Dgraph mutation with input of unrecognized type, " +
 				"this indicates a GraphQL validation error")
 }
 
@@ -178,20 +192,20 @@ func rewriteMutationAsQuery(m schema.Mutation) *gql.GraphQuery {
 	return dgQuery
 }
 
-func (mrw *mutationRewriter) RewriteDelete(m schema.Mutation) (query string, mutation string,
-	err error) {
+func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
+	*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	if m.MutationType() != schema.DeleteMutation {
-		return "", "", errors.Errorf(
-			"internal error - call to build Dgraph mutation for %s mutation type",
+
+		return nil, nil, errors.Errorf(
+			"(internal error) call to build delete mutation for %s mutation type",
 			m.MutationType())
 	}
 
-	q := rewriteMutationAsQuery(m)
-	query = asString(q)
-	// The query stores the result of the filter variable in a variable called x, so we need to
-	// send a delete mutation with the same variable.
-	mutation = deleteUidVarMutation
-	return query, mutation, nil
+	return rewriteMutationAsQuery(m),
+		[]*dgoapi.Mutation{{
+			DelNquads: []byte(deleteUidVarMutation),
+		}},
+		nil
 }
 
 func getUpdUID(m schema.Mutation) (uint64, error) {
