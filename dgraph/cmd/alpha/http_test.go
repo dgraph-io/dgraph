@@ -159,10 +159,10 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 }
 
 type mutationResponse struct {
-	keys    []string
-	preds   []string
-	startTs uint64
-	mutated map[string][]string
+	keys         []string
+	preds        []string
+	startTs      uint64
+	mutationVars map[string][]string
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -188,12 +188,12 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	x.Check(json.Unmarshal(body, &r))
 
 	type resData struct {
-		Mutated map[string][]string
+		MutationVars map[string][]string `json:"mutation_vars"`
 	}
 	var rd resData
 	x.Check(json.Unmarshal(r.Data, &rd))
 
-	mr.mutated = rd.Mutated
+	mr.mutationVars = rd.MutationVars
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs

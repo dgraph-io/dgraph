@@ -516,12 +516,12 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		// There could be a lot of these uids which could blow up the response size, specially for
 		// bulk mutations, hence only return the first million.
 		numUids := 0
-		resp.Mutated = make(map[string]*api.Uids, len(varToUID))
+		resp.MutationVars = make(map[string]*api.Uids, len(varToUID))
 		for v, uids := range varToUID {
 			if numUids+len(uids) > 1e6 {
 				continue
 			}
-			resp.Mutated[v] = &api.Uids{
+			resp.MutationVars[v] = &api.Uids{
 				Uids: uids,
 			}
 			numUids += len(uids)
