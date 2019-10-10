@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -358,7 +357,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 	`
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, x.DebugKey, "true")
+	ctx = context.WithValue(ctx, DebugKey, "true")
 	js, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	require.JSONEq(t,
