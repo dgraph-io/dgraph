@@ -27,8 +27,11 @@ import (
 // validate query, and so doesn't return an error if query is 'malformed' - it might
 // just write something that wouldn't parse as a Dgraph query.
 func asString(query *gql.GraphQuery) string {
-	var b strings.Builder
+	if query == nil {
+		return ""
+	}
 
+	var b strings.Builder
 	b.WriteString("query {\n")
 	writeQuery(&b, query, "  ", true)
 	b.WriteString("}")
