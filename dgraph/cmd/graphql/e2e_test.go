@@ -334,6 +334,11 @@ func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
 	q.Add("variables", string(variableString))
 
 	req.URL.RawQuery = q.Encode()
+	if params.acceptGzip {
+		req.Header.Set("Accept-Encoding", "gzip")
+	} else {
+		req.Header.Set("Accept-Encoding", "identity")
+	}
 	return req, nil
 }
 
@@ -463,6 +468,7 @@ func allCountriesAdded() ([]*country, error) {
 		return nil, errors.Wrap(err, "unable to build GraphQL request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Encoding", "identity")
 
 	resp, err := runGQLRequest(req)
 	if err != nil {
