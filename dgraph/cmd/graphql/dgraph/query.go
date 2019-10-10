@@ -56,7 +56,10 @@ import (
 // the mutation.
 type QueryRewriter interface {
 	Rewrite(q schema.Query) (*gql.GraphQuery, error)
-	FromMutationResult(m schema.Mutation, uids map[string]string) (*gql.GraphQuery, error)
+	FromMutationResult(
+		m schema.Mutation,
+		assigned map[string]string,
+		mutated map[string][]string) (*gql.GraphQuery, error)
 }
 
 type queryRewriter struct{}
@@ -102,31 +105,32 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 
 // FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
 func (qr *queryRewriter) FromMutationResult(
-	gqlMutation schema.Mutation,
-	uids map[string]string) (*gql.GraphQuery, error) {
+	mutation schema.Mutation,
+	assigned map[string]string,
+	mutated map[string][]string) (*gql.GraphQuery, error) {
 
-	switch gqlMutation.MutationType() {
+	switch mutation.MutationType() {
 	case schema.AddMutation:
-		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
+		uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
 		if err != nil {
 			return nil, schema.GQLWrapf(err,
 				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-				uids[createdNode])
+				assigned[createdNode])
 		}
 
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
+		return rewriteAsGet(mutation.QueryField(), uid), nil
 
 	case schema.UpdateMutation:
-		uid, err := getUpdUID(gqlMutation)
+		uid, err := getUpdUID(mutation)
 		if err != nil {
 			return nil, err
 		}
 
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
+		return rewriteAsGet(mutation.QueryField(), uid), nil
 
 	default:
 		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
-			gqlMutation.MutationType())
+			mutation.MutationType())
 	}
 }
 
