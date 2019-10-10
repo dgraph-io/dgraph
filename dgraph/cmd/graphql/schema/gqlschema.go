@@ -532,8 +532,12 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if search := getSearchArgs(fld); search[0] != "" {
-			filterTypeName := builtInFilters[search[0]]
+		for _, search := range getSearchArgs(fld) {
+			if search == "" {
+				continue
+			}
+
+			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
 				// Instead we allow to write `fieldName: enumValue` in the filter.
@@ -572,7 +576,14 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld)[0] != "" || isID(fld) })
+		func(fld *ast.FieldDefinition) bool {
+			for _, search := range getSearchArgs(fld) {
+				if search != "" {
+					return true
+				}
+			}
+			return isID(fld)
+		})
 }
 
 func hasOrderables(defn *ast.Definition) bool {
