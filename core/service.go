@@ -93,7 +93,7 @@ func (s *Service) start(e chan error) {
 }
 
 func (s *Service) Stop() error {
-	if s.rt != nil{
+	if s.rt != nil {
 		s.rt.Stop()
 	}
 	return nil

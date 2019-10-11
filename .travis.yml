@@ -44,6 +44,6 @@ matrix:
         - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
     - name: "Golang-ci Linter"
       before_script:
-        - go install github.com/golangci/golangci-lint/cmd/golangci-lint
+        - go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.18.0
       script: golangci-lint run ./... -c .golangci.yml
 

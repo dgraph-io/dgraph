@@ -26,7 +26,7 @@ var _ services.Service = &DbService{}
 
 // DbService contains both databases for service registry
 type DbService struct {
-	path string
+	path    string
 	StateDB *StateDB
 	BlockDB *BlockDB
 }
@@ -34,7 +34,7 @@ type DbService struct {
 // NewDbService opens and returns a new DB object
 func NewDbService(path string) (*DbService, error) {
 	return &DbService{
-		path: path,
+		path:    path,
 		StateDB: nil,
 		BlockDB: nil,
 	}, nil
@@ -76,4 +76,3 @@ func (s *DbService) Stop() error {
 	}
 	return nil
 }
-

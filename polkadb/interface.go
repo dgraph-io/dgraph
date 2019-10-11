@@ -55,3 +55,13 @@ type Iterator interface {
 type Iteratee interface {
 	NewIterator() Iterable
 }
+
+type Reader interface {
+	Get(key []byte) ([]byte, error)
+	Has(key []byte) (bool, error)
+}
+
+type Writer interface {
+	PutItem
+	Del(key []byte) error
+}

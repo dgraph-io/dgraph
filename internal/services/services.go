@@ -31,8 +31,8 @@ type Service interface {
 
 // ServiceRegistry is a structure to manage core system services
 type ServiceRegistry struct {
-	services     map[reflect.Type]Service      // map of types to service instances
-	serviceTypes []reflect.Type                // all known service types, used to iterate through services
+	services     map[reflect.Type]Service // map of types to service instances
+	serviceTypes []reflect.Type           // all known service types, used to iterate through services
 }
 
 // NewServiceRegistry creates an empty registry

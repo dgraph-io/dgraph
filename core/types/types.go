@@ -33,13 +33,13 @@ type Block struct {
 
 // BlockHeader is a state block header
 type BlockHeader struct {
-	ParentHash     common.Hash
-	Number         *big.Int
-	StateRoot      common.Hash
-	ExtrinsicsRoot common.Hash
-	Digest         []byte // any additional block info eg. logs, seal
+	ParentHash     common.Hash `json:"parentHash"`
+	Number         *big.Int    `json:"number"`
+	StateRoot      common.Hash `json:"stateRoot"`
+	ExtrinsicsRoot common.Hash `json:"extrinsicsRoot"`
+	Digest         []byte      `json:"digest"` // any additional block info eg. logs, seal
 	// TODO: Not part of spec, can potentially remove
-	Hash common.Hash
+	Hash common.Hash `json:"hash"`
 }
 
 // BlockBody is the extrinsics inside a state block
@@ -48,8 +48,8 @@ type BlockBody []byte
 /// BlockData is stored within the BlockDB
 type BlockData struct {
 	Hash   common.Hash
-	Header BlockHeader
-	Body   BlockBody
+	Header *BlockHeader
+	Body   *BlockBody
 	// Receipt
 	// MessageQueue
 	// Justification

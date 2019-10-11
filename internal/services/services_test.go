@@ -50,7 +50,7 @@ func (s *MockSrvcB) Stop() error {
 type FakeService struct{}
 
 func (s *FakeService) Start() error { return nil }
-func (s *FakeService) Stop()               {}
+func (s *FakeService) Stop()        {}
 
 // --------------------------------------------------------
 

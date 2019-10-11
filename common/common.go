@@ -22,6 +22,12 @@ import (
 	"strings"
 )
 
+// Length of hashes in bytes.
+const (
+	// HashLength is the expected length of the hash
+	HashLength = 32
+)
+
 // HexToBytes turns a 0x prefixed hex string into a byte slice
 func HexToBytes(in string) ([]byte, error) {
 	if strings.Compare(in[:2], "0x") != 0 {
@@ -93,4 +99,22 @@ func SwapNibbles(k []byte) []byte {
 		result[i] = SwapByteNibbles(b)
 	}
 	return result
+}
+
+// BytesToHash sets b to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func BytesToHash(b []byte) Hash {
+	var h Hash
+	h.SetBytes(b)
+	return h
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-HashLength:]
+	}
+
+	copy(h[HashLength-len(b):], b)
 }
