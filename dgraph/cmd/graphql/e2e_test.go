@@ -239,7 +239,7 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
 	require.NotNil(t, result.Errors)
-	require.Contains(t, result.Errors[0].Message, "not a valid GraphQL request body")
+	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
 
 func TestGetRequest(t *testing.T) {
