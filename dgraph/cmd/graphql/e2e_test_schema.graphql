@@ -14,7 +14,7 @@ type Author {
 
 type Post {
         postID: ID!
-        title: String! @search(by: ["term"])
+        title: String! @search(by: ["term", "fulltext", "trigram"])
         text: String @search(by: ["fulltext"])
         tags: [String] @search(by: ["exact"])
         topic: String @search(by: ["exact"])

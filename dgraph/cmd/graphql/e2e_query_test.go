@@ -154,6 +154,21 @@ func TestRegExp(t *testing.T) {
 		})
 }
 
+func TestSearch(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryPost (filter: { title: { regexp: "Introducing*" } }) {
+			    title
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	fmt.Println(gqlResponse.Errors)
+
+	fmt.Println(string(gqlResponse.Data))
+}
+
 func TestHashSearch(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
