@@ -59,6 +59,25 @@ func GraphQLHTTPHandler(
 		}))
 }
 
+// write chooses between the http response writer and gzip writer
+// and sends the schema response using that.
+func write(w http.ResponseWriter, rr *schema.Response, errMsg string, acceptGzip bool) {
+	var out io.Writer = w
+
+	// If the receiver accepts gzip, then we would update the writer
+	// and send gzipped content instead.
+	if acceptGzip {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	if _, err := rr.WriteTo(out); err != nil {
+		glog.Error(errMsg, err)
+	}
+}
+
 // ServeHTTP handles GraphQL queries and mutations that get resolved
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
@@ -73,17 +92,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
-	var out io.Writer = w
-
-	// If the reciever accepts gzip, then we would update the writer
-	// and send gzipped content instead.
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
 	var res *schema.Response
 	rh, err := gh.resolverForRequest(r)
 	if err != nil {
@@ -92,9 +100,9 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res = rh.Resolve(ctx)
 	}
 
-	if _, err := res.WriteTo(out); err != nil {
-		glog.Error(fmt.Sprintf("[%s]", api.RequestID(ctx)), err)
-	}
+	write(w, res, fmt.Sprintf("[%s]", api.RequestID(ctx)),
+		strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+
 }
 
 func (gh *graphqlHandler) isValid() bool {
@@ -178,18 +186,8 @@ func recoveryHandler(next http.Handler) http.Handler {
 			func(err error) {
 				rr := schema.ErrorResponse(err, reqID)
 				w.Header().Set("Content-Type", "application/json")
-				var out io.Writer = w
-
-				if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-					w.Header().Set("Content-Encoding", "gzip")
-					gzw := gzip.NewWriter(w)
-					defer gzw.Close()
-					out = gzw
-				}
-
-				if _, err = rr.WriteTo(out); err != nil {
-					glog.Errorf("[%s] %s", reqID, err)
-				}
+				write(w, rr, fmt.Sprintf("[%s]", reqID),
+					strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 			})
 
 		next.ServeHTTP(w, r)

@@ -60,16 +60,16 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 }
 
 // This test checks that all the different combinations of
-// request sending compressed / uncompressed query and recieving
+// request sending compressed / uncompressed query and receiving
 // compressed / uncompressed result.
 func TestGzipCompression(t *testing.T) {
 	r := []bool{false, true}
-	for _, acceptEncoding := range r {
-		for _, contentEncoding := range r {
+	for _, acceptGzip := range r {
+		for _, gzipEncoding := range r {
 			t.Run(fmt.Sprintf("TestQueryByType acceptGzip=%t gzipEncoding=%t",
-				acceptEncoding, contentEncoding), func(t *testing.T) {
+				acceptGzip, gzipEncoding), func(t *testing.T) {
 
-				queryByType(t, acceptEncoding, contentEncoding)
+				queryByType(t, acceptGzip, gzipEncoding)
 			})
 		}
 	}
@@ -79,15 +79,15 @@ func TestQueryByType(t *testing.T) {
 	queryByType(t, true, true)
 }
 
-func queryByType(t *testing.T, acceptEncoding, contentEncoding bool) {
+func queryByType(t *testing.T, acceptGzip, gzipEncoding bool) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
 				name
 			}
 		}`,
-		acceptGzip:   acceptEncoding,
-		gzipEncoding: contentEncoding,
+		acceptGzip:   acceptGzip,
+		gzipEncoding: gzipEncoding,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)

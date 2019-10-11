@@ -203,8 +203,6 @@ func TestGzipCompressionHeader(t *testing.T) {
 				name
 			}
 		}`,
-		acceptGzip:   false,
-		gzipEncoding: false,
 	}
 
 	req, err := queryCountry.createGQLPost(graphqlURL)
@@ -229,8 +227,6 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 				name
 			}
 		}`,
-		acceptGzip:   false,
-		gzipEncoding: true,
 	}
 
 	req, err := queryCountry.createGQLPost(graphqlURL)
@@ -256,8 +252,6 @@ func TestGetQueryEmptyVariable(t *testing.T) {
 				name
 			}
 		}`,
-		acceptGzip:   false,
-		gzipEncoding: false,
 	}
 	req, err := queryCountry.createGQLGet(graphqlURL)
 	require.NoError(t, err)
