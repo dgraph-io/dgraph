@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,12 @@ const (
 // "Query variables can be sent as a JSON-encoded string in an additional query parameter
 // called variables. If the query contains several named operations, an operationName query
 // parameter can be used to control which one should be executed."
+//
+// acceptGzip sends "Accept-Encoding: gzip" header to the server, which would return the
+// response after gzip.
+// gzipEncoding would compress the request to the server and add "Content-Encoding: gzip"
+// header to the same.
+
 type GraphQLParams struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
@@ -276,6 +282,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 		res, err = gunzipData(res)
 		require.NoError(t, err)
 		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
+		require.Contains(t, req.Header.Get("Content-Encoding"), "gzip")
 	}
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
