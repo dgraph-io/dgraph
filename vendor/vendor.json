@@ -513,10 +513,10 @@
 			"revisionTime": "2019-10-02T19:27:24Z"
 		},
 		{
-			"checksumSHA1": "07q/gm/1gTO2okdXFdwkv/lgUr0=",
+			"checksumSHA1": "B+YsSP9VUMxSgYq/VLSFxBmtr2U=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "35220f590a7cbec7baaa5e347957fee8fe9949ee",
-			"revisionTime": "2019-10-10T00:01:05Z"
+			"revision": "1e0f291b623586a5466bc0efbf68cbc37a34674c",
+			"revisionTime": "2019-10-11T00:11:50Z"
 		},
 		{
 			"checksumSHA1": "DuPu1FW2biXFeA1ROhN3EmO4xEc=",

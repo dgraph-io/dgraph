@@ -388,13 +388,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
-	if len(resp.MutationVars) > 0 {
-		mutationVars := make(map[string][]string)
+	if len(resp.Vars) > 0 {
+		vars := make(map[string][]string)
 		// Flatten the mutated map so that it is easier to parse for the client.
-		for v, uids := range resp.MutationVars {
-			mutationVars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
+		for v, uids := range resp.Vars {
+			vars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
 		}
-		mp["mutation_vars"] = mutationVars
+		mp["vars"] = vars
 	}
 	response["data"] = mp
 

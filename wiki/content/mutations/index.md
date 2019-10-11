@@ -872,7 +872,7 @@ results of executing the query block:
 
 * If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
-* A mapping of the uid variable to the list of uids that were used to execute the mutation are also returned as part of the response (as part of the `mutation_vars` key). Currently only upto a million uids are returned as part of the result.
+
 
 ### Example
 
@@ -989,7 +989,7 @@ Result:
     "code": "Success",
     "message": "Done",
     "uids": {},
-    "mutation_vars": {
+    "vars": {
       "uid(v)": ["0x2"]
     }
   },
@@ -999,7 +999,8 @@ Result:
 
 Here, the query block queries for a user with `email` as `user@company1.io`. It stores
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part of `mutation_vars` which has a list of uids that were used in the set mutation.
+user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
+of `vars` which has a list of uids that were used in the set mutation.
 
 We can achieve the same result using `json` dataset as follows:
 
@@ -1049,7 +1050,7 @@ Result:
     "code": "Success",
     "message": "Done",
     "uids": {},
-    "mutation_vars": {
+    "vars": {
       "uid(v)": ["0x2"]
     }
   },

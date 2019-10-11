@@ -188,7 +188,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	x.Check(json.Unmarshal(body, &r))
 
 	type resData struct {
-		MutationVars map[string][]string `json:"mutation_vars"`
+		MutationVars map[string][]string `json:"vars"`
 	}
 	var rd resData
 	x.Check(json.Unmarshal(r.Data, &rd))
