@@ -518,11 +518,10 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		for v, uids := range varToUID {
 			// There could be a lot of these uids which could blow up the response size, especially
 			// for bulk mutations, hence only return the first million.
-			if totalUids := numUids + len(uids); totalUids <= 1e6 {
+			if numUids += len(uids); numUids <= 1e6 {
 				resp.Vars[v] = &api.Uids{
 					Uids: uids,
 				}
-				numUids = totalUids
 			}
 		}
 	}
@@ -673,7 +672,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 		uids := make([]string, len(v.Uids.Uids))
 		for i, u := range v.Uids.Uids {
-			uids[i] = strconv.FormatUint(u, 10)
+			uids[i] = fmt.Sprintf("%#x", u)
 		}
 		varToUID[name] = uids
 	}
