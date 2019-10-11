@@ -18,6 +18,7 @@ package alpha
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,18 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
+
+// assertAsHex checks that uids returned as part of the vars map should be valid hex encoded uids.
+func assertAsHex(t *testing.T, vars map[string][]string) {
+	for _, uids := range vars {
+		for _, uid := range uids {
+			require.True(t, strings.HasPrefix(uid, "0x"), "uid: [%v] should be a hex encoded string", uid)
+			// ParseUint throws an error if the string has 0x prefix, so we need to strip the prefix here.
+			_, err := strconv.ParseUint(uid[2:], 16, 64)
+			require.NoErrorf(t, err, "while parsing: [%v] as hex encoded uint64", uid)
+		}
+	}
+}
 
 // contains checks whether given element is contained
 // in any of the elements of the given list of strings.
@@ -64,6 +77,7 @@ upsert {
 	require.Equal(t, 0, len(mr.vars))
 	require.True(t, contains(mr.preds, "email"))
 	require.True(t, contains(mr.preds, "name"))
+	assertAsHex(t, mr.vars)
 
 	// query should return the wrong name
 	q1 := `
@@ -100,6 +114,7 @@ upsert {
 	uids, ok := mr.vars["uid(v)"]
 	require.True(t, ok)
 	require.Equal(t, 1, len(uids))
+	assertAsHex(t, mr.vars)
 	require.True(t, contains(mr.preds, "name"))
 
 	// query should return correct name
@@ -168,6 +183,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -455,6 +471,7 @@ upsert {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -488,6 +505,7 @@ upsert {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -545,6 +563,7 @@ upsert {
 	require.Equal(t, 2, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
 	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -581,6 +600,7 @@ upsert {
 	require.Equal(t, 2, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
 	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -704,6 +724,7 @@ friend: uid @reverse .`))
 	require.Equal(t, 2, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
 	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -765,6 +786,7 @@ upsert {
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(mr.vars))
+	assertAsHex(t, mr.vars)
 
 	q := `
 {
@@ -897,6 +919,8 @@ upsert {
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.Equal(t, 0, len(mr.vars))
 	require.NoError(t, err)
+	assertAsHex(t, mr.vars)
+
 }
 
 func TestConditionalUpsertExample0(t *testing.T) {
@@ -965,6 +989,7 @@ upsert {
 	require.True(t, contains(mr.preds, "name"))
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(v)"]))
+	assertAsHex(t, mr.vars)
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1091,6 +1116,7 @@ upsert {
 	require.False(t, contains(mr.preds, "works_for"))
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 2, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -1129,6 +1155,7 @@ upsert {
 	require.Equal(t, 2, len(mr.vars))
 	require.Equal(t, 2, len(mr.vars["uid(c1)"]))
 	require.Equal(t, 2, len(mr.vars["uid(c2)"]))
+	assertAsHex(t, mr.vars)
 
 	// The following mutation should have no effect on the state of the database
 	m4 := `
@@ -1224,6 +1251,7 @@ upsert {
 	require.Equal(t, 2, len(mr.vars))
 	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
 	require.Equal(t, 1, len(mr.vars["uid(u3)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1571,6 +1599,7 @@ upsert {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1864,6 +1893,7 @@ upsert {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(mr.vars))
 	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes := `
