@@ -161,6 +161,63 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
+var defaultFiltersDirectives = map[string]ast.FieldList{
+	"StringTermFilter": ast.FieldList{
+		{Name: "allofterms",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "anyofterms",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+	},
+	"StringRegExpFilter": ast.FieldList{
+		{Name: "regexp",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+	},
+	"StringFullTextFilter": ast.FieldList{
+		{Name: "allofterms",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "anyofterms",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+	},
+	"StringHashFilter": ast.FieldList{
+		{Name: "eq",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+	},
+	"StringExactFilter": ast.FieldList{
+		{Name: "eq",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "le",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "lt",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "ge",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+		{Name: "gt",
+			Type: &ast.Type{
+				NamedType: "String",
+			}},
+	},
+}
+
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
 var orderable = map[string]bool{
 	"Int":      true,
@@ -532,6 +589,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
+
+		filterTypeNameUnion := []string{}
 		for _, search := range getSearchArgs(fld) {
 			if search == "" {
 				continue
@@ -550,6 +609,11 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				filterTypeName = fld.Type.Name()
 			}
 
+			filterTypeNameUnion = append(filterTypeNameUnion, filterTypeName)
+		}
+
+		if len(filterTypeNameUnion) > 0 {
+			filterTypeName := strings.Join(filterTypeNameUnion, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
@@ -557,6 +621,29 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 						NamedType: filterTypeName,
 					},
 				})
+
+			//create a schema type
+			if len(filterTypeNameUnion) > 1 {
+				//fieldList := ast.FieldList{}
+				//for _, fieldName := range filterTypeNameUnion {
+				//	fieldDirectives := defaultFiltersDirectives[fieldName]
+				//	for _, fieldDirective := range fieldDirectives {
+				//		fieldList = append(fieldList, fieldDirective)
+				//	}
+				//}
+
+				//schema.Types[filterTypeName] = &ast.Definition{
+				//	Kind:   ast.InputObject,
+				//	Name:   filterTypeName,
+				//	Fields: fieldList,
+				//}
+
+				schema.Types[filterTypeName] = &ast.Definition{
+					Kind:  ast.Union,
+					Name:  filterTypeName,
+					Types: filterTypeNameUnion,
+				}
+			}
 		}
 	}
 
@@ -1017,6 +1104,10 @@ func generateScalarString(typ *ast.Definition) string {
 	return sch.String()
 }
 
+func generateUnionString(typ *ast.Definition) string {
+	return fmt.Sprintf("union %s = %s\n", typ.Name, strings.Join(typ.Types, " | "))
+}
+
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
 // built by completeSchema, and so contains an original set of definitions, the
 // definitions from schemaExtras and generated types, queries and mutations.
@@ -1025,7 +1116,7 @@ func generateScalarString(typ *ast.Definition) string {
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
 func Stringify(schema *ast.Schema, originalTypes []string) string {
-	var sch, original, object, input, enum strings.Builder
+	var sch, original, object, input, enum, union strings.Builder
 
 	if schema.Types == nil {
 		return ""
@@ -1084,6 +1175,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			input.WriteString(generateInputString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
 			enum.WriteString(generateEnumString(typ) + "\n")
+		} else if typ.Kind == ast.Union {
+			union.WriteString(generateUnionString(typ) + "\n")
 		}
 	}
 
@@ -1098,6 +1191,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	sch.WriteString(enum.String())
 	sch.WriteString("#######################\n# Generated Inputs\n#######################\n\n")
 	sch.WriteString(input.String())
+	sch.WriteString("#######################\n# Generated Unions\n#######################\n\n")
+	sch.WriteString(union.String())
 	sch.WriteString("#######################\n# Generated Query\n#######################\n\n")
 	sch.WriteString(generateObjectString(schema.Query) + "\n")
 	sch.WriteString("#######################\n# Generated Mutations\n#######################\n\n")

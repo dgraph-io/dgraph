@@ -217,10 +217,12 @@ func initDgraph() error {
 	}
 
 	completeSchema := schHandler.GQLSchema()
+	fmt.Println(completeSchema)
 	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
 	dgSchema := schHandler.DGSchema()
 
+	fmt.Println("Here: ", dgSchema)
 	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
 
 	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)

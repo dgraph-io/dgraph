@@ -185,7 +185,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
 							indexes := getAllSearchIndexes(arg.Value)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ","))
+							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 						} else {
 							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
 						}
