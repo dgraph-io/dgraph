@@ -2114,7 +2114,7 @@ upsert {
 }`
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	// The uid variable is only used in the query and not in mutation and hene shouldn't be part
-	// of mutated.
+	// The uid variable is only used in the query and not in mutation and hence shouldn't be part
+	// of vars.
 	require.Equal(t, 0, len(mr.vars))
 }
