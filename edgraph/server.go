@@ -518,13 +518,12 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 		for v, uids := range varToUID {
 			// There could be a lot of these uids which could blow up the response size, especially
 			// for bulk mutations, hence only return the first million.
-			if numUids+len(uids) > 1e6 {
-				continue
+			if totalUids := numUids + len(uids); totalUids <= 1e6 {
+				resp.Vars[v] = &api.Uids{
+					Uids: uids,
+				}
+				numUids = totalUids
 			}
-			resp.Vars[v] = &api.Uids{
-				Uids: uids,
-			}
-			numUids += len(uids)
 		}
 	}
 
@@ -532,6 +531,11 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	if err != nil {
 		return resp, err
 	}
+
+	// resp.Uids contains a map of the node name to the uid.
+	// 1. For a blank node, like _:foo, the key would be foo.
+	// 2. For a uid variable that is part of an upsert query, like uid(foo), the key would
+	// be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToDirectedEdges(gmu, newUids)
 	if err != nil {
@@ -592,7 +596,7 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 }
 
 // doQueryInUpsert processes the query in upsert block.
-// It return the latency and a map of variables => [ uids ...] used in the mutation.
+// It returns the latency and a map of variables => [ uids ...] used in the upsert mutation.
 func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	*query.Latency, map[string][]string, error) {
 
@@ -687,7 +691,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 	updateUIDInMutations(gmu, varToUID)
 	updateValInMutations(gmu, qr)
-	// varToUID is returned to the client, lets delete the dummy var that we put in there for
+	// varToUID is returned to the client, let's delete the dummy var that we put in there for
 	// evaluating the conditional upsert.
 	delete(varToUID, varName)
 	return l, varToUID, nil
