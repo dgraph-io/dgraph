@@ -270,6 +270,10 @@ state                          : [uid] .
 county                         : [uid] .
 firstName                      : string .
 lastName                       : string .
+newname                        : string @index(exact, term) .
+newage                         : int .
+boss                           : uid .
+newfriend                      : [uid] .
 `
 
 func populateCluster() {
@@ -566,6 +570,45 @@ func populateCluster() {
 		_:har <lastName> "Ford" .
 		_:ss <firstName> "Steven" .
 		_:ss <lastName> "Spielberg" .
+
+		<501> <newname> "P1" .
+		<502> <newname> "P2" .
+		<503> <newname> "P3" .
+		<504> <newname> "P4" .
+		<505> <newname> "P5" .
+		<506> <newname> "P6" .
+		<507> <newname> "P7" .
+		<508> <newname> "P8" .
+		<509> <newname> "P9" .
+		<510> <newname> "P10" .
+		<511> <newname> "P11" .
+		<512> <newname> "P12" .
+
+		<501> <newage> "21" .
+		<502> <newage> "22" .
+		<503> <newage> "23" .
+		<504> <newage> "24" .
+		<505> <newage> "25" .
+		<506> <newage> "26" .
+		<507> <newage> "27" .
+		<508> <newage> "28" .
+		<509> <newage> "29" .
+		<510> <newage> "30" .
+		<511> <newage> "31" .
+		<512> <newage> "32" .
+
+		<501> <newfriend> <502> .
+		<501> <newfriend> <503> .
+		<501> <boss> <504> .
+		<502> <newfriend> <505> .
+		<502> <newfriend> <506> .
+		<503> <newfriend> <507> .
+		<503> <newfriend> <508> .
+		<504> <newfriend> <509> .
+		<504> <newfriend> <510> .
+		<502> <boss> <510> .
+		<510> <newfriend> <511> .
+		<510> <newfriend> <512> .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
