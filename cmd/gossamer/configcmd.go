@@ -83,13 +83,11 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	srvcs = append(srvcs, p2pSrvc)
 
 	// DB
-	// Create database dir and initialize stateDB and blockDB
 	dataDir := getDatabaseDir(ctx, fig)
-	dbSrv, err := polkadb.NewDatabaseService(dataDir)
+	dbSrv, err := polkadb.NewDbService(dataDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	// append DBs to services registrar
 	srvcs = append(srvcs, dbSrv)
 
 	// API

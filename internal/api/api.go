@@ -16,12 +16,16 @@
 
 package api
 
-import apiModule "github.com/ChainSafe/gossamer/internal/api/modules"
+import (
+	apiModule "github.com/ChainSafe/gossamer/internal/api/modules"
+	"github.com/ChainSafe/gossamer/internal/services"
+)
+
+var _ services.Service = &Service{}
 
 // Service couples all components required for the API.
 type Service struct {
 	Api *Api
-	err <-chan error
 }
 
 // Api contains all the available modules
@@ -43,16 +47,14 @@ func NewApiService(p2p apiModule.P2pApi, rt apiModule.RuntimeApi) *Service {
 			RuntimeModule: &apiModule.RuntimeModule{
 				Rt: rt,
 			},
-		}, nil,
+		},
 	}
 }
 
-// Start creates, stores and returns an error channel
-func (s *Service) Start() <-chan error {
-	s.err = make(chan error)
-	return s.err
+func (s *Service) Start() error {
+	return nil
 }
 
-func (s *Service) Stop() <-chan error {
+func (s *Service) Stop() error {
 	return nil
 }

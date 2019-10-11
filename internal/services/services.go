@@ -25,14 +25,13 @@ import (
 
 // Service must be implemented by all services
 type Service interface {
-	Start() <-chan error
-	Stop() <-chan error
+	Start() error
+	Stop() error
 }
 
 // ServiceRegistry is a structure to manage core system services
 type ServiceRegistry struct {
 	services     map[reflect.Type]Service      // map of types to service instances
-	errs         map[reflect.Type]<-chan error // map of types to error channels
 	serviceTypes []reflect.Type                // all known service types, used to iterate through services
 }
 
@@ -40,7 +39,6 @@ type ServiceRegistry struct {
 func NewServiceRegistry() *ServiceRegistry {
 	return &ServiceRegistry{
 		services: make(map[reflect.Type]Service),
-		errs:     make(map[reflect.Type]<-chan error),
 	}
 }
 
@@ -61,7 +59,9 @@ func (s *ServiceRegistry) StartAll() {
 	for _, typ := range s.serviceTypes {
 		log.Debug(fmt.Sprintf("Starting service %v", typ))
 		err := s.services[typ].Start()
-		s.errs[typ] = err
+		if err != nil {
+			log.Error("Error starting service", "srvc", typ, "err", err)
+		}
 	}
 	log.Debug("All services started.")
 }
@@ -72,7 +72,9 @@ func (s *ServiceRegistry) StopAll() {
 	for _, typ := range s.serviceTypes {
 		log.Debug(fmt.Sprintf("Stopping service %v", typ))
 		err := s.services[typ].Stop()
-		s.errs[typ] = err
+		if err != nil {
+			log.Error("Error stopping service", "srvc", typ, "err", err)
+		}
 	}
 	log.Debug("All services stopped.")
 }
@@ -87,21 +89,6 @@ func (s *ServiceRegistry) Get(srvc interface{}) Service {
 
 	if s, ok := s.services[e.Type()]; ok {
 		return s
-	}
-	log.Warn("unknown service type", "type", fmt.Sprintf("%T", srvc))
-	return nil
-}
-
-// Err returns the error channel for a given service
-func (s *ServiceRegistry) Err(srvc interface{}) <-chan error {
-	if reflect.TypeOf(srvc).Kind() != reflect.Ptr {
-		log.Warn("expected a pointer", "type", fmt.Sprintf("%T", srvc))
-		return nil
-	}
-	e := reflect.ValueOf(srvc)
-
-	if e, ok := s.errs[e.Type()]; ok {
-		return e
 	}
 	log.Warn("unknown service type", "type", fmt.Sprintf("%T", srvc))
 	return nil

@@ -18,55 +18,62 @@ package polkadb
 
 import (
 	"path/filepath"
+
+	"github.com/ChainSafe/gossamer/internal/services"
 )
 
-// Start...
-func (dbService *DbService) Start() <-chan error {
-	dbService.err = make(<-chan error)
-	return dbService.err
-}
-
-// Stop kills running BlockDB and StateDB instances
-func (dbService *DbService) Stop() <-chan error {
-	e := make(chan error)
-	// Closing Badger Databases
-	err := dbService.StateDB.Db.Close()
-	if err != nil {
-		e <- err
-	}
-
-	err = dbService.BlockDB.Db.Close()
-	if err != nil {
-		e <- err
-	}
-	return e
-}
+var _ services.Service = &DbService{}
 
 // DbService contains both databases for service registry
 type DbService struct {
+	path string
 	StateDB *StateDB
 	BlockDB *BlockDB
-
-	err <-chan error
 }
 
-// NewDatabaseService opens and returns a new DB object
-func NewDatabaseService(file string) (*DbService, error) {
-	stateDataDir := filepath.Join(file, "state")
-	blockDataDir := filepath.Join(file, "block")
+// NewDbService opens and returns a new DB object
+func NewDbService(path string) (*DbService, error) {
+	return &DbService{
+		path: path,
+		StateDB: nil,
+		BlockDB: nil,
+	}, nil
+}
+
+// Start...
+func (s *DbService) Start() error {
+
+	stateDataDir := filepath.Join(s.path, "state")
+	blockDataDir := filepath.Join(s.path, "block")
 
 	stateDb, err := NewStateDB(stateDataDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	blockDb, err := NewBlockDB(blockDataDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &DbService{
-		StateDB: stateDb,
-		BlockDB: blockDb,
-	}, nil
+	s.BlockDB = blockDb
+	s.StateDB = stateDb
+
+	return nil
 }
+
+// Stop kills running BlockDB and StateDB instances
+func (s *DbService) Stop() error {
+	// Closing Badger Databases
+	err := s.StateDB.Db.Close()
+	if err != nil {
+		return err
+	}
+
+	err = s.BlockDB.Db.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+

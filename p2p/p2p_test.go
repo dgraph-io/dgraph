@@ -36,8 +36,7 @@ func startNewService(t *testing.T, cfg *Config) *Service {
 		t.Fatal(err)
 	}
 
-	e := node.Start()
-	err = <-e
+	err = node.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +85,7 @@ func TestService_PeerCount(t *testing.T) {
 
 	defer sa.Stop()
 
-	e := sa.Start()
-	err = <-e
+	err = sa.Start()
 	if err != nil {
 		t.Errorf("Start error: %s", err)
 	}
@@ -139,8 +137,7 @@ func TestSend(t *testing.T) {
 
 	defer sa.Stop()
 
-	e := sa.Start()
-	err = <-e
+	err = sa.Start()
 	if err != nil {
 		t.Errorf("Start error: %s", err)
 	}
@@ -174,8 +171,7 @@ func TestSend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e = sb.Start()
-	err = <-e
+	err = sb.Start()
 	if err != nil {
 		t.Errorf("Start error: %s", err)
 	}

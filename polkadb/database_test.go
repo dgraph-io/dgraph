@@ -41,7 +41,7 @@ func testSetup() []data {
 }
 
 func TestBadgerDB_PutGetDel(t *testing.T) {
-	db, remove := newTestDBService()
+	db, remove := newTestDBService(t)
 	defer remove()
 
 	testPutGetter(db.StateDB.Db, t)
@@ -133,7 +133,7 @@ func testGetPath(db Database, t *testing.T) {
 }
 
 func TestBadgerDB_Batch(t *testing.T) {
-	db, remove := newTestDBService()
+	db, remove := newTestDBService(t)
 	defer remove()
 	testBatchPut(db.StateDB.Db, t)
 }
@@ -177,7 +177,7 @@ func testBatchPut(db Database, t *testing.T) {
 }
 
 func TestBadgerDB_Iterator(t *testing.T) {
-	db, remove := newTestDBService()
+	db, remove := newTestDBService(t)
 	defer remove()
 
 	testNewIterator(db.StateDB.Db, t)

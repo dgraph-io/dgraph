@@ -24,7 +24,7 @@
 # Sublime
 *.sublime*
 
-trie/test_data
+test_data/
 /bin
 chaindata/
 *.wasm

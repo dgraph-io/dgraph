@@ -91,8 +91,8 @@ func main() {
 	//}()
 
 	for _, node := range sim.Nodes {
-		e := node.Start()
-		if <-e != nil {
+		err := node.Start()
+		if err != nil {
 			log.Warn("main", "start err", err)
 		}
 	}

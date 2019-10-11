@@ -39,7 +39,7 @@ func createTestDot(t *testing.T) *Dot {
 
 	// DB
 	dataDir := "../test_data"
-	dbSrv, err := polkadb.NewDatabaseService(dataDir)
+	dbSrv, err := polkadb.NewDbService(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,11 +70,6 @@ func TestDot_Start(t *testing.T) {
 		s := dot.Services.Get(srvc)
 		if s == nil {
 			t.Fatalf("error getting service: %T", srvc)
-		}
-
-		e := dot.Services.Err(srvc)
-		if e == nil {
-			t.Fatalf("error getting error channel for service: %T", srvc)
 		}
 	}
 

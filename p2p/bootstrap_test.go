@@ -106,8 +106,7 @@ func TestNoBootstrap(t *testing.T) {
 
 	defer sa.Stop()
 
-	e := sa.Start()
-	err = <-e
+	err = sa.Start()
 	if err != nil {
 		t.Errorf("Start error: %s", err)
 	}

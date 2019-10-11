@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
@@ -40,6 +41,8 @@ import (
 
 const ProtocolPrefix = "/substrate/dot/2"
 const mdnsPeriod = time.Minute
+
+var _ services.Service = &Service{}
 
 // Service describes a p2p service, including host and dht
 type Service struct {
@@ -122,10 +125,10 @@ func NewService(conf *Config, msgChan chan<- []byte) (*Service, error) {
 }
 
 // Start begins the p2p Service, including discovery
-func (s *Service) Start() <-chan error {
+func (s *Service) Start() error {
 	e := make(chan error)
 	go s.start(e)
-	return e
+	return <-e
 }
 
 // start begins the p2p Service, including discovery. start does not terminate once called.
@@ -168,25 +171,23 @@ func (s *Service) start(e chan error) {
 }
 
 // Stop stops the p2p service
-func (s *Service) Stop() <-chan error {
-	e := make(chan error)
-
+func (s *Service) Stop() error {
 	//Stop the host & IpfsDHT
 	err := s.host.Close()
 	if err != nil {
-		e <- err
+		return err
 	}
 
 	err = s.dht.Close()
 	if err != nil {
-		e <- err
+		return err
 	}
 
 	if s.msgChan != nil {
 		close(s.msgChan)
 	}
 
-	return e
+	return nil
 }
 
 // Broadcast sends a message to all peers
