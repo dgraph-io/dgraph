@@ -157,16 +157,29 @@ func TestRegExp(t *testing.T) {
 func TestSearch(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
-			queryPost (filter: { title: { regexp: "Introducing*" } }) {
+			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {
 			    title
 			}
 		}`,
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	fmt.Println(gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Errors)
 
-	fmt.Println(string(gqlResponse.Data))
+	var expected, result struct {
+		QueryPost []*post
+	}
+
+	expected.QueryPost = []*post{
+		&post{Title: "Introducing GraphQL in Dgraph"},
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestHashSearch(t *testing.T) {
