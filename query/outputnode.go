@@ -29,7 +29,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
@@ -63,7 +63,6 @@ type outputNode interface {
 	SetUID(uid uint64, attr string)
 	IsEmpty() bool
 
-	addCountAtRoot(*SubGraph)
 	addGroupby(*SubGraph, *groupResults, string)
 	addAggregations(*SubGraph) error
 }
@@ -386,18 +385,6 @@ func (fj *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string
 	fj.AddListChild(fname, g)
 }
 
-func (fj *fastJsonNode) addCountAtRoot(sg *SubGraph) {
-	c := types.ValueForType(types.IntID)
-	c.Value = int64(len(sg.DestUIDs.Uids))
-	n1 := fj.New(sg.Params.Alias)
-	field := sg.Params.UidCountAlias
-	if field == "" {
-		field = "count"
-	}
-	n1.AddValue(field, c)
-	fj.AddListChild(sg.Params.Alias, n1)
-}
-
 func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.UidToVal[0]
@@ -423,6 +410,32 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	return nil
 }
 
+func handleCountUIDNodes(sg *SubGraph, n outputNode, count int) bool {
+	addedNewChild := false
+	fieldName := sg.fieldName()
+	for _, child := range sg.Children {
+		uidCount := child.Attr == "uid" && child.Params.DoCount && child.IsInternal()
+		normWithoutAlias := child.Params.Alias == "" && child.Params.Normalize
+		if uidCount && !normWithoutAlias {
+			addedNewChild = true
+
+			c := types.ValueForType(types.IntID)
+			c.Value = int64(count)
+
+			field := child.Params.Alias
+			if field == "" {
+				field = "count"
+			}
+
+			fjChild := n.New(fieldName)
+			fjChild.AddValue(field, c)
+			n.AddListChild(fieldName, fjChild)
+		}
+	}
+
+	return addedNewChild
+}
+
 func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.Params.IsEmpty {
@@ -434,12 +447,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		return nil
 	}
 
-	hasChild := false
-	if sg.Params.UidCount && !(sg.Params.UidCountAlias == "" && sg.Params.Normalize) {
-		hasChild = true
-		fj.addCountAtRoot(sg)
-	}
-
+	hasChild := handleCountUIDNodes(sg, fj, len(sg.DestUIDs.Uids))
 	if sg.Params.IsGroupBy {
 		if len(sg.GroupbyRes) == 0 {
 			return errors.Errorf("Expected GroupbyRes to have length > 0.")
@@ -715,17 +723,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					}
 				}
 			}
-			if pc.Params.UidCount && !(pc.Params.UidCountAlias == "" && pc.Params.Normalize) {
-				uc := dst.New(fieldName)
-				c := types.ValueForType(types.IntID)
-				c.Value = int64(len(ul.Uids))
-				alias := pc.Params.UidCountAlias
-				if alias == "" {
-					alias = "count"
-				}
-				uc.AddValue(alias, c)
-				dst.AddListChild(fieldName, uc)
-			}
+
+			// add value for count(uid) nodes if any.
+			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
 		} else {
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"

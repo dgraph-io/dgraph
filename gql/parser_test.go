@@ -22,7 +22,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
@@ -2030,6 +2030,23 @@ func TestParseStringVarInFilter(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, "v0.7.3/beta", res.Query[0].Children[0].Filter.Func.Args[0].Value)
+}
+
+func TestParseVarInFacet(t *testing.T) {
+	query := `
+query works($since: string = "2018") {
+  q(func: has(works_in)) @cascade {
+    name
+    works_in @facets @facets(gt(since, $since)) {
+      name
+    }
+  }
+}`
+
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "2018", res.Query[0].Children[1].FacetsFilter.Func.Args[0].Value)
 }
 
 func TestParseVariablesError1(t *testing.T) {

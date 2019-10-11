@@ -30,7 +30,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -193,11 +193,6 @@ type params struct {
 	// GroupbyAttrs holds the list of attributes to group by.
 	GroupbyAttrs []gql.GroupByAttr
 
-	// UidCount is true when "count(uid)" is used.
-	UidCount bool
-	// UidCountAlias holds the alias of the variable used to hold the results of a "count(uid)"
-	// request, if any.
-	UidCountAlias string
 	// ParentIds is a stack that is maintained and passed down to children.
 	ParentIds []uint64
 	// IsEmpty is true if the subgraph doesn't have any SrcUids or DestUids.
@@ -532,8 +527,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs:   gchild.GroupbyAttrs,
 			IsGroupBy:      gchild.IsGroupby,
 			IsInternal:     gchild.IsInternal,
-			UidCount:       gchild.UidCount,
-			UidCountAlias:  gchild.UidCountAlias,
 		}
 
 		if gchild.IsCount {
@@ -758,8 +751,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:              gq.Var,
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
-		UidCount:         gq.UidCount,
-		UidCountAlias:    gq.UidCountAlias,
 	}
 
 	for argk := range gq.Args {
@@ -1203,8 +1194,11 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		srcMap := doneVars[srcVar.Name]
 		// The value var can be empty. No need to check for nil.
 		sg.Params.UidToVal = srcMap.Vals
+	} else if sg.Attr == "uid" && sg.Params.DoCount {
+		// This is the count(uid) case.
+		// We will do the computation later while constructing the result.
 	} else {
-		return errors.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
+		return errors.Errorf("Unhandled pb.node <%v> with parent <%v>", sg.Attr, parent.Attr)
 	}
 
 	return nil
@@ -1378,7 +1372,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
-	} else if sg.Params.UidCount {
+	} else if sg.Params.DoCount && sg.Attr == "uid" && sg.IsInternal() {
 		// 2. This is the case where count(uid) is requested in the query and stored as variable.
 		// In this case there is just one value which is stored corresponding to the uid
 		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
@@ -1389,9 +1383,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			strList: sg.valueMatrix,
 		}
 
+		// Because we are counting the number of UIDs in parent
+		// we use the length of SrcUIDs instead of DestUIDs.
 		val := types.Val{
 			Tid:   types.IntID,
-			Value: int64(len(sg.DestUIDs.Uids)),
+			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
 	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {

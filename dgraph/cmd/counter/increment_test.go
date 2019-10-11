@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/viper"
@@ -224,10 +224,10 @@ func TestBestEffortTs(t *testing.T) {
 	incrementInLoop(t, dg, 1)
 	readBestEffort(t, dg, pred, 1)
 	txn := dg.NewReadOnlyTxn().BestEffort()
-	_, err := queryCounter(txn, pred)
+	_, err := queryCounter(context.Background(), txn, pred)
 	require.NoError(t, err)
 
-	incrementInLoop(t, dg, 1)        // Increment the MaxAssigned ts at Alpha.
-	_, err = queryCounter(txn, pred) // The timestamp here shouldn't change.
+	incrementInLoop(t, dg, 1)                              // Increment the MaxAssigned ts at Alpha.
+	_, err = queryCounter(context.Background(), txn, pred) // The timestamp here shouldn't change.
 	require.NoError(t, err)
 }
