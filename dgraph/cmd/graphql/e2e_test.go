@@ -282,7 +282,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 		res, err = gunzipData(res)
 		require.NoError(t, err)
 		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
-		require.Contains(t, req.Header.Get("Content-Encoding"), "gzip")
 	}
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
