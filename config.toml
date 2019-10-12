@@ -2,6 +2,7 @@
 
 [p2p]
 # Alexander testnet bootstrap nodes
+# TODO: move these to alexander genesis file
 BootstrapNodes=[
 			"/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj",
 			"/ip4/104.211.48.51/tcp/30363/p2p/16Uiu2HAmJqVCtF5oMvu1rbJvqWubMMRuWiKJtpoM8KSQ3JNnL5Ec",

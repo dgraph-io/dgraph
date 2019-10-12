@@ -305,7 +305,7 @@ func TestMakeNode(t *testing.T) {
 		set := flag.NewFlagSet(c.name, 0)
 		set.String(c.name, c.value, c.usage)
 		context := cli.NewContext(nil, set, nil)
-		d, fig, _ := makeNode(context)
+		d, fig, _ := makeNode(context, nil)
 		if reflect.TypeOf(d) != reflect.TypeOf(&dot.Dot{}) {
 			t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d), reflect.TypeOf(&dot.Dot{}))
 		}

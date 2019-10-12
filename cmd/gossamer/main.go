@@ -42,6 +42,9 @@ var (
 		utils.RpcHostFlag,
 		utils.RpcModuleFlag,
 	}
+	genesisFlags = []cli.Flag{
+		utils.GenesisFlag,
+	}
 	cliFlags = []cli.Flag{
 		utils.VerbosityFlag,
 	}
@@ -61,6 +64,7 @@ func init() {
 	app.Flags = append(app.Flags, nodeFlags...)
 	app.Flags = append(app.Flags, p2pFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
+	app.Flags = append(app.Flags, genesisFlags...)
 	app.Flags = append(app.Flags, cliFlags...)
 }
 
@@ -88,18 +92,23 @@ func startLogger(ctx *cli.Context) error {
 
 // gossamer is the main entrypoint into the gossamer system
 func gossamer(ctx *cli.Context) error {
+	genesisState, err := loadGenesis(ctx)
+	if err != nil {
+		log.Error("error loading genesis state", "error", err)
+	}
 
-	err := startLogger(ctx)
+	err = startLogger(ctx)
 	if err != nil {
 		return err
 	}
 
-	node, _, err := makeNode(ctx)
+	node, _, err := makeNode(ctx, genesisState)
 	if err != nil {
 		// TODO: Need to manage error propagation and exit smoothly
 		return err
 	}
-	log.Info("🕸️Starting node...")
+
+	log.Info("🕸️Starting node...", "name", genesisState.Name, "ID", genesisState.Id)
 	node.Start()
 
 	return nil

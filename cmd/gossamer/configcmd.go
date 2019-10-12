@@ -25,6 +25,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
+	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
@@ -56,7 +57,7 @@ var (
 )
 
 // makeNode sets up node; opening badgerDB instance and returning the Dot container
-func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
+func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Config, error) {
 	fig, err := getConfig(ctx)
 	if err != nil {
 		log.Crit("unable to extract required config", "err", err)
@@ -253,7 +254,7 @@ func strToMods(strs []string) []api.Module {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	_, fig, err := makeNode(ctx)
+	_, fig, err := makeNode(ctx, nil)
 	if err != nil {
 		return err
 	}
