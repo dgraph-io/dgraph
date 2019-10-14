@@ -6,7 +6,7 @@ type Post {
 	postID: ID!
 	title: String! @search(by: [term])
 	text: String @search(by: [fulltext])
-	tags: [String] @search(by: [trigram])
+	tags: [String] @search(by: [trigram,fulltext,hash,term])
 	tagsHash: [String] @search(by: [hash])
 	tagsExact: [String] @search(by: [exact])
 	publishByYear: DateTime @search(by: [year])
@@ -158,7 +158,7 @@ input PostFilter {
 	ids: [ID!]
 	title: StringTermFilter
 	text: StringFullTextFilter
-	tags: StringRegExpFilter
+	tags: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
 	tagsHash: StringHashFilter
 	tagsExact: StringExactFilter
 	publishByYear: DateTimeFilter
@@ -198,6 +198,15 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
+	alloftext: String
+	anyoftext: String
+	eq: String
+	allofterms: String
+	anyofterms: String
+	regexp: String
 }
 
 input UpdatePostInput {
