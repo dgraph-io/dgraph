@@ -257,7 +257,7 @@ func searchValidation(
 				dir.Position,
 				"Type %s; Field %s: the argument to @search %s is duplicated. "+
 					"The filter (%s) was applied through the argument %s "+
-					"provided before",
+					"provided before.",
 				typ.Name, field.Name, searchArg, searchIndex, val)
 		}
 
@@ -267,7 +267,7 @@ func searchValidation(
 					dir.Position,
 					"Type %s; Field %s: the argument to @search %s "+
 						"contradicts the field %s provided before "+
-						"and shouldn't be used together. ",
+						"and shouldn't be used together.",
 					typ.Name, field.Name, searchArg, val)
 			}
 		}

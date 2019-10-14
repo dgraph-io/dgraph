@@ -163,7 +163,7 @@ var defaultSearches = map[string]string{
 
 // Dgraph index to ast.FieldList map
 var defaultFiltersDirectives = map[string]ast.FieldList{
-	"StringTermFilter": ast.FieldList{
+	"StringTermFilter": {
 		{Name: "allofterms",
 			Type: &ast.Type{
 				NamedType: "String",
@@ -173,13 +173,13 @@ var defaultFiltersDirectives = map[string]ast.FieldList{
 				NamedType: "String",
 			}},
 	},
-	"StringRegExpFilter": ast.FieldList{
+	"StringRegExpFilter": {
 		{Name: "regexp",
 			Type: &ast.Type{
 				NamedType: "String",
 			}},
 	},
-	"StringFullTextFilter": ast.FieldList{
+	"StringFullTextFilter": {
 		{Name: "alloftext",
 			Type: &ast.Type{
 				NamedType: "String",
@@ -189,13 +189,13 @@ var defaultFiltersDirectives = map[string]ast.FieldList{
 				NamedType: "String",
 			}},
 	},
-	"StringHashFilter": ast.FieldList{
+	"StringHashFilter": {
 		{Name: "eq",
 			Type: &ast.Type{
 				NamedType: "String",
 			}},
 	},
-	"StringExactFilter": ast.FieldList{
+	"StringExactFilter": {
 		{Name: "eq",
 			Type: &ast.Type{
 				NamedType: "String",
@@ -635,9 +635,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				fieldList := ast.FieldList{}
 				for _, fieldName := range filterTypeNameUnion {
 					fieldDirectives := defaultFiltersDirectives[fieldName]
-					for _, fieldDirective := range fieldDirectives {
-						fieldList = append(fieldList, fieldDirective)
-					}
+					fieldList = append(fieldList, fieldDirectives...)
 				}
 
 				schema.Types[filterTypeName] = &ast.Definition{

@@ -209,6 +209,55 @@ invalid_schemas:
       ]
 
   -
+    name: "Search with wrong arg for the index"
+    input: |
+      type X {
+        y: String @search(by: [hash, hour])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument hour doesn't
+          apply to field type String.  Search by hour applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't allow hash and exact together"
+    input: |
+      type X {
+        y: String @search(by: [hash, exact])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search hash contradicts the field exact
+           provided before and shouldn't be used together.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with multiple datetime index"
+    input: |
+      type X {
+        y: DateTime @search(by: [hour, month])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search month is duplicated. The
+          filter (DateTimeFilter) was applied through the argument hour provided before.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Search doesn't allow trigram and regexp together"
+    input: |
+      type X {
+        y: String @search(by: [trigram, regexp])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search trigram is duplicated. The
+          filter (StringRegExpFilter) was applied through the argument regexp provided before.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
     name: "Search doesn't accept bogus args"
     input: |
       type X {
@@ -340,18 +389,25 @@ valid_schemas:
       type X {
         int1: Int @search
         int2: Int @search(by: [int])
+        int3: Int @search(by: [])
         float1: Float @search
         float2: Float @search(by: [float])
+        float3: Float @search(by: [])
         bool1: Boolean @search
         bool2: Boolean @search(by: [bool])
+        bool3: Boolean @search(by: [])
         str: String @search
+        str2: String @search(by: [])
         strHash: String @search(by: [hash])
         strExact: String @search(by: [exact])
         strTerm: String @search(by: [term])
         strFulltext: String @search(by: [fulltext])
         strTrigram: String @search(by: [trigram])
         strRegexp: String @search(by: [regexp])
+        strRegexpFulltext: String @search(by: [regexp, fulltext])
+        strMultipleIndex: String @search(by: [trigram, hash, term, fulltext])
         dt: DateTime @search
+        dt2: DateTime @search(by: [])
         dtYear: DateTime @search(by: [year])
         dtMonth: DateTime @search(by: [month])
         dtDay: DateTime @search(by: [day])
