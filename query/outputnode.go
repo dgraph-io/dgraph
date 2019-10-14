@@ -41,7 +41,6 @@ import (
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	sgr := &SubGraph{}
-	metricsMap := map[string]int{}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
@@ -49,11 +48,8 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		if sg.Params.GetUid {
 			sgr.Params.GetUid = true
 		}
-		// calculate metrics for this query.
-		calculateMetrics(sg, metricsMap)
 		sgr.Children = append(sgr.Children, sg)
 	}
-	fmt.Println(metricsMap)
 	return sgr.toFastJSON(l)
 }
 
@@ -813,24 +809,4 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	}
 
 	return nil
-}
-
-// calculateMetrics populates the given map with the number of uids are gathered for each
-// attributes.
-func calculateMetrics(sg *SubGraph, metrics map[string]int) {
-	// we'll calculate srcUid of the each attribute. because, these are number of uids
-	// processed by this attribute.
-	prev := metrics[sg.Attr]
-	// QUESTION: @manish @pawan: should I add destuid or length of posting list?.
-	prev = prev + len(sg.SrcUIDs.GetUids())
-	metrics[sg.Attr] = prev
-
-	// add all the uids gathered by filters
-	for _, filter := range sg.Filters {
-		calculateMetrics(filter, metrics)
-	}
-	// calculate metrics for the childres as well.
-	for _, child := range sg.Children {
-		calculateMetrics(child, metrics)
-	}
 }
