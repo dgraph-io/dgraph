@@ -1778,3 +1778,88 @@ func TestFilterRegex16(t *testing.T) {
 		`{"data": {"me":[{"name@ru":"Артём Ткаченко"}]}}`,
 		js)
 }
+
+func TestNestedExpandAll(t *testing.T) {
+	query := `{
+		q(func: has(node)) {
+			uid
+			expand(_all_) {
+				uid
+				node {
+					uid
+					expand(_all_)
+				}
+			}
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {
+    "q": [
+      {
+        "uid": "0x2b5c",
+        "name": "expand",
+        "node": [
+          {
+            "uid": "0x2b5c",
+            "node": [
+              {
+                "uid": "0x2b5c",
+                "name": "expand"
+              }
+            ]
+          }
+        ]
+      }
+    ]}}`, js)
+}
+
+func TestNoResultsFilter(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) @filter(le(name, "abc")) {
+			uid
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsPagination(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred), first: 50) {
+			uid
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsGroupBy(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) @groupby(name) {
+			count(uid)
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestNoResultsOrder(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred), orderasc: name) {
+			uid
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsCount(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) {
+			uid
+			count(friend)
+		}
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
