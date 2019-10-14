@@ -171,7 +171,8 @@ func TestParseQueryExpandForward(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _forward_ has been deprecated")
 }
 
 func TestParseQueryExpandReverse(t *testing.T) {
@@ -185,7 +186,8 @@ func TestParseQueryExpandReverse(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _reverse_ has been deprecated")
 }
 
 func TestParseQueryAliasListPred(t *testing.T) {

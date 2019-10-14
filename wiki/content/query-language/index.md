@@ -1797,18 +1797,12 @@ There are four ways to use the `expand` function.
 
 * Predicates can be stored in a variable and passed to `expand()` to expand all
   the predicates in the variable.
-* If `_all_` is passed as an argument to `expand()`, all the predicates for each
-  node at that level are retrieved. More levels can be specified in a nested
-  fashion under `expand()`.
-* If `_forward_` is passed as an argument to `expand()`, all predicates for each
-  node at that level (minus any reverse predicates) are retrieved.
-* If `_reverse_` is passed as an argument to `expand()`, only the reverse
-  predicates at each node in that level are retrieved.
+* If `_all_` is passed as an argument to `expand()`, the predicates to be
+expanded will be the union of fields in the types assigned to a given node.
 
-The last three keywords require that the nodes have types. Dgraph will look 
-for all the types that have been assigned to a node,
-query the types to check which attributes they have, and use those to compute
-the list of predicates to expand.
+The `_all_` keyword requires that the nodes have types. Dgraph will look for all
+the types that have been assigned to a node, query the types to check which
+attributes they have, and use those to compute the list of predicates to expand.
 
 For example, consider a node that has types `Animal` and `Pet`, which have 
 the following definitions:
@@ -2533,8 +2527,7 @@ err := c.Alter(context.Background(), &api.Operation{
 ### Expand queries and types
 
 Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
-`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
-nodes to expand have types.
+`expand(_all_)`) require that the nodes to be expanded have types.
 
 ## Facets : Edge attributes
 

@@ -2804,9 +2804,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				case "_all_":
 					child.Expand = "_all_"
 				case "_forward_":
-					child.Expand = "_forward_"
+					return item.Errorf("Argument _forward_ has been deprecated")
 				case "_reverse_":
-					child.Expand = "_reverse_"
+					return item.Errorf("Argument _reverse_ has been deprecated")
 				default:
 					return item.Errorf("Invalid argument %v in expand()", item.Val)
 				}

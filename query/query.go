@@ -1820,7 +1820,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		switch child.Params.Expand {
-		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
+		// It could be expand(_all_) or expand(val(x)).
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
 			if len(types) == 0 {
@@ -1829,25 +1829,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 			preds = getPredicatesFromTypes(types)
 			rpreds, err := getReversePredicates(ctx, preds)
-			if err != nil {
-				return out, err
-			}
-			preds = append(preds, rpreds...)
-		case "_forward_":
-			span.Annotate(nil, "expand(_forward_)")
-			if len(types) == 0 {
-				break
-			}
-
-			preds = getPredicatesFromTypes(types)
-		case "_reverse_":
-			span.Annotate(nil, "expand(_reverse_)")
-			if len(types) == 0 {
-				break
-			}
-
-			typePreds := getPredicatesFromTypes(types)
-			rpreds, err := getReversePredicates(ctx, typePreds)
 			if err != nil {
 				return out, err
 			}
