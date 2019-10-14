@@ -152,7 +152,7 @@ func batchTestSetup(db Database) (func(i int) []byte, func(i int) []byte, Batch)
 func testBatchPut(db Database, t *testing.T) {
 	k, v, b := batchTestSetup(db)
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		err := b.Put(k(i), v(i))
 		if err != nil {
 			t.Fatalf("failed to add key-value to batch mapping  %q", err)
