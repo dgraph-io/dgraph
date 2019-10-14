@@ -4,25 +4,25 @@
 
 interface Character {
 	id: ID!
-	name: String! @searchable(by: exact)
+	name: String! @search(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 }
 
 type Human implements Character {
 	id: ID!
-	name: String! @searchable(by: exact)
+	name: String! @search(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
 
 type Droid implements Character {
 	id: ID!
-	name: String! @searchable(by: exact)
+	name: String! @search(by: exact)
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @searchable
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
 }
 
@@ -34,7 +34,7 @@ enum Episode {
 
 type Starship {
 	id: ID!
-	name: String! @searchable(by: term)
+	name: String! @search(by: term)
 	length: Float
 }
 
@@ -53,6 +53,7 @@ enum DgraphIndex {
 	term
 	fulltext
 	trigram
+	regexp
 	year
 	month
 	day
@@ -60,7 +61,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

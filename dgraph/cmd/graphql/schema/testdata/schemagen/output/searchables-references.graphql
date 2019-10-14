@@ -4,15 +4,15 @@
 
 type Author {
 	id: ID!
-	name: String! @searchable(by: hash)
+	name: String! @search(by: hash)
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type Post {
 	postID: ID!
-	title: String! @searchable(by: term)
-	text: String @searchable(by: fulltext)
+	title: String! @search(by: term)
+	text: String @search(by: fulltext)
 	datePublished: DateTime
 }
 
@@ -31,6 +31,7 @@ enum DgraphIndex {
 	term
 	fulltext
 	trigram
+	regexp
 	year
 	month
 	day
@@ -38,7 +39,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: DgraphIndex!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
