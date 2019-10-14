@@ -1,4 +1,4 @@
 # This should still generate and, or keys in PostFilter.
 type Post {
-    content: String! @searchable
+    content: String! @search
 }

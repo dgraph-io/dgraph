@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -67,11 +68,21 @@ const (
 // "Query variables can be sent as a JSON-encoded string in an additional query parameter
 // called variables. If the query contains several named operations, an operationName query
 // parameter can be used to control which one should be executed."
+//
+// acceptGzip sends "Accept-Encoding: gzip" header to the server, which would return the
+// response after gzip.
+// gzipEncoding would compress the request to the server and add "Content-Encoding: gzip"
+// header to the same.
+
 type GraphQLParams struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+	acceptGzip    bool
+	gzipEncoding  bool
 }
+
+type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
 
 // GraphQLResponse GraphQL response structure.
 // see https://graphql.github.io/graphql-spec/June2018/#sec-Response
@@ -160,28 +171,174 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
-// and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
-	req, err := params.createGQLPost(url)
+func gunzipData(data []byte) ([]byte, error) {
+	b := bytes.NewBuffer(data)
+
+	r, err := gzip.NewReader(b)
+	if err != nil {
+		return nil, err
+	}
+
+	var resB bytes.Buffer
+	if _, err := resB.ReadFrom(r); err != nil {
+		return nil, err
+	}
+	return resB.Bytes(), nil
+}
+
+func gzipData(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+
+	if _, err := gz.Write(data); err != nil {
+		return nil, err
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// This tests that if a request has gzip header but the body is
+// not compressed, then it should return an error
+func TestGzipCompressionHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
 	require.NoError(t, err)
 
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resData, err := runGQLRequest(req)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Unable to parse gzip")
+}
+
+// This tests that if a req's body is compressed but the
+// header is not present, then it should return an error
+func TestGzipCompressionNoHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+		gzipEncoding: true,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	req.Header.Del("Content-Encoding")
+	resData, err := runGQLRequest(req)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
+}
+
+func TestGetRequest(t *testing.T) {
+	AddMutation(t, getExecutor)
+}
+
+func TestGetQueryEmptyVariable(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := queryCountry.createGQLGet(graphqlURL)
+	require.NoError(t, err)
+
+	q := req.URL.Query()
+	q.Del("variables")
+	req.URL.RawQuery = q.Encode()
+
+	res := queryCountry.Execute(t, req)
+	require.Nil(t, res.Errors)
+}
+
+// Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
+// and executes the request
+func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
+	if params.acceptGzip {
+		res, err = gunzipData(res)
+		require.NoError(t, err)
+		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
+	}
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
 
 	requireContainsRequestID(t, result)
 
 	return result
+
+}
+
+// ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
+// and executes the request to url.
+func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLPost(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
 }
 
 // ExecuteAsGet builds a HTTP GET request from the GraphQL input structure
 // and executes the request to url.
-func (params *GraphQLParams) ExecuteAsGet(url string) ([]byte, error) {
-	return nil, errors.New("GET not yet supported")
+func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResponse {
+	req, err := params.createGQLGet(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
+}
+
+func getExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsGet(t, url)
+}
+
+func postExecutor(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse {
+	return params.ExecuteAsPost(t, url)
+}
+
+func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	q.Add("query", params.Query)
+	q.Add("operationName", params.OperationName)
+
+	variableString, err := json.Marshal(params.Variables)
+	if err != nil {
+		return nil, err
+	}
+	q.Add("variables", string(variableString))
+
+	req.URL.RawQuery = q.Encode()
+	if params.acceptGzip {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
+	return req, nil
 }
 
 func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
@@ -190,11 +347,24 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params.gzipEncoding {
+		if body, err = gzipData(body); err != nil {
+			return nil, err
+		}
+	}
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if params.gzipEncoding {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+
+	if params.acceptGzip {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 
 	return req, nil
 }

@@ -89,8 +89,14 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 					"mutations are implemented.", mr.mutation.Name())}, mutationFailed
 	}
 
+	// Mutations should have an extra element to their result path.  Because the mutation
+	// always looks like `addFoo(...) { foo { ... } }` and what's resolved above
+	// is the `foo { ... }` part, so both the result and any error paths need a prefix
+	// of `addFoo` added.
+
+	// Add prefix to result
 	var b bytes.Buffer
-	b.WriteRune('"')
+	b.WriteString("\"")
 	b.WriteString(mr.mutation.ResponseName())
 	b.WriteString(`": `)
 	if len(res.data) > 0 {
@@ -98,8 +104,17 @@ func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
 	} else {
 		b.WriteString("null")
 	}
-
 	res.data = b.Bytes()
+
+	// Add prefix to all error paths
+	resErrs := schema.AsGQLErrors(res.err)
+	for _, err := range resErrs {
+		if len(err.Path) > 0 {
+			err.Path = append([]interface{}{mr.mutation.ResponseName()}, err.Path...)
+		}
+	}
+	res.err = resErrs
+
 	return res, mutationSucceeded
 }
 

@@ -17,10 +17,13 @@
 package web
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -56,13 +59,31 @@ func GraphQLHTTPHandler(
 		}))
 }
 
+// write chooses between the http response writer and gzip writer
+// and sends the schema response using that.
+func write(w http.ResponseWriter, rr *schema.Response, errMsg string, acceptGzip bool) {
+	var out io.Writer = w
+
+	// If the receiver accepts gzip, then we would update the writer
+	// and send gzipped content instead.
+	if acceptGzip {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	if _, err := rr.WriteTo(out); err != nil {
+		glog.Error(errMsg, err)
+	}
+}
+
 // ServeHTTP handles GraphQL queries and mutations that get resolved
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
@@ -79,9 +100,9 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res = rh.Resolve(ctx)
 	}
 
-	if _, err := res.WriteTo(w); err != nil {
-		glog.Error(fmt.Sprintf("[%s]", api.RequestID(ctx)), err)
-	}
+	write(w, res, fmt.Sprintf("[%s]", api.RequestID(ctx)),
+		strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+
 }
 
 func (gh *graphqlHandler) isValid() bool {
@@ -89,13 +110,46 @@ func (gh *graphqlHandler) isValid() bool {
 		gh.queryRewriter == nil || gh.mutationRewriter == nil)
 }
 
+type gzreadCloser struct {
+	*gzip.Reader
+	io.Closer
+}
+
+func (gz gzreadCloser) Close() error {
+	err := gz.Reader.Close()
+	if err != nil {
+		return err
+	}
+	return gz.Closer.Close()
+}
+
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestResolver, error) {
 	rr := resolve.New(gh.schema, gh.dgraphClient, gh.queryRewriter, gh.mutationRewriter)
 
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			return nil, errors.Wrap(err, "Unable to parse gzip")
+		}
+		r.Body = gzreadCloser{zr, r.Body}
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		// TODO: fill gqlReq in from parameters
-		return nil, errors.New("GraphQL on HTTP GET not yet implemented")
+		query := r.URL.Query()
+		rr.GqlReq = &schema.Request{}
+		rr.GqlReq.Query = query.Get("query")
+		rr.GqlReq.OperationName = query.Get("operationName")
+		variables, ok := query["variables"]
+
+		if ok {
+			d := json.NewDecoder(strings.NewReader(variables[0]))
+			d.UseNumber()
+
+			if err := d.Decode(&rr.GqlReq.Variables); err != nil {
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+			}
+		}
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
@@ -107,7 +161,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 			d := json.NewDecoder(r.Body)
 			d.UseNumber()
 			if err = d.Decode(&rr.GqlReq); err != nil {
-				return nil, errors.Wrap(err, "not a valid GraphQL request body")
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
@@ -132,9 +186,8 @@ func recoveryHandler(next http.Handler) http.Handler {
 			func(err error) {
 				rr := schema.ErrorResponse(err, reqID)
 				w.Header().Set("Content-Type", "application/json")
-				if _, err = rr.WriteTo(w); err != nil {
-					glog.Errorf("[%s] %s", reqID, err)
-				}
+				write(w, rr, fmt.Sprintf("[%s]", reqID),
+					strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 			})
 
 		next.ServeHTTP(w, r)
