@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -380,6 +381,14 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 	// GraphQL server should always return OK, even when there are errors
 	if status := resp.StatusCode; status != http.StatusOK {
 		return nil, errors.Errorf("unexpected status code: %v", status)
+	}
+
+	if strings.ToLower(resp.Header.Get("Content-Type")) != "application/json" {
+		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
 	}
 
 	defer resp.Body.Close()

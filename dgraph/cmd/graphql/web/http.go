@@ -50,13 +50,13 @@ func GraphQLHTTPHandler(
 	queryRewriter dgraph.QueryRewriter,
 	mutationRewriter dgraph.MutationRewriter) http.Handler {
 
-	return api.WithRequestID(recoveryHandler(
+	return api.WithRequestID(recoveryHandler(commonHeaders(
 		&graphqlHandler{
 			schema:           schema,
 			dgraphClient:     dgraphClient,
 			queryRewriter:    queryRewriter,
 			mutationRewriter: mutationRewriter,
-		}))
+		})))
 }
 
 // write chooses between the http response writer and gzip writer
@@ -82,8 +82,6 @@ func write(w http.ResponseWriter, rr *schema.Response, errMsg string, acceptGzip
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
 
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
@@ -178,6 +176,15 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 	return rr, nil
 }
 
+func commonHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		x.AddCorsHeaders(w)
+		w.Header().Set("Content-Type", "application/json")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func recoveryHandler(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +192,6 @@ func recoveryHandler(next http.Handler) http.Handler {
 		defer api.PanicHandler(reqID,
 			func(err error) {
 				rr := schema.ErrorResponse(err, reqID)
-				w.Header().Set("Content-Type", "application/json")
 				write(w, rr, fmt.Sprintf("[%s]", reqID),
 					strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 			})
