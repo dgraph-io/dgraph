@@ -598,6 +598,8 @@ func TestManyMutations(t *testing.T) {
 	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
+	fmt.Printf("%s", string(gqlResponse.Data))
+
 	opt := cmpopts.IgnoreFields(country{}, "ID")
 	if diff := cmp.Diff(expected, result, opt); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
