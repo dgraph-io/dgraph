@@ -226,7 +226,10 @@ func searchValidation(
 	}
 
 	searchArgs := getSearchArgs(field)
+	searchIndexes := make(map[string]string)
 	for _, searchArg := range searchArgs {
+		// Checks that the argument for search is valid and compatible
+		// with the type it is applied to.
 		if search, ok := supportedSearches[searchArg]; !ok {
 			// This check can be removed once gqlparser bug
 			// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
@@ -245,6 +248,31 @@ func searchValidation(
 				typ.Name, field.Name, searchArg, field.Type.Name(),
 				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
 		}
+
+		// Checks that the filter indexes aren't repeated and they
+		// don't clash with each other.
+		searchIndex := builtInFilters[searchArg]
+		if val, ok := searchIndexes[searchIndex]; ok {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: the argument to @search %s is duplicated. "+
+					"The filter (%s) was applied through the argument %s "+
+					"provided before",
+				typ.Name, field.Name, searchArg, searchIndex, val)
+		}
+
+		for _, index := range filtersCollisions[searchIndex] {
+			if val, ok := searchIndexes[index]; ok {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the argument to @search %s "+
+						"contradicts the field %s provided before "+
+						"and shouldn't be used together. ",
+					typ.Name, field.Name, searchArg, val)
+			}
+		}
+
+		searchIndexes[searchIndex] = searchArg
 	}
 
 	return nil

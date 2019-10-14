@@ -161,6 +161,7 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
+// Dgraph index to ast.FieldList map
 var defaultFiltersDirectives = map[string]ast.FieldList{
 	"StringTermFilter": ast.FieldList{
 		{Name: "allofterms",
@@ -216,6 +217,13 @@ var defaultFiltersDirectives = map[string]ast.FieldList{
 				NamedType: "String",
 			}},
 	},
+}
+
+// Dgraph index filters that have contains intersecting filter
+// directive.
+var filtersCollisions = map[string][]string{
+	"StringHashFilter":  []string{"StringExactFilter"},
+	"StringExactFilter": []string{"StringHashFilter"},
 }
 
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
@@ -709,6 +717,7 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		res[i] = child.Value.Raw
 	}
 
+	sort.Strings(res)
 	return res
 }
 
