@@ -41,7 +41,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) (*Reso
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	resCtx := &ResolverContext{Ctx: ctx, Field: query}
+	resCtx := &ResolverContext{Ctx: ctx, RootField: query}
 
 	res, succeed, err := qr.rewriteAndExecute(resCtx, query)
 
@@ -72,5 +72,5 @@ func (qr *queryResolver) rewriteAndExecute(
 }
 
 func introspectionExecution(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
-	return schema.Introspect(resCtx.Field)
+	return schema.Introspect(resCtx.RootField)
 }

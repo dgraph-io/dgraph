@@ -69,7 +69,7 @@ func (mr *mutationResolver) Resolve(
 			mutation.MutationType())
 	}
 
-	resCtx := &ResolverContext{Ctx: ctx, Field: mutation}
+	resCtx := &ResolverContext{Ctx: ctx, RootField: mutation}
 
 	res, success, err := mr.rewriteAndExecute(resCtx, mutation)
 
