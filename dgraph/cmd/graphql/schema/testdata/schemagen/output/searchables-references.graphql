@@ -11,8 +11,8 @@ type Author {
 
 type Post {
 	postID: ID!
-	title: String! @search(by: [term])
-	text: String @search(by: [fulltext])
+	title: String! @search(by: [term,fulltext])
+	text: String @search(by: [fulltext,term])
 	datePublished: DateTime
 }
 
@@ -176,8 +176,8 @@ input PatchPost {
 
 input PostFilter {
 	ids: [ID!]
-	title: StringTermFilter
-	text: StringFullTextFilter
+	title: StringFullTextFilter_StringTermFilter
+	text: StringFullTextFilter_StringTermFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -197,6 +197,13 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input StringFullTextFilter_StringTermFilter {
+	alloftext: String
+	anyoftext: String
+	allofterms: String
+	anyofterms: String
 }
 
 input UpdateAuthorInput {

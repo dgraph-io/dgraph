@@ -7,7 +7,7 @@ type Author {
 
 type Post {
 	postID: ID!
-	title: String! @search(by: [term])
-	text: String @search(by: [fulltext])
+	title: String! @search(by: [term, fulltext])
+	text: String @search(by: [fulltext, term])
 	datePublished: DateTime   # Have something not search
 }

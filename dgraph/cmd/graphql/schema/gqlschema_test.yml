@@ -222,6 +222,17 @@ invalid_schemas:
       ]
 
   -
+    name: "Search without []"
+    input: |
+      type X {
+        y: String @search(by: hash)
+      }
+    errlist: [
+      {"message": "User didn't supply an array to @search directive.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
     name: "Search doesn't allow hash and exact together"
     input: |
       type X {

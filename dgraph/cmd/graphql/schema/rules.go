@@ -222,7 +222,7 @@ func searchValidation(
 	if arg.Value.Raw != "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"User didn't supply an array")
+			"User didn't supply an array to @search directive.")
 	}
 
 	searchArgs := getSearchArgs(field)
