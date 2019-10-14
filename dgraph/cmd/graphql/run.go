@@ -240,14 +240,19 @@ func run() error {
 
 	resolvers := resolve.New(schema.AsSchema(gqlSchema), resolverFactory)
 	mainServer := web.NewServer(resolvers)
-	http.Handle("/graphql",
-		web.GraphQLHTTPHandler(
-			schema.AsSchema(gqlSchema),
-			dgraph.AsDgraph(dgraphClient),
-			dgraph.NewQueryRewriter(),
-			dgraph.NewMutationRewriter()))
+
+	adminResolvers :=
+		NewAdminResolver(
+			dgraphClient,
+			mainServer,
+			queryRewriter,
+			mutationRewriter,
+			queryExecutor,
+			mutationExecutor)
+	adminServer := web.NewServer(adminResolvers)
 
 	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.Handle("/admin", adminServer.HTTPHandler())
 
 	trace.ApplyConfig(trace.Config{
 		DefaultSampler:             trace.ProbabilitySampler(GraphQL.Conf.GetFloat64("trace")),
@@ -261,6 +266,7 @@ func run() error {
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
 	glog.Infof("Bringing up GraphQL HTTP API at 127.0.0.1:9000/graphql")
+	glog.Infof("Bringing up GraphQL HTTP admin API at 127.0.0.1:9000/admin")
 	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
 }
 
