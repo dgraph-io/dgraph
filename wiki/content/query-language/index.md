@@ -1821,18 +1821,14 @@ type Pet {
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
-the node has (`Animal` and `Pet`). Then it will get the definitions of 
-`Animal` and `Pet` and build a list of predicates.
-Finally, it will query the schema to check if any of those predicates have a
-reverse node. If, for example, there's a reverse node in the `owner` predicate,
-the final list of predicates to expand will be:
+the node has (`Animal` and `Pet`). Then it will get the definitions of `Animal`
+and `Pet` and build a list of predicates from their type definitions.
 
 ```
 name
 species
 dob
 owner
-~owner
 veterinarian
 ```
 
