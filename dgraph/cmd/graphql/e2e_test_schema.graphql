@@ -1,11 +1,11 @@
 type Country {
         id: ID!
-        name: String! @search(by: ["trigram"])
+        name: String! @search(by: ["trigram", "hash"])
 }
 
 type Author {
         id: ID!
-        name: String! @search(by: ["hash"])
+        name: String! @search(by: ["hash", "trigram"])
         dob: DateTime @search
         reputation: Float @search
         country: Country
@@ -14,7 +14,7 @@ type Author {
 
 type Post {
         postID: ID!
-        title: String! @search(by: ["term", "fulltext", "trigram"])
+        title: String! @search(by: ["term", "fulltext"])
         text: String @search(by: ["fulltext"])
         tags: [String] @search(by: ["exact"])
         topic: String @search(by: ["exact"])

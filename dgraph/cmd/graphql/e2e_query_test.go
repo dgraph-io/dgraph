@@ -154,7 +154,45 @@ func TestRegExp(t *testing.T) {
 		})
 }
 
-func TestSearch(t *testing.T) {
+func TestSearchDifferentIndex(t *testing.T) {
+	query := `query {
+		  queryPost (filter: {title : { %s : "%s" }} ) {
+		      title
+		  }
+	}`
+
+	testCases := []struct {
+		filter string
+		text   string
+	}{
+		{"anyofterms", "Introducing"},
+		{"alloftext", "Introducing GraphQL in Dgraph"},
+	}
+	for _, tc := range testCases {
+		getCountryParams := &GraphQLParams{
+			Query: fmt.Sprintf(query, tc.filter, tc.text),
+		}
+
+		gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		var expected, result struct {
+			QueryPost []*post
+		}
+
+		expected.QueryPost = []*post{
+			&post{Title: "Introducing GraphQL in Dgraph"},
+		}
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+
+		if diff := cmp.Diff(expected, result); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+
+func TestSearchDifferentArg(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
 			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {
@@ -164,22 +202,10 @@ func TestSearch(t *testing.T) {
 	}
 
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	require.NotNil(t, gqlResponse.Errors)
 
-	var expected, result struct {
-		QueryPost []*post
-	}
-
-	expected.QueryPost = []*post{
-		&post{Title: "Introducing GraphQL in Dgraph"},
-	}
-
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
+	expected := `Field "regexp" is not defined by type StringFullTextFilter_StringTermFilter`
+	require.Contains(t, gqlResponse.Errors[0].Error(), expected)
 }
 
 func TestHashSearch(t *testing.T) {
