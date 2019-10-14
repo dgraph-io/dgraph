@@ -230,7 +230,7 @@ func run() error {
 	resolverFactory :=
 		resolve.NewResolverFactory(
 			queryRewriter,
-			resolve.NewMutationRewriter(),
+			mutationRewriter,
 			queryExecutor,
 			mutationExecutor)
 
@@ -240,12 +240,6 @@ func run() error {
 
 	resolvers := resolve.New(schema.AsSchema(gqlSchema), resolverFactory)
 	mainServer := web.NewServer(resolvers)
-	http.Handle("/graphql",
-		web.GraphQLHTTPHandler(
-			schema.AsSchema(gqlSchema),
-			dgraph.AsDgraph(dgraphClient),
-			dgraph.NewQueryRewriter(),
-			dgraph.NewMutationRewriter()))
 
 	http.Handle("/graphql", mainServer.HTTPHandler())
 

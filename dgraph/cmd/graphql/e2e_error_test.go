@@ -58,14 +58,17 @@ func TestPanicCatcher(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
 
-	handler := web.GraphQLHTTPHandler(
-		gqlSchema,
-		&panicClient{},
-		&panicClient{},
-		resolve.NewQueryRewriter(),
-		resolve.NewMutationRewriter())
+	resolverFactory :=
+		resolve.NewResolverFactory(
+			resolve.NewQueryRewriter(),
+			resolve.NewMutationRewriter(),
+			&panicClient{},
+			&panicClient{})
 
-	ts := httptest.NewServer(handler)
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
 	for name, test := range tests {
