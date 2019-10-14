@@ -138,8 +138,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				str3: Int @search(by: term)
 				str4: Int @search(by: fulltext)
 				str5: Int @search(by: trigram)
+				str6: Int @search(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searches don't apply to Float": {schema: `
 			type X {
 				str1: Float @search(by: hash)
@@ -147,8 +148,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				str3: Float @search(by: term)
 				str4: Float @search(by: fulltext)
 				str5: Float @search(by: trigram)
+				str6: Float @search(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searches don't apply to Boolean": {schema: `
 			type X {
 				str1: Boolean @search(by: hash)
@@ -156,8 +158,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				str3: Boolean @search(by: term)
 				str4: Boolean @search(by: fulltext)
 				str5: Boolean @search(by: trigram)
+				str6: Boolean @search(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"String searches don't apply to DateTime": {schema: `
 			type X {
 				str1: DateTime @search(by: hash)
@@ -165,8 +168,9 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				str3: DateTime @search(by: term)
 				str4: DateTime @search(by: fulltext)
 				str5: DateTime @search(by: trigram)
+				str6: DateTime @search(by: regexp)
 			}`,
-			expectedErrors: 5},
+			expectedErrors: 6},
 		"DateTime searches don't apply to Int": {schema: `
 			type X {
 				dt1: Int @search(by: year)
@@ -237,11 +241,12 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				e10: E @search(by: term)
 				e11: E @search(by: fulltext)
 				e12: E @search(by: trigram)
+				e13: E @search(by: regexp)
 			}
 			enum E {
 				A
 			}`,
-			expectedErrors: 12},
+			expectedErrors: 13},
 	}
 
 	for name, test := range tests {

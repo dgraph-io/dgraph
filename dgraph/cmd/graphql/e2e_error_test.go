@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http/httptest"
 	"testing"
 
@@ -27,8 +28,43 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
+
+type ErrorCase struct {
+	Name       string
+	GQLRequest string
+	variables  map[string]interface{}
+	Errors     x.GqlErrorList
+}
+
+// TestRequestValidationErrors just makes sure we are catching validation failures.
+// Mostly this is provided by an external lib, so just checking we hit common cases.
+func TestRequestValidationErrors(t *testing.T) {
+	b, err := ioutil.ReadFile("e2e_error_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []ErrorCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal test cases from yaml.")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			test := &GraphQLParams{
+				Query:     tcase.GQLRequest,
+				Variables: tcase.variables,
+			}
+			gqlResponse := test.ExecuteAsPost(t, graphqlURL)
+
+			require.Nil(t, gqlResponse.Data)
+			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 // TestPanicCatcher tests that the GraphQL server behaves properly when an internal
 // bug triggers a panic.  Here, this is mocked up with httptest and a dgraph package

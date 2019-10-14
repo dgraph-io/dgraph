@@ -48,6 +48,7 @@ enum DgraphIndex {
 	term
 	fulltext
 	trigram
+	regexp
 	year
 	month
 	day
@@ -127,21 +128,27 @@ type directiveValidator func(
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error
 
+type searchTypeIndex struct {
+	gqlType string
+	dgIndex string
+}
+
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
-var supportedSearches = map[string]string{
-	"int":      "Int",
-	"float":    "Float",
-	"bool":     "Boolean",
-	"hash":     "String",
-	"exact":    "String",
-	"term":     "String",
-	"fulltext": "String",
-	"trigram":  "String",
-	"year":     "DateTime",
-	"month":    "DateTime",
-	"day":      "DateTime",
-	"hour":     "DateTime",
+var supportedSearches = map[string]searchTypeIndex{
+	"int":      {"Int", "int"},
+	"float":    {"Float", "float"},
+	"bool":     {"Boolean", "bool"},
+	"hash":     {"String", "hash"},
+	"exact":    {"String", "exact"},
+	"term":     {"String", "term"},
+	"fulltext": {"String", "fulltext"},
+	"trigram":  {"String", "trigram"},
+	"regexp":   {"String", "trigram"},
+	"year":     {"DateTime", "year"},
+	"month":    {"DateTime", "month"},
+	"day":      {"DateTime", "day"},
+	"hour":     {"DateTime", "hour"},
 }
 
 // GraphQL scalar type -> default Dgraph index (/search)
@@ -173,6 +180,7 @@ var builtInFilters = map[string]string{
 	"hour":     "DateTimeFilter",
 	"term":     "StringTermFilter",
 	"trigram":  "StringRegExpFilter",
+	"regexp":   "StringRegExpFilter",
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
