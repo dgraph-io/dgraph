@@ -2358,8 +2358,8 @@ A schema query queries for the whole schema:
 schema {}
 ```
 
-{{% notice "note" %}}
-Unlike regular queries, the schema query is not surrounded by curly braces.
+{{% notice "note" %}} Unlike regular queries, the schema query is not surrounded
+by curly braces. Also, schema queries and regular queries cannot be combined.
 {{% /notice %}}
 
 You can query for particular schema fields in the query body.
