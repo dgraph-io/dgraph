@@ -462,7 +462,7 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
-func authorizeAlter(ctx context.Context, op *api.Operation) (err error) {
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -487,44 +487,49 @@ func authorizeAlter(ctx context.Context, op *api.Operation) (err error) {
 
 	var userId string
 	var groupIds []string
+
+	// doAuthorizeAlter checks if alter of all the predicates are allowed
+	// as a byproduct, it also sets the userId, groups variables
+	doAuthorizeAlter := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		if err == nil {
+			userId = userData[0]
+			groupIds = userData[1:]
+
+			if userId == x.GrootId {
+				return nil
+			}
+		} else if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined, per the
+			// fail open approach
+			userId = "anonymous"
+		} else {
+			return status.Error(codes.Unauthenticated, err.Error())
+		}
+
+		// if we get here, we know the user is not Groot.
+		if isDropAll(op) || op.DropOp == api.Operation_DATA {
+			return errors.Errorf(
+				"only Groot is allowed to drop all data, but the current user is %s", userId)
+		}
+
+		return authorizePreds(userId, groupIds, preds, acl.Modify)
+	}
+
+	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		defer func() {
-			span.Annotatef(nil, (&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: acl.Modify,
-				allowed:   err == nil,
-			}).String())
-		}()
+		span.Annotatef(nil, (&accessEntry{
+			userId:    userId,
+			groups:    groupIds,
+			preds:     preds,
+			operation: acl.Modify,
+			allowed:   err == nil,
+		}).String())
 	}
 
-	// Check if alter of all the predicates are allowed also set the userId, groups variables
-	userData, err := extractUserAndGroups(ctx)
-	if err == errNoJwt {
-		// treat the user as an anonymous guest who has not joined any group yet
-		// such a user can still get access to predicates that have no ACL rule defined, per the
-		// fail open approach
-		userId = "anonymous"
-	} else if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	} else {
-		userId = userData[0]
-		groupIds = userData[1:]
-
-		if userId == x.GrootId {
-			return nil
-		}
-	}
-
-	// if we get here, we know the user is not Groot.
-	if isDropAll(op) || op.DropOp == api.Operation_DATA {
-		return errors.Errorf(
-			"only Groot is allowed to drop all data, but the current user is %s", userId)
-	}
-
-	return authorizePreds(userId, groupIds, preds, acl.Modify)
+	return err
 }
 
 // parsePredsFromMutation returns a union set of all the predicate names in the input nquads
@@ -569,7 +574,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 }
 
 // authorizeMutation authorizes the mutation using the aclCachePtr
-func authorizeMutation(ctx context.Context, gmu *gql.Mutation) (err error) {
+func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -579,41 +584,44 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) (err error) {
 
 	var userId string
 	var groupIds []string
+	// doAuthorizeMutation checks if modification of all the predicates are allowed
+	// as a byproduct, it also sets the userId and groups
+	doAuthorizeMutation := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		if err == nil {
+			userId = userData[0]
+			groupIds = userData[1:]
+
+			if userId == x.GrootId {
+				// groot is allowed to mutate anything except the permission of the acl predicates
+				if isAclPredMutation(gmu.Set) {
+					return errors.Errorf("the permission of ACL predicates can not be changed")
+				}
+				return nil
+			}
+		} else if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else {
+			return status.Error(codes.Unauthenticated, err.Error())
+		}
+
+		return authorizePreds(userId, groupIds, preds, acl.Write)
+	}
+
+	err := doAuthorizeMutation()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		defer func() {
-			span.Annotatef(nil, (&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: acl.Write,
-				allowed:   err == nil,
-			}).String())
-		}()
+		span.Annotatef(nil, (&accessEntry{
+			userId:    userId,
+			groups:    groupIds,
+			preds:     preds,
+			operation: acl.Write,
+			allowed:   err == nil,
+		}).String())
 	}
 
-	// Check if modification of all the predicates are allowed and set the userId and groups
-	userData, err := extractUserAndGroups(ctx)
-	if err == errNoJwt {
-		// treat the user as an anonymous guest who has not joined any group yet
-		// such a user can still get access to predicates that have no ACL rule defined
-		userId = "anonymous"
-	} else if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	} else {
-		userId = userData[0]
-		groupIds = userData[1:]
-
-		if userId == x.GrootId {
-			// groot is allowed to mutate anything except the permission of the acl predicates
-			if isAclPredMutation(gmu.Set) {
-				return errors.Errorf("the permission of ACL predicates can not be changed")
-			}
-			return nil
-		}
-	}
-
-	return authorizePreds(userId, groupIds, preds, acl.Write)
+	return err
 }
 
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
@@ -659,7 +667,7 @@ func logAccess(log *accessEntry) {
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) (err error) {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -668,34 +676,36 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) (err error) {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
-	if span := otrace.FromContext(ctx); span != nil {
-		defer func() {
-			span.Annotatef(nil, (&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: acl.Read,
-				allowed:   err == nil,
-			}).String())
-		}()
-	}
+	doAuthorizeQuery := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		if err == nil {
+			userId = userData[0]
+			groupIds = userData[1:]
 
-	userData, err := extractUserAndGroups(ctx)
-	if err == errNoJwt {
-		// treat the user as an anonymous guest who has not joined any group yet
-		// such a user can still get access to predicates that have no ACL rule defined
-		userId = "anonymous"
-	} else if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	} else {
-		userId = userData[0]
-		groupIds = userData[1:]
-
-		if userId == x.GrootId {
-			// groot is allowed to query anything
-			return nil
+			if userId == x.GrootId {
+				// groot is allowed to query anything
+				return nil
+			}
+		} else if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else {
+			return status.Error(codes.Unauthenticated, err.Error())
 		}
+
+		return authorizePreds(userId, groupIds, preds, acl.Read)
 	}
 
-	return authorizePreds(userId, groupIds, preds, acl.Read)
+	err := doAuthorizeQuery()
+	if span := otrace.FromContext(ctx); span != nil {
+		span.Annotatef(nil, (&accessEntry{
+			userId:    userId,
+			groups:    groupIds,
+			preds:     preds,
+			operation: acl.Read,
+			allowed:   err == nil,
+		}).String())
+	}
+
+	return err
 }
