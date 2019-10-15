@@ -38,9 +38,9 @@ type HttpServer struct {
 }
 
 // NewHttpServer creates a new http server and registers an associated rpc server
-func NewHttpServer(api *api.Api, codec Codec, cfg *Config) *HttpServer {
+func NewHttpServer(api *api.Api, codec Codec, cfg Config) *HttpServer {
 	server := &HttpServer{
-		cfg:       cfg,
+		cfg:       &cfg,
 		rpcServer: NewApiServer(cfg.Modules, api),
 	}
 

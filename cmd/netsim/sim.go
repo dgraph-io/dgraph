@@ -50,7 +50,7 @@ func NewSimulator(num int) (sim *Simulator, err error) {
 			BootstrapNodes: []string{
 				bootnodeAddr,
 			},
-			Port: 5001 + i,
+			Port: 5001 + uint32(i),
 		}
 		sim.Nodes[i] = new(p2p.Service)
 		sim.Nodes[i], err = p2p.NewService(conf, nil)

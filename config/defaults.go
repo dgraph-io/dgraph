@@ -34,34 +34,32 @@ const (
 
 	// P2P
 	DefaultP2PPort     = 7001
-	DefaultP2PRandSeed = int64(33)
-	DefaultNoBootstrap = false
+	DefaultP2PRandSeed = int64(0)
+
+	DefaultGenesisPath = "./genesis.json"
 )
 
-var DefaultGenesisPath = "./genesis.json"
-
-var DefaultP2PBootstrap = []string{
-	"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
-	"/ip4/104.236.179.241/tcp/4001/ipfs/QmSoLPppuBtQSGwKDZT2M73ULpjvfd3aZ6ha4oFGL1KrGM",
-}
+var DefaultP2PBootstrap []string
 
 var DefaultRpcModules = []api.Module{"system"}
 
 var (
 	// P2P
-	DefaultP2PConfig = &p2p.Config{
+	DefaultP2PConfig = p2p.Config{
 		Port:           DefaultP2PPort,
 		RandSeed:       DefaultP2PRandSeed,
 		BootstrapNodes: DefaultP2PBootstrap,
+		NoBootstrap:    false,
+		NoMdns:         false,
 	}
 
 	// DB
-	DefaultDBConfig = &polkadb.Config{
+	DefaultDBConfig = polkadb.Config{
 		DataDir: DefaultDataDir(),
 	}
 
 	// RPC
-	DefaultRpcConfig = &rpc.Config{
+	DefaultRpcConfig = rpc.Config{
 		Host:    DefaultRpcHttpHost,
 		Port:    DefaultRpcHttpPort,
 		Modules: DefaultRpcModules,
@@ -69,10 +67,12 @@ var (
 )
 
 // DefaultConfig is the default settings used when a config.toml file is not passed in during instantiation
-var DefaultConfig = &Config{
-	P2pCfg: DefaultP2PConfig,
-	DbCfg:  DefaultDBConfig,
-	RpcCfg: DefaultRpcConfig,
+func DefaultConfig() *Config {
+	return &Config{
+		P2pCfg: DefaultP2PConfig,
+		DbCfg:  DefaultDBConfig,
+		RpcCfg: DefaultRpcConfig,
+	}
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other

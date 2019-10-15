@@ -33,10 +33,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
+
+const TestDataDir = "./test_data"
 
 func teardown(tempFile *os.File) {
 	if err := os.Remove(tempFile.Name()); err != nil {
@@ -48,28 +49,35 @@ func teardown(tempFile *os.File) {
 }
 
 func createTempConfigFile() (*os.File, *cfg.Config) {
-	TestDBConfig := &polkadb.Config{
-		DataDir: "chaingang",
-	}
-	TestP2PConfig := &p2p.Config{
-		Port:     cfg.DefaultP2PPort,
-		RandSeed: cfg.DefaultP2PRandSeed,
-		BootstrapNodes: []string{
-			"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"},
-	}
-	var TestConfig = &cfg.Config{
-		P2pCfg: TestP2PConfig,
-		DbCfg:  TestDBConfig,
-		RpcCfg: cfg.DefaultRpcConfig,
-	}
+	testConfig := cfg.DefaultConfig()
+	testConfig.DbCfg.DataDir = TestDataDir
 	tmpFile, err := ioutil.TempFile(os.TempDir(), "prefix-")
 	if err != nil {
 		log.Crit("Cannot create temporary file", err)
 		os.Exit(1)
 	}
 
-	f := cfg.ToTOML(tmpFile.Name(), TestConfig)
-	return f, TestConfig
+	f := cfg.ToTOML(tmpFile.Name(), testConfig)
+	return f, testConfig
+}
+
+// Creates a cli context for a test given a set of flags and values
+func createCliContext(description string, flags []string, values []interface{}) (*cli.Context, error) {
+	set := flag.NewFlagSet(description, 0)
+	for i := range values {
+		switch v := values[i].(type) {
+		case bool:
+			set.Bool(flags[i], v, "")
+		case string:
+			set.String(flags[i], v, "")
+		case uint:
+			set.Uint(flags[i], v, "")
+		default:
+			return nil, fmt.Errorf("unexpected cli value type: %T", values[i])
+		}
+	}
+	context := cli.NewContext(nil, set, nil)
+	return context, nil
 }
 
 func TestGetConfig(t *testing.T) {
@@ -84,7 +92,7 @@ func TestGetConfig(t *testing.T) {
 		usage    string
 		expected *cfg.Config
 	}{
-		{"", "", "", cfg.DefaultConfig},
+		{"", "", "", cfg.DefaultConfig()},
 		{"config", tempFile.Name(), "TOML configuration file", cfgClone},
 	}
 
@@ -146,7 +154,7 @@ func TestGetDatabaseDir(t *testing.T) {
 		} else {
 			cfgClone.DbCfg.DataDir = "chaingang"
 		}
-		dir := getDatabaseDir(context, cfgClone)
+		dir := getDataDir(context, cfgClone)
 
 		if dir != c.expected {
 			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, dir, c.expected)
@@ -156,125 +164,140 @@ func TestGetDatabaseDir(t *testing.T) {
 
 func TestCreateP2PService(t *testing.T) {
 	_, cfgClone := createTempConfigFile()
-	srv := createP2PService(cfgClone.P2pCfg, nil)
+	srv, _ := createP2PService(cfgClone.P2pCfg)
 
 	if srv == nil {
 		t.Fatalf("failed to create p2p service")
 	}
 }
 
-func TestSetBootstrapNodes(t *testing.T) {
+func TestSetP2pConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
 
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
 	tc := []struct {
-		name     string
-		value    string
-		usage    string
-		expected []string
+		description string
+		flags       []string
+		values      []interface{}
+		expected    p2p.Config
 	}{
-		{"config", tempFile.Name(), "TOML configuration file", cfgClone.P2pCfg.BootstrapNodes},
-		{"bootnodes", "test1", "Comma separated enode URLs for P2P discovery bootstrap", []string{"test1"}},
-	}
-
-	for i, c := range tc {
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
-		context := cli.NewContext(nil, set, nil)
-
-		setBootstrapNodes(context, cfgClone.P2pCfg)
-
-		if cfgClone.P2pCfg.BootstrapNodes[i] != c.expected[0] {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, cfgClone.P2pCfg.BootstrapNodes[i], c.expected)
-		}
-	}
-}
-
-func TestSetRpcModules(t *testing.T) {
-	tempFile, cfgClone := createTempConfigFile()
-
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
-	tc := []struct {
-		name     string
-		value    string
-		usage    string
-		expected []api.Module
-	}{
-		{"config", tempFile.Name(), "TOML configuration file", []api.Module{"system"}},
-		{"rpcmods", "author", "API modules to enable via HTTP-RPC, comma separated list", []api.Module{"author"}},
-	}
-
-	for i, c := range tc {
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
-		context := cli.NewContext(nil, set, nil)
-
-		setRpcModules(context, cfgClone.RpcCfg)
-
-		if cfgClone.RpcCfg.Modules[i] != c.expected[0] {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, cfgClone.RpcCfg.Modules[i], c.expected)
-		}
-	}
-}
-
-func TestSetRpcHost(t *testing.T) {
-	tempFile, cfgClone := createTempConfigFile()
-
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
-	tc := []struct {
-		name     string
-		value    string
-		usage    string
-		expected string
-	}{
-		{"", "", "", cfg.DefaultRpcHttpHost},
-		{"config", tempFile.Name(), "TOML configuration file", "localhost"},
-		{"rpchost", "test1", "HTTP-RPC server listening hostname", "test1"},
-	}
-
-	for i, c := range tc {
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
-		context := cli.NewContext(nil, set, nil)
-		if i == 0 {
-			cfgClone.RpcCfg.Host = ""
-		} else {
-			cfgClone.RpcCfg.Host = "localhost"
-		}
-		setRpcHost(context, cfgClone.RpcCfg)
-
-		if cfgClone.RpcCfg.Host != c.expected {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, cfgClone.RpcCfg.Host, c.expected)
-		}
-	}
-}
-
-func TestSetNoBootstrap(t *testing.T) {
-	_, cfgClone := createTempConfigFile()
-
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
-	tc := []struct {
-		name     string
-		value    bool
-		expected bool
-	}{
-		{"nobootstrap", true, true},
+		{
+			"config file",
+			[]string{"config"},
+			[]interface{}{tempFile.Name()},
+			cfgClone.P2pCfg,
+		},
+		{
+			"no bootstrap, no mdns",
+			[]string{"nobootstrap", "nomdns"},
+			[]interface{}{true, true},
+			p2p.Config{
+				BootstrapNodes: cfg.DefaultP2PBootstrap,
+				Port:           cfg.DefaultP2PPort,
+				RandSeed:       cfg.DefaultP2PRandSeed,
+				NoBootstrap:    true,
+				NoMdns:         true,
+			},
+		},
+		{
+			"bootstrap nodes",
+			[]string{"bootnodes"},
+			[]interface{}{"1234,5678"},
+			p2p.Config{
+				BootstrapNodes: []string{"1234", "5678"},
+				Port:           cfg.DefaultP2PPort,
+				RandSeed:       cfg.DefaultP2PRandSeed,
+				NoBootstrap:    false,
+				NoMdns:         false,
+			},
+		},
+		{
+			"port",
+			[]string{"p2pport"},
+			[]interface{}{uint(1337)},
+			p2p.Config{
+				BootstrapNodes: cfg.DefaultP2PBootstrap,
+				Port:           1337,
+				RandSeed:       cfg.DefaultP2PRandSeed,
+				NoBootstrap:    false,
+				NoMdns:         false,
+			},
+		},
 	}
 
 	for _, c := range tc {
-		set := flag.NewFlagSet(c.name, 0)
-		set.Bool(c.name, c.value, "")
-		context := cli.NewContext(nil, set, nil)
+		c := c // bypass scopelint false positive
+		t.Run(c.description, func(t *testing.T) {
+			context, err := createCliContext(c.description, c.flags, c.values)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		setNoBootstrap(context, cfgClone.P2pCfg)
+			input := cfg.DefaultConfig()
+			res := setP2pConfig(context, input.P2pCfg)
 
-		if cfgClone.P2pCfg.NoBootstrap != c.expected {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, cfgClone.P2pCfg.NoBootstrap, c.expected)
-		}
+			if !reflect.DeepEqual(res, c.expected) {
+				t.Fatalf("\ngot %+v\nexpected %+v", input.P2pCfg, c.expected)
+			}
+		})
+	}
+}
+
+func TestSetRpcConfig(t *testing.T) {
+	tempFile, cfgClone := createTempConfigFile()
+
+	app := cli.NewApp()
+	app.Writer = ioutil.Discard
+	tc := []struct {
+		description string
+		flags       []string
+		values      []interface{}
+		expected    rpc.Config
+	}{
+		{
+			"config file",
+			[]string{"config"},
+			[]interface{}{tempFile.Name()},
+			cfgClone.RpcCfg,
+		},
+		{
+			"host and port",
+			[]string{"rpchost", "rpcport"},
+			[]interface{}{"someHost", uint(1337)},
+			rpc.Config{
+				Port:    1337,
+				Host:    "someHost",
+				Modules: cfg.DefaultRpcModules,
+			},
+		},
+		{
+			"modules",
+			[]string{"rpcmods"},
+			[]interface{}{"system,state"},
+			rpc.Config{
+				Port:    cfg.DefaultRpcHttpPort,
+				Host:    cfg.DefaultRpcHttpHost,
+				Modules: []api.Module{"system", "state"},
+			},
+		},
+	}
+
+	for _, c := range tc {
+		c := c // bypass scopelint false positive
+		t.Run(c.description, func(t *testing.T) {
+			context, err := createCliContext(c.description, c.flags, c.values)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			input := cfg.DefaultConfig()
+			res := setRpcConfig(context, input.RpcCfg)
+
+			if !reflect.DeepEqual(res, c.expected) {
+				t.Fatalf("\ngot %+v\nexpected %+v", input.RpcCfg, c.expected)
+			}
+		})
 	}
 }
 
@@ -302,6 +325,7 @@ func TestMakeNode(t *testing.T) {
 	}
 
 	for _, c := range tc {
+		c := c // bypass scopelint false positive
 		set := flag.NewFlagSet(c.name, 0)
 		set.String(c.name, c.value, c.usage)
 		context := cli.NewContext(nil, set, nil)
@@ -326,25 +350,31 @@ func TestCommands(t *testing.T) {
 	tempFile, _ := createTempConfigFile()
 
 	tc := []struct {
-		name  string
-		value string
-		usage string
+		description string
+		flags       []string
+		values      []interface{}
 	}{
-		{"config", tempFile.Name(), "TOML configuration file"},
+		{"from config file",
+			[]string{"config"},
+			[]interface{}{tempFile.Name()}},
 	}
 
 	for _, c := range tc {
+		c := c // bypass scopelint false positive
+
 		app := cli.NewApp()
 		app.Writer = ioutil.Discard
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
 
-		context := cli.NewContext(app, set, nil)
+		context, err := createCliContext(c.description, c.flags, c.values)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		command := dumpConfigCommand
 
-		err := command.Run(context)
+		err = command.Run(context)
 		if err != nil {
-			t.Fatalf("should have ran dumpConfig command")
+			t.Fatalf("should have ran dumpConfig command. err: %s", err)
 		}
 	}
 	defer teardown(tempFile)

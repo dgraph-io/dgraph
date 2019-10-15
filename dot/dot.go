@@ -82,5 +82,7 @@ func (d *Dot) Wait() {
 //Stop all services first, then send stop signal for test
 func (d *Dot) Stop() {
 	d.Services.StopAll()
-	close(d.stop)
+	if d.stop != nil {
+		close(d.stop)
+	}
 }

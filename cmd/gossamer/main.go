@@ -33,13 +33,14 @@ var (
 	}
 	p2pFlags = []cli.Flag{
 		utils.BootnodesFlag,
+		utils.P2pPortFlag,
 		utils.NoBootstrapFlag,
+		utils.NoMdnsFlag,
 	}
 	rpcFlags = []cli.Flag{
 		utils.RpcEnabledFlag,
-		utils.RpcListenAddrFlag,
-		utils.RpcPortFlag,
 		utils.RpcHostFlag,
+		utils.RpcPortFlag,
 		utils.RpcModuleFlag,
 	}
 	genesisFlags = []cli.Flag{
@@ -70,7 +71,6 @@ func init() {
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
-		log.Error("error starting app", "err", err)
 		os.Exit(1)
 	}
 }
@@ -95,6 +95,7 @@ func gossamer(ctx *cli.Context) error {
 	genesisState, err := loadGenesis(ctx)
 	if err != nil {
 		log.Error("error loading genesis state", "error", err)
+		return err
 	}
 
 	err = startLogger(ctx)
@@ -104,7 +105,7 @@ func gossamer(ctx *cli.Context) error {
 
 	node, _, err := makeNode(ctx, genesisState)
 	if err != nil {
-		// TODO: Need to manage error propagation and exit smoothly
+		log.Error("error starting gossamer", "err", err)
 		return err
 	}
 

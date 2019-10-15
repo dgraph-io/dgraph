@@ -32,7 +32,7 @@ type Config struct {
 	// Peers used for bootstrapping
 	BootstrapNodes []string
 	// Listening port
-	Port int
+	Port uint32
 	// If 0, random host ID will be generated; If non-0, deterministic ID will be produced
 	RandSeed int64
 	// Disable bootstrapping altogether. BootstrapNodes has no effect over this.

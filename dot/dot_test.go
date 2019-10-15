@@ -31,7 +31,7 @@ import (
 func createTestDot(t *testing.T) *Dot {
 	var services []services.Service
 	// P2P
-	p2pSrvc, err := p2p.NewService(cfg.DefaultP2PConfig, nil)
+	p2pSrvc, err := p2p.NewService(&cfg.DefaultConfig().P2pCfg, nil)
 	services = append(services, p2pSrvc)
 	if err != nil {
 		t.Fatal(err)

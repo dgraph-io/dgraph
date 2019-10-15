@@ -28,14 +28,53 @@ var (
 		Usage: "Data directory for the database",
 		Value: cfg.DefaultDataDir(),
 	}
-	// RPC settings
+	// cli service settings
+	VerbosityFlag = cli.StringFlag{
+		Name:  "verbosity",
+		Usage: "Supports levels crit (silent) to trce (trace)",
+		Value: "info",
+	}
+	//Genesis
+	GenesisFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "Path to genesis JSON file",
+		Value: cfg.DefaultGenesisPath,
+	}
+)
+
+// P2P flags
+var (
+	// P2P service settings
+	BootnodesFlag = cli.StringFlag{
+		Name:  "bootnodes",
+		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
+		Value: "",
+	}
+	P2pPortFlag = cli.UintFlag{
+		Name:  "p2pport",
+		Usage: "Set P2P listening port",
+		Value: cfg.DefaultP2PPort,
+	}
+	NoBootstrapFlag = cli.BoolFlag{
+		Name:  "nobootstrap",
+		Usage: "Disables p2p bootstrapping (mdns still enabled)",
+	}
+
+	NoMdnsFlag = cli.BoolFlag{
+		Name:  "nomdns",
+		Usage: "Disables p2p mdns discovery",
+	}
+)
+
+// RPC flags
+var (
 	RpcEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server",
 	}
-	RpcListenAddrFlag = cli.StringFlag{
-		Name:  "rpcaddr",
-		Usage: "HTTP-RPC server listening interface",
+	RpcHostFlag = cli.StringFlag{
+		Name:  "rpchost",
+		Usage: "HTTP-RPC server listening hostname",
 		Value: cfg.DefaultRpcHttpHost,
 	}
 	RpcPortFlag = cli.IntFlag{
@@ -43,36 +82,9 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: cfg.DefaultRpcHttpPort,
 	}
-	RpcHostFlag = cli.StringFlag{
-		Name:  "rpchost",
-		Usage: "HTTP-RPC server listening hostname",
-		Value: "",
-	}
 	RpcModuleFlag = cli.StringFlag{
 		Name:  "rpcmods",
 		Usage: "API modules to enable via HTTP-RPC, comma separated list",
 		Value: "",
-	}
-	// P2P service settings
-	BootnodesFlag = cli.StringFlag{
-		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
-		Value: "",
-	}
-	// Genesis
-	GenesisFlag = cli.StringFlag{
-		Name:  "genesis",
-		Usage: "Path to genesis JSON file",
-		Value: cfg.DefaultGenesisPath,
-	}
-	NoBootstrapFlag = cli.BoolFlag{
-		Name:  "nobootstrap",
-		Usage: "Disables p2p bootstrapping",
-	}
-	// cli service settings
-	VerbosityFlag = cli.StringFlag{
-		Name:  "verbosity",
-		Usage: "Supports levels crit (silent) to trce (trace)",
-		Value: "info",
 	}
 )
