@@ -50,7 +50,7 @@ func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
 
 // GraphQLHTTPHandler returns a http.Handler that serves GraphQL.
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
-	return api.WithRequestID(recoveryHandler(gh))
+	return api.WithRequestID(recoveryHandler(commonHeaders(gh)))
 }
 
 // ServeGQL tells the hander that the schema and resolvers it serves has changed.
