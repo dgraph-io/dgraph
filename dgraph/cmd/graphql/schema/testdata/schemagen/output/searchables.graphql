@@ -5,8 +5,9 @@
 type Post {
 	postID: ID!
 	title: String! @search(by: [term])
+	titleByEverything: String! @search(by: [term,fulltext,trigram,hash])
 	text: String @search(by: [fulltext])
-	tags: [String] @search(by: [trigram,fulltext,hash,term])
+	tags: [String] @search(by: [trigram])
 	tagsHash: [String] @search(by: [hash])
 	tagsExact: [String] @search(by: [exact])
 	publishByYear: DateTime @search(by: [year])
@@ -122,6 +123,7 @@ type UpdatePostPayload {
 
 enum PostOrderable {
 	title
+	titleByEverything
 	text
 	tags
 	tagsHash
@@ -140,6 +142,7 @@ enum PostOrderable {
 
 input PatchPost {
 	title: String
+	titleByEverything: String
 	text: String
 	tags: [String]
 	tagsHash: [String]
@@ -157,8 +160,9 @@ input PatchPost {
 input PostFilter {
 	ids: [ID!]
 	title: StringTermFilter
+	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
 	text: StringFullTextFilter
-	tags: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
+	tags: StringRegExpFilter
 	tagsHash: StringHashFilter
 	tagsExact: StringExactFilter
 	publishByYear: DateTimeFilter
@@ -176,6 +180,7 @@ input PostFilter {
 
 input PostInput {
 	title: String!
+	titleByEverything: String!
 	text: String
 	tags: [String]
 	tagsHash: [String]

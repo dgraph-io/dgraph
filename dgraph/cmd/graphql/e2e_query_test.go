@@ -154,23 +154,21 @@ func TestRegExp(t *testing.T) {
 		})
 }
 
-func TestSearchDifferentIndex(t *testing.T) {
-	query := `query {
-		  queryPost (filter: {title : { %s : "%s" }} ) {
+func TestMultipleSearchIndexes(t *testing.T) {
+	query := `query queryPost($filter: PostFilter){
+		  queryPost (filter: $filter) {
 		      title
 		  }
 	}`
 
-	testCases := []struct {
-		filter string
-		text   string
-	}{
-		{"anyofterms", "Introducing"},
-		{"alloftext", "Introducing GraphQL in Dgraph"},
+	testCases := []interface{}{
+		map[string]interface{}{"title": map[string]interface{}{"anyofterms": "Introducing"}},
+		map[string]interface{}{"title": map[string]interface{}{"alloftext": "Introducing GraphQL in Dgraph"}},
 	}
-	for _, tc := range testCases {
+	for _, filter := range testCases {
 		getCountryParams := &GraphQLParams{
-			Query: fmt.Sprintf(query, tc.filter, tc.text),
+			Query:     query,
+			Variables: map[string]interface{}{"filter": filter},
 		}
 
 		gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
@@ -192,7 +190,7 @@ func TestSearchDifferentIndex(t *testing.T) {
 	}
 }
 
-func TestSearchDifferentArg(t *testing.T) {
+func TestMultipleSearchIndexesWrongField(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
 			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {

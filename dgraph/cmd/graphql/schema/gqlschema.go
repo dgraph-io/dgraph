@@ -161,64 +161,6 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
-// Dgraph index to ast.FieldList map
-var defaultFiltersDirectives = map[string]ast.FieldList{
-	"StringTermFilter": {
-		{Name: "allofterms",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "anyofterms",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-	},
-	"StringRegExpFilter": {
-		{Name: "regexp",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-	},
-	"StringFullTextFilter": {
-		{Name: "alloftext",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "anyoftext",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-	},
-	"StringHashFilter": {
-		{Name: "eq",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-	},
-	"StringExactFilter": {
-		{Name: "eq",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "le",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "lt",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "ge",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-		{Name: "gt",
-			Type: &ast.Type{
-				NamedType: "String",
-			}},
-	},
-}
-
 // Dgraph index filters that have contains intersecting filter
 // directive.
 var filtersCollisions = map[string][]string{
@@ -600,14 +542,10 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 		filterTypeNameUnion := []string{}
 		for _, search := range getSearchArgs(fld) {
-			if search == "" {
-				continue
-			}
-
 			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
-				// Instead we allow to write `fieldName: enumValue` in the filter.
+				// Instead we allow to write `typeName: enumValue` in the filter.
 				// So, for example : `filter: { postType: Answer }`
 				// rather than : `filter: { postType: { eq: Answer } }`
 				//
@@ -633,9 +571,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			//create a schema type
 			if len(filterTypeNameUnion) > 1 {
 				fieldList := ast.FieldList{}
-				for _, fieldName := range filterTypeNameUnion {
-					fieldDirectives := defaultFiltersDirectives[fieldName]
-					fieldList = append(fieldList, fieldDirectives...)
+				for _, typeName := range filterTypeNameUnion {
+					fieldList = append(fieldList, schema.Types[typeName].Fields...)
 				}
 
 				schema.Types[filterTypeName] = &ast.Definition{
@@ -664,12 +601,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			for _, search := range getSearchArgs(fld) {
-				if search != "" {
-					return true
-				}
-			}
-			return isID(fld)
+			return getSearchArgs(fld) != nil || isID(fld)
 		})
 }
 
@@ -698,7 +630,7 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
-		return []string{""}
+		return nil
 	}
 	if len(search.Arguments) == 0 {
 		if search, ok := defaultSearches[fld.Type.Name()]; ok {

@@ -228,7 +228,8 @@ invalid_schemas:
         y: String @search(by: hash)
       }
     errlist: [
-      {"message": "User didn't supply an array to @search directive.",
+      {"message": "Type X; Field y: the @search directive requires a list argument, 
+          like @search(by: [hash])",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -251,8 +252,8 @@ invalid_schemas:
         y: DateTime @search(by: [hour, month])
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @search month is duplicated. The
-          filter (DateTimeFilter) was applied through the argument hour provided before.",
+      {"message": "Type X; Field y: has the search directive on DateTime. DateTime 
+           allows only one argument for @search.",
       "locations":[{"line":2, "column":16}]}
       ]
 

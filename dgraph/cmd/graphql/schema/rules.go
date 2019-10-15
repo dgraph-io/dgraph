@@ -219,10 +219,11 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if arg.Value.Raw != "" {
+	if arg.Value.Kind != ast.ListValue {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"User didn't supply an array to @search directive.")
+			"Type %s; Field %s: the @search directive requires a list argument, like @search(by: [hash])",
+			typ.Name, field.Name)
 	}
 
 	searchArgs := getSearchArgs(field)
@@ -253,12 +254,20 @@ func searchValidation(
 		// don't clash with each other.
 		searchIndex := builtInFilters[searchArg]
 		if val, ok := searchIndexes[searchIndex]; ok {
+			if field.Type.Name() == "String" {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the argument to @search %s is duplicated. "+
+						"The filter (%s) was applied through the argument %s "+
+						"provided before.",
+					typ.Name, field.Name, searchArg, searchIndex, val)
+			}
+
 			return gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s: the argument to @search %s is duplicated. "+
-					"The filter (%s) was applied through the argument %s "+
-					"provided before.",
-				typ.Name, field.Name, searchArg, searchIndex, val)
+				"Type %s; Field %s: has the search directive on %s. %s "+
+					"allows only one argument for @search.",
+				typ.Name, field.Name, field.Type.Name(), field.Type.Name())
 		}
 
 		for _, index := range filtersCollisions[searchIndex] {
