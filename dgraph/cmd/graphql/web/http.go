@@ -29,34 +29,33 @@ import (
 	"go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
+type IServeGraphQL interface {
+	ServeGQL(resolver *resolve.RequestResolver)
+	HTTPHandler() http.Handler
+}
+
 type graphqlHandler struct {
-	schema           schema.Schema
-	dgraphClient     dgraph.Client
-	queryRewriter    dgraph.QueryRewriter
-	mutationRewriter dgraph.MutationRewriter
+	resolver *resolve.RequestResolver
+}
+
+func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
+	return &graphqlHandler{resolver: resolver}
 }
 
 // GraphQLHTTPHandler returns a http.Handler that serves GraphQL.
-func GraphQLHTTPHandler(
-	schema schema.Schema,
-	dgraphClient dgraph.Client,
-	queryRewriter dgraph.QueryRewriter,
-	mutationRewriter dgraph.MutationRewriter) http.Handler {
+func (gh *graphqlHandler) HTTPHandler() http.Handler {
+	return api.WithRequestID(recoveryHandler(commonHeaders(gh)))
+}
 
-	return api.WithRequestID(recoveryHandler(commonHeaders(
-		&graphqlHandler{
-			schema:           schema,
-			dgraphClient:     dgraphClient,
-			queryRewriter:    queryRewriter,
-			mutationRewriter: mutationRewriter,
-		})))
+// ServeGQL tells the hander that the schema and resolvers it serves has changed.
+func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
+	gh.resolver = resolver
 }
 
 // write chooses between the http response writer and gzip writer
@@ -91,11 +90,11 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var res *schema.Response
-	rh, err := gh.resolverForRequest(r)
+	gqlReq, err := getRequest(r)
 	if err != nil {
 		res = schema.ErrorResponse(err, api.RequestID(ctx))
 	} else {
-		res = rh.Resolve(ctx)
+		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
 
 	write(w, res, fmt.Sprintf("[%s]", api.RequestID(ctx)),
@@ -104,8 +103,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (gh *graphqlHandler) isValid() bool {
-	return !(gh == nil || gh.schema == nil || gh.dgraphClient == nil ||
-		gh.queryRewriter == nil || gh.mutationRewriter == nil)
+	return !(gh == nil || gh.resolver == nil)
 }
 
 type gzreadCloser struct {
@@ -121,8 +119,8 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestResolver, error) {
-	rr := resolve.New(gh.schema, gh.dgraphClient, gh.queryRewriter, gh.mutationRewriter)
+func getRequest(r *http.Request) (*schema.Request, error) {
+	gqlReq := &schema.Request{}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := gzip.NewReader(r.Body)
@@ -135,16 +133,14 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 	switch r.Method {
 	case http.MethodGet:
 		query := r.URL.Query()
-		rr.GqlReq = &schema.Request{}
-		rr.GqlReq.Query = query.Get("query")
-		rr.GqlReq.OperationName = query.Get("operationName")
+		gqlReq.Query = query.Get("query")
+		gqlReq.OperationName = query.Get("operationName")
 		variables, ok := query["variables"]
-
 		if ok {
 			d := json.NewDecoder(strings.NewReader(variables[0]))
 			d.UseNumber()
 
-			if err := d.Decode(&rr.GqlReq.Variables); err != nil {
+			if err := d.Decode(&gqlReq.Variables); err != nil {
 				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		}
@@ -158,7 +154,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 		case "application/json":
 			d := json.NewDecoder(r.Body)
 			d.UseNumber()
-			if err = d.Decode(&rr.GqlReq); err != nil {
+			if err = d.Decode(&gqlReq); err != nil {
 				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		default:
@@ -173,7 +169,7 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (*resolve.RequestR
 			errors.New("Unrecognised request method.  Please use GET or POST for GraphQL requests")
 	}
 
-	return rr, nil
+	return gqlReq, nil
 }
 
 func commonHeaders(next http.Handler) http.Handler {

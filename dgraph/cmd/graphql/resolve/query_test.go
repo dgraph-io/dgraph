@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package dgraph
+package resolve
 
 import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/stretchr/testify/require"
@@ -61,7 +62,7 @@ func TestQueryRewriting(t *testing.T) {
 			dgQuery, err := testRewriter.Rewrite(gqlQuery)
 
 			require.Nil(t, err)
-			require.Equal(t, tcase.DGQuery, asString(dgQuery))
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
 }

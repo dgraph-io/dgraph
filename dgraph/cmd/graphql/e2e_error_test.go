@@ -17,13 +17,13 @@
 package graphql
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 	"github.com/dgraph-io/dgraph/gql"
@@ -94,13 +94,17 @@ func TestPanicCatcher(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
 
-	handler := web.GraphQLHTTPHandler(
-		gqlSchema,
-		&panicClient{},
-		dgraph.NewQueryRewriter(),
-		dgraph.NewMutationRewriter())
+	resolverFactory :=
+		resolve.NewResolverFactory(
+			resolve.NewQueryRewriter(),
+			resolve.NewMutationRewriter(),
+			&panicClient{},
+			&panicClient{})
 
-	ts := httptest.NewServer(handler)
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
 	for name, test := range tests {
@@ -121,14 +125,15 @@ func TestPanicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dg *panicClient) Query(
+	resCtx *resolve.ResolverContext,
+	query *gql.GraphQuery) ([]byte, error) {
 	panic("bugz!!!")
 }
 
-func (dg *panicClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
-	panic("bugz!!!")
-}
-
-func (dg *panicClient) DeleteNodes(ctx context.Context, query, mutation string) error {
+func (dg *panicClient) Mutate(
+	resCtx *resolve.ResolverContext,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 	panic("bugz!!!")
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dgraph
+package resolve
 
 import (
 	"fmt"
@@ -28,48 +28,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query, and
-// can build a Dgraph gql.GraphQuery to follow a GraphQL mutation.
-//
-// GraphQL queries come in like:
-//
-// query {
-// 	 getAuthor(id: "0x1") {
-// 	  name
-// 	 }
-// }
-//
-// and get rewritten straight to Dgraph.  But mutations come in like:
-//
-// mutation addAuthor($auth: AuthorInput!) {
-//   addAuthor(input: $auth) {
-// 	   author {
-// 	     id
-// 	     name
-// 	   }
-//   }
-// }
-//
-// Where `addAuthor(input: $auth)` implies a mutation that must get run, and the
-// remainder implies a query to run and return the newly created author, so the
-// mutation query rewriting is dependent on the context set up by the result of
-// the mutation.
-type QueryRewriter interface {
-	Rewrite(q schema.Query) (*gql.GraphQuery, error)
-	FromMutationResult(m schema.Mutation, uids map[string]string) (*gql.GraphQuery, error)
-}
-
 type queryRewriter struct{}
 
-// NewQueryRewriter returns a new query rewriter.
+// NewQueryRewriter returns a new QueryRewriter.
 func NewQueryRewriter() QueryRewriter {
 	return &queryRewriter{}
 }
 
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
-
-	// currently only handles getT(id: "0x123") queries
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -97,36 +64,6 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 		return rewriteAsQuery(gqlQuery), nil
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
-	}
-}
-
-// FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
-func (qr *queryRewriter) FromMutationResult(
-	gqlMutation schema.Mutation,
-	uids map[string]string) (*gql.GraphQuery, error) {
-
-	switch gqlMutation.MutationType() {
-	case schema.AddMutation:
-		uid, err := strconv.ParseUint(uids[createdNode], 0, 64)
-		if err != nil {
-			return nil, schema.GQLWrapf(err,
-				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-				uids[createdNode])
-		}
-
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
-
-	case schema.UpdateMutation:
-		uid, err := getUpdUID(gqlMutation)
-		if err != nil {
-			return nil, err
-		}
-
-		return rewriteAsGet(gqlMutation.QueryField(), uid), nil
-
-	default:
-		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
-			gqlMutation.MutationType())
 	}
 }
 

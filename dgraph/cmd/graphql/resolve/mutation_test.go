@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dgraph
+package resolve
 
 import (
 	"encoding/json"
@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
@@ -75,12 +76,15 @@ func TestMutationRewriting(t *testing.T) {
 
 			mut := test.GetMutation(t, op)
 
-			jsonMut, err := rewriterToTest.Rewrite(mut)
+			q, muts, err := rewriterToTest.Rewrite(mut)
+			require.Nil(t, q)
 
 			if tcase.Error != nil || err != nil {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
-				test.RequireJSONEqStr(t, tcase.DgraphMutation, jsonMut)
+				require.Len(t, muts, 1)
+				jsonMut := string(muts[0].SetJson)
+				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
 			}
 		})
 	}
@@ -101,7 +105,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	testRewriter := NewQueryRewriter()
+	testRewriter := NewMutationRewriter()
 
 	for name, mut := range testTypes {
 		for _, tcase := range tests {
@@ -117,10 +121,10 @@ func TestMutationQueryRewriting(t *testing.T) {
 				gqlMutation := test.GetMutation(t, op)
 
 				dgQuery, err := testRewriter.FromMutationResult(
-					gqlMutation, map[string]string{"newnode": "0x4"})
+					gqlMutation, map[string]string{"newnode": "0x4"}, nil)
 
 				require.Nil(t, err)
-				require.Equal(t, tcase.DGQuery, asString(dgQuery))
+				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 			})
 		}
 	}
@@ -135,7 +139,7 @@ func TestDeleteMutationRewriting(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewMutationRewriter()
+	rewriterToTest := NewDeleteRewriter()
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -153,12 +157,14 @@ func TestDeleteMutationRewriting(t *testing.T) {
 			require.NoError(t, err)
 
 			mut := test.GetMutation(t, op)
-			q, m, err := rewriterToTest.RewriteDelete(mut)
+			q, muts, err := rewriterToTest.Rewrite(mut)
+			require.Len(t, muts, 1)
+			m := string(muts[0].DelNquads)
 
 			test.RequireJSONEq(t, tcase.Error, err)
 			if tcase.Error == nil {
 				require.Equal(t, tcase.DgraphMutation, m)
-				require.Equal(t, tcase.DgraphQuery, q)
+				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
 			}
 		})
 	}

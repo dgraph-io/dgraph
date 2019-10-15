@@ -64,6 +64,7 @@ type Schema interface {
 type Operation interface {
 	Queries() []Query
 	Mutations() []Mutation
+	Schema() Schema
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
@@ -82,6 +83,7 @@ type Field interface {
 	SelectionSet() []Field
 	Location() x.Location
 	DgraphPredicate() string
+	Operation() Operation
 	// InterfaceType tells us whether this field represents a GraphQL Interface.
 	InterfaceType() bool
 	ConcreteType(types []interface{}) string
@@ -180,6 +182,10 @@ func (o *operation) IsMutation() bool {
 
 func (o *operation) IsSubscription() bool {
 	return o.op.Operation == ast.Subscription
+}
+
+func (o *operation) Schema() Schema {
+	return o.inSchema
 }
 
 func (o *operation) Queries() (qs []Query) {
@@ -306,6 +312,11 @@ func mutatedTypeMapping(s *ast.Schema,
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
 		def := s.Types["Update"+mutatedTypeName+"Payload"]
+
+		if def == nil {
+			continue
+		}
+
 		// Accessing 0th element should be safe to do as according to the spec an object must define
 		// one or more fields.
 		typ := def.Fields[0].Type
@@ -434,6 +445,10 @@ func (f *field) Location() x.Location {
 		Column: f.field.Position.Column}
 }
 
+func (f *field) Operation() Operation {
+	return f.op
+}
+
 func (f *field) DgraphPredicate() string {
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
@@ -504,6 +519,10 @@ func (q *query) QueryType() QueryType {
 	default:
 		return NotSupportedQuery
 	}
+}
+
+func (q *query) Operation() Operation {
+	return (*field)(q).Operation()
 }
 
 func (q *query) DgraphPredicate() string {
@@ -589,6 +608,10 @@ func (m *mutation) MutationType() MutationType {
 	default:
 		return NotSupportedMutation
 	}
+}
+
+func (m *mutation) Operation() Operation {
+	return (*field)(m).Operation()
 }
 
 func (m *mutation) DgraphPredicate() string {
