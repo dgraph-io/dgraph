@@ -205,6 +205,7 @@ type CarModel {
 	model
 	year
 	previous_model
+	<~previous_model>
 }
 
 type SchoolInfo {

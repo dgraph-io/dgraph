@@ -1828,11 +1828,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(types)
-			rpreds, err := getReversePredicates(ctx, preds)
-			if err != nil {
-				return out, err
-			}
-			preds = append(preds, rpreds...)
 		default:
 			span.Annotate(nil, "expand default")
 			// We already have the predicates populated from the var.
