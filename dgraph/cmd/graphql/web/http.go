@@ -155,7 +155,7 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 			d := json.NewDecoder(r.Body)
 			d.UseNumber()
 			if err = d.Decode(&gqlReq); err != nil {
-				return nil, errors.Wrap(err, "not a valid GraphQL request body")
+				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
