@@ -24,8 +24,8 @@ import (
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo"
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"

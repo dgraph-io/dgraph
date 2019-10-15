@@ -77,8 +77,8 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
-	"github.com/dgraph-io/dgo"
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/trace"
 	"go.opencensus.io/zpages"

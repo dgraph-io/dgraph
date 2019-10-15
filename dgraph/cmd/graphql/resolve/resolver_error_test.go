@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/gql"

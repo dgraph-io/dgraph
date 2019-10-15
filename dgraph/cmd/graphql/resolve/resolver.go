@@ -23,10 +23,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
