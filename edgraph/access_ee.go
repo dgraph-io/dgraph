@@ -453,8 +453,8 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 				op = "query"
 			}
 
-			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to %s the predicate: %v", op, err))
+			return status.Errorf(codes.PermissionDenied,
+				"unauthorized to %s the predicate: %v", op, err)
 		}
 	}
 	return nil
@@ -492,20 +492,19 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined, per the
+			// fail open approach
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
 			if userId == x.GrootId {
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined, per the
-			// fail open approach
-			userId = "anonymous"
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		// if we get here, we know the user is not Groot.
@@ -588,7 +587,12 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -599,11 +603,6 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				}
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		return authorizePreds(userId, groupIds, preds, acl.Write)
@@ -678,7 +677,12 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -686,11 +690,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 				// groot is allowed to query anything
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		return authorizePreds(userId, groupIds, preds, acl.Read)
