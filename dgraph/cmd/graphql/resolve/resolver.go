@@ -91,7 +91,15 @@ type QueryRewriter interface {
 // mutation query rewriting is dependent on the context set up by the result of
 // the mutation.
 type MutationRewriter interface {
+	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
+	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
+	// with a query and multiple mutations guarded by conditions.
 	Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error)
+
+	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
+	// mutation and constructs a Dgraph query.  It's used to find the return
+	// value from a GraphQL mutation - i.e. we've run the mutation indicated by m
+	// now we need to query Dgraph to satisfy all the result fields in m.
 	FromMutationResult(
 		m schema.Mutation,
 		assigned map[string]string,
@@ -343,7 +351,6 @@ func StdMutationCompletion() CompletionFunc {
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
-
 	resolver := rf.queryResolvers[query.Name()]
 	if resolver != nil {
 		return resolver
@@ -353,7 +360,6 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
-
 	resolver := rf.mutationResolvers[mutation.Name()]
 	if resolver != nil {
 		return resolver

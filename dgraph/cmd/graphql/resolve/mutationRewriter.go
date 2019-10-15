@@ -76,8 +76,8 @@ func NewDeleteRewriter() MutationRewriter {
 //   "Author.country": { "uid": "0x123" },
 //   "Author.posts":[]
 // }
-func (mrw *mutationRewriter) Rewrite(m schema.Mutation) (
-	*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (mrw *mutationRewriter) Rewrite(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	if m.MutationType() != schema.AddMutation &&
 		m.MutationType() != schema.UpdateMutation {

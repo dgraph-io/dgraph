@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Pacakge graphql is a http server for GraphQL on Dgraph
+// Package graphql is a http server for GraphQL on Dgraph
 //
 // GraphQL spec:
 // https://graphql.github.io/graphql-spec/June2018
