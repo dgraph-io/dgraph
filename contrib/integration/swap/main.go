@@ -78,7 +78,8 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := testutil.DgraphClientWithGroot(*alpha)
+	c, err := testutil.DgraphClientWithGroot(*alpha)
+	x.Check(err)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
