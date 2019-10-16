@@ -23,25 +23,28 @@ import (
 
 // Introspect performs an introspection query given a field that's expected to be either
 // __schema or __type.
-func Introspect(f Field) (json.RawMessage, error) {
-	if f.Name() != "__schema" && f.Name() != "__type" {
+func Introspect(q Query) (json.RawMessage, error) {
+	if q.Name() != "__schema" && q.Name() != "__type" {
 		return nil, errors.New("call to introspect for field that isn't an introspection query " +
-			"this indicates an internal bug ... let us know")
+			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
 	}
 
-	sch, ok := f.Operation().Schema().(*schema)
+	sch, ok := q.Operation().Schema().(*schema)
 	if !ok {
-		return nil, errors.New("couldn't convert schema to internal type")
+		return nil, errors.New("couldn't convert schema to internal type " +
+			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
 	}
 
-	op, ok := f.Operation().(*operation)
+	op, ok := q.Operation().(*operation)
 	if !ok {
-		return nil, errors.New("couldn't convert operation to internal type")
+		return nil, errors.New("couldn't convert operation to internal type " +
+			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
 	}
 
-	qu, ok := f.(*query)
+	qu, ok := q.(*query)
 	if !ok {
-		return nil, errors.New("couldn't convert query to internal type")
+		return nil, errors.New("couldn't convert query to internal type " +
+			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
 	}
 
 	reqCtx := &requestContext{
