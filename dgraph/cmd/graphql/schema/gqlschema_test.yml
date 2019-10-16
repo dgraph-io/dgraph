@@ -56,6 +56,17 @@ invalid_schemas:
       {"message": "Arguments was provided to the field f. Fields don't support arguments.", "locations": [{"line": 2, "column": 3}]}
     ]
 
+
+  -
+    name: "Reference type that is not in input schema"
+    input: |
+      type T {
+          f: Author
+      }
+    errlist: [
+      {"message": "Undefined type Author.", "locations": [{"line": 2, "column": 8}]}
+    ]
+
   -
     name: "Unsupported definitions in initial schema"
     input: |
