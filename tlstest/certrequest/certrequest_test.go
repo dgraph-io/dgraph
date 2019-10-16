@@ -11,8 +11,11 @@ import (
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
-	dg := testutil.DgraphClient(testutil.SockAddr)
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.Error(t, err, "The authentication handshake should have failed")
 }
 

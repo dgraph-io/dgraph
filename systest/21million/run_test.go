@@ -48,7 +48,10 @@ func TestQueries(t *testing.T) {
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	files, err := ioutil.ReadDir(queryDir)
 	x.CheckfNoTrace(err)
