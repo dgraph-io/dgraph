@@ -853,8 +853,7 @@ cat data.json | jq '{set: .}'
 
 The upsert block allows performing queries and mutations in a single request. The upsert
 block contains one query block and one mutation block. Variables defined in the query
-block can be used in the mutation block using the `uid` function.
-Support for `val` function is coming soon.
+block can be used in the mutation block using the `uid` and `val` function
 
 In general, the structure of the upsert block is as follows:
 
@@ -866,12 +865,18 @@ upsert {
 }
 ```
 
-The Mutation block currently only allows the `uid` function, which allows extracting UIDs
-from variables defined in the query block. There are two possible outcomes based on the
-results of executing the query block:
+`uid` function currently allows extracting UIDs from variables defined in
+the query block. There are two possible outcomes based on the results of
+executing the query block:
 
 * If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
+
+`val` function currently allows for extracting values from variables defined in
+the query block. That value can then be passed to mutation block and updated
+for the same UID. `val` function could also be used with result of aggregate
+variables, in which case, all the UID in the mutation would be updated with that
+value.
 
 ### Example
 
@@ -1013,6 +1018,44 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 
 If we want to execute the mutation only when the user exists, we could use
 [Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+
+### Bulk Update Example
+
+Let's say we want to update all the users of `company1` to increase their age.
+This can be achieved in just one query using the upsert block:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    v as var(func: regexp(email, /.*@company1.io$/)) {
+      age as age
+    }
+    me() {
+      updated_age as math(age+1)
+    }
+  }
+
+  mutation {
+    set {
+      uid(u) <age> val(updated_age)
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+  },
+  "extensions": {...}
+}
+```
 
 ### Bulk Delete Example
 
