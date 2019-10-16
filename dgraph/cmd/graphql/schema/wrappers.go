@@ -57,6 +57,8 @@ const (
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
+	Queries(t QueryType) []string
+	Mutations(t MutationType) []string
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -77,6 +79,7 @@ type Field interface {
 	ResponseName() string
 	ArgValue(name string) interface{}
 	IDArgValue() (uint64, error)
+	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
 	Type() Type
@@ -171,6 +174,26 @@ type fieldDefinition struct {
 
 type mutation field
 type query field
+
+func (s *schema) Queries(t QueryType) []string {
+	var result []string
+	for _, q := range s.schema.Query.Fields {
+		if queryType(q.Name) == t {
+			result = append(result, q.Name)
+		}
+	}
+	return result
+}
+
+func (s *schema) Mutations(t MutationType) []string {
+	var result []string
+	for _, m := range s.schema.Mutation.Fields {
+		if mutationType(m.Name) == t {
+			result = append(result, m.Name)
+		}
+	}
+	return result
+}
 
 func (o *operation) IsQuery() bool {
 	return o.op.Operation == ast.Query
@@ -356,6 +379,10 @@ func (f *field) ResponseName() string {
 	return responseName(f.field)
 }
 
+func (f *field) SetArgTo(arg string, val interface{}) {
+	f.arguments[arg] = val
+}
+
 func (f *field) ArgValue(name string) interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -476,6 +503,10 @@ func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
 
+func (q *query) SetArgTo(arg string, val interface{}) {
+	(*field)(q).SetArgTo(arg, val)
+}
+
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
@@ -509,12 +540,16 @@ func (q *query) ResponseName() string {
 }
 
 func (q *query) QueryType() QueryType {
+	return queryType(q.Name())
+}
+
+func queryType(name string) QueryType {
 	switch {
-	case strings.HasPrefix(q.Name(), "get"):
+	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case q.Name() == "__schema" || q.Name() == "__type":
+	case name == "__schema" || name == "__type":
 		return SchemaQuery
-	case strings.HasPrefix(q.Name(), "query"):
+	case strings.HasPrefix(name, "query"):
 		return FilterQuery
 	default:
 		return NotSupportedQuery
@@ -543,6 +578,10 @@ func (m *mutation) Name() string {
 
 func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
+}
+
+func (m *mutation) SetArgTo(arg string, val interface{}) {
+	(*field)(m).SetArgTo(arg, val)
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
@@ -598,12 +637,16 @@ func (m *mutation) MutatedType() Type {
 }
 
 func (m *mutation) MutationType() MutationType {
+	return mutationType(m.Name())
+}
+
+func mutationType(name string) MutationType {
 	switch {
-	case strings.HasPrefix(m.Name(), "add"):
+	case strings.HasPrefix(name, "add"):
 		return AddMutation
-	case strings.HasPrefix(m.Name(), "update"):
+	case strings.HasPrefix(name, "update"):
 		return UpdateMutation
-	case strings.HasPrefix(m.Name(), "delete"):
+	case strings.HasPrefix(name, "delete"):
 		return DeleteMutation
 	default:
 		return NotSupportedMutation
