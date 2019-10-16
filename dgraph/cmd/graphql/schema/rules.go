@@ -253,14 +253,12 @@ func searchValidation(
 		// Checks that the filter indexes aren't repeated and they
 		// don't clash with each other.
 		searchIndex := builtInFilters[searchArg]
-		if val, ok := searchIndexes[searchIndex]; ok {
+		if _, ok := searchIndexes[searchIndex]; ok {
 			if field.Type.Name() == "String" {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s: the argument to @search %s is duplicated. "+
-						"The filter (%s) was applied through the argument %s "+
-						"provided before.",
-					typ.Name, field.Name, searchArg, searchIndex, val)
+					"Type %s; Field %s: the tokenizer to @search %s is not unique.",
+					typ.Name, field.Name, searchArg)
 			}
 
 			return gqlerror.ErrorPosf(
