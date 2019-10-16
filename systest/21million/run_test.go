@@ -54,7 +54,9 @@ func TestQueries(t *testing.T) {
 	}
 
 	files, err := ioutil.ReadDir(queryDir)
-	x.CheckfNoTrace(err)
+	if err != nil {
+		t.Fatalf("Error reading directory: %s", err.Error())
+	}
 
 	savepath := ""
 	diffs := 0
@@ -66,7 +68,9 @@ func TestQueries(t *testing.T) {
 			filename := path.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename)
 			bytes, err := ioutil.ReadAll(reader)
-			x.CheckfNoTrace(err)
+			if err != nil {
+				t.Fatalf("Error reading file: %s", err.Error())
+			}
 			contents := string(bytes[:])
 			cleanup()
 

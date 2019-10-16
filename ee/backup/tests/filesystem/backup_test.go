@@ -93,7 +93,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.True(t, moveOk)
 
 	// Setup test directories.
-	dirSetup()
+	dirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
@@ -195,7 +195,7 @@ func TestBackupFilesystem(t *testing.T) {
 	runFailingRestore(t, copyBackupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
-	dirCleanup()
+	dirCleanup(t)
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
@@ -220,7 +220,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.Contains(t, string(buf), "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
-	copyToLocalFs()
+	copyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
@@ -269,33 +269,47 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
 }
 
-func dirSetup() {
+func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
-	dirCleanup()
+	dirCleanup(t)
 
 	for _, dir := range testDirs {
-		x.Check(os.MkdirAll(dir, os.ModePerm))
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			t.Fatalf("Error creating directory: %s", err.Error())
+		}
 	}
 
 	for _, alpha := range alphaContainers {
 		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		x.Check(testutil.DockerExec(alpha, cmd...))
+		if err := testutil.DockerExec(alpha, cmd...); err != nil {
+			t.Fatalf("Error executing command in docker container: %s", err.Error())
+		}
 	}
 }
 
-func dirCleanup() {
-	x.Check(os.RemoveAll(restoreDir))
-	x.Check(os.RemoveAll(copyBackupDir))
+func dirCleanup(t *testing.T) {
+	if err := os.RemoveAll(restoreDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
 
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
-	x.Check(testutil.DockerExec(alphaContainers[0], cmd...))
+	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
+		t.Fatalf("Error executing command in docker container: %s", err.Error())
+	}
 }
 
-func copyToLocalFs() {
+func copyToLocalFs(t *testing.T) {
 	// The original backup files are not accessible because docker creates all files in
 	// the shared volume as the root user. This restriction is circumvented by using
 	// "docker cp" to create a copy that is not owned by the root user.
-	x.Check(os.RemoveAll(copyBackupDir))
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
 	srcPath := "alpha1:/data/backups"
-	x.Check(testutil.DockerCp(srcPath, copyBackupDir))
+	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
+		t.Fatalf("Error copying files from docker container: %s", err.Error())
+	}
 }
