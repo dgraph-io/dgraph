@@ -69,11 +69,9 @@ func (mr *mutationResolver) Resolve(
 			mutation.MutationType())
 	}
 
-	resCtx := &ResolverContext{Ctx: ctx, RootField: mutation}
+	res, success, err := mr.rewriteAndExecute(ctx, mutation)
 
-	res, success, err := mr.rewriteAndExecute(resCtx, mutation)
-
-	completed, err := mr.resultCompleter.Complete(resCtx, mutation.QueryField(), res, err)
+	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
 	return &Resolved{
 		Data: completed,
 		Err:  err,
@@ -81,7 +79,7 @@ func (mr *mutationResolver) Resolve(
 }
 
 func (mr *mutationResolver) rewriteAndExecute(
-	resCtx *ResolverContext, mutation schema.Mutation) ([]byte, bool, error) {
+	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
 
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
@@ -89,7 +87,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	assigned, mutated, err := mr.mutationExecutor.Mutate(resCtx, query, mutations)
+	assigned, mutated, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -101,18 +99,18 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 	}
 
-	resp, err := mr.queryExecutor.Query(resCtx, dgQuery)
+	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
 
 	return resp, resolverSucceeded,
 		schema.GQLWrapf(err, "mutation %s succeeded but query failed", mutation.Name())
 }
 
-// a deleteCompletion returns `{ "msg": "Deleted" }`
+// deleteCompletion returns `{ "msg": "Deleted" }`
 // FIXME: after upsert mutations changes are done, it will return info about
 // the result of a deletion.
 func deleteCompletion() CompletionFunc {
 	return CompletionFunc(func(
-		resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error) {
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
 		return []byte(`{ "msg": "Deleted" }`), err
 	})

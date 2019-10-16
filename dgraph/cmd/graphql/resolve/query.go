@@ -35,42 +35,36 @@ type queryResolver struct {
 	resultCompleter ResultCompleter
 }
 
-func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) (*Resolved, bool) {
-
+func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	resCtx := &ResolverContext{Ctx: ctx, RootField: query}
+	res, err := qr.rewriteAndExecute(ctx, query)
 
-	res, succeed, err := qr.rewriteAndExecute(resCtx, query)
-
-	completed, err := qr.resultCompleter.Complete(resCtx, query, res, err)
-	return &Resolved{
-		Data: completed,
-		Err:  err,
-	}, succeed
+	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
+	return &Resolved{Data: completed, Err: err}
 }
 
 func (qr *queryResolver) rewriteAndExecute(
-	resCtx *ResolverContext, query schema.Query) ([]byte, bool, error) {
+	ctx context.Context, query schema.Query) ([]byte, error) {
 
 	dgQuery, err := qr.queryRewriter.Rewrite(query)
 	if err != nil {
-		return nil, resolverFailed,
-			schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
+		return nil, schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
 	}
 
-	resp, err := qr.queryExecutor.Query(resCtx, dgQuery)
+	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
 	if err != nil {
-		glog.Infof("[%s] query execution failed : %s", api.RequestID(resCtx.Ctx), err)
-		return nil, resolverFailed,
-			schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(resCtx.Ctx))
+		glog.Infof("[%s] query execution failed : %s", api.RequestID(ctx), err)
+		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
-	return resp, resolverSucceeded, nil
+	return resp, nil
 }
 
-func introspectionExecution(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
-	return schema.Introspect(resCtx.RootField)
+func introspectionExecution(q schema.Query) QueryExecutionFunc {
+	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+		return schema.Introspect(q)
+	})
 }
