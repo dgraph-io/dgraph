@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 # usage: test.sh [pkg_regex]
 

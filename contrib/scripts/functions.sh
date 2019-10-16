@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # Containers MUST be labeled with "cluster:test" to be restarted and stopped
 # by these functions.
 
