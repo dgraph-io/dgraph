@@ -139,14 +139,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					continue
 				}
 
-				typName := def.Name
-				// This field could have originally been defined in an interface that this type
-				// implements. If we get a parent interface, then we should prefix the field name
-				// with it instead of def.Name.
-				parentInt := parentInterface(gqlSch, def, f.Name)
-				if parentInt != "" {
-					typName = parentInt
+				edgeName := f.Name
+				dgraphDirective := f.Directives.ForName("dgraph")
+				if dgraphDirective != nil {
+					edge := dgraphDirective.Arguments.ForName("edge")
+					if en := edge.Value.Raw; en != "" {
+						edgeName = en
+					}
 				}
+				// This field could have originally been defined in an interface that this type
+				// implements. If we get a parent interface, then we shouldn't add the predicate to
+				// the scalar list.
+				parentInt := parentInterface(gqlSch, def, f.Name)
 
 				var prefix, suffix string
 				if f.Type.Elem != nil {
@@ -159,9 +163,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s .\n", typName, f.Name, typStr)
+						fmt.Fprintf(&preds, "%s: %s .\n", edgeName, typStr)
 					}
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
@@ -180,18 +184,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
+						fmt.Fprintf(&preds, "%s: %s%s .\n", edgeName, typStr, indexStr)
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
 						prefix, "string", suffix,
 					)
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s @index(exact) .\n", typName, f.Name, typStr)
+						fmt.Fprintf(&preds, "%s: %s @index(exact) .\n", edgeName, typStr)
 					}
 				}
 			}

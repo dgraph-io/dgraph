@@ -11,9 +11,9 @@ schemas:
       }
     output: |
       type A {
-        A.p: uid
+        p: uid
       }
-      A.p: uid .
+      p: uid .
       type P {
       }
 
@@ -26,9 +26,9 @@ schemas:
       }
     output: |
       type X {
-        X.names: [string]
+        names: [string]
       }
-      X.names: [string] .
+      names: [string] .
 
   -
     name: "Object list"
@@ -41,9 +41,9 @@ schemas:
       }
     output: |
       type X {
-        X.p: [uid]
+        p: [uid]
       }
-      X.p: [uid] .
+      p: [uid] .
       type P {
       }
 
@@ -64,25 +64,25 @@ schemas:
       }
     output: |
       type X {
-        X.p: int
-        X.pList: [int]
-        X.q: bool
-        X.r: string
-        X.rList: [string]
-        X.s: dateTime
-        X.sList: [dateTime]
-        X.t: float
-        X.tList: [float]
+        p: int
+        pList: [int]
+        q: bool
+        r: string
+        rList: [string]
+        s: dateTime
+        sList: [dateTime]
+        t: float
+        tList: [float]
       }
-      X.p: int .
-      X.pList: [int] .
-      X.q: bool .
-      X.r: string .
-      X.rList: [string] .
-      X.s: dateTime .
-      X.sList: [dateTime] .
-      X.t: float .
-      X.tList: [float] .
+      p: int .
+      pList: [int] .
+      q: bool .
+      r: string .
+      rList: [string] .
+      s: dateTime .
+      sList: [dateTime] .
+      t: float .
+      tList: [float] .
 
   -
     name: "enum - always gets an index"
@@ -94,11 +94,11 @@ schemas:
       enum E { A }
     output: |
       type X {
-        X.e: string
-        X.f: [string]
+        e: string
+        f: [string]
       }
-      X.e: string @index(exact) .
-      X.f: [string] @index(exact) .
+      e: string @index(exact) .
+      f: [string] @index(exact) .
 
 
   -
@@ -128,45 +128,45 @@ schemas:
       enum E { A }
     output: |
       type X {
-        X.i1: int
-        X.i2: int
-        X.f1: float
-        X.f2: float
-        X.b1: bool
-        X.b2: bool
-        X.s1: string
-        X.s2: string
-        X.s3: string
-        X.s4: string
-        X.s5: string
-        X.s6: string
-        X.s7: string
-        X.dt1: dateTime
-        X.dt2: dateTime
-        X.dt3: dateTime
-        X.dt4: dateTime
-        X.dt5: dateTime
-        X.e: string
+        i1: int
+        i2: int
+        f1: float
+        f2: float
+        b1: bool
+        b2: bool
+        s1: string
+        s2: string
+        s3: string
+        s4: string
+        s5: string
+        s6: string
+        s7: string
+        dt1: dateTime
+        dt2: dateTime
+        dt3: dateTime
+        dt4: dateTime
+        dt5: dateTime
+        e: string
       }
-      X.i1: int @index(int) .
-      X.i2: int @index(int) .
-      X.f1: float @index(float) .
-      X.f2: float @index(float) .
-      X.b1: bool @index(bool) .
-      X.b2: bool @index(bool) .
-      X.s1: string @index(term) .
-      X.s2: string @index(hash) .
-      X.s3: string @index(exact) .
-      X.s4: string @index(term) .
-      X.s5: string @index(fulltext) .
-      X.s6: string @index(trigram) .
-      X.s7: string @index(trigram) .
-      X.dt1: dateTime @index(year) .
-      X.dt2: dateTime @index(year) .
-      X.dt3: dateTime @index(month) .
-      X.dt4: dateTime @index(day) .
-      X.dt5: dateTime @index(hour) .
-      X.e: string @index(exact) .
+      i1: int @index(int) .
+      i2: int @index(int) .
+      f1: float @index(float) .
+      f2: float @index(float) .
+      b1: bool @index(bool) .
+      b2: bool @index(bool) .
+      s1: string @index(term) .
+      s2: string @index(hash) .
+      s3: string @index(exact) .
+      s4: string @index(term) .
+      s5: string @index(fulltext) .
+      s6: string @index(trigram) .
+      s7: string @index(trigram) .
+      dt1: dateTime @index(year) .
+      dt2: dateTime @index(year) .
+      dt3: dateTime @index(month) .
+      dt4: dateTime @index(day) .
+      dt5: dateTime @index(hour) .
+      e: string @index(exact) .
 
   -
     name: "interface and types interact properly"
@@ -183,16 +183,16 @@ schemas:
       }
     output: |
       type A {
-        A.name: string
+        name: string
       }
-      A.name: string @index(exact) .
+      name: string @index(exact) .
       type B {
-        A.name: string
-        B.correct: bool
+        name: string
+        correct: bool
       }
-      B.correct: bool @index(bool) .
+      correct: bool @index(bool) .
       type C {
-        A.name: string
-        C.dob: dateTime
+        name: string
+        dob: dateTime
       }
-      C.dob: dateTime .
+      dob: dateTime .

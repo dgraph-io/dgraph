@@ -21,7 +21,7 @@ type Post {
         text: String @search(by: "fulltext") @dgraph(edge: "Post.text")
         tags: [String] @search(by: "exact") @dgraph(edge: "Post.tags")
         numLikes: Int @search @dgraph(edge: "Post.numLikes")
-        isPublished: Boolean @search @dgraph(edge: "Post.isPublished")
+        isPublished: Boolean @dgraph(edge: "Post.isPublished")
         postType: PostType @search @dgraph(edge: "Post.postType")
         author: Author! @hasInverse(field: "posts") @dgraph(edge: "Post.author")
 }

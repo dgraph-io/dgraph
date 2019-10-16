@@ -165,8 +165,9 @@ type field struct {
 }
 
 type fieldDefinition struct {
-	fieldDef *ast.FieldDefinition
-	inSchema *ast.Schema
+	fieldDef        *ast.FieldDefinition
+	inSchema        *ast.Schema
+	dgraphPredicate map[string]map[string]string
 }
 
 type mutation field
@@ -633,8 +634,9 @@ func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
 func (t *astType) Field(name string) FieldDefinition {
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
-		inSchema: t.inSchema,
+		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate,
 	}
 }
 
@@ -653,8 +655,9 @@ func isID(fd *ast.FieldDefinition) bool {
 
 func (fd *fieldDefinition) Type() Type {
 	return &astType{
-		typ:      fd.fieldDef.Type,
-		inSchema: fd.inSchema,
+		typ:             fd.fieldDef.Type,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate,
 	}
 }
 

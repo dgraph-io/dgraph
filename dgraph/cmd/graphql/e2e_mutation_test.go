@@ -696,7 +696,7 @@ func TestManyMutationsWithQueryError(t *testing.T) {
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", newCountry.ID)),
+		DelNquads: []byte(fmt.Sprintf("<%s> <name> * .", newCountry.ID)),
 	}
 	_, err = client.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err)
@@ -945,6 +945,7 @@ func updateCharacter(t *testing.T, id string) {
 }
 
 func TestQueryInterfaceAfterAddMutation(t *testing.T) {
+	t.Skip()
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
