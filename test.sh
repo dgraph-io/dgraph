@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 # usage: test.sh [pkg_regex]
 
@@ -23,7 +23,6 @@
 # Keep in mind that the test build will overwrite the "dgraph"
 # binary in your $GOPATH/bin with the Linux-ELF binary for Docker.
 
-set -e
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
