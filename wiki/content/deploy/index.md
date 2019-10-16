@@ -1811,12 +1811,11 @@ the server which has IP address as `192.168.1.1`.
 
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
-an alter operation is performed for the predicate with an appropriate
+the predicate gets added to the schema with an appropriate
 [Dgraph Type](https://docs.dgraph.io/master/query-language/#schema-types).
-You can make use of `--mutations` flag to set restrictions on mutation operations,
-which is set to `allow` by default.
 
-Use `--mutations disallow` to disable all mutations.
+You can use `--mutations disallow` to disable all mutations,
+which is set to `allow` by default.
 
 ```sh
 dgraph alpha --mutations disallow
@@ -1830,7 +1829,6 @@ you need to perform an alter operation with that predicate and its schema type.
 ```sh
 dgraph alpha --mutations strict
 ```
-
 
 ### Secure Alter Operations
 
