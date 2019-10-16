@@ -30,6 +30,7 @@ func init() {
 
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck)
+	fieldValidations = append(fieldValidations, fieldArgumentCheck)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -105,24 +106,46 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-// [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
-func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
+func isValidTypeForList(typeName string) bool {
+	switch typeName {
+	case
+		"Boolean",
+		"ID":
+		return true
+	}
+	return false
+}
 
-	if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
+func fieldArgumentCheck(field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
-			fmt.Sprintf(
-				"[%s]! lists are invalid. Valid options are [%s!]! and [%s!].",
-				field.Type.Name(), field.Type.Name(), field.Type.Name(),
-			),
+			"Arguments was provided to the field %s. Fields don't support arguments.",
+			field.Name,
 		)
 	}
+	return nil
+}
 
+func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
+	// Checks if the field is nil.
+	if field.Type.Elem == nil {
+		return nil
+	}
+
+	// ID and Boolean list are not allowed.
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if field.Type.Elem != nil && field.Type.Elem.Name() == "Boolean" &&
-		field.Type.NamedType == "" {
+	if isValidTypeForList(field.Type.Elem.Name()) && field.Type.NamedType == "" {
 		return gqlerror.ErrorPosf(
-			field.Position, "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.")
+			field.Position, "[%[1]s] lists are invalid. Only %[1]s "+
+				"scalar fields are allowed.", field.Type.Elem.Name())
+	}
+
+	// Nested lists are not allowed.
+	if field.Type.Elem.Elem != nil {
+		return gqlerror.ErrorPosf(field.Position,
+			"%s Nested lists are invalid. Only single lists are allowed.",
+			field.Type.Dump())
 	}
 
 	return nil
