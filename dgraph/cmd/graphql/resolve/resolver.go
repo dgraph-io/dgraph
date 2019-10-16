@@ -48,7 +48,7 @@ const (
 
 // A QueryResolver can resolve a single query.
 type QueryResolver interface {
-	Resolve(ctx context.Context, query schema.Query) (*Resolved, bool)
+	Resolve(ctx context.Context, query schema.Query) *Resolved
 }
 
 // A MutationResolver can resolve a single mutation.
@@ -61,8 +61,10 @@ type ResolverFactory interface {
 	queryResolverFor(query schema.Query) QueryResolver
 	mutationResolverFor(mutation schema.Mutation) MutationResolver
 
-	WithQueryResolver(name string, resolver QueryResolver) ResolverFactory
-	WithMutationResolver(name string, resolver MutationResolver) ResolverFactory
+	WithQueryResolver(name string, resolver func(schema.Query) QueryResolver) ResolverFactory
+	WithMutationResolver(
+		name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory
+	WithConventionResolvers(s schema.Schema, fns *ResolverFns) ResolverFactory
 	WithSchemaIntrospection() ResolverFactory
 }
 
@@ -109,13 +111,18 @@ type MutationRewriter interface {
 // A QueryExecutor can execute a gql.GraphQuery and return a result.  The result of
 // a QueryExecutor doesn't need to be valid GraphQL results.
 type QueryExecutor interface {
-	Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error)
+	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 }
 
 // A MutationExecutor can execute a mutation and returns the assigned map, the
 // mutated map and any errors.
 type MutationExecutor interface {
-	Mutate(resCtx *ResolverContext,
+	// Mutate performs the actual mutation and returns a map of newly assigned nodes,
+	// a map of variable->[]uid from upsert mutations and any errors.  If an error
+	// occurs, that indicates that the mutation failed in some way significant enough
+	// way as to not continue procissing this mutation or others in the same request.
+	Mutate(
+		ctx context.Context,
 		query *gql.GraphQuery,
 		mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
 }
@@ -124,7 +131,7 @@ type MutationExecutor interface {
 // in resolving field and applies a completion step - for example, apply GraphQL
 // error propagation or massaging error paths.
 type ResultCompleter interface {
-	Complete(resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error)
+	Complete(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
@@ -138,13 +145,21 @@ type RequestResolver struct {
 // just returns errors if it's asked for a resolver for a field that it doesn't
 // know about.
 type resolverFactory struct {
-	queryResolvers    map[string]QueryResolver
-	mutationResolvers map[string]MutationResolver
+	queryResolvers    map[string]func(schema.Query) QueryResolver
+	mutationResolvers map[string]func(schema.Mutation) MutationResolver
 
-	// FIXME: These will go in next PR
-	defaultQuery    QueryResolver
-	defaultMutation MutationResolver
-	defaultDelete   MutationResolver
+	// returned if the factory gets asked for resolver for a field that it doesn't
+	// know about.
+	queryError    QueryResolverFunc
+	mutationError MutationResolverFunc
+}
+
+type ResolverFns struct {
+	Qrw QueryRewriter
+	Mrw MutationRewriter
+	Drw MutationRewriter
+	Qe  QueryExecutor
+	Me  MutationExecutor
 }
 
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
@@ -163,20 +178,15 @@ func DgoAsMutationExecutor(client *dgo.Dgraph) MutationExecutor {
 	return &dgoExecutor{client: client}
 }
 
-func (de *dgoExecutor) Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
-	return dgraph.Query(resCtx.Ctx, de.client, query)
+func (de *dgoExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	return dgraph.Query(ctx, de.client, query)
 }
 
-func (de *dgoExecutor) Mutate(resCtx *ResolverContext,
+func (de *dgoExecutor) Mutate(
+	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
-	return dgraph.Mutate(resCtx.Ctx, de.client, query, mutations)
-}
-
-// ResolverContext collects context needed through the resolver pipeline.
-type ResolverContext struct {
-	Ctx       context.Context
-	RootField schema.Field
+	return dgraph.Mutate(ctx, de.client, query, mutations)
 }
 
 // A Resolved is the result of resolving a single query or mutation.
@@ -188,14 +198,17 @@ type Resolved struct {
 	Err  error
 }
 
-// An ErrorResolver is a Resolver that always resolves to nil data and error err.
-type ErrorResolver struct {
-	Err error
-}
+// QueryResolverFunc is an adapter that allows to build a QueryResolver from
+// a function.  Based on the http.HandlerFunc pattern.
+type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
+
+// MutationResolverFunc is an adapter that allows to build a MutationResolver from
+// a function.  Based on the http.HandlerFunc pattern.
+type MutationResolverFunc func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool)
 
 // CompletionFunc is an adapter that allows us to compose completions and build a ResultCompleter from
 // a function.  Based on the http.HandlerFunc pattern.
-type CompletionFunc func(resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error)
+type CompletionFunc func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
 
 // QueryRewritingFunc is an adapter that allows us to build a QueryRewriter from
 // a function.  Based on the http.HandlerFunc pattern.
@@ -203,77 +216,118 @@ type QueryRewritingFunc func(q schema.Query) (*gql.GraphQuery, error)
 
 // QueryExecutionFunc is an adapter that allows us to compose query execution and build a QueryExecuter from
 // a function.  Based on the http.HandlerFunc pattern.
-type QueryExecutionFunc func(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error)
+type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 
 // MutationExecutionFunc is an adapter that allows us to compose mutation execution and build a
 // MutationExecuter from a function.  Based on the http.HandlerFunc pattern.
 type MutationExecutionFunc func(
-	resCtx *ResolverContext,
+	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
+
+// Resolve calls qr(ctx, query)
+func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	return qr(ctx, query)
+}
+
+// Resolve calls mr(ctx, mutation)
+func (mr MutationResolverFunc) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+	return mr(ctx, mutation)
+}
 
 // Rewrite calls qr(q)
 func (qr QueryRewritingFunc) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
 	return qr(q)
 }
 
-// Query calls qe(resCtx, query)
-func (qe QueryExecutionFunc) Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
-	return qe(resCtx, query)
+// Query calls qe(ctx, query)
+func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	return qe(ctx, query)
 }
 
-// Mutate calls me(resCtx, query, mutations)
+// Mutate calls me(ctx, query, mutations)
 func (me MutationExecutionFunc) Mutate(
-	resCtx *ResolverContext,
+	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
-	return me(resCtx, query, mutations)
+	return me(ctx, query, mutations)
 }
 
-// Complete calls cf(resCtx, field, result, err)
+// Complete calls cf(ctx, field, result, err)
 func (cf CompletionFunc) Complete(
-	resCtx *ResolverContext,
+	ctx context.Context,
 	field schema.Field,
 	result []byte,
 	err error) ([]byte, error) {
 
-	return cf(resCtx, field, result, err)
-}
-
-// Resolve for an ErrorResolver just returns nil data and an error
-func (er *ErrorResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
-	return &Resolved{Err: er.Err}, resolverFailed
+	return cf(ctx, field, result, err)
 }
 
 // NoOpQueryExecution does nothing and returns nil.
-func NoOpQueryExecution(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
-	return nil, nil
+func NoOpQueryExecution() QueryExecutionFunc {
+	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+		return nil, nil
+	})
 }
 
 // NoOpQueryRewrite does nothing and returns a nil rewriting.
-func NoOpQueryRewrite(q schema.Query) (*gql.GraphQuery, error) {
-	return nil, nil
+func NoOpQueryRewrite() QueryRewritingFunc {
+	return QueryRewritingFunc(func(q schema.Query) (*gql.GraphQuery, error) {
+		return nil, nil
+	})
 }
 
-func (rf *resolverFactory) WithQueryResolver(query string, r QueryResolver) ResolverFactory {
-	rf.queryResolvers[query] = r
+func (rf *resolverFactory) WithQueryResolver(
+	name string, resolver func(schema.Query) QueryResolver) ResolverFactory {
+	rf.queryResolvers[name] = resolver
 	return rf
 }
 
-func (rf *resolverFactory) WithMutationResolver(mutation string, r MutationResolver) ResolverFactory {
-	rf.mutationResolvers[mutation] = r
+func (rf *resolverFactory) WithMutationResolver(
+	name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory {
+	rf.mutationResolvers[name] = resolver
 	return rf
 }
 
 func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
-	introspect := &queryResolver{
-		queryRewriter:   QueryRewritingFunc(NoOpQueryRewrite),
-		queryExecutor:   QueryExecutionFunc(introspectionExecution),
-		resultCompleter: removeObjectCompletion(noopCompletion),
+	introspect := func(q schema.Query) QueryResolver {
+		return &queryResolver{
+			queryRewriter:   NoOpQueryRewrite(),
+			queryExecutor:   introspectionExecution(q),
+			resultCompleter: removeObjectCompletion(noopCompletion),
+		}
 	}
 
 	rf.WithQueryResolver("__schema", introspect)
 	rf.WithQueryResolver("__type", introspect)
+
+	return rf
+}
+
+func (rf *resolverFactory) WithConventionResolvers(
+	s schema.Schema, fns *ResolverFns) ResolverFactory {
+
+	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
+	for _, q := range queries {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewQueryResolver(fns.Qrw, fns.Qe, StdQueryCompletion())
+		})
+	}
+
+	addUpdt := append(s.Mutations(schema.AddMutation), s.Mutations(schema.UpdateMutation)...)
+	for _, m := range addUpdt {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewMutationResolver(
+				fns.Mrw, fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+		})
+	}
+
+	for _, m := range s.Mutations(schema.DeleteMutation) {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewMutationResolver(
+				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+		})
+	}
 
 	return rf
 }
@@ -307,75 +361,58 @@ func NewMutationResolver(
 
 // NewResolverFactory returns a ResolverFactory that resolves requests via
 // query/mutation rewriting and execution through Dgraph.
-func NewResolverFactory(
-	queryRewriter QueryRewriter,
-	mutRewriter MutationRewriter,
-	queryExecutor QueryExecutor,
-	mutationExecutor MutationExecutor) ResolverFactory {
+func NewResolverFactory() ResolverFactory {
 
-	rf := &resolverFactory{
-		queryResolvers:    make(map[string]QueryResolver),
-		mutationResolvers: make(map[string]MutationResolver),
-
-		// FIXME: these defaults will go in a soon PR.  When the schema is first loaded
-		// or changes, we'll spin through the schema and add a specific resolver
-		// to the map for each query and mutation.  If we can't find one in the maps,
-		// then that's an error, not a default.
-		defaultQuery: &queryResolver{
-			queryRewriter:   queryRewriter,
-			queryExecutor:   queryExecutor,
-			resultCompleter: removeObjectCompletion(completeDgraphResult),
-		},
-
-		defaultMutation: &mutationResolver{
-			mutationRewriter: mutRewriter,
-			queryExecutor:    queryExecutor,
-			mutationExecutor: mutationExecutor,
-			resultCompleter:  addPathCompletion(addRootFieldCompletion(completeDgraphResult)),
-		},
-
-		defaultDelete: &mutationResolver{
-			mutationRewriter: NewDeleteRewriter(),
-			queryExecutor:    QueryExecutionFunc(NoOpQueryExecution),
-			mutationExecutor: mutationExecutor,
-			resultCompleter:  addPathCompletion(addRootFieldCompletion(deleteCompletion())),
-		},
+	errFunc := func(name string) error {
+		return errors.Errorf("%s was not executed because no suitable resolver could be found - "+
+			"this indicates a resolver or validation bug "+
+			"(Please let us know : https://github.com/dgraph-io/dgraph/issues)", name)
 	}
 
-	return rf
+	return &resolverFactory{
+		queryResolvers:    make(map[string]func(schema.Query) QueryResolver),
+		mutationResolvers: make(map[string]func(schema.Mutation) MutationResolver),
+
+		queryError: QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+			return &Resolved{Err: errFunc(query.ResponseName())}
+		}),
+
+		mutationError: MutationResolverFunc(
+			func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+				return &Resolved{Err: errFunc(mutation.ResponseName())}, resolverFailed
+			}),
+	}
+}
+
+// StdQueryCompletion is the completion steps that get run for queries
+func StdQueryCompletion() CompletionFunc {
+	return removeObjectCompletion(completeDgraphResult)
 }
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
-func StdMutationCompletion() CompletionFunc {
-	return addPathCompletion(addRootFieldCompletion(completeDgraphResult))
+func StdMutationCompletion(name string) CompletionFunc {
+	return addPathCompletion(name, addRootFieldCompletion(name, completeDgraphResult))
+}
+
+// StdDeleteCompletion is the completion steps that get run for add and update mutations
+func StdDeleteCompletion(name string) CompletionFunc {
+	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
-	resolver := rf.queryResolvers[query.Name()]
-	if resolver != nil {
-		return resolver
+	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
+		return resolver(query)
 	}
 
-	return rf.defaultQuery
+	return rf.queryError
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
-	resolver := rf.mutationResolvers[mutation.Name()]
-	if resolver != nil {
-		return resolver
+	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
+		return resolver(mutation)
 	}
 
-	switch mutation.MutationType() {
-	case schema.AddMutation, schema.UpdateMutation:
-		return rf.defaultMutation
-	case schema.DeleteMutation:
-		return rf.defaultDelete
-	}
-
-	return &ErrorResolver{
-		Err: errors.Errorf("%s was not executed because no suitable resolver could be found - "+
-			"this indicates a resolver or validation bug "+
-			"(Please let us know : https://github.com/dgraph-io/dgraph/issues)", mutation.Name())}
+	return rf.mutationError
 }
 
 // New creates a new RequestResolver.
@@ -450,7 +487,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 						allResolved[storeAt] = &Resolved{Err: err}
 					})
 
-				allResolved[storeAt], _ = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
+				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
 		wg.Wait()
@@ -501,8 +538,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 }
 
 // noopCompletion just passes back it's result and err arguments
-func noopCompletion(resCtx *ResolverContext, field schema.Field, result []byte, err error) (
-	[]byte, error) {
+func noopCompletion(
+	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 	return result, err
 }
 
@@ -522,8 +559,8 @@ func noopCompletion(resCtx *ResolverContext, field schema.Field, result []byte, 
 // so the completed result should be
 // q1: {...}
 func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error) {
-		res, err := cf(resCtx, field, result, err)
+	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+		res, err := cf(ctx, field, result, err)
 		if len(res) >= 2 {
 			res = res[1 : len(res)-1]
 		}
@@ -538,14 +575,14 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 // What's resolved initially is
 //   `foo { ... }`
 // So `addFoo: ...` is added.
-func addRootFieldCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error) {
+func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
+	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
-		res, err := cf(resCtx, field, result, err)
+		res, err := cf(ctx, field, result, err)
 
 		var b bytes.Buffer
 		b.WriteString("\"")
-		b.WriteString(resCtx.RootField.ResponseName())
+		b.WriteString(name)
 		b.WriteString(`": `)
 		if len(res) > 0 {
 			b.Write(res)
@@ -563,15 +600,15 @@ func addRootFieldCompletion(cf CompletionFunc) CompletionFunc {
 // A mutation always looks like
 //   `addFoo(...) { foo { ... } }`
 // But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
-func addPathCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error) {
+func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
+	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
-		res, err := cf(resCtx, field, result, err)
+		res, err := cf(ctx, field, result, err)
 
 		resErrs := schema.AsGQLErrors(err)
 		for _, err := range resErrs {
 			if len(err.Path) > 0 {
-				err.Path = append([]interface{}{resCtx.RootField.ResponseName()}, err.Path...)
+				err.Path = append([]interface{}{name}, err.Path...)
 			}
 		}
 
@@ -644,9 +681,9 @@ func addPathCompletion(cf CompletionFunc) CompletionFunc {
 //
 // Returned errors are generally lists of errors resulting from the value completion
 // algorithm that may emit multiple errors
-func completeDgraphResult(resCtx *ResolverContext, field schema.Field, dgResult []byte, e error) (
+func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte, e error) (
 	[]byte, error) {
-	span := trace.FromContext(resCtx.Ctx)
+	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "completeDgraphResult")
 	defer stop()
 
@@ -676,7 +713,7 @@ func completeDgraphResult(resCtx *ResolverContext, field schema.Field, dgResult 
 
 	dgraphError := func() ([]byte, error) {
 		glog.Errorf("[%s] Could not process Dgraph result : \n%s",
-			api.RequestID(resCtx.Ctx), string(dgResult))
+			api.RequestID(ctx), string(dgResult))
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
@@ -692,7 +729,7 @@ func completeDgraphResult(resCtx *ResolverContext, field schema.Field, dgResult 
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
 		glog.Errorf("[%s] %+v \n Dgraph result :\n%s\n",
-			api.RequestID(resCtx.Ctx),
+			api.RequestID(ctx),
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
 		return nullResponse(),
@@ -726,7 +763,7 @@ func completeDgraphResult(resCtx *ResolverContext, field schema.Field, dgResult 
 				glog.Errorf("[%s] Got a list of length %v from Dgraph when expecting a "+
 					"one-item list.\n"+
 					"GraphQL query was : %s\n",
-					api.RequestID(resCtx.Ctx), len(val), api.QueryString(resCtx.Ctx))
+					api.RequestID(ctx), len(val), api.QueryString(ctx))
 
 				errs = append(errs,
 					x.GqlErrorf(
@@ -773,7 +810,7 @@ func completeDgraphResult(resCtx *ResolverContext, field schema.Field, dgResult 
 			"That's only possible if the query result is non-nullable.  "+
 			"There's something wrong in the GraphQL schema.  \n"+
 			"GraphQL query was : %s\n",
-			api.RequestID(resCtx.Ctx), api.QueryString(resCtx.Ctx)) //...FIXME:  <-- should just be in the req??
+			api.RequestID(ctx), api.QueryString(ctx))
 		return nullResponse(), append(errs, gqlErrs...)
 	}
 
