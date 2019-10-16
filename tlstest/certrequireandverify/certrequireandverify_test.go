@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"

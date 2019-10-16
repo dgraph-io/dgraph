@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -1225,6 +1225,16 @@ func TestListTypeSchemaChange(t *testing.T) {
 
 func TestDeleteAllSP2(t *testing.T) {
 	s := `
+	nodeType: string .
+	name: string .
+	date: datetime .
+	weight: float .
+	weightUnit: string .
+	lifeLoad: int .
+	stressLevel: int .
+	plan: string .
+	postMortem: string .
+
 	type Node12345 {
 		nodeType
 		name
@@ -1274,7 +1284,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z","weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{

@@ -14,6 +14,54 @@
  * limitations under the License.
  */
 
+// Package graphql is a http server for GraphQL on Dgraph
+//
+// GraphQL spec:
+// https://graphql.github.io/graphql-spec/June2018
+//
+//
+// GraphQL servers should serve both GET and POST
+// https://graphql.org/learn/serving-over-http/
+//
+// GET should be like
+// http://myapi/graphql?query={me{name}}
+//
+// POST should have a json content body like
+// {
+//   "query": "...",
+//   "operationName": "...",
+//   "variables": { "myVariable": "someValue", ... }
+// }
+//
+// GraphQL servers should return 200 (even on errors),
+// and result body should be json:
+// {
+//   "data": { "query_name" : { ... } },
+//   "errors": [ { "message" : ..., ...} ... ]
+// }
+//
+// Key points about the response
+// (https://graphql.github.io/graphql-spec/June2018/#sec-Response)
+//
+// - If an error was encountered before execution begins,
+//   the data entry should not be present in the result.
+//
+// - If an error was encountered during the execution that
+//   prevented a valid response, the data entry in the response should be null.
+//
+// - If there's errors and data, both are returned
+//
+// - If no errors were encountered during the requested operation,
+//   the errors entry should not be present in the result.
+//
+// - There's rules around how errors work when there's ! fields in the schema
+//   https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
+//
+// - The "message" in an error is required, the rest is up to the implementation
+//
+// - The "data" works just like a Dgraph query
+//
+// - "extensions" is allowed and can be anything
 package graphql
 
 import (
@@ -26,11 +74,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
-	"github.com/dgraph-io/dgo"
-	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -174,12 +222,26 @@ func run() error {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	http.Handle("/graphql",
-		web.GraphQLHTTPHandler(
-			schema.AsSchema(gqlSchema),
-			dgraph.AsDgraph(dgraphClient),
-			dgraph.NewQueryRewriter(),
-			dgraph.NewMutationRewriter()))
+	queryRewriter := resolve.NewQueryRewriter()
+	mutationRewriter := resolve.NewMutationRewriter()
+	queryExecutor := resolve.DgoAsQueryExecutor(dgraphClient)
+	mutationExecutor := resolve.DgoAsMutationExecutor(dgraphClient)
+
+	resolverFactory :=
+		resolve.NewResolverFactory(
+			queryRewriter,
+			mutationRewriter,
+			queryExecutor,
+			mutationExecutor)
+
+	// We don't have to add schema introspection here.  Often GraphQL servers turn
+	// off schema introspection in production.  So this can easily be optional.
+	resolverFactory.WithSchemaIntrospection()
+
+	resolvers := resolve.New(schema.AsSchema(gqlSchema), resolverFactory)
+	mainServer := web.NewServer(resolvers)
+
+	http.Handle("/graphql", mainServer.HTTPHandler())
 
 	trace.ApplyConfig(trace.Config{
 		DefaultSampler:             trace.ProbabilitySampler(GraphQL.Conf.GetFloat64("trace")),

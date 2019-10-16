@@ -23,12 +23,15 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 )
 
-// asString writes query as an indented GraphQL+- query string.  AsString doesn't
+// AsString writes query as an indented GraphQL+- query string.  AsString doesn't
 // validate query, and so doesn't return an error if query is 'malformed' - it might
 // just write something that wouldn't parse as a Dgraph query.
-func asString(query *gql.GraphQuery) string {
-	var b strings.Builder
+func AsString(query *gql.GraphQuery) string {
+	if query == nil {
+		return ""
+	}
 
+	var b strings.Builder
 	b.WriteString("query {\n")
 	writeQuery(&b, query, "  ", true)
 	b.WriteString("}")

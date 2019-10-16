@@ -257,7 +257,7 @@ func searchValidation(
 			if field.Type.Name() == "String" {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s: the tokenizer to @search %s is not unique.",
+					"Type %s; Field %s: the argument to @search %s is not unique.",
 					typ.Name, field.Name, searchArg)
 			}
 

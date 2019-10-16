@@ -17,18 +17,54 @@
 package graphql
 
 import (
-	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
+
+type ErrorCase struct {
+	Name       string
+	GQLRequest string
+	variables  map[string]interface{}
+	Errors     x.GqlErrorList
+}
+
+// TestRequestValidationErrors just makes sure we are catching validation failures.
+// Mostly this is provided by an external lib, so just checking we hit common cases.
+func TestRequestValidationErrors(t *testing.T) {
+	b, err := ioutil.ReadFile("e2e_error_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []ErrorCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal test cases from yaml.")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			test := &GraphQLParams{
+				Query:     tcase.GQLRequest,
+				Variables: tcase.variables,
+			}
+			gqlResponse := test.ExecuteAsPost(t, graphqlURL)
+
+			require.Nil(t, gqlResponse.Data)
+			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 // TestPanicCatcher tests that the GraphQL server behaves properly when an internal
 // bug triggers a panic.  Here, this is mocked up with httptest and a dgraph package
@@ -58,13 +94,17 @@ func TestPanicCatcher(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
 
-	handler := web.GraphQLHTTPHandler(
-		gqlSchema,
-		&panicClient{},
-		dgraph.NewQueryRewriter(),
-		dgraph.NewMutationRewriter())
+	resolverFactory :=
+		resolve.NewResolverFactory(
+			resolve.NewQueryRewriter(),
+			resolve.NewMutationRewriter(),
+			&panicClient{},
+			&panicClient{})
 
-	ts := httptest.NewServer(handler)
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
 	for name, test := range tests {
@@ -85,14 +125,15 @@ func TestPanicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dg *panicClient) Query(
+	resCtx *resolve.ResolverContext,
+	query *gql.GraphQuery) ([]byte, error) {
 	panic("bugz!!!")
 }
 
-func (dg *panicClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
-	panic("bugz!!!")
-}
-
-func (dg *panicClient) DeleteNodes(ctx context.Context, query, mutation string) error {
+func (dg *panicClient) Mutate(
+	resCtx *resolve.ResolverContext,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 	panic("bugz!!!")
 }

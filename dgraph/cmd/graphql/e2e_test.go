@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ *    Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,11 +26,12 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -67,10 +69,18 @@ const (
 // "Query variables can be sent as a JSON-encoded string in an additional query parameter
 // called variables. If the query contains several named operations, an operationName query
 // parameter can be used to control which one should be executed."
+//
+// acceptGzip sends "Accept-Encoding: gzip" header to the server, which would return the
+// response after gzip.
+// gzipEncoding would compress the request to the server and add "Content-Encoding: gzip"
+// header to the same.
+
 type GraphQLParams struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+	acceptGzip    bool
+	gzipEncoding  bool
 }
 
 type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
@@ -162,6 +172,83 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func gunzipData(data []byte) ([]byte, error) {
+	b := bytes.NewBuffer(data)
+
+	r, err := gzip.NewReader(b)
+	if err != nil {
+		return nil, err
+	}
+
+	var resB bytes.Buffer
+	if _, err := resB.ReadFrom(r); err != nil {
+		return nil, err
+	}
+	return resB.Bytes(), nil
+}
+
+func gzipData(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+
+	if _, err := gz.Write(data); err != nil {
+		return nil, err
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// This tests that if a request has gzip header but the body is
+// not compressed, then it should return an error
+func TestGzipCompressionHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resData, err := runGQLRequest(req)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Unable to parse gzip")
+}
+
+// This tests that if a req's body is compressed but the
+// header is not present, then it should return an error
+func TestGzipCompressionNoHeader(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+		gzipEncoding: true,
+	}
+
+	req, err := queryCountry.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	req.Header.Del("Content-Encoding")
+	resData, err := runGQLRequest(req)
+
+	var result *GraphQLResponse
+	err = json.Unmarshal(resData, &result)
+	require.NotNil(t, result.Errors)
+	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
+}
+
 func TestGetRequest(t *testing.T) {
 	AddMutation(t, getExecutor)
 }
@@ -174,7 +261,6 @@ func TestGetQueryEmptyVariable(t *testing.T) {
 			}
 		}`,
 	}
-
 	req, err := queryCountry.createGQLGet(graphqlURL)
 	require.NoError(t, err)
 
@@ -193,6 +279,11 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
+	if params.acceptGzip {
+		res, err = gunzipData(res)
+		require.NoError(t, err)
+		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
+	}
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
 
@@ -245,6 +336,9 @@ func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
 	q.Add("variables", string(variableString))
 
 	req.URL.RawQuery = q.Encode()
+	if params.acceptGzip {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 	return req, nil
 }
 
@@ -254,11 +348,24 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params.gzipEncoding {
+		if body, err = gzipData(body); err != nil {
+			return nil, err
+		}
+	}
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if params.gzipEncoding {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+
+	if params.acceptGzip {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 
 	return req, nil
 }
@@ -274,6 +381,14 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 	// GraphQL server should always return OK, even when there are errors
 	if status := resp.StatusCode; status != http.StatusOK {
 		return nil, errors.Errorf("unexpected status code: %v", status)
+	}
+
+	if strings.ToLower(resp.Header.Get("Content-Type")) != "application/json" {
+		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
 	}
 
 	defer resp.Body.Close()

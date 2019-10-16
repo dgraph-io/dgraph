@@ -35,8 +35,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -584,8 +584,8 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 
-	dialOpts := append([]grpc.DialOption{
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{})},
+	dialOpts := append([]grpc.DialOption{},
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
 

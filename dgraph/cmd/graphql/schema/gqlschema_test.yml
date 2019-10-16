@@ -264,8 +264,7 @@ invalid_schemas:
         y: String @search(by: [trigram, regexp])
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @search trigram is duplicated. The
-          filter (StringRegExpFilter) was applied through the argument regexp provided before.",
+      {"message": "Type X; Field y: the argument to @search trigram is not unique.",
       "locations":[{"line":2, "column":14}]}
       ]
 

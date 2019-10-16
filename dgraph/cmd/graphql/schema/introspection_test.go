@@ -170,14 +170,15 @@ func TestIntrospectionQuery(t *testing.T) {
 
 		op := doc.Operations.ForName("")
 		oper := &operation{op: op,
-			vars:  map[string]interface{}{},
-			query: string(q),
-			doc:   doc,
+			vars:     map[string]interface{}{},
+			query:    string(q),
+			doc:      doc,
+			inSchema: &schema{schema: sch},
 		}
 		require.NotNil(t, op)
 
 		queries := oper.Queries()
-		resp, err := Introspect(oper, queries[0], AsSchema(sch))
+		resp, err := Introspect(queries[0])
 		require.NoError(t, err)
 
 		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
@@ -226,14 +227,15 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 
 	op := doc.Operations.ForName("")
 	oper := &operation{op: op,
-		vars:  map[string]interface{}{"name": "TestInputObject"},
-		query: q,
-		doc:   doc,
+		vars:     map[string]interface{}{"name": "TestInputObject"},
+		query:    q,
+		doc:      doc,
+		inSchema: &schema{schema: sch},
 	}
 	require.NotNil(t, op)
 
 	queries := oper.Queries()
-	resp, err := Introspect(oper, queries[0], AsSchema(sch))
+	resp, err := Introspect(queries[0])
 	require.NoError(t, err)
 
 	fname := "testdata/introspection/output/type_complex_object_name_filter.json"
@@ -265,13 +267,14 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	op := doc.Operations.ForName("")
 	require.NotNil(t, op)
 	oper := &operation{op: op,
-		vars:  map[string]interface{}{},
-		query: string(introspectionQuery),
-		doc:   doc,
+		vars:     map[string]interface{}{},
+		query:    string(introspectionQuery),
+		doc:      doc,
+		inSchema: &schema{schema: sch},
 	}
 
 	queries := oper.Queries()
-	resp, err := Introspect(oper, queries[0], AsSchema(sch))
+	resp, err := Introspect(queries[0])
 	require.NoError(t, err)
 
 	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")
