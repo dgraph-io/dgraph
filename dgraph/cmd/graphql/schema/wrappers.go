@@ -272,18 +272,26 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, fld := range inputTyp.Fields {
-			typName := inputTypeName
-			parentInt := parentInterface(sch, inputTyp, fld.Name)
-			if parentInt != "" {
-				typName = parentInt
+			edgeName := fld.Name
+			dgraphDirective := fld.Directives.ForName("dgraph")
+			if dgraphDirective != nil {
+				edge := dgraphDirective.Arguments.ForName("edge")
+				if en := edge.Value.Raw; en != "" {
+					edgeName = en
+				}
 			}
+			// typName := inputTypeName
+			// parentInt := parentInterface(sch, inputTyp, fld.Name)
+			// if parentInt != "" {
+			// 	typName = parentInt
+			// }
 			// 1. For types which don't inherit from an interface the keys, value would be.
 			//    typName,fldName => typName.fldName
 			// 2. For types which inherit fields from an interface
 			//    typName,fldName => interfaceName.fldName
 			// 3. For DeleteTypePayload type
 			//    DeleteTypePayload,fldName => typName.fldName
-			dgraphPredicate[originalTyp.Name][fld.Name] = typName + "." + fld.Name
+			dgraphPredicate[originalTyp.Name][fld.Name] = edgeName
 		}
 	}
 	return dgraphPredicate

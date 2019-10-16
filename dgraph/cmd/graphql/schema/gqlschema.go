@@ -30,6 +30,9 @@ const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
 
+	dgraphDirective = "dgraph"
+	dgraphArgs      = "edge"
+
 	searchDirective = "search"
 	searchArgs      = "by"
 
@@ -57,6 +60,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @dgraph(edge: String!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -199,6 +203,7 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
+	dgraphDirective:  dgraphValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error

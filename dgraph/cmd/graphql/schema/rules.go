@@ -241,6 +241,15 @@ func searchValidation(
 	return nil
 }
 
+func dgraphValidation(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	return nil
+}
+
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	var possibleSearchArgs []string
 	for name, typ := range supportedSearches {
