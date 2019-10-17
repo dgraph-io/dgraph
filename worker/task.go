@@ -439,7 +439,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			// add facets to result.
 			if q.FacetParam != nil {
-				fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+				fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs, listType)
 				if err != nil {
 					fs = []*api.Facet{}
 				}

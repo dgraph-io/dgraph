@@ -956,6 +956,22 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	return vals, err
 }
 
+// AllUntaggedFacets returns all facets of all untagged values.
+func (l *List) AllUntaggedFacets(readTs uint64) ([]*api.Facet, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var facets []*api.Facet
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if len(p.LangTag) == 0 {
+			facets = append(facets, p.Facets...)
+		}
+		return nil
+	})
+
+	return facets, err
+}
+
 // AllValues returns all the values in the posting list.
 func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
@@ -1125,10 +1141,18 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs []*api.Facet,
-	ferr error) {
+func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string, listType bool) ([]*api.Facet,
+	error) {
 	l.RLock()
 	defer l.RUnlock()
+
+	if listType {
+		fs, err := l.AllUntaggedFacets(readTs)
+		if err != nil {
+			return nil, err
+		}
+		return facets.CopyFacets(fs, param), nil
+	}
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
