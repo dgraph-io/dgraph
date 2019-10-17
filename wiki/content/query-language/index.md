@@ -2087,23 +2087,22 @@ If data exists and new indices are specified in a schema mutation, any index not
 Reverse edges are also computed if specified by a schema mutation.
 
 
-### Predicate names rules
+### Predicate name rules
 
 Any alphanumeric combination of a predicate name is permitted.
-Dgraph supports Internationalization.
-
-{{% notice "note" %}}Read more about it [here](#predicates-i18n).{{% /notice  %}}
+Dgraph also supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs).
+You can read more in [Predicates i18n](#predicates-i18n).
 
 #### Allowed special characters
 
-Single special characters are not accepted. This also includes single special characters from IRIs.
+Single special characters are not accepted, which includes the special characters from IRIs.
 They have to be prefixed/suffixed with alphanumeric characters.
 
 ```
 ][&*()_-+=!#$%
 ```
 
-*Note: You are not resistricted to use @ suffix, but the suffix character is ignored.*
+*Note: You are not restricted to use @ suffix, but the suffix character gets ignored.*
 
 #### Forbidden special characters
 
@@ -2119,7 +2118,7 @@ The special characters below are not accepted.
 If your predicate is a URI or has language-specific characters, then enclose
 it with angle brackets `<>` when executing the schema mutation.
 
-{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifiers][IRI] (IRIs) for predicate names and values.{{% /notice  %}}
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs) for predicate names and values.{{% /notice  %}}
 
 Schema syntax:
 ```
@@ -2156,7 +2155,6 @@ Query:
 }
 ```
 
-[IRI](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier)
 
 ### Upsert directive
 
