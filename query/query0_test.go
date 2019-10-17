@@ -24,9 +24,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -2284,7 +2285,9 @@ func TestCountUidWithAlias(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	var err error
+	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.CheckfNoTrace(err)
 
 	populateCluster()
 	os.Exit(m.Run())

@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -84,8 +84,10 @@ func runBenchmark() {
 			opt.mutationsPerTxn, opt.numMutations)
 	}
 
-	dg := testutil.DgraphClientWithGroot(opt.addr)
-	var err error
+	dg, err := testutil.DgraphClientWithGroot(opt.addr)
+	if err != nil {
+		log.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	// Drop all existing data.
 	for {

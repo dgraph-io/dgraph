@@ -296,35 +296,6 @@ func TestTypeExpandAll(t *testing.T) {
 	]}}`, js)
 }
 
-func TestTypeExpandForward(t *testing.T) {
-	query := `{
-		q(func: eq(make, "Ford")) {
-			expand(_forward_) {
-				uid
-			}
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Ford","model":"Focus","year":2008},
-		{"make":"Ford","model":"Focus","year":2009, "previous_model": {"uid":"0xc8"}}
-	]}}`, js)
-}
-
-func TestTypeExpandReverse(t *testing.T) {
-	query := `{
-		q(func: eq(make, "Ford")) {
-			expand(_reverse_) {
-				uid
-			}
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q":[
-		{"~previous_model": [{"uid":"0xc9"}]}
-	]}}`, js)
-}
-
 func TestTypeExpandLang(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
@@ -897,4 +868,291 @@ func TestCascadeSubQueryMultiUid(t *testing.T) {
 			}
 		}
 	`, js)
+}
+
+func TestCountUIDWithOneUID(t *testing.T) {
+	query := `{
+		q(func: uid(1)) {
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"count": 1}]}}`, js)
+}
+
+func TestCountUIDWithMultipleUIDs(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"count": 3}]}}`, js)
+}
+
+func TestCountUIDWithPredicate(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			name
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+				{
+					"count": 3
+				},
+				{
+					"name": "Michonne"
+				},
+				{
+					"name": "King Lear"
+				},
+				{
+					"name": "Margaret"
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountUIDWithAlias(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			total: count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"total": 3}]}}`, js)
+}
+
+func TestCountUIDWithVar(t *testing.T) {
+	query := `{
+		var(func: uid(1, 2, 3)) {
+			total as count(uid)
+		}
+
+		q(func: uid(total)) {
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"count": 1}]}}`, js)
+}
+
+func TestCountUIDWithParentAlias(t *testing.T) {
+	query := `{
+		total1 as var(func: uid(1, 2, 3)) {
+			total2 as count(uid)
+		}
+
+		q1(func: uid(total1)) {
+			count(uid)
+		}
+
+		q2(func: uid(total2)) {
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q1": [{"count": 3}], "q2": [{"count": 1}]}}`, js)
+}
+
+func TestCountUIDWithMultipleCount(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			count(uid)
+			count(uid)
+		}
+	}`
+	_, err := processQuery(context.Background(), t, query)
+	require.Contains(t, err.Error(), "uidcount not allowed multiple times in same sub-query")
+}
+
+func TestCountUIDWithMultipleCountAndAlias(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			total1: count(uid)
+			total2: count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"total1": 3},{"total2": 3}]}}`, js)
+}
+
+func TestCountUIDWithMultipleCountAndAliasAndPredicate(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			name
+			total1: count(uid)
+			total2: count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+				{
+					"total1": 3
+				},
+				{
+					"total2": 3
+				},
+				{
+					"name": "Michonne"
+				},
+				{
+					"name": "King Lear"
+				},
+				{
+					"name": "Margaret"
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountUIDNested(t *testing.T) {
+	query := `{
+		q(func: uid(1, 2, 3)) {
+			total1: count(uid)
+			total2: count(uid)
+			friend {
+				name
+				count(uid)
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+				{
+					"total1": 3
+				},
+				{
+					"total2": 3
+				},
+				{
+					"friend": [
+						{
+							"name": "Rick Grimes"
+						},
+						{
+							"name": "Glenn Rhee"
+						},
+						{
+							"name": "Daryl Dixon"
+						},
+						{
+							"name": "Andrea"
+						},
+						{
+							"count": 5
+						}
+					]
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountUIDNestedMultiple(t *testing.T) {
+	query := `{
+		q(func: has(friend)) {
+			count(uid)
+			friend {
+				name
+				count(uid)
+				friend {
+					name
+					count(uid)
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [
+				{
+					"count": 3
+				},
+				{
+					"friend": [
+						{
+							"name": "Rick Grimes",
+							"friend": [
+								{
+									"name": "Michonne"
+								},
+								{
+									"count": 1
+								}
+							]
+						},
+						{
+							"name": "Glenn Rhee"
+						},
+						{
+							"name": "Daryl Dixon"
+						},
+						{
+							"name": "Andrea",
+							"friend": [
+								{
+									"name": "Glenn Rhee"
+								},
+								{
+									"count": 1
+								}
+							]
+						},
+						{
+							"count": 5
+						}
+					]
+				},
+				{
+					"friend": [
+						{
+							"name": "Michonne",
+							"friend": [
+								{
+									"name": "Rick Grimes"
+								},
+								{
+									"name": "Glenn Rhee"
+								},
+								{
+									"name": "Daryl Dixon"
+								},
+								{
+									"name": "Andrea"
+								},
+								{
+									"count": 5
+								}
+							]
+						},
+						{
+							"count": 1
+						}
+					]
+				},
+				{
+					"friend": [
+						{
+							"name": "Glenn Rhee"
+						},
+						{
+							"count": 1
+						}
+					]
+				}
+			]
+		}
+	}`, js)
 }

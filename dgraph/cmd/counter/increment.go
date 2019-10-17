@@ -25,12 +25,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.opencensus.io/trace"
 )
 
 // Increment is the sub-command invoked when calling "dgraph increment".
@@ -59,6 +60,7 @@ func init() {
 		"Read-only. Read the counter value without updating it.")
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
+	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
 }
@@ -73,8 +75,10 @@ type Counter struct {
 	mLatency time.Duration
 }
 
-func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, error) {
+	span := trace.FromContext(ctx)
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	var counter Counter
@@ -99,6 +103,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	} else {
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
+	span.Annotatef(nil, "Found counter: %+v", counter)
 	counter.startTs = resp.GetTxn().GetStartTs()
 	counter.qLatency = time.Duration(queryLatency).Round(time.Millisecond)
 	return counter, nil
@@ -124,7 +129,10 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		}
 	}()
 
-	counter, err := queryCounter(txn, pred)
+	ctx, span := trace.StartSpan(context.Background(), "Counter")
+	defer span.End()
+
+	counter, err := queryCounter(ctx, txn, pred)
 	if err != nil {
 		return Counter{}, err
 	}
@@ -141,7 +149,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
 
 	// Don't put any timeout for mutation.
-	resp, err := txn.Mutate(context.Background(), &mu)
+	resp, err := txn.Mutate(ctx, &mu)
 	if err != nil {
 		return Counter{}, err
 	}
@@ -153,6 +161,12 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
+	trace.ApplyConfig(trace.Config{
+		DefaultSampler:             trace.AlwaysSample(),
+		MaxAnnotationEventsPerSpan: 256,
+	})
+	x.RegisterExporters(conf, "dgraph.increment")
+
 	startTime := time.Now()
 	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
 

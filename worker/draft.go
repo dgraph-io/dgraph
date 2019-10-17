@@ -209,7 +209,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
-
 		return nil
 	}
 

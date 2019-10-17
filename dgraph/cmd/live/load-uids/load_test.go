@@ -19,13 +19,14 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"runtime"
 	"testing"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -175,7 +176,11 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	var err error
+	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		log.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	x.Check(dg.Alter(
 		context.Background(), &api.Operation{DropAll: true}))
 

@@ -21,9 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/stretchr/testify/require"
 
 	"google.golang.org/grpc"
@@ -161,7 +160,9 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 
 func TestMutationsDisallow(t *testing.T) {
 	conn, err := grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
-	x.Check(err)
+	if err != nil {
+		t.Fatalf("Cannot perform drop all op: %s", err.Error())
+	}
 	defer conn.Close()
 
 	t.Run("disallow drop all in no mutations mode",
@@ -176,11 +177,15 @@ func TestMutationsDisallow(t *testing.T) {
 
 func TestMutationsStrict(t *testing.T) {
 	conn1, err := grpc.Dial(strictModeAlphaGroup1, grpc.WithInsecure())
-	x.Check(err)
+	if err != nil {
+		t.Fatalf("Cannot perform drop all op: %s", err.Error())
+	}
 	defer conn1.Close()
 
 	conn2, err := grpc.Dial(strictModeAlphaGroup2, grpc.WithInsecure())
-	x.Check(err)
+	if err != nil {
+		t.Fatalf("Cannot perform drop all op: %s", err.Error())
+	}
 	defer conn2.Close()
 
 	t.Run("allow group1 drop all in strict mutations mode",

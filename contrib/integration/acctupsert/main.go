@@ -27,8 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -69,7 +69,8 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := testutil.DgraphClientWithGroot(*alpha)
+	c, err := testutil.DgraphClientWithGroot(*alpha)
+	x.Check(err)
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)
