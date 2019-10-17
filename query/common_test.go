@@ -199,6 +199,11 @@ type CarModel {
 	<~previous_model>
 }
 
+type Object {
+	name
+	owner
+}
+
 type SchoolInfo {
 	name
 	abbr
@@ -266,6 +271,7 @@ newname                        : string @index(exact, term) .
 newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
+owner                          : [uid] .
 `
 
 func populateCluster() {
@@ -545,11 +551,14 @@ func populateCluster() {
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
 
+		<202> <name> "Car" .
 		<202> <make> "Toyota" .
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
+		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
+		<202> <dgraph.type> "Object" .
 
 		# data for regexp testing
 		_:luke <firstName> "Luke" .
