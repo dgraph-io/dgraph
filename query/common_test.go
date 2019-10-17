@@ -200,7 +200,8 @@ type CarModel {
 }
 
 type Object {
-	name: string
+	name
+	owner
 }
 
 type SchoolInfo {
@@ -270,6 +271,7 @@ newname                        : string @index(exact, term) .
 newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
+owner                          : [uid] .
 `
 
 func populateCluster() {
@@ -554,6 +556,7 @@ func populateCluster() {
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
+		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
 		<202> <dgraph.type> "Object" .
 
