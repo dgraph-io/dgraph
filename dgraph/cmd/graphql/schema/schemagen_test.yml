@@ -148,12 +148,18 @@ schemas:
         dt5: dateTime
         e: string
       }
-      i1: int @index(int) .
-      i2: int @index(int) .
-      f1: float @index(float) .
-      f2: float @index(float) .
+      e: string @index(exact) .
       b1: bool @index(bool) .
       b2: bool @index(bool) .
+      dt1: dateTime @index(year) .
+      dt2: dateTime @index(year) .
+      dt3: dateTime @index(month) .
+      dt4: dateTime @index(day) .
+      dt5: dateTime @index(hour) .
+      f1: float @index(float) .
+      f2: float @index(float) .
+      i1: int @index(int) .
+      i2: int @index(int) .
       s1: string @index(term) .
       s2: string @index(hash) .
       s3: string @index(exact) .
@@ -161,12 +167,6 @@ schemas:
       s5: string @index(fulltext) .
       s6: string @index(trigram) .
       s7: string @index(trigram) .
-      dt1: dateTime @index(year) .
-      dt2: dateTime @index(year) .
-      dt3: dateTime @index(month) .
-      dt4: dateTime @index(day) .
-      dt5: dateTime @index(hour) .
-      e: string @index(exact) .
 
   -
     name: "interface and types interact properly"
@@ -185,14 +185,49 @@ schemas:
       type A {
         name: string
       }
-      name: string @index(exact) .
       type B {
         name: string
         correct: bool
       }
-      correct: bool @index(bool) .
       type C {
         name: string
         dob: dateTime
       }
+      correct: bool @index(bool) .
       dob: dateTime .
+      name: string @index(exact) .
+
+  -
+    name: "Searchables are collected across all types."
+    input: |
+      type A {
+        id: ID!
+        p: String! @search(by: exact)
+      }
+      type P {
+        id: ID!
+        p: String! @search(by: term)
+      }
+      type B {
+        id: ID!
+        p: String! @search(by: fulltext)
+      }
+      type C {
+        id: ID!
+        p: String! @search(by: exact)
+      }
+    output: |
+      type A {
+        p: string
+      }
+      type P {
+        p: string
+      }
+      type B {
+        p: string
+      }
+      type C {
+        p: string
+      }
+      p: string @index(exact,term,fulltext) .
+

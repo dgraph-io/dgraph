@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -128,6 +129,14 @@ func NewHandler(input string) (Handler, error) {
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
+	type scalar struct {
+		indexes map[string]bool
+		typ     string
+	}
+	scalars := make(map[string]*scalar)
+	var scalarPreds strings.Builder
+
+	// Stores a list of predicate name => scalar definition for it.
 	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
@@ -178,15 +187,20 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexStr = fmt.Sprintf(" @index(%s)", supportedSearches[arg.Value.Raw].dgIndex)
+							indexStr = supportedSearches[arg.Value.Raw].dgIndex
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
+							indexStr = defaultSearches[f.Type.Name()]
 						}
 					}
 
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
-					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s: %s%s .\n", edgeName, typStr, indexStr)
+
+					_, ok := scalars[edgeName]
+					if !ok {
+						scalars[edgeName] = &scalar{indexes: make(map[string]bool), typ: typStr}
+					}
+					if indexStr != "" {
+						scalars[edgeName].indexes[indexStr] = true
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(
@@ -208,5 +222,26 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		}
 	}
 
+	// Sort the predicates to have a predictable order in the result.
+	scalarPredicates := make([]string, 0, len(scalars))
+	for predicate := range scalars {
+		scalarPredicates = append(scalarPredicates, predicate)
+	}
+	sort.Strings(scalarPredicates)
+	for _, predicate := range scalarPredicates {
+		s := scalars[predicate]
+		indexes := make([]string, 0, len(s.indexes))
+		for index := range s.indexes {
+			indexes = append(indexes, index)
+		}
+
+		indexStr := ""
+		if len(indexes) != 0 {
+			indexStr = strings.Join(indexes, ",")
+			indexStr = fmt.Sprintf("@index(%s) ", indexStr)
+		}
+		fmt.Fprintf(&scalarPreds, "%s: %s %s.\n", predicate, s.typ, indexStr)
+	}
+	typeStrings = append(typeStrings, scalarPreds.String())
 	return strings.Join(typeStrings, "")
 }
