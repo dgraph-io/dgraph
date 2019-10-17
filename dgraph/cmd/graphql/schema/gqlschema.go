@@ -202,7 +202,7 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
+var fieldValidations []func(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
@@ -295,7 +295,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
-			errs = append(errs, applyFieldValidations(field)...)
+			errs = append(errs, applyFieldValidations(field, typ)...)
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
@@ -318,11 +318,11 @@ func applyDefnValidations(defn *ast.Definition,
 	return errs
 }
 
-func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
+func applyFieldValidations(field *ast.FieldDefinition, typ *ast.Definition) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(field))
+		errs = appendIfNotNull(errs, rule(field, typ))
 	}
 
 	return errs
@@ -1087,8 +1087,12 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	return sch.String()
 }
 
+func isIDType(defn *ast.Definition, typ *ast.Type) bool {
+	return typ.Name() == idTypeFor(defn)
+}
+
 func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
-	return fld.Type.Name() == idTypeFor(defn)
+	return isIDType(defn, fld.Type)
 }
 
 func idTypeFor(defn *ast.Definition) string {

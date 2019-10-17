@@ -106,17 +106,15 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func isValidTypeForList(typeName string) bool {
-	switch typeName {
-	case
-		"Boolean",
-		"ID":
-		return true
+func isValidTypeForList(field *ast.Type, typ *ast.Definition) bool {
+	if isIDType(typ, field) {
+		return false
 	}
-	return false
+
+	return field.Name() != "Boolean"
 }
 
-func fieldArgumentCheck(field *ast.FieldDefinition) *gqlerror.Error {
+func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
 	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
@@ -127,7 +125,7 @@ func fieldArgumentCheck(field *ast.FieldDefinition) *gqlerror.Error {
 	return nil
 }
 
-func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
+func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
 	// Checks if the field is nil.
 	if field.Type.Elem == nil {
 		return nil
@@ -135,7 +133,7 @@ func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
 
 	// ID and Boolean list are not allowed.
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if isValidTypeForList(field.Type.Elem.Name()) && field.Type.NamedType == "" {
+	if !isValidTypeForList(field.Type.Elem, typ) && field.Type.NamedType == "" {
 		return gqlerror.ErrorPosf(
 			field.Position, "[%[1]s] lists are invalid. Only %[1]s "+
 				"scalar fields are allowed.", field.Type.Elem.Name())
