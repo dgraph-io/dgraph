@@ -130,8 +130,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
 	type scalar struct {
-		indexes map[string]bool
-		typ     string
+		indexes   map[string]bool
+		dgraphTyp string
 	}
 	scalars := make(map[string]*scalar)
 	var scalarPreds strings.Builder
@@ -163,7 +163,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
 					_, ok := scalars[edgeName]
 					if !ok {
-						scalars[edgeName] = &scalar{indexes: make(map[string]bool), typ: typStr}
+						scalars[edgeName] = &scalar{
+							indexes:   make(map[string]bool),
+							dgraphTyp: typStr,
+						}
 					}
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
@@ -186,7 +189,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 					_, ok := scalars[edgeName]
 					if !ok {
-						scalars[edgeName] = &scalar{indexes: make(map[string]bool), typ: typStr}
+						scalars[edgeName] = &scalar{indexes: make(map[string]bool), dgraphTyp: typStr}
 					}
 					if indexStr != "" {
 						scalars[edgeName].indexes[indexStr] = true
@@ -200,7 +203,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					_, ok := scalars[edgeName]
 					if !ok {
 						scalars[edgeName] = &scalar{indexes: map[string]bool{"exact": true},
-							typ: typStr}
+							dgraphTyp: typStr}
 					}
 				}
 			}
@@ -232,7 +235,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			indexStr = strings.Join(indexes, ",")
 			indexStr = fmt.Sprintf("@index(%s) ", indexStr)
 		}
-		fmt.Fprintf(&scalarPreds, "%s: %s %s.\n", predicate, s.typ, indexStr)
+		fmt.Fprintf(&scalarPreds, "%s: %s %s.\n", predicate, s.dgraphTyp, indexStr)
 	}
 	typeStrings = append(typeStrings, scalarPreds.String())
 	return strings.Join(typeStrings, "")

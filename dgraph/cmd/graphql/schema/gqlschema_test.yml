@@ -88,15 +88,15 @@ invalid_schemas:
     name: "Non linking inverse directives"
     input: |
       type X {
-        f1: P @hasInverse(field: "f1")
+        f1: P @hasInverse(field: "f3")
         f2: String
       }
       type P {
-        f1: X @hasInverse(field: "f2")
+        f3: X @hasInverse(field: "f2")
       }
     errlist: [
-      {"message":"Type X; Field f1: @hasInverse is required in both the directions to link the fields, but field f1 of type P doesn't have @hasInverse directive pointing to field f1 of type X. To link these add @hasInverse in both directions.", "locations":[{"line":2, "column":10}]},
-      {"message":"Type P; Field f1: @hasInverse is required in both the directions to link the fields, but field f2 of type X doesn't have @hasInverse directive pointing to field f1 of type P. To link these add @hasInverse in both directions.", "locations":[{"line":6, "column":10}]},
+      {"message":"Type X; Field f1: @hasInverse is required in both the directions to link the fields, but field f3 of type P doesn't have @hasInverse directive pointing to field f1 of type X. To link these add @hasInverse in both directions.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f3: @hasInverse is required in both the directions to link the fields, but field f2 of type X doesn't have @hasInverse directive pointing to field f3 of type P. To link these add @hasInverse in both directions.", "locations":[{"line":6, "column":10}]},
     ]
 
   -
@@ -126,7 +126,7 @@ invalid_schemas:
         f1: [P!]! @hasInverse(field: "f2")
       }
       type P  {
-        f1: String
+        f3: String
       }
     errlist: [
       {"message":"Type X; Field f1: inverse field f2 doesn't exist for type P.", "locations":[{"line":2, "column":14}]},
@@ -158,7 +158,7 @@ invalid_schemas:
         y: Y @search
       }
       type Y {
-        y: String
+        Z: String
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but fields of type Y
@@ -173,7 +173,7 @@ invalid_schemas:
         y: Y @search(by: term)
       }
       type Y {
-        y: String
+        Z: String
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
@@ -302,36 +302,70 @@ invalid_schemas:
       "locations":[{"line":2, "column":3}]}
       ]
 
+  -
+    name: "Field with same name but different type across different type definitions not allowed."
+    input: |
+      type X {
+        q: [String]
+      }
+
+      type Y {
+        q: String
+      }
+    errlist: [
+      {"message": "Field Y.q should have same type across type definitions. Found: String, expected: [String]",
+      "locations":[{"line":6, "column":3}]}
+      ]
+
+  -
+    name: "Field with same name but different field type across different definitions not allowed."
+    input: |
+      type X {
+        q: [String]
+      }
+
+      type Y {
+        q: P
+      }
+
+      type P {
+        a: String
+      }
+    errlist: [
+      {"message": "Field Y.q should have same type across type definitions. Found: P, expected: [String]",
+      "locations":[{"line":6, "column":3}]}
+      ]
+
 
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
     input: |
       type X {
-        f1: Y @hasInverse(field: "f1")
+        f1: Y @hasInverse(field: "f2")
       }
       type Y {
-        f1: X @hasInverse(field: "f1")
+        f2: X @hasInverse(field: "f1")
       }
 
   -
     name: "hasInverse directive on list type 1"
     input: |
       type X {
-        f1: [Y] @hasInverse(field: "f1")
+        f1: [Y] @hasInverse(field: "f2")
       }
       type Y {
-        f1: X @hasInverse(field: "f1")
+        f2: X @hasInverse(field: "f1")
       }
 
   -
     name: "hasInverse directive on list type 2"
     input: |
       type X {
-        f1: [Y] @hasInverse(field: "f1")
+        f1: [Y] @hasInverse(field: "f2")
       }
       type Y {
-        f1: [X] @hasInverse(field: "f1")
+        f2: [X] @hasInverse(field: "f1")
       }
 
   -
@@ -363,4 +397,19 @@ valid_schemas:
       }
       enum E {
         A
+      }
+
+  -
+    name: "Field with same name and same type but different list guarantees are allowed."
+    input: |
+      type X {
+        q: [String]
+      }
+
+      type Y {
+        a: [X]
+      }
+
+      type P {
+        b: [X!]
       }

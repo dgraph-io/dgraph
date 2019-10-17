@@ -265,18 +265,40 @@ func expandSchema(doc *ast.SchemaDocument) {
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
 // before GraphQL validation means the schema only has allowed structures, and
-// means we can give better errors than GrqphQL validation would give if their
+// means we can give better errors than GraphQL validation would give if their
 // schema contains something that will fail because of the extras we inject into
 // the schema.
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
+	scalarTyp := make(map[string]string)
 	for _, defn := range schema.Definitions {
 		if defn.BuiltIn {
 			// prelude definitions are built in and we don't want to validate them.
 			continue
 		}
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
+
+		// Go through all fields and store their type in the map. If we find a field name being
+		// repeated but with a different type that is an error as dgraph later would need to know
+		// what type to store in the schema.
+		for _, field := range defn.Fields {
+			if isIDField(defn, field) {
+				continue
+			}
+			fieldTyp := field.Type.String()
+			if typ, ok := scalarTyp[field.Name]; ok {
+				if typ != fieldTyp {
+					errs = append(errs, gqlerror.ErrorPosf(
+						field.Position,
+						fmt.Sprintf(
+							"Field %s.%s should have same type across type definitions. Found: %s, expected: %s",
+							defn.Name, field.Name, fieldTyp, typ)))
+				}
+			} else {
+				scalarTyp[field.Name] = fieldTyp
+			}
+		}
 	}
 
 	return errs
