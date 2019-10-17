@@ -320,6 +320,72 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	return nil
 }
 
+// ValidateAndConvertAppendLangTags is a special ValidateAndConvert for AppendLangTags checks compatibility or converts to the schema type if the storage type is
+// specified. If no storage type is specified then it converts to the schema type.
+func ValidateAndConvertAppendLangTags(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
+	if isDeletePredicateEdge(edge) {
+		return nil
+	}
+	if types.TypeID(edge.ValueType) == types.DefaultID && isStarAll(edge.Value) {
+		return nil
+	}
+
+	storageType := posting.TypeID(edge)
+	schemaType := types.TypeID(su.ValueType)
+
+	// type checks
+	switch {
+	/*case edge.Lang != "" && !su.GetLang() && schemaType.IsString() && !su.List:
+	return errors.Errorf("Attr: [%v] is a list type in the schema and cannot be upgraded @lang to mutate edge: [%v]",
+		edge.Attr, edge)*/
+
+	case edge.Lang != "" && !su.GetLang() && schemaType.IsString() && !su.List:
+		// yhj-code 2019-10-08 modify upsert @lang. if predicate in schema don't have @lang, change schema and add @lang.and not list
+		su.SetLang(true)
+
+	case edge.Lang != "" && !su.GetLang():
+		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+			edge.Attr, edge)
+
+	case !schemaType.IsScalar() && !storageType.IsScalar():
+		return nil
+
+	case !schemaType.IsScalar() && storageType.IsScalar():
+		return errors.Errorf("Input for predicate %s of type uid is scalar. Edge: %v", edge.Attr, edge)
+
+	case schemaType.IsScalar() && !storageType.IsScalar():
+		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+
+	// The suggested storage type matches the schema, OK!
+	case storageType == schemaType && schemaType != types.DefaultID:
+		return nil
+
+	// We accept the storage type iff we don't have a schema type and a storage type is specified.
+	case schemaType == types.DefaultID:
+		schemaType = storageType
+	}
+
+	var (
+		dst types.Val
+		err error
+	)
+
+	src := types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
+	// check compatibility of schema type and storage type
+	if dst, err = types.Convert(src, schemaType); err != nil {
+		return err
+	}
+
+	// convert to schema type
+	b := types.ValueForType(types.BinaryID)
+	if err = types.Marshal(dst, &b); err != nil {
+		return err
+	}
+	edge.ValueType = schemaType.Enum()
+	edge.Value = b.Value.([]byte)
+	return nil
+}
+
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
 // specified. If no storage type is specified then it converts to the schema type.
 func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
