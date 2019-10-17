@@ -30,8 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/stretchr/testify/require"
 )
 
