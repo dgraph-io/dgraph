@@ -24,18 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
-
-func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
-}
 
 func setSchema(schema string) {
 	err := client.Alter(context.Background(), &api.Operation{

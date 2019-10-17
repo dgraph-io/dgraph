@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -146,7 +145,9 @@ func setup(t *testing.T) *dgo.Dgraph {
 	md := metadata.New(nil)
 	md.Append("auth-token", "mrjn2")
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	x.Check(dg.Alter(ctx, &op))
+	if err := dg.Alter(ctx, &op); err != nil {
+		t.Fatalf("Cannot perform drop all op: %s", err.Error())
+	}
 
 	conf := viper.New()
 	conf.Set("pred", "counter.val")
