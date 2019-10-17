@@ -53,7 +53,7 @@ func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]by
 	// then Dgraph would just return 7 posts.  And we'd have no way of knowing if
 	// there's only 7 posts, or if there's more that are missing 'text'.
 	// But, for GraphQL, we want to know about those missing values.
-	md := metadata.Pairs("debug", "true")
+	md := metadata.Pairs("debug", "false")
 	resp, err := client.NewTxn().
 		Query(metadata.NewOutgoingContext(ctx, md), queryStr)
 
