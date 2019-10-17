@@ -149,14 +149,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				}
 
 				edgeName := f.Name
-				dgraphDirective := f.Directives.ForName("dgraph")
-				if dgraphDirective != nil {
-					edge := dgraphDirective.Arguments.ForName("edge")
-					if en := edge.Value.Raw; en != "" {
-						edgeName = en
-					}
-				}
-
 				var prefix, suffix string
 				if f.Type.Elem != nil {
 					prefix = "["

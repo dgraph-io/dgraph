@@ -21,7 +21,7 @@ type Post {
         text: String @search(by: "fulltext")
         tags: [String] @search(by: "exact")
         numLikes: Int @search
-        isPublished: Boolean
+        isPublished: Boolean @search
         postType: PostType @search
         author: Author! @hasInverse(field: "posts")
 }

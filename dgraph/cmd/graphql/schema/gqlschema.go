@@ -30,9 +30,6 @@ const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
 
-	dgraphDirective = "dgraph"
-	dgraphArgs      = "edge"
-
 	searchDirective = "search"
 	searchArgs      = "by"
 
@@ -202,7 +199,6 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
-	dgraphDirective:  dgraphValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
