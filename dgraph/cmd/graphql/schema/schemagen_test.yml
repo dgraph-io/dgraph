@@ -13,9 +13,9 @@ schemas:
       type A {
         p: uid
       }
-      p: uid .
       type P {
       }
+      p: uid .
 
   -
     name: "Scalar list"
@@ -43,9 +43,9 @@ schemas:
       type X {
         p: [uid]
       }
-      p: [uid] .
       type P {
       }
+      p: [uid] .
 
   -
     name: "Scalar types"
@@ -148,7 +148,6 @@ schemas:
         dt5: dateTime
         e: string
       }
-      e: string @index(exact) .
       b1: bool @index(bool) .
       b2: bool @index(bool) .
       dt1: dateTime @index(year) .
@@ -156,6 +155,7 @@ schemas:
       dt3: dateTime @index(month) .
       dt4: dateTime @index(day) .
       dt5: dateTime @index(hour) .
+      e: string @index(exact) .
       f1: float @index(float) .
       f2: float @index(float) .
       i1: int @index(int) .
@@ -203,6 +203,7 @@ schemas:
       type A {
         id: ID!
         p: String! @search(by: exact)
+        friend: P
       }
       type P {
         id: ID!
@@ -211,23 +212,29 @@ schemas:
       type B {
         id: ID!
         p: String! @search(by: fulltext)
+        friend: P
       }
       type C {
         id: ID!
         p: String! @search(by: exact)
+        friend: P
       }
     output: |
       type A {
         p: string
+        friend: uid
       }
       type P {
         p: string
       }
       type B {
         p: string
+        friend: uid
       }
       type C {
         p: string
+        friend: uid
       }
-      p: string @index(exact,term,fulltext) .
+      friend: uid .
+      p: string @index(exact,fulltext,term) .
 

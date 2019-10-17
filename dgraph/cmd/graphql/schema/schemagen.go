@@ -156,10 +156,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						edgeName = en
 					}
 				}
-				// This field could have originally been defined in an interface that this type
-				// implements. If we get a parent interface, then we shouldn't add the predicate to
-				// the scalar list.
-				parentInt := parentInterface(gqlSch, def, f.Name)
 
 				var prefix, suffix string
 				if f.Type.Elem != nil {
@@ -173,8 +169,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
-					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s: %s .\n", edgeName, typStr)
+					_, ok := scalars[edgeName]
+					if !ok {
+						scalars[edgeName] = &scalar{indexes: make(map[string]bool), typ: typStr}
 					}
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
@@ -208,8 +205,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, "string", suffix,
 					)
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
-					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s: %s @index(exact) .\n", edgeName, typStr)
+					_, ok := scalars[edgeName]
+					if !ok {
+						scalars[edgeName] = &scalar{indexes: map[string]bool{"exact": true},
+							typ: typStr}
 					}
 				}
 			}
@@ -237,6 +236,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 		indexStr := ""
 		if len(indexes) != 0 {
+			sort.Strings(indexes)
 			indexStr = strings.Join(indexes, ",")
 			indexStr = fmt.Sprintf("@index(%s) ", indexStr)
 		}
