@@ -3,27 +3,27 @@
 
 type Country {
         id: ID!
-        name: String! @search(by: "trigram") @dgraph(edge: "Country.name")
+        name: String! @search(by: "trigram")
 }
 
 type Author {
         id: ID!
-        name: String! @search(by: "hash") @dgraph(edge: "Author.name")
-        dob: DateTime @search @dgraph(edge: "Author.dob")
-        reputation: Float @search @dgraph(edge: "Author.reputation")
-        country: Country @dgraph(edge: "Author.country")
-        posts: [Post!] @hasInverse(field: "author") @dgraph(edge: "Author.posts")
+        name: String! @search(by: "hash")
+        dob: DateTime @search
+        reputation: Float @search
+        country: Country
+        posts: [Post!] @hasInverse(field: "author")
 }
 
 type Post {
         postID: ID!
-        title: String! @search(by: "term") @dgraph(edge: "Post.title")
-        text: String @search(by: "fulltext") @dgraph(edge: "Post.text")
-        tags: [String] @search(by: "exact") @dgraph(edge: "Post.tags")
-        numLikes: Int @search @dgraph(edge: "Post.numLikes")
-        isPublished: Boolean @dgraph(edge: "Post.isPublished")
-        postType: PostType @search @dgraph(edge: "Post.postType")
-        author: Author! @hasInverse(field: "posts") @dgraph(edge: "Post.author")
+        title: String! @search(by: "term")
+        text: String @search(by: "fulltext")
+        tags: [String] @search(by: "exact")
+        numLikes: Int @search
+        isPublished: Boolean
+        postType: PostType @search
+        author: Author! @hasInverse(field: "posts")
 }
 
 enum PostType {
@@ -34,18 +34,18 @@ enum PostType {
 
 interface Character {
         id: ID!
-        name: String! @search @dgraph(edge: "Character.name")
+        name: String! @search
 }
 
 interface Employee {
-        ename: String! @dgraph(edge: "Employee.ename")
+        ename: String!
 }
 
 type Director implements Character {
-        movies: [String!] @dgraph(edge: "Director.movies")
+        movies: [String!]
 }
 
 type Human implements Character & Employee {
-        dob: DateTime @dgraph(edge: "Human.dob")
-        female: Boolean @dgraph(edge: "Human.female")
+        dob: DateTime
+        female: Boolean
 }

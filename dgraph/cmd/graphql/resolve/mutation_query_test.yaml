@@ -13,7 +13,7 @@
     query {
       post(func: uid(0x4)) {
         postID : uid
-        title : Post.title
+        title : title
       }
     }
 
@@ -32,7 +32,7 @@
     query {
       result(func: uid(0x4)) {
         postID : uid
-        title : Post.title
+        title : title
       }
     }
 
@@ -51,7 +51,7 @@
     query {
       post(func: uid(0x4)) {
         id : uid
-        postTitle : Post.title
+        postTitle : title
       }
     }
 
@@ -73,9 +73,9 @@
     query {
       post(func: uid(0x4)) {
         postID : uid
-        title : Post.title
-        author : Post.author {
-          name : Author.name
+        title : title
+        author : author {
+          name : name
         }
       }
     }
@@ -99,10 +99,10 @@
     query {
       post(func: uid(0x4)) {
         postID : uid
-        title : Post.title
-        postAuthor : Post.author {
+        title : title
+        postAuthor : author {
           authorID : uid
-          authorName : Author.name
+          authorName : name
         }
       }
     }
@@ -126,10 +126,10 @@
     query {
       post(func: uid(0x4)) {
         postID : uid
-        title : Post.title
-        author : Post.author {
-          name : Author.name
-          posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+        title : title
+        author : author {
+          name : name
+          posts : posts @filter(anyofterms(title, "GraphQL"))
         }
       }
     }
@@ -155,6 +155,6 @@
   dgquery: |-
     query {
       post(func: uid(0x4)) {
-        title : Post.title
+        title : title
       }
     }

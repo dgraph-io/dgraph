@@ -60,7 +60,6 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: DgraphIndex!) on FIELD_DEFINITION
-directive @dgraph(edge: String!) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

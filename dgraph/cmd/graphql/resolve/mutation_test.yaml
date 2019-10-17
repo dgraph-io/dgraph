@@ -20,9 +20,9 @@
   dgraphmutation: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.dob":"2000-01-01",
-      "Author.posts":[]
+      "name":"A.N. Author",
+      "dob":"2000-01-01",
+      "posts":[]
     }
 
 -
@@ -40,8 +40,8 @@
   dgraphmutation: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.posts":[]
+      "name":"A.N. Author",
+      "posts":[]
     }
 
 -
@@ -61,8 +61,8 @@
   dgraphmutation: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.posts":[]
+      "name":"A.N. Author",
+      "posts":[]
     }
 
 -
@@ -87,9 +87,9 @@
   dgraphmutation: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.country": { "uid": "0x123" },
-      "Author.posts":[]
+      "name":"A.N. Author",
+      "country": { "uid": "0x123" },
+      "posts":[]
     }
 
 -
@@ -135,11 +135,11 @@
   dgraphmutation: |
     { "uid" : "_:newnode",
       "dgraph.type" : ["Post"],
-      "Post.title" : "Exciting post",
-      "Post.text" : "A really good post",
-      "Post.author": {
+      "title" : "Exciting post",
+      "text" : "A really good post",
+      "author": {
         "uid" : "0x2",
-        "Author.posts" : { "uid": "_:newnode" }
+        "posts" : { "uid": "_:newnode" }
       }
     }
 
@@ -164,7 +164,7 @@
   explanation: "The update patch should get rewritten into the Dgraph mutation"
   dgraphmutation: |
     { "uid" : "0x123",
-      "Post.text": "updated text"
+      "text": "updated text"
     }
 
 -
@@ -190,10 +190,10 @@
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
     { "uid" : "_:newnode",
-      "Character.name": "Bob",
-      "Employee.ename": "employee no. 1",
-      "Human.dob": "2000-01-01",
-      "Human.female": true,
+      "name": "Bob",
+      "ename": "employee no. 1",
+      "dob": "2000-01-01",
+      "female": true,
       "dgraph.type": ["Human", "Character", "Employee"]
     }
 
@@ -224,10 +224,10 @@
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
     { "uid" : "0x123",
-      "Character.name": "Bob",
-      "Employee.ename": "employee no. 1",
-      "Human.dob": "2000-01-01",
-      "Human.female": true
+      "name": "Bob",
+      "ename": "employee no. 1",
+      "dob": "2000-01-01",
+      "female": true
     }
 
 -
@@ -244,6 +244,6 @@
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
     { "uid" : "0x123",
-      "Character.name": "Bob"
+      "name": "Bob"
     }
 
