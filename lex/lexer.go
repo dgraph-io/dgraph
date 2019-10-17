@@ -376,7 +376,7 @@ const (
 	quote = '"'
 )
 
-// IsEscChar returns true if the run is an escape character (ECHAR ::= '\' [vtbnrf"'\])
+// IsEscChar returns true if the run is an escape character (ECHAR ::= '\' [uvtbnrf"'\])
 func (l *Lexer) IsEscChar(r rune) bool {
 	switch r {
 	case 'u', 'v', 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
