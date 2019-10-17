@@ -86,7 +86,7 @@ type Field interface {
 	Operation() Operation
 	// InterfaceType tells us whether this field represents a GraphQL Interface.
 	InterfaceType() bool
-	ConcreteType(types []interface{}) string
+	ChildOf(types []interface{}) bool
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -448,19 +448,19 @@ func (f *field) DgraphPredicate() string {
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
-func (f *field) ConcreteType(dgraphTypes []interface{}) string {
-	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
-	// and not an Interface object.
+// ChildOf checks if this field is a child of any of the types given to us in dgraphTypes.
+func (f *field) ChildOf(dgraphTypes []interface{}) bool {
 	for _, typ := range dgraphTypes {
 		styp, ok := typ.(string)
 		if !ok {
 			continue
 		}
-		if f.op.inSchema.schema.Types[styp].Kind == ast.Object {
-			return styp
+
+		if _, ok := f.op.inSchema.dgraphPredicate[styp][f.Name()]; ok {
+			return true
 		}
 	}
-	return ""
+	return false
 }
 
 func (q *query) Name() string {
@@ -528,8 +528,8 @@ func (q *query) InterfaceType() bool {
 	return (*field)(q).InterfaceType()
 }
 
-func (q *query) ConcreteType(dgraphTypes []interface{}) string {
-	return (*field)(q).ConcreteType(dgraphTypes)
+func (q *query) ChildOf(dgraphTypes []interface{}) bool {
+	return (*field)(q).ChildOf(dgraphTypes)
 }
 
 func (m *mutation) Name() string {
@@ -613,8 +613,8 @@ func (m *mutation) DgraphPredicate() string {
 	return (*field)(m).DgraphPredicate()
 }
 
-func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
-	return (*field)(m).ConcreteType(dgraphTypes)
+func (m *mutation) ChildOf(dgraphTypes []interface{}) bool {
+	return (*field)(m).ChildOf(dgraphTypes)
 }
 
 func (t *astType) Field(name string) FieldDefinition {

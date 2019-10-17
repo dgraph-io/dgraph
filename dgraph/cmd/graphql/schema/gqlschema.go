@@ -286,7 +286,10 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 			if isIDField(defn, field) {
 				continue
 			}
-			fieldTyp := field.Type.String()
+			fieldTyp := field.Type.NamedType
+			if field.Type.NamedType == "" && field.Type.Elem != nil {
+				fieldTyp = "[" + field.Type.Elem.NamedType + "]"
+			}
 			if typ, ok := scalarTyp[field.Name]; ok {
 				if typ != fieldTyp {
 					errs = append(errs, gqlerror.ErrorPosf(

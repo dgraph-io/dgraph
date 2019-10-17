@@ -262,7 +262,7 @@ invalid_schemas:
       ]
 
   -
-    name: "Type implemets an interface with no field of its own"
+    name: "Type implements an interface with no field of its own"
     input: |
       interface Y {
         id: ID
@@ -411,5 +411,5 @@ valid_schemas:
       }
 
       type P {
-        b: [X!]
+        a: [X!]
       }

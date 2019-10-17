@@ -945,7 +945,6 @@ func updateCharacter(t *testing.T, id string) {
 }
 
 func TestQueryInterfaceAfterAddMutation(t *testing.T) {
-	t.Skip()
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
