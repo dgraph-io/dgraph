@@ -240,8 +240,8 @@ invalid_schemas:
         y: String @search(by: [hash, exact])
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @search hash contradicts the field exact
-           provided before and shouldn't be used together.",
+      {"message": "Type X; Field y: the argument to @search 'hash' contradicts the index
+          'exact' provided before and shouldn't be used together.",
       "locations":[{"line":2, "column":14}]}
       ]
 
@@ -264,7 +264,8 @@ invalid_schemas:
         y: String @search(by: [trigram, regexp])
       }
     errlist: [
-      {"message": "Type X; Field y: the argument to @search trigram is not unique.",
+      {"message": "Type X; Field y: the argument to @search 'trigram' is the same as 
+          the index 'regexp' provided before and shoudln't be used together",
       "locations":[{"line":2, "column":14}]}
       ]
 

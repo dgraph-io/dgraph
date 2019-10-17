@@ -253,12 +253,14 @@ func searchValidation(
 		// Checks that the filter indexes aren't repeated and they
 		// don't clash with each other.
 		searchIndex := builtInFilters[searchArg]
-		if _, ok := searchIndexes[searchIndex]; ok {
+		if val, ok := searchIndexes[searchIndex]; ok {
 			if field.Type.Name() == "String" {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s: the argument to @search %s is not unique.",
-					typ.Name, field.Name, searchArg)
+					"Type %s; Field %s: the argument to @search '%s' is the same "+
+						"as the index '%s' provided before and shoudln't "+
+						"be used together",
+					typ.Name, field.Name, searchArg, val)
 			}
 
 			return gqlerror.ErrorPosf(
@@ -272,8 +274,8 @@ func searchValidation(
 			if val, ok := searchIndexes[index]; ok {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s: the argument to @search %s "+
-						"contradicts the field %s provided before "+
+					"Type %s; Field %s: the argument to @search '%s' "+
+						"contradicts the index '%s' provided before "+
 						"and shouldn't be used together.",
 					typ.Name, field.Name, searchArg, val)
 			}
