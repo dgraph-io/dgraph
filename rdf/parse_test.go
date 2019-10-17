@@ -484,6 +484,30 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
+		input: `<alice> <lives> "wonderland" (friend="hatter").`,
+		nq: api.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: `wonderland`}},
+			Facets: []*api.Facet{{Key: "friend", Value: []byte("hatter"),
+				Tokens: []string{"\001hatter"}}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `<alice> <lives> "wonderland" (friend="hatter \u0045") .`,
+		nq: api.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: `wonderland`}},
+			Facets: []*api.Facet{{Key: "friend", Value: []byte("hatter E"),
+				Tokens: []string{"\001e", "\001hatter"}}},
+		},
+		expectedErr: false,
+	},
+	{
 		input:       `<alice> <lives> "\u004 wonderland" .`,
 		expectedErr: true, // should have 4 hex values after \u
 	},
