@@ -810,8 +810,9 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	var startUid, endUid uint64
 	var splitIdx int
 
-	// Method to properly initialize all the variables described above.
-	init := func() {
+	// Method to properly initialize the variables above
+	// when a multi-part list boundary is crossed.
+	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
 
 		// Otherwise, load the corresponding part and set endUid to correctly
@@ -831,7 +832,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		plist = out.plist
 		endUid = math.MaxUint64
 	} else {
-		init()
+		initializeSplit()
 	}
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
@@ -840,7 +841,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 			out.parts[startUid] = plist
 
 			splitIdx++
-			init()
+			initializeSplit()
 		}
 
 		enc.Add(p.Uid)
