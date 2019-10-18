@@ -513,14 +513,25 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	}
 	parsingTime += l.Parsing
 	if len(varToUID) > 0 {
-		numUids := 0
 		resp.Vars = make(map[string]*api.Uids, len(varToUID))
 		for v, uids := range varToUID {
 			// There could be a lot of these uids which could blow up the response size, especially
-			// for bulk mutations, hence only return the first million.
-			if numUids += len(uids); numUids <= 1e6 {
+			// for bulk mutations, hence only return variables which have less than a million uids.
+			if len(uids) <= 1e6 {
+				hexUids := make([]string, 0, len(uids))
+				// doQueryInUpsert returns uids as base10 string representation. We convert them
+				// to base16 string so that response format is consistent with assigned uids.
+				for _, uid := range uids {
+					u, err := strconv.ParseUint(uid, 10, 64)
+					if err != nil {
+						return resp, errors.Errorf("Couldn't parse uid: [%v] as base 10 uint64",
+							uid)
+					}
+					huid := fmt.Sprintf("%#x", u)
+					hexUids = append(hexUids, huid)
+				}
 				resp.Vars[v] = &api.Uids{
-					Uids: uids,
+					Uids: hexUids,
 				}
 			}
 		}
@@ -608,7 +619,9 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	upsertQuery := req.Query
 	needVars := findVars(gmu)
 	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
-	varName := fmt.Sprintf("__dgraph%d__", rand.Int())
+	// conditionalVar is a dummy var that we use to evaluate the result of
+	// conditional upsert.
+	conditionalVar := fmt.Sprintf("__dgraph%d__", rand.Int())
 	if isCondUpsert {
 		// @if in upsert is same as @filter in the query
 		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)
@@ -630,8 +643,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		//      * be empty if the condition is true
 		//      * have 1 UID (the 0 UID) if the condition is false
 		upsertQuery = strings.TrimSuffix(strings.TrimSpace(req.Query), "}")
-		upsertQuery += varName + ` as var(func: uid(0)) ` + cond + `}`
-		needVars = append(needVars, varName)
+		upsertQuery += conditionalVar + ` as var(func: uid(0)) ` + cond + `}`
+		needVars = append(needVars, conditionalVar)
 	}
 
 	startParsingTime := time.Now()
@@ -672,14 +685,15 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 		uids := make([]string, len(v.Uids.Uids))
 		for i, u := range v.Uids.Uids {
-			uids[i] = fmt.Sprintf("%#x", u)
+			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
+			uids[i] = strconv.FormatUint(u, 10)
 		}
 		varToUID[name] = uids
 	}
 
 	// If @if condition is false, no need to process the mutations
 	if isCondUpsert {
-		v, ok := qr.Vars[varName]
+		v, ok := qr.Vars[conditionalVar]
 		isMut := ok && v.Uids != nil && len(v.Uids.Uids) == 1
 		if !isMut {
 			gmu.Set = nil
@@ -692,7 +706,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	updateValInMutations(gmu, qr)
 	// varToUID is returned to the client, let's delete the dummy var that we put in there for
 	// evaluating the conditional upsert.
-	delete(varToUID, varName)
+	delete(varToUID, conditionalVar)
 	return l, varToUID, nil
 }
 
