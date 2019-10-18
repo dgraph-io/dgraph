@@ -58,13 +58,14 @@ func TestBackupMinio(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	// Add initial data.
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,

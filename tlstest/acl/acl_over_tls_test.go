@@ -5,11 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -94,17 +94,17 @@ func dgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 	return dg, nil
 }
 
-func ExampleLoginOverTLS() {
+func TestLoginOverTLS(t *testing.T) {
 	conf := viper.New()
 	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
 	dg, err := dgraphClientWithCerts(testutil.SockAddr, conf)
 	if err != nil {
-		glog.Fatalf("Unable to get dgraph client: %v", err)
+		t.Fatalf("Unable to get dgraph client: %s", err.Error())
 	}
 	if err := dg.Login(context.Background(), "groot", "password"); err != nil {
-		glog.Fatalf("Unable to login using the groot account: %v", err)
+		t.Fatalf("Unable to login using the groot account: %v", err.Error())
 	}
 
 	// Output:
