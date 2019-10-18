@@ -322,7 +322,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
 // specified. If no storage type is specified then it converts to the schema type.
-func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate, RemoveInconsistentData bool) error {
+func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate, ap bool) error {
 	if isDeletePredicateEdge(edge) {
 		return nil
 	}
@@ -336,7 +336,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate, RemoveIncons
 	// type checks
 	switch {
 	case edge.Lang != "" && !su.GetLang():
-		if RemoveInconsistentData {
+		if ap {
 			if schemaType.IsString() && !su.List {
 				su.SetLang(true)
 			} else {
