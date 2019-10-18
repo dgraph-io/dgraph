@@ -21,7 +21,7 @@ services:
     container_name: alpha1
     working_dir: /data/alpha1
     env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+      - ../../backup.env
     labels:
       cluster: test
     volumes:
@@ -39,7 +39,7 @@ services:
     container_name: alpha2
     working_dir: /data/alpha2
     env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+      - ../../backup.env
     labels:
       cluster: test
     depends_on:
@@ -59,7 +59,7 @@ services:
     container_name: alpha3
     working_dir: /data/alpha3
     env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+      - ../../backup.env
     labels:
       cluster: test
     depends_on:
@@ -78,8 +78,7 @@ services:
     image: minio/minio:latest
     container_name: minio1
     env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
-    working_dir: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data/minio
+      - ../../backup.env
     ports:
       - 9001:9001
     labels:

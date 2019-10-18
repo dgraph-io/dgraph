@@ -28,7 +28,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/tests/filesystem/data/backups
+        source: ./data/backups
         target: /data/backups/
         read_only: false
     ports:
@@ -50,7 +50,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/tests/filesystem/data/backups
+        source: ./data/backups
         target: /data/backups/
         read_only: false
     ports:
@@ -72,7 +72,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/tests/filesystem/data/backups
+        source: ./data/backups
         target: /data/backups/
         read_only: false
     ports:

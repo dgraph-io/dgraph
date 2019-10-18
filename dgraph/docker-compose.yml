@@ -65,7 +65,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -88,7 +88,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -111,7 +111,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -134,7 +134,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -157,7 +157,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -180,7 +180,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
@@ -195,7 +195,7 @@ services:
     image: minio/minio:latest
     container_name: minio1
     env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/minio.env
+      - ./minio.env
     working_dir: /data/minio1
     ports:
       - 9001:9001
