@@ -134,6 +134,7 @@ func (t TypeID) IsScalar() bool {
 	return t != UidID
 }
 
+// IsString returns whether the type is a string type.
 func (t TypeID) IsString() bool {
 	return t == StringID
 }
