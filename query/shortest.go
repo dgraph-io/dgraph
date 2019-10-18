@@ -202,11 +202,23 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							rch <- err
 							return
 						}
-						adjacencyMap[fromUID][toUID] = mapItem{
-							cost:  cost,
-							facet: facet,
-							attr:  subgraph.Attr,
+
+						if temp, ok := adjacencyMap[fromUID][toUID]; ok {
+							if temp.cost > cost {
+								adjacencyMap[fromUID][toUID] = mapItem{
+									cost:  cost,
+									facet: facet,
+									attr:  subgraph.Attr,
+								}
+							}
+						} else {
+							adjacencyMap[fromUID][toUID] = mapItem{
+								cost:  cost,
+								facet: facet,
+								attr:  subgraph.Attr,
+							}
 						}
+
 						numEdges++
 					}
 				}
