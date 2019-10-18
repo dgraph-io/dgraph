@@ -71,7 +71,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	if err := ValidateAndConvert(edge, &su); err != nil {
+	if err := ValidateAndConvert(edge, &su, false); err != nil {
 		return err
 	}
 
@@ -322,7 +322,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 // ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
 // specified. If no storage type is specified then it converts to the schema type.
-func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
+func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate, RemoveInconsistentData bool) error {
 	if isDeletePredicateEdge(edge) {
 		return nil
 	}
@@ -336,8 +336,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	// type checks
 	switch {
 	case edge.Lang != "" && !su.GetLang():
-		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
-			edge.Attr, edge)
+		if RemoveInconsistentData {
+			if schemaType.IsString() && !su.List {
+				su.SetLang(true)
+			} else {
+				return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+					edge.Attr, edge)
+			}
+		} else {
+			return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+				edge.Attr, edge)
+		}
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil

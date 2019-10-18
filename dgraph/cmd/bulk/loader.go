@@ -60,6 +60,7 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	LangTagsAppend   bool
 
 	MapShards    int
 	ReduceShards int

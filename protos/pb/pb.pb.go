@@ -3056,6 +3056,10 @@ func (m *SchemaUpdate) GetLang() bool {
 	return false
 }
 
+func (m *SchemaUpdate) SetLang(lang bool) {
+	m.Lang = lang
+}
+
 func (m *SchemaUpdate) GetNonNullable() bool {
 	if m != nil {
 		return m.NonNullable

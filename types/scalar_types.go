@@ -134,6 +134,10 @@ func (t TypeID) IsScalar() bool {
 	return t != UidID
 }
 
+func (t TypeID) IsString() bool {
+	return t == StringID
+}
+
 // IsNumber returns whether the type is a number type.
 func (t TypeID) IsNumber() bool {
 	return t == IntID || t == FloatID

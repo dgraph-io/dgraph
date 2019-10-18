@@ -51,6 +51,7 @@ func init() {
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
+	flag.Bool("append_langtags", false, "Automatically add langtags(@lang) to predicate based on data")
 	flag.StringP("files", "f", "",
 		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
 	flag.StringP("schema", "s", "",
@@ -119,6 +120,7 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
+		LangTagsAppend:   Bulk.Conf.GetBool("append_langtags"),
 	}
 
 	x.PrintVersion()

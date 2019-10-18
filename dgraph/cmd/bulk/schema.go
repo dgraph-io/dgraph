@@ -89,7 +89,7 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 	schema.List = true
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
+func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool, RemoveInconsistentData bool) {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
@@ -110,7 +110,7 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 		s.Unlock()
 	}
 
-	err := wk.ValidateAndConvert(de, sch)
+	err := wk.ValidateAndConvert(de, sch, RemoveInconsistentData)
 	if err != nil {
 		log.Fatalf("RDF doesn't match schema: %v", err)
 	}
