@@ -1,6 +1,6 @@
 #!/bin/bash
 
-pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/queries &> /dev/null
+pushd $(dirname "${BASH_SOURCE[0]}")/queries &> /dev/null
 
 function run_index_test {
   local max_attempts=${ATTEMPTS-5}

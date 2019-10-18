@@ -5,7 +5,7 @@ readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="$GOPATH/src/github.com/dgraph-io/benchmarks"
+BENCHMARKS_REPO="${BENCHMARKS_REPO:-$(go env GOPATH)/src/github.com/dgraph-io/benchmarks}"
 SCHEMA_FILE="$BENCHMARKS_REPO/data/21million.schema"
 DATA_FILE="$BENCHMARKS_REPO/data/21million.rdf.gz"
 

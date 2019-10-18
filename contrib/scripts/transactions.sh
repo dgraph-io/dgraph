@@ -1,6 +1,6 @@
 #!/bin/bash
 
-basedir=$GOPATH/src/github.com/dgraph-io/dgraph
+basedir=$(dirname "${BASH_SOURCE[0]}")/../..
 contrib=$basedir/contrib
 set -e
 

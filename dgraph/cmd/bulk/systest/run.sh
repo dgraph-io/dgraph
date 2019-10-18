@@ -19,19 +19,19 @@ for suite in $script_dir/suite*; do
 	pushd tmp >/dev/null
 	mkdir dg
 	pushd dg >/dev/null
-	$GOPATH/bin/dgraph-bulk-loader -r $suite/rdfs.rdf -s $suite/schema.txt >/dev/null 2>&1
+	$(go env GOPATH)/bin/dgraph-bulk-loader -r $suite/rdfs.rdf -s $suite/schema.txt >/dev/null 2>&1
 	mv out/0 p
 	popd >/dev/null
 
 	mkdir dgz
 	pushd dgz >/dev/null
-	$GOPATH/bin/dgraphzero -id 1 >/dev/null 2>&1 &
+	$(go env GOPATH)/bin/dgraphzero -id 1 >/dev/null 2>&1 &
 	dgzPid=$!
 	popd >/dev/null
 	sleep 2
 
 	pushd dg >/dev/null
-	$GOPATH/bin/dgraph -peer localhost:8888 -lru_mb=1024 >/dev/null 2>&1 &
+	$(go env GOPATH)/bin/dgraph -peer localhost:8888 -lru_mb=1024 >/dev/null 2>&1 &
 	dgPid=$!
 	popd >/dev/null
 	sleep 2
