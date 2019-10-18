@@ -124,8 +124,9 @@ func TestXidmapMemory(t *testing.T) {
 
 func BenchmarkXidmap(b *testing.B) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
-	x.Check(err)
-	x.AssertTrue(conn != nil)
+	if err != nil {
+		b.Fatalf("Error setting up connection: %s", err.Error())
+	}
 
 	var counter uint64
 	xidmap := New(conn, nil)

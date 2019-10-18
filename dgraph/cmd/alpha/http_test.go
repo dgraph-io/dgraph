@@ -114,7 +114,9 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", nil, err
+	}
 
 	// Check for errors
 	if len(r.Errors) != 0 {
@@ -146,7 +148,9 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", 0, err
+	}
 	startTs := r.Extensions.Txn.StartTs
 
 	// Remove the extensions.
@@ -185,13 +189,17 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
+	if err := json.Unmarshal(body, &r); err != nil {
+		return mr, err
+	}
 
 	type resData struct {
 		MutationVars map[string][]string `json:"vars"`
 	}
 	var rd resData
-	x.Check(json.Unmarshal(r.Data, &rd))
+	if err := json.Unmarshal(r.Data, &rd); err != nil {
+		return mr, err
+	}
 
 	mr.vars = rd.MutationVars
 	mr.keys = r.Extensions.Txn.Keys

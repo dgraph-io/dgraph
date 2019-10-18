@@ -171,7 +171,8 @@ func TestParseQueryExpandForward(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _forward_ has been deprecated")
 }
 
 func TestParseQueryExpandReverse(t *testing.T) {
@@ -180,6 +181,35 @@ func TestParseQueryExpandReverse(t *testing.T) {
 		var(func: uid( 0x0a)) {
 			friends {
 				expand(_reverse_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _reverse_ has been deprecated")
+}
+
+func TestParseQueryExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryExpandMultipleTypes(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person, Relative)
 			}
 		}
 	}
@@ -4820,4 +4850,24 @@ func TestTypeFilterInPredicate(t *testing.T) {
 
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
+}
+
+func TestParseExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: has(name)) {
+			expand(Person,Animal) {
+				uid
+			}
+		}
+	}
+`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "expand", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "Person,Animal", gq.Query[0].Children[0].Expand)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
+	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
 }

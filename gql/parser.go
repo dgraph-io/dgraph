@@ -2185,6 +2185,38 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 	return count, nil
 }
 
+func parseTypeList(it *lex.ItemIterator, gq *GraphQuery) error {
+	typeList := it.Item().Val
+	expectArg := false
+loop:
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightRound:
+			it.Prev()
+			break loop
+		case itemComma:
+			if expectArg {
+				return item.Errorf("Expected a variable but got comma")
+			}
+			expectArg = true
+		case itemName:
+			if !expectArg {
+				return item.Errorf("Expected a variable but got comma")
+			}
+			typeList = fmt.Sprintf("%s,%s", typeList, item.Val)
+			expectArg = false
+		default:
+			return item.Errorf("Unexpected token %s when reading a type list", item.Val)
+		}
+	}
+	if expectArg {
+		return it.Item().Errorf("Unnecessary comma in val()")
+	}
+	gq.Expand = typeList
+	return nil
+}
+
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	valid := true
 	it.Prev()
@@ -2233,6 +2265,8 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		}
 	} else if item.Val == "cascade" {
 		curp.Cascade = true
+	} else if item.Val == "normalize" {
+		curp.Normalize = true
 	} else if peek[0].Typ == itemLeftRound {
 		// this is directive
 		switch item.Val {
@@ -2802,11 +2836,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				case "_all_":
 					child.Expand = "_all_"
 				case "_forward_":
-					child.Expand = "_forward_"
+					return item.Errorf("Argument _forward_ has been deprecated")
 				case "_reverse_":
-					child.Expand = "_reverse_"
+					return item.Errorf("Argument _reverse_ has been deprecated")
 				default:
-					return item.Errorf("Invalid argument %v in expand()", item.Val)
+					if err := parseTypeList(it, child); err != nil {
+						return err
+					}
 				}
 				it.Next() // Consume ')'
 				gq.Children = append(gq.Children, child)

@@ -294,10 +294,19 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	return mergedList, nil
 }
 
+// normalize returns all attributes of fj and its children (if any).
 func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range fj.attrs {
-		if a.isChild {
+		// Here we are counting all non-scalar attributes of fj. If there are any such
+		// attributes, we will flatten it, otherwise we will return all attributes.
+
+		// When we call addMapChild it tries to find whether there is already an attribute
+		// with attr field same as attribute argument of addMapChild. If it doesn't find any
+		// such attribute, it creates an attribute with isChild = false. In those cases
+		// sometimes cnt remains zero  and normalize returns attributes without flattening.
+		// So we are using len(a.attrs) > 0 instead of a.isChild
+		if len(a.attrs) > 0 {
 			cnt++
 		}
 	}
@@ -313,7 +322,8 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	// merged with children later.
 	attrs := make([]*fastJsonNode, 0, len(fj.attrs)-cnt)
 	for _, a := range fj.attrs {
-		if !a.isChild {
+		// Check comment at previous occurrence of len(a.attrs) > 0
+		if len(a.attrs) == 0 {
 			attrs = append(attrs, a)
 		}
 	}
@@ -321,17 +331,14 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 
 	for ci := 0; ci < len(fj.attrs); {
 		childNode := fj.attrs[ci]
-		if !childNode.isChild {
+		// Check comment at previous occurrence of len(a.attrs) > 0
+		if len(childNode.attrs) == 0 {
 			ci++
 			continue
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(fj.attrs) && childNode.attr == fj.attrs[ci].attr {
-			normalized, err := fj.attrs[ci].normalize()
-			if err != nil {
-				return nil, err
-			}
-			childSlice = append(childSlice, normalized...)
+			childSlice = append(childSlice, fj.attrs[ci].attrs)
 			ci++
 		}
 		// Merging with parent.
@@ -678,6 +685,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if sg.Params.IgnoreReflex {
 				pc.Params.ParentIds = sg.Params.ParentIds
 			}
+
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
@@ -715,6 +723,48 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if !uc.IsEmpty() {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
+					}
+					if pc.Params.Normalize {
+						// We will normalize at each level instead of
+						// calling normalize after pretraverse.
+						// Now normalize() only flattens one level,
+						// the expectation is that its children have
+						// already been normalized.
+						normAttrs, err := uc.(*fastJsonNode).normalize()
+						if err != nil {
+							return err
+						}
+
+						for _, c := range normAttrs {
+							// Adding as list child irrespective of the type of pc
+							// (list or non-list), otherwise result might be inconsistent or might
+							// depend on children and grandchildren of pc. Consider the case:
+							// 	boss: uid .
+							// 	friend: [uid] .
+							// 	name: string .
+							// For query like:
+							// {
+							// 	me(func: uid(0x1)) {
+							// 		boss @normalize {
+							// 			name
+							// 		}
+							// 	}
+							// }
+							// boss will be non list type in response, but for query like:
+							// {
+							// 	me(func: uid(0x1)) {
+							// 		boss @normalize {
+							// 			friend {
+							// 				name
+							// 			}
+							// 		}
+							// 	}
+							// }
+							// boss should be of list type because there can be mutliple friends of
+							// boss.
+							dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
+						}
+						continue
 					}
 					if pc.List {
 						dst.AddListChild(fieldName, uc)

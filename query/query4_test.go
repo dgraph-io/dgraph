@@ -296,35 +296,6 @@ func TestTypeExpandAll(t *testing.T) {
 	]}}`, js)
 }
 
-func TestTypeExpandForward(t *testing.T) {
-	query := `{
-		q(func: eq(make, "Ford")) {
-			expand(_forward_) {
-				uid
-			}
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Ford","model":"Focus","year":2008},
-		{"make":"Ford","model":"Focus","year":2009, "previous_model": {"uid":"0xc8"}}
-	]}}`, js)
-}
-
-func TestTypeExpandReverse(t *testing.T) {
-	query := `{
-		q(func: eq(make, "Ford")) {
-			expand(_reverse_) {
-				uid
-			}
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q":[
-		{"~previous_model": [{"uid":"0xc9"}]}
-	]}}`, js)
-}
-
 func TestTypeExpandLang(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
@@ -335,7 +306,34 @@ func TestTypeExpandLang(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009,
+			"owner": [{"uid": "0xcb"}]}]}}`, js)
+}
+
+func TestTypeExpandExplicitType(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(Object) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Car", "owner": [{"uid": "0xcb"}]}]}}`, js)
+}
+
+func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(CarModel, Object) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009,
+			"owner": [{"uid": "0xcb"}]}]}}`, js)
 }
 
 // Test Related to worker based pagination.

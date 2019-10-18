@@ -2,6 +2,8 @@
 # Containers MUST be labeled with "cluster:test" to be restarted and stopped
 # by these functions.
 
+set -e
+
 # May be called with an argument which is a docker compose file
 # to use *instead of* the default docker-compose.yml.
 function restartCluster {
