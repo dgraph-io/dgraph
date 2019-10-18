@@ -732,7 +732,6 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 				path @filter(not anyofterms(name, "alice"))
 			}
-
 			me(func: uid(A)) {
 				name
 			}
