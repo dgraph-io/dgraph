@@ -710,8 +710,8 @@ func TestShortestPath4(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
-				path
 				follow
+				path
 			}
 
 			me(func: uid( A)) {
@@ -729,8 +729,8 @@ func TestShortestPath_filter(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
-				path @filter(not anyofterms(name, "alice"))
 				follow
+				path @filter(not anyofterms(name, "alice"))
 			}
 
 			me(func: uid(A)) {
