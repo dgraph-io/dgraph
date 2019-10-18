@@ -25,7 +25,7 @@
 
 set -e
 readonly ME=${0##*/}
-readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+readonly DGRAPH_ROOT=$(dirname $0)
 
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
