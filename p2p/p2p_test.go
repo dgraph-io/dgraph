@@ -18,13 +18,14 @@ package p2p
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/common/optional"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	ps "github.com/libp2p/go-libp2p-core/peerstore"
 	ma "github.com/multiformats/go-multiaddr"
@@ -45,30 +46,40 @@ func startNewService(t *testing.T, cfg *Config) *Service {
 }
 
 func TestBuildOpts(t *testing.T) {
-	testServiceConfig := &Config{
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "p2p-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	testCfgA := &Config{
 		BootstrapNodes: []string{},
 		Port:           7001,
+		DataDir:        tmpDir,
 	}
 
-	_, err := testServiceConfig.buildOpts()
+	_, err = testCfgA.buildOpts()
 	if err != nil {
 		t.Fatalf("TestBuildOpts error: %s", err)
 	}
-}
 
-func TestGenerateKey(t *testing.T) {
-	privA, err := generateKey(33)
-	if err != nil {
-		t.Fatalf("GenerateKey error: %s", err)
+	if testCfgA.privateKey == nil {
+		t.Error("Private key is nil")
 	}
 
-	privC, err := generateKey(0)
-	if err != nil {
-		t.Fatalf("GenerateKey error: %s", err)
+	testCfgB := &Config{
+		BootstrapNodes: []string{},
+		Port:           7001,
+		DataDir:        tmpDir,
 	}
 
-	if crypto.KeyEqual(privA, privC) {
-		t.Fatal("GenerateKey error: created same key for different seed")
+	_, err = testCfgB.buildOpts()
+	if err != nil {
+		t.Fatalf("TestBuildOpts error: %s", err)
+	}
+
+	if testCfgA.privateKey == testCfgB.privateKey {
+		t.Error("Private key does not match first key generated")
 	}
 }
 
@@ -76,6 +87,7 @@ func TestService_PeerCount(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
 		Port:        7002,
+		RandSeed:    1,
 	}
 
 	sa, err := NewService(testServiceConfigA, nil)
@@ -93,6 +105,7 @@ func TestService_PeerCount(t *testing.T) {
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
 		Port:        7003,
+		RandSeed:    2,
 	}
 
 	sb, err := NewService(testServiceConfigB, nil)
@@ -128,6 +141,7 @@ func TestSend(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
 		Port:        7004,
+		RandSeed:    1,
 	}
 
 	sa, err := NewService(testServiceConfigA, nil)
@@ -145,6 +159,7 @@ func TestSend(t *testing.T) {
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
 		Port:        7005,
+		RandSeed:    2,
 	}
 
 	msgChan := make(chan []byte)
@@ -220,6 +235,7 @@ func TestGossiping(t *testing.T) {
 		Port:           7000,
 		NoBootstrap:    true,
 		NoMdns:         true,
+		RandSeed:       1,
 	}
 
 	nodeA, err := NewService(nodeConfigA, nil)
@@ -236,8 +252,9 @@ func TestGossiping(t *testing.T) {
 		BootstrapNodes: []string{
 			nodeA_Addr.String(),
 		},
-		Port:   7001,
-		NoMdns: true,
+		Port:     7001,
+		NoMdns:   true,
+		RandSeed: 2,
 	}
 
 	msgChanB := make(chan []byte)
@@ -261,8 +278,9 @@ func TestGossiping(t *testing.T) {
 		BootstrapNodes: []string{
 			nodeB_Addr.String(),
 		},
-		Port:   7002,
-		NoMdns: true,
+		Port:     7002,
+		NoMdns:   true,
+		RandSeed: 3,
 	}
 
 	msgChanC := make(chan []byte)

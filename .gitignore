@@ -28,3 +28,4 @@ test_data/
 /bin
 chaindata/
 *.wasm
+node.key

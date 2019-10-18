@@ -63,7 +63,7 @@ func TestBootstrapConnect(t *testing.T) {
 	bootnodeCfg := &Config{
 		BootstrapNodes: nil,
 		Port:           7000,
-		RandSeed:       0,
+		RandSeed:       1,
 		NoBootstrap:    true,
 		NoMdns:         true,
 	}
@@ -75,7 +75,7 @@ func TestBootstrapConnect(t *testing.T) {
 	nodeCfg := &Config{
 		BootstrapNodes: []string{bootnodeAddr.String()},
 		Port:           7001,
-		RandSeed:       1,
+		RandSeed:       2,
 		NoBootstrap:    false,
 		NoMdns:         true,
 	}
