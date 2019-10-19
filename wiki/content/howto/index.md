@@ -363,6 +363,11 @@ $ dgraph increment
 0410 10:36:50.857 While trying to process counter: Query error: rpc error: code = DeadlineExceeded desc = context deadline exceeded. Retrying...
 ```
 
+## Giving Nodes a Type
+
+It's often useful to give the nodes in a graph *types* (also commonly referred
+to as *labels* or *kinds*). You can do so using the [type system]({{< relref "query-language/index.md#type-system" >}}).
+
 ## Loading CSV Data
 
 [Dgraph mutations]({{< relref "mutations/index.md" >}}) are accepted in RDF
