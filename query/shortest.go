@@ -203,15 +203,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							return
 						}
 
-						if temp, ok := adjacencyMap[fromUID][toUID]; ok {
-							if temp.cost > cost {
-								adjacencyMap[fromUID][toUID] = mapItem{
-									cost:  cost,
-									facet: facet,
-									attr:  subgraph.Attr,
-								}
-							}
-						} else {
+						if temp, ok := adjacencyMap[fromUID][toUID]; !ok || temp.cost > cost {
 							adjacencyMap[fromUID][toUID] = mapItem{
 								cost:  cost,
 								facet: facet,
