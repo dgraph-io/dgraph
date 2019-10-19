@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/trie"
@@ -208,4 +209,27 @@ func TestConfigurationFromRuntime(t *testing.T) {
 	if res == expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
 	}
+}
+
+func TestStart(t *testing.T) {
+	rt := newRuntime(t)
+	babesession := NewSession([32]byte{}, [64]byte{}, rt)
+	babesession.authorityIndex = 0
+	babesession.authorityWeights = []uint64{1}
+	conf := &BabeConfiguration{
+		SlotDuration:       1,
+		EpochLength:        6,
+		C1:                 1,
+		C2:                 10,
+		GenesisAuthorities: []AuthorityData{},
+		Randomness:         0,
+		SecondarySlots:     false,
+	}
+	babesession.config = conf
+
+	err := babesession.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Duration(conf.SlotDuration) * time.Duration(conf.EpochLength) * time.Millisecond)
 }
