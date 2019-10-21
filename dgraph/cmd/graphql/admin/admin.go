@@ -135,7 +135,8 @@ func newAdminResolverFactory(
 	dg *dgo.Dgraph,
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns) resolve.ResolverFactory {
-	// The args ^^ are the rewriters and executors used by the endpoint being admin'd.
+
+	// The args are the rewriters and executors used by the endpoint being admin'd.
 	// These are the ones used by the admin endpoint itself.
 	mutRw := resolve.NewMutationRewriter()
 	qryRw := resolve.NewQueryRewriter()

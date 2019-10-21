@@ -21,7 +21,7 @@ import (
 // queries or we might get rid of the types defined in wrappers.go and use the types defined in
 // gqlgen instead if they make more sense.
 
-// Introspect performs an introspection query given a field that's expected to be either
+// Introspect performs an introspection query given a query that's expected to be either
 // __schema or __type.
 func Introspect(q Query) (json.RawMessage, error) {
 	if q.Name() != "__schema" && q.Name() != "__type" {
