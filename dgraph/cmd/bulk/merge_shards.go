@@ -33,6 +33,11 @@ const (
 
 func mergeMapShardsIntoReduceShards(opt options) {
 	mapShards := shardDirs(filepath.Join(opt.TmpDir, mapShardDir))
+	// First shard is handled differently because it contains reserved predicates.
+	firstShard := mapShards[0]
+	// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
+	mapShards = mapShards[1:]
+	sortBySize(mapShards)
 
 	var reduceShards []string
 	for i := 0; i < opt.ReduceShards; i++ {
@@ -40,6 +45,12 @@ func mergeMapShardsIntoReduceShards(opt options) {
 		x.Check(os.MkdirAll(shardDir, 0750))
 		reduceShards = append(reduceShards, shardDir)
 	}
+
+	// Put the first map shard in the first reduce shard since it contains all the reserved
+	// predicates.
+	reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
+	fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
+	x.Check(os.Rename(firstShard, reduceShard))
 
 	// Heuristic: put the largest map shard into the smallest reduce shard
 	// until there are no more map shards left. Should be a good approximation.
@@ -61,9 +72,6 @@ func shardDirs(d string) []string {
 	for i, shard := range shards {
 		shards[i] = filepath.Join(d, shard)
 	}
-
-	// Allow largest shards to be shuffled first.
-	sortBySize(shards)
 	return shards
 }
 
