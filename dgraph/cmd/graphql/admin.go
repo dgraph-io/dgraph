@@ -40,7 +40,7 @@ const (
 	adminSchema = `
  type Schema {
 	schema: String!  # the input schema, not the expanded schema
-	date: DateTime! #@search(by: day)
+	date: DateTime!
  }
  
  type Health {
@@ -126,9 +126,10 @@ func (hr *healthResolver) Resolve(ctx context.Context, query schema.Query) *reso
 // A addSchemaResolver serves as the mutation rewriter and executor in handling
 // the addSchema mutation.
 type addSchemaResolver struct {
-	dgraph *dgo.Dgraph // the Dgraph that gets its schema changed
+	// the Dgraph that gets its schema changed
+	dgraph *dgo.Dgraph
 
-	// generated from the mutation input
+	// schema that is generated from the mutation input
 	newGQLSchema    schema.Schema
 	newDgraphSchema string
 
@@ -137,7 +138,8 @@ type addSchemaResolver struct {
 	baseMutationRewriter resolve.MutationRewriter
 	baseMutationExecutor resolve.MutationExecutor
 
-	gqlServer web.IServeGraphQL // The GraphQL endpoint that's being admin'd.
+	// The GraphQL server that's being admin'd
+	gqlServer web.IServeGraphQL
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.

@@ -206,16 +206,17 @@ type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
 // a function.  Based on the http.HandlerFunc pattern.
 type MutationResolverFunc func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool)
 
-// CompletionFunc is an adapter that allows us to compose completions and build a ResultCompleter from
-// a function.  Based on the http.HandlerFunc pattern.
-type CompletionFunc func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+// CompletionFunc is an adapter that allows us to compose completions and build a
+// ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
+type CompletionFunc func(
+	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
 
 // QueryRewritingFunc is an adapter that allows us to build a QueryRewriter from
 // a function.  Based on the http.HandlerFunc pattern.
 type QueryRewritingFunc func(q schema.Query) (*gql.GraphQuery, error)
 
-// QueryExecutionFunc is an adapter that allows us to compose query execution and build a QueryExecuter from
-// a function.  Based on the http.HandlerFunc pattern.
+// QueryExecutionFunc is an adapter that allows us to compose query execution and
+// build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
 type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
 
 // MutationExecutionFunc is an adapter that allows us to compose mutation execution and build a
@@ -231,7 +232,10 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 }
 
 // Resolve calls mr(ctx, mutation)
-func (mr MutationResolverFunc) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+func (mr MutationResolverFunc) Resolve(
+	ctx context.Context,
+	mutation schema.Mutation) (*Resolved, bool) {
+
 	return mr(ctx, mutation)
 }
 
@@ -559,13 +563,14 @@ func noopCompletion(
 // so the completed result should be
 // q1: {...}
 func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-		res, err := cf(ctx, field, result, err)
-		if len(res) >= 2 {
-			res = res[1 : len(res)-1]
-		}
-		return res, err
-	})
+	return CompletionFunc(
+		func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+			res, err := cf(ctx, field, result, err)
+			if len(res) >= 2 {
+				res = res[1 : len(res)-1]
+			}
+			return res, err
+		})
 }
 
 // addRootFieldCompletion adds an extra object name to the start of a result.
@@ -576,7 +581,8 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 //   `foo { ... }`
 // So `addFoo: ...` is added.
 func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+	return CompletionFunc(func(
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
 		res, err := cf(ctx, field, result, err)
 

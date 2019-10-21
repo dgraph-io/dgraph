@@ -334,7 +334,10 @@ func mutatedTypeMapping(s *ast.Schema,
 		// for UpdateTPayload and get the type from the first field. There is no direct way to get
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
-		def := s.Types["Update"+mutatedTypeName+"Payload"]
+		var def *ast.Definition
+		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		}
 
 		if def == nil {
 			continue
