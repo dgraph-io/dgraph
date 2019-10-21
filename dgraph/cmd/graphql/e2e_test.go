@@ -272,6 +272,24 @@ func TestGetQueryEmptyVariable(t *testing.T) {
 	require.Nil(t, res.Errors)
 }
 
+func TestGraphQLCompletionOn(t *testing.T) {
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($name: String!) {
+			addCountry(input: { name: $name }) {
+				country {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": "Testland"},
+	}
+
+	res := addCountryParams.ExecuteAsPost(t, graphqlURL)
+	fmt.Println(string(res.Data))
+	fmt.Println(res.Errors)
+}
+
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
