@@ -226,6 +226,7 @@ func searchValidation(
 			typ.Name, field.Name)
 	}
 
+	isEnum := isFieldEnum(sch, field)
 	searchArgs := getSearchArgs(field)
 	searchIndexes := make(map[string]string)
 	for _, searchArg := range searchArgs {
@@ -240,7 +241,7 @@ func searchValidation(
 					"Fields of type %s %s.",
 				typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
 
-		} else if search.gqlType != field.Type.Name() {
+		} else if search.gqlType != field.Type.Name() && !isEnum {
 			return gqlerror.ErrorPosf(
 				dir.Position,
 				"Type %s; Field %s: has the @search directive but the argument %s "+
@@ -248,6 +249,13 @@ func searchValidation(
 					"Fields of type %[4]s %[6]s.",
 				typ.Name, field.Name, searchArg, field.Type.Name(),
 				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+		} else if isEnum && !(searchArg == "exact" || searchArg == "regexp" || searchArg == "trigram") {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the @search directive but the argument %s "+
+					"doesn't apply to field type %s which is an Enum. Enum only supports "+
+					"exact, regexp and trigram",
+				typ.Name, field.Name, searchArg, field.Type.Name())
 		}
 
 		// Checks that the filter indexes aren't repeated and they
@@ -285,6 +293,10 @@ func searchValidation(
 	}
 
 	return nil
+}
+
+func isFieldEnum(sch *ast.Schema, field *ast.FieldDefinition) bool {
+	return sch.Types[field.Type.Name()].Kind == ast.Enum
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {

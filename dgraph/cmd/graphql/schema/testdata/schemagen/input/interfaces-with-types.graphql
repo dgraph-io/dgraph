@@ -2,7 +2,7 @@ interface Character {
     id: ID!
     name: String! @search(by: [exact])
     friends: [Character]
-    appearsIn: [Episode!]! @search
+    appearsIn: [Episode!]! @search(by: [exact])
 }
 
 type Human implements Character {

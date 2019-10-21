@@ -542,9 +542,10 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 		filterTypeNameUnion := []string{}
 		searchArgs := getSearchArgs(fld)
-		if schema.Types[fld.Type.Name()].Kind == ast.Enum && len(searchArgs) == 1 {
-			// If the field is an enum type, we don't generate a filter type.
-			// Instead we allow to write `typeName: enumValue` in the filter.
+		if schema.Types[fld.Type.Name()].Kind == ast.Enum &&
+			len(searchArgs) == 1 && searchArgs[0] == "exact" {
+			// If the field is an enum type, and has only exact filter,
+			// We allow to write `typeName: enumValue` in the filter.
 			// So, for example : `filter: { postType: Answer }`
 			// rather than : `filter: { postType: { eq: Answer } }`
 			//
