@@ -17,60 +17,18 @@
 package p2p
 
 import (
-	"errors"
-	"fmt"
-	"sync"
+	"context"
 
 	log "github.com/ChainSafe/log15"
-	"github.com/libp2p/go-libp2p-core/peer"
-	ps "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
-// this code is borrowed from the go-ipfs bootstrap process
-func (s *Service) bootstrapConnect() error {
-	peers := s.bootstrapNodes
-	if len(peers) < 1 {
-		return errors.New("not enough bootstrap peers")
-	}
-
-	// begin bootstrapping
-	errs := make(chan error, len(peers))
-	var wg sync.WaitGroup
-
-	var err error
-	for _, p := range peers {
-
-		// performed asynchronously because when performed synchronously, if
-		// one `Connect` call hangs, subsequent calls are more likely to
-		// fail/abort due to an expiring context.
-
-		wg.Add(1)
-		go func(p peer.AddrInfo) {
-			defer wg.Done()
-			log.Debug("bootstrap attempt", "host", s.host.ID(), "peer", p.ID)
-
-			s.host.Peerstore().AddAddrs(p.ID, p.Addrs, ps.PermanentAddrTTL)
-			if err = s.host.Connect(s.ctx, p); err != nil {
-				log.Error("bootstrap error", "peer", p.ID, "error", err)
-				errs <- err
-				return
-			}
-			log.Info("bootstrap success", "peer", p.ID)
-		}(p)
-	}
-	wg.Wait()
-
-	// our failure condition is when no connection attempt succeeded.
-	// drain the errs channel, counting the results.
-	close(errs)
-	count := 0
-	for err = range errs {
+// bootstrao connects to all provided bootnodes
+func (s *Service) bootstrap() {
+	for _, peerInfo := range s.bootnodes {
+		log.Debug("Attempting to dial peer", "id", peerInfo.ID, "addrs", peerInfo.Addrs)
+		err := s.host.Connect(context.Background(), peerInfo)
 		if err != nil {
-			count++
+			log.Debug("failed to dial bootstrap peer", "err", err)
 		}
 	}
-	if count == len(peers) {
-		return fmt.Errorf("failed to bootstrap. %s", err)
-	}
-	return err
 }

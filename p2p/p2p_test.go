@@ -31,8 +31,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func startNewService(t *testing.T, cfg *Config) *Service {
-	node, err := NewService(cfg, nil)
+func startNewService(t *testing.T, cfg *Config, msgChan chan []byte) *Service {
+	node, err := NewService(cfg, msgChan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +83,47 @@ func TestBuildOpts(t *testing.T) {
 	}
 }
 
+func TestBootstrapConnect(t *testing.T) {
+	bootnodeCfg := &Config{
+		BootstrapNodes: nil,
+		Port:           7000,
+		RandSeed:       0,
+		NoBootstrap:    true,
+		NoMdns:         true,
+	}
+
+	bootnode := startNewService(t, bootnodeCfg, nil)
+	defer bootnode.Stop()
+	bootnodeAddr := bootnode.FullAddrs()[0]
+
+	nodeCfg := &Config{
+		BootstrapNodes: []string{bootnodeAddr.String()},
+		Port:           7001,
+		RandSeed:       1,
+		NoBootstrap:    false,
+		NoMdns:         true,
+	}
+
+	node := startNewService(t, nodeCfg, nil)
+	defer node.Stop()
+	// Allow everything to finish connecting
+	time.Sleep(1 * time.Second)
+
+	if bootnode.PeerCount() != 1 {
+		t.Errorf("expected peer count: %d got: %d", 1, bootnode.PeerCount())
+	}
+}
+
+func TestNoBootstrap(t *testing.T) {
+	testServiceConfigA := &Config{
+		NoBootstrap: true,
+		Port:        7006,
+	}
+
+	sa := startNewService(t, testServiceConfigA, nil)
+	sa.Stop()
+}
+
 func TestService_PeerCount(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
@@ -90,17 +131,8 @@ func TestService_PeerCount(t *testing.T) {
 		RandSeed:    1,
 	}
 
-	sa, err := NewService(testServiceConfigA, nil)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
+	sa := startNewService(t, testServiceConfigA, nil)
 	defer sa.Stop()
-
-	err = sa.Start()
-	if err != nil {
-		t.Errorf("Start error: %s", err)
-	}
 
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
@@ -108,11 +140,7 @@ func TestService_PeerCount(t *testing.T) {
 		RandSeed:    2,
 	}
 
-	sb, err := NewService(testServiceConfigB, nil)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
+	sb := startNewService(t, testServiceConfigB, nil)
 	defer sb.Stop()
 
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
@@ -144,17 +172,8 @@ func TestSend(t *testing.T) {
 		RandSeed:    1,
 	}
 
-	sa, err := NewService(testServiceConfigA, nil)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
+	sa := startNewService(t, testServiceConfigA, nil)
 	defer sa.Stop()
-
-	err = sa.Start()
-	if err != nil {
-		t.Errorf("Start error: %s", err)
-	}
 
 	testServiceConfigB := &Config{
 		NoBootstrap: true,
@@ -163,11 +182,7 @@ func TestSend(t *testing.T) {
 	}
 
 	msgChan := make(chan []byte)
-	sb, err := NewService(testServiceConfigB, msgChan)
-	if err != nil {
-		t.Fatalf("NewService error: %s", err)
-	}
-
+	sb := startNewService(t, testServiceConfigB, msgChan)
 	defer sb.Stop()
 
 	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
@@ -184,11 +199,6 @@ func TestSend(t *testing.T) {
 	err = sb.Host().Connect(sb.ctx, *addrInfo)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	err = sb.Start()
-	if err != nil {
-		t.Errorf("Start error: %s", err)
 	}
 
 	p, err := sa.dht.FindPeer(sa.ctx, sb.host.ID())
@@ -228,7 +238,6 @@ func TestSend(t *testing.T) {
 }
 
 func TestGossiping(t *testing.T) {
-
 	//Start node A
 	nodeConfigA := &Config{
 		BootstrapNodes: nil,
@@ -238,19 +247,14 @@ func TestGossiping(t *testing.T) {
 		RandSeed:       1,
 	}
 
-	nodeA, err := NewService(nodeConfigA, nil)
-	if err != nil {
-		t.Fatalf("Could not start p2p service: %s", err)
-	}
-
+	nodeA := startNewService(t, nodeConfigA, nil)
 	defer nodeA.Stop()
-
-	nodeA_Addr := nodeA.FullAddrs()[0]
+	nodeAAddr := nodeA.FullAddrs()[0]
 
 	//Start node B
 	nodeConfigB := &Config{
 		BootstrapNodes: []string{
-			nodeA_Addr.String(),
+			nodeAAddr.String(),
 		},
 		Port:     7001,
 		NoMdns:   true,
@@ -258,25 +262,14 @@ func TestGossiping(t *testing.T) {
 	}
 
 	msgChanB := make(chan []byte)
-	nodeB, err := NewService(nodeConfigB, msgChanB)
-	if err != nil {
-		t.Fatalf("Could not start p2p service: %s", err)
-	}
-
+	nodeB := startNewService(t, nodeConfigB, msgChanB)
 	defer nodeB.Stop()
-
-	nodeB_Addr := nodeB.FullAddrs()[0]
-
-	//Connect node A & node B
-	err = nodeB.bootstrapConnect()
-	if err != nil {
-		t.Errorf("Start error :%s", err)
-	}
+	nodeBAddr := nodeB.FullAddrs()[0]
 
 	//Start node C
 	nodeConfigC := &Config{
 		BootstrapNodes: []string{
-			nodeB_Addr.String(),
+			nodeBAddr.String(),
 		},
 		Port:     7002,
 		NoMdns:   true,
@@ -284,18 +277,8 @@ func TestGossiping(t *testing.T) {
 	}
 
 	msgChanC := make(chan []byte)
-	nodeC, err := NewService(nodeConfigC, msgChanC)
-	if err != nil {
-		t.Fatalf("Could not start p2p service: %s", err)
-	}
-
+	nodeC := startNewService(t, nodeConfigC, msgChanC)
 	defer nodeC.Stop()
-
-	//Connect node B & node C
-	err = nodeC.bootstrapConnect()
-	if err != nil {
-		t.Errorf("Start error :%s", err)
-	}
 
 	// Meaningless hash
 	endBlock, err := common.HexToHash("0xfd19d9ebac759c993fd2e05a1cff9e757d8741c2704c8682c15b5503496b6aa1")
@@ -313,7 +296,10 @@ func TestGossiping(t *testing.T) {
 		Max:           optional.NewUint32(true, 1),
 	}
 
-	nodeA.Broadcast(bm)
+	err = nodeA.Broadcast(bm)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// Check returned values from channels in the 2 other nodes
 	select {

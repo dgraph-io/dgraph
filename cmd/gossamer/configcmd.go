@@ -93,8 +93,8 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 	srvcs = append(srvcs, apiSrvc)
 
 	// RPC
-	fig.RpcCfg = setRpcConfig(ctx, fig.RpcCfg)
-	rpcSrvr := rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig.RpcCfg)
+	setRpcConfig(ctx, fig.RpcCfg)
+	rpcSrvr := startRpc(ctx, fig.RpcCfg, apiSrvc)
 
 	return dot.NewDot(srvcs, rpcSrvr), fig, nil
 }
@@ -211,6 +211,13 @@ func setRpcConfig(ctx *cli.Context, fig rpc.Config) rpc.Config {
 		fig.Port = uint32(port)
 	}
 	return fig
+}
+
+func startRpc(ctx *cli.Context, fig rpc.Config, apiSrvc *api.Service) *rpc.HttpServer {
+	if ctx.GlobalBool(utils.RpcEnabledFlag.Name) {
+		return rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig)
+	}
+	return nil
 }
 
 // strToMods casts a []strings to []api.Module
