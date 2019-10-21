@@ -18,8 +18,10 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -27,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/golang/glog"
 )
 
 // A addSchemaResolver serves as the mutation rewriter and executor in handling
@@ -120,7 +121,7 @@ func (asr *addSchemaResolver) Mutate(
 func getSchemaInput(m schema.Mutation) (string, error) {
 	input, ok := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	if !ok {
-		return "", errors.New("couldn't get input argument")
+		return "", errors.Errorf("couldn't get argument %s", schema.InputArgName)
 	}
 
 	return input["schema"].(string), nil
