@@ -953,7 +953,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	t.Run("test query all characters", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
-			queryCharacter {
+			queryCharacter (filter: {appearsIn : {regexp: "/EMPIRE/"}}) {
 			  name
 			  appearsIn
 			  ... on Human {
@@ -1041,7 +1041,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	t.Run("test query all humans", func(t *testing.T) {
 		queryHumanParams := &GraphQLParams{
 			Query: `query {
-		queryHuman {
+		queryHuman(filter: {appearsIn: {eq: "EMPIRE"}}){
 		  name
 		  appearsIn
 		  starships {

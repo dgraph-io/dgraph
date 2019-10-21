@@ -6,14 +6,14 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
 }
 
 type Human implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
@@ -22,7 +22,7 @@ type Droid implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
 	primaryFunction: String
 }
 
@@ -191,7 +191,7 @@ enum StarshipOrderable {
 input CharacterFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: StringExactFilter_StringRegExpFilter
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
@@ -210,7 +210,7 @@ input CharacterRef {
 input DroidFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: StringExactFilter_StringRegExpFilter
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
@@ -236,7 +236,7 @@ input DroidRef {
 input HumanFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: StringExactFilter_StringRegExpFilter
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
@@ -307,6 +307,15 @@ input StarshipOrder {
 
 input StarshipRef {
 	id: ID!
+}
+
+input StringExactFilter_StringRegExpFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	regexp: String
 }
 
 input UpdateCharacterInput {
