@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -79,9 +79,8 @@ func init() {
 // DgraphClientDropAll creates a Dgraph client and drops all existing data.
 // It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
-func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
-	dg := DgraphClient(serviceAddr)
-	var err error
+func DgraphClientDropAll(serviceAddr string) (*dgo.Dgraph, error) {
+	dg, err := DgraphClient(serviceAddr)
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
 		err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
@@ -90,18 +89,19 @@ func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
 		}
 		time.Sleep(time.Second)
 	}
-	x.CheckfNoTrace(err)
 
-	return dg
+	return dg, err
 }
 
 // DgraphClientWithGroot creates a Dgraph client with groot permissions set up.
 // It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
-func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
-	dg := DgraphClient(serviceAddr)
+func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
+	dg, err := DgraphClient(serviceAddr)
+	if err != nil {
+		return nil, err
+	}
 
-	var err error
 	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
@@ -111,22 +111,21 @@ func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
 		}
 		time.Sleep(time.Second)
 	}
-	x.CheckfNoTrace(err)
 
-	return dg
+	return dg, err
 }
 
 // DgraphClient creates a Dgraph client.
 // It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
-func DgraphClient(serviceAddr string) *dgo.Dgraph {
+func DgraphClient(serviceAddr string) (*dgo.Dgraph, error) {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.CheckfNoTrace(err)
+	if err != nil {
+		return nil, err
+	}
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	x.CheckfNoTrace(err)
-
-	return dg
+	return dg, nil
 }
 
 // DgraphClientWithCerts creates a Dgraph client with TLS configured using the given
@@ -324,9 +323,7 @@ func VerifyCurlCmd(t *testing.T, args []string,
 }
 
 // AssignUids talks to zero to assign the given number of uids.
-func AssignUids(num uint64) {
+func AssignUids(num uint64) error {
 	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
-	if err != nil {
-		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
-	}
+	return err
 }

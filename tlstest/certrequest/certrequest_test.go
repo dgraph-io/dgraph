@@ -4,15 +4,18 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
-	dg := testutil.DgraphClient(testutil.SockAddr)
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.Error(t, err, "The authentication handshake should have failed")
 }
 

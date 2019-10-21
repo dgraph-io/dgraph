@@ -33,7 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
@@ -52,22 +52,13 @@ var personType = &pb.TypeUpdate{
 	TypeName: "Person",
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate:   "name",
-			ValueType:   pb.Posting_STRING,
-			NonNullable: true,
+			Predicate: "name",
 		},
 		{
-			Predicate:       "friend",
-			ValueType:       pb.Posting_UID,
-			List:            true,
-			NonNullable:     true,
-			NonNullableList: true,
+			Predicate: "friend",
 		},
 		{
-			Predicate:      "friend_not_served",
-			ValueType:      pb.Posting_OBJECT,
-			List:           true,
-			ObjectTypeName: "Person",
+			Predicate: "friend_not_served",
 		},
 	},
 }

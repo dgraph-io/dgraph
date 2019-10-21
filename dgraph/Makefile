@@ -22,6 +22,8 @@ BUILD_VERSION ?= $(shell git describe --always --tags)
 BUILD_TAGS    ?=
 GOPATH        ?= $(shell go env GOPATH)
 
+export GO111MODULE := on
+
 # Build-time Go variables
 dgraphVersion  = github.com/dgraph-io/dgraph/x.dgraphVersion
 gitBranch      = github.com/dgraph-io/dgraph/x.gitBranch

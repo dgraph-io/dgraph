@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,10 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
@@ -81,6 +84,7 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
+	t.Run("type predicate check", wrap(TypePredicateCheck))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -832,9 +836,12 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
+		to: [uid] .
+		name: string .
+
 		type Node {
-			to: uid
-			name: string
+			to
+			name
 		}
 `
 
@@ -1564,8 +1571,10 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
+			name: string .
+
 			type Person {
-				name: string
+				name
 			}
 		`,
 	}))
@@ -1574,8 +1583,8 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	query := `schema(type: Person) {}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+	testutil.CompareJSON(t, `{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`,
+		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
@@ -1652,4 +1661,57 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
+}
+
+func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
+	// Reject schema updates if the types have missing predicates.
+
+	// Update is rejected because name is not in the schema.
+	op := &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+	}`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Update is accepted because name is not in the schema but is present in the same
+	// update.
+	op = &api.Operation{}
+	op.Schema = `
+	name: string .
+
+	type Person {
+		name
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	// Type with reverse predicate is not accepted if the original predicate does not exist.
+	op = &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Type with reverse predicate is accepted if the original predicate exists.
+	op = &api.Operation{}
+	op.Schema = `
+	parent: [uid] @reverse .
+
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
 }

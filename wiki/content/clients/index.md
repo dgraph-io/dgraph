@@ -60,6 +60,8 @@ The Go client communicates with the server on the gRPC port (default value 9080)
 The client can be obtained in the usual way via `go get`:
 
 ```sh
+# Requires at least Go 1.11
+export GO111MODULE=on
 go get -u -v github.com/dgraph-io/dgo/v2
 ```
 
@@ -352,6 +354,7 @@ dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 // In the example below new nodes for Alice, Bob and Charlie and school are created (since they
 // dont have a Uid).
 p := Person{
+    Uid:     "_:alice",
 	Name:    "Alice",
 	Age:     26,
 	Married: true,
@@ -388,7 +391,7 @@ if err != nil {
 }
 
 // Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
-variables := map[string]string{"$id": assigned.Uids["blank-0"]}
+variables := map[string]string{"$id": assigned.Uids["alice"]}
 q := `query Me($id: string){
 	me(func: uid($id)) {
 		name
@@ -853,3 +856,27 @@ $ curl localhost:8080/health
 ```
 
 Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
+
+### Run a query in JSON format
+
+The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables". The JSON format is required to set [GraphQL Variables]({{< relref "query-language/index.md#graphql-variables" >}}) with the HTTP API.
+
+This query:
+
+```
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    uid
+    name
+    balance
+  }
+}
+```
+
+Should be escaped to this:
+
+```sh
+curl -H "Content-Type: application/json" localhost:8080/query -XPOST -d '{
+    "query": "{\n balances(func: anyofterms(name, \"Alice Bob\")) {\n uid\n name\n balance\n }\n }"
+}' | python -m json.tool | jq
+```

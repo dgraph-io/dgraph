@@ -209,3 +209,56 @@ func TestCheckSchema(t *testing.T) {
 	err = checkSchema(result.Preds[1])
 	require.NoError(t, err)
 }
+
+func TestTypeSanityCheck(t *testing.T) {
+	// Empty field name check.
+	typeDef := &pb.TypeUpdate{
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "",
+			},
+		},
+	}
+	err := typeSanityCheck(typeDef)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Field in type definition must have a name")
+
+	// Object type without object name.
+	typeDef = &pb.TypeUpdate{
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "name",
+				ValueType: pb.Posting_OBJECT,
+			},
+		},
+	}
+	err = typeSanityCheck(typeDef)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Field with value type OBJECT must specify the name")
+
+	// Field with directive.
+	typeDef = &pb.TypeUpdate{
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "name",
+				Directive: pb.SchemaUpdate_REVERSE,
+			},
+		},
+	}
+	err = typeSanityCheck(typeDef)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Field in type definition cannot have a directive")
+
+	// Field with tokenizer.
+	typeDef = &pb.TypeUpdate{
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "name",
+				Tokenizer: []string{"int"},
+			},
+		},
+	}
+	err = typeSanityCheck(typeDef)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Field in type definition cannot have tokenizers")
+}

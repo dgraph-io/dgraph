@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
@@ -432,6 +432,34 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
+func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operation) error {
+	for _, pred := range preds {
+		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
+			logAccess(&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: aclOp,
+				allowed:   false,
+			})
+
+			var op string
+			switch aclOp.Name {
+			case acl.OpModify:
+				op = "alter"
+			case acl.OpWrite:
+				op = "mutate"
+			case acl.OpRead:
+				op = "query"
+			}
+
+			return status.Errorf(codes.PermissionDenied,
+				"unauthorized to %s the predicate: %v", op, err)
+		}
+	}
+	return nil
+}
+
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
@@ -464,20 +492,19 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined, per the
+			// fail open approach
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
 			if userId == x.GrootId {
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined, per the
-			// fail open approach
-			userId = "anonymous"
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		// if we get here, we know the user is not Groot.
@@ -486,22 +513,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Modify)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Modify,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to alter the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Modify)
 	}
 
 	err := doAuthorizeAlter()
@@ -527,7 +539,7 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 		predsMap[nquad.Predicate] = struct{}{}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -575,7 +587,12 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -586,29 +603,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				}
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Write)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Write,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to mutate the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Write)
 	}
 
 	err := doAuthorizeMutation()
@@ -643,7 +640,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -682,7 +679,17 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// Do not allow schema queries unless the user has logged in.
+			if isSchemaQuery {
+				return status.Error(codes.Unauthenticated, err.Error())
+			}
+
+			// Treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined.
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -690,34 +697,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 				// groot is allowed to query anything
 				return nil
 			}
-		} else if err == errNoJwt {
-			// Do not allow schema queries unless the user has logged in.
-			if isSchemaQuery {
-				return status.Error(codes.Unauthenticated, err.Error())
-			}
-
-			// Otherwise, treat the user as an anonymous guest who has not joined any group yet.
-			// Such a user can still get access to predicates that have no ACL rule defined.
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Read)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Read,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to query the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Read)
 	}
 
 	err := doAuthorizeQuery()

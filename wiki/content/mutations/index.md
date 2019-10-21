@@ -873,6 +873,7 @@ results of executing the query block:
 * If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
+
 ### Example
 
 Consider an example with the following schema:
@@ -927,12 +928,12 @@ Result:
 ```
 
 The query part of the upsert block stores the UID of the user with the provided email
-in the variable `v`. The mutation part then extracts the UID from variable `v` and
+in the variable `v`. The mutation part then extracts the UID from variable `v`, and
 stores the `name` and `email` information in the database. If the user exists,
 the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
-If we run the same mutation again, the data would just be overwritten and no new uid is
+If we run the same mutation again, the data would just be overwritten, and no new uid is
 created. Note that the `uids` map is empty in the response when the mutation is executed again:
 
 ```json
@@ -944,6 +945,21 @@ created. Note that the `uids` map is empty in the response when the mutation is 
   },
   "extensions": {...}
 }
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set": {
+    "uid": uid(v),
+    "name": "first last",
+    "email": "user@company1.io"
+  }
+}
+' | jq
 ```
 
 Now, we want to add the `age` information for the same user having the same email
@@ -972,7 +988,10 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {}
+    "uids": {},
+    "vars": {
+      "uid(v)": ["0x2"]
+    }
   },
   "extensions": {...}
 }
@@ -980,7 +999,22 @@ Result:
 
 Here, the query block queries for a user with `email` as `user@company1.io`. It stores
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function.
+user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
+of `vars` which has a list of uids that were used in the set mutation.
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}
+' | jq
+```
 
 If we want to execute the mutation only when the user exists, we could use
 [Conditional Upsert]({{< relref "#conditional-upsert" >}}).
@@ -1015,10 +1049,28 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {}
+    "uids": {},
+    "vars": {
+      "uid(v)": ["0x2"]
+    }
   },
   "extensions": {...}
 }
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}
+' | jq
 ```
 
 ## Conditional Upsert
@@ -1061,4 +1113,19 @@ upsert {
   }
 }
 ' | jq
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "cond": "@if(lt(len(v), 100) AND gt(len(v), 50))",
+  "delete": {
+    "uid": "uid(v)",
+    "name": null,
+    "email": null,
+    "age": null
+  }
+}' | jq
 ```

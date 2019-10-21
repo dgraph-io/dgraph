@@ -28,8 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -133,10 +133,13 @@ func initTest(t *testing.T, schemaStr string) {
 }
 
 func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	testutil.DropAll(t, dg)
 
-	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
 	populateClusterGraph(t, dg)
 

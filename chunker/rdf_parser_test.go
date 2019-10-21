@@ -19,7 +19,7 @@ package chunker
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -500,6 +500,30 @@ var testNQuads = []struct {
 			Predicate:   "lives",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: `E wonderland`}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `<alice> <lives> "wonderland" (friend="hatter").`,
+		nq: api.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: `wonderland`}},
+			Facets: []*api.Facet{{Key: "friend", Value: []byte("hatter"),
+				Tokens: []string{"\001hatter"}}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `<alice> <lives> "wonderland" (friend="hatter \u0045") .`,
+		nq: api.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: `wonderland`}},
+			Facets: []*api.Facet{{Key: "friend", Value: []byte("hatter E"),
+				Tokens: []string{"\001e", "\001hatter"}}},
 		},
 		expectedErr: false,
 	},
