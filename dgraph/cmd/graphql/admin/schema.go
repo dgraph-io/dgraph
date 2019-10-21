@@ -55,7 +55,9 @@ type addSchemaResolver struct {
 	withIntrospection bool
 }
 
-func (asr *addSchemaResolver) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (asr *addSchemaResolver) Rewrite(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+
 	sch, err := getSchemaInput(m)
 	if err != nil {
 		return nil, nil, err

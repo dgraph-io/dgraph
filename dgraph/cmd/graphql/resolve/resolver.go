@@ -457,7 +457,8 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 //   `addFoo(...) { foo { ... } }`
 // But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
 func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+	return CompletionFunc(func(
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
 		res, err := cf(ctx, field, result, err)
 
