@@ -541,7 +541,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 
 		filterTypeNameUnion := []string{}
-		if schema.Types[fld.Type.Name()].Kind == ast.Enum {
+		searchArgs := getSearchArgs(fld)
+		if schema.Types[fld.Type.Name()].Kind == ast.Enum && len(searchArgs) == 1 {
 			// If the field is an enum type, we don't generate a filter type.
 			// Instead we allow to write `typeName: enumValue` in the filter.
 			// So, for example : `filter: { postType: Answer }`
@@ -550,10 +551,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			// Booleans are the same, allowing:
 			// `filter: { isPublished: true }
 			// but that case is already handled by builtInFilters
-			filterTypeNameUnion = []string{"StringRegExpFilter",
-				"StringHashFilter"}
+			filterTypeNameUnion = []string{fld.Type.Name()}
 		} else {
-			for _, search := range getSearchArgs(fld) {
+			for _, search := range searchArgs {
 				filterTypeNameUnion = append(filterTypeNameUnion,
 					builtInFilters[search])
 			}
