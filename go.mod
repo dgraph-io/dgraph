@@ -15,7 +15,7 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/d4l3k/messagediff v1.2.1 // indirect
-	github.com/dgraph-io/badger v0.0.0-20191021104909-b9056f135481
+	github.com/dgraph-io/badger v0.0.0-20191021140416-be6402f83d31
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
@@ -32,8 +32,6 @@ require (
 	github.com/google/codesearch v1.0.0
 	github.com/google/uuid v1.0.0
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1
