@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -157,6 +158,17 @@ type addSchemaResolver struct {
 	withIntrospection bool
 }
 
+var statusMessage = map[healthStatus]string{
+	errNoConnection: "Unable to contact Dgraph",
+	noGraphQLSchema: "Dgraph connection established but there's no GraphQL schema.",
+	healthy:         "Dgraph connection established and serving GraphQL schema.",
+}
+
+func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	s := hr.status
+	return []byte(fmt.Sprintf(`{"message":"%s","status":%s`, statusMessage[s], string(s))), nil
+}
+
 // NewAdminResolver creates a GraphQL request resolver for the /admin endpoint.
 func NewAdminResolver(
 	dg *dgo.Dgraph,
@@ -184,7 +196,12 @@ func newAdminResolverFactory(
 
 	return resolve.NewResolverFactory().
 		WithQueryResolver("health",
-			func(q schema.Query) resolve.QueryResolver { return &healthResolver{} }).
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					resolve.NoOpQueryRewrite(),
+					&healthResolver{status: healthy},
+					resolve.StdQueryCompletion())
+			}).
 		WithMutationResolver("addSchema",
 			func(m schema.Mutation) resolve.MutationResolver {
 				addResolver := &addSchemaResolver{
