@@ -49,8 +49,9 @@ const (
  }
  
  enum HealthStatus {
-	OK
-	DgraphUnreachable
+	ErrNoConnection
+	NoGraphQLSchema
+	Healthy
  }
  
  scalar DateTime
@@ -114,13 +115,22 @@ const (
 	addSchema(input: SchemaInput!) : AddSchemaPayload
  }
  `
+
+	// Heath status codes
+	errNoConnection healthStatus = "ErrNoConnection"
+	noGraphQLSchema healthStatus = "noGraphQLSchema"
+	healthy         healthStatus = "Healthy"
 )
 
-type healthResolver struct{}
+type healthStatus string
 
-func (hr *healthResolver) Resolve(ctx context.Context, query schema.Query) *resolve.Resolved {
-	// TODO: The actual algorithm for determining health goes here...
-	return &resolve.Resolved{Data: []byte(`"message" : "I'm alive"`)}
+type schemaDef struct {
+	Schema string    `json:"schema,omitempty"`
+	Date   time.Time `json:"date,omitempty"`
+}
+
+type healthResolver struct {
+	status healthStatus
 }
 
 // A addSchemaResolver serves as the mutation rewriter and executor in handling
