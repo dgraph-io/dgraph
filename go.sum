@@ -10,6 +10,8 @@ github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 h1:fSu93OUqfEko
 github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08 h1:5btKvK+N+FpW0EEgvxq7LWcUEwIRLsL4IwIo0u+Qlhs=
 github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08/go.mod h1:gMGUEe16aZh0QN941HgDjwrdjU4iTthPoz2/AtDRADE=
+github.com/DataDog/zstd v1.4.1 h1:3oxKN3wbHibqx897utPC2LTQU4J+IHWWJO+glkAkpFM=
+github.com/DataDog/zstd v1.4.1/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/OneOfOne/xxhash v1.2.5 h1:zl/OfRA6nftbBK9qTohYBJ5xvw6C/oNKizR7cZGl3cI=
 github.com/OneOfOne/xxhash v1.2.5/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
@@ -56,6 +58,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7 h1:sXNo2Xtte2hOGeq21YyV3qjsyOScoQqWvLdBKInkQS8=
 github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7/go.mod h1:V7oadAIwiqodXo5jT04lP+8ysOAuMFZO5x20VSI94Uc=
+github.com/dgraph-io/badger v0.0.0-20191021104909-b9056f135481 h1:l4sbxadRWUGR5dHFKrz6R3H2+B4arWgjNaSmNLyj6Kw=
+github.com/dgraph-io/badger v0.0.0-20191021104909-b9056f135481/go.mod h1:cEjdIw+iaGXuQdsDymXPRcpp8yHXZ6PmwmDJajnVyJc=
 github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da h1:JAadBE19xm15ZsBZ9HOSuQvMiaCKu+NsV5O5Mfb/62M=
 github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da/go.mod h1:R/MTZMGhTo60XSziuKpLXzI1OnVWQCZS5oJjxA8Q1bo=
 github.com/dgraph-io/ristretto v0.0.0-20190903064322-eb48d2f7ca30 h1:FkdGlqxPjfHKdVUzS5dOSMeOkGjEG7PnR1RLbcEqw88=

@@ -7,6 +7,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
+	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/beorn7/perks v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.0.0-20181114232033-e1f5e6cdcd76
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -14,9 +15,8 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/d4l3k/messagediff v1.2.1 // indirect
-	github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7
+	github.com/dgraph-io/badger v0.0.0-20191021104909-b9056f135481
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da
-	github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
@@ -26,11 +26,14 @@ require (
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/uuid v1.0.0
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
+	github.com/onsi/ginkgo v1.7.0 // indirect
+	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1
