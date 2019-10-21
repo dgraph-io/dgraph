@@ -28,6 +28,71 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// A QueryResolver can resolve a single query.
+type QueryResolver interface {
+	Resolve(ctx context.Context, query schema.Query) *Resolved
+}
+
+// A QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query,
+type QueryRewriter interface {
+	Rewrite(q schema.Query) (*gql.GraphQuery, error)
+}
+
+// A QueryExecutor can execute a gql.GraphQuery and return a result.  The result of
+// a QueryExecutor doesn't need to be valid GraphQL results.
+type QueryExecutor interface {
+	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
+}
+
+// QueryResolverFunc is an adapter that allows to build a QueryResolver from
+// a function.  Based on the http.HandlerFunc pattern.
+type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
+
+// QueryRewritingFunc is an adapter that allows us to build a QueryRewriter from
+// a function.  Based on the http.HandlerFunc pattern.
+type QueryRewritingFunc func(q schema.Query) (*gql.GraphQuery, error)
+
+// QueryExecutionFunc is an adapter that allows us to compose query execution and
+// build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
+type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
+
+// Resolve calls qr(ctx, query)
+func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	return qr(ctx, query)
+}
+
+// Rewrite calls qr(q)
+func (qr QueryRewritingFunc) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+	return qr(q)
+}
+
+// Query calls qe(ctx, query)
+func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	return qe(ctx, query)
+}
+
+// NewQueryResolver creates a new query resolver.  The resolver runs the pipeline:
+// 1) rewrite the query using qr (return error if failed)
+// 2) execute the rewritten query with qe (return error if failed)
+// 3) process the result with rc
+func NewQueryResolver(qr QueryRewriter, qe QueryExecutor, rc ResultCompleter) QueryResolver {
+	return &queryResolver{queryRewriter: qr, queryExecutor: qe, resultCompleter: rc}
+}
+
+// NoOpQueryExecution does nothing and returns nil.
+func NoOpQueryExecution() QueryExecutionFunc {
+	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+		return nil, nil
+	})
+}
+
+// NoOpQueryRewrite does nothing and returns a nil rewriting.
+func NoOpQueryRewrite() QueryRewritingFunc {
+	return QueryRewritingFunc(func(q schema.Query) (*gql.GraphQuery, error) {
+		return nil, nil
+	})
+}
+
 // a queryResolver can resolve a single GraphQL query field.
 type queryResolver struct {
 	queryRewriter   QueryRewriter

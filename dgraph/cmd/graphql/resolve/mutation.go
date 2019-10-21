@@ -19,7 +19,9 @@ package resolve
 import (
 	"context"
 
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	otrace "go.opencensus.io/trace"
 )
@@ -49,6 +51,105 @@ import (
 //
 // For now, all mutations are only 1 level deep (cause of how we build the
 // input objects) and only create a single node (again cause of inputs)
+
+// A MutationResolver can resolve a single mutation.
+type MutationResolver interface {
+	Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved, bool)
+}
+
+// A MutationRewriter can transform a GraphQL mutation into a Dgraph mutation and
+// can build a Dgraph gql.GraphQuery to follow a GraphQL mutation.
+//
+// Mutations come in like:
+//
+// mutation addAuthor($auth: AuthorInput!) {
+//   addAuthor(input: $auth) {
+// 	   author {
+// 	     id
+// 	     name
+// 	   }
+//   }
+// }
+//
+// Where `addAuthor(input: $auth)` implies a mutation that must get run - written
+// to a Dgraph mutation by Rewrite.  The GraphQL following `addAuthor(...)`implies
+// a query to run and return the newly created author, so the
+// mutation query rewriting is dependent on the context set up by the result of
+// the mutation.
+type MutationRewriter interface {
+	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
+	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
+	// with a query and multiple mutations guarded by conditions.
+	Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error)
+
+	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
+	// mutation and constructs a Dgraph query.  It's used to find the return
+	// value from a GraphQL mutation - i.e. we've run the mutation indicated by m
+	// now we need to query Dgraph to satisfy all the result fields in m.
+	FromMutationResult(
+		m schema.Mutation,
+		assigned map[string]string,
+		mutated map[string][]string) (*gql.GraphQuery, error)
+}
+
+// A MutationExecutor can execute a mutation and returns the assigned map, the
+// mutated map and any errors.
+type MutationExecutor interface {
+	// Mutate performs the actual mutation and returns a map of newly assigned nodes,
+	// a map of variable->[]uid from upsert mutations and any errors.  If an error
+	// occurs, that indicates that the mutation failed in some way significant enough
+	// way as to not continue procissing this mutation or others in the same request.
+	Mutate(
+		ctx context.Context,
+		query *gql.GraphQuery,
+		mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
+}
+
+// MutationResolverFunc is an adapter that allows to build a MutationResolver from
+// a function.  Based on the http.HandlerFunc pattern.
+type MutationResolverFunc func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool)
+
+// MutationExecutionFunc is an adapter that allows us to compose mutation execution and build a
+// MutationExecuter from a function.  Based on the http.HandlerFunc pattern.
+type MutationExecutionFunc func(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
+
+// Resolve calls mr(ctx, mutation)
+func (mr MutationResolverFunc) Resolve(
+	ctx context.Context,
+	mutation schema.Mutation) (*Resolved, bool) {
+
+	return mr(ctx, mutation)
+}
+
+// Mutate calls me(ctx, query, mutations)
+func (me MutationExecutionFunc) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	return me(ctx, query, mutations)
+}
+
+// NewMutationResolver creates a new mutation resolver.  The resolver runs the pipeline:
+// 1) rewrite the mutation using mr (return error if failed)
+// 2) execute the mutation with me (return error if failed)
+// 3) write a query for the mutation with mr (return error if failed)
+// 4) execute the query with qe (return error if failed)
+// 5) process the result with rc
+func NewMutationResolver(
+	mr MutationRewriter,
+	qe QueryExecutor,
+	me MutationExecutor,
+	rc ResultCompleter) MutationResolver {
+	return &mutationResolver{
+		mutationRewriter: mr,
+		queryExecutor:    qe,
+		mutationExecutor: me,
+		resultCompleter:  rc,
+	}
+}
 
 // mutationResolver can resolve a single GraphQL mutation field
 type mutationResolver struct {
