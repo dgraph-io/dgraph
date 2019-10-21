@@ -451,7 +451,7 @@ func TestPredicateRegex(t *testing.T) {
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err);
+	require.NoError(t, err)
 
 	createAccountAndData(t, dg)
 	dg, err = testutil.DgraphClient(testutil.SockAddr)
