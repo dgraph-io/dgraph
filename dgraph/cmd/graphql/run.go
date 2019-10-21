@@ -74,6 +74,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/admin"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
@@ -228,7 +229,7 @@ func run() error {
 	resolvers := resolve.New(gqlSchema, resolverFactory)
 	mainServer := web.NewServer(resolvers)
 
-	adminResolvers := NewAdminResolver(dgraphClient, mainServer, fns)
+	adminResolvers := admin.NewAdminResolver(dgraphClient, mainServer, fns)
 	adminServer := web.NewServer(adminResolvers)
 
 	http.Handle("/graphql", mainServer.HTTPHandler())
