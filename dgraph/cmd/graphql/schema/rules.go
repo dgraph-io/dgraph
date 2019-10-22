@@ -219,6 +219,8 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
+	// This check can be removed once gqlparser bug
+	// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 	if arg.Value.Kind != ast.ListValue {
 		return gqlerror.ErrorPosf(
 			dir.Position,
@@ -258,7 +260,7 @@ func searchValidation(
 				return gqlerror.ErrorPosf(
 					dir.Position,
 					"Type %s; Field %s: the argument to @search '%s' is the same "+
-						"as the index '%s' provided before and shoudln't "+
+						"as the index '%s' provided before and shouldn't "+
 						"be used together",
 					typ.Name, field.Name, searchArg, val)
 			}
@@ -274,9 +276,8 @@ func searchValidation(
 			if val, ok := searchIndexes[index]; ok {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s: the argument to @search '%s' "+
-						"contradicts the index '%s' provided before "+
-						"and shouldn't be used together.",
+					"Type %s; Field %s: the arguments '%s' and '%s' can't "+
+						"be used together as arguments to @search.",
 					typ.Name, field.Name, searchArg, val)
 			}
 		}

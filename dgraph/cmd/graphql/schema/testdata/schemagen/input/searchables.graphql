@@ -1,7 +1,7 @@
 type Post {
 	postID: ID!
 	title: String! @search(by: [term])
-        titleByEverything: String! @search(by: [term, fulltext, trigram, hash])
+	titleByEverything: String! @search(by: [term, fulltext, trigram, hash])
 	text: String @search(by: [fulltext])
 
 	tags: [String] @search(by: [trigram])
