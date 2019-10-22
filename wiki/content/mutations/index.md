@@ -1028,9 +1028,6 @@ curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=
 upsert {
   query {
     v as var(func: regexp(email, /.*@company1.io$/)) {
-      age as age
-    }
-    me() {
       updated_age as math(age+1)
     }
   }
