@@ -87,6 +87,7 @@ func TestSchemaString(t *testing.T) {
 
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				t.Errorf("schema mismatch (-want +got):\n%s", diff)
+				fmt.Println(newSchemaStr)
 			}
 		})
 	}

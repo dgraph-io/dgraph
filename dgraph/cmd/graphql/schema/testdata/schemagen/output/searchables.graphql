@@ -18,6 +18,11 @@ type Post {
 	score: Float @search
 	isPublished: Boolean @search
 	postType: PostType @search
+	postTypeTrigram: PostType @search(by: [trigram])
+	postTypeRegexp: PostType @search(by: [regexp])
+	postTypeExact: PostType @search(by: [exact])
+	postTypeRegexpExact: PostType @search(by: [exact,regexp])
+	postTypeNone: PostType @search(by: [])
 }
 
 enum PostType {
@@ -155,6 +160,11 @@ input PatchPost {
 	score: Float
 	isPublished: Boolean
 	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeRegexpExact: PostType
+	postTypeNone: PostType
 }
 
 input PostFilter {
@@ -173,6 +183,10 @@ input PostFilter {
 	score: FloatFilter
 	isPublished: Boolean
 	postType: PostType
+	postTypeTrigram: StringRegExpFilter
+	postTypeRegexp: StringRegExpFilter
+	postTypeExact: PostType
+	postTypeRegexpExact: StringExactFilter_StringRegExpFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -193,6 +207,11 @@ input PostInput {
 	score: Float
 	isPublished: Boolean
 	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeRegexpExact: PostType
+	postTypeNone: PostType
 }
 
 input PostOrder {
@@ -203,6 +222,15 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input StringExactFilter_StringRegExpFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	regexp: String
 }
 
 input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {

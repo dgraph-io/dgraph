@@ -507,6 +507,49 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 	)
 }
 
+// getFilterTypes converts search arguments of a field to graphql filter types.
+func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition) []string {
+	searchArgs := getSearchArgs(fld)
+	filterNames := make([]string, len(searchArgs))
+	if schema.Types[fld.Type.Name()].Kind == ast.Enum &&
+		len(searchArgs) == 1 && searchArgs[0] == "exact" {
+		// If the field is an enum type, and has only exact filter,
+		// We allow to write `typeName: enumValue` in the filter.
+		// So, for example : `filter: { postType: Answer }`
+		// rather than : `filter: { postType: { eq: Answer } }`
+		//
+		// Booleans are the same, allowing:
+		// `filter: { isPublished: true }
+		// but that case is already handled by builtInFilters
+		filterNames[0] = fld.Type.Name()
+	} else {
+		for i, search := range searchArgs {
+			filterNames[i] = builtInFilters[search]
+		}
+	}
+
+	return filterNames
+}
+
+// mergeAndAddFilters merges multiple filterTypes into one and adds it to the schema.
+func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName string) {
+	if len(filterTypes) <= 1 {
+		// Filters only require to be merged if there are alteast 2
+		return
+	}
+
+	var fieldList ast.FieldList
+	for _, typeName := range filterTypes {
+		fieldList = append(fieldList, schema.Types[typeName].Fields...)
+	}
+
+	schema.Types[filterName] = &ast.Definition{
+		Kind:   ast.InputObject,
+		Name:   filterName,
+		Fields: fieldList,
+	}
+}
+
 // addFilterType add a `input TFilter { ... }` type to the schema, if defn
 // is a type that has fields that can be filtered on.  This type filter is used
 // in constructing the corresponding query
@@ -540,48 +583,18 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		var filterTypeNameUnion []string
-		searchArgs := getSearchArgs(fld)
-		if schema.Types[fld.Type.Name()].Kind == ast.Enum &&
-			len(searchArgs) == 1 && searchArgs[0] == "exact" {
-			// If the field is an enum type, and has only exact filter,
-			// We allow to write `typeName: enumValue` in the filter.
-			// So, for example : `filter: { postType: Answer }`
-			// rather than : `filter: { postType: { eq: Answer } }`
-			//
-			// Booleans are the same, allowing:
-			// `filter: { isPublished: true }
-			// but that case is already handled by builtInFilters
-			filterTypeNameUnion = []string{fld.Type.Name()}
-		} else {
-			for _, search := range searchArgs {
-				filterTypeNameUnion = append(filterTypeNameUnion,
-					builtInFilters[search])
-		}
-
-		if len(filterTypeNameUnion) > 0 {
-			filterTypeName := strings.Join(filterTypeNameUnion, "_")
+		filterTypes := getFilterTypes(schema, fld)
+		if len(filterTypes) > 0 {
+			filterName := strings.Join(filterTypes, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
-						NamedType: filterTypeName,
+						NamedType: filterName,
 					},
 				})
 
-			//create a schema type
-			if len(filterTypeNameUnion) > 1 {
-				var fieldList ast.FieldList
-				for _, typeName := range filterTypeNameUnion {
-					fieldList = append(fieldList, schema.Types[typeName].Fields...)
-				}
-
-				schema.Types[filterTypeName] = &ast.Definition{
-					Kind:   ast.InputObject,
-					Name:   filterTypeName,
-					Fields: fieldList,
-				}
-			}
+			mergeAndAddFilters(filterTypes, schema, filterName)
 		}
 	}
 

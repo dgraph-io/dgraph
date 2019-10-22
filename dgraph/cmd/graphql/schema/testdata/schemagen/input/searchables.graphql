@@ -16,7 +16,13 @@ type Post {
 	numLikes: Int @search
 	score: Float @search
 	isPublished: Boolean @search
+
 	postType: PostType @search
+        postTypeTrigram: PostType @search(by: [trigram])
+        postTypeRegexp: PostType @search(by: [regexp])
+        postTypeExact: PostType @search(by: [exact])
+        postTypeRegexpExact: PostType @search(by: [exact, regexp])
+        postTypeNone: PostType @search(by: [])
 }
 
 enum PostType {
