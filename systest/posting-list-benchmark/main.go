@@ -84,8 +84,10 @@ func runBenchmark() {
 			opt.mutationsPerTxn, opt.numMutations)
 	}
 
-	dg := testutil.DgraphClientWithGroot(opt.addr)
-	var err error
+	dg, err := testutil.DgraphClientWithGroot(opt.addr)
+	if err != nil {
+		log.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	// Drop all existing data.
 	for {

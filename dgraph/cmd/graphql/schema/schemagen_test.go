@@ -133,115 +133,115 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 	}{
 		"String searches don't apply to Int": {schema: `
 			type X {
-				str1: Int @search(by: hash)
-				str2: Int @search(by: exact)
-				str3: Int @search(by: term)
-				str4: Int @search(by: fulltext)
-				str5: Int @search(by: trigram)
-				str6: Int @search(by: regexp)
+				str1: Int @search(by: [hash])
+				str2: Int @search(by: [exact])
+				str3: Int @search(by: [term])
+				str4: Int @search(by: [fulltext])
+				str5: Int @search(by: [trigram])
+				str6: Int @search(by: [regexp])
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to Float": {schema: `
 			type X {
-				str1: Float @search(by: hash)
-				str2: Float @search(by: exact)
-				str3: Float @search(by: term)
-				str4: Float @search(by: fulltext)
-				str5: Float @search(by: trigram)
-				str6: Float @search(by: regexp)
+				str1: Float @search(by: [hash])
+				str2: Float @search(by: [exact])
+				str3: Float @search(by: [term])
+				str4: Float @search(by: [fulltext])
+				str5: Float @search(by: [trigram])
+				str6: Float @search(by: [regexp])
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to Boolean": {schema: `
 			type X {
-				str1: Boolean @search(by: hash)
-				str2: Boolean @search(by: exact)
-				str3: Boolean @search(by: term)
-				str4: Boolean @search(by: fulltext)
-				str5: Boolean @search(by: trigram)
-				str6: Boolean @search(by: regexp)
+				str1: Boolean @search(by: [hash])
+				str2: Boolean @search(by: [exact])
+				str3: Boolean @search(by: [term])
+				str4: Boolean @search(by: [fulltext])
+				str5: Boolean @search(by: [trigram])
+				str6: Boolean @search(by: [regexp])
 			}`,
 			expectedErrors: 6},
 		"String searches don't apply to DateTime": {schema: `
 			type X {
-				str1: DateTime @search(by: hash)
-				str2: DateTime @search(by: exact)
-				str3: DateTime @search(by: term)
-				str4: DateTime @search(by: fulltext)
-				str5: DateTime @search(by: trigram)
-				str6: DateTime @search(by: regexp)
+				str1: DateTime @search(by: [hash])
+				str2: DateTime @search(by: [exact])
+				str3: DateTime @search(by: [term])
+				str4: DateTime @search(by: [fulltext])
+				str5: DateTime @search(by: [trigram])
+				str6: DateTime @search(by: [regexp])
 			}`,
 			expectedErrors: 6},
 		"DateTime searches don't apply to Int": {schema: `
 			type X {
-				dt1: Int @search(by: year)
-				dt2: Int @search(by: month)
-				dt3: Int @search(by: day)
-				dt4: Int @search(by: hour)
+				dt1: Int @search(by: [year])
+				dt2: Int @search(by: [month])
+				dt3: Int @search(by: [day])
+				dt4: Int @search(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searches don't apply to Float": {schema: `
 			type X {
-				dt1: Float @search(by: year)
-				dt2: Float @search(by: month)
-				dt3: Float @search(by: day)
-				dt4: Float @search(by: hour)
+				dt1: Float @search(by: [year])
+				dt2: Float @search(by: [month])
+				dt3: Float @search(by: [day])
+				dt4: Float @search(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searches don't apply to Boolean": {schema: `
 			type X {
-				dt1: Boolean @search(by: year)
-				dt2: Boolean @search(by: month)
-				dt3: Boolean @search(by: day)
-				dt4: Boolean @search(by: hour)
+				dt1: Boolean @search(by: [year])
+				dt2: Boolean @search(by: [month])
+				dt3: Boolean @search(by: [day])
+				dt4: Boolean @search(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"DateTime searches don't apply to String": {schema: `
 			type X {
-				dt1: String @search(by: year)
-				dt2: String @search(by: month)
-				dt3: String @search(by: day)
-				dt4: String @search(by: hour)
+				dt1: String @search(by: [year])
+				dt2: String @search(by: [month])
+				dt3: String @search(by: [day])
+				dt4: String @search(by: [hour])
 			}`,
 			expectedErrors: 4},
 		"Int searches only appy to Int": {schema: `
 			type X {
-				i1: Float @search(by: int)
-				i2: Boolean @search(by: int)
-				i3: String @search(by: int)
-				i4: DateTime @search(by: int)
+				i1: Float @search(by: [int])
+				i2: Boolean @search(by: [int])
+				i3: String @search(by: [int])
+				i4: DateTime @search(by: [int])
 			}`,
 			expectedErrors: 4},
 		"Float searches only appy to Float": {schema: `
 			type X {
-				f1: Int @search(by: float)
-				f2: Boolean @search(by: float)
-				f3: String @search(by: float)
-				f4: DateTime @search(by: float)
+				f1: Int @search(by: [float])
+				f2: Boolean @search(by: [float])
+				f3: String @search(by: [float])
+				f4: DateTime @search(by: [float])
 			}`,
 			expectedErrors: 4},
 		"Boolean searches only appy to Boolean": {schema: `
 			type X {
-				b1: Int @search(by: bool)
-				b2: Float @search(by: bool)
-				b3: String @search(by: bool)
-				b4: DateTime @search(by: bool)
+				b1: Int @search(by: [bool])
+				b2: Float @search(by: [bool])
+				b3: String @search(by: [bool])
+				b4: DateTime @search(by: [bool])
 			}`,
 			expectedErrors: 4},
 		"Enums can only have no arg search": {schema: `
 			type X {
-				e1: E @search(by: int)
-				e2: E @search(by: float)
-				e3: E @search(by: bool)
-				e4: E @search(by: year)
-				e5: E @search(by: month)
-				e6: E @search(by: day)
-				e7: E @search(by: hour)
-				e8: E @search(by: hash)
-				e9: E @search(by: exact)
-				e10: E @search(by: term)
-				e11: E @search(by: fulltext)
-				e12: E @search(by: trigram)
-				e13: E @search(by: regexp)
+				e1: E @search(by: [int])
+				e2: E @search(by: [float])
+				e3: E @search(by: [bool])
+				e4: E @search(by: [year])
+				e5: E @search(by: [month])
+				e6: E @search(by: [day])
+				e7: E @search(by: [hour])
+				e8: E @search(by: [hash])
+				e9: E @search(by: [exact])
+				e10: E @search(by: [term])
+				e11: E @search(by: [fulltext])
+				e12: E @search(by: [trigram])
+				e13: E @search(by: [regexp])
 			}
 			enum E {
 				A

@@ -184,13 +184,17 @@ func BenchmarkGzip(b *testing.B) {
 		for _, uid := range uids {
 			n := binary.PutUvarint(tmp, uid)
 			_, err := buf.Write(tmp[:n])
-			x.Check(err)
+			if err != nil {
+				b.Fatalf("Error while writing to buffer: %s", err.Error())
+			}
 		}
 
 		var out bytes.Buffer
 		zw := gzip.NewWriter(&out)
 		_, err := zw.Write(buf.Bytes())
-		x.Check(err)
+		if err != nil {
+			b.Fatalf("Error while writing to gzip writer: %s", err.Error())
+		}
 
 		data = out.Bytes()
 	}
@@ -211,7 +215,9 @@ func benchmarkUidPackEncode(b *testing.B, blockSize int) {
 	for i := 0; i < b.N; i++ {
 		pack := Encode(uids, blockSize)
 		out, err := pack.Marshal()
-		x.Check(err)
+		if err != nil {
+			b.Fatalf("Error marshaling uid pack: %s", err.Error())
+		}
 		data = out
 	}
 	b.Logf("Output size: %s. Compression: %.2f",

@@ -24,18 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
-
-func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
-}
 
 func setSchema(schema string) {
 	err := client.Alter(context.Background(), &api.Operation{
@@ -205,6 +196,12 @@ type CarModel {
 	model
 	year
 	previous_model
+	<~previous_model>
+}
+
+type Object {
+	name
+	owner
 }
 
 type SchoolInfo {
@@ -274,6 +271,7 @@ newname                        : string @index(exact, term) .
 newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
+owner                          : [uid] .
 `
 
 func populateCluster() {
@@ -553,11 +551,14 @@ func populateCluster() {
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
 
+		<202> <name> "Car" .
 		<202> <make> "Toyota" .
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
+		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
+		<202> <dgraph.type> "Object" .
 
 		# data for regexp testing
 		_:luke <firstName> "Luke" .

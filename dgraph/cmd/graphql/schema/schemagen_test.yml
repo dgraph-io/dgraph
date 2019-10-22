@@ -106,23 +106,24 @@ schemas:
     input: |
       type X {
         i1: Int @search
-        i2: Int @search(by: int)
+        i2: Int @search(by: [int])
         f1: Float @search
-        f2: Float @search(by: float)
+        f2: Float @search(by: [float])
         b1: Boolean @search
-        b2: Boolean @search(by: bool)
+        b2: Boolean @search(by: [bool])
         s1: String @search
-        s2: String @search(by: hash)
-        s3: String @search(by: exact)
-        s4: String @search(by: term)
-        s5: String @search(by: fulltext)
-        s6: String @search(by: trigram)
-        s7: String @search(by: regexp)
+        s2: String @search(by: [hash])
+        s3: String @search(by: [exact])
+        s4: String @search(by: [term])
+        s5: String @search(by: [fulltext])
+        s6: String @search(by: [trigram])
+        s7: String @search(by: [regexp])
+        s8: String @search(by: [trigram, fulltext, term, exact]) 
         dt1: DateTime @search
-        dt2: DateTime @search(by: year)
-        dt3: DateTime @search(by: month)
-        dt4: DateTime @search(by: day)
-        dt5: DateTime @search(by: hour)
+        dt2: DateTime @search(by: [year])
+        dt3: DateTime @search(by: [month])
+        dt4: DateTime @search(by: [day])
+        dt5: DateTime @search(by: [hour])
         e: E @search
       }
       enum E { A }
@@ -141,6 +142,7 @@ schemas:
         X.s5: string
         X.s6: string
         X.s7: string
+        X.s8: string
         X.dt1: dateTime
         X.dt2: dateTime
         X.dt3: dateTime
@@ -161,6 +163,7 @@ schemas:
       X.s5: string @index(fulltext) .
       X.s6: string @index(trigram) .
       X.s7: string @index(trigram) .
+      X.s8: string @index(trigram, fulltext, term, exact) .
       X.dt1: dateTime @index(year) .
       X.dt2: dateTime @index(year) .
       X.dt3: dateTime @index(month) .
@@ -173,7 +176,7 @@ schemas:
     input: |
       interface A {
         id: ID!
-        name: String! @search(by: exact)
+        name: String! @search(by: [exact])
       }
       type B implements A {
         correct: Boolean @search
