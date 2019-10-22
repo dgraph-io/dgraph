@@ -35,17 +35,19 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/trace"
+	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/status"
 )
 
 // Error constants representing different types of errors.
@@ -121,7 +123,7 @@ func ShouldCrash(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := grpc.ErrorDesc(err)
+	errStr := status.Convert(err).Message()
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
@@ -528,6 +530,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 	}
 
 	dialOpts := append([]grpc.DialOption{},
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
 
@@ -620,7 +623,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 	for _, d := range ds {
 		var conn *grpc.ClientConn
-		for i := 0; i < retries; retries++ {
+		for i := 0; i < retries; i++ {
 			conn, err = SetupConnection(d, tlsCfg, false)
 			if err == nil {
 				break

@@ -36,8 +36,8 @@ import (
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
-	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -209,7 +209,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
-
 		return nil
 	}
 
@@ -262,7 +261,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return dy.ErrConflict
+		return zero.ErrConflict
 	}
 
 	// Discard the posting lists from cache to release memory at the end.
@@ -1283,7 +1282,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
 	}
-	if snapshotIdx <= 0 {
+	if snapshotIdx == 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
 		snapshotIdx = lastEntry.Index

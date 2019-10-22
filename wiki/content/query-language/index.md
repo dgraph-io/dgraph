@@ -1176,7 +1176,7 @@ that have the same first_name sort them by last_name in descending order.
 
 ```
 {
-  me(func: eq(type, "Person", orderasc: first_name, orderdesc: last_name)) {
+  me(func: type("Person"), orderasc: first_name, orderdesc: last_name) {
     first_name
     last_name
   }
@@ -1797,48 +1797,38 @@ There are four ways to use the `expand` function.
 
 * Predicates can be stored in a variable and passed to `expand()` to expand all
   the predicates in the variable.
-* If `_all_` is passed as an argument to `expand()`, all the predicates for each
-  node at that level are retrieved. More levels can be specified in a nested
-  fashion under `expand()`.
-* If `_forward_` is passed as an argument to `expand()`, all predicates for each
-  node at that level (minus any reverse predicates) are retrieved.
-* If `_reverse_` is passed as an argument to `expand()`, only the reverse
-  predicates at each node in that level are retrieved.
+* If `_all_` is passed as an argument to `expand()`, the predicates to be
+expanded will be the union of fields in the types assigned to a given node.
 
-The last three keywords require that the nodes have types. Dgraph will look 
-for all the types that have been assigned to a node,
-query the types to check which attributes they have, and use those to compute
-the list of predicates to expand.
+The `_all_` keyword requires that the nodes have types. Dgraph will look for all
+the types that have been assigned to a node, query the types to check which
+attributes they have, and use those to compute the list of predicates to expand.
 
 For example, consider a node that has types `Animal` and `Pet`, which have 
 the following definitions:
 
 ```
 type Animal {
-    name: string
-    species: uid
-    dob: datetime
+    name
+    species
+    dob
 }
 
 type Pet {
-    owner: uid
-    veterinarian: uid
+    owner
+    veterinarian
 }
 ```
 
 When `expand(_all_)` is called on this node, Dgraph will first check which types
-the node has (`Animal` and `Pet`). Then it will get the definitions of 
-`Animal` and `Pet` and build a list of predicates.
-Finally, it will query the schema to check if any of those predicates have a
-reverse node. If, for example, there's a reverse node in the `owner` predicate,
-the final list of predicates to expand will be:
+the node has (`Animal` and `Pet`). Then it will get the definitions of `Animal`
+and `Pet` and build a list of predicates from their type definitions.
 
 ```
 name
 species
 dob
 owner
-~owner
 veterinarian
 ```
 
@@ -1868,6 +1858,26 @@ Query Example: Harry Potter movies, with each actor and characters played.  With
 }
 {{< /runnable >}}
 
+You can apply `@cascade` on inner query blocks as well.
+{{< runnable >}}
+{
+  HP(func: allofterms(name@en, "Harry Potter")) {
+    name@en
+    genre {
+      name@en
+    }
+    starring @cascade {
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name@en, "Warwick")){
+            name@en
+         }
+    }
+  }
+}
+{{< /runnable >}}
+
 ## Normalize directive
 
 With the `@normalize` directive, only aliased predicates are returned and the result is flattened to remove nesting.
@@ -1881,6 +1891,30 @@ Query Example: Film name, country and first two actors (by UID order) of every S
       film: name@en
       initial_release_date
       starring(first: 2) {
+        performance.actor {
+          actor: name@en
+        }
+        performance.character {
+          character: name@en
+        }
+      }
+      country {
+        country: name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+You can also apply `@normalize` on nested query blocks. It will work similarly but only flatten the result of the nested query block where `@normalize` has been applied. `@normalize` will return a list irrespective of the type of attribute on which it is applied.
+{{< runnable >}}
+{
+  director(func:allofterms(name@en, "steven spielberg")) {
+    director: name@en
+    director.film {
+      film: name@en
+      initial_release_date
+      starring(first: 2) @normalize {
         performance.actor {
           actor: name@en
         }
@@ -2052,6 +2086,33 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+
+### Predicate name rules
+
+Any alphanumeric combination of a predicate name is permitted.
+Dgraph also supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs).
+You can read more in [Predicates i18n](#predicates-i18n).
+
+#### Allowed special characters
+
+Single special characters are not accepted, which includes the special characters from IRIs.
+They have to be prefixed/suffixed with alphanumeric characters.
+
+```
+][&*()_-+=!#$%
+```
+
+*Note: You are not restricted to use @ suffix, but the suffix character gets ignored.*
+
+#### Forbidden special characters
+
+The special characters below are not accepted.
+
+```
+^}|{`\~
+```
+
+
 ### Predicates i18n
 
 If your predicate is a URI or has language-specific characters, then enclose
@@ -2093,6 +2154,7 @@ Query:
   }
 }
 ```
+
 
 ### Upsert directive
 
@@ -2320,8 +2382,8 @@ A schema query queries for the whole schema:
 schema {}
 ```
 
-{{% notice "note" %}}
-Unlike regular queries, the schema query is not surrounded by curly braces.
+{{% notice "note" %}} Unlike regular queries, the schema query is not surrounded
+by curly braces. Also, schema queries and regular queries cannot be combined.
 {{% /notice %}}
 
 You can query for particular schema fields in the query body.
@@ -2375,11 +2437,11 @@ Types are defined using a GraphQL-like syntax. For example:
 
 ```
 type Student {
-  name: string
-  dob: datetime
-  home_address: string
-  year: int
-  friends: [uid]
+  name
+  dob
+  home_address
+  year
+  friends
 }
 ```
 
@@ -2407,18 +2469,16 @@ different.
 
 ```
 type Student {
-  student_name: string
+  student_name
 }
 
 type Textbook {
-  textbook_name: string
+  textbook_name
 }
 
 student_name: string @index(exact) .
 textbook_name: string @lang @index(fulltext) .
 ```
-
-Types also support lists like `friends: [uid]` or `tags: [string]`.
 
 Altering the schema for a type that already exists, overwrites the existing
 definition.
@@ -2491,8 +2551,7 @@ err := c.Alter(context.Background(), &api.Operation{
 ### Expand queries and types
 
 Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
-`expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`) require that the
-nodes to expand have types.
+`expand(_all_)`) require that the nodes to be expanded have types.
 
 ## Facets : Edge attributes
 
@@ -3155,6 +3214,16 @@ query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
 }
 {{< /runnable >}}
 
+We also support variable substituion in facets now.
+{{< runnable vars="{\"$name\": \"Alice\"}" >}}
+query test($name: string = "Alice") {
+  data(func: eq(name, $name)) {
+    friend @facets(eq(close, true)) {
+      name
+    }
+  }
+}
+{{</ runnable >}}
 
 {{% notice "note" %}}
 If you want to input a list of uids as a GraphQL variable value, you can have the variable as string type and

@@ -24,9 +24,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestGetUID(t *testing.T) {
@@ -152,9 +153,9 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
 		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":46}]}}`},
+			out: `{"data":{"q": [{"count":47}]}}`},
 		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":48}]}}`},
+			out: `{"data":{"q": [{"count":49}]}}`},
 		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
@@ -165,7 +166,7 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":2}]}}`},
 		// NOTE: match with empty string filters values greater than the max distance.
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":28}]}}`},
+			out: `{"data":{"q": [{"count":29}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
 			failure: `Value "" in uid_in is not a number`},
 	}
@@ -2284,7 +2285,9 @@ func TestCountUidWithAlias(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	var err error
+	client, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.CheckfNoTrace(err)
 
 	populateCluster()
 	os.Exit(m.Run())

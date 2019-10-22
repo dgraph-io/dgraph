@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -193,7 +194,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	switch strings.ToLower(contentType) {
 	case "application/json":
 		if err := json.Unmarshal(body, &params); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
 
@@ -312,7 +314,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
 		if err := json.Unmarshal(body, &ms); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
 
@@ -385,6 +388,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
+	if len(resp.Vars) > 0 {
+		vars := make(map[string][]string)
+		// Flatten the mutated map so that it is easier to parse for the client.
+		for v, uids := range resp.Vars {
+			vars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
+		}
+		mp["vars"] = vars
+	}
 	response["data"] = mp
 
 	js, err := json.Marshal(response)
@@ -452,7 +463,7 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 
 	_, err := worker.CommitOverNetwork(context.Background(), tc)
 	switch err {
-	case y.ErrAborted:
+	case dgo.ErrAborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
@@ -576,4 +587,54 @@ type skipJSONUnmarshal struct {
 func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
 	sju.bs = bs
 	return nil
+}
+
+// convertJSONError adds line and character information to the JSON error.
+// Idea taken from: https://bit.ly/2moFIVS
+func convertJSONError(input string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if jsonError, ok := err.(*json.SyntaxError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	if jsonError, ok := err.(*json.UnmarshalTypeError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	return err
+}
+
+func jsonLineAndChar(input string, offset int) (line int, character int, err error) {
+	lf := rune(0x0A)
+
+	if offset > len(input) || offset < 0 {
+		return 0, 0, errors.Errorf("Couldn't find offset %d within the input.", offset)
+	}
+
+	line = 1
+	for i, b := range input {
+		if b == lf {
+			line++
+			character = 0
+		}
+		character++
+		if i == offset {
+			break
+		}
+	}
+
+	return line, character, nil
 }

@@ -1204,7 +1204,7 @@ See the `initContainers` configuration in
 [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
 to learn more.
 
-## More about Dgraph
+## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 
@@ -1807,6 +1807,29 @@ dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third R
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
 
+### Restrict Mutation Operations
+
+By default, you can perform mutation operations for any predicate.
+If the predicate in mutation doesn't exist in the schema,
+the predicate gets added to the schema with an appropriate
+[Dgraph Type](https://docs.dgraph.io/master/query-language/#schema-types).
+
+You can use `--mutations disallow` to disable all mutations,
+which is set to `allow` by default.
+
+```sh
+dgraph alpha --mutations disallow
+```
+
+Enforce a strict schema by setting `--mutations strict`.
+This mode allows mutations only on predicates already in the schema.
+Before performing a mutation on a predicate that doesn't exist in the schema,
+you need to perform an alter operation with that predicate and its schema type.
+
+```sh
+dgraph alpha --mutations strict
+```
+
 ### Secure Alter Operations
 
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
@@ -1855,12 +1878,19 @@ can be initiated using the `--whitelist` flag on `dgraph alpha`.
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
-{{% notice "note" %}}An export file would be created on only the server which is the leader for a group
-and not on followers.{{% /notice %}}
+This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
-This triggers an export of all the groups spread across the entire cluster. Each Alpha leader for
-a group writes output as a gzipped file to the export directory specified on startup by `--export`.
-If any of the groups fail, the entire export process is considered failed and an error is returned.
+1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
+2. For every other group, its group's export data is stored with the Alpha leader of that group. 
+
+It is up to the user to retrieve the right export files from the Alphas in the
+cluster. Dgraph does not copy all files to the Alpha that initiated the export.
+The user must also ensure that there is sufficient space on disk to store the
+export.
+
+Each Alpha leader for a group writes output as a gzipped file to the export
+directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
+entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
 `format` URL parameter. For example:
@@ -1870,8 +1900,6 @@ $ curl 'localhost:8080/admin/export?format=json'
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
-
-{{% notice "note" %}}It is up to the user to retrieve the right export files from the Alphas in the cluster. Dgraph does not copy files to the Alpha that initiated the export.{{% /notice %}}
 
 ### Shutdown Database
 

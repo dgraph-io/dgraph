@@ -30,9 +30,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/dustin/go-humanize/english"
@@ -112,7 +112,7 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != y.ErrConflict && err != y.ErrAborted:
+	case err != zero.ErrConflict && err != dgo.ErrAborted:
 		fmt.Printf("Error while mutating: %v s.Code %v\n", s.Message(), s.Code())
 	}
 }

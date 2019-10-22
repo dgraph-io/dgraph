@@ -30,7 +30,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -193,11 +193,6 @@ type params struct {
 	// GroupbyAttrs holds the list of attributes to group by.
 	GroupbyAttrs []gql.GroupByAttr
 
-	// UidCount is true when "count(uid)" is used.
-	UidCount bool
-	// UidCountAlias holds the alias of the variable used to hold the results of a "count(uid)"
-	// request, if any.
-	UidCountAlias string
 	// ParentIds is a stack that is maintained and passed down to children.
 	ParentIds []uint64
 	// IsEmpty is true if the subgraph doesn't have any SrcUids or DestUids.
@@ -516,7 +511,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
-			Cascade:        sg.Params.Cascade,
+			Cascade:        gchild.Cascade || sg.Params.Cascade,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
@@ -526,14 +521,12 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IgnoreReflex:   sg.Params.IgnoreReflex,
 			Langs:          gchild.Langs,
 			NeedsVar:       append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
-			Normalize:      sg.Params.Normalize,
+			Normalize:      gchild.Normalize || sg.Params.Normalize,
 			Order:          gchild.Order,
 			Var:            gchild.Var,
 			GroupbyAttrs:   gchild.GroupbyAttrs,
 			IsGroupBy:      gchild.IsGroupby,
 			IsInternal:     gchild.IsInternal,
-			UidCount:       gchild.UidCount,
-			UidCountAlias:  gchild.UidCountAlias,
 		}
 
 		if gchild.IsCount {
@@ -758,8 +751,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:              gq.Var,
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
-		UidCount:         gq.UidCount,
-		UidCountAlias:    gq.UidCountAlias,
 	}
 
 	for argk := range gq.Args {
@@ -868,6 +859,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		sg.Params.ExpandAll = true
 		sg.Params.Langs = nil
 	}
+	// count is to limit how many results we want.
+	first := calculateFirstN(sg)
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
@@ -881,12 +874,48 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
+		First:        first,
 	}
 
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
 	return out, nil
+}
+
+// calculateFirstN returns the count of result we need to proceed query further down.
+func calculateFirstN(sg *SubGraph) int32 {
+	// by default count is zero. (zero will retrive all the results)
+	count := math.MaxInt32
+	// In order to limit we have to make sure that the this level met the following conditions
+	// - No Filter (We can't filter until we have all the uids)
+	// {
+	//   q(func: has(name), first:1)@filter(eq(father, "schoolboy")) {
+	//     name
+	//     father
+	//   }
+	// }
+	// - No Ordering (We need all the results to do the sorting)
+	// {
+	//   q(func: has(name), first:1, orderasc: name) {
+	//     name
+	//   }
+	// }
+	// - should be has function (Right now, I'm doing it for has, later it can be extended)
+	// {
+	//   q(func: has(name), first:1) {
+	//     name
+	//   }
+	// }
+	isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
+		isSupportedFunction {
+		// Offset also added because, we need n results to trim the offset.
+		if sg.Params.Count != 0 {
+			count = sg.Params.Count + sg.Params.Offset
+		}
+	}
+	return int32(count)
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
@@ -1165,8 +1194,11 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		srcMap := doneVars[srcVar.Name]
 		// The value var can be empty. No need to check for nil.
 		sg.Params.UidToVal = srcMap.Vals
+	} else if sg.Attr == "uid" && sg.Params.DoCount {
+		// This is the count(uid) case.
+		// We will do the computation later while constructing the result.
 	} else {
-		return errors.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
+		return errors.Errorf("Unhandled pb.node <%v> with parent <%v>", sg.Attr, parent.Attr)
 	}
 
 	return nil
@@ -1250,7 +1282,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !sg.Params.Cascade {
+		if !child.Params.Cascade {
 			continue
 		}
 
@@ -1340,7 +1372,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
-	} else if sg.Params.UidCount {
+	} else if sg.Params.DoCount && sg.Attr == "uid" && sg.IsInternal() {
 		// 2. This is the case where count(uid) is requested in the query and stored as variable.
 		// In this case there is just one value which is stored corresponding to the uid
 		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
@@ -1351,9 +1383,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			strList: sg.valueMatrix,
 		}
 
+		// Because we are counting the number of UIDs in parent
+		// we use the length of SrcUIDs instead of DestUIDs.
 		val := types.Val{
 			Tid:   types.IntID,
-			Value: int64(len(sg.DestUIDs.Uids)),
+			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
 	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
@@ -1786,7 +1820,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		switch child.Params.Expand {
-		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
+		// It could be expand(_all_) or expand(val(x)).
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
 			if len(types) == 0 {
@@ -1794,34 +1828,15 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(types)
-			rpreds, err := getReversePredicates(ctx, preds)
-			if err != nil {
-				return out, err
-			}
-			preds = append(preds, rpreds...)
-		case "_forward_":
-			span.Annotate(nil, "expand(_forward_)")
-			if len(types) == 0 {
-				break
-			}
-
-			preds = getPredicatesFromTypes(types)
-		case "_reverse_":
-			span.Annotate(nil, "expand(_reverse_)")
-			if len(types) == 0 {
-				break
-			}
-
-			typePreds := getPredicatesFromTypes(types)
-			rpreds, err := getReversePredicates(ctx, typePreds)
-			if err != nil {
-				return out, err
-			}
-			preds = append(preds, rpreds...)
 		default:
-			span.Annotate(nil, "expand default")
-			// We already have the predicates populated from the var.
-			preds = getPredsFromVals(child.ExpandPreds)
+			if len(child.ExpandPreds) > 0 {
+				span.Annotate(nil, "expand default")
+				// We already have the predicates populated from the var.
+				preds = getPredsFromVals(child.ExpandPreds)
+			} else {
+				types := strings.Split(child.Params.Expand, ",")
+				preds = getPredicatesFromTypes(types)
+			}
 		}
 		preds = uniquePreds(preds)
 
@@ -1831,7 +1846,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				Attr:   pred,
 			}
 			temp.Params = child.Params
-			temp.Params.ExpandAll = child.Params.Expand == "_all_"
+			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
+			// are removed
+			temp.Params.ExpandAll = child.Params.Expand != "_reverse_" &&
+				child.Params.Expand != "_forward_"
 			temp.Params.ParentVars = make(map[string]varValue)
 			for k, v := range child.Params.ParentVars {
 				temp.Params.ParentVars[k] = v

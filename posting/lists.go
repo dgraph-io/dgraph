@@ -32,7 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,28 +119,35 @@ func updateMemoryMetrics(lc *y.Closer) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
+	update := func() {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+
+		inUse := ms.HeapInuse + ms.StackInuse
+		// From runtime/mstats.go:
+		// HeapIdle minus HeapReleased estimates the amount of memory
+		// that could be returned to the OS, but is being retained by
+		// the runtime so it can grow the heap without requesting more
+		// memory from the OS. If this difference is significantly
+		// larger than the heap size, it indicates there was a recent
+		// transient spike in live heap size.
+		idle := ms.HeapIdle - ms.HeapReleased
+
+		ostats.Record(context.Background(),
+			x.MemoryInUse.M(int64(inUse)),
+			x.MemoryIdle.M(int64(idle)),
+			x.MemoryProc.M(int64(getMemUsage())))
+	}
+	// Call update immediately so that Dgraph reports memory stats without
+	// having to wait for the first tick.
+	update()
+
 	for {
 		select {
 		case <-lc.HasBeenClosed():
 			return
 		case <-ticker.C:
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-
-			inUse := ms.HeapInuse + ms.StackInuse
-			// From runtime/mstats.go:
-			// HeapIdle minus HeapReleased estimates the amount of memory
-			// that could be returned to the OS, but is being retained by
-			// the runtime so it can grow the heap without requesting more
-			// memory from the OS. If this difference is significantly
-			// larger than the heap size, it indicates there was a recent
-			// transient spike in live heap size.
-			idle := ms.HeapIdle - ms.HeapReleased
-
-			ostats.Record(context.Background(),
-				x.MemoryInUse.M(int64(inUse)),
-				x.MemoryIdle.M(int64(idle)),
-				x.MemoryProc.M(int64(getMemUsage())))
+			update()
 		}
 	}
 }

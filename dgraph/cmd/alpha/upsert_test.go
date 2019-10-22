@@ -18,14 +18,27 @@ package alpha
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
+
+// assertAsHex checks that uids returned as part of the vars map should be valid hex encoded uids.
+func assertAsHex(t *testing.T, vars map[string][]string) {
+	for _, uids := range vars {
+		for _, uid := range uids {
+			require.True(t, strings.HasPrefix(uid, "0x"), "uid: [%v] should be a hex encoded string", uid)
+			// ParseUint throws an error if the string has 0x prefix, so we need to strip the prefix here.
+			_, err := strconv.ParseUint(uid[2:], 16, 64)
+			require.NoErrorf(t, err, "while parsing: [%v] as hex encoded uint64", uid)
+		}
+	}
+}
 
 // contains checks whether given element is contained
 // in any of the elements of the given list of strings.
@@ -58,11 +71,13 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "email"))
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, 0, len(mr.vars))
+	require.True(t, contains(mr.preds, "email"))
+	require.True(t, contains(mr.preds, "name"))
+	assertAsHex(t, mr.vars)
 
 	// query should return the wrong name
 	q1 := `
@@ -92,10 +107,15 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, 1, len(mr.vars))
+	uids, ok := mr.vars["uid(v)"]
+	require.True(t, ok)
+	require.Equal(t, 1, len(uids))
+	assertAsHex(t, mr.vars)
+	require.True(t, contains(mr.preds, "name"))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -123,7 +143,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Expected ')' while reading function found: '.'")
 }
 
@@ -141,7 +161,7 @@ func TestUpsertNoCloseBracketJSON(t *testing.T) {
   ]
 }
 `
-	_, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	_, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.Contains(t, err.Error(), "brackets are not closed properly")
 }
 
@@ -159,8 +179,11 @@ func TestUpsertExampleJSON(t *testing.T) {
   ]
 }
 `
-	_, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -208,9 +231,9 @@ func TestUpsertExample0JSON(t *testing.T) {
     }
   ]
 }`
-	keys, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
+	require.True(t, len(mr.keys) == 0)
 
 	// query should return the wrong name
 	q1 := `
@@ -236,10 +259,10 @@ func TestUpsertExample0JSON(t *testing.T) {
     }
   ]
 }`
-	keys, preds, _, err := mutationWithTs(m2, "application/json", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "name"))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -275,7 +298,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "upsert query block has no variables")
 }
 
@@ -305,16 +328,16 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(keys))
-	require.True(t, contains(preds, "age"))
+	require.True(t, 0 == len(mr.keys))
+	require.True(t, contains(mr.preds, "age"))
 
 	// Ensure that another run works too
-	keys, preds, _, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(keys))
-	require.True(t, contains(preds, "age"))
+	require.True(t, 0 == len(mr.keys))
+	require.True(t, contains(mr.preds, "age"))
 }
 
 func TestUpsertInvalidErr(t *testing.T) {
@@ -330,7 +353,7 @@ friend: uid @reverse .`))
     uid(variable) <age> "45" .
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "invalid syntax")
 }
 
@@ -362,7 +385,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Some variables are used but not defined")
 	require.Contains(t, err.Error(), "Defined:[variable]")
 	require.Contains(t, err.Error(), "Used:[42 variable]")
@@ -397,7 +420,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Some variables are defined but not used")
 	require.Contains(t, err.Error(), "Defined:[var1 var2]")
 	require.Contains(t, err.Error(), "Used:[var2]")
@@ -421,7 +444,7 @@ friend: uid @reverse .`))
     _:user3 <name@en> "user3" .
   }
 }`
-	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m0, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -444,8 +467,11 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -475,8 +501,11 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -508,7 +537,7 @@ friend: uid @reverse .`))
     _:user3 <name@en> "user3" .
   }
 }`
-	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m0, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -529,8 +558,12 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -562,8 +595,12 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -596,7 +633,7 @@ friend: uid @reverse .`))
     _:user3 <name@en> "user3" .
   }
 }`
-	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m0, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -609,7 +646,7 @@ friend: uid @reverse .`))
     }
   ]
 }`
-	_, _, _, err = mutationWithTs(m1, "application/json", false, true, 0)
+	_, err = mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 
 	q1 := `
@@ -636,7 +673,7 @@ friend: uid @reverse .`))
     }
   ]
 }`
-	_, _, _, err = mutationWithTs(m2, "application/json", false, true, 0)
+	_, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 
 	q2 := `
@@ -669,7 +706,7 @@ friend: uid @reverse .`))
     _:user3 <name@en> "user3" .
   }
 }`
-	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m0, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -682,8 +719,12 @@ friend: uid @reverse .`))
     }
   ]
 }`
-	_, _, _, err = mutationWithTs(m1, "application/json", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
+	assertAsHex(t, mr.vars)
 
 	q1 := `
 {
@@ -707,7 +748,7 @@ friend: uid @reverse .`))
     }
   ]
 }`
-	_, _, _, err = mutationWithTs(m3, "application/json", false, true, 0)
+	_, err = mutationWithTs(m3, "application/json", false, true, 0)
 	require.NoError(t, err)
 
 	q3 := `
@@ -742,8 +783,10 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.vars))
+	assertAsHex(t, mr.vars)
 
 	q := `
 {
@@ -800,9 +843,9 @@ upsert {
 	doUpsert := func(wg *sync.WaitGroup) {
 		defer wg.Done()
 		for i := 0; i < 10; i++ {
-			err := y.ErrAborted
+			err := dgo.ErrAborted
 			for err != nil && strings.Contains(err.Error(), "Transaction has been aborted. Please retry") {
-				_, _, _, err = mutationWithTs(m, "application/rdf", false, true, 0)
+				_, err = mutationWithTs(m, "application/rdf", false, true, 0)
 			}
 
 			require.NoError(t, err)
@@ -873,8 +916,11 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	require.Equal(t, 0, len(mr.vars))
 	require.NoError(t, err)
+	assertAsHex(t, mr.vars)
+
 }
 
 func TestConditionalUpsertExample0(t *testing.T) {
@@ -897,15 +943,17 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "email"))
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "email"))
+	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 0, len(mr.vars))
 
 	// Trying again, should be a NOOP
-	_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.vars))
 
 	// query should return the wrong name
 	q1 := `
@@ -935,10 +983,13 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(v)"]))
+	assertAsHex(t, mr.vars)
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -966,9 +1017,10 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
     }
   ]
 }`
-	keys, _, _, err := mutationWithTs(m1, "application/json", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, 0, len(mr.vars))
 
 	// query should return the wrong name
 	q1 := `
@@ -995,10 +1047,12 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
     }
   ]
 }`
-	keys, preds, _, err := mutationWithTs(m2, "application/json", false, true, 0)
+	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "name"))
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(v)"]))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1032,7 +1086,7 @@ works_with: [uid] .`))
     _:user4 <works_for> "company2" .
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 }
 
@@ -1055,11 +1109,14 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err := mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, len(keys) == 0)
-	require.True(t, contains(preds, "color"))
-	require.False(t, contains(preds, "works_for"))
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "color"))
+	require.False(t, contains(mr.preds, "works_for"))
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 2, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	q2 := `
 {
@@ -1093,8 +1150,12 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.vars))
+	require.Equal(t, 2, len(mr.vars["uid(c1)"]))
+	require.Equal(t, 2, len(mr.vars["uid(c2)"]))
+	assertAsHex(t, mr.vars)
 
 	// The following mutation should have no effect on the state of the database
 	m4 := `
@@ -1114,8 +1175,9 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.vars))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1147,7 +1209,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	q1 := `
@@ -1184,8 +1246,12 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(mr.vars))
+	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
+	require.Equal(t, 1, len(mr.vars["uid(u3)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1219,7 +1285,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	q1 := `
@@ -1258,7 +1324,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Expected @if, found [@filter]")
 }
 
@@ -1281,7 +1347,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), `Unrecognized character inside mutation: U+0028 '('`)
 }
 
@@ -1304,7 +1370,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Expected { at the start of block")
 }
 
@@ -1327,7 +1393,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Matching brackets not found")
 }
 
@@ -1365,7 +1431,7 @@ content: string @index(exact) .`))
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	// user2 trying to delete the post4
@@ -1389,7 +1455,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	// post4 must still exist
@@ -1424,7 +1490,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	// post4 shouldn't exist anymore
@@ -1476,7 +1542,7 @@ amount: float .`))
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	q1 := `
@@ -1529,8 +1595,11 @@ upsert {
 	// parsed correctly by the val function.
 	// User3 doesn't have all the fields. This test also ensures
 	// that val works when not all records have the values
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1553,7 +1622,7 @@ upsert {
 }
 `
 
-	_, _, _, err := mutationWithTs(m3, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "while lexing val(amt) <amount> 1")
 }
 
@@ -1572,7 +1641,7 @@ upsert {
   }
 }
 `
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Invalid input: V at lexText")
 
 	m2 := `
@@ -1589,7 +1658,7 @@ upsert {
   }
 }
 `
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Invalid input: U at lexText")
 }
 
@@ -1614,7 +1683,7 @@ amount: float .`))
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	q1 := `
 {
@@ -1656,7 +1725,7 @@ upsert {
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1693,7 +1762,7 @@ upsert {
     amount
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1728,7 +1797,7 @@ upsert {
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1767,7 +1836,7 @@ upsert {
     amount
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1820,8 +1889,11 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	assertAsHex(t, mr.vars)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes := `
@@ -1865,8 +1937,9 @@ upsert {
     }
   }
 }`
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 0, len(mr.vars))
 }
 
 func TestUpsertBulkUpdateBranch(t *testing.T) {
@@ -1893,7 +1966,7 @@ amount: float .`))
   }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	// Bulk Update: update everyone's branch
@@ -1901,6 +1974,7 @@ amount: float .`))
 upsert {
   query {
     u as var(func: has(branch))
+
   }
 
   mutation {
@@ -1909,8 +1983,10 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 3, len(mr.vars["uid(u)"]))
 
 	q2 := `
 {
@@ -1940,8 +2016,10 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(mr.vars))
+	require.Equal(t, 3, len(mr.vars["uid(u)"]))
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1968,7 +2046,7 @@ set {
 }
 }`
 
-	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	m2 := `
@@ -1983,7 +2061,7 @@ upsert {
     }
   }
 }`
-	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	q1 := `
@@ -1996,4 +2074,47 @@ upsert {
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "count(~game_answer)")
+}
+
+func TestUpsertVarOnlyUsedInQuery(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: float .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <branch> "Fuller Street, San Francisco" .
+    _:user1 <amount> "10" .
+  }
+}`
+
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// Bulk Update: update everyone's branch
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(branch))
+
+    me(func: uid(u)) {
+      branch
+    }
+  }
+
+  mutation {
+    set {
+      _:a <branch> "Fuller Street, SF" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	// The uid variable is only used in the query and not in mutation and hence shouldn't be part
+	// of vars.
+	require.Equal(t, 0, len(mr.vars))
 }

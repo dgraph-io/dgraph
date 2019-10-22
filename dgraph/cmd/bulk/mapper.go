@@ -32,7 +32,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -93,8 +93,8 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map.gz", fileNum),
 	)
-	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
+	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
 func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {

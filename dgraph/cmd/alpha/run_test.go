@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -133,12 +133,12 @@ func runJSONQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	return err
 }
 
 func runJSONMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/json", true, true, 0)
+	_, err := mutationWithTs(m, "application/json", true, true, 0)
 	return err
 }
 
@@ -805,11 +805,10 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 
 	n1, ok := q1Result.Data.Q[0]["n1"]
 	require.True(t, ok)
-	switch n1.(type) {
+	switch n1 := n1.(type) {
 	case json.Number:
-		n := n1.(json.Number)
-		require.True(t, strings.Index(n.String(), ".") < 0)
-		i, err := n.Int64()
+		require.False(t, strings.Contains(n1.String(), "."))
+		i, err := n1.Int64()
 		require.NoError(t, err)
 		require.Equal(t, int64(9007199254740995), i)
 	default:
@@ -818,11 +817,10 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 
 	n2, ok := q1Result.Data.Q[0]["n2"]
 	require.True(t, ok)
-	switch n2.(type) {
+	switch n2 := n2.(type) {
 	case json.Number:
-		n := n2.(json.Number)
-		require.True(t, strings.Index(n.String(), ".") >= 0)
-		f, err := n.Float64()
+		require.True(t, strings.Contains(n2.String(), "."))
+		f, err := n2.Float64()
 		require.NoError(t, err)
 		require.Equal(t, 9007199254740995.0, f)
 	default:
@@ -1227,16 +1225,26 @@ func TestListTypeSchemaChange(t *testing.T) {
 
 func TestDeleteAllSP2(t *testing.T) {
 	s := `
+	nodeType: string .
+	name: string .
+	date: datetime .
+	weight: float .
+	weightUnit: string .
+	lifeLoad: int .
+	stressLevel: int .
+	plan: string .
+	postMortem: string .
+
 	type Node12345 {
-		nodeType: string
-		name: string
-		date: dateTime
-		weight: float
-		weightUnit: string
-		lifeLoad: int
-		stressLevel: int
-		plan: string
-		postMortem: string
+		nodeType
+		name
+		date
+		weight
+		weightUnit
+		lifeLoad
+		stressLevel
+		plan
+		postMortem
 	}
 	`
 	require.NoError(t, dropAll())
@@ -1276,7 +1284,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03Z","weight":262.3,"lifeLoad":5,"stressLevel":3}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{
@@ -1515,7 +1523,9 @@ func TestGrpcCompressionSupport(t *testing.T) {
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 	require.NoError(t, err)
 
 	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))

@@ -26,10 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -46,7 +45,7 @@ func incrementInLoop(t *testing.T, dg *dgo.Dgraph, M int) int {
 	for i := 0; i < M; i++ {
 		cnt, err := process(dg, conf)
 		if err != nil {
-			if strings.Index(err.Error(), "Transaction has been aborted") >= 0 {
+			if strings.Contains(err.Error(), "Transaction has been aborted") {
 				// pass
 			} else {
 				t.Logf("Error while incrementing: %v\n", err)
@@ -134,7 +133,10 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	ctx := context.Background()
 	op := api.Operation{DropAll: true}
 
@@ -143,7 +145,9 @@ func setup(t *testing.T) *dgo.Dgraph {
 	md := metadata.New(nil)
 	md.Append("auth-token", "mrjn2")
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	x.Check(dg.Alter(ctx, &op))
+	if err := dg.Alter(ctx, &op); err != nil {
+		t.Fatalf("Cannot perform drop all op: %s", err.Error())
+	}
 
 	conf := viper.New()
 	conf.Set("pred", "counter.val")
@@ -224,10 +228,10 @@ func TestBestEffortTs(t *testing.T) {
 	incrementInLoop(t, dg, 1)
 	readBestEffort(t, dg, pred, 1)
 	txn := dg.NewReadOnlyTxn().BestEffort()
-	_, err := queryCounter(txn, pred)
+	_, err := queryCounter(context.Background(), txn, pred)
 	require.NoError(t, err)
 
-	incrementInLoop(t, dg, 1)        // Increment the MaxAssigned ts at Alpha.
-	_, err = queryCounter(txn, pred) // The timestamp here shouldn't change.
+	incrementInLoop(t, dg, 1)                              // Increment the MaxAssigned ts at Alpha.
+	_, err = queryCounter(context.Background(), txn, pred) // The timestamp here shouldn't change.
 	require.NoError(t, err)
 }

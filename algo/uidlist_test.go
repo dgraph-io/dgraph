@@ -290,7 +290,7 @@ func TestApplyFilterUint(t *testing.T) {
 func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests := func(arrSz int, overlap float64) {
 		limit := int64(float64(arrSz) / overlap)
-		u1, v1 := make([]uint64, arrSz, arrSz), make([]uint64, arrSz, arrSz)
+		u1, v1 := make([]uint64, arrSz), make([]uint64, arrSz)
 		for i := 0; i < arrSz; i++ {
 			u1[i] = uint64(rand.Int63n(limit))
 			v1[i] = uint64(rand.Int63n(limit))
@@ -350,7 +350,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 				break
 			}
 
-			u1, v1 := make([]uint64, sz1, sz1), make([]uint64, sz2, sz2)
+			u1, v1 := make([]uint64, sz1), make([]uint64, sz2)
 			limit := int64(float64(sz) / overlap)
 			for i := 0; i < sz1; i++ {
 				u1[i] = uint64(rand.Int63n(limit))

@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +48,8 @@ var addr string = testutil.SockAddr
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	testutil.AssignUids(200)
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.CheckfNoTrace(err)
 	s.dg = dg
 
 	r := m.Run()
@@ -172,7 +173,7 @@ func TestTxnRead4(t *testing.T) {
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish2"}`, uid))
-	assigned, err = txn3.Mutate(context.Background(), mu)
+	_, err = txn3.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -740,14 +741,15 @@ query countAnswers($num: int) {
 )
 
 func TestCountIndexConcurrentTxns(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	x.Check(err)
 	err = txn0.Commit(ctxb)
 	x.Check(err)
@@ -796,14 +798,15 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 }
 
 func TestCountIndexSerialTxns(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	require.NoError(t, err)
 	err = txn0.Commit(ctxb)
 	require.NoError(t, err)
@@ -845,14 +848,15 @@ func TestCountIndexSerialTxns(t *testing.T) {
 }
 
 func TestCountIndexSameTxn(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	x.Check(err)
 	err = txn0.Commit(ctxb)
 	x.Check(err)

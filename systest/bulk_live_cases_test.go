@@ -270,8 +270,10 @@ func TestCountIndex(t *testing.T) {
 
 func TestLoadTypes(t *testing.T) {
 	s := newSuite(t, `
+	name: string .
+
 	type Person {
-		name: string
+		name
 	}
 	`, `
 		_:alice <name> "Alice" .
@@ -281,7 +283,7 @@ func TestLoadTypes(t *testing.T) {
 	// Ensures that the index keys are written to disk after commit.
 	time.Sleep(time.Second)
 	t.Run("All queries", s.testCase("schema(type: Person) {}",
-		`{"types":[{"name":"Person", "fields":[{"name":"name", "type":"string"}]}]}`))
+		`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`))
 }
 
 // This test is similar to TestCount but the friend predicate is not a list. The bulk loader
