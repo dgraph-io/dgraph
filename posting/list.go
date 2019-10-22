@@ -107,6 +107,10 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 			deleteBelowTs, l.minTs)
 	}
 
+	if deleteBelowTs > 0 {
+		return nil
+	}
+
 	it.l = l
 	it.splitIdx = it.selectInitialSplit(afterUid)
 	if len(it.l.plist.Splits) > 0 {
