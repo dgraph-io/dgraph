@@ -1158,3 +1158,17 @@ func TestCountUIDNestedMultiple(t *testing.T) {
 		}
 	}`, js)
 }
+
+func TestNumUids(t *testing.T) {
+	query := `{
+        me(func:has(name), first:10){
+          name
+         friend{
+           name
+          }
+        }
+      }`
+	metrics := processQueryForMetrics(t, query)
+	require.Equal(t, metrics.NumUids["friend"], uint64(10))
+	require.Equal(t, metrics.NumUids["name"], uint64(16))
+}
