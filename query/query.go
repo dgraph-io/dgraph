@@ -2755,7 +2755,7 @@ func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
 	for _, filter := range sg.Filters {
 		calculateMetrics(filter, metrics)
 	}
-	// calculate metrics for the childres as well.
+	// calculate metrics for the children as well.
 	for _, child := range sg.Children {
 		calculateMetrics(child, metrics)
 	}
