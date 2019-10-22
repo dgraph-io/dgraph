@@ -103,7 +103,7 @@ func InitServerState() {
 
 	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
 	if err != nil {
-		glog.Warningf("% file not found or could not be opened", groupFile)
+		glog.Warningf("%s file not found or could not be opened", groupFile)
 		return
 	}
 
