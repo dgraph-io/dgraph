@@ -72,6 +72,7 @@ func shardDirs(d string) []string {
 	for i, shard := range shards {
 		shards[i] = filepath.Join(d, shard)
 	}
+	sort.Strings(shards)
 	return shards
 }
 
