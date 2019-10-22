@@ -198,6 +198,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+	x.PostingListMemeory.M(int64(l.DeepSize()))
 	return l, nil
 }
 

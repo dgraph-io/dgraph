@@ -82,6 +82,8 @@ var (
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 
+	PostingListMemeory = stats.Int64("posting_memory", "posting memory", stats.UnitDimensionless)
+
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
@@ -142,6 +144,13 @@ var (
 			Name:        MaxAssignedTs.Name(),
 			Measure:     MaxAssignedTs,
 			Description: MaxAssignedTs.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PostingListMemeory.Name(),
+			Measure:     PostingListMemeory,
+			Description: PostingListMemeory.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},
