@@ -164,8 +164,8 @@ var defaultSearches = map[string]string{
 // Dgraph index filters that have contains intersecting filter
 // directive.
 var filtersCollisions = map[string][]string{
-	"StringHashFilter":  []string{"StringExactFilter"},
-	"StringExactFilter": []string{"StringHashFilter"},
+	"StringHashFilter":  {"StringExactFilter"},
+	"StringExactFilter": {"StringHashFilter"},
 }
 
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
@@ -711,7 +711,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Add" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -730,7 +730,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -749,7 +749,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: "msg",
 				Type: &ast.Type{
 					NamedType: "String",
@@ -771,7 +771,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: defn.Name,
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "id",
 				Type: &ast.Type{
 					NamedType: idTypeFor(defn),
@@ -813,7 +813,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Add" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: defn.Name + "Input",
@@ -837,7 +837,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Update" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: "Update" + defn.Name + "Input",
@@ -861,7 +861,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Delete" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "filter",
 				Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: true},
 			},
