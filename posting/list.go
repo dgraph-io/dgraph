@@ -107,10 +107,6 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 			deleteBelowTs, l.minTs)
 	}
 
-	if deleteBelowTs > 0 {
-		return nil
-	}
-
 	it.l = l
 	it.splitIdx = it.selectInitialSplit(afterUid)
 	if len(it.l.plist.Splits) > 0 {
@@ -125,9 +121,13 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 
 	it.afterUid = afterUid
 	it.deleteBelowTs = deleteBelowTs
+	if deleteBelowTs > 0 {
+		return nil
+	}
 
 	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
