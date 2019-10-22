@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -44,6 +45,8 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) (*Reso
 	resCtx := &ResolverContext{Ctx: ctx, RootField: query}
 
 	res, succeed, err := qr.rewriteAndExecute(resCtx, query)
+
+	fmt.Println(string(res))
 
 	completed, err := qr.resultCompleter.Complete(resCtx, query, res, err)
 	return &Resolved{

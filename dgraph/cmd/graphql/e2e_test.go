@@ -274,15 +274,13 @@ func TestGetQueryEmptyVariable(t *testing.T) {
 
 func TestGraphQLCompletionOn(t *testing.T) {
 	addCountryParams := &GraphQLParams{
-		Query: `mutation addCountry($name: String!) {
-			addCountry(input: { name: $name }) {
-				country {
-					id
-					name
-				}
+		Query: `query {
+			queryPost {
+			      title
+			      text
+			      postID
 			}
 		}`,
-		Variables: map[string]interface{}{"name": "Testland"},
 	}
 
 	res := addCountryParams.ExecuteAsPost(t, graphqlURL)
