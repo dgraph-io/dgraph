@@ -38,6 +38,7 @@ import (
 var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
+var groupFile = "group_id"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -193,7 +194,7 @@ func run() {
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 
-		groupFile := filepath.Join(dir, "group_id")
+		groupFile := filepath.Join(dir, groupFile)
 		f, err := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
 		x.Check(err)
 		x.Check2(f.WriteString(strconv.Itoa(i + 1)))

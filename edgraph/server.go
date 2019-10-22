@@ -62,7 +62,7 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
-	groupIdPath  = "group_id"
+	groupFile    = "group_id"
 )
 
 // ServerState holds the state of the Dgraph server.
@@ -99,16 +99,18 @@ func InitServerState() {
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
+	go State.fillTimestampRequests()
 
-	groupIdFile := filepath.Join(Config.PostingDir, groupIdPath)
-	if contents, err := ioutil.ReadFile(groupIdFile); err == nil {
-		groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 32)
-		x.Checkf(err, "Error reading %s file inside posting directory %s",
-			groupIdPath, Config.PostingDir)
-		x.WorkerConfig.ProposedGroupId = uint32(groupId)
+	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
+	if err != nil {
+		glog.Warningf("% file not found or could not be opened", groupFile)
+		return
 	}
 
-	go State.fillTimestampRequests()
+	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 32)
+	x.Checkf(err, "Error reading %s file inside posting directory %s",
+		groupFile, Config.PostingDir)
+	x.WorkerConfig.ProposedGroupId = uint32(groupId)
 }
 
 func (s *ServerState) runVlogGC(store *badger.DB) {
