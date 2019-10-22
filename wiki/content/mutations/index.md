@@ -865,15 +865,15 @@ upsert {
 }
 ```
 
-`uid` function currently allows extracting UIDs from variables defined in
+`uid` function allows extracting UIDs from variables defined in
 the query block. There are two possible outcomes based on the results of
 executing the query block:
 
 * If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
-`val` function currently allows for extracting values from variables defined in
-the query block. That value can then be passed to mutation block and updated
+`val` function allows for extracting values from value variables defined in
+the query block. That value can then be passed to the mutation block and updated
 for the same UID. `val` function could also be used with result of aggregate
 variables, in which case, all the UID in the mutation would be updated with that
 value.
@@ -1022,7 +1022,6 @@ If we want to execute the mutation only when the user exists, we could use
 ### Bulk Update Example
 
 Let's say we want to update all the users of `company1` to increase their age.
-This can be achieved in just one query using the upsert block:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
