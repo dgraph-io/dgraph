@@ -17,10 +17,10 @@
 package badger
 
 import (
-	"bytes"
 	"sync"
 
 	"github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/trie"
 	"github.com/dgraph-io/badger/y"
 )
 
@@ -35,6 +35,7 @@ type publisher struct {
 	pubCh       chan requests
 	subscribers map[uint64]subscriber
 	nextID      uint64
+	indexer     *trie.Trie
 }
 
 func newPublisher() *publisher {
@@ -42,6 +43,7 @@ func newPublisher() *publisher {
 		pubCh:       make(chan requests, 1000),
 		subscribers: make(map[uint64]subscriber),
 		nextID:      0,
+		indexer:     trie.NewTrie(),
 	}
 }
 
@@ -72,42 +74,37 @@ func (p *publisher) listenForUpdates(c *y.Closer) {
 }
 
 func (p *publisher) publishUpdates(reqs requests) {
-	kvs := &pb.KVList{}
 	p.Lock()
 	defer func() {
 		p.Unlock()
 		// Release all the request.
 		reqs.DecrRef()
 	}()
-
-	// TODO: Optimize this, so we can figure out key -> subscriber quickly, without iterating over
-	// all the prefixes.
-	// TODO: Use trie to find subscribers.
-	for _, s := range p.subscribers {
-		// BUG: This would send out the same entry multiple times on multiple matches for the same
-		// subscriber.
-		for _, prefix := range s.prefixes {
-			for _, req := range reqs {
-				for _, e := range req.Entries {
-					if bytes.HasPrefix(e.Key, prefix) {
-						// TODO: Maybe we can optimize this by creating the KV once and sending it
-						// over to multiple subscribers.
-						k := y.SafeCopy(nil, e.Key)
-						kv := &pb.KV{
-							Key:       y.ParseKey(k),
-							Value:     y.SafeCopy(nil, e.Value),
-							UserMeta:  []byte{e.UserMeta},
-							ExpiresAt: e.ExpiresAt,
-							Version:   y.ParseTs(k),
-						}
-						kvs.Kv = append(kvs.Kv, kv)
+	batchedUpdates := make(map[uint64]*pb.KVList)
+	for _, req := range reqs {
+		for _, e := range req.Entries {
+			ids := p.indexer.Get(e.Key)
+			if len(ids) > 0 {
+				k := y.SafeCopy(nil, e.Key)
+				kv := &pb.KV{
+					Key:       y.ParseKey(k),
+					Value:     y.SafeCopy(nil, e.Value),
+					Meta:      []byte{e.UserMeta},
+					ExpiresAt: e.ExpiresAt,
+					Version:   y.ParseTs(k),
+				}
+				for id := range ids {
+					if _, ok := batchedUpdates[id]; !ok {
+						batchedUpdates[id] = &pb.KVList{}
 					}
+					batchedUpdates[id].Kv = append(batchedUpdates[id].Kv, kv)
 				}
 			}
 		}
-		if len(kvs.GetKv()) > 0 {
-			s.sendCh <- kvs
-		}
+	}
+
+	for id, kvs := range batchedUpdates {
+		p.subscribers[id].sendCh <- kvs
 	}
 }
 
@@ -123,6 +120,9 @@ func (p *publisher) newSubscriber(c *y.Closer, prefixes ...[]byte) (<-chan *pb.K
 		sendCh:    ch,
 		subCloser: c,
 	}
+	for _, prefix := range prefixes {
+		p.indexer.Add(prefix, id)
+	}
 	return ch, id
 }
 
@@ -131,6 +131,9 @@ func (p *publisher) cleanSubscribers() {
 	p.Lock()
 	defer p.Unlock()
 	for id, s := range p.subscribers {
+		for _, prefix := range s.prefixes {
+			p.indexer.Delete(prefix, id)
+		}
 		delete(p.subscribers, id)
 		s.subCloser.SignalAndWait()
 	}
@@ -139,14 +142,15 @@ func (p *publisher) cleanSubscribers() {
 func (p *publisher) deleteSubscriber(id uint64) {
 	p.Lock()
 	defer p.Unlock()
-	if _, ok := p.subscribers[id]; !ok {
-		return
+	if s, ok := p.subscribers[id]; ok {
+		for _, prefix := range s.prefixes {
+			p.indexer.Delete(prefix, id)
+		}
 	}
 	delete(p.subscribers, id)
 }
 
 func (p *publisher) sendUpdates(reqs []*request) {
-	// TODO: Prefix check before pushing into pubCh.
 	if p.noOfSubscribers() != 0 {
 		p.pubCh <- reqs
 	}
