@@ -3,27 +3,27 @@
 
 type Country {
         id: ID!
-        name: String! @search(by: "trigram")
+        name: String! @search(by: [trigram])
 }
 
 type Author {
         id: ID!
-        name: String! @search(by: "hash")
+        name: String! @search(by: [hash])
         dob: DateTime @search
         reputation: Float @search
         country: Country
-        posts: [Post!] @hasInverse(field: "author")
+        posts: [Post!] @hasInverse(field: author)
 }
 
 type Post {
         postID: ID!
-        title: String! @search(by: "term")
-        text: String @search(by: "fulltext")
-        tags: [String] @search(by: "exact")
+        title: String! @search(by: [term])
+        text: String @search(by: [fulltext])
+        tags: [String] @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
         postType: PostType @search
-        author: Author! @hasInverse(field: "posts")
+        author: Author! @hasInverse(field: posts)
 }
 
 enum PostType {
