@@ -540,7 +540,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		filterTypeNameUnion := []string{}
+		var filterTypeNameUnion []string
 		searchArgs := getSearchArgs(fld)
 		if schema.Types[fld.Type.Name()].Kind == ast.Enum &&
 			len(searchArgs) == 1 && searchArgs[0] == "exact" {
@@ -557,7 +557,6 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			for _, search := range searchArgs {
 				filterTypeNameUnion = append(filterTypeNameUnion,
 					builtInFilters[search])
-			}
 		}
 
 		if len(filterTypeNameUnion) > 0 {
@@ -572,7 +571,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 			//create a schema type
 			if len(filterTypeNameUnion) > 1 {
-				fieldList := ast.FieldList{}
+				var fieldList ast.FieldList
 				for _, typeName := range filterTypeNameUnion {
 					fieldList = append(fieldList, schema.Types[typeName].Fields...)
 				}
@@ -603,7 +602,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return getSearchArgs(fld) != nil || isID(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld)
 		})
 }
 

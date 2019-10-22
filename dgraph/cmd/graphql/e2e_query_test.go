@@ -176,9 +176,6 @@ func TestRegExp(t *testing.T) {
 		})
 }
 
-func TestEnumSearch(t *testing.T) {
-}
-
 func TestMultipleSearchIndexes(t *testing.T) {
 	query := `query queryPost($filter: PostFilter){
 		  queryPost (filter: $filter) {

@@ -1,5 +1,6 @@
-#!/bin/bash -e
+#!/bin/bash
 
+set -e
 readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 

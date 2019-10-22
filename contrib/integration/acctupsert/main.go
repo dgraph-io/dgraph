@@ -69,7 +69,8 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := testutil.DgraphClientWithGroot(*alpha)
+	c, err := testutil.DgraphClientWithGroot(*alpha)
+	x.Check(err)
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)

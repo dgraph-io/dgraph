@@ -239,8 +239,8 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				e6: E @search(by: [day])
 				e7: E @search(by: [hour])
 				e8: E @search(by: [hash])
-				e10: E @search(by: [term])
-				e11: E @search(by: [fulltext])
+				e9: E @search(by: [term])
+				e10: E @search(by: [fulltext])
 			}
 			enum E {
 				A
