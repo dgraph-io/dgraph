@@ -99,7 +99,7 @@ const (
 func (m *Manifest) asChanges() []*pb.ManifestChange {
 	changes := make([]*pb.ManifestChange, 0, len(m.Tables))
 	for id, tm := range m.Tables {
-		changes = append(changes, newCreateChange(id, int(tm.Level), tm.Checksum))
+		changes = append(changes, newCreateChange(id, int(tm.Level)))
 	}
 	return changes
 }
@@ -223,7 +223,7 @@ func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
 // The magic version number.
-const magicVersion = 4
+const magicVersion = 5
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -390,8 +390,7 @@ func applyManifestChange(build *Manifest, tc *pb.ManifestChange) error {
 			return fmt.Errorf("MANIFEST invalid, table %d exists", tc.Id)
 		}
 		build.Tables[tc.Id] = TableManifest{
-			Level:    uint8(tc.Level),
-			Checksum: append([]byte{}, tc.Checksum...),
+			Level: uint8(tc.Level),
 		}
 		for len(build.Levels) <= int(tc.Level) {
 			build.Levels = append(build.Levels, levelManifest{make(map[uint64]struct{})})
@@ -423,12 +422,11 @@ func applyChangeSet(build *Manifest, changeSet *pb.ManifestChangeSet) error {
 	return nil
 }
 
-func newCreateChange(id uint64, level int, checksum []byte) *pb.ManifestChange {
+func newCreateChange(id uint64, level int) *pb.ManifestChange {
 	return &pb.ManifestChange{
-		Id:       id,
-		Op:       pb.ManifestChange_CREATE,
-		Level:    uint32(level),
-		Checksum: checksum,
+		Id:    id,
+		Op:    pb.ManifestChange_CREATE,
+		Level: uint32(level),
 	}
 }
 
