@@ -187,6 +187,7 @@ input PostFilter {
 	postTypeRegexp: StringRegExpFilter
 	postTypeExact: PostType
 	postTypeRegexpExact: StringExactFilter_StringRegExpFilter
+	postTypeNone: PostType
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter

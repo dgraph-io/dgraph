@@ -639,6 +639,15 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
+func getDefaultSearchType(fldName string) []string {
+	if search, ok := defaultSearches[fldName]; ok {
+		return []string{search}
+	}
+	// it's an enum - always has exact index
+	return []string{"exact"}
+
+}
+
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
@@ -647,14 +656,13 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		return nil
 	}
 	if len(search.Arguments) == 0 {
-		if search, ok := defaultSearches[fld.Type.Name()]; ok {
-			return []string{search}
-		}
-		// it's an enum - always has exact index
-		return []string{"exact"}
+		return getDefaultSearchType(fld.Type.Name())
 	}
 
 	val := search.Arguments.ForName(searchArgs).Value
+	if len(val.Children) == 0 {
+		return getDefaultSearchType(fld.Type.Name())
+	}
 	res := make([]string, len(val.Children))
 
 	for i, child := range val.Children {
