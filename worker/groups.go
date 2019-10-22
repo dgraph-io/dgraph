@@ -94,13 +94,20 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		id, err := raftwal.RaftId(walStore)
 		x.Check(err)
 		x.WorkerConfig.RaftId = id
+
+		// If the w directory already contains raft information, ignore the proposed
+		// group ID stored inside the p directory.
+		if id > 0 {
+			x.WorkerConfig.ProposedGroupId = 0
+		}
 	}
 	glog.Infof("Current Raft Id: %#x\n", x.WorkerConfig.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 
 	// Connect with Zero leader and figure out what group we should belong to.
-	m := &pb.Member{Id: x.WorkerConfig.RaftId, Addr: x.WorkerConfig.MyAddr}
+	m := &pb.Member{Id: x.WorkerConfig.RaftId, GroupId: x.WorkerConfig.ProposedGroupId,
+		Addr: x.WorkerConfig.MyAddr}
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289

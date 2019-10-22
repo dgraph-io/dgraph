@@ -19,9 +19,11 @@ package edgraph
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,6 +62,7 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
+	groupIdPath  = "group_id"
 )
 
 // ServerState holds the state of the Dgraph server.
@@ -96,6 +99,14 @@ func InitServerState() {
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
+
+	groupIdFile := filepath.Join(Config.PostingDir, groupIdPath)
+	if contents, err := ioutil.ReadFile(groupIdFile); err == nil {
+		groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 32)
+		x.Checkf(err, "Error reading %s file inside posting directory %s",
+			groupIdPath, Config.PostingDir)
+		x.WorkerConfig.ProposedGroupId = uint32(groupId)
+	}
 
 	go State.fillTimestampRequests()
 }

@@ -192,6 +192,13 @@ func run() {
 		dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
+
+		groupFile := filepath.Join(dir, "group_id")
+		f, err := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
+		x.Check(err)
+		x.Check2(f.WriteString(strconv.Itoa(i)))
+		x.Check2(f.WriteString("\n"))
+		x.Check(f.Close())
 	}
 
 	// Create a directory just for bulk loader's usage.
