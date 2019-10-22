@@ -1048,6 +1048,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	resp.Latency = gl
+	resp.Metrics = &api.Metrics{
+		NumUids: er.Metrics,
+	}
 	return resp, err
 }
 
