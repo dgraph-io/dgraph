@@ -2746,12 +2746,11 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
 
 	// skip internal nodes.
-	if sg.IsInternal() {
-		return
+	if !sg.IsInternal() {
+		// we'll calculate srcUid of the each attribute. because, these are number of uids
+		// processed by this attribute.
+		metrics[sg.Attr] = metrics[sg.Attr] + uint64(len(sg.SrcUIDs.GetUids()))
 	}
-	// we'll calculate srcUid of the each attribute. because, these are number of uids
-	// processed by this attribute.
-	metrics[sg.Attr] = metrics[sg.Attr] + uint64(len(sg.SrcUIDs.GetUids()))
 	// add all the uids gathered by filters
 	for _, filter := range sg.Filters {
 		calculateMetrics(filter, metrics)
