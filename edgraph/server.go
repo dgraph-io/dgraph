@@ -109,8 +109,10 @@ func InitServerState() {
 	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
 		Config.PostingDir)
 	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
-	glog.Warningf("Could not read %s file inside posting directory %s.",
-		groupFile, Config.PostingDir)
+	if err != nil {
+		glog.Warningf("Could not read %s file inside posting directory %s.",
+			groupFile, Config.PostingDir)
+	}
 	x.WorkerConfig.ProposedGroupId = uint32(groupId)
 }
 
