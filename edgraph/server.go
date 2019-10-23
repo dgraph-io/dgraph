@@ -103,12 +103,13 @@ func InitServerState() {
 
 	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
 	if err != nil {
-		glog.Warningf("%s file not found or could not be opened", groupFile)
 		return
 	}
 
-	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 32)
-	x.Checkf(err, "Error reading %s file inside posting directory %s",
+	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
+		Config.PostingDir)
+	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
+	glog.Warningf("Could not read %s file inside posting directory %s.",
 		groupFile, Config.PostingDir)
 	x.WorkerConfig.ProposedGroupId = uint32(groupId)
 }
