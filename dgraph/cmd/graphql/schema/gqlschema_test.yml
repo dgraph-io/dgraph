@@ -359,6 +359,29 @@ invalid_schemas:
       "locations":[{"line":14, "column":3}]}
       ]
 
+  -
+    name: "List fields with same name(a) but different types (list vs singular) are not allowed.."
+    input: |
+      type X {
+        q: [String]
+      }
+
+      type Y {
+        p: [Int]
+      }
+
+      type Z {
+        a: [X]
+      }
+
+      type W {
+        a: Y
+      }
+    errlist: [
+      {"message": "Field W.a should have same type across type definitions. Found: Y, expected: [X]",
+      "locations":[{"line":14, "column":3}]}
+      ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
