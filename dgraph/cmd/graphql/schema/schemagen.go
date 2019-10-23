@@ -133,10 +133,11 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		indexes   map[string]bool
 		dgraphTyp string
 	}
+
+	// Stores a list of predicate name => scalar definition for it.
 	scalars := make(map[string]*scalar)
 	var scalarPreds strings.Builder
 
-	// Stores a list of predicate name => scalar definition for it.
 	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
@@ -187,9 +188,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
 
-					_, ok := scalars[edgeName]
-					if !ok {
-						scalars[edgeName] = &scalar{indexes: make(map[string]bool), dgraphTyp: typStr}
+					if _, ok := scalars[edgeName]; !ok {
+						scalars[edgeName] = &scalar{
+							indexes:   make(map[string]bool),
+							dgraphTyp: typStr}
 					}
 					if indexStr != "" {
 						scalars[edgeName].indexes[indexStr] = true
@@ -200,8 +202,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, "string", suffix,
 					)
 					fmt.Fprintf(&typeDef, "  %s: %s\n", edgeName, typStr)
-					_, ok := scalars[edgeName]
-					if !ok {
+					if _, ok := scalars[edgeName]; !ok {
 						scalars[edgeName] = &scalar{indexes: map[string]bool{"exact": true},
 							dgraphTyp: typStr}
 					}

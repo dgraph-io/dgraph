@@ -272,13 +272,13 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			inputTyp = sch.Types[inputTypeName]
 		}
 
-		for _, fld := range inputTyp.Fields {
-			edgeName := fld.Name
+		for _, field := range inputTyp.Fields {
+			edgeName := field.Name
 			// 1. For types the keys, value would be.
 			//    typName,fldName => fldName
 			// 2. For DeleteTypePayload type
 			//    DeleteTypePayload,fldName => typName.fldName
-			dgraphPredicate[originalTyp.Name][fld.Name] = edgeName
+			dgraphPredicate[originalTyp.Name][field.Name] = edgeName
 		}
 	}
 	return dgraphPredicate
@@ -451,12 +451,12 @@ func (f *field) DgraphPredicate() string {
 // ChildOf checks if this field is a child of any of the types given to us in dgraphTypes.
 func (f *field) ChildOf(dgraphTypes []interface{}) bool {
 	for _, typ := range dgraphTypes {
-		styp, ok := typ.(string)
+		strType, ok := typ.(string)
 		if !ok {
 			continue
 		}
 
-		if _, ok := f.op.inSchema.dgraphPredicate[styp][f.Name()]; ok {
+		if _, ok := f.op.inSchema.dgraphPredicate[strType][f.Name()]; ok {
 			return true
 		}
 	}

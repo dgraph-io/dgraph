@@ -158,7 +158,7 @@ invalid_schemas:
         y: Y @search
       }
       type Y {
-        Z: String
+        z: String
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but fields of type Y
@@ -173,7 +173,7 @@ invalid_schemas:
         y: Y @search(by: term)
       }
       type Y {
-        Z: String
+        z: String
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
@@ -321,18 +321,18 @@ invalid_schemas:
     name: "Field with same name but different field type across different definitions not allowed."
     input: |
       type X {
-        q: [String]
+        q: String
       }
 
       type Y {
-        q: P
+        q: Int
       }
 
       type P {
         a: String
       }
     errlist: [
-      {"message": "Field Y.q should have same type across type definitions. Found: P, expected: [String]",
+      {"message": "Field Y.q should have same type across type definitions. Found: Int, expected: String",
       "locations":[{"line":6, "column":3}]}
       ]
 
