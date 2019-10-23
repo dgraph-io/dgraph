@@ -830,13 +830,13 @@ func completeObject(
 			continue
 		}
 
-		add := f.ChildOf(dgraphTypes)
+		shouldAdd := f.ChildOf(dgraphTypes)
 		// In the case where we query for an interface at the root and request type specific
 		// info as part of fragments, we would get back multiple types for a node. We check if this
 		// field is a child of any of those type definitions.
 		// Note - Dgraph types could contain multiple interface names but would only have one type
 		// definition by design.
-		if len(dgraphTypes) > 0 && !add {
+		if len(dgraphTypes) > 0 && !shouldAdd {
 			continue
 		}
 

@@ -271,7 +271,7 @@ func expandSchema(doc *ast.SchemaDocument) {
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	scalarTyp := make(map[string]string)
+	fieldTypes := make(map[string]string)
 	for _, defn := range schema.Definitions {
 		if defn.BuiltIn {
 			// prelude definitions are built in and we don't want to validate them.
@@ -280,8 +280,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 
 		// Go through all fields and store their type in the map. If we find a field name being
-		// repeated but with a different type that is an error as dgraph later would need to know
-		// what type to store in the schema.
+		// repeated but with a different type that is an error as dgraph later would see two
+		// contradicting types for the same predicate.
 		for _, field := range defn.Fields {
 			if isIDField(defn, field) {
 				continue
@@ -290,7 +290,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 			if field.Type.NamedType == "" && field.Type.Elem != nil {
 				fieldTyp = "[" + field.Type.Elem.NamedType + "]"
 			}
-			if typ, ok := scalarTyp[field.Name]; ok {
+			if typ, ok := fieldTypes[field.Name]; ok {
 				if typ != fieldTyp {
 					errs = append(errs, gqlerror.ErrorPosf(
 						field.Position,
@@ -299,7 +299,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 							defn.Name, field.Name, fieldTyp, typ)))
 				}
 			} else {
-				scalarTyp[field.Name] = fieldTyp
+				fieldTypes[field.Name] = fieldTyp
 			}
 		}
 	}
