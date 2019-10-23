@@ -4,15 +4,15 @@
 
 type Author {
 	id: ID!
-	name: String! @search(by: hash)
+	name: String! @search(by: [hash])
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type Post {
 	postID: ID!
-	title: String! @search(by: term)
-	text: String @search(by: fulltext)
+	title: String! @search(by: [term,fulltext])
+	text: String @search(by: [fulltext,term])
 	datePublished: DateTime
 }
 
@@ -39,7 +39,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -176,8 +176,8 @@ input PatchPost {
 
 input PostFilter {
 	ids: [ID!]
-	title: StringTermFilter
-	text: StringFullTextFilter
+	title: StringFullTextFilter_StringTermFilter
+	text: StringFullTextFilter_StringTermFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -197,6 +197,13 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input StringFullTextFilter_StringTermFilter {
+	alloftext: String
+	anyoftext: String
+	allofterms: String
+	anyofterms: String
 }
 
 input UpdateAuthorInput {

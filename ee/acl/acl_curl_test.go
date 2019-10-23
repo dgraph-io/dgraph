@@ -30,7 +30,10 @@ func TestCurlAuthorization(t *testing.T) {
 	}
 
 	glog.Infof("testing with port %s", testutil.SockAddr)
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	createAccountAndData(t, dg)
 
 	// test query through curl

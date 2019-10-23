@@ -59,8 +59,12 @@ type suiteOpts struct {
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	err := dg.Alter(context.Background(), &api.Operation{
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
+	err = dg.Alter(context.Background(), &api.Operation{
 		DropAll: true,
 	})
 	if err != nil {
@@ -185,7 +189,10 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		if !s.opts.skipLiveLoader {
 			// Check results of the live loader.
-			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
@@ -199,7 +206,10 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 
 		if !s.opts.skipBulkLoader {
 			// Check results of the bulk loader.
-			dg := testutil.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+			dg, err := testutil.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel2()
 
