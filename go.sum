@@ -62,8 +62,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7 h1:sXNo2Xtte2hOGeq21YyV3qjsyOScoQqWvLdBKInkQS8=
 github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7/go.mod h1:V7oadAIwiqodXo5jT04lP+8ysOAuMFZO5x20VSI94Uc=
-github.com/dgraph-io/dgo/v2 v2.1.0 h1:zm4gygHzZwu11y3VqDG/fDA80xgpSvLMlrhEcb9KfT0=
-github.com/dgraph-io/dgo/v2 v2.1.0/go.mod h1:R/MTZMGhTo60XSziuKpLXzI1OnVWQCZS5oJjxA8Q1bo=
+github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da h1:JAadBE19xm15ZsBZ9HOSuQvMiaCKu+NsV5O5Mfb/62M=
+github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da/go.mod h1:R/MTZMGhTo60XSziuKpLXzI1OnVWQCZS5oJjxA8Q1bo=
 github.com/dgraph-io/ristretto v0.0.0-20190903064322-eb48d2f7ca30 h1:FkdGlqxPjfHKdVUzS5dOSMeOkGjEG7PnR1RLbcEqw88=
 github.com/dgraph-io/ristretto v0.0.0-20190903064322-eb48d2f7ca30/go.mod h1:UvZmzj8odp3S1nli6yEb1vLME8iJFBrRcw8rAJEiu9Q=
 github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 h1:9G6fVccQriMJu4nXwpwLDoy9y31t/KUSLAbPcoBgv+4=

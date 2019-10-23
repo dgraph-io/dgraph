@@ -56,7 +56,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -159,6 +159,13 @@ var defaultSearches = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+}
+
+// Dgraph index filters that have contains intersecting filter
+// directive.
+var filtersCollisions = map[string][]string{
+	"StringHashFilter":  {"StringExactFilter"},
+	"StringExactFilter": {"StringHashFilter"},
 }
 
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
@@ -441,7 +448,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
 // defn that can be searched.  For example, if there's another type
-// `type R { ... f: String @search(by: term) ... }`
+// `type R { ... f: String @search(by: [term]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -532,11 +539,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if search := getSearchArgs(fld); search != "" {
+
+		var filterTypeNameUnion []string
+		for _, search := range getSearchArgs(fld) {
 			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
-				// Instead we allow to write `fieldName: enumValue` in the filter.
+				// Instead we allow to write `typeName: enumValue` in the filter.
 				// So, for example : `filter: { postType: Answer }`
 				// rather than : `filter: { postType: { eq: Answer } }`
 				//
@@ -546,6 +555,11 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				filterTypeName = fld.Type.Name()
 			}
 
+			filterTypeNameUnion = append(filterTypeNameUnion, filterTypeName)
+		}
+
+		if len(filterTypeNameUnion) > 0 {
+			filterTypeName := strings.Join(filterTypeNameUnion, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
@@ -553,6 +567,20 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 						NamedType: filterTypeName,
 					},
 				})
+
+			//create a schema type
+			if len(filterTypeNameUnion) > 1 {
+				var fieldList ast.FieldList
+				for _, typeName := range filterTypeNameUnion {
+					fieldList = append(fieldList, schema.Types[typeName].Fields...)
+				}
+
+				schema.Types[filterTypeName] = &ast.Definition{
+					Kind:   ast.InputObject,
+					Name:   filterTypeName,
+					Fields: fieldList,
+				}
+			}
 		}
 	}
 
@@ -572,7 +600,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchArgs(fld) != "" || isID(fld) })
+		func(fld *ast.FieldDefinition) bool {
+			return len(getSearchArgs(fld)) != 0 || isID(fld)
+		})
 }
 
 func hasOrderables(defn *ast.Definition) bool {
@@ -597,19 +627,28 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
-func getSearchArgs(fld *ast.FieldDefinition) string {
+func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
-		return ""
+		return nil
 	}
 	if len(search.Arguments) == 0 {
 		if search, ok := defaultSearches[fld.Type.Name()]; ok {
-			return search
+			return []string{search}
 		}
 		// it's an enum - always has exact index
-		return "exact"
+		return []string{"exact"}
 	}
-	return search.Arguments.ForName(searchArgs).Value.Raw
+
+	val := search.Arguments.ForName(searchArgs).Value
+	res := make([]string, len(val.Children))
+
+	for i, child := range val.Children {
+		res[i] = child.Value.Raw
+	}
+
+	sort.Strings(res)
+	return res
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.
@@ -670,7 +709,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Add" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -689,7 +728,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -708,7 +747,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: "msg",
 				Type: &ast.Type{
 					NamedType: "String",
@@ -730,7 +769,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: defn.Name,
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "id",
 				Type: &ast.Type{
 					NamedType: idTypeFor(defn),
@@ -772,7 +811,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Add" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: defn.Name + "Input",
@@ -796,7 +835,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Update" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: "Update" + defn.Name + "Input",
@@ -820,7 +859,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Delete" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "filter",
 				Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: true},
 			},

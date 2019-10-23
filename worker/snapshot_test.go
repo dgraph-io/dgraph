@@ -36,7 +36,10 @@ import (
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := testutil.DgraphClient("localhost:9180")
+	dg1, err := testutil.DgraphClient("localhost:9180")
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
@@ -44,7 +47,7 @@ func TestSnapshot(t *testing.T) {
 		Schema: "value: int .",
 	}))
 
-	err := testutil.DockerStop("alpha2")
+	err = testutil.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 1; i <= 200; i++ {
@@ -59,7 +62,10 @@ func TestSnapshot(t *testing.T) {
 	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 := testutil.DgraphClient("localhost:9182")
+	dg2, err := testutil.DgraphClient("localhost:9182")
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	verifySnapshot(t, dg2, 200)
 
 	err = testutil.DockerStop("alpha2")
@@ -77,7 +83,10 @@ func TestSnapshot(t *testing.T) {
 	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 = testutil.DgraphClient("localhost:9182")
+	dg2, err = testutil.DgraphClient("localhost:9182")
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	verifySnapshot(t, dg2, 400)
 }
 

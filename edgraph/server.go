@@ -507,16 +507,45 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 	}
 	annotateStartTs(span, req.StartTs)
 
-	l, err := doQueryInUpsert(ctx, req, gmu)
+	l, varToUID, err := doQueryInUpsert(ctx, req, gmu)
 	if err != nil {
 		return resp, err
 	}
 	parsingTime += l.Parsing
+	if len(varToUID) > 0 {
+		resp.Vars = make(map[string]*api.Uids, len(varToUID))
+		for v, uids := range varToUID {
+			// There could be a lot of these uids which could blow up the response size, especially
+			// for bulk mutations, hence only return variables which have less than a million uids.
+			if len(uids) <= 1e6 {
+				hexUids := make([]string, 0, len(uids))
+				// doQueryInUpsert returns uids as base10 string representation. We convert them
+				// to base16 string so that response format is consistent with assigned uids.
+				for _, uid := range uids {
+					u, err := strconv.ParseUint(uid, 10, 64)
+					if err != nil {
+						return resp, errors.Errorf("Couldn't parse uid: [%v] as base 10 uint64",
+							uid)
+					}
+					huid := fmt.Sprintf("%#x", u)
+					hexUids = append(hexUids, huid)
+				}
+				resp.Vars[v] = &api.Uids{
+					Uids: hexUids,
+				}
+			}
+		}
+	}
 
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
 		return resp, err
 	}
+
+	// resp.Uids contains a map of the node name to the uid.
+	// 1. For a blank node, like _:foo, the key would be foo.
+	// 2. For a uid variable that is part of an upsert query, like uid(foo), the key would
+	// be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToDirectedEdges(gmu, newUids)
 	if err != nil {
@@ -577,19 +606,22 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 }
 
 // doQueryInUpsert processes the query in upsert block.
+// It returns the latency and a map of variables => [ uids ...] used in the upsert mutation.
 func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
-	*query.Latency, error) {
+	*query.Latency, map[string][]string, error) {
 
 	l := &query.Latency{}
 	if req.Query == "" {
-		return l, nil
+		return l, nil, nil
 	}
 
 	mu := req.Mutations[0]
 	upsertQuery := req.Query
 	needVars := findVars(gmu)
 	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
-	varName := fmt.Sprintf("__dgraph%d__", rand.Int())
+	// conditionalVar is a dummy var that we use to evaluate the result of
+	// conditional upsert.
+	conditionalVar := fmt.Sprintf("__dgraph%d__", rand.Int())
 	if isCondUpsert {
 		// @if in upsert is same as @filter in the query
 		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)
@@ -611,8 +643,8 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		//      * be empty if the condition is true
 		//      * have 1 UID (the 0 UID) if the condition is false
 		upsertQuery = strings.TrimSuffix(strings.TrimSpace(req.Query), "}")
-		upsertQuery += varName + ` as var(func: uid(0)) ` + cond + `}`
-		needVars = append(needVars, varName)
+		upsertQuery += conditionalVar + ` as var(func: uid(0)) ` + cond + `}`
+		needVars = append(needVars, conditionalVar)
 	}
 
 	startParsingTime := time.Now()
@@ -622,25 +654,28 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	}, needVars)
 	l.Parsing += time.Since(startParsingTime)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
 	}
 	if err := validateQuery(parsedReq.Query); err != nil {
-		return nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
 	}
 
 	if err := authorizeQuery(ctx, &parsedReq); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: req.StartTs}
 	if err := qr.ProcessQuery(ctx); err != nil {
-		return nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
+		return nil, nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
 	}
 
 	if len(qr.Vars) <= 0 {
-		return nil, errors.Errorf("upsert query block has no variables")
+		return nil, nil, errors.Errorf("upsert query block has no variables")
 	}
 
+	// varToUID contains a map of variable name to the uids corresponding to it.
+	// It is used later for constructing set and delete mutations by replacing variables
+	// with the actual uids they correspond to.
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	varToUID := make(map[string][]string)
 	for name, v := range qr.Vars {
@@ -650,6 +685,7 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 		uids := make([]string, len(v.Uids.Uids))
 		for i, u := range v.Uids.Uids {
+			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
 		varToUID[name] = uids
@@ -657,18 +693,21 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 
 	// If @if condition is false, no need to process the mutations
 	if isCondUpsert {
-		v, ok := qr.Vars[varName]
+		v, ok := qr.Vars[conditionalVar]
 		isMut := ok && v.Uids != nil && len(v.Uids.Uids) == 1
 		if !isMut {
 			gmu.Set = nil
 			gmu.Del = nil
-			return l, nil
+			return l, nil, nil
 		}
 	}
 
 	updateUIDInMutations(gmu, varToUID)
 	updateValInMutations(gmu, qr)
-	return l, nil
+	// varToUID is returned to the client, let's delete the dummy var that we put in there for
+	// evaluating the conditional upsert.
+	delete(varToUID, conditionalVar)
+	return l, varToUID, nil
 }
 
 // findVars finds all the variables used in mutation block
@@ -791,10 +830,13 @@ func updateValInMutations(gmu *gql.Mutation, req query.Request) {
 //   * uid(v) -> _:uid(v)  -- Otherwise
 
 func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+	// usedMutationVars keeps track of variables that are used in mutations.
+	usedMutationVars := make(map[string]bool)
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
 			if uids, ok := varToUID[varName]; ok {
+				usedMutationVars[varName] = true
 				return uids
 			}
 
@@ -846,6 +888,12 @@ func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 			for _, o := range newObs {
 				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
 			}
+		}
+	}
+	for v := range varToUID {
+		// We only want to return the vars which are used in the mutation.
+		if _, ok := usedMutationVars[v]; !ok {
+			delete(varToUID, v)
 		}
 	}
 	gmu.Set = gmuSet

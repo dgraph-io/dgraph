@@ -108,9 +108,7 @@ Example: Get all unique genres from all of the movies directed by Steven Spielbe
 {
   var(func: eq(name@en, "Steven Spielberg")) {
     director.film {
-      genres as genre {
-        name@.
-      }
+      genres as genre
     }
   }
 

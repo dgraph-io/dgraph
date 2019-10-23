@@ -219,23 +219,70 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearches[arg.Value.Raw]; !ok {
-		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	// This check can be removed once gqlparser bug
+	// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	if arg.Value.Kind != ast.ListValue {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: the argument to @search %s isn't valid."+
-				"Fields of type %s %s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
+			"Type %s; Field %s: the @search directive requires a list argument, like @search(by: [hash])",
+			typ.Name, field.Name)
+	}
 
-	} else if search.gqlType != field.Type.Name() {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: has the @search directive but the argument %s "+
-				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
-				"Fields of type %[4]s %[6]s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearches[arg.Value.Raw].gqlType, searchMessage(sch, field))
+	searchArgs := getSearchArgs(field)
+	searchIndexes := make(map[string]string)
+	for _, searchArg := range searchArgs {
+		// Checks that the argument for search is valid and compatible
+		// with the type it is applied to.
+		if search, ok := supportedSearches[searchArg]; !ok {
+			// This check can be removed once gqlparser bug
+			// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: the argument to @search %s isn't valid."+
+					"Fields of type %s %s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
+
+		} else if search.gqlType != field.Type.Name() {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the @search directive but the argument %s "+
+					"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
+					"Fields of type %[4]s %[6]s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(),
+				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+		}
+
+		// Checks that the filter indexes aren't repeated and they
+		// don't clash with each other.
+		searchIndex := builtInFilters[searchArg]
+		if val, ok := searchIndexes[searchIndex]; ok {
+			if field.Type.Name() == "String" {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the argument to @search '%s' is the same "+
+						"as the index '%s' provided before and shouldn't "+
+						"be used together",
+					typ.Name, field.Name, searchArg, val)
+			}
+
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the search directive on %s. %s "+
+					"allows only one argument for @search.",
+				typ.Name, field.Name, field.Type.Name(), field.Type.Name())
+		}
+
+		for _, index := range filtersCollisions[searchIndex] {
+			if val, ok := searchIndexes[index]; ok {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the arguments '%s' and '%s' can't "+
+						"be used together as arguments to @search.",
+					typ.Name, field.Name, searchArg, val)
+			}
+		}
+
+		searchIndexes[searchIndex] = searchArg
 	}
 
 	return nil

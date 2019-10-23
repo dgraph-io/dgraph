@@ -133,10 +133,13 @@ func initTest(t *testing.T, schemaStr string) {
 }
 
 func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	testutil.DropAll(t, dg)
 
-	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
 	populateClusterGraph(t, dg)
 
