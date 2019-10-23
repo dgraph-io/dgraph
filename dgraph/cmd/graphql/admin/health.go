@@ -25,7 +25,7 @@ import (
 
 const (
 	errNoConnection healthStatus = "ErrNoConnection"
-	noGraphQLSchema healthStatus = "noGraphQLSchema"
+	noGraphQLSchema healthStatus = "NoGraphQLSchema"
 	healthy         healthStatus = "Healthy"
 )
 
@@ -43,5 +43,5 @@ var statusMessage = map[healthStatus]string{
 
 func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	s := hr.status
-	return []byte(fmt.Sprintf(`{"message":"%s","status":%s`, statusMessage[s], string(s))), nil
+	return []byte(fmt.Sprintf(`{"health":[{"message":"%s","status":"%s"}]}`, statusMessage[s], string(s))), nil
 }
