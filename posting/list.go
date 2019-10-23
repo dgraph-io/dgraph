@@ -810,16 +810,10 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	var startUid, endUid uint64
 	var splitIdx int
 
-	// Method to properly initialize all the variables described above.
-	init := func() {
+	// Method to properly initialize the variables above
+	// when a multi-part list boundary is crossed.
+	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
-
-		// If not a multi-part list, all UIDs go to the same encoder.
-		if len(l.plist.Splits) == 0 {
-			plist = out.plist
-			endUid = math.MaxUint64
-			return
-		}
 
 		// Otherwise, load the corresponding part and set endUid to correctly
 		// detect the end of the list.
@@ -833,14 +827,21 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		plist = &pb.PostingList{}
 	}
 
-	init()
+	// If not a multi-part list, all UIDs go to the same encoder.
+	if len(l.plist.Splits) == 0 {
+		plist = out.plist
+		endUid = math.MaxUint64
+	} else {
+		initializeSplit()
+	}
+
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
 			splitIdx++
-			init()
+			initializeSplit()
 		}
 
 		enc.Add(p.Uid)
