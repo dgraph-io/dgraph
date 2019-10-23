@@ -121,6 +121,11 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 
 	it.afterUid = afterUid
 	it.deleteBelowTs = deleteBelowTs
+	if deleteBelowTs > 0 {
+		// We don't need to iterate over the immutable layer if this is > 0. Returning here would
+		// mean it.uids is empty and valid() would return false.
+		return nil
+	}
 
 	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
