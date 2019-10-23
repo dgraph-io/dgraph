@@ -29,7 +29,6 @@ func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck)
 	fieldValidations = append(fieldValidations, fieldArgumentCheck)
 }
 
@@ -106,44 +105,51 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func isValidTypeForList(field *ast.Type, typ *ast.Definition) bool {
-	if isIDType(typ, field) {
+func isValidFieldForList(field *ast.Type, typ *ast.Definition) bool {
+	switch field.Name() {
+	case
+		"ID",
+		"Boolean":
 		return false
 	}
-
-	return field.Name() != "Boolean"
+	return true
 }
 
-func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
+func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
 	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
-			"Arguments was provided to the field %s. Fields don't support arguments.",
-			field.Name,
+			"Type %s; Field %s: Arguments was provided to the field %s. Fields"+
+				" don't support arguments.", typ.Name, field.Name, field.Name,
 		)
 	}
+
+	if err := listValidityCheck(typ, field); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
-	// Checks if the field is nil.
+func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
 	if field.Type.Elem == nil {
 		return nil
 	}
 
 	// ID and Boolean list are not allowed.
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if !isValidTypeForList(field.Type.Elem, typ) && field.Type.NamedType == "" {
+	if !isValidFieldForList(field.Type.Elem, typ) && field.Type.NamedType == "" {
 		return gqlerror.ErrorPosf(
-			field.Position, "[%[1]s] lists are invalid. Only %[1]s "+
-				"scalar fields are allowed.", field.Type.Elem.Name())
+			field.Position, "Type %s; Field %s: [%[3]s] lists are invalid. Only %[3]s "+
+				"scalar fields are allowed.", typ.Name, field.Name,
+			field.Type.Elem.Name())
 	}
 
 	// Nested lists are not allowed.
 	if field.Type.Elem.Elem != nil {
 		return gqlerror.ErrorPosf(field.Position,
-			"%s Nested lists are invalid. Only single lists are allowed.",
-			field.Type.Dump())
+			"Type %s; Field %s: %s Nested lists are invalid. Only single lists are "+
+				"allowed.", typ.Name, field.Name, field.Type.Dump())
 	}
 
 	return nil

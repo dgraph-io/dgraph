@@ -202,7 +202,7 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
@@ -322,7 +322,7 @@ func applyFieldValidations(field *ast.FieldDefinition, typ *ast.Definition) gqle
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(field, typ))
+		errs = appendIfNotNull(errs, rule(typ, field))
 	}
 
 	return errs
@@ -1087,12 +1087,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	return sch.String()
 }
 
-func isIDType(defn *ast.Definition, typ *ast.Type) bool {
-	return typ.Name() == idTypeFor(defn)
-}
-
 func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
-	return isIDType(defn, fld.Type)
+	return fld.Type.Name() == idTypeFor(defn)
 }
 
 func idTypeFor(defn *ast.Definition) string {
