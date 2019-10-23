@@ -271,7 +271,19 @@ func expandSchema(doc *ast.SchemaDocument) {
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	fieldTypes := make(map[string]string)
+	type fieldTyp struct {
+		dgraphType string
+		name       string
+	}
+
+	dtype := func(n string) string {
+		if dt, sok := scalarToDgraph[n]; sok {
+			return dt
+		}
+		return "uid"
+	}
+
+	fieldTypes := make(map[string]fieldTyp)
 	for _, defn := range schema.Definitions {
 		if defn.BuiltIn {
 			// prelude definitions are built in and we don't want to validate them.
@@ -286,20 +298,26 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 			if isIDField(defn, field) {
 				continue
 			}
-			fieldTyp := field.Type.NamedType
+
+			typeName := field.Type.NamedType
+			dgraphType := dtype(typeName)
 			if field.Type.NamedType == "" && field.Type.Elem != nil {
-				fieldTyp = "[" + field.Type.Elem.NamedType + "]"
+				typeName = "[" + field.Type.Elem.NamedType + "]"
+				dgraphType = "[" + dtype(field.Type.Elem.NamedType) + "]"
 			}
 			if typ, ok := fieldTypes[field.Name]; ok {
-				if typ != fieldTyp {
+				if dgraphType != typ.dgraphType {
 					errs = append(errs, gqlerror.ErrorPosf(
 						field.Position,
 						fmt.Sprintf(
 							"Field %s.%s should have same type across type definitions. Found: %s, expected: %s",
-							defn.Name, field.Name, fieldTyp, typ)))
+							defn.Name, field.Name, typeName, typ.name)))
 				}
 			} else {
-				fieldTypes[field.Name] = fieldTyp
+				fieldTypes[field.Name] = fieldTyp{
+					name:       typeName,
+					dgraphType: dgraphType,
+				}
 			}
 		}
 	}

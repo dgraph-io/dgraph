@@ -336,6 +336,28 @@ invalid_schemas:
       "locations":[{"line":6, "column":3}]}
       ]
 
+  -
+    name: "Field with same name but different field type (Object vs Int) across different definitions not allowed."
+    input: |
+      type X {
+        q: String
+      }
+
+      type Y {
+        z: Int
+      }
+
+      type P {
+        a: [X]
+      }
+
+      type Q {
+        a: Int
+      }
+    errlist: [
+      {"message": "Field Q.a should have same type across type definitions. Found: Int, expected: [X]",
+      "locations":[{"line":14, "column":3}]}
+      ]
 
 valid_schemas:
   -
@@ -412,4 +434,24 @@ valid_schemas:
 
       type P {
         a: [X!]
+      }
+
+  -
+    name: "List fields with same name(a) and different object types are allowed."
+    input: |
+      type X {
+        q: [String]
+      }
+
+      type Y {
+        p: [Int]
+      }
+
+      # In dgraph, they both [X] and [Y] translate to [uid]
+      type Z {
+        a: [X]
+      }
+
+      type W {
+        a: [Y]
       }
