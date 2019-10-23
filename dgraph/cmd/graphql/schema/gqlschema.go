@@ -273,7 +273,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 
 	type fieldTyp struct {
 		dgraphType string
-		name       string
+		name       string // field name
+		typeName   string // type name to which the field belongs
 	}
 
 	dtype := func(n string) string {
@@ -310,13 +311,15 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 					errs = append(errs, gqlerror.ErrorPosf(
 						field.Position,
 						fmt.Sprintf(
-							"Field %s.%s should have same type across type definitions. Found: %s, expected: %s",
-							defn.Name, field.Name, typeName, typ.name)))
+							"Field %s should have same type across type definitions. "+
+								"Found: %s in type: %s, expected: %s from type: %s",
+							field.Name, typeName, defn.Name, typ.name, typ.typeName)))
 				}
 			} else {
 				fieldTypes[field.Name] = fieldTyp{
 					name:       typeName,
 					dgraphType: dgraphType,
+					typeName:   defn.Name,
 				}
 			}
 		}
