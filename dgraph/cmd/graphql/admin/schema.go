@@ -23,19 +23,17 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 	"github.com/dgraph-io/dgraph/gql"
 )
 
 // A addSchemaResolver serves as the mutation rewriter and executor in handling
 // the addSchema mutation.
 type addSchemaResolver struct {
-	// the Dgraph that gets its schema changed
-	dgraph *dgo.Dgraph
+	admin *adminServer
 
 	// schema that is generated from the mutation input
 	newGQLSchema    schema.Schema
@@ -45,14 +43,6 @@ type addSchemaResolver struct {
 	// GraphQL metadata
 	baseMutationRewriter resolve.MutationRewriter
 	baseMutationExecutor resolve.MutationExecutor
-
-	// The GraphQL server that's being admin'd
-	gqlServer web.IServeGraphQL
-
-	// When the schema changes, we use these to create a new RequestResolver for
-	// the main graphql endpoint (gqlServer) and thus refresh the API.
-	fns               *resolve.ResolverFns
-	withIntrospection bool
 }
 
 func (asr *addSchemaResolver) Rewrite(
@@ -91,31 +81,30 @@ func (asr *addSchemaResolver) Mutate(
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 
+	asr.admin.mux.Lock()
+	defer asr.admin.mux.Unlock()
+
 	assigned, mutated, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	glog.Infof("[%s] Altering Dgraph schema.", api.RequestID(ctx))
 	if glog.V(3) {
-		glog.Infof("Altering Dgraph schema:\n\n%s\n", asr.newDgraphSchema)
+		glog.Infof("[%s] New schema Dgraph:\n\n%s\n", api.RequestID(ctx), asr.newDgraphSchema)
 	}
 
-	err = asr.dgraph.Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
+	err = asr.admin.dgraph.Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema "+
 				"(you should retry)")
 	}
 
-	resolverFactory := resolve.NewResolverFactory().
-		WithConventionResolvers(asr.newGQLSchema, asr.fns)
+	asr.admin.resetSchema(asr.newGQLSchema)
 
-	if asr.withIntrospection {
-		resolverFactory.WithSchemaIntrospection()
-	}
-
-	resolvers := resolve.New(asr.newGQLSchema, resolverFactory)
-	asr.gqlServer.ServeGQL(resolvers)
+	glog.Infof("[%s] Successfully loaded new GraphQL schema.  Serving New GraphQL API.",
+		api.RequestID(ctx))
 
 	return assigned, mutated, nil
 }
