@@ -159,7 +159,7 @@ type adminServer struct {
 	settings *ConnectionSettings
 	rf       resolve.ResolverFactory
 	resolver *resolve.RequestResolver
-	health   *healthResolver
+	status   healthStatus
 
 	// The mutex that locks schema update operations
 	mux sync.Mutex
@@ -188,14 +188,13 @@ func NewAdminResolver(
 		panic(err)
 	}
 
-	health := &healthResolver{status: errNoConnection}
-	rf := newAdminResolverFactory(health)
+	rf := newAdminResolverFactory()
 
 	admin := &adminServer{
 		settings:          settings,
 		rf:                rf,
 		resolver:          resolve.New(adminSchema, rf),
-		health:            health,
+		status:            errNoConnection,
 		gqlServer:         gqlServer,
 		fns:               fns,
 		withIntrospection: introspection,
@@ -206,15 +205,19 @@ func NewAdminResolver(
 	return admin.resolver
 }
 
-func newAdminResolverFactory(health *healthResolver) resolve.ResolverFactory {
+func newAdminResolverFactory() resolve.ResolverFactory {
 
 	errResult := errors.Errorf("Unavailable: Server has not yet connected to Dgraph.")
 
 	rf := resolve.NewResolverFactory().
 		WithQueryResolver("health",
 			func(q schema.Query) resolve.QueryResolver {
+				health := &healthResolver{
+					status: errNoConnection,
+				}
+
 				return resolve.NewQueryResolver(
-					resolve.NoOpQueryRewrite(),
+					health,
 					health,
 					resolve.StdQueryCompletion())
 			}).
@@ -265,7 +268,7 @@ func (as *adminServer) pollForConnection() {
 
 		as.addConnectedAdminResolvers(dgraphClient)
 
-		as.health.status = noGraphQLSchema
+		as.status = noGraphQLSchema
 
 		sch, err := getCurrentGraphQLSchema(as.resolver)
 		if err != nil {
@@ -295,7 +298,7 @@ func (as *adminServer) pollForConnection() {
 
 		glog.Infof("Successfully loaded GraphQL schema.  Now serving GraphQL API.")
 
-		as.health.status = healthy
+		as.status = healthy
 		as.resetSchema(gqlSchema)
 
 		break
@@ -321,19 +324,30 @@ func (as *adminServer) addConnectedAdminResolvers(dg *dgo.Dgraph) {
 	as.fns.Qe = qryExec
 	as.fns.Me = mutExec
 
-	as.rf.WithMutationResolver("addSchema",
-		func(m schema.Mutation) resolve.MutationResolver {
-			addResolver := &addSchemaResolver{
-				admin:                as,
-				baseMutationRewriter: mutRw,
-				baseMutationExecutor: mutExec}
+	as.rf.WithQueryResolver("health",
+		func(q schema.Query) resolve.QueryResolver {
+			health := &healthResolver{
+				status: as.status,
+			}
 
-			return resolve.NewMutationResolver(
-				addResolver,
-				qryExec,
-				addResolver,
-				resolve.StdMutationCompletion(m.Name()))
+			return resolve.NewQueryResolver(
+				health,
+				health,
+				resolve.StdQueryCompletion())
 		}).
+		WithMutationResolver("addSchema",
+			func(m schema.Mutation) resolve.MutationResolver {
+				addResolver := &addSchemaResolver{
+					admin:                as,
+					baseMutationRewriter: mutRw,
+					baseMutationExecutor: mutExec}
+
+				return resolve.NewMutationResolver(
+					addResolver,
+					qryExec,
+					addResolver,
+					resolve.StdMutationCompletion(m.Name()))
+			}).
 		WithQueryResolver("querySchema",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
@@ -377,7 +391,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 
-	as.health.status = healthy
+	as.status = healthy
 }
 
 func connect(cs *ConnectionSettings) (*dgo.Dgraph, func(), error) {
