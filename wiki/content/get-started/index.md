@@ -292,8 +292,8 @@ curl localhost:8080/alter -XPOST -d $'
     release_date: datetime
     revenue: float
     running_time: int
-    starring: uid
-    director: uid
+    starring: [uid]
+    director: [uid]
   }
 
 ' | python -m json.tool | less
