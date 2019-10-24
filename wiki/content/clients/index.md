@@ -326,9 +326,9 @@ type Person {
   dob: string
   married: bool
   raw: string
-  friends: [Person]
-  loc: [Loc]
-  school: [Institution]
+  friends: [uid]
+  loc: [uid]
+  school: [uid]
  }
 
 type Loc {
