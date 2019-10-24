@@ -127,21 +127,11 @@ func (mrw *mutationRewriter) Rewrite(
 			// If patch were nil, validation would have failed.
 			val = val["patch"].(map[string]interface{})
 
-			uids, err := getUpdUIDs(m)
-			if err != nil {
-				return nil, nil, err
-			}
-			if uids == nil {
-				// If the user didn't supply the ids filter, but supplied other filters we
-				// construct a query from those.
-				gqlQuery = rewriteMutationAsQuery(m)
-				srcUIDs = []string{fmt.Sprintf("uid(%s)", mutationQueryVar)}
-			} else {
-				// TODO - These requests should also have type filter on them.
-				for _, uid := range uids {
-					srcUIDs = append(srcUIDs, fmt.Sprintf("%#x", uid))
-				}
-			}
+			// All mutations have an upsert query as part of them. The root function verifies
+			// that the type of the node is correct. The filters from the update operation are
+			// added as filters to the query.
+			gqlQuery = rewriteMutationAsQuery(m)
+			srcUIDs = []string{fmt.Sprintf("uid(%s)", mutationQueryVar)}
 		}
 
 		res := make([]interface{}, 0, len(srcUIDs))

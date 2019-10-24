@@ -156,7 +156,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "ids": ["0x123", "0x124"]
         },
         "patch": {
           "text": "updated text"
@@ -165,9 +165,13 @@
     }
   explanation: "The update patch should get rewritten into the Dgraph mutation"
   dgraphmutation: |
-    [{ "uid" : "0x123",
+    [{ "uid" : "uid(x)",
       "Post.text": "updated text"
     }]
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+    }
 
 -
   name: "Add mutation for a type that implements an interface"
@@ -227,16 +231,20 @@
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
-    [{ "uid" : "0x123",
+    [{ "uid" : "uid(x)",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
       "Human.female": true
     }]
+  dgraphquery: |-
+    query {
+      x as updateHuman(func: type(Human)) @filter(uid(0x123))
+    }
 
 -
   name: "Update mutation for an interface"
-  gqlmutation: |
+  gqlmutation: |-
     mutation {
       updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
         character {
@@ -247,9 +255,13 @@
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgraphmutation: |
-    [{ "uid" : "0x123",
+    [{ "uid" : "uid(x)",
       "Character.name": "Bob"
     }]
+  dgraphquery: |-
+    query {
+      x as updateCharacter(func: type(Character)) @filter(uid(0x123))
+    }
 
 -
   name: "Update mutation using filters"
