@@ -17,7 +17,6 @@
 package query
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -846,21 +845,35 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAtValueFail(t *testing.T) {
+func TestFacetsFilterAtValue(t *testing.T) {
 	populateClusterWithFacets()
-	// facet filtering is not supported at value level.
 	query := `
 	{
-		me(func: uid(1)) {
-			friend {
-				name @facets(eq(origin, "french"))
-			}
+		me(func: has(name)) {
+			name @facets(eq(origin, "french"))
 		}
-	}
-`
+	}`
 
-	_, err := processQuery(context.Background(), t, query)
-	require.Error(t, err)
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne"}, {"name":"Rick Grimes"}, {"name": "Glenn Rhee"}]}}`,
+		js)
+}
+
+func TestFacetsFilterAtValueWithFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french")) @facets(origin)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne", "name|origin": "french"},
+			{"name": "Rick Grimes", "name|origin": "french"},
+			{"name": "Glenn Rhee", "name|origin": "french"}]}}`, js)
 }
 
 func TestFacetsFilterAndRetrieval(t *testing.T) {

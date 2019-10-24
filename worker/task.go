@@ -371,7 +371,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			vals, facets, err := retrieveValuesAndFacets(args, pl)
+			vals, fcs, err := retrieveValuesAndFacets(args, pl)
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
@@ -423,14 +423,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 			out.ValueMatrix = append(out.ValueMatrix, &vl)
 
-			if q.FacetsFilter != nil { // else part means isValueEdge
-				// This is Value edge and we are asked to do facet filtering. Not supported.
-				return errors.Errorf("Facet filtering is not supported on values.")
-			}
-
 			// Add facets to result.
 			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: facets}}})
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fcs}}})
 
 			switch {
 			case q.DoCount:
@@ -501,7 +496,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*a
 	listType := schema.State().IsList(q.Attr)
 	var err error
 	var vals []types.Val
-	var facets []*api.Facet
+	var fcs []*api.Facet
 
 	// No facet filtering on values.
 	if q.FacetsFilter == nil {
@@ -521,13 +516,39 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*a
 
 		// Retrieve facets.
 		if q.FacetParam != nil {
-			facets, _ = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+			fcs, _ = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
 		}
 
-		return vals, facets, nil
+		return vals, fcs, nil
 	}
 
-	return vals, facets, nil
+	// Filter values by facets.
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+		pick, err := applyFacetsTree(p.Facets, facetsTree)
+		if err != nil {
+			return err
+		}
+		if pick {
+			vals = append(vals, types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			})
+			if q.FacetParam != nil {
+				fcs = append(fcs, facets.CopyFacets(p.Facets, q.FacetParam)...)
+			}
+		}
+		return nil // continue iteration.
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return vals, fcs, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
