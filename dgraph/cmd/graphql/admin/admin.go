@@ -243,9 +243,7 @@ func (as *adminServer) pollForConnection() {
 	var waitFor time.Duration
 	for {
 		<-time.After(waitFor)
-		if waitFor < time.Minute {
-			waitFor += 10 * time.Second
-		}
+		waitFor = 10 * time.Second
 
 		glog.Infof("Trying to connect to Dgraph at %s", as.settings.Alphas)
 		dgraphClient, disconnect, err := connect(as.settings)
