@@ -77,14 +77,14 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 // then Dgraph would just return 7 posts.  And we'd have no way of knowing if
 // there's only 7 posts, or if there's more that are missing 'text'.
 // But, for GraphQL, we want to know about those missing values.
-func addUID(field *schema.Field, dgQuery *gql.GraphQuery) {
+func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
 		return
 	}
 	hasUID := false
 	aliasUID := false
 	for _, c := range dgQuery.Children {
-		addUID(field, c)
+		addUID(c)
 		hasUID = hasUID || c.Attr == "uid"
 		aliasUID = aliasUID || c.Alias == "uid"
 	}
@@ -93,13 +93,13 @@ func addUID(field *schema.Field, dgQuery *gql.GraphQuery) {
 		return
 	}
 
-	uidAttr := "uid"
-	if aliasUID {
-		uidAttr = fmt.Sprintf("uid_%d", rand.Int())
+	uidChild := &gql.GraphQuery{
+		Attr: "uid",
 	}
-	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
-		Attr: uidAttr,
-	})
+	if aliasUID {
+		uidChild.Alias = fmt.Sprintf("uid_%d", rand.Int())
+	}
+	dgQuery.Children = append(dgQuery.Children, uidChild)
 }
 
 func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
@@ -112,7 +112,7 @@ func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
 	}
 
 	addSelectionSetFrom(dgQuery, field)
-	addUID(&field, dgQuery)
+	addUID(dgQuery)
 
 	return dgQuery
 }
@@ -131,7 +131,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
-	addUID(&field, dgQuery)
+	addUID(dgQuery)
 
 	return dgQuery
 }

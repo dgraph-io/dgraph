@@ -15,6 +15,23 @@
     }
 
 -
+  name: "UID alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        id
+        uid: name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        id : uid
+        uid : Author.name
+      }
+    }
+
+-
   name: "ID query with query alias"
   gqlquery: |
     query {
