@@ -69,7 +69,7 @@ services:
       - 5280:5280
       - 6280:6280
     labels:
-      cluster: test
+      cluster: admintest
       service: zeroAdmin
     volumes:
       - type: bind
@@ -91,7 +91,7 @@ services:
       - 8280:8280
       - 9280:9280
     labels:
-      cluster: test
+      cluster: admintest
       service: alphaAdmin
     command: /gobin/dgraph alpha --lru_mb=1024 --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 
 
@@ -108,6 +108,6 @@ services:
       - 9200:9200
     restart: always
     labels:
-      cluster: test
+      cluster: admintest
       service: graphqlAdmin
     command: /gobin/dgraph graphql --alpha alphaAdmin:9280 --v 3 --port 9200
