@@ -401,7 +401,7 @@ func TestUpdateMutationByName(t *testing.T) {
 	t.Run("update country by name", func(t *testing.T) {
 		filter := nameRegexFilter(anotherCountry.Name)
 		anotherCountry.Name = "updated another country name"
-		updateCountryByName(t, filter, anotherCountry)
+		updateCountry(t, filter, anotherCountry.Name)
 	})
 
 	t.Run("check updated Country", func(t *testing.T) {
@@ -440,36 +440,6 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 	for _, c := range result.UpdateCountry.Country {
 		require.NotNil(t, c.ID)
 		require.Equal(t, newName, c.Name)
-	}
-}
-
-func updateCountryByName(t *testing.T, filter map[string]interface{}, updCountry *country) {
-	updateParams := &GraphQLParams{
-		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
-			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
-				country {
-					id
-					name
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"filter": filter, "newName": updCountry.Name},
-	}
-
-	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	var expected, result struct {
-		UpdateCountry struct {
-			Country []*country
-		}
-	}
-	expected.UpdateCountry.Country = []*country{updCountry}
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
 
