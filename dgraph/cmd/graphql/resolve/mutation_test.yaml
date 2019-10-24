@@ -278,7 +278,5 @@
     }]
   dgraphquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo")) {
-        uid
-      }
+      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
     }

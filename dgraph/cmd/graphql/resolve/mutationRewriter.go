@@ -135,9 +135,6 @@ func (mrw *mutationRewriter) Rewrite(
 				// If the user didn't supply the ids filter, but supplied other filters we
 				// construct a query from those.
 				gqlQuery = rewriteMutationAsQuery(m)
-				gqlQuery.Children = append(gqlQuery.Children, &gql.GraphQuery{
-					Attr: "uid",
-				})
 				srcUIDs = []string{fmt.Sprintf("uid(%s)", mutationQueryVar)}
 			} else {
 				// TODO - These requests should also have type filter on them.
@@ -207,9 +204,25 @@ func (mrw *mutationRewriter) FromMutationResult(
 		return rewriteAsGet(mutation.QueryField(), []uint64{uid}), nil
 
 	case schema.UpdateMutation:
-		uids, err := getUpdUIDs(mutation)
-		if err != nil {
-			return nil, err
+		var uids []uint64
+		if len(mutated) > 0 {
+			// This is the case of a conditional upsert where we should get uids from mutated.
+			stringUids := mutated[mutationQueryVar]
+			for _, id := range stringUids {
+				uid, err := strconv.ParseUint(id, 0, 64)
+				if err != nil {
+					return nil, schema.GQLWrapf(err,
+						"received %s as an assigned uid from Dgraph, but couldn't parse it as "+
+							"uint64", assigned[createdNode])
+				}
+				uids = append(uids, uid)
+			}
+		} else {
+			var err error
+			uids, err = getUpdUIDs(mutation)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return rewriteAsGet(mutation.QueryField(), uids), nil
