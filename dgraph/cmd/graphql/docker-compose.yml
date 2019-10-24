@@ -15,7 +15,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero:5180 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph zero -o 100 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 --jaeger.collector=http://jaeger:14268
 
   alpha:
     image: dgraph/dgraph:latest
@@ -76,7 +76,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 200 --my=zeroAdmin:5280 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 
+    command: /gobin/dgraph zero -o 200 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 
 
   alphaAdmin:
     image: dgraph/dgraph:latest
@@ -93,7 +93,7 @@ services:
     labels:
       cluster: test
       service: alphaAdmin
-    command: /gobin/dgraph alpha --my=alphaAdmin:9280 --lru_mb=1024 --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 
+    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 
 
   graphqlAdmin:
     image: dgraph/dgraph:latest
