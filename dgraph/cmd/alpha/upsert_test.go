@@ -170,7 +170,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 	m1 := `
 {
-  "query": "{ u as var(func: has(amount)) { amt as amount} me () {  updated_amt as math(amt+1)}}",
+  "query": "{ u as var(func: has(amount)) { amt as amount \n updated_amt as math(amt+1)}}",
   "set": [
     {
       "uid": "uid(u)",
@@ -270,38 +270,6 @@ func TestUpsertExample0JSON(t *testing.T) {
 	require.Contains(t, res, "Ashish")
 }
 
-func TestUpsertNoVarErr(t *testing.T) {
-	require.NoError(t, dropAll())
-	require.NoError(t, alterSchema(`
-age: int @index(int) .
-friend: uid @reverse .`))
-
-	m1 := `
-upsert {
-  query {
-    me(func: eq(age, 34)) {
-      ...fragmentA
-      friend {
-        ...fragmentA
-        age
-      }
-    }
-  }
-
-  fragment fragmentA {
-    uid
-  }
-
-  mutation {
-    set {
-      _:user1 <age> "45" .
-    }
-  }
-}`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
-	require.Contains(t, err.Error(), "upsert query block has no variables")
-}
-
 func TestUpsertWithFragment(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
@@ -338,23 +306,6 @@ upsert {
 	require.NoError(t, err)
 	require.True(t, 0 == len(mr.keys))
 	require.True(t, contains(mr.preds, "age"))
-}
-
-func TestUpsertInvalidErr(t *testing.T) {
-	require.NoError(t, dropAll())
-	require.NoError(t, alterSchema(`
-age: int @index(int) .
-name: string @index(exact) .
-friend: uid @reverse .`))
-
-	m1 := `
-{
-  set {
-    uid(variable) <age> "45" .
-  }
-}`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
-	require.Contains(t, err.Error(), "invalid syntax")
 }
 
 func TestUpsertUndefinedVarErr(t *testing.T) {
@@ -1743,8 +1694,6 @@ upsert {
   query {
     u as var(func: has(amount)) {
       amt as amount
-    }
-    me() {
       updated_amt as  math(amt+1)
     }
   }
@@ -1815,8 +1764,6 @@ upsert {
   query {
     u as var(func: has(amount)) {
       amt as amount
-    }
-    me () {
       updated_amt as math(amt+1)
     }
   }

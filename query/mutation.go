@@ -111,38 +111,40 @@ func verifyUid(ctx context.Context, uid uint64) error {
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the
 // format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
 // it shows up in the subjects or objects
-func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
 	var err error
-	for _, nq := range nquads {
-		// We dont want to assign uids to these.
-		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return newUids, errors.New("Predicate deletion should be called via alter")
-		}
+	for _, gmu := range gmuList {
+		for _, nq := range gmu.Set {
+			// We dont want to assign uids to these.
+			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+				return newUids, errors.New("Predicate deletion should be called via alter")
+			}
 
-		if len(nq.Subject) == 0 {
-			return nil, errors.Errorf("Subject must not be empty for nquad: %+v", nq)
-		}
-		var uid uint64
-		if strings.HasPrefix(nq.Subject, "_:") {
-			newUids[nq.Subject] = 0
-		} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
-			return newUids, err
-		}
-		if err = verifyUid(ctx, uid); err != nil {
-			return newUids, err
-		}
-
-		if len(nq.ObjectId) > 0 {
+			if len(nq.Subject) == 0 {
+				return nil, errors.Errorf("Subject must not be empty for nquad: %+v", nq)
+			}
 			var uid uint64
-			if strings.HasPrefix(nq.ObjectId, "_:") {
-				newUids[nq.ObjectId] = 0
-			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+			if strings.HasPrefix(nq.Subject, "_:") {
+				newUids[nq.Subject] = 0
+			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
 			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
+			}
+
+			if len(nq.ObjectId) > 0 {
+				var uid uint64
+				if strings.HasPrefix(nq.ObjectId, "_:") {
+					newUids[nq.ObjectId] = 0
+				} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+					return newUids, err
+				}
+				if err = verifyUid(ctx, uid); err != nil {
+					return newUids, err
+				}
 			}
 		}
 	}
@@ -167,8 +169,8 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(gmu *gql.Mutation,
-	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
+func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
+	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
@@ -189,20 +191,22 @@ func ToDirectedEdges(gmu *gql.Mutation,
 		return nil
 	}
 
-	for _, nq := range gmu.Set {
-		if err := facets.SortAndValidate(nq.Facets); err != nil {
-			return edges, err
+	for _, gmu := range gmuList {
+		for _, nq := range gmu.Set {
+			if err := facets.SortAndValidate(nq.Facets); err != nil {
+				return edges, err
+			}
+			if err := parse(nq, pb.DirectedEdge_SET); err != nil {
+				return edges, err
+			}
 		}
-		if err := parse(nq, pb.DirectedEdge_SET); err != nil {
-			return edges, err
-		}
-	}
-	for _, nq := range gmu.Del {
-		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should be called via alter")
-		}
-		if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
-			return edges, err
+		for _, nq := range gmu.Del {
+			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+				return edges, errors.New("Predicate deletion should be called via alter")
+			}
+			if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
+				return edges, err
+			}
 		}
 	}
 

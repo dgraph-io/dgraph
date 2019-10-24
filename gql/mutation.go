@@ -32,8 +32,9 @@ var (
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set []*api.NQuad
-	Del []*api.NQuad
+	Cond string
+	Set  []*api.NQuad
+	Del  []*api.NQuad
 }
 
 // ParseUid parses the given string into an UID. This method returns with an error
