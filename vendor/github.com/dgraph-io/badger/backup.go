@@ -69,10 +69,28 @@ func (stream *Stream) Backup(w io.Writer, since uint64) (uint64, error) {
 				}
 			}
 
+			// Convert key and/or values to a different format if requested before writing
+			// the key-value pair.
+			keyCopy := item.KeyCopy(nil)
+			if stream.db.opt.BackupKeyFn != nil {
+				var err error
+				keyCopy, err = stream.db.opt.BackupKeyFn(keyCopy)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if stream.db.opt.BackupValueFn != nil {
+				var err error
+				valCopy, err = stream.db.opt.BackupValueFn(valCopy)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			// clear txn bits
 			meta := item.meta &^ (bitTxn | bitFinTxn)
 			kv := &pb.KV{
-				Key:       item.KeyCopy(nil),
+				Key:       keyCopy,
 				Value:     valCopy,
 				UserMeta:  []byte{item.UserMeta()},
 				Version:   item.Version(),
@@ -86,7 +104,7 @@ func (stream *Stream) Backup(w io.Writer, since uint64) (uint64, error) {
 				// If we need to discard earlier versions of this item, add a delete
 				// marker just below the current version.
 				list.Kv = append(list.Kv, &pb.KV{
-					Key:     item.KeyCopy(nil),
+					Key:     keyCopy,
 					Version: item.Version() - 1,
 					Meta:    []byte{bitDelete},
 				})
@@ -127,23 +145,20 @@ func writeTo(list *pb.KVList, w io.Writer) error {
 	return err
 }
 
-// KVLoader is used to write KVList objects in to badger. It can be used to restore a backup.
-type KVLoader struct {
+type loader struct {
 	db       *DB
 	throttle *y.Throttle
 	entries  []*Entry
 }
 
-// NewKVLoader returns a new instance of KVLoader.
-func (db *DB) NewKVLoader(maxPendingWrites int) *KVLoader {
-	return &KVLoader{
+func (db *DB) newLoader(maxPendingWrites int) *loader {
+	return &loader{
 		db:       db,
 		throttle: y.NewThrottle(maxPendingWrites),
 	}
 }
 
-// Set writes the key-value pair to the database.
-func (l *KVLoader) Set(kv *pb.KV) error {
+func (l *loader) set(kv *pb.KV) error {
 	var userMeta, meta byte
 	if len(kv.UserMeta) > 0 {
 		userMeta = kv.UserMeta[0]
@@ -165,7 +180,7 @@ func (l *KVLoader) Set(kv *pb.KV) error {
 	return nil
 }
 
-func (l *KVLoader) send() error {
+func (l *loader) send() error {
 	if err := l.throttle.Do(); err != nil {
 		return err
 	}
@@ -179,8 +194,7 @@ func (l *KVLoader) send() error {
 	return nil
 }
 
-// Finish is meant to be called after all the key-value pairs have been loaded.
-func (l *KVLoader) Finish() error {
+func (l *loader) finish() error {
 	if len(l.entries) > 0 {
 		if err := l.send(); err != nil {
 			return err
@@ -191,8 +205,7 @@ func (l *KVLoader) Finish() error {
 
 // Load reads a protobuf-encoded list of all entries from a reader and writes
 // them to the database. This can be used to restore the database from a backup
-// made by calling DB.Backup(). If more complex logic is needed to restore a badger
-// backup, the KVLoader interface should be used instead.
+// made by calling DB.Backup().
 //
 // DB.Load() should be called on a database that is not running any other
 // concurrent transactions while it is running.
@@ -200,7 +213,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
-	ldr := db.NewKVLoader(maxPendingWrites)
+	ldr := db.newLoader(maxPendingWrites)
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
@@ -224,7 +237,24 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 		}
 
 		for _, kv := range list.Kv {
-			if err := ldr.Set(kv); err != nil {
+			// If the keys or values were transformed before backup, reverse those
+			// changes before restoring the key-value pair.
+			if db.opt.RestoreKeyFn != nil {
+				var err error
+				kv.Key, err = db.opt.RestoreKeyFn(kv.Key)
+				if err != nil {
+					return err
+				}
+			}
+			if db.opt.RestoreValueFn != nil {
+				var err error
+				kv.Value, err = db.opt.RestoreValueFn(kv.Value)
+				if err != nil {
+					return err
+				}
+			}
+
+			if err := ldr.set(kv); err != nil {
 				return err
 			}
 
@@ -236,7 +266,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 		}
 	}
 
-	if err := ldr.Finish(); err != nil {
+	if err := ldr.finish(); err != nil {
 		return err
 	}
 	db.orc.txnMark.Done(db.orc.nextTxnTs - 1)

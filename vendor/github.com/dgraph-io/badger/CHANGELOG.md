@@ -2,17 +2,14 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project adheres to [Serialization Versioning](VERSIONING.md).
+and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.6.0] - 2019-07-01
+## [2.0.0] - unreleased
 
 This is a release including almost 200 commits, so expect many changes - some of them
-not backward compatible.
-
-Regarding backward compatibility in Badger versions, you might be interested on reading
-[VERSIONING.md](VERSIONING.md).
+not backwards compatible.
 
 _Note_: The hashes in parentheses correspond to the commits that impacted the given feature.
 
@@ -175,8 +172,8 @@ Bug fix:
 ## [1.0.1] - 2017-11-06
 * Fix an uint16 overflow when resizing key slice
 
-[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.6.0...HEAD
-[1.6.0]: https://github.com/dgraph-io/badger/compare/v1.5.5...v1.6.0
+[Unreleased]: https://github.com/dgraph-io/badger/compare/v2.0-rc1...HEAD
+[2.0-rc1]: https://github.com/dgraph-io/badger/compare/v1.5.5...v2.0-rc1
 [1.5.5]: https://github.com/dgraph-io/badger/compare/v1.5.3...v1.5.5
 [1.5.3]: https://github.com/dgraph-io/badger/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/dgraph-io/badger/compare/v1.5.1...v1.5.2
