@@ -17,11 +17,14 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
@@ -30,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,6 +42,45 @@ type ErrorCase struct {
 	GQLRequest string
 	variables  map[string]interface{}
 	Errors     x.GqlErrorList
+}
+
+func TestGraphQLCompletionOn(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+
+	// delete the country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", newCountry.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	tests := [2]string{"name", "uid: name"}
+
+	for _, test := range tests {
+		queryCountry := &GraphQLParams{
+			Query: fmt.Sprintf(`query {
+			queryCountry {
+			     %s
+			}
+		}`, test),
+		}
+
+		gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+		require.NotNil(t, gqlResponse.Errors)
+	}
+
+	cleanUp(t,
+		[]*country{newCountry},
+		[]*author{},
+		[]*post{},
+	)
 }
 
 // TestRequestValidationErrors just makes sure we are catching validation failures.
