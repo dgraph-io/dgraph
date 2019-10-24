@@ -527,7 +527,6 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*a
 	if err != nil {
 		return nil, nil, err
 	}
-
 	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
 		pick, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
