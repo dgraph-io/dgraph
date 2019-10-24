@@ -124,16 +124,16 @@ type post struct {
 }
 
 func TestMain(m *testing.M) {
-	err := ensureGraphQLLayerStarted(graphqlAdminTestAdminURL)
-	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
-			"but it never did.\n Got last error: %+v", err.Error()))
-	}
-
-	err = ensureGraphQLLayerStarted(graphqlAdminURL)
+	err := ensureGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
 			"Got last error %+v", err.Error()))
+	}
+
+	err = ensureGraphQLLayerStarted(graphqlAdminTestAdminURL)
+	if err != nil {
+		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
+			"but it never did.\n Got last error: %+v", err.Error()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
