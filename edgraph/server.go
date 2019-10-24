@@ -54,6 +54,7 @@ import (
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -428,37 +429,60 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
 }
 
-func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) (
+// queryContext is used to pass around all the variables needed
+// to process a request for query, mutation or upsert.
+type queryContext struct {
+	// req is the incoming, not yet parsed request containing
+	// a query or more than one mutations or both (in case of upsert)
+	req *api.Request
+	// gmuList is the list of mutations after parsing req.Mutations
+	gmuList []*gql.Mutation
+	// gqlRes contains result of parsing the req.Query
+	gqlRes gql.Result
+	// condVars are conditional variables used in the (modified) query to figure out
+	// whether the condition in Conditional Upsert is true. The string would be empty
+	// if the corresponding mutation is not a conditional upsert.
+	// Note that, len(condVars) == len(gmuList).
+	condVars []string
+	// uidRes stores mapping from variable names to UIDs for UID variables.
+	// These variables are either dummy variables used for Conditional
+	// Upsert or variables defined in the query in the incoming request.
+	uidRes map[string][]string
+	// valRes stores mapping from variable names to values for value variables.
+	valRes map[string]map[uint64]types.Val
+	// l stores latency numbers
+	latency *query.Latency
+	// span stores a opencensus span
+	span *trace.Span
+}
+
+// Query handles queries or mutations
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(ctx, req, NeedAuthorize)
+}
+
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	if len(req.Mutations) != 1 {
-		return nil, errors.Errorf("Only 1 mutation per request is supported")
+	l := &query.Latency{}
+	l.Start = time.Now()
+
+	// let's divide the request in two categories:
+	// 1. query
+	// 2. mutation (upsert is also a mutation)
+	isMutation := len(req.Mutations) > 0
+	methodRequest := methodQuery
+	if isMutation {
+		methodRequest = methodMutate
 	}
-	mu := req.Mutations[0]
 
-	if !isMutationAllowed(ctx) {
-		return resp, errors.Errorf("No mutations allowed.")
-	}
-
-	var parsingTime time.Duration
-	resp = &api.Response{}
-
-	start := time.Now()
-	defer func() {
-		totalTime := time.Since(start)
-		processingTime := totalTime - parsingTime
-		resp.Latency = &api.Latency{
-			ParsingNs:    uint64(parsingTime.Nanoseconds()),
-			ProcessingNs: uint64(processingTime.Nanoseconds()),
-		}
-	}()
-
-	ctx, span := otrace.StartSpan(ctx, methodMutate)
-	ctx = x.WithMethod(ctx, methodMutate)
+	var measurements []ostats.Measurement
+	ctx, span := otrace.StartSpan(ctx, methodRequest)
+	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
@@ -466,218 +490,233 @@ func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) 
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceMs(start)
-		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
+		timeSpentMs := x.SinceMs(l.Start)
+		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
+		ostats.Record(ctx, measurements...)
 	}()
 
 	if rerr = x.HealthCheck(); rerr != nil {
 		return
 	}
 
-	ostats.Record(ctx, x.NumMutations.M(1))
-	if req.Query != "" {
-		span.Annotatef(nil, "Got Mutation with Upsert Block: %s", mu)
-	}
-	if len(mu.SetJson) > 0 {
-		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
-	} else if len(mu.SetNquads) > 0 {
-		span.Annotatef(nil, "Got NQuad Mutation: %s", mu.SetNquads)
+	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
+	defer func() {
+		measurements = append(measurements, x.PendingQueries.M(-1))
+	}()
+
+	span.Annotatef(nil, "Request received: %v", req)
+	if len(req.Query) == 0 && len(req.Mutations) == 0 {
+		span.Annotate(nil, "Empty request")
+		return resp, errors.Errorf("Empty request")
 	}
 
-	startParsingTime := time.Now()
-	gmu, err := parseMutationObject(mu)
-	if err != nil {
-		return resp, err
+	qc := &queryContext{req: req, latency: l, span: span}
+	if rerr = parseRequest(qc); rerr != nil {
+		return
 	}
-	parsingTime += time.Since(startParsingTime)
 
 	if authorize == NeedAuthorize {
-		if err := authorizeMutation(ctx, gmu); err != nil {
-			return resp, err
+		if rerr = authorizeRequest(ctx, qc); rerr != nil {
+			return
 		}
 	}
 
-	if len(gmu.Set) == 0 && len(gmu.Del) == 0 {
-		span.Annotate(nil, "Empty mutation")
-		return resp, errors.Errorf("Empty mutation")
+	if resp, rerr = processQuery(ctx, qc); rerr != nil {
+		return
 	}
 
-	if req.StartTs == 0 {
-		req.StartTs = State.getTimestamp(false)
-	}
-	annotateStartTs(span, req.StartTs)
-
-	l, varToUID, err := doQueryInUpsert(ctx, req, gmu)
-	if err != nil {
-		return resp, err
-	}
-	parsingTime += l.Parsing
-	if len(varToUID) > 0 {
-		resp.Vars = make(map[string]*api.Uids, len(varToUID))
-		for v, uids := range varToUID {
-			// There could be a lot of these uids which could blow up the response size, especially
-			// for bulk mutations, hence only return variables which have less than a million uids.
-			if len(uids) <= 1e6 {
-				hexUids := make([]string, 0, len(uids))
-				// doQueryInUpsert returns uids as base10 string representation. We convert them
-				// to base16 string so that response format is consistent with assigned uids.
-				for _, uid := range uids {
-					u, err := strconv.ParseUint(uid, 10, 64)
-					if err != nil {
-						return resp, errors.Errorf("Couldn't parse uid: [%v] as base 10 uint64",
-							uid)
-					}
-					huid := fmt.Sprintf("%#x", u)
-					hexUids = append(hexUids, huid)
-				}
-				resp.Vars[v] = &api.Uids{
-					Uids: hexUids,
-				}
-			}
+	if isMutation {
+		updateMutations(qc)
+		if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
+			return
 		}
 	}
 
-	newUids, err := query.AssignUids(ctx, gmu.Set)
-	if err != nil {
-		return resp, err
+	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
+	// since it involves modifying the API protos.
+	// TODO (Aman): may need to calculate processing time here!!!
+	resp.Latency = &api.Latency{
+		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
+		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
+		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
+		EncodingNs:        uint64(l.Json.Nanoseconds()),
 	}
-
-	// resp.Uids contains a map of the node name to the uid.
-	// 1. For a blank node, like _:foo, the key would be foo.
-	// 2. For a uid variable that is part of an upsert query, like uid(foo), the key would
-	// be uid(foo).
-	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(gmu, newUids)
-	if err != nil {
-		return resp, err
-	}
-
-	m := &pb.Mutations{Edges: edges, StartTs: req.StartTs}
-	span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, m)
-	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
-	if !req.CommitNow {
-		if err == zero.ErrConflict {
-			err = status.Error(codes.FailedPrecondition, err.Error())
-		}
-
-		return resp, err
-	}
-
-	// The following logic is for committing immediately.
-	if err != nil {
-		// ApplyMutations failed. We now want to abort the transaction,
-		// ignoring any error that might occur during the abort (the user would
-		// care more about the previous error).
-		if resp.Txn == nil {
-			resp.Txn = &api.TxnContext{StartTs: req.StartTs}
-		}
-
-		resp.Txn.Aborted = true
-		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
-
-		if err == zero.ErrConflict {
-			// We have already aborted the transaction, so the error message should reflect that.
-			return resp, dgo.ErrAborted
-		}
-
-		return resp, err
-	}
-
-	span.Annotatef(nil, "Prewrites err: %v. Attempting to commit/abort immediately.", err)
-	ctxn := resp.Txn
-	// zero would assign the CommitTs
-	cts, err := worker.CommitOverNetwork(ctx, ctxn)
-	span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
-	if err != nil {
-		if err == dgo.ErrAborted {
-			err = status.Errorf(codes.Aborted, err.Error())
-			resp.Txn.Aborted = true
-		}
-
-		return resp, err
-	}
-
-	// CommitNow was true, no need to send keys.
-	resp.Txn.Keys = resp.Txn.Keys[:0]
-	resp.Txn.CommitTs = cts
 
 	return resp, nil
 }
 
-// doQueryInUpsert processes the query in upsert block.
-// It returns the latency and a map of variables => [ uids ...] used in the upsert mutation.
-func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
-	*query.Latency, map[string][]string, error) {
+// parseRequest parses the incoming request
+func parseRequest(qc *queryContext) error {
+	parsingStartTime := time.Now()
 
-	l := &query.Latency{}
-	if req.Query == "" {
-		return l, nil, nil
+	// parsing mutations
+	qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
+	for _, mu := range qc.req.Mutations {
+		gmu, err := parseMutationObject(mu)
+		if err != nil {
+			return err
+		}
+
+		qc.gmuList = append(qc.gmuList, gmu)
 	}
 
-	mu := req.Mutations[0]
-	upsertQuery := req.Query
-	needVars := findVars(gmu)
-	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
-	// conditionalVar is a dummy var that we use to evaluate the result of
-	// conditional upsert.
-	conditionalVar := fmt.Sprintf("__dgraph%d__", rand.Int())
-	if isCondUpsert {
-		// @if in upsert is same as @filter in the query
-		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)
+	// updating queries to include dummy variables for conditional upsert
+	upsertQuery, condVars := buildUpsertQuery(qc)
+	qc.condVars = condVars
 
-		// Add dummy query to evaluate the @if directive, ok to use uid(0) because
-		// dgraph doesn't check for existence of UIDs until we query for other predicates.
-		// Here, we are only querying for uid predicate in the dummy query.
-		//
-		// For example if - mu.Query = {
-		//      me(...) {...}
-		//   }
-		//
-		// Then, upsertQuery = {
-		//      me(...) {...}
-		//      __dgraph0__ as var(func: uid(0)) @if(...)
-		//   }
-		//
-		// The variable __dgraph0__ will -
-		//      * be empty if the condition is true
-		//      * have 1 UID (the 0 UID) if the condition is false
-		upsertQuery = strings.TrimSuffix(strings.TrimSpace(req.Query), "}")
-		upsertQuery += conditionalVar + ` as var(func: uid(0)) ` + cond + `}`
-		needVars = append(needVars, conditionalVar)
-	}
-
-	startParsingTime := time.Now()
-	parsedReq, err := gql.ParseWithNeedVars(gql.Request{
+	// parsing the updated query
+	needVars := findVars(qc)
+	gqlRes, err := gql.ParseWithNeedVars(gql.Request{
 		Str:       upsertQuery,
-		Variables: make(map[string]string),
+		Variables: qc.req.Vars,
 	}, needVars)
-	l.Parsing += time.Since(startParsingTime)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
+		return err
 	}
-	if err := validateQuery(parsedReq.Query); err != nil {
-		return nil, nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
-	}
-
-	if err := authorizeQuery(ctx, &parsedReq); err != nil {
-		return nil, nil, err
+	if err = validateQuery(qc.gqlRes.Query); err != nil {
+		return err
 	}
 
-	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: req.StartTs}
-	if err := qr.ProcessQuery(ctx); err != nil {
-		return nil, nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
+	qc.gqlRes = gqlRes
+	qc.latency.Parsing = time.Since(parsingStartTime)
+	return nil
+}
+
+// buildUpsertQuery modifies the query to evaluate the
+// @if condition defined in Conditional Upsert.
+func buildUpsertQuery(qc *queryContext) (string, []string) {
+	vars := make([]string, len(qc.gmuList))
+	qc.req.Query = strings.TrimSpace(qc.req.Query)
+	if qc.req.Query == "" {
+		return qc.req.Query, vars
 	}
 
-	if len(qr.Vars) <= 0 {
-		return nil, nil, errors.Errorf("upsert query block has no variables")
+	upsertQuery := strings.TrimSuffix(qc.req.Query, "}")
+	for i, gmu := range qc.gmuList {
+		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
+		if isCondUpsert {
+			vars[i] = fmt.Sprintf("__dgraph_%d__", rand.Int())
+			// @if in upsert is same as @filter in the query
+			cond := strings.Replace(gmu.Cond, "@if", "@filter", 1)
+
+			// Add dummy query to evaluate the @if directive, ok to use uid(0) because
+			// dgraph doesn't check for existence of UIDs until we query for other predicates.
+			// Here, we are only querying for uid predicate in the dummy query.
+			//
+			// For example if - mu.Query = {
+			//      me(...) {...}
+			//   }
+			//
+			// Then, upsertQuery = {
+			//      me(...) {...}
+			//      __dgraph_0__ as var(func: uid(0)) @filter(...)
+			//   }
+			//
+			// The variable __dgraph_0__ will -
+			//      * be empty if the condition is true
+			//      * have 1 UID (the 0 UID) if the condition is false
+			upsertQuery += vars[i] + ` as var(func: uid(0)) ` + cond + `\n`
+		}
 	}
+	upsertQuery += `}`
+
+	return upsertQuery, vars
+}
+
+func authorizeRequest(ctx context.Context, qc *queryContext) error {
+	// if err := authorizeQuery(ctx, &qc.gqlRes); err != nil {
+	// 	return err
+	// }
+
+	// // TODO(Aman): can be optimized to do the authorization in just one func call
+	// for _, gmu := range qc.gmuList {
+	// 	if err := authorizeMutation(ctx, gmu); err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	return nil
+}
+
+func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
+	qr := query.Request{
+		Latency:  qc.latency,
+		GqlQuery: &qc.gqlRes,
+	}
+
+	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
+	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
+	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	switch {
+	case qc.req.BestEffort:
+		qc.span.Annotate([]otrace.Attribute{otrace.BoolAttribute("be", true)}, "")
+	case qc.req.ReadOnly:
+		qc.span.Annotate([]otrace.Attribute{otrace.BoolAttribute("ro", true)}, "")
+	default:
+		qc.span.Annotate([]otrace.Attribute{otrace.BoolAttribute("no", true)}, "")
+	}
+
+	if qc.req.BestEffort {
+		// Sanity: check that request is read-only too.
+		if !qc.req.ReadOnly {
+			return nil, errors.Errorf("A best effort query must be read-only.")
+		}
+
+		if qc.req.StartTs == 0 {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		}
+
+		qr.Cache = worker.NoCache
+	}
+
+	if qc.req.StartTs == 0 {
+		assignTimestampStart := time.Now()
+		qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
+	}
+
+	qr.ReadTs = qc.req.StartTs
+	resp := &api.Response{}
+	resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
+	annotateStartTs(qc.span, qc.req.StartTs)
+
+	// Core processing happens here.
+	er, err := qr.Process(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "")
+	}
+
+	var js []byte
+	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		sort.Slice(er.SchemaNode, func(i, j int) bool {
+			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
+		})
+		sort.Slice(er.Types, func(i, j int) bool {
+			return er.Types[i].TypeName < er.Types[j].TypeName
+		})
+
+		respMap := make(map[string]interface{})
+		if len(er.SchemaNode) > 0 {
+			respMap["schema"] = er.SchemaNode
+		}
+		if len(er.Types) > 0 {
+			respMap["types"] = formatTypes(er.Types)
+		}
+		js, err = json.Marshal(respMap)
+	} else {
+		js, err = query.ToJson(qc.latency, er.Subgraphs)
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp.Json = js
+	qc.span.Annotatef(nil, "Response = %s", js)
 
 	// varToUID contains a map of variable name to the uids corresponding to it.
-	// It is used later for constructing set and delete mutations by replacing variables
-	// with the actual uids they correspond to.
+	// It is used later for constructing set and delete mutations by replacing
+	// variables with the actual uids they correspond to.
 	// If a variable doesn't have any UID, we generate one ourselves later.
-	varToUID := make(map[string][]string)
+	qc.uidRes = make(map[string][]string)
 	for name, v := range qr.Vars {
 		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
 			continue
@@ -688,52 +727,60 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
-		varToUID[name] = uids
+		qc.uidRes[name] = uids
 	}
 
-	// If @if condition is false, no need to process the mutations
-	if isCondUpsert {
-		v, ok := qr.Vars[conditionalVar]
-		isMut := ok && v.Uids != nil && len(v.Uids.Uids) == 1
-		if !isMut {
+	return resp, err
+}
+
+func updateMutations(qc *queryContext) {
+	for i, gmu := range qc.gmuList {
+		condVar := qc.condVars[i]
+		if condVar == "" {
+			continue
+		}
+
+		uids, ok := qc.uidRes[condVar]
+		if !(ok && len(uids) == 1) {
 			gmu.Set = nil
 			gmu.Del = nil
-			return l, nil, nil
 		}
-	}
 
-	updateUIDInMutations(gmu, varToUID)
-	updateValInMutations(gmu, qr)
-	// varToUID is returned to the client, let's delete the dummy var that we put in there for
-	// evaluating the conditional upsert.
-	delete(varToUID, conditionalVar)
-	return l, varToUID, nil
+		updateUIDInMutations(gmu, qc)
+		updateValInMutations(gmu, qc)
+		delete(qc.uidRes, condVar)
+	}
 }
 
 // findVars finds all the variables used in mutation block
-func findVars(gmu *gql.Mutation) []string {
-	vars := make(map[string]struct{})
+func findVars(qc *queryContext) []string {
 	updateVars := func(s string) {
-		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
+		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
-			vars[varName] = struct{}{}
+			qc.uidRes[varName] = nil
+		} else if strings.HasPrefix(s, "val(") {
+			varName := s[4 : len(s)-1]
+			qc.valRes[varName] = nil
 		}
 	}
-	for _, nq := range gmu.Set {
-		updateVars(nq.Subject)
-		updateVars(nq.ObjectId)
-	}
-	for _, nq := range gmu.Del {
-		updateVars(nq.Subject)
-		updateVars(nq.ObjectId)
+
+	for _, gmu := range qc.gmuList {
+		for _, nq := range gmu.Set {
+			updateVars(nq.Subject)
+			updateVars(nq.ObjectId)
+		}
+		for _, nq := range gmu.Del {
+			updateVars(nq.Subject)
+			updateVars(nq.ObjectId)
+		}
 	}
 
-	varsList := make([]string, 0, len(vars))
-	for v := range vars {
+	varsList := make([]string, 0, len(qc.uidRes)+len(qc.valRes))
+	for v := range qc.uidRes {
 		varsList = append(varsList, v)
 	}
-	if glog.V(3) {
-		glog.Infof("Variables used in mutation block: %v", varsList)
+	for v := range qc.valRes {
+		varsList = append(varsList, v)
 	}
 
 	return varsList
@@ -743,12 +790,12 @@ func findVars(gmu *gql.Mutation) []string {
 // Assumption is that Subject can contain UID, whereas Object can contain Val
 // If val(variable) exists in a query, but the values are not there for the variable,
 // it will ignore the mutation silently.
-func updateValInNQuads(nquads []*api.NQuad, req query.Request) []*api.NQuad {
+func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 	getNewVals := func(s string) (map[uint64]types.Val, bool) {
 		if strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
-			if vals, ok := req.Vars[varName]; ok {
-				return vals.Vals, true
+			if v, ok := qc.valRes[varName]; ok && v != nil {
+				return v, true
 			}
 			return nil, true
 		}
@@ -820,22 +867,21 @@ func updateValInNQuads(nquads []*api.NQuad, req query.Request) []*api.NQuad {
 
 // updateValInMuations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
-func updateValInMutations(gmu *gql.Mutation, req query.Request) {
-	gmu.Del = updateValInNQuads(gmu.Del, req)
-	gmu.Set = updateValInNQuads(gmu.Set, req)
+func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
+	gmu.Del = updateValInNQuads(gmu.Del, qc)
+	gmu.Set = updateValInNQuads(gmu.Set, qc)
 }
 
 // updateUIDInMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-
-func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	usedMutationVars := make(map[string]bool)
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
-			if uids, ok := varToUID[varName]; ok {
+			if uids, ok := qc.uidRes[varName]; ok {
 				usedMutationVars[varName] = true
 				return uids
 			}
@@ -890,165 +936,118 @@ func updateUIDInMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 			}
 		}
 	}
-	for v := range varToUID {
+	for v := range qc.uidRes {
 		// We only want to return the vars which are used in the mutation.
 		if _, ok := usedMutationVars[v]; !ok {
-			delete(varToUID, v)
+			delete(qc.uidRes, v)
 		}
 	}
 	gmu.Set = gmuSet
 }
 
-// Query handles queries and returns the data.
-func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	if len(req.Mutations) > 0 {
-		return s.doMutate(ctx, req, NeedAuthorize)
-	}
-
-	return s.doQuery(ctx, req, NeedAuthorize)
-}
-
-// This method is used to execute the query and return the response to the
-// client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
-	resp *api.Response, rerr error) {
-
+func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
-	startTime := time.Now()
 
-	var measurements []ostats.Measurement
-	ctx, span := otrace.StartSpan(ctx, methodQuery)
-	ctx = x.WithMethod(ctx, methodQuery)
-	defer func() {
-		span.End()
-		v := x.TagValueStatusOK
-		if rerr != nil {
-			v = x.TagValueStatusError
-		}
-		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceMs(startTime)
-		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
-		ostats.Record(ctx, measurements...)
-	}()
+	if !isMutationAllowed(ctx) {
+		return errors.Errorf("No mutations allowed.")
+	}
 
 	if err := x.HealthCheck(); err != nil {
-		return nil, err
+		return err
 	}
 
-	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
-	defer func() {
-		measurements = append(measurements, x.PendingQueries.M(-1))
-	}()
-
-	resp = &api.Response{}
-	if len(req.Query) == 0 {
-		span.Annotate(nil, "Empty query")
-		return resp, errors.Errorf("Empty query")
+	if len(qc.uidRes) > 0 {
+		resp.Vars = make(map[string]*api.Uids, len(qc.uidRes))
+		for v, uids := range qc.uidRes {
+			// There could be a lot of these uids which could blow up the response size, especially
+			// for bulk mutations, hence only return variables which have less than a million uids.
+			if len(uids) <= 1e6 {
+				hexUids := make([]string, 0, len(uids))
+				// doQueryInUpsert returns uids as base10 string representation. We convert them
+				// to base16 string so that response format is consistent with assigned uids.
+				for _, uid := range uids {
+					u, err := strconv.ParseUint(uid, 10, 64)
+					if err != nil {
+						return errors.Errorf("Couldn't parse uid: [%v] as base 10 uint64", uid)
+					}
+					huid := fmt.Sprintf("%#x", u)
+					hexUids = append(hexUids, huid)
+				}
+				resp.Vars[v] = &api.Uids{
+					Uids: hexUids,
+				}
+			}
+		}
 	}
 
-	var l query.Latency
-	l.Start = time.Now()
-	span.Annotatef(nil, "Query received: %v", req)
-
-	parsedReq, err := gql.Parse(gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-	})
+	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
-		return resp, err
+		return err
 	}
 
-	if err = validateQuery(parsedReq.Query); err != nil {
-		return resp, err
-	}
-
-	if authorize == NeedAuthorize {
-		if err := authorizeQuery(ctx, &parsedReq); err != nil {
-			return nil, err
-		}
-	}
-
-	var queryRequest = query.Request{
-		Latency:  &l,
-		GqlQuery: &parsedReq,
-	}
-	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
-	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
-	// If we haven't processed any updates yet then fall back to getting TS from Zero.
-	switch {
-	case req.BestEffort:
-		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("be", true)}, "")
-	case req.ReadOnly:
-		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("ro", true)}, "")
-	default:
-		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("no", true)}, "")
-	}
-	if req.BestEffort {
-		// Sanity: check that request is read-only too.
-		if !req.ReadOnly {
-			return resp, errors.Errorf("A best effort query must be read-only.")
-		}
-		if req.StartTs == 0 {
-			req.StartTs = posting.Oracle().MaxAssigned()
-		}
-		queryRequest.Cache = worker.NoCache
-	}
-
-	if req.StartTs == 0 {
-		assignTimestampStart := time.Now()
-		req.StartTs = State.getTimestamp(req.ReadOnly)
-		l.AssignTimestamp = time.Since(assignTimestampStart)
-	}
-
-	queryRequest.ReadTs = req.StartTs
-	resp.Txn = &api.TxnContext{StartTs: req.StartTs}
-	annotateStartTs(span, req.StartTs)
-
-	// Core processing happens here.
-	var er query.ExecutionResult
-	if er, err = queryRequest.Process(ctx); err != nil {
-		return resp, errors.Wrap(err, "")
-	}
-
-	var js []byte
-	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
-		sort.Slice(er.SchemaNode, func(i, j int) bool {
-			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
-		})
-		sort.Slice(er.Types, func(i, j int) bool {
-			return er.Types[i].TypeName < er.Types[j].TypeName
-		})
-
-		respMap := make(map[string]interface{})
-		if len(er.SchemaNode) > 0 {
-			respMap["schema"] = er.SchemaNode
-		}
-		if len(er.Types) > 0 {
-			respMap["types"] = formatTypes(er.Types)
-		}
-		js, err = json.Marshal(respMap)
-	} else {
-		js, err = query.ToJson(&l, er.Subgraphs)
-	}
+	// resp.Uids contains a map of the node name to the uid.
+	// 1. For a blank node, like _:foo, the key would be foo.
+	// 2. For a uid variable that is part of an upsert query,
+	//    like uid(foo), the key would be uid(foo).
+	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
+	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
 	if err != nil {
-		return resp, err
-	}
-	resp.Json = js
-	span.Annotatef(nil, "Response = %s", js)
-
-	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
-	// since it involves modifying the API protos.
-	gl := &api.Latency{
-		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
-		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
-		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
-		EncodingNs:        uint64(l.Json.Nanoseconds()),
+		return err
 	}
 
-	resp.Latency = gl
-	return resp, err
+	m := &pb.Mutations{Edges: edges, StartTs: qc.req.StartTs}
+	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
+	resp.Txn, err = query.ApplyMutations(ctx, m)
+	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+	if qc.req.CommitNow {
+		if err == zero.ErrConflict {
+			err = status.Error(codes.FailedPrecondition, err.Error())
+		}
+
+		return err
+	}
+
+	// The following logic is for committing immediately.
+	if err != nil {
+		// ApplyMutations failed. We now want to abort the transaction,
+		// ignoring any error that might occur during the abort (the user would
+		// care more about the previous error).
+		if resp.Txn == nil {
+			resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
+		}
+
+		resp.Txn.Aborted = true
+		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
+
+		if err == zero.ErrConflict {
+			// We have already aborted the transaction, so the error message should reflect that.
+			return dgo.ErrAborted
+		}
+
+		return err
+	}
+
+	qc.span.Annotatef(nil, "Prewrites err: %v. Attempting to commit/abort immediately.", err)
+	ctxn := resp.Txn
+	// zero would assign the CommitTs
+	cts, err := worker.CommitOverNetwork(ctx, ctxn)
+	qc.span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
+	if err != nil {
+		if err == dgo.ErrAborted {
+			err = status.Errorf(codes.Aborted, err.Error())
+			resp.Txn.Aborted = true
+		}
+
+		return err
+	}
+
+	// CommitNow was true, no need to send keys.
+	resp.Txn.Keys = resp.Txn.Keys[:0]
+	resp.Txn.CommitTs = cts
+
+	return nil
 }
 
 // CommitOrAbort commits or aborts a transaction.
@@ -1133,7 +1132,7 @@ func isAlterAllowed(ctx context.Context) error {
 // gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
-	res := &gql.Mutation{}
+	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
 		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
