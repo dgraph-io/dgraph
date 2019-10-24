@@ -139,7 +139,6 @@
           author : Post.author {
             authorID : uid
             name : Author.name
-            uid
           }
           uid
         }
@@ -474,7 +473,6 @@
         name : Author.name
         uid
       }
-      uid
     }
 
 -
@@ -491,7 +489,6 @@
         name : Author.name
         uid
       }
-      uid
     }
 
 -
@@ -508,7 +505,6 @@
         title : Post.title
         uid
       }
-      uid
     }
 
 -
@@ -525,7 +521,6 @@
         name : Author.name
         uid
       }
-      uid
     }
 
 -
@@ -542,7 +537,6 @@
         name : Country.name
         uid
       }
-      uid
     }
 
 -
@@ -559,7 +553,6 @@
         title : Post.title
         uid
       }
-      uid
     }
 
 
@@ -577,7 +570,6 @@
         title : Post.title
         uid
       }
-      uid
     }
 
 -
@@ -594,7 +586,6 @@
         name : Country.name
         uid
       }
-      uid
     }
 
 -
