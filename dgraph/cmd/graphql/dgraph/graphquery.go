@@ -67,15 +67,9 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	}
 
 	if len(query.Children) > 0 {
-		hasUID := false
 		b.WriteString(" {\n")
 		for _, c := range query.Children {
-			hasUID = hasUID || c.Attr == "uid"
 			writeQuery(b, c, prefix+"  ", false)
-		}
-		if !hasUID {
-			b.WriteString(prefix + "  ")
-			b.WriteString("uid\n")
 		}
 		b.WriteString(prefix)
 		b.WriteString("}")

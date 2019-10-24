@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,6 +68,31 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	}
 }
 
+func addUID(field *schema.Field, dgQuery *gql.GraphQuery) {
+	if len(dgQuery.Children) == 0 {
+		return
+	}
+	hasUID := false
+	aliasUID := false
+	for _, c := range dgQuery.Children {
+		addUID(field, c)
+		hasUID = hasUID || c.Attr == "uid"
+		aliasUID = aliasUID || c.Alias == "uid"
+	}
+
+	if hasUID {
+		return
+	}
+
+	uidAttr := "uid"
+	if aliasUID {
+		uidAttr = fmt.Sprintf("uid_%d", rand.Int())
+	}
+	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
+		Attr: uidAttr,
+	})
+}
+
 func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
@@ -77,6 +103,7 @@ func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
 	}
 
 	addSelectionSetFrom(dgQuery, field)
+	addUID(&field, dgQuery)
 
 	return dgQuery
 }
@@ -95,6 +122,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
+	addUID(&field, dgQuery)
 
 	return dgQuery
 }

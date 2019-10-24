@@ -10,6 +10,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -25,6 +26,7 @@
     query {
       author(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -40,6 +42,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         authName : Author.name
+        uid
       }
     }
 
@@ -69,7 +72,9 @@
         posts {
           title
           text
+          uid
         }
+        uid
       }
     }
   dgquery: |-
@@ -79,7 +84,9 @@
         posts : Author.posts {
           title : Post.title
           text : Post.text
+          uid
         }
+        uid
       }
     }
 
@@ -102,7 +109,9 @@
         allPosts : Author.posts {
           postTitle : Post.title
           postText : Post.text
+          uid
         }
+        uid
       }
     }
 
@@ -132,8 +141,11 @@
           author : Post.author {
             authorID : uid
             name : Author.name
+            uid
           }
+          uid
         }
+        uid
       }
     }
 
@@ -149,6 +161,7 @@
     query {
       queryAuthor(func: type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -164,6 +177,7 @@
     query {
       queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -179,6 +193,7 @@
     query {
       queryAuthor(func: type(Author)) @filter((le(Author.dob, "2001-01-01") AND eq(Author.name, "A. N. Author") AND gt(Author.reputation, 2.5))) {
         name : Author.name
+        uid
       }
     }
 
@@ -194,6 +209,7 @@
     query {
       queryAuthor(func: type(Author)) @filter(((gt(Author.reputation, 2.5) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
         name : Author.name
+        uid
       }
     }
 
@@ -209,6 +225,7 @@
     query {
       queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR le(Author.dob, "2001-01-01"))) {
         name : Author.name
+        uid
       }
     }
 
@@ -225,6 +242,7 @@
     query {
       queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, 2.5)) OR le(Author.dob, "2001-01-01"))) {
         name : Author.name
+        uid
       }
     }
 
@@ -240,6 +258,7 @@
     query {
       queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (le(Author.dob, "2001-01-01") AND gt(Author.reputation, 2.5)))) {
         name : Author.name
+        uid
       }
     }
 
@@ -255,6 +274,7 @@
     query {
       queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (gt(Author.reputation, 2.5) OR le(Author.dob, "2001-01-01")))) {
         name : Author.name
+        uid
       }
     }
 
@@ -270,6 +290,7 @@
     query {
       queryAuthor(func: type(Author)) @filter(NOT (gt(Author.reputation, 2.5))) {
         name : Author.name
+        uid
       }
     }
 
@@ -285,6 +306,7 @@
     query {
       queryAuthor(func: type(Author), first: 10) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -300,6 +322,7 @@
     query {
       queryAuthor(func: type(Author), first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -315,6 +338,7 @@
     query {
       queryAuthor(func: type(Author), orderasc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -330,6 +354,7 @@
     query {
       queryAuthor(func: type(Author), orderdesc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -346,6 +371,7 @@
     query {
       queryAuthor(func: type(Author), orderdesc: Author.reputation, orderasc: Author.dob) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -361,6 +387,7 @@
     query {
       queryAuthor(func: type(Author), orderdesc: Author.reputation, first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
     }
 
@@ -381,7 +408,9 @@
         name : Author.name
         posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
           title : Post.title
+          uid
         }
+        uid
       }
     }
 
@@ -403,7 +432,9 @@
         name : Author.name
         posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (first: 10) {
           title : Post.title
+          uid
         }
+        uid
       }
     }
 
@@ -424,7 +455,9 @@
         name : Author.name
         posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, first: 10, offset: 10) {
           title : Post.title
+          uid
         }
+        uid
       }
     }
 
@@ -441,7 +474,9 @@
     query {
       queryAuthor(func: type(Author)) @filter((gt(Author.reputation, 1.1) OR (ge(Author.reputation, 1.1) OR (lt(Author.reputation, 1.1) OR (le(Author.reputation, 1.1) OR eq(Author.reputation, 1.1)))))) {
         name : Author.name
+        uid
       }
+      uid
     }
 
 -
@@ -456,7 +491,9 @@
     query {
       queryAuthor(func: type(Author)) @filter((gt(Author.dob, "2000-01-01") OR (ge(Author.dob, "2000-01-01") OR (lt(Author.dob, "2000-01-01") OR (le(Author.dob, "2000-01-01") OR eq(Author.dob, "2000-01-01")))))) {
         name : Author.name
+        uid
       }
+      uid
     }
 
 -
@@ -471,7 +508,9 @@
     query {
       queryPost(func: type(Post)) @filter((gt(Post.numLikes, 10) OR (ge(Post.numLikes, 10) OR (lt(Post.numLikes, 10) OR (le(Post.numLikes, 10) OR eq(Post.numLikes, 10)))))) {
         title : Post.title
+        uid
       }
+      uid
     }
 
 -
@@ -486,7 +525,9 @@
     query {
       queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
         name : Author.name
+        uid
       }
+      uid
     }
 
 -
@@ -501,7 +542,9 @@
     query {
       queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR (ge(Country.name, "AAA") OR (lt(Country.name, "AAA") OR (le(Country.name, "AAA") OR eq(Country.name, "AAA")))))) {
         name : Country.name
+        uid
       }
+      uid
     }
 
 -
@@ -516,7 +559,9 @@
     query {
       queryPost(func: type(Post)) @filter((anyofterms(Post.title, "GraphQL") OR allofterms(Post.title, "GraphQL"))) {
         title : Post.title
+        uid
       }
+      uid
     }
 
 
@@ -532,7 +577,9 @@
     query {
       queryPost(func: type(Post)) @filter((anyoftext(Post.text, "GraphQL") OR alloftext(Post.text, "GraphQL"))) {
         title : Post.title
+        uid
       }
+      uid
     }
 
 -
@@ -547,7 +594,9 @@
     query {
       queryCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
         name : Country.name
+        uid
       }
+      uid
     }
 
 -
@@ -569,6 +618,7 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -590,6 +640,7 @@
     query {
       queryAuthor(func: type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -618,6 +669,7 @@
     query {
       queryAuthor(func: type(Author)) {
         name : Author.name
+        uid
       }
     }
 
@@ -752,6 +804,7 @@
     query {
       queryAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
         name : Author.name
+        uid
       }
     }
 
@@ -767,6 +820,7 @@
     query {
       queryAuthor(func: type(Author)) @filter((uid(0x1, 0x2) AND eq(Author.name, "A. N. Author"))) {
         name : Author.name
+        uid
       }
     }
 
@@ -782,6 +836,7 @@
     query {
       queryAuthor(func: type(Author)) @filter(NOT (uid(0x1, 0x2))) {
         name : Author.name
+        uid
       }
     }
 
@@ -802,7 +857,9 @@
         name : Author.name
         posts : Author.posts @filter((anyofterms(Post.title, "GraphQL") AND uid(0x1, 0x2))) {
           title : Post.title
+          uid
         }
+        uid
       }
     }
 
@@ -823,7 +880,9 @@
         name : Author.name
         posts : Author.posts @filter((NOT (uid(0x1, 0x2)) AND anyofterms(Post.title, "GraphQL"))) {
           title : Post.title
+          uid
         }
+        uid
       }
     }
 
@@ -839,6 +898,7 @@
     query {
       queryAuthor(func: uid()) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
         name : Author.name
+        uid
       }
     }
 
@@ -854,5 +914,6 @@
     query {
       queryAuthor(func: uid(0x1)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
         name : Author.name
+        uid
       }
     }

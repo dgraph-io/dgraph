@@ -76,6 +76,7 @@
         title : Post.title
         author : Post.author {
           name : Author.name
+          uid
         }
       }
     }
@@ -130,6 +131,7 @@
         author : Post.author {
           name : Author.name
           posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+          uid
         }
       }
     }
@@ -156,5 +158,6 @@
     query {
       post(func: uid(0x4)) {
         title : Post.title
+        uid
       }
     }
