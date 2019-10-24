@@ -114,7 +114,6 @@ func (mrw *mutationRewriter) Rewrite(
 		if m.MutationType() == schema.AddMutation {
 			srcUIDs = []string{"_:" + createdNode}
 		} else {
-			// TODO - Update this comment below to reflect new filters.
 			// must be schema.UpdateMutation, so the mutation payload came in like
 			// { id: 0x123, patch { ... the actual changes ... } }
 			// it's that "patch" object that needs to be built into the mutation.
