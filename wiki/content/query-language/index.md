@@ -1815,14 +1815,14 @@ the following definitions:
 
 ```
 type Animal {
-    name
-    species
-    dob
+    name: string
+    species: uid
+    dob: datetime
 }
 
 type Pet {
-    owner
-    veterinarian
+    owner: datetime
+    veterinarian: datetime
 }
 ```
 
@@ -2375,11 +2375,11 @@ Types are defined using a GraphQL-like syntax. For example:
 
 ```
 type Student {
-  name
-  dob
-  home_address
-  year
-  friends
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
+  friends: [uid]
 }
 ```
 
@@ -2407,11 +2407,11 @@ different.
 
 ```
 type Student {
-  student_name
+  student_name: string
 }
 
 type Textbook {
-  textbook_name
+  textbook_name: string
 }
 
 student_name: string @index(exact) .

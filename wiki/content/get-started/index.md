@@ -280,18 +280,20 @@ curl localhost:8080/alter -XPOST -d $'
   release_date: datetime @index(year) .
   revenue: float .
   running_time: int .
+  starring: [uid] .
+  director: [uid] .
 
   type Person {
-    name
+    name: string
   }
 
   type Film {
-    name
-    release_date
-    revenue
-    running_time
-    starring
-    director
+    name: string
+    release_date: datetime
+    revenue: float
+    running_time: int
+    starring: uid
+    director: uid
   }
 
 ' | python -m json.tool | less
