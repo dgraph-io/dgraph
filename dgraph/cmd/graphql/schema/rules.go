@@ -30,7 +30,6 @@ func init() {
 
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck)
-	fieldValidations = append(fieldValidations, fieldArgumentCheck)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -107,11 +106,13 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 }
 
 func isValidTypeForList(field *ast.Type, typ *ast.Definition) bool {
-	if isIDType(typ, field) {
+	switch field.Name() {
+	case
+		"ID",
+		"Boolean":
 		return false
 	}
-
-	return field.Name() != "Boolean"
+	return true
 }
 
 func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
@@ -144,6 +145,10 @@ func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerro
 		return gqlerror.ErrorPosf(field.Position,
 			"%s Nested lists are invalid.",
 			field.Type.Dump())
+	}
+
+	if err := fieldArgumentCheck(field, typ); err != nil {
+		return err
 	}
 
 	return nil
@@ -289,7 +294,7 @@ func isScalar(s string) bool {
 }
 
 func isReservedKeyWord(name string) bool {
-	if isScalar(name) || name == "Query" || name == "Mutation" {
+	if isScalar(name) || name == "Query" || name == "Mutation" || name == "uid" {
 		return true
 	}
 
