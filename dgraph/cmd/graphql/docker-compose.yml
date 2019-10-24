@@ -2,14 +2,14 @@ version: "3.5"
 services:
   zero:
     image: dgraph/dgraph:latest
-    container_name: zero
-    working_dir: /data/zero
+    container_name: zero1
+    working_dir: /data/zero1
     ports:
       - 5180:5180
       - 6180:6180
     labels:
       cluster: test
-      service: zero
+      service: zero1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -19,8 +19,8 @@ services:
 
   alpha:
     image: dgraph/dgraph:latest
-    container_name: alpha
-    working_dir: /data/alpha
+    container_name: alpha1
+    working_dir: /data/alpha1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -31,8 +31,8 @@ services:
       - 9180:9180
     labels:
       cluster: test
-      service: alpha
-    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zero:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --jaeger.collector=http://jaeger:14268
+      service: alpha1
+    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --jaeger.collector=http://jaeger:14268
 
   graphql:
     image: dgraph/dgraph:latest
