@@ -4,19 +4,20 @@
 
 type Post {
 	postID: ID!
-	title: String! @searchable(by: term)
-	text: String @searchable(by: fulltext)
-	tags: [String] @searchable(by: trigram)
-	tagsHash: [String] @searchable(by: hash)
-	tagsExact: [String] @searchable(by: exact)
-	publishByYear: DateTime @searchable(by: year)
-	publishByMonth: DateTime @searchable(by: month)
-	publishByDay: DateTime @searchable(by: day)
-	publishByHour: DateTime @searchable(by: hour)
-	numLikes: Int @searchable
-	score: Float @searchable
-	isPublished: Boolean @searchable
-	postType: PostType @searchable
+	title: String! @search(by: [term])
+	titleByEverything: String! @search(by: [term,fulltext,trigram,hash])
+	text: String @search(by: [fulltext])
+	tags: [String] @search(by: [trigram])
+	tagsHash: [String] @search(by: [hash])
+	tagsExact: [String] @search(by: [exact])
+	publishByYear: DateTime @search(by: [year])
+	publishByMonth: DateTime @search(by: [month])
+	publishByDay: DateTime @search(by: [day])
+	publishByHour: DateTime @search(by: [hour])
+	numLikes: Int @search
+	score: Float @search
+	isPublished: Boolean @search
+	postType: PostType @search
 }
 
 enum PostType {
@@ -40,6 +41,7 @@ enum DgraphIndex {
 	term
 	fulltext
 	trigram
+	regexp
 	year
 	month
 	day
@@ -47,7 +49,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -121,6 +123,7 @@ type UpdatePostPayload {
 
 enum PostOrderable {
 	title
+	titleByEverything
 	text
 	tags
 	tagsHash
@@ -139,6 +142,7 @@ enum PostOrderable {
 
 input PatchPost {
 	title: String
+	titleByEverything: String
 	text: String
 	tags: [String]
 	tagsHash: [String]
@@ -156,6 +160,7 @@ input PatchPost {
 input PostFilter {
 	ids: [ID!]
 	title: StringTermFilter
+	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
 	text: StringFullTextFilter
 	tags: StringRegExpFilter
 	tagsHash: StringHashFilter
@@ -175,6 +180,7 @@ input PostFilter {
 
 input PostInput {
 	title: String!
+	titleByEverything: String!
 	text: String
 	tags: [String]
 	tagsHash: [String]
@@ -197,6 +203,15 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
+	alloftext: String
+	anyoftext: String
+	eq: String
+	allofterms: String
+	anyofterms: String
+	regexp: String
 }
 
 input UpdatePostInput {

@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
 	"github.com/dgraph-io/dgraph/gql"
@@ -41,7 +41,7 @@ import (
 // Dgraph instance.  Done on a real Dgraph, you also can't see the responses
 // to see what the test is actually doing.
 
-type dgraphClient struct {
+type executor struct {
 	resp     string
 	assigned map[string]string
 
@@ -118,25 +118,22 @@ type Mutation {
 }
 `
 
-func (dg *dgraphClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	dg.failQuery--
-	if dg.failQuery == 0 {
+func (ex *executor) Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
+	ex.failQuery--
+	if ex.failQuery == 0 {
 		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
 	}
-	return []byte(dg.resp), nil
+	return []byte(ex.resp), nil
 }
 
-func (dg *dgraphClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
-	dg.failMutation--
-	if dg.failMutation == 0 {
-		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
+func (ex *executor) Mutate(resCtx *ResolverContext,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	ex.failMutation--
+	if ex.failMutation == 0 {
+		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
 	}
-	return dg.assigned, nil
-}
-
-func (dg *dgraphClient) DeleteNodes(ctx context.Context, query, mutation string) error {
-	// Not needed in testing responses
-	return nil
+	return ex.assigned, nil, nil
 }
 
 func (dg *dgraphClient) ConditionalMutate(ctx context.Context,
@@ -285,7 +282,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"post", "author", "name"}}},
+				Path:      []interface{}{"addPost", "post", "author", "name"}}},
 		},
 	}
 
@@ -294,7 +291,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
-				&dgraphClient{resp: tcase.queryResponse, assigned: tcase.mutResponse})
+				&executor{resp: tcase.queryResponse, assigned: tcase.mutResponse})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
 			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
@@ -350,7 +347,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"post", "author", "name"}}},
+				Path:      []interface{}{"updatePost", "post", "author", "name"}}},
 		},
 	}
 
@@ -359,7 +356,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
-				&dgraphClient{resp: tcase.queryResponse, assigned: tcase.mutResponse})
+				&executor{resp: tcase.queryResponse, assigned: tcase.mutResponse})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
 			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
@@ -422,8 +419,8 @@ func TestManyMutationsWithError(t *testing.T) {
 				&x.GqlError{Message: `mutation addPost failed because ` +
 					`Dgraph mutation failed because _bad stuff happend_`,
 					Locations: []x.Location{{Line: 6, Column: 4}}},
-				&x.GqlError{Message: `mutation add3 was not executed because of ` +
-					`a previous error`,
+				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
+					`a previous error.`,
 					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 		"Rewriting error": {
@@ -436,10 +433,10 @@ func TestManyMutationsWithError(t *testing.T) {
 				"add2" : null
 			}`,
 			errors: x.GqlErrorList{
-				&x.GqlError{Message: `couldn't rewrite mutation because ` +
+				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
 					`ID argument (hi) was not able to be parsed`},
-				&x.GqlError{Message: `mutation add3 was not executed because of ` +
-					`a previous error`,
+				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
+					`a previous error.`,
 					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 	}
@@ -453,7 +450,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				gqlSchema,
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
-				&dgraphClient{
+				&executor{
 					resp:         tcase.queryResponse,
 					assigned:     tcase.mutResponse,
 					failMutation: 2})
@@ -467,19 +464,21 @@ func TestManyMutationsWithError(t *testing.T) {
 }
 
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
-	return resolveWithClient(gqlSchema, gqlQuery, nil, &dgraphClient{resp: dgResponse})
+	return resolveWithClient(gqlSchema, gqlQuery, nil, &executor{resp: dgResponse})
 }
 
 func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,
 	vars map[string]interface{},
-	client dgraph.Client) *schema.Response {
+	ex *executor) *schema.Response {
 	resolver := New(
 		gqlSchema,
-		client,
-		dgraph.NewQueryRewriter(),
-		dgraph.NewMutationRewriter())
-	resolver.GqlReq = &schema.Request{Query: gqlQuery, Variables: vars}
-	return resolver.Resolve(context.Background())
+		NewResolverFactory(
+			NewQueryRewriter(),
+			NewMutationRewriter(),
+			ex,
+			ex))
+
+	return resolver.Resolve(context.Background(), &schema.Request{Query: gqlQuery, Variables: vars})
 }

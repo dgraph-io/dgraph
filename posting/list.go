@@ -27,7 +27,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"

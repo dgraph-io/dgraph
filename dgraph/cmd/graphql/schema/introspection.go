@@ -21,19 +21,25 @@ import (
 // queries or we might get rid of the types defined in wrappers.go and use the types defined in
 // gqlgen instead if they make more sense.
 
-// Introspect performs an introspection query given an operation (contains the query) and a schema.
-func Introspect(o Operation, q Query, s Schema) (json.RawMessage, error) {
-	sch, ok := s.(*schema)
+// Introspect performs an introspection query given a field that's expected to be either
+// __schema or __type.
+func Introspect(f Field) (json.RawMessage, error) {
+	if f.Name() != "__schema" && f.Name() != "__type" {
+		return nil, errors.New("call to introspect for field that isn't an introspection query " +
+			"this indicates an internal bug ... let us know")
+	}
+
+	sch, ok := f.Operation().Schema().(*schema)
 	if !ok {
 		return nil, errors.New("couldn't convert schema to internal type")
 	}
 
-	op, ok := o.(*operation)
+	op, ok := f.Operation().(*operation)
 	if !ok {
 		return nil, errors.New("couldn't convert operation to internal type")
 	}
 
-	qu, ok := q.(*query)
+	qu, ok := f.(*query)
 	if !ok {
 		return nil, errors.New("couldn't convert query to internal type")
 	}

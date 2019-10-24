@@ -30,8 +30,8 @@ const (
 	inverseDirective = "hasInverse"
 	inverseArg       = "field"
 
-	searchableDirective = "searchable"
-	searchableArg       = "by"
+	searchDirective = "search"
+	searchArgs      = "by"
 
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
@@ -48,6 +48,7 @@ enum DgraphIndex {
 	term
 	fulltext
 	trigram
+	regexp
 	year
 	month
 	day
@@ -55,7 +56,7 @@ enum DgraphIndex {
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @searchable(by: DgraphIndex!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -111,7 +112,7 @@ input StringHashFilter {
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
 // generated directly for the bool field / enum.  E.g. if
-// `type T { b: Boolean @searchable }`,
+// `type T { b: Boolean @search }`,
 // then the filter allows `filter: {b: true}`.  That's better than having
 // `input BooleanFilter { eq: Boolean }`, which would require writing
 // `filter: {b: {eq: true}}`.
@@ -127,31 +128,44 @@ type directiveValidator func(
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error
 
-// searchable arg -> supported GraphQL type
-// == supported Dgraph index -> GraphQL type it applies to
-var supportedSearchables = map[string]string{
-	"int":      "Int",
-	"float":    "Float",
-	"bool":     "Boolean",
-	"hash":     "String",
-	"exact":    "String",
-	"term":     "String",
-	"fulltext": "String",
-	"trigram":  "String",
-	"year":     "DateTime",
-	"month":    "DateTime",
-	"day":      "DateTime",
-	"hour":     "DateTime",
+type searchTypeIndex struct {
+	gqlType string
+	dgIndex string
 }
 
-// GraphQL scalar type -> default Dgraph index (/searchable)
-// used if the schema specifies @searchable without an arg
-var defaultSearchables = map[string]string{
+// search arg -> supported GraphQL type
+// == supported Dgraph index -> GraphQL type it applies to
+var supportedSearches = map[string]searchTypeIndex{
+	"int":      {"Int", "int"},
+	"float":    {"Float", "float"},
+	"bool":     {"Boolean", "bool"},
+	"hash":     {"String", "hash"},
+	"exact":    {"String", "exact"},
+	"term":     {"String", "term"},
+	"fulltext": {"String", "fulltext"},
+	"trigram":  {"String", "trigram"},
+	"regexp":   {"String", "trigram"},
+	"year":     {"DateTime", "year"},
+	"month":    {"DateTime", "month"},
+	"day":      {"DateTime", "day"},
+	"hour":     {"DateTime", "hour"},
+}
+
+// GraphQL scalar type -> default Dgraph index (/search)
+// used if the schema specifies @search without an arg
+var defaultSearches = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+}
+
+// Dgraph index filters that have contains intersecting filter
+// directive.
+var filtersCollisions = map[string][]string{
+	"StringHashFilter":  {"StringExactFilter"},
+	"StringExactFilter": {"StringHashFilter"},
 }
 
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
@@ -173,6 +187,7 @@ var builtInFilters = map[string]string{
 	"hour":     "DateTimeFilter",
 	"term":     "StringTermFilter",
 	"trigram":  "StringRegExpFilter",
+	"regexp":   "StringRegExpFilter",
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
@@ -189,8 +204,8 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchableDirective: searchableValidation,
+	inverseDirective: hasInverseValidation,
+	searchDirective:  searchValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -438,8 +453,8 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 // addFieldFilters adds field arguments that allow filtering to all fields of
-// defn that are searchable.  For example, if there's another type
-// `type R { ... f: String @searchable(by: term) ... }`
+// defn that can be searched.  For example, if there's another type
+// `type R { ... f: String @search(by: [term]) ... }`
 // and defn has a field of type R, e.g. if defn is like
 // `type T { ... g: R ... }`
 // then a query should be able to filter on g by term search on f, like
@@ -530,11 +545,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				})
 			continue
 		}
-		if searchable := getSearchable(fld); searchable != "" {
-			filterTypeName := builtInFilters[searchable]
+
+		var filterTypeNameUnion []string
+		for _, search := range getSearchArgs(fld) {
+			filterTypeName := builtInFilters[search]
 			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
 				// If the field is an enum type, we don't generate a filter type.
-				// Instead we allow to write `fieldName: enumValue` in the filter.
+				// Instead we allow to write `typeName: enumValue` in the filter.
 				// So, for example : `filter: { postType: Answer }`
 				// rather than : `filter: { postType: { eq: Answer } }`
 				//
@@ -544,6 +561,11 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 				filterTypeName = fld.Type.Name()
 			}
 
+			filterTypeNameUnion = append(filterTypeNameUnion, filterTypeName)
+		}
+
+		if len(filterTypeNameUnion) > 0 {
+			filterTypeName := strings.Join(filterTypeNameUnion, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
@@ -551,6 +573,20 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 						NamedType: filterTypeName,
 					},
 				})
+
+			//create a schema type
+			if len(filterTypeNameUnion) > 1 {
+				var fieldList ast.FieldList
+				for _, typeName := range filterTypeNameUnion {
+					fieldList = append(fieldList, schema.Types[typeName].Fields...)
+				}
+
+				schema.Types[filterTypeName] = &ast.Definition{
+					Kind:   ast.InputObject,
+					Name:   filterTypeName,
+					Fields: fieldList,
+				}
+			}
 		}
 	}
 
@@ -570,12 +606,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" || isID(fld) })
-}
-
-func hasSearchables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return getSearchable(fld) != "" })
+		func(fld *ast.FieldDefinition) bool {
+			return len(getSearchArgs(fld)) != 0 || isID(fld)
+		})
 }
 
 func hasOrderables(defn *ast.Definition) bool {
@@ -598,21 +631,30 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
-// getSearchable returns the name of the searchable applied to fld, or ""
-// if fld doesn't have a searchable directive.
-func getSearchable(fld *ast.FieldDefinition) string {
-	search := fld.Directives.ForName(searchableDirective)
+// getSearchArgs returns the name of the search applied to fld, or ""
+// if fld doesn't have a search directive.
+func getSearchArgs(fld *ast.FieldDefinition) []string {
+	search := fld.Directives.ForName(searchDirective)
 	if search == nil {
-		return ""
+		return nil
 	}
 	if len(search.Arguments) == 0 {
-		if searchable, ok := defaultSearchables[fld.Type.Name()]; ok {
-			return searchable
+		if search, ok := defaultSearches[fld.Type.Name()]; ok {
+			return []string{search}
 		}
 		// it's an enum - always has exact index
-		return "exact"
+		return []string{"exact"}
 	}
-	return search.Arguments.ForName(searchableArg).Value.Raw
+
+	val := search.Arguments.ForName(searchArgs).Value
+	res := make([]string, len(val.Children))
+
+	for i, child := range val.Children {
+		res[i] = child.Value.Raw
+	}
+
+	sort.Strings(res)
+	return res
 }
 
 // addTypeOrderable adds an input type that allows ordering in query.
@@ -673,7 +715,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Add" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
@@ -692,7 +734,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					Elem: &ast.Type{
@@ -713,7 +755,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Delete" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			&ast.FieldDefinition{
+			{
 				Name: "msg",
 				Type: &ast.Type{
 					NamedType: "String",
@@ -735,7 +777,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: defn.Name,
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "id",
 				Type: &ast.Type{
 					NamedType: idTypeFor(defn),
@@ -777,7 +819,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Add" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: defn.Name + "Input",
@@ -801,7 +843,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Update" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "input",
 				Type: &ast.Type{
 					NamedType: "Update" + defn.Name + "Input",
@@ -825,7 +867,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 			NamedType: "Delete" + defn.Name + "Payload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
-			&ast.ArgumentDefinition{
+			{
 				Name: "filter",
 				Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: true},
 			},

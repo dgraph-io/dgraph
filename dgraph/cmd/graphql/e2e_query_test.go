@@ -59,13 +59,35 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
+// This test checks that all the different combinations of
+// request sending compressed / uncompressed query and receiving
+// compressed / uncompressed result.
+func TestGzipCompression(t *testing.T) {
+	r := []bool{false, true}
+	for _, acceptGzip := range r {
+		for _, gzipEncoding := range r {
+			t.Run(fmt.Sprintf("TestQueryByType acceptGzip=%t gzipEncoding=%t",
+				acceptGzip, gzipEncoding), func(t *testing.T) {
+
+				queryByType(t, acceptGzip, gzipEncoding)
+			})
+		}
+	}
+}
+
 func TestQueryByType(t *testing.T) {
+	queryByType(t, true, true)
+}
+
+func queryByType(t *testing.T, acceptGzip, gzipEncoding bool) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
 				name
 			}
 		}`,
+		acceptGzip:   acceptGzip,
+		gzipEncoding: gzipEncoding,
 	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
@@ -152,6 +174,58 @@ func TestRegExp(t *testing.T) {
 			&country{Name: "Angola"},
 			&country{Name: "Bangladesh"},
 		})
+}
+
+func TestMultipleSearchIndexes(t *testing.T) {
+	query := `query queryPost($filter: PostFilter){
+		  queryPost (filter: $filter) {
+		      title
+		  }
+	}`
+
+	testCases := []interface{}{
+		map[string]interface{}{"title": map[string]interface{}{"anyofterms": "Introducing"}},
+		map[string]interface{}{"title": map[string]interface{}{"alloftext": "Introducing GraphQL in Dgraph"}},
+	}
+	for _, filter := range testCases {
+		getCountryParams := &GraphQLParams{
+			Query:     query,
+			Variables: map[string]interface{}{"filter": filter},
+		}
+
+		gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		var expected, result struct {
+			QueryPost []*post
+		}
+
+		expected.QueryPost = []*post{
+			&post{Title: "Introducing GraphQL in Dgraph"},
+		}
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+
+		if diff := cmp.Diff(expected, result); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+
+func TestMultipleSearchIndexesWrongField(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {
+			    title
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+
+	expected := `Field "regexp" is not defined by type StringFullTextFilter_StringTermFilter`
+	require.Contains(t, gqlResponse.Errors[0].Error(), expected)
 }
 
 func TestHashSearch(t *testing.T) {

@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	minio "github.com/minio/minio-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -58,13 +58,14 @@ func TestBackupMinio(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	// Add initial data.
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -98,7 +99,7 @@ func TestBackupMinio(t *testing.T) {
 	require.True(t, moveOk)
 
 	// Setup test directories.
-	dirSetup()
+	dirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
@@ -200,7 +201,7 @@ func TestBackupMinio(t *testing.T) {
 	runFailingRestore(t, backupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
-	dirCleanup()
+	dirCleanup(t)
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
@@ -274,17 +275,21 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
 }
 
-func dirSetup() {
+func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
-	dirCleanup()
+	dirCleanup(t)
 
 	for _, dir := range testDirs {
-		x.Check(os.MkdirAll(dir, os.ModePerm))
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			t.Fatalf("Error while creaing directory: %s", err.Error())
+		}
 	}
 }
 
-func dirCleanup() {
-	x.Check(os.RemoveAll("./data"))
+func dirCleanup(t *testing.T) {
+	if err := os.RemoveAll("./data"); err != nil {
+		t.Fatalf("Error removing direcotory: %s", err.Error())
+	}
 }
 
 func copyToLocalFs(t *testing.T) {

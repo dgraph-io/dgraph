@@ -19,13 +19,14 @@ package live
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -162,7 +163,11 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	var err error
+	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		log.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

@@ -17,13 +17,10 @@
 package resolve
 
 import (
-	"bytes"
 	"context"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/gqlerror"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -55,186 +52,68 @@ import (
 
 // mutationResolver can resolve a single GraphQL mutation field
 type mutationResolver struct {
-	mutation         schema.Mutation
-	schema           schema.Schema
-	mutationRewriter dgraph.MutationRewriter
-	queryRewriter    dgraph.QueryRewriter
-	dgraph           dgraph.Client
+	mutationRewriter MutationRewriter
+	queryExecutor    QueryExecutor
+	mutationExecutor MutationExecutor
+	resultCompleter  ResultCompleter
 }
 
-const (
-	mutationFailed    = false
-	mutationSucceeded = true
-)
+func (mr *mutationResolver) Resolve(
+	ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
 
-// resolve a single mutation, returning the result of resolving the mutation and
-// a bool where true indicates that the mutation itself succeeded and false indicates
-// that some error prevented the actual mutation.
-func (mr *mutationResolver) resolve(ctx context.Context) (*resolved, bool) {
-	// A mutation operation can contain any number of mutation fields.  Those should be executed
-	// serially.
-	// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
-	//
-	// The spec is ambigous about what to do in the case of errors during that serial execution
-	// - apparently deliberatly so; see this comment from Lee Byron:
-	// https://github.com/graphql/graphql-spec/issues/277#issuecomment-385588590
-	// and clarification
-	// https://github.com/graphql/graphql-spec/pull/438
-	//
-	// A reasonable interpretation of that is to stop a list of mutations after the first error -
-	// which seems like the natural semantics and is what we enforce here.
-	//
-	// What we aren't following the exact semantics for is the error propagation.
-	// According to the spec
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Executing-Selection-Sets,
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
-	// and the commentry here:
-	// https://github.com/graphql/graphql-spec/issues/277
-	//
-	// If we had a schema with:
-	//
-	// type Mutation {
-	// 	 push(val: Int!): Int!
-	// }
-	//
-	// and then ran operation:
-	//
-	//  mutation {
-	// 	  one: push(val: 1)
-	// 	  thirteen: push(val: 13)
-	// 	  two: push(val: 2)
-	//  }
-	//
-	// if `push(val: 13)` fails with an error, then only errors should be returned from the whole
-	// mutation` - because the result value is ! and one of them failed, the error should propagate
-	// to the entire operation. That is, even though `push(val: 1)` succeeded and we already
-	// calculated its result value, we should squash that and return null data and an error.
-	// (nothing in GraphQL says where any transaction or persistence boundries lie)
-	//
-	// We aren't doing that below - we aren't even inspecting if the result type is !.  For now,
-	// we'll return any data we've already calculated and following errors.  However:
-	// TODO: we should be picking through all results and propagating errors according to spec
-	// TODO: and, we should have all mutation return types not have ! so we avoid the above
-
-	var res *resolved
-	var mutationSucceeded bool
-	switch mr.mutation.MutationType() {
-	case schema.AddMutation:
-		res, mutationSucceeded = mr.resolveAddMutation(ctx)
-	case schema.DeleteMutation:
-		res, mutationSucceeded = mr.resolveDeleteMutation(ctx)
-	case schema.UpdateMutation:
-		res, mutationSucceeded = mr.resolveUpdateMutation(ctx)
-	default:
-		return &resolved{
-			err: gqlerror.Errorf(
-				"Only add, delete and update mutations are implemented")}, mutationFailed
-	}
-
-	var b bytes.Buffer
-	b.WriteRune('"')
-	b.WriteString(mr.mutation.ResponseName())
-	b.WriteString(`": `)
-	if len(res.data) > 0 {
-		b.Write(res.data)
-	} else {
-		b.WriteString("null")
-	}
-
-	res.data = b.Bytes()
-	return res, mutationSucceeded
-}
-
-func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) (*resolved, bool) {
-	res := &resolved{}
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveMutation")
 	defer stop()
 	if span != nil {
-		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
-			mr.mutation.MutationType())
+		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mutation.Alias(),
+			mutation.MutationType())
 	}
 
-	query, mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res, mutationFailed
-	}
+	resCtx := &ResolverContext{Ctx: ctx, RootField: mutation}
 
-	_, err = mr.dgraph.ConditionalMutate(ctx, query, mut)
-	if err != nil {
-		res.err = schema.GQLWrapLocationf(err,
-			mr.mutation.Location(),
-			"mutation %s failed", mr.mutation.Name())
-		return res, mutationFailed
-	}
-	// TODO - Get mutated uids from Dgraph and use them in the following query.
-	return res, mutationSucceeded
+	res, success, err := mr.rewriteAndExecute(resCtx, mutation)
+
+	completed, err := mr.resultCompleter.Complete(resCtx, mutation.QueryField(), res, err)
+	return &Resolved{
+		Data: completed,
+		Err:  err,
+	}, success
 }
 
-func (mr *mutationResolver) resolveAddMutation(ctx context.Context) (*resolved, bool) {
-	res := &resolved{}
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveMutation")
-	defer stop()
-	if span != nil {
-		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
-			mr.mutation.MutationType())
-	}
+func (mr *mutationResolver) rewriteAndExecute(
+	resCtx *ResolverContext, mutation schema.Mutation) ([]byte, bool, error) {
 
-	_, mut, err := mr.mutationRewriter.Rewrite(mr.mutation)
+	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res, mutationFailed
+		return nil, resolverFailed,
+			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	assigned, err := mr.dgraph.Mutate(ctx, mut)
+	assigned, mutated, err := mr.mutationExecutor.Mutate(resCtx, query, mutations)
 	if err != nil {
-		res.err = schema.GQLWrapLocationf(err,
-			mr.mutation.Location(),
-			"mutation %s failed", mr.mutation.Name())
-		return res, mutationFailed
+		return nil, resolverFailed,
+			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
-	dgQuery, err := mr.queryRewriter.FromMutationResult(mr.mutation, assigned)
+	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, mutated)
 	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation %s",
-			mr.mutation.Name())
-		return res, mutationSucceeded
+		return nil, resolverFailed,
+			schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 	}
 
-	resp, err := mr.dgraph.Query(ctx, dgQuery)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s created a node but query failed",
-			mr.mutation.Name())
-		return res, mutationSucceeded
-	}
+	resp, err := mr.queryExecutor.Query(resCtx, dgQuery)
 
-	res.data, res.err = completeDgraphResult(ctx, mr.mutation.QueryField(), resp)
-	return res, mutationSucceeded
+	return resp, resolverSucceeded,
+		schema.GQLWrapf(err, "mutation %s succeeded but query failed", mutation.Name())
 }
 
-func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) (*resolved, bool) {
-	res := &resolved{}
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveDeleteMutation")
-	defer stop()
-	if span != nil {
-		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", mr.mutation.Alias(),
-			mr.mutation.MutationType())
-	}
+// a deleteCompletion returns `{ "msg": "Deleted" }`
+// FIXME: after upsert mutations changes are done, it will return info about
+// the result of a deletion.
+func deleteCompletion() CompletionFunc {
+	return CompletionFunc(func(
+		resCtx *ResolverContext, field schema.Field, result []byte, err error) ([]byte, error) {
 
-	query, mut, err := mr.mutationRewriter.RewriteDelete(mr.mutation)
-	if err != nil {
-		res.err = schema.GQLWrapf(err, "couldn't rewrite mutation")
-		return res, mutationFailed
-	}
-
-	if err = mr.dgraph.DeleteNodes(ctx, query, mut); err != nil {
-		res.err = schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
-		return res, mutationFailed
-	}
-
-	res.data = []byte(`{ "msg": "Deleted" }`)
-	return res, mutationSucceeded
+		return []byte(`{ "msg": "Deleted" }`), err
+	})
 }

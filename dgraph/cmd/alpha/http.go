@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -387,6 +388,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
+	if len(resp.Vars) > 0 {
+		vars := make(map[string][]string)
+		// Flatten the mutated map so that it is easier to parse for the client.
+		for v, uids := range resp.Vars {
+			vars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
+		}
+		mp["vars"] = vars
+	}
 	response["data"] = mp
 
 	js, err := json.Marshal(response)

@@ -24,8 +24,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -34,7 +34,10 @@ import (
 func TestQuery(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
 		}

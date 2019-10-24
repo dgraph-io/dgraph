@@ -1546,13 +1546,769 @@ func TestNormalizeDirective(t *testing.T) {
 					sn: name
 				}
 			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "d": "1910-01-02T00:00:00Z",
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1910-01-02T00:00:00Z",
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1909-05-05T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1909-05-05T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1909-01-10T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1909-01-10T00:00:00Z",
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Helmut"
+				},
+				{
+				  "d": "1901-01-15T00:00:00Z",
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Andre"
+				},
+				{
+				  "d": "1901-01-15T00:00:00Z",
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Helmut"
+				}
+			  ]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
 		}
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
-		js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "mn": "Michonne",
+				  "gender": "female",
+				  "friend": [
+					{
+					  "fn": "Michonne",
+					  "n": "Rick Grimes"
+					},
+					{
+					  "n": "Glenn Rhee"
+					},
+					{
+					  "n": "Daryl Dixon"
+					},
+					{
+					  "fn": "Glenn Rhee",
+					  "n": "Andrea"
+					}
+				  ],
+				  "son": [
+					{
+					  "sn": "Andre"
+					},
+					{
+					  "sn": "Helmut"
+					}
+				  ]
+				}
+			  ]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveSubQueryLevel2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				mn: name
+				gender
+				friend {
+					n: name
+					dob
+					friend @normalize { # Results of this subquery will be normalized
+						fn : name
+						dob
+						friend {
+							ffn: name
+						}
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"friend": [
+							{
+								"dob": "1910-01-02T00:00:00Z",
+								"friend": [
+									{
+										"ffn": "Rick Grimes",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Glenn Rhee",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Daryl Dixon",
+										"fn": "Michonne"
+									},
+									{
+										"ffn": "Andrea",
+										"fn": "Michonne"
+									}
+								],
+								"n": "Rick Grimes"
+							},
+							{
+								"dob": "1909-05-05T00:00:00Z",
+								"n": "Glenn Rhee"
+							},
+							{
+								"dob": "1909-01-10T00:00:00Z",
+								"n": "Daryl Dixon"
+							},
+							{
+								"dob": "1901-01-15T00:00:00Z",
+								"friend": [
+									{
+										"fn": "Glenn Rhee"
+									}
+								],
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveRootSubQueryLevel2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @normalize { # Results of this query will be normalized
+				mn: name
+				gender
+				friend {
+					n: name
+					dob
+					friend @normalize { # This would be ignored.
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+			  "me": [
+				{
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Andre"
+				},
+				{
+				  "fn": "Michonne",
+				  "mn": "Michonne",
+				  "n": "Rick Grimes",
+				  "sn": "Helmut"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Andre"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Glenn Rhee",
+				  "sn": "Helmut"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Andre"
+				},
+				{
+				  "mn": "Michonne",
+				  "n": "Daryl Dixon",
+				  "sn": "Helmut"
+				},
+				{
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Andre"
+				},
+				{
+				  "fn": "Glenn Rhee",
+				  "mn": "Michonne",
+				  "n": "Andrea",
+				  "sn": "Helmut"
+				}
+			  ]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveSubQueryLevel1MultipleUIDs(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"friend": [
+							{
+								"fn": "Michonne",
+								"n": "Rick Grimes"
+							},
+							{
+								"n": "Glenn Rhee"
+							},
+							{
+								"n": "Daryl Dixon"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
+					},
+					{
+						"friend": [
+							{
+								"fn": "Rick Grimes",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Daryl Dixon",
+								"n": "Michonne"
+							},
+							{
+								"fn": "Andrea",
+								"n": "Michonne"
+							}
+						],
+						"gender": "male",
+						"mn": "Rick Grimes"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveMultipleSubQueryLevel1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1, 23))  {
+				mn: name
+				gender
+				friend @normalize {
+					fn: name
+					dob
+					friend {
+						ffn : name
+					}
+				}
+				follow @normalize {
+					foln: name
+					friend {
+						fofn: name
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"follow": [
+							{
+								"foln": "Glenn Rhee"
+							},
+							{
+								"fofn": "Glenn Rhee",
+								"foln": "Andrea"
+							}
+						],
+						"friend": [
+							{
+								"ffn": "Michonne",
+								"fn": "Rick Grimes"
+							},
+							{
+								"fn": "Glenn Rhee"
+							},
+							{
+								"fn": "Daryl Dixon"
+							},
+							{
+								"ffn": "Glenn Rhee",
+								"fn": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne"
+					},
+					{
+						"friend": [
+							{
+								"ffn": "Rick Grimes",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Glenn Rhee",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Daryl Dixon",
+								"fn": "Michonne"
+							},
+							{
+								"ffn": "Andrea",
+								"fn": "Michonne"
+							}
+						],
+						"gender": "male",
+						"mn": "Rick Grimes"
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveMultipleQuery(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1)) @normalize {
+				mn: name
+				gender
+				friend { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+			me2(func: uid(1)) {
+				mn: name
+				gender
+				friend @normalize { # Results of this subquery will be normalized
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+				son {
+					sn: name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"fn": "Michonne",
+						"mn": "Michonne",
+						"n": "Rick Grimes",
+						"sn": "Andre"
+					},
+					{
+						"fn": "Michonne",
+						"mn": "Michonne",
+						"n": "Rick Grimes",
+						"sn": "Helmut"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Glenn Rhee",
+						"sn": "Andre"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Glenn Rhee",
+						"sn": "Helmut"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Daryl Dixon",
+						"sn": "Andre"
+					},
+					{
+						"mn": "Michonne",
+						"n": "Daryl Dixon",
+						"sn": "Helmut"
+					},
+					{
+						"fn": "Glenn Rhee",
+						"mn": "Michonne",
+						"n": "Andrea",
+						"sn": "Andre"
+					},
+					{
+						"fn": "Glenn Rhee",
+						"mn": "Michonne",
+						"n": "Andrea",
+						"sn": "Helmut"
+					}
+				],
+				"me2": [
+					{
+						"friend": [
+							{
+								"fn": "Michonne",
+								"n": "Rick Grimes"
+							},
+							{
+								"n": "Glenn Rhee"
+							},
+							{
+								"n": "Daryl Dixon"
+							},
+							{
+								"fn": "Glenn Rhee",
+								"n": "Andrea"
+							}
+						],
+						"gender": "female",
+						"mn": "Michonne",
+						"son": [
+							{
+								"sn": "Andre"
+							},
+							{
+								"sn": "Helmut"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveListAndNonListChild1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				newfriend @normalize { # Results of this subquery will be normalized
+					fn: newname
+					newfriend @normalize  {
+						ffn: newname
+					}
+				}
+				boss @normalize {
+					bn: newname
+					newfriend {
+						bfn: newname
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"newfriend": [
+							{
+								"ffn": "P5",
+								"fn": "P2"
+							},
+							{
+								"ffn": "P6",
+								"fn": "P2"
+							},
+							{
+								"ffn": "P7",
+								"fn": "P3"
+							},
+							{
+								"ffn": "P8",
+								"fn": "P3"
+							}
+						],
+						"boss": [
+							{
+								"bfn": "P9",
+								"bn": "P4"
+							},
+							{
+								"bfn": "P10",
+								"bn": "P4"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"newfriend": [
+							{
+								"fn": "P5"
+							},
+							{
+								"fn": "P6"
+							}
+						],
+						"boss": [
+							{
+								"bfn": "P11",
+								"bn": "P10"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveListAndNonListChild2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				newfriend @normalize { # Results of this subquery will be normalized
+					fn: newname
+					boss @normalize {
+						bn: newname
+						newfriend {
+							bfn: newname
+						}
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"newfriend": [
+							{
+								"bfn": "P11",
+								"bn": "P10",
+								"fn": "P2"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10",
+								"fn": "P2"
+							},
+							{
+								"fn": "P3"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"newfriend": [
+							{
+								"fn": "P5"
+							},
+							{
+								"fn": "P6"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
+}
+
+func TestNormalizeDirectiveListAndNonListChild3(t *testing.T) {
+	query := `
+		{
+			me(func: uid(501, 502)) {
+				mn: newname
+				boss @normalize { # Results of this subquery will be normalized
+					bn: newname
+					newfriend @normalize {
+						bfn: newname
+						newfriend {
+							bffn: newname
+						}
+					}
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"mn": "P1",
+						"boss": [
+							{
+								"bfn": "P9",
+								"bn": "P4"
+							},
+							{
+								"bffn": "P11",
+								"bfn": "P10",
+								"bn": "P4"
+							},
+							{
+								"bffn": "P12",
+								"bfn": "P10",
+								"bn": "P4"
+							}
+						]
+					},
+					{
+						"mn": "P2",
+						"boss": [
+							{
+								"bfn": "P11",
+								"bn": "P10"
+							},
+							{
+								"bfn": "P12",
+								"bn": "P10"
+							}
+						]
+					}
+				]
+			}
+		}`, js)
 }
 
 func TestNearPoint(t *testing.T) {
