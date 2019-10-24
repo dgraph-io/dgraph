@@ -107,7 +107,10 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	// Connect with Zero leader and figure out what group we should belong to.
 	m := &pb.Member{Id: x.WorkerConfig.RaftId, GroupId: x.WorkerConfig.ProposedGroupId,
-		Addr: x.WorkerConfig.MyAddr, ForceGroupId: true}
+		Addr: x.WorkerConfig.MyAddr}
+	if m.GroupId > 0 {
+		m.ForceGroupId = true
+	}
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289

@@ -34,6 +34,7 @@ const (
 func mergeMapShardsIntoReduceShards(opt options) {
 	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
 	// First shard is handled differently because it contains reserved predicates.
+	x.AssertTrue(len(shardDirs) > 0)
 	firstShard := shardDirs[0]
 	// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
 	shardDirs = shardDirs[1:]

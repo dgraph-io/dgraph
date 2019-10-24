@@ -130,7 +130,7 @@ message Member {
 	uint64 last_update = 6;
 
 	bool cluster_info_only = 13;
-  bool force_group_id = 14;
+	bool force_group_id = 14;
 }
 
 message Group {
