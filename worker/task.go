@@ -351,7 +351,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
-	listType := schema.State().IsList(q.Attr)
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
@@ -371,24 +370,16 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			if err != nil {
 				return err
 			}
-			var vals []types.Val
-			if q.ExpandAll {
-				vals, err = pl.AllValues(args.q.ReadTs)
-			} else if listType && len(q.Langs) == 0 {
-				vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-			} else {
-				var val types.Val
-				val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
-				vals = append(vals, val)
-			}
 
+			vals, facets, err := retrieveValuesAndFacets(args, pl)
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
-					out.ValueMatrix = append(out.ValueMatrix, &pb.ValueList{Values: []*pb.TaskValue{}})
+					out.ValueMatrix = append(out.ValueMatrix,
+						&pb.ValueList{Values: []*pb.TaskValue{}})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -437,17 +428,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return errors.Errorf("Facet filtering is not supported on values.")
 			}
 
-			// add facets to result.
-			if q.FacetParam != nil {
-				fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
-				if err != nil {
-					fs = []*api.Facet{}
-				}
-				out.FacetMatrix = append(out.FacetMatrix,
-					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
-			} else {
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-			}
+			// Add facets to result.
+			out.FacetMatrix = append(out.FacetMatrix,
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: facets}}})
 
 			switch {
 			case q.DoCount:
@@ -511,6 +494,40 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
 	}
 	return nil
+}
+
+func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*api.Facet, error) {
+	q := args.q
+	listType := schema.State().IsList(q.Attr)
+	var err error
+	var vals []types.Val
+	var facets []*api.Facet
+
+	// No facet filtering on values.
+	if q.FacetsFilter == nil {
+		// Retrieve values.
+		if q.ExpandAll {
+			vals, err = pl.AllValues(args.q.ReadTs)
+		} else if listType && len(q.Langs) == 0 {
+			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
+		} else {
+			var val types.Val
+			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
+			vals = append(vals, val)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Retrieve facets.
+		if q.FacetParam != nil {
+			facets, _ = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+		}
+
+		return vals, facets, nil
+	}
+
+	return vals, facets, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
