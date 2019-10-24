@@ -498,7 +498,7 @@ func allCountriesAdded() ([]*country, error) {
 
 func ensureGraphQLLayerStarted(url string) error {
 	var err error
-	retries := 3
+	retries := 6
 	sleep := 10 * time.Second
 
 	// Because of how the test containers are brought up, there's no guarantee
