@@ -311,7 +311,7 @@ func (w *sortedWriter) createTable(data []byte) error {
 	if _, err := fd.Write(data); err != nil {
 		return err
 	}
-	tbl, err := table.OpenTable(fd, w.db.opt.TableLoadingMode, w.db.opt.ChecksumVerificationMode)
+	tbl, err := table.OpenTable(fd, w.db.opt.TableLoadingMode, nil)
 	if err != nil {
 		return err
 	}
@@ -341,9 +341,10 @@ func (w *sortedWriter) createTable(data []byte) error {
 	}
 	// Now that table can be opened successfully, let's add this to the MANIFEST.
 	change := &pb.ManifestChange{
-		Id:    tbl.ID(),
-		Op:    pb.ManifestChange_CREATE,
-		Level: uint32(lhandler.level),
+		Id:       tbl.ID(),
+		Op:       pb.ManifestChange_CREATE,
+		Level:    uint32(lhandler.level),
+		Checksum: tbl.Checksum,
 	}
 	if err := w.db.manifest.addChanges([]*pb.ManifestChange{change}); err != nil {
 		return err

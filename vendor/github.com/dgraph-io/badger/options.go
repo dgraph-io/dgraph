@@ -64,8 +64,10 @@ type Options struct {
 	CompactL0OnClose  bool
 	LogRotatesToFlush int32
 
-	// ChecksumVerificationMode decides when db should verify checksum for SStable blocks.
-	ChecksumVerificationMode options.ChecksumVerificationMode
+	BackupKeyFn    func([]byte) ([]byte, error)
+	BackupValueFn  func([]byte) ([]byte, error)
+	RestoreKeyFn   func([]byte) ([]byte, error)
+	RestoreValueFn func([]byte) ([]byte, error)
 
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
@@ -114,15 +116,12 @@ func DefaultOptions(path string) Options {
 	}
 }
 
-const (
-	maxValueThreshold = (1 << 20) // 1 MB
-)
-
 // LSMOnlyOptions follows from DefaultOptions, but sets a higher ValueThreshold
-// so values would be collocated with the LSM tree, with value log largely acting
+// so values would be colocated with the LSM tree, with value log largely acting
 // as a write-ahead log only. These options would reduce the disk usage of value
 // log, and make Badger act more like a typical LSM tree.
 func LSMOnlyOptions(path string) Options {
+	// Max value length which fits in uint16.
 	// Let's not set any other options, because they can cause issues with the
 	// size of key-value a user can pass to Badger. For e.g., if we set
 	// ValueLogFileSize to 64MB, a user can't pass a value more than that.
@@ -132,8 +131,8 @@ func LSMOnlyOptions(path string) Options {
 	// achieve a heavier usage of LSM tree.
 	// NOTE: If a user does not want to set 64KB as the ValueThreshold because
 	// of performance reasons, 1KB would be a good option too, allowing
-	// values smaller than 1KB to be collocated with the keys in the LSM tree.
-	return DefaultOptions(path).WithValueThreshold(maxValueThreshold /* 1 MB */)
+	// values smaller than 1KB to be colocated with the keys in the LSM tree.
+	return DefaultOptions(path).WithValueThreshold(65500)
 }
 
 // WithDir returns a new Options value with Dir set to the given value.
@@ -269,9 +268,9 @@ func (opt Options) WithMaxLevels(val int) Options {
 // WithValueThreshold returns a new Options value with ValueThreshold set to the given value.
 //
 // ValueThreshold sets the threshold used to decide whether a value is stored directly in the LSM
-// tree or separately in the log value files.
+// tree or separatedly in the log value files.
 //
-// The default value of ValueThreshold is 32, but LSMOnlyOptions sets it to maxValueThreshold.
+// The default value of ValueThreshold is 32, but LSMOnlyOptions sets it to 65500.
 func (opt Options) WithValueThreshold(val int) Options {
 	opt.ValueThreshold = val
 	return opt
@@ -376,5 +375,41 @@ func (opt Options) WithCompactL0OnClose(val bool) Options {
 // The default value of LogRotatesToFlush is 2.
 func (opt Options) WithLogRotatesToFlush(val int32) Options {
 	opt.LogRotatesToFlush = val
+	return opt
+}
+
+// WithBackupKeyFn returns a new Options value with BackupKeyFn set to the given value.
+//
+// BackupKeyFn is used during backup when the user wishes to store the keys in some other format.
+func (opt Options) WithBackupKeyFn(fn func([]byte) ([]byte, error)) Options {
+	opt.BackupKeyFn = fn
+	return opt
+}
+
+// WithBackupValueFn returns a new Options value with BackupValueFn set to the given value.
+//
+// BackupValueFn is used during backup when the user wishes to store the values in some other
+// format.
+func (opt Options) WithBackupValueFn(fn func([]byte) ([]byte, error)) Options {
+	opt.BackupValueFn = fn
+	return opt
+}
+
+// WithRestoreKeyFn returns a new Options value with RestoreKeyFn set to the given value.
+//
+// RestoreKeyFn is used while loading a backup when the user wishes to restore keys that were
+// backed up in a different format. It essentially should revert the changes made by BackupKeyFn.
+func (opt Options) WithRestoreKeyFn(fn func([]byte) ([]byte, error)) Options {
+	opt.RestoreKeyFn = fn
+	return opt
+}
+
+// WithRestoreValueFn returns a new Options value with RestoreValueFn set to the given value.
+//
+// RestoreValueFn is used while loading a backup when the user wishes to restore values that were
+// backed up in a different format. It essentially should revert the changes made by
+// BackupValueFn.
+func (opt Options) WithRestoreValueFn(fn func([]byte) ([]byte, error)) Options {
+	opt.RestoreValueFn = fn
 	return opt
 }

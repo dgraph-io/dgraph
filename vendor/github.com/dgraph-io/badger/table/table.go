@@ -17,6 +17,8 @@
 package table
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -28,8 +30,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/pb"
-
 	"github.com/AndreasBriese/bbloom"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/y"
@@ -37,6 +37,12 @@ import (
 )
 
 const fileSuffix = ".sst"
+
+type keyOffset struct {
+	key    []byte
+	offset int
+	len    int
+}
 
 // TableInterface is useful for testing.
 type TableInterface interface {
@@ -52,7 +58,7 @@ type Table struct {
 	fd        *os.File // Own fd.
 	tableSize int      // Initialized in OpenTable, using fd.Stat().
 
-	blockIndex []*pb.BlockOffset
+	blockIndex []keyOffset
 	ref        int32 // For file garbage collection. Atomic.
 
 	loadingMode options.FileLoadingMode
@@ -65,7 +71,6 @@ type Table struct {
 	bf bbloom.Bloom
 
 	Checksum []byte
-	chkMode  options.ChecksumVerificationMode // indicates when to verify checksum for blocks.
 }
 
 // IncrRef increments the refcount (having to do with whether the file should be deleted)
@@ -102,46 +107,19 @@ func (t *Table) DecrRef() error {
 }
 
 type block struct {
-	offset            int
-	data              []byte
-	numEntries        int // number of entries present in the block
-	entriesIndexStart int // start index of entryOffsets list
-	chkLen            int // checksum length
-}
-
-func (b block) verifyCheckSum() error {
-	readPos := len(b.data) - 4 - b.chkLen
-	if readPos < 0 {
-		// This should be rare, hence can create a error instead of having global error.
-		return fmt.Errorf("block does not contain checksum")
-	}
-
-	cs := &pb.Checksum{}
-	if err := cs.Unmarshal(b.data[readPos : readPos+b.chkLen]); err != nil {
-		return y.Wrapf(err, "unable to unmarshal checksum for block")
-	}
-
-	return y.VerifyChecksum(b.data[:readPos], cs)
+	offset int
+	data   []byte
 }
 
 func (b block) NewIterator() *blockIterator {
-	bi := &blockIterator{
-		data:              b.data,
-		numEntries:        b.numEntries,
-		entriesIndexStart: b.entriesIndexStart,
-	}
-
-	return bi
+	return &blockIterator{data: b.data}
 }
 
-// OpenTable assumes file has only one table and opens it. Takes ownership of fd upon function
-// entry. Returns a table with one reference count on it (decrementing which may delete the file!
-// -- consider t.Close() instead). The fd has to writeable because we call Truncate on it before
-// deleting. Checksum for all blocks of table is verified based on value of chkMode.
-// TODO:(Ashish): convert individual args to option struct.
-func OpenTable(fd *os.File, mode options.FileLoadingMode,
-	chkMode options.ChecksumVerificationMode) (*Table, error) {
-
+// OpenTable assumes file has only one table and opens it.  Takes ownership of fd upon function
+// entry.  Returns a table with one reference count on it (decrementing which may delete the file!
+// -- consider t.Close() instead).  The fd has to writeable because we call Truncate on it before
+// deleting.
+func OpenTable(fd *os.File, mode options.FileLoadingMode, cksum []byte) (*Table, error) {
 	fileInfo, err := fd.Stat()
 	if err != nil {
 		// It's OK to ignore fd.Close() errs in this function because we have only read
@@ -161,11 +139,22 @@ func OpenTable(fd *os.File, mode options.FileLoadingMode,
 		ref:         1, // Caller is given one reference.
 		id:          id,
 		loadingMode: mode,
-		chkMode:     chkMode,
 	}
 
 	t.tableSize = int(fileInfo.Size())
 
+	// We first load to RAM, so we can read the index and do checksum.
+	if err := t.loadToRAM(); err != nil {
+		return nil, err
+	}
+	// Enforce checksum before we read index. Otherwise, if the file was
+	// truncated, we'd end up with panics in readIndex.
+	if len(cksum) > 0 && !bytes.Equal(t.Checksum, cksum) {
+		return nil, fmt.Errorf(
+			"CHECKSUM_MISMATCH: Table checksum does not match checksum in MANIFEST."+
+				" NOT including table %s. This would lead to missing data."+
+				"\n  sha256 %x Expected\n  sha256 %x Found\n", filename, cksum, t.Checksum)
+	}
 	if err := t.readIndex(); err != nil {
 		return nil, y.Wrap(err)
 	}
@@ -186,20 +175,7 @@ func OpenTable(fd *os.File, mode options.FileLoadingMode,
 
 	switch mode {
 	case options.LoadToRAM:
-		if _, err := t.fd.Seek(0, io.SeekStart); err != nil {
-			return nil, err
-		}
-		t.mmap = make([]byte, t.tableSize)
-		n, err := t.fd.Read(t.mmap)
-		if err != nil {
-			// It's OK to ignore fd.Close() error because we have only read from the file.
-			_ = t.fd.Close()
-			return nil, y.Wrapf(err, "Failed to load file into RAM")
-		}
-		if n != t.tableSize {
-			return nil, errors.Errorf("Failed to read all bytes from the file."+
-				"Bytes in file: %d Bytes actually Read: %d", t.tableSize, n)
-		}
+		// No need to do anything. t.mmap is already filled.
 	case options.MemoryMap:
 		t.mmap, err = y.Mmap(fd, false, fileInfo.Size())
 		if err != nil {
@@ -211,14 +187,6 @@ func OpenTable(fd *os.File, mode options.FileLoadingMode,
 	default:
 		panic(fmt.Sprintf("Invalid loading mode: %v", mode))
 	}
-
-	if t.chkMode == options.OnTableRead || t.chkMode == options.OnTableAndBlockRead {
-		if err := t.VerifyChecksum(); err != nil {
-			_ = fd.Close()
-			return nil, err
-		}
-	}
-
 	return t, nil
 }
 
@@ -255,71 +223,76 @@ func (t *Table) readNoFail(off, sz int) []byte {
 }
 
 func (t *Table) readIndex() error {
+	if len(t.mmap) != t.tableSize {
+		panic("Table size does not match the read bytes")
+	}
 	readPos := t.tableSize
 
-	// Read checksum len from the last 4 bytes.
+	// Read bloom filter.
 	readPos -= 4
 	buf := t.readNoFail(readPos, 4)
-	checksumLen := int(binary.BigEndian.Uint32(buf))
+	bloomLen := int(binary.BigEndian.Uint32(buf))
+	readPos -= bloomLen
+	data := t.readNoFail(readPos, bloomLen)
+	t.bf = bbloom.JSONUnmarshal(data)
 
-	// Read checksum.
-	expectedChk := &pb.Checksum{}
-	readPos -= checksumLen
-	buf = t.readNoFail(readPos, checksumLen)
-	if err := expectedChk.Unmarshal(buf); err != nil {
-		return err
-	}
-
-	// Read index size from the footer.
 	readPos -= 4
 	buf = t.readNoFail(readPos, 4)
-	indexLen := int(binary.BigEndian.Uint32(buf))
-	// Read index.
-	readPos -= indexLen
-	data := t.readNoFail(readPos, indexLen)
+	restartsLen := int(binary.BigEndian.Uint32(buf))
 
-	if err := y.VerifyChecksum(data, expectedChk); err != nil {
-		return y.Wrapf(err, "failed to verify checksum for table: %s", t.Filename())
+	readPos -= 4 * restartsLen
+	buf = t.readNoFail(readPos, 4*restartsLen)
+
+	offsets := make([]int, restartsLen)
+	for i := 0; i < restartsLen; i++ {
+		offsets[i] = int(binary.BigEndian.Uint32(buf[:4]))
+		buf = buf[4:]
 	}
 
-	index := pb.TableIndex{}
-	err := index.Unmarshal(data)
-	y.Check(err)
+	// The last offset stores the end of the last block.
+	for i := 0; i < len(offsets); i++ {
+		var o int
+		if i == 0 {
+			o = 0
+		} else {
+			o = offsets[i-1]
+		}
 
-	t.bf = bbloom.JSONUnmarshal(index.BloomFilter)
-	t.blockIndex = index.Offsets
+		ko := keyOffset{
+			offset: o,
+			len:    offsets[i] - o,
+		}
+		t.blockIndex = append(t.blockIndex, ko)
+	}
+
+	// Execute this index read serially, because we already have table data in memory.
+	var h header
+	for idx := range t.blockIndex {
+		ko := &t.blockIndex[idx]
+
+		hbuf := t.readNoFail(ko.offset, h.Size())
+		h.Decode(hbuf)
+		y.AssertTrue(h.plen == 0)
+
+		key := t.readNoFail(ko.offset+len(hbuf), int(h.klen))
+		ko.key = append([]byte{}, key...)
+	}
+
 	return nil
 }
 
-func (t *Table) block(idx int) (*block, error) {
+func (t *Table) block(idx int) (block, error) {
 	y.AssertTruef(idx >= 0, "idx=%d", idx)
 	if idx >= len(t.blockIndex) {
-		return nil, errors.New("block out of index")
+		return block{}, errors.New("block out of index")
 	}
 
 	ko := t.blockIndex[idx]
-	blk := &block{
-		offset: int(ko.Offset),
+	blk := block{
+		offset: ko.offset,
 	}
 	var err error
-	blk.data, err = t.read(blk.offset, int(ko.Len))
-
-	// Read meta data related to block.
-	readPos := len(blk.data) - 4 // First read checksum length.
-	blk.chkLen = int(binary.BigEndian.Uint32(blk.data[readPos : readPos+4]))
-
-	// Skip reading checksum, and move position to read numEntries in block.
-	readPos -= (blk.chkLen + 4)
-	blk.numEntries = int(binary.BigEndian.Uint32(blk.data[readPos : readPos+4]))
-	blk.entriesIndexStart = readPos - (blk.numEntries * 4)
-
-	// Verify checksum on if checksum verification mode is OnRead on OnStartAndRead.
-	if t.chkMode == options.OnBlockRead || t.chkMode == options.OnTableAndBlockRead {
-		if err = blk.verifyCheckSum(); err != nil {
-			return nil, err
-		}
-	}
-
+	blk.data, err = t.read(blk.offset, ko.len)
 	return blk, err
 }
 
@@ -341,30 +314,6 @@ func (t *Table) ID() uint64 { return t.id }
 // DoesNotHave returns true if (but not "only if") the table does not have the key.  It does a
 // bloom filter lookup.
 func (t *Table) DoesNotHave(key []byte) bool { return !t.bf.Has(key) }
-
-// VerifyChecksum verifies checksum for all blocks of table. This function is called by
-// OpenTable() function. This function is also called inside levelsController.VerifyChecksum().
-func (t *Table) VerifyChecksum() error {
-	for i, os := range t.blockIndex {
-		b, err := t.block(i)
-		if err != nil {
-			return y.Wrapf(err, "checksum validation failed for table: %s, block: %d, offset:%d",
-				t.Filename(), i, os.Offset)
-		}
-
-		// OnBlockRead or OnTableAndBlockRead, we don't need to call verify checksum
-		// on block, verification would be done while reading block itself.
-		if !(t.chkMode == options.OnBlockRead || t.chkMode == options.OnTableAndBlockRead) {
-			if err = b.verifyCheckSum(); err != nil {
-				return y.Wrapf(err,
-					"checksum validation failed for table: %s, block: %d, offset:%d",
-					t.Filename(), i, os.Offset)
-			}
-		}
-	}
-
-	return nil
-}
 
 // ParseFileID reads the file id out of a filename.
 func ParseFileID(name string) (uint64, bool) {
@@ -391,4 +340,21 @@ func IDToFilename(id uint64) string {
 // filepath.
 func NewFilename(id uint64, dir string) string {
 	return filepath.Join(dir, IDToFilename(id))
+}
+
+func (t *Table) loadToRAM() error {
+	if _, err := t.fd.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	t.mmap = make([]byte, t.tableSize)
+	sum := sha256.New()
+	tee := io.TeeReader(t.fd, sum)
+	read, err := tee.Read(t.mmap)
+	if err != nil || read != t.tableSize {
+		return y.Wrapf(err, "Unable to load file in memory. Table file: %s", t.Filename())
+	}
+	t.Checksum = sum.Sum(nil)
+	y.NumReads.Add(1)
+	y.NumBytesRead.Add(int64(read))
+	return nil
 }

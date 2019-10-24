@@ -74,6 +74,29 @@ type logFile struct {
 	loadingMode options.FileLoadingMode
 }
 
+// openReadOnly assumes that we have a write lock on logFile.
+func (lf *logFile) openReadOnly() error {
+	var err error
+	lf.fd, err = os.OpenFile(lf.path, os.O_RDONLY, 0666)
+	if err != nil {
+		return errors.Wrapf(err, "Unable to open %q as RDONLY.", lf.path)
+	}
+
+	fi, err := lf.fd.Stat()
+	if err != nil {
+		return errors.Wrapf(err, "Unable to check stat for %q", lf.path)
+	}
+	y.AssertTrue(fi.Size() <= math.MaxUint32)
+	lf.size = uint32(fi.Size())
+
+	if err = lf.mmap(fi.Size()); err != nil {
+		_ = lf.fd.Close()
+		return y.Wrapf(err, "Unable to map file: %q", fi.Name())
+	}
+
+	return nil
+}
+
 func (lf *logFile) mmap(size int64) (err error) {
 	if lf.loadingMode != options.MemoryMap {
 		// Nothing to do
@@ -125,21 +148,33 @@ func (lf *logFile) read(p valuePointer, s *y.Slice) (buf []byte, err error) {
 }
 
 func (lf *logFile) doneWriting(offset uint32) error {
-	// Sync before acquiring lock. (We call this from write() and thus know we have shared access
+	// Sync before acquiring lock.  (We call this from write() and thus know we have shared access
 	// to the fd.)
 	if err := y.FileSync(lf.fd); err != nil {
 		return errors.Wrapf(err, "Unable to sync value log: %q", lf.path)
 	}
-
+	// Close and reopen the file read-only.  Acquire lock because fd will become invalid for a bit.
+	// Acquiring the lock is bad because, while we don't hold the lock for a long time, it forces
+	// one batch of readers wait for the preceding batch of readers to finish.
+	//
+	// If there's a benefit to reopening the file read-only, it might be on Windows.  I don't know
+	// what the benefit is.  Consider keeping the file read-write, or use fcntl to change
+	// permissions.
+	lf.lock.Lock()
+	defer lf.lock.Unlock()
+	if err := lf.munmap(); err != nil {
+		return err
+	}
 	// TODO: Confirm if we need to run a file sync after truncation.
 	// Truncation must run after unmapping, otherwise Windows would crap itself.
 	if err := lf.fd.Truncate(int64(offset)); err != nil {
 		return errors.Wrapf(err, "Unable to truncate file: %q", lf.path)
 	}
+	if err := lf.fd.Close(); err != nil {
+		return errors.Wrapf(err, "Unable to close value log: %q", lf.path)
+	}
 
-	// Previously we used to close the file after it was written and reopen it in read-only mode.
-	// We no longer open files in read-only mode. We keep all vlog files open in read-write mode.
-	return nil
+	return lf.openReadOnly()
 }
 
 // You must hold lf.lock to sync()
@@ -362,10 +397,9 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			}
 
 			ne.Value = append([]byte{}, e.Value...)
-			es := int64(ne.estimateSize(vlog.opt.ValueThreshold))
-			// Ensure length and size of wb is within transaction limits.
-			if int64(len(wb)+1) > vlog.opt.maxBatchCount ||
-				size+es > vlog.opt.maxBatchSize {
+			wb = append(wb, ne)
+			size += int64(e.estimateSize(vlog.opt.ValueThreshold))
+			if size >= 64*mi {
 				tr.LazyPrintf("request has %d entries, size %d", len(wb), size)
 				if err := vlog.db.batchSet(wb); err != nil {
 					return err
@@ -373,8 +407,6 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 				size = 0
 				wb = wb[:0]
 			}
-			wb = append(wb, ne)
-			size += es
 		} else {
 			vlog.db.opt.Warningf("This entry should have been caught. %+v\n", e)
 		}
@@ -682,6 +714,18 @@ func errFile(err error, path string, msg string) error {
 }
 
 func (vlog *valueLog) replayLog(lf *logFile, offset uint32, replayFn logEntry) error {
+	var err error
+	mode := os.O_RDONLY
+	if vlog.opt.Truncate {
+		// We should open the file in RW mode, so it can be truncated.
+		mode = os.O_RDWR
+	}
+	lf.fd, err = os.OpenFile(lf.path, mode, 0)
+	if err != nil {
+		return errFile(err, lf.path, "Open file")
+	}
+	defer lf.fd.Close()
+
 	fi, err := lf.fd.Stat()
 	if err != nil {
 		return errFile(err, lf.path, "Unable to run file.Stat")
@@ -738,23 +782,13 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 	for _, fid := range fids {
 		lf, ok := vlog.filesMap[fid]
 		y.AssertTrue(ok)
-		var flags uint32
-		switch {
-		case vlog.opt.ReadOnly:
-			// If we have read only, we don't need SyncWrites.
-			flags |= y.ReadOnly
-			// Set sync flag.
-		case vlog.opt.SyncWrites:
-			flags |= y.Sync
-		}
 
-		// Open log file "lf" in read-write mode.
-		if err := lf.open(vlog.fpath(lf.fid), flags); err != nil {
-			return err
-		}
 		// This file is before the value head pointer. So, we don't need to
 		// replay it, and can just open it in readonly mode.
 		if fid < ptr.Fid {
+			if err := lf.openReadOnly(); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -779,6 +813,25 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 			return err
 		}
 		vlog.db.opt.Infof("Replay took: %s\n", time.Since(now))
+
+		if fid < vlog.maxFid {
+			if err := lf.openReadOnly(); err != nil {
+				return err
+			}
+		} else {
+			var flags uint32
+			switch {
+			case vlog.opt.ReadOnly:
+				// If we have read only, we don't need SyncWrites.
+				flags |= y.ReadOnly
+			case vlog.opt.SyncWrites:
+				flags |= y.Sync
+			}
+			var err error
+			if lf.fd, err = y.OpenExistingFile(vlog.fpath(fid), flags); err != nil {
+				return errFile(err, lf.path, "Open existing file")
+			}
+		}
 	}
 
 	// Seek to the end to start writing.
@@ -800,32 +853,7 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 		return errFile(err, last.path, "Map log file")
 	}
 	if err := vlog.populateDiscardStats(); err != nil {
-		// Print the error and continue. We don't want to prevent value log open if there's an error
-		// with the fetching discards stats.
-		db.opt.Errorf("Failed to populate discard stats: %s", err)
-	}
-	return nil
-}
-
-func (lf *logFile) open(filename string, flags uint32) error {
-	var err error
-	if lf.fd, err = y.OpenExistingFile(filename, flags); err != nil {
-		return errors.Wrapf(err, "Open existing file: %q", lf.path)
-	}
-	fstat, err := lf.fd.Stat()
-	if err != nil {
-		return errors.Wrapf(err, "Unable to check stat for %q", lf.path)
-	}
-	sz := fstat.Size()
-	if sz == 0 {
-		// File is empty. We don't need to mmap it. Return.
-		return nil
-	}
-	y.AssertTrue(sz <= math.MaxUint32)
-	lf.size = uint32(sz)
-	if err = lf.mmap(sz); err != nil {
-		_ = lf.fd.Close()
-		return errors.Wrapf(err, "Unable to map file: %q", fstat.Name())
+		return err
 	}
 	return nil
 }
@@ -1365,13 +1393,9 @@ func (vlog *valueLog) updateDiscardStats(stats map[uint32]int64) error {
 
 // flushDiscardStats inserts discard stats into badger. Returns error on failure.
 func (vlog *valueLog) flushDiscardStats() error {
-	vlog.lfDiscardStats.Lock()
 	if len(vlog.lfDiscardStats.m) == 0 {
-		vlog.lfDiscardStats.Unlock()
 		return nil
 	}
-	vlog.lfDiscardStats.Unlock()
-
 	entries := []*Entry{{
 		Key:   y.KeyWithTs(lfDiscardStatsKey, 1),
 		Value: vlog.encodedDiscardStats(),
