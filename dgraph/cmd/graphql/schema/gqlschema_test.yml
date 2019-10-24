@@ -29,10 +29,10 @@ invalid_schemas:
     name: "No ID list of any kind"
     input: |
       type A {
-        posts: [ID]
+        f: [ID]
       }
     errlist: [
-      {"message": "[ID] lists are invalid. Only ID scalar fields are allowed.", "locations": [{"line":2, "column": 3}]}
+      {"message": "Type A; Field f: ID lists are invalid.", "locations": [{"line":2, "column": 3}]}
     ]
 
 
@@ -40,10 +40,10 @@ invalid_schemas:
     name: "No nested list of any kind"
     input: |
       type A {
-        posts: [[String]]
+        f: [[String]]
       }
     errlist: [
-      {"message": "[[String]] Nested lists are invalid. Only single lists are allowed.", "locations": [{"line":2, "column": 3}]}
+      {"message": "[[String]] Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
     ]
 
   -
@@ -53,7 +53,7 @@ invalid_schemas:
         f(a: Int): String
       }
     errlist: [
-      {"message": "Arguments was provided to the field f. Fields don't support arguments.", "locations": [{"line": 2, "column": 3}]}
+      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
     ]
 
 
@@ -106,7 +106,7 @@ invalid_schemas:
       }
     errlist: [
       {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
-      {"message": "[ID] lists are invalid. Only ID scalar fields are allowed.", "locations": [{"line": 6, "column": 3}]}
+      {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
     ]
 
   -
@@ -331,7 +331,7 @@ invalid_schemas:
         q: [Boolean]
       }
     errlist: [
-      {"message": "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.",
+      {"message": "Type X; Field q: Boolean lists are invalid.",
       "locations":[{"line":2, "column":3}]}
       ]
 

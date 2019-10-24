@@ -118,8 +118,8 @@ func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerr
 	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
-			"Arguments was provided to the field %s. Fields don't support arguments.",
-			field.Name,
+			"Type %s; Field %s: You can't give arguments to fields.",
+			typ.Name, field.Name,
 		)
 	}
 	return nil
@@ -135,14 +135,14 @@ func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerro
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
 	if !isValidTypeForList(field.Type.Elem, typ) && field.Type.NamedType == "" {
 		return gqlerror.ErrorPosf(
-			field.Position, "[%[1]s] lists are invalid. Only %[1]s "+
-				"scalar fields are allowed.", field.Type.Elem.Name())
+			field.Position, "Type %s; Field %s: %s lists are invalid.",
+			typ.Name, field.Name, field.Type.Elem.Name())
 	}
 
 	// Nested lists are not allowed.
 	if field.Type.Elem.Elem != nil {
 		return gqlerror.ErrorPosf(field.Position,
-			"%s Nested lists are invalid. Only single lists are allowed.",
+			"%s Nested lists are invalid.",
 			field.Type.Dump())
 	}
 
