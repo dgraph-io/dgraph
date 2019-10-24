@@ -72,9 +72,7 @@
         posts {
           title
           text
-          uid
         }
-        uid
       }
     }
   dgquery: |-
