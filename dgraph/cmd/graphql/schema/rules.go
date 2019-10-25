@@ -29,7 +29,8 @@ func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck)
+	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
+		fieldNameCheck, isValidFieldForList)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -105,24 +106,57 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-// [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
-func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
-
-	if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
-		return gqlerror.ErrorPosf(
-			field.Position,
-			fmt.Sprintf(
-				"[%s]! lists are invalid. Valid options are [%s!]! and [%s!].",
-				field.Type.Name(), field.Type.Name(), field.Type.Name(),
-			),
-		)
+func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
 	}
 
+	// ID and Boolean list are not allowed.
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if field.Type.Elem != nil && field.Type.Elem.Name() == "Boolean" &&
-		field.Type.NamedType == "" {
+	switch field.Type.Elem.Name() {
+	case
+		"ID",
+		"Boolean":
 		return gqlerror.ErrorPosf(
-			field.Position, "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.")
+			field.Position, "Type %s; Field %s: %s lists are invalid.",
+			typ.Name, field.Name, field.Type.Elem.Name())
+	}
+	return nil
+}
+
+func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Arguments != nil {
+		return gqlerror.ErrorPosf(
+			field.Position,
+			"Type %s; Field %s: You can't give arguments to fields.",
+			typ.Name, field.Name,
+		)
+	}
+	return nil
+}
+
+func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	//field name cannot be a reserved word
+	if isReservedKeyWord(field.Name) {
+		return gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
+				"you cannot declare a field with this name.",
+			typ.Name, field.Name, field.Name)
+	}
+
+	return nil
+}
+
+func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
+	}
+
+	// Nested lists are not allowed.
+	if field.Type.Elem.Elem != nil {
+		return gqlerror.ErrorPosf(field.Position,
+			"Type %s; Field %s: Nested lists are invalid.",
+			typ.Name, field.Name)
 	}
 
 	return nil
@@ -315,7 +349,7 @@ func isScalar(s string) bool {
 }
 
 func isReservedKeyWord(name string) bool {
-	if isScalar(name) || name == "Query" || name == "Mutation" {
+	if isScalar(name) || name == "Query" || name == "Mutation" || name == "uid" {
 		return true
 	}
 

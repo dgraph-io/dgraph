@@ -209,7 +209,7 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
@@ -302,7 +302,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
-			errs = append(errs, applyFieldValidations(field)...)
+			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
@@ -325,11 +325,11 @@ func applyDefnValidations(defn *ast.Definition,
 	return errs
 }
 
-func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
+func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(field))
+		errs = appendIfNotNull(errs, rule(typ, field))
 	}
 
 	return errs
