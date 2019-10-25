@@ -12,6 +12,16 @@ invalid_schemas:
     ]
 
   -
+    name: "UID as a field name"
+    input: |
+      type P {
+        uid: String
+      }
+    errlist: [
+      {"message":"Type P; Field uid: uid is a reserved keyword and you cannot declare a field with this name.", "locations": [{"line":2, "column": 3}]},
+    ]
+
+  -
     name: "Query, Mutation in initial schema"
     input: |
       type Query {

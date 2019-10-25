@@ -127,6 +127,18 @@ func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerr
 }
 
 func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
+
+	if err := fieldArgumentCheck(field, typ); err != nil {
+		return err
+	}
+
+	if isReservedKeyWord(field.Name) {
+		return gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
+				"you cannot declare a field with this name.",
+			typ.Name, field.Name, field.Name)
+	}
+
 	// Checks if the field is nil.
 	if field.Type.Elem == nil {
 		return nil
@@ -145,10 +157,6 @@ func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerro
 		return gqlerror.ErrorPosf(field.Position,
 			"%s Nested lists are invalid.",
 			field.Type.Dump())
-	}
-
-	if err := fieldArgumentCheck(field, typ); err != nil {
-		return err
 	}
 
 	return nil
