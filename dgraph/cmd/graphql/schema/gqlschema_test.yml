@@ -53,7 +53,7 @@ invalid_schemas:
         f: [[String]]
       }
     errlist: [
-      {"message": "[[String]] Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
+      {"message": "Type A; Field f: Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
     ]
 
   -

@@ -155,8 +155,8 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerro
 	// Nested lists are not allowed.
 	if field.Type.Elem.Elem != nil {
 		return gqlerror.ErrorPosf(field.Position,
-			"%s Nested lists are invalid.",
-			field.Type.Dump())
+			"Type %s; Field %s: Nested lists are invalid.",
+			typ.Name, field.Name)
 	}
 
 	return nil

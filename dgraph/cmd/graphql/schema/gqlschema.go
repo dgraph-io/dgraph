@@ -295,7 +295,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
-			errs = append(errs, applyFieldValidations(field, typ)...)
+			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
@@ -318,7 +318,7 @@ func applyDefnValidations(defn *ast.Definition,
 	return errs
 }
 
-func applyFieldValidations(field *ast.FieldDefinition, typ *ast.Definition) gqlerror.List {
+func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
