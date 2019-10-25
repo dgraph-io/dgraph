@@ -38,6 +38,7 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
@@ -531,21 +532,23 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Retrieve the posting that matches the language preferences.
+	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
+	if err != nil && err != posting.ErrNoValue {
+		return nil, nil, err
+	}
 	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		// Don't retrieve tagged values unless explicitly asked.
-		if listType && len(q.Langs) == 0 && len(p.LangTag) > 0 {
-			return nil
-		}
-		// Only retrieve values that match one of the specified languages.
-		langMatches := false
-		langTag := string(p.LangTag)
-		for _, lang := range q.Langs {
-			if lang == langTag {
-				langMatches = true
+		if listType && len(q.Langs) == 0 {
+			// Don't retrieve tagged values unless explicitly asked.
+			if len(p.LangTag) > 0 {
+				return nil
 			}
-		}
-		if !langMatches && len(q.Langs) > 0 {
-			return nil
+		} else {
+			// Only consider the posting that matches our language preferences.
+			if !proto.Equal(p, langMatch) {
+				return nil
+			}
 		}
 
 		picked, err := applyFacetsTree(p.Facets, facetsTree)
