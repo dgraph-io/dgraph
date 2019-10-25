@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -44,9 +43,8 @@ func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]by
 		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
 	}
 
-	md := metadata.Pairs("debug", "false")
 	resp, err := client.NewTxn().
-		Query(metadata.NewOutgoingContext(ctx, md), queryStr)
+		Query(context.Background(), queryStr)
 
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }

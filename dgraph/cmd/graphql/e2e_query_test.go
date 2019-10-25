@@ -113,6 +113,34 @@ func queryByType(t *testing.T, acceptGzip, gzipEncoding bool) {
 	}
 }
 
+func TestUIDAlias(t *testing.T) {
+	queryCountry := &GraphQLParams{
+		Query: `query {
+			queryCountry(order: { asc: name }) {
+				uid: name
+			}
+		}`,
+	}
+
+	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		QueryCountry []*countryUID
+	}
+	expected.QueryCountry = []*countryUID{
+		&countryUID{UID: "Angola"},
+		&countryUID{UID: "Bangladesh"},
+		&countryUID{UID: "Mozambique"},
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestOrderAtRoot(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {

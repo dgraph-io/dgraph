@@ -66,3 +66,28 @@ func TestQueryRewriting(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryUIDRand(t *testing.T) {
+	query := `query{
+		queryCountry {
+			uid: name
+		}
+	}`
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+	testRewriter := NewQueryRewriter()
+
+	op, err := gqlSchema.Operation(
+		&schema.Request{
+			Query: query,
+		})
+
+	require.NoError(t, err)
+	gqlQuery := test.GetQuery(t, op)
+	dgQuery, err := testRewriter.Rewrite(gqlQuery)
+
+	require.Equal(t, dgQuery.Children[0].Attr, "Country.name")
+	require.Equal(t, dgQuery.Children[0].Alias, "uid")
+	require.Equal(t, dgQuery.Children[1].Attr, "uid")
+	require.Contains(t, dgQuery.Children[1].Alias, "uid_")
+}

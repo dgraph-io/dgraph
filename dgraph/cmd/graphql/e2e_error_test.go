@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -44,6 +45,11 @@ type ErrorCase struct {
 	Errors     x.GqlErrorList
 }
 
+type countryUID struct {
+	Name string
+	UID  string
+}
+
 func TestGraphQLCompletionOn(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 
@@ -62,18 +68,36 @@ func TestGraphQLCompletionOn(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := [2]string{"name", "uid: name"}
-
 	for _, test := range tests {
-		queryCountry := &GraphQLParams{
-			Query: fmt.Sprintf(`query {
-			queryCountry {
-			     %s
+		t.Run(test, func(t *testing.T) {
+			queryCountry := &GraphQLParams{
+				Query: fmt.Sprintf(`query {
+						    queryCountry {
+						       %s
+						    }
+					            }`, test),
 			}
-		}`, test),
-		}
 
-		gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
-		require.NotNil(t, gqlResponse.Errors)
+			// Check that the error is valid
+			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+			require.NotNil(t, gqlResponse.Errors)
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"Non-nullable field 'name' (type String!) was not present"+
+					" in result from Dgraph.")
+
+			// Check that the result is valid
+			var result struct {
+				QueryCountry []*countryUID
+			}
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+			require.Equal(t, len(result.QueryCountry), 4)
+			for i := 0; i < 3; i++ {
+				require.NotNil(t, result.QueryCountry[i])
+			}
+			require.Nil(t, result.QueryCountry[3])
+		})
 	}
 
 	cleanUp(t,
