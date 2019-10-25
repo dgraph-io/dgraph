@@ -112,11 +112,11 @@ type DeletePostPayload {
 }
 
 type UpdateAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type UpdatePostPayload {
-	post: Post
+	post: [Post]
 }
 
 #######################
@@ -207,12 +207,12 @@ input StringFullTextFilter_StringTermFilter {
 }
 
 input UpdateAuthorInput {
-	id: ID!
+	filter: AuthorFilter!
 	patch: PatchAuthor!
 }
 
 input UpdatePostInput {
-	postID: ID!
+	filter: PostFilter!
 	patch: PatchPost!
 }
 

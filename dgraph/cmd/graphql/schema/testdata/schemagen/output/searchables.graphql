@@ -114,7 +114,7 @@ type DeletePostPayload {
 }
 
 type UpdatePostPayload {
-	post: Post
+	post: [Post]
 }
 
 #######################
@@ -215,7 +215,7 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 }
 
 input UpdatePostInput {
-	postID: ID!
+	filter: PostFilter!
 	patch: PatchPost!
 }
 

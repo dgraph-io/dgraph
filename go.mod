@@ -32,11 +32,7 @@ require (
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.2.0
 	github.com/google/uuid v1.0.0
-	github.com/gorilla/context v1.1.1 // indirect
-	github.com/gorilla/mux v1.6.2 // indirect
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1
@@ -63,6 +59,7 @@ require (
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
+	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2

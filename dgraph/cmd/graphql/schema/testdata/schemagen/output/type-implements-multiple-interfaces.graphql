@@ -114,11 +114,11 @@ type DeleteHumanPayload {
 }
 
 type UpdateCharacterPayload {
-	character: Character
+	character: [Character]
 }
 
 type UpdateHumanPayload {
-	human: Human
+	human: [Human]
 }
 
 #######################
@@ -209,12 +209,12 @@ input PatchHuman {
 }
 
 input UpdateCharacterInput {
-	id: ID!
+	filter: CharacterFilter!
 	patch: PatchCharacter!
 }
 
 input UpdateHumanInput {
-	id: ID!
+	filter: HumanFilter!
 	patch: PatchHuman!
 }
 

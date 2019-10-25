@@ -97,7 +97,7 @@ type DeleteMessagePayload {
 }
 
 type UpdateMessagePayload {
-	message: Message
+	message: [Message]
 }
 
 #######################
@@ -142,7 +142,7 @@ input PatchMessage {
 }
 
 input UpdateMessageInput {
-	id: ID!
+	filter: MessageFilter!
 	patch: PatchMessage!
 }
 
