@@ -125,6 +125,16 @@ func NewHandler(input string) (Handler, error) {
 	}, nil
 }
 
+func getAllSearchIndexes(val *ast.Value) []string {
+	res := make([]string, len(val.Children))
+
+	for i, child := range val.Children {
+		res[i] = supportedSearches[child.Value.Raw].dgIndex
+	}
+
+	return res
+}
+
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
@@ -175,14 +185,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 
-					indexStr := ""
+					indexes := []string{}
 					search := f.Directives.ForName(searchDirective)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexStr = supportedSearches[arg.Value.Raw].dgIndex
+							indexes = getAllSearchIndexes(arg.Value)
 						} else {
-							indexStr = defaultSearches[f.Type.Name()]
+							indexes = append(indexes, defaultSearches[f.Type.Name()])
 						}
 					}
 
@@ -193,8 +203,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							indexes:   make(map[string]bool),
 							dgraphTyp: typStr}
 					}
-					if indexStr != "" {
-						scalars[edgeName].indexes[indexStr] = true
+					if len(indexes) != 0 {
+						for _, index := range indexes {
+							scalars[edgeName].indexes[index] = true
+						}
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(

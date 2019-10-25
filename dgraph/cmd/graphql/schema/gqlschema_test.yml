@@ -12,6 +12,16 @@ invalid_schemas:
     ]
 
   -
+    name: "UID as a field name"
+    input: |
+      type P {
+        uid: String
+      }
+    errlist: [
+      {"message":"Type P; Field uid: uid is a reserved keyword and you cannot declare a field with this name.", "locations": [{"line":2, "column": 3}]},
+    ]
+
+  -
     name: "Query, Mutation in initial schema"
     input: |
       type Query {
@@ -26,13 +36,45 @@ invalid_schemas:
     ]
 
   -
-    name: "Invalid list type"
+    name: "No ID list of any kind"
     input: |
       type A {
-        posts: [A]!
+        f: [ID]
       }
     errlist: [
-      {"message":"[A]! lists are invalid. Valid options are [A!]! and [A!].", "locations":[{"line":2, "column":3}]},
+      {"message": "Type A; Field f: ID lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+
+  -
+    name: "No nested list of any kind"
+    input: |
+      type A {
+        f: [[String]]
+      }
+    errlist: [
+      {"message": "Type A; Field f: Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+  -
+    name: "There shoudnt be arguments on any field"
+    input: |
+      type T {
+        f(a: Int): String
+      }
+    errlist: [
+      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
+    ]
+
+
+  -
+    name: "Reference type that is not in input schema"
+    input: |
+      type T {
+          f: Author
+      }
+    errlist: [
+      {"message": "Undefined type Author.", "locations": [{"line": 2, "column": 8}]}
     ]
 
   -
@@ -70,10 +112,11 @@ invalid_schemas:
         i2: ID!
         i3: ID!
         l1: [X]!
+        l2: [ID]
       }
     errlist: [
-      {"message":"Fields i1, i2 and i3 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
-      {"message":"[X]! lists are invalid. Valid options are [X!]! and [X!].", "locations":[{"line":5, "column":3}]},
+      {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
+      {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
     ]
 
   -
@@ -139,7 +182,7 @@ invalid_schemas:
         id: ID! @search
       }
       type Y {
-        id: ID! @search(by: term)
+        id: ID! @search(by: [term])
       }
     errlist: [
       {"message": "Type X; Field id: has the @search directive but fields of type ID can't
@@ -170,7 +213,7 @@ invalid_schemas:
     name: "Search (with arg) will error that can't have the @search"
     input: |
       type X {
-        y: Y @search(by: term)
+        y: Y @search(by: [term])
       }
       type Y {
         z: String
@@ -186,7 +229,7 @@ invalid_schemas:
     name: "Search with wrong arg with error on default search type"
     input: |
       type X {
-        y: Int @search(by: term)
+        y: Int @search(by: [term])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument term doesn't
@@ -199,7 +242,7 @@ invalid_schemas:
     name: "Search with wrong arg with error on search type"
     input: |
       type X {
-        y: String @search(by: day)
+        y: String @search(by: [day])
       }
     errlist: [
       {"message": "Type X; Field y: has the @search directive but the argument day doesn't
@@ -209,10 +252,71 @@ invalid_schemas:
       ]
 
   -
+    name: "Search with wrong arg for the index"
+    input: |
+      type X {
+        y: String @search(by: [hash, hour])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument hour doesn't
+          apply to field type String.  Search by hour applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search without []"
+    input: |
+      type X {
+        y: String @search(by: hash)
+      }
+    errlist: [
+      {"message": "Type X; Field y: the @search directive requires a list argument, 
+          like @search(by: [hash])",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't allow hash and exact together"
+    input: |
+      type X {
+        y: String @search(by: [hash, exact])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the arguments 'hash' and 'exact' can't be
+          used together as arguments to @search.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with multiple datetime index"
+    input: |
+      type X {
+        y: DateTime @search(by: [hour, month])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the search directive on DateTime. DateTime 
+           allows only one argument for @search.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Search doesn't allow trigram and regexp together"
+    input: |
+      type X {
+        y: String @search(by: [trigram, regexp])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search 'trigram' is the same as 
+          the index 'regexp' provided before and shouldn't be used together",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
     name: "Search doesn't accept bogus args"
     input: |
       type X {
-        y: String @search(by: bogus)
+        y: String @search(by: [bogus])
       }
     errlist: [
       {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
@@ -298,7 +402,7 @@ invalid_schemas:
         q: [Boolean]
       }
     errlist: [
-      {"message": "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.",
+      {"message": "Type X; Field q: Boolean lists are invalid.",
       "locations":[{"line":2, "column":3}]}
       ]
 
@@ -402,25 +506,32 @@ valid_schemas:
     input: |
       type X {
         int1: Int @search
-        int2: Int @search(by: int)
+        int2: Int @search(by: [int])
+        int3: Int @search(by: [])
         float1: Float @search
-        float2: Float @search(by: float)
+        float2: Float @search(by: [float])
+        float3: Float @search(by: [])
         bool1: Boolean @search
-        bool2: Boolean @search(by: bool)
+        bool2: Boolean @search(by: [bool])
+        bool3: Boolean @search(by: [])
         str: String @search
-        strHash: String @search(by: hash)
-        strExact: String @search(by: exact)
-        strTerm: String @search(by: term)
-        strFulltext: String @search(by: fulltext)
-        strTrigram: String @search(by: trigram)
-        strRegexp: String @search(by: regexp)
+        str2: String @search(by: [])
+        strHash: String @search(by: [hash])
+        strExact: String @search(by: [exact])
+        strTerm: String @search(by: [term])
+        strFulltext: String @search(by: [fulltext])
+        strTrigram: String @search(by: [trigram])
+        strRegexp: String @search(by: [regexp])
+        strRegexpFulltext: String @search(by: [regexp, fulltext])
+        strMultipleIndex: String @search(by: [trigram, hash, term, fulltext])
         dt: DateTime @search
-        dtYear: DateTime @search(by: year)
-        dtMonth: DateTime @search(by: month)
-        dtDay: DateTime @search(by: day)
-        dtHour: DateTime @search(by: hour)
+        dt2: DateTime @search(by: [])
+        dtYear: DateTime @search(by: [year])
+        dtMonth: DateTime @search(by: [month])
+        dtDay: DateTime @search(by: [day])
+        dtHour: DateTime @search(by: [hour])
         enumFld: E @search
-        req: String! @search(by: term)
+        req: String! @search(by: [term])
         list: [Int] @search
         reqList: [DateTime!]! @search
       }

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -189,7 +188,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	// So that snapshot happens and everything is persisted to disk.
 	if err := restart(cluster.dgraph); err != nil {
 		//		shutdownCluster()
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	waitForNodeToBeHealthy(t, cluster.alphaPortOffset+x.PortHTTP)
 	waitForConvergence(t, cluster)
@@ -238,7 +237,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	cmd.Process.Signal(syscall.SIGINT)
 	if _, err := cmd.Process.Wait(); err != nil {
 		shutdownCluster()
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// We wait so that after restart n becomes leader.
@@ -248,7 +247,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	glog.Infoln("Trying to restart Dgraph Alpha")
 	if err := cmd.Start(); err != nil {
 		shutdownCluster()
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	waitForNodeToBeHealthy(t, cluster.alphaPortOffset+x.PortHTTP)

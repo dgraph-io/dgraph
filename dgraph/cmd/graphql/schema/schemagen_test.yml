@@ -106,23 +106,24 @@ schemas:
     input: |
       type X {
         i1: Int @search
-        i2: Int @search(by: int)
+        i2: Int @search(by: [int])
         f1: Float @search
-        f2: Float @search(by: float)
+        f2: Float @search(by: [float])
         b1: Boolean @search
-        b2: Boolean @search(by: bool)
+        b2: Boolean @search(by: [bool])
         s1: String @search
-        s2: String @search(by: hash)
-        s3: String @search(by: exact)
-        s4: String @search(by: term)
-        s5: String @search(by: fulltext)
-        s6: String @search(by: trigram)
-        s7: String @search(by: regexp)
+        s2: String @search(by: [hash])
+        s3: String @search(by: [exact])
+        s4: String @search(by: [term])
+        s5: String @search(by: [fulltext])
+        s6: String @search(by: [trigram])
+        s7: String @search(by: [regexp])
+        s8: String @search(by: [trigram, fulltext, term, exact])
         dt1: DateTime @search
-        dt2: DateTime @search(by: year)
-        dt3: DateTime @search(by: month)
-        dt4: DateTime @search(by: day)
-        dt5: DateTime @search(by: hour)
+        dt2: DateTime @search(by: [year])
+        dt3: DateTime @search(by: [month])
+        dt4: DateTime @search(by: [day])
+        dt5: DateTime @search(by: [hour])
         e: E @search
       }
       enum E { A }
@@ -141,6 +142,7 @@ schemas:
         s5: string
         s6: string
         s7: string
+        s8: string
         dt1: dateTime
         dt2: dateTime
         dt3: dateTime
@@ -167,13 +169,14 @@ schemas:
       s5: string @index(fulltext) .
       s6: string @index(trigram) .
       s7: string @index(trigram) .
+      s8: string @index(exact,fulltext,term,trigram) .
 
   -
     name: "interface and types interact properly"
     input: |
       interface A {
         id: ID!
-        name: String! @search(by: exact)
+        name: String! @search(by: [exact])
       }
       type B implements A {
         correct: Boolean @search
@@ -202,21 +205,21 @@ schemas:
     input: |
       type A {
         id: ID!
-        p: String! @search(by: exact)
+        p: String! @search(by: [exact, trigram])
         friend: P
       }
       type P {
         id: ID!
-        p: String! @search(by: term)
+        p: String! @search(by: [term])
       }
       type B {
         id: ID!
-        p: String! @search(by: fulltext)
+        p: String! @search(by: [fulltext])
         friend: P
       }
       type C {
         id: ID!
-        p: String! @search(by: exact)
+        p: String! @search(by: [exact])
         friend: P
       }
     output: |
@@ -236,5 +239,5 @@ schemas:
         friend: uid
       }
       friend: uid .
-      p: string @index(exact,fulltext,term) .
+      p: string @index(exact,fulltext,term,trigram) .
 

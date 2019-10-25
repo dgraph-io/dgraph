@@ -998,6 +998,6 @@ func TestTypeExpandFacets(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "model|type":"Electric",
-			"year":2009}]}}`, js)
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス",
+			"model|type":"Electric", "year":2009, "owner": [{"uid": "0xcb"}]}]}}`, js)
 }

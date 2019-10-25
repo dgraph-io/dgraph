@@ -78,13 +78,17 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 
 func (exp *Experiment) verify() {
 	// insert the data into dgraph
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
 	ctx := context.Background()
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
 
-	_, err := dg.NewTxn().Mutate(ctx,
+	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
 	require.NoError(exp.t, err, "mutation failed")
 

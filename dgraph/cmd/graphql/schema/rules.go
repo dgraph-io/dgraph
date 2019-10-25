@@ -29,7 +29,8 @@ func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck)
+	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
+		fieldNameCheck, isValidFieldForList)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -105,24 +106,57 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-// [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
-func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
-
-	if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
-		return gqlerror.ErrorPosf(
-			field.Position,
-			fmt.Sprintf(
-				"[%s]! lists are invalid. Valid options are [%s!]! and [%s!].",
-				field.Type.Name(), field.Type.Name(), field.Type.Name(),
-			),
-		)
+func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
 	}
 
+	// ID and Boolean list are not allowed.
 	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if field.Type.Elem != nil && field.Type.Elem.Name() == "Boolean" &&
-		field.Type.NamedType == "" {
+	switch field.Type.Elem.Name() {
+	case
+		"ID",
+		"Boolean":
 		return gqlerror.ErrorPosf(
-			field.Position, "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.")
+			field.Position, "Type %s; Field %s: %s lists are invalid.",
+			typ.Name, field.Name, field.Type.Elem.Name())
+	}
+	return nil
+}
+
+func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Arguments != nil {
+		return gqlerror.ErrorPosf(
+			field.Position,
+			"Type %s; Field %s: You can't give arguments to fields.",
+			typ.Name, field.Name,
+		)
+	}
+	return nil
+}
+
+func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	//field name cannot be a reserved word
+	if isReservedKeyWord(field.Name) {
+		return gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
+				"you cannot declare a field with this name.",
+			typ.Name, field.Name, field.Name)
+	}
+
+	return nil
+}
+
+func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
+	}
+
+	// Nested lists are not allowed.
+	if field.Type.Elem.Elem != nil {
+		return gqlerror.ErrorPosf(field.Position,
+			"Type %s; Field %s: Nested lists are invalid.",
+			typ.Name, field.Name)
 	}
 
 	return nil
@@ -219,23 +253,70 @@ func searchValidation(
 			typ.Name, field.Name, field.Type.Name())
 	}
 
-	if search, ok := supportedSearches[arg.Value.Raw]; !ok {
-		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	// This check can be removed once gqlparser bug
+	// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	if arg.Value.Kind != ast.ListValue {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: the argument to @search %s isn't valid."+
-				"Fields of type %s %s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(), searchMessage(sch, field))
+			"Type %s; Field %s: the @search directive requires a list argument, like @search(by: [hash])",
+			typ.Name, field.Name)
+	}
 
-	} else if search.gqlType != field.Type.Name() {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: has the @search directive but the argument %s "+
-				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
-				"Fields of type %[4]s %[6]s.",
-			typ.Name, field.Name, arg.Value.Raw, field.Type.Name(),
-			supportedSearches[arg.Value.Raw].gqlType, searchMessage(sch, field))
+	searchArgs := getSearchArgs(field)
+	searchIndexes := make(map[string]string)
+	for _, searchArg := range searchArgs {
+		// Checks that the argument for search is valid and compatible
+		// with the type it is applied to.
+		if search, ok := supportedSearches[searchArg]; !ok {
+			// This check can be removed once gqlparser bug
+			// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: the argument to @search %s isn't valid."+
+					"Fields of type %s %s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
+
+		} else if search.gqlType != field.Type.Name() {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the @search directive but the argument %s "+
+					"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
+					"Fields of type %[4]s %[6]s.",
+				typ.Name, field.Name, searchArg, field.Type.Name(),
+				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+		}
+
+		// Checks that the filter indexes aren't repeated and they
+		// don't clash with each other.
+		searchIndex := builtInFilters[searchArg]
+		if val, ok := searchIndexes[searchIndex]; ok {
+			if field.Type.Name() == "String" {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the argument to @search '%s' is the same "+
+						"as the index '%s' provided before and shouldn't "+
+						"be used together",
+					typ.Name, field.Name, searchArg, val)
+			}
+
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: has the search directive on %s. %s "+
+					"allows only one argument for @search.",
+				typ.Name, field.Name, field.Type.Name(), field.Type.Name())
+		}
+
+		for _, index := range filtersCollisions[searchIndex] {
+			if val, ok := searchIndexes[index]; ok {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: the arguments '%s' and '%s' can't "+
+						"be used together as arguments to @search.",
+					typ.Name, field.Name, searchArg, val)
+			}
+		}
+
+		searchIndexes[searchIndex] = searchArg
 	}
 
 	return nil
@@ -268,7 +349,7 @@ func isScalar(s string) bool {
 }
 
 func isReservedKeyWord(name string) bool {
-	if isScalar(name) || name == "Query" || name == "Mutation" {
+	if isScalar(name) || name == "Query" || name == "Mutation" || name == "uid" {
 		return true
 	}
 

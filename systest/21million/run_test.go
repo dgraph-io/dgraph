@@ -30,8 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,10 +46,15 @@ func TestQueries(t *testing.T) {
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	files, err := ioutil.ReadDir(queryDir)
-	x.CheckfNoTrace(err)
+	if err != nil {
+		t.Fatalf("Error reading directory: %s", err.Error())
+	}
 
 	savepath := ""
 	diffs := 0
@@ -63,7 +66,9 @@ func TestQueries(t *testing.T) {
 			filename := path.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename)
 			bytes, err := ioutil.ReadAll(reader)
-			x.CheckfNoTrace(err)
+			if err != nil {
+				t.Fatalf("Error reading file: %s", err.Error())
+			}
 			contents := string(bytes[:])
 			cleanup()
 

@@ -114,7 +114,9 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", nil, err
+	}
 
 	// Check for errors
 	if len(r.Errors) != 0 {
@@ -146,7 +148,9 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", 0, err
+	}
 	startTs := r.Extensions.Txn.StartTs
 
 	// Remove the extensions.
@@ -158,15 +162,22 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
+type mutationResponse struct {
+	keys    []string
+	preds   []string
+	startTs uint64
+	vars    map[string][]string
+}
+
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
-	[]string, []string, uint64, error) {
+	mutationResponse, error) {
 
 	params := make([]string, 2)
 	if ts != 0 {
 		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
 	}
-	var keys []string
-	var preds []string
+
+	var mr mutationResponse
 	if commitNow {
 		params = append(params, "commitNow=true")
 	}
@@ -174,14 +185,27 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	url := addr + "/mutate?" + strings.Join(params, "&")
 	_, body, err := runWithRetries("POST", t, url, m)
 	if err != nil {
-		return keys, preds, 0, err
+		return mr, err
 	}
 
 	var r res
-	x.Check(json.Unmarshal(body, &r))
-	startTs := r.Extensions.Txn.StartTs
+	if err := json.Unmarshal(body, &r); err != nil {
+		return mr, err
+	}
 
-	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
+	type resData struct {
+		MutationVars map[string][]string `json:"vars"`
+	}
+	var rd resData
+	if err := json.Unmarshal(r.Data, &rd); err != nil {
+		return mr, err
+	}
+
+	mr.vars = rd.MutationVars
+	mr.keys = r.Extensions.Txn.Keys
+	mr.preds = r.Extensions.Txn.Preds
+	mr.startTs = r.Extensions.Txn.StartTs
+	return mr, nil
 }
 
 func createRequest(method, contentType, url string, body string) (*http.Request, error) {
@@ -316,13 +340,13 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
-	require.Equal(t, mts, ts)
-	require.Equal(t, 4, len(keys))
-	require.Equal(t, 2, len(preds))
+	require.Equal(t, mr.startTs, ts)
+	require.Equal(t, 4, len(mr.keys))
+	require.Equal(t, 2, len(mr.preds))
 	var parsedPreds []string
-	for _, pred := range preds {
+	for _, pred := range mr.preds {
 		parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
@@ -339,7 +363,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(keys, preds, ts))
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -370,10 +394,10 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
-	require.Equal(t, mts, ts)
-	require.Equal(t, 4, len(keys))
+	require.Equal(t, mr.startTs, ts)
+	require.Equal(t, 4, len(mr.keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -385,7 +409,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -416,10 +440,10 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
-	require.Equal(t, mts, ts)
-	require.Equal(t, 4, len(keys))
+	require.Equal(t, mr.startTs, ts)
+	require.Equal(t, 4, len(mr.keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -438,7 +462,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit (using a list of keys instead of a map) and query.
-	require.NoError(t, commitWithTsKeysOnly(keys, ts))
+	require.NoError(t, commitWithTsKeysOnly(mr.keys, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -711,7 +735,7 @@ func TestDrainingMode(t *testing.T) {
 	  }
 	}
 	`
-		_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, ts)
+		_, err = mutationWithTs(m1, "application/rdf", false, true, ts)
 		if expectErr {
 			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
 		} else {
