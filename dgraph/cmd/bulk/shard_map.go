@@ -16,7 +16,11 @@
 
 package bulk
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/dgraph-io/dgraph/x"
+)
 
 type shardMap struct {
 	sync.RWMutex
@@ -33,6 +37,11 @@ func newShardMap(numShards int) *shardMap {
 }
 
 func (m *shardMap) shardFor(pred string) int {
+	// Always assign NQuads with reserved predicates to the first map shard.
+	if x.IsReservedPredicate(pred) {
+		return 0
+	}
+
 	m.RLock()
 	shard, ok := m.predToShard[pred]
 	m.RUnlock()
