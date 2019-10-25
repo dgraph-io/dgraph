@@ -97,7 +97,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 	}
 	if aliasUID {
 		candidateFound := false
-		for candidateFound == false {
+		for !candidateFound {
 			candidateFound = true
 			uidCandidate := fmt.Sprintf("uid_%d", rand.Int())
 			for _, c := range dgQuery.Children {
