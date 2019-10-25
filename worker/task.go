@@ -532,25 +532,22 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 		return nil, nil, err
 	}
 	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		if q.ExpandAll {
-			// Retrieve all the values.
-		} else if listType && len(q.Langs) == 0 && len(p.LangTag) > 0 {
-			// Don't retrieve tagged values unless explicitly asked.
+		// Don't retrieve tagged values unless explicitly asked.
+		if listType && len(q.Langs) == 0 && len(p.LangTag) > 0 {
 			return nil
-		} else {
-			// Only retrieve values that match one of the specified languages.
-			langMatches := false
-			langTag := string(p.LangTag)
-			for _, lang := range q.Langs {
-				if lang == langTag {
-					langMatches = true
-				}
-			}
-			if !langMatches && len(q.Langs) > 0 {
-				return nil
+		}
+		// Only retrieve values that match one of the specified languages.
+		langMatches := false
+		langTag := string(p.LangTag)
+		for _, lang := range q.Langs {
+			if lang == langTag {
+				langMatches = true
 			}
 		}
-		
+		if !langMatches && len(q.Langs) > 0 {
+			return nil
+		}
+
 		picked, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
