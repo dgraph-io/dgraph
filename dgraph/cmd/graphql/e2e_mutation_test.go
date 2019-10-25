@@ -355,7 +355,7 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 	}
 }
 
-func TestUpdateMutation(t *testing.T) {
+func TestUpdateMutationByIds(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 
@@ -367,10 +367,9 @@ func TestUpdateMutation(t *testing.T) {
 		updateCountry(t, filter, newName)
 		newCountry.Name = newName
 		anotherCountry.Name = newName
-	})
 
-	t.Run("check updated Country", func(t *testing.T) {
 		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
 	})
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})

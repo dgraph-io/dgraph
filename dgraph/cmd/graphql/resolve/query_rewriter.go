@@ -55,7 +55,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 			return nil, err
 		}
 
-		dgQuery := rewriteAsGet(gqlQuery, []uint64{uid})
+		dgQuery := rewriteAsGet(gqlQuery, uid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
 		return dgQuery, nil
@@ -67,7 +67,7 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	}
 }
 
-func rewriteAsGet(field schema.Field, uids []uint64) *gql.GraphQuery {
+func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 		Func: &gql.Function{
@@ -79,6 +79,10 @@ func rewriteAsGet(field schema.Field, uids []uint64) *gql.GraphQuery {
 	addSelectionSetFrom(dgQuery, field)
 
 	return dgQuery
+}
+
+func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
+	return rewriteAsQueryByIds(field, []uint64{uid})
 }
 
 func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
