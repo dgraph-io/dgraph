@@ -120,7 +120,7 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
-		LangTagsAppend:   Bulk.Conf.GetBool("append_langtags"),
+		AppendLangTags:   Bulk.Conf.GetBool("append_langtags"),
 	}
 
 	x.PrintVersion()

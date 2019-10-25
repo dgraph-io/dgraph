@@ -263,7 +263,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
-	m.schema.validateType(de, nq.ObjectValue == nil, m.opt.LangTagsAppend)
+	m.schema.validateType(de, nq.ObjectValue == nil, m.opt.AppendLangTags)
 
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(nq.GetPredicate())
@@ -286,7 +286,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.schema.validateType(de, true, m.opt.LangTagsAppend)
+	m.schema.validateType(de, true, m.opt.AppendLangTags)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
