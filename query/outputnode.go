@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -198,6 +199,38 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) {
 	out.WriteString(fj.attr)
 	out.WriteRune('"')
 	out.WriteRune(':')
+}
+
+func attachFacets(fj *fastJsonNode, fieldName string, isList bool, fList []*api.Facet, facetIdx int) error {
+	facetMap := make(map[string][]*api.Facet)
+	for _, f := range fList {
+		fName := facetName(fieldName, f)
+		facetMap[fName] = append(facetMap[fName], f)
+	}
+
+	for fName, facetList := range facetMap {
+		if len(facetList) == 1 && !isList {
+			fVal, err := facets.ValFor(facetList[0])
+			if err != nil {
+				return err
+			}
+			fj.AddValue(facetName(fieldName, facetList[0]), fVal)
+			continue
+		}
+
+		facetNode := &fastJsonNode{attr: fName}
+		for idx, f := range facetList {
+			fVal, err := facets.ValFor(f)
+			if err != nil {
+				return err
+			}
+
+			facetNode.AddValue(strconv.Itoa(facetIdx+idx), fVal)
+		}
+		fj.AddMapChild(fName, facetNode, false)
+	}
+
+	return nil
 }
 
 func (fj *fastJsonNode) encode(out *bytes.Buffer) {
@@ -689,7 +722,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
-			for childIdx, childUID := range ul.Uids {
+			for childIdx := range ul.Uids {
+				if pc.Params.Facet != nil && len(fcsList) > childIdx {
+					fs := fcsList[childIdx]
+					err := attachFacets(dst.(*fastJsonNode),
+						fieldName, pc.List, fs.Facets, childIdx+1)
+					if err != nil {
+						return err
+					}
+				}
+
+			}
+
+			for _, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
 				}
@@ -706,18 +751,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					// Some other error.
 					glog.Errorf("Error while traversal: %v", rerr)
 					return rerr
-				}
-
-				if pc.Params.Facet != nil && len(fcsList) > childIdx {
-					fs := fcsList[childIdx]
-					for _, f := range fs.Facets {
-						fVal, err := facets.ValFor(f)
-						if err != nil {
-							return err
-						}
-
-						uc.AddValue(facetName(fieldName, f), fVal)
-					}
 				}
 
 				if !uc.IsEmpty() {
@@ -789,13 +822,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
-				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fVal, err := facets.ValFor(f)
-					if err != nil {
-						return err
-					}
-
-					dst.AddValue(facetName(fieldName, f), fVal)
+				err := attachFacets(dst.(*fastJsonNode), fieldName,
+					pc.List, pc.facetsMatrix[idx].FacetsList[0].Facets, idx+1)
+				if err != nil {
+					return err
 				}
 			}
 
