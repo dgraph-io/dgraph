@@ -29,7 +29,8 @@ func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck)
+	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
+		fieldNameCheck, isValidFieldForList)
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -105,17 +106,25 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func isValidTypeForList(field *ast.Type, typ *ast.Definition) bool {
-	switch field.Name() {
+func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
+	}
+
+	// ID and Boolean list are not allowed.
+	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
+	switch field.Type.Elem.Name() {
 	case
 		"ID",
 		"Boolean":
-		return false
+		return gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: %s lists are invalid.",
+			typ.Name, field.Name, field.Type.Elem.Name())
 	}
-	return true
+	return nil
 }
 
-func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
+func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
 	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
@@ -126,12 +135,8 @@ func fieldArgumentCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerr
 	return nil
 }
 
-func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error {
-
-	if err := fieldArgumentCheck(field, typ); err != nil {
-		return err
-	}
-
+func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	//field name cannot be a reserved word
 	if isReservedKeyWord(field.Name) {
 		return gqlerror.ErrorPosf(
 			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
@@ -139,17 +144,12 @@ func listValidityCheck(field *ast.FieldDefinition, typ *ast.Definition) *gqlerro
 			typ.Name, field.Name, field.Name)
 	}
 
-	// Checks if the field is nil.
-	if field.Type.Elem == nil {
-		return nil
-	}
+	return nil
+}
 
-	// ID and Boolean list are not allowed.
-	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
-	if !isValidTypeForList(field.Type.Elem, typ) && field.Type.NamedType == "" {
-		return gqlerror.ErrorPosf(
-			field.Position, "Type %s; Field %s: %s lists are invalid.",
-			typ.Name, field.Name, field.Type.Elem.Name())
+func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if field.Type.Elem == nil && field.Type.NamedType != "" {
+		return nil
 	}
 
 	// Nested lists are not allowed.

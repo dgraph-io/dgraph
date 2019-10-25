@@ -202,7 +202,7 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition, typ *ast.Definition) *gqlerror.Error
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
@@ -322,7 +322,7 @@ func applyFieldValidations(field *ast.FieldDefinition, typ *ast.Definition) gqle
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(field, typ))
+		errs = appendIfNotNull(errs, rule(typ, field))
 	}
 
 	return errs
