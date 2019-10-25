@@ -240,7 +240,7 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	}
 
 	filter := extractFilter(m)
-	addFilter(dgQuery, m, filter)
+	addFilter(dgQuery, m.Type(), filter)
 	return dgQuery
 }
 
@@ -267,17 +267,6 @@ func (drw *deleteRewriter) FromMutationResult(
 
 	// There's no query that follows a delete
 	return nil, nil
-}
-
-func getUpdUIDs(m schema.Mutation) ([]uint64, error) {
-	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
-	filter := val[schema.FilterArgName].(map[string]interface{})
-	idArg := filter["ids"]
-	if idArg == nil {
-		return nil, nil
-	}
-
-	return asUIDs(idArg.([]interface{}))
 }
 
 func asUIDs(vals []interface{}) ([]uint64, error) {

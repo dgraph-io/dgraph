@@ -96,7 +96,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		addTypeFunc(dgQuery, field.Type().Name())
 	}
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	addFilter(dgQuery, field, filter)
+	addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
@@ -180,7 +180,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		}
 
 		filter, _ := f.ArgValue("filter").(map[string]interface{})
-		addFilter(child, f, filter)
+		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
 
@@ -250,7 +250,7 @@ func idFilter(field schema.Field) []uint64 {
 	return convertIDs(idsSlice)
 }
 
-func addFilter(q *gql.GraphQuery, field schema.Field, filter map[string]interface{}) {
+func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) {
 	if len(filter) == 0 {
 		return
 	}
@@ -266,9 +266,9 @@ func addFilter(q *gql.GraphQuery, field schema.Field, filter map[string]interfac
 		// If id was present as a filter,
 		delete(filter, "ids")
 	}
-	q.Filter = buildFilter(field.Type(), filter)
+	q.Filter = buildFilter(typ, filter)
 	if filterAtRoot {
-		addTypeFilter(q, field.Type())
+		addTypeFilter(q, typ)
 	}
 }
 
