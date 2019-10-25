@@ -313,7 +313,7 @@ invalid_schemas:
         q: String
       }
     errlist: [
-      {"message": "Field q should have same type across type definitions: Found String in type Y; expected [String] from type X",
+      {"message": "Field q should have same type across type definitions: found String in type Y; expected [String] from type X",
       "locations":[{"line":6, "column":3}]}
       ]
 
@@ -332,7 +332,7 @@ invalid_schemas:
         a: String
       }
     errlist: [
-      {"message": "Field q should have same type across type definitions: Found Int in type Y; expected String from type X",
+      {"message": "Field q should have same type across type definitions: found Int in type Y; expected String from type X",
       "locations":[{"line":6, "column":3}]}
       ]
 
@@ -347,7 +347,7 @@ invalid_schemas:
         a: Int
       }
     errlist: [
-      {"message": "Field a should have same type across type definitions: Found Int in type Q; expected [Q] from type P",
+      {"message": "Field a should have same type across type definitions: found Int in type Q; expected [Q] from type P",
       "locations":[{"line":6, "column":3}]}
       ]
 
@@ -362,7 +362,7 @@ invalid_schemas:
         a: W
       }
     errlist: [
-      {"message": "Field a should have same type across type definitions: Found W in type W; expected [W] from type Z",
+      {"message": "Field a should have same type across type definitions: found W in type W; expected [W] from type Z",
       "locations":[{"line":6, "column":3}]}
       ]
 
