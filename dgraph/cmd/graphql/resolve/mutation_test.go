@@ -121,7 +121,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 				gqlMutation := test.GetMutation(t, op)
 
 				dgQuery, err := testRewriter.FromMutationResult(
-					gqlMutation, map[string]string{"newnode": "0x4"}, nil)
+					gqlMutation, map[string]string{"newnode": "0x4"},
+					map[string][]string{mutationQueryVar: []string{"0x4"}})
 
 				require.Nil(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
