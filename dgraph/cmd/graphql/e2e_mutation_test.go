@@ -412,6 +412,21 @@ func TestUpdateMutationByName(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
+func TestUpdateMutationByNameNoMatch(t *testing.T) {
+	// The countries shouldn't get updated as the query shouldn't match any nodes.
+	newCountry := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
+	t.Run("update Country", func(t *testing.T) {
+		filter := nameRegexFilter("no match")
+		updateCountry(t, filter, "new name")
+		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+
+	})
+
+	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
+}
+
 func updateCountry(t *testing.T, filter map[string]interface{}, newName string) {
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
