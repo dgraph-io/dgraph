@@ -342,7 +342,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		return nil
 	}
 
-	// This function has small boiletplate as handleUidPostings, around how the code gets
+	// This function has small boilerplate as handleUidPostings, around how the code gets
 	// concurrently executed. I didn't see much value in trying to separate it out, because the core
 	// logic constitutes most of the code volume here.
 	numGo, width := x.DivideAndRule(srcFn.n)
@@ -351,6 +351,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
+	listType := schema.State().IsList(q.Attr)
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
@@ -371,7 +372,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			vals, fcs, err := retrieveValuesAndFacets(args, pl)
+			vals, fcs, err := retrieveValuesAndFacets(args, pl, listType)
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
@@ -491,14 +492,14 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*api.Facet, error) {
+func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
+	[]types.Val, []*api.Facet, error) {
 	q := args.q
-	listType := schema.State().IsList(q.Attr)
 	var err error
 	var vals []types.Val
 	var fcs []*api.Facet
 
-	// No facet filtering on values.
+	// Retrieve values when facet filtering is not being requested.
 	if q.FacetsFilter == nil {
 		// Retrieve values.
 		if q.ExpandAll {
@@ -516,23 +517,45 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List) ([]types.Val, []*a
 
 		// Retrieve facets.
 		if q.FacetParam != nil {
-			fcs, _ = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+		}
+		if err != nil {
+			return nil, nil, err
 		}
 
 		return vals, fcs, nil
 	}
 
-	// Filter values by facets.
+	// Retrieve values when facet filtering is being requested.
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
 		return nil, nil, err
 	}
 	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		pick, err := applyFacetsTree(p.Facets, facetsTree)
+		if q.ExpandAll {
+			// Retrieve all the values.
+		} else if listType && len(q.Langs) == 0 && len(p.LangTag) > 0 {
+			// Don't retrieve tagged values unless explicitly asked.
+			return nil
+		} else {
+			// Only retrieve values that match one of the specified languages.
+			langMatches := false
+			langTag := string(p.LangTag)
+			for _, lang := range q.Langs {
+				if lang == langTag {
+					langMatches = true
+				}
+			}
+			if !langMatches && len(q.Langs) > 0 {
+				return nil
+			}
+		}
+		
+		picked, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
 		}
-		if pick {
+		if picked {
 			vals = append(vals, types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
