@@ -313,7 +313,7 @@ invalid_schemas:
         q: String
       }
     errlist: [
-      {"message": "Field q should have same type across type definitions. Found: String in type: Y, expected: [String] from type: X",
+      {"message": "Field q should have same type across type definitions: Found String in type Y; expected [String] from type X",
       "locations":[{"line":6, "column":3}]}
       ]
 
@@ -332,54 +332,38 @@ invalid_schemas:
         a: String
       }
     errlist: [
-      {"message": "Field q should have same type across type definitions. Found: Int in type: Y, expected: String from type: X",
+      {"message": "Field q should have same type across type definitions: Found Int in type Y; expected String from type X",
       "locations":[{"line":6, "column":3}]}
       ]
 
   -
     name: "Field with same name but different field type (Object vs Int) across different definitions not allowed."
     input: |
-      type X {
-        q: String
-      }
-
-      type Y {
-        z: Int
-      }
-
       type P {
-        a: [X]
+        a: [Q]
       }
 
       type Q {
         a: Int
       }
     errlist: [
-      {"message": "Field a should have same type across type definitions. Found: Int in type: Q, expected: [X] from type: P",
-      "locations":[{"line":14, "column":3}]}
+      {"message": "Field a should have same type across type definitions: Found Int in type Q; expected [Q] from type P",
+      "locations":[{"line":6, "column":3}]}
       ]
 
   -
     name: "List fields with same name(a) but different types (list vs singular) are not allowed.."
     input: |
-      type X {
-        q: [String]
-      }
-
-      type Y {
-        p: [Int]
-      }
-
       type Z {
-        a: [X]
+        a: [W]
       }
 
       type W {
-        a: Y
+        a: W
       }
     errlist: [
-      {"message": "Field a should have same type across type definitions. Found: Y in type: W, expected: [X] from type: Z",
-      "locations":[{"line":14, "column":3}]}
+      {"message": "Field a should have same type across type definitions: Found W in type W; expected [W] from type Z",
+      "locations":[{"line":6, "column":3}]}
       ]
 
 valid_schemas:

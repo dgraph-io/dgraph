@@ -311,8 +311,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 					errs = append(errs, gqlerror.ErrorPosf(
 						field.Position,
 						fmt.Sprintf(
-							"Field %s should have same type across type definitions. "+
-								"Found: %s in type: %s, expected: %s from type: %s",
+							"Field %s should have same type across type definitions: "+
+								"Found %s in type %s; expected %s from type %s",
 							field.Name, typeName, defn.Name, typ.name, typ.typeName)))
 				}
 			} else {
