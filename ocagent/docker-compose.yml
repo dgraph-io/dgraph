@@ -41,7 +41,7 @@ services:
       - 55679:55679
     volumes:
     - type: bind
-      source: $GOPATH/src/github.com/dgraph-io/dgraph/ocagent/ocagent-config.yaml
+      source: ./ocagent-config.yaml
       target: /conf/ocagent-config.yaml
       read_only: true
     command: --config /conf/ocagent-config.yaml
