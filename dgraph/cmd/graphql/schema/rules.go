@@ -322,6 +322,20 @@ func searchValidation(
 	return nil
 }
 
+func idValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	if field.Type.String() != "String!" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: with @id directive must be of type String! Found %s",
+			typ.Name, field.Name, field.Type.String())
+	}
+	return nil
+}
+
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 	var possibleSearchArgs []string
 	for name, typ := range supportedSearches {

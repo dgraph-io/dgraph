@@ -33,6 +33,8 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
+	idDirective = "id"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
@@ -57,6 +59,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -206,6 +209,7 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
+	idDirective:      idValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
