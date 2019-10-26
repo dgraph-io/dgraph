@@ -118,7 +118,7 @@ schemas:
         s5: String @search(by: [fulltext])
         s6: String @search(by: [trigram])
         s7: String @search(by: [regexp])
-        s8: String @search(by: [trigram, fulltext, term, exact]) 
+        s8: String @search(by: [trigram, fulltext, term, exact])
         dt1: DateTime @search
         dt2: DateTime @search(by: [year])
         dt3: DateTime @search(by: [month])
@@ -163,7 +163,7 @@ schemas:
       X.s5: string @index(fulltext) .
       X.s6: string @index(trigram) .
       X.s7: string @index(trigram) .
-      X.s8: string @index(trigram, fulltext, term, exact) .
+      X.s8: string @index(exact, fulltext, term, trigram) .
       X.dt1: dateTime @index(year) .
       X.dt2: dateTime @index(year) .
       X.dt3: dateTime @index(month) .
@@ -199,3 +199,23 @@ schemas:
         C.dob: dateTime
       }
       C.dob: dateTime .
+
+  -
+    name: "Field with @id directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id @search(by: [regexp])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash, trigram) .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .

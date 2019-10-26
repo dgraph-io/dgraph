@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -124,14 +125,38 @@ func NewHandler(input string) (Handler, error) {
 	}, nil
 }
 
-func getAllSearchIndexes(val *ast.Value) []string {
-	res := make([]string, len(val.Children))
+func getAllSearchIndexes(val *ast.Value) map[string]bool {
+	res := make(map[string]bool, len(val.Children))
 
-	for i, child := range val.Children {
-		res[i] = supportedSearches[child.Value.Raw].dgIndex
+	for _, child := range val.Children {
+		res[supportedSearches[child.Value.Raw].dgIndex] = true
 	}
 
 	return res
+}
+
+func indexStr(indexMap map[string]bool) string {
+	indexes := make([]string, 0, len(indexMap))
+	for index := range indexMap {
+		indexes = append(indexes, index)
+	}
+	sort.Strings(indexes)
+
+	var indexStr strings.Builder
+	if len(indexes) > 0 {
+		indexStr.WriteString(" @index(")
+		idx := 0
+		sort.Strings(indexes)
+		for _, index := range indexes {
+			if idx != 0 {
+				indexStr.WriteString(", ")
+			}
+			indexStr.WriteString(index)
+			idx++
+		}
+		indexStr.WriteString(")")
+	}
+	return indexStr.String()
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
@@ -179,21 +204,26 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 
-					indexStr := ""
 					search := f.Directives.ForName(searchDirective)
+					indexes := make(map[string]bool)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes := getAllSearchIndexes(arg.Value)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+							indexes = getAllSearchIndexes(arg.Value)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
+							indexes[defaultSearches[f.Type.Name()]] = true
 						}
+					}
+
+					id := f.Directives.ForName(idDirective)
+					if id != nil {
+						indexes["hash"] = true
 					}
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
+						str := indexStr(indexes)
+						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, str)
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(
