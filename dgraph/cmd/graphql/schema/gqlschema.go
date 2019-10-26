@@ -219,8 +219,8 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
-		Directives:   src.Directives,
-		Position:     src.Position,
+		//Directives:   src.Directives,
+		Position: src.Position,
 	}
 	return dst
 }
