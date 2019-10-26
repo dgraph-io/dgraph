@@ -428,6 +428,19 @@ invalid_schemas:
       "locations":[{"line":2, "column":15}]}
       ]
 
+  -
+    name: "Field with multiple @id directives should not be allowed"
+    input: |
+      type X {
+        f1: String! @id
+        f2: String! @id
+      }
+    errlist: [
+      {"message": "Fields f1 and f2 are listed with @id directive for type X, but a type can
+        have only one field with @id. Pick a single field with @id for type X.",
+      "locations":[{"line":2, "column":3},{"line":3, "column":3}]}
+      ]
+
 
 valid_schemas:
   -
