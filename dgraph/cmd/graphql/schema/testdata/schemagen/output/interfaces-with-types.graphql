@@ -11,18 +11,18 @@ interface Character {
 
 type Human implements Character {
 	id: ID!
-	name: String! @search(by: [exact])
+	name: String!
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn(first: Int, offset: Int): [Episode!]!
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
 
 type Droid implements Character {
 	id: ID!
-	name: String! @search(by: [exact])
+	name: String!
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn(first: Int, offset: Int): [Episode!]!
 	primaryFunction: String
 }
 
@@ -209,10 +209,6 @@ input CharacterRef {
 
 input DroidFilter {
 	ids: [ID!]
-	name: StringExactFilter
-	appearsIn: Episode
-	and: DroidFilter
-	or: DroidFilter
 	not: DroidFilter
 }
 
@@ -235,10 +231,6 @@ input DroidRef {
 
 input HumanFilter {
 	ids: [ID!]
-	name: StringExactFilter
-	appearsIn: Episode
-	and: HumanFilter
-	or: HumanFilter
 	not: HumanFilter
 }
 
