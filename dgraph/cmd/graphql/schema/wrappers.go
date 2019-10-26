@@ -646,6 +646,11 @@ func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
 }
 
+func hasIDDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName("id")
+	return id != nil
+}
+
 func isID(fd *ast.FieldDefinition) bool {
 	// this will change once we have more types of ID fields
 	return fd.Type.Name() == "ID"

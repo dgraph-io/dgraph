@@ -215,11 +215,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 
-					id := f.Directives.ForName(idDirective)
-					if id != nil {
-						indexes["hash"] = true
-					}
-
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
 						str := indexStr(indexes)

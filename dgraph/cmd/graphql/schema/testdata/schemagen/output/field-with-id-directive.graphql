@@ -3,15 +3,15 @@
 #######################
 
 type Post {
-	content: String!
+	content: String! @id
 	author(filter: AuthorFilter): Author!
 	genre: Genre
 }
 
 type Author {
 	id: ID
-	name: String
-	posts(order: PostOrder, first: Int, offset: Int): [Post]
+	name: String! @id
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type Genre {
@@ -114,6 +114,10 @@ type DeleteAuthorPayload {
 	msg: String
 }
 
+type DeletePostPayload {
+	msg: String
+}
+
 type UpdateAuthorPayload {
 	author: [Author]
 }
@@ -140,11 +144,14 @@ enum PostOrderable {
 
 input AuthorFilter {
 	ids: [ID!]
+	name: StringHashFilter
+	and: AuthorFilter
+	or: AuthorFilter
 	not: AuthorFilter
 }
 
 input AuthorInput {
-	name: String
+	name: String!
 }
 
 input AuthorOrder {
@@ -171,6 +178,18 @@ input PatchAuthor {
 	name: String
 }
 
+input PatchPost {
+	content: String
+	author: AuthorRef
+}
+
+input PostFilter {
+	content: StringHashFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
 input PostInput {
 	content: String!
 	author: AuthorRef!
@@ -187,13 +206,19 @@ input UpdateAuthorInput {
 	patch: PatchAuthor!
 }
 
+input UpdatePostInput {
+	filter: PostFilter!
+	patch: PatchPost!
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID!): Author
+	getPost(content: String!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID, name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
 }
@@ -204,6 +229,8 @@ type Query {
 
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload

@@ -1,0 +1,16 @@
+
+type Post {
+    content: String! @id
+    author: Author!
+    genre: Genre
+}
+
+type Author {
+    id: ID
+    name: String! @id
+    posts: [Post]
+}
+
+type Genre {
+    name: String!
+}

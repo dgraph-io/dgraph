@@ -625,6 +625,11 @@ func hasID(defn *ast.Definition) bool {
 		func(fld *ast.FieldDefinition) bool { return isID(fld) })
 }
 
+func hasXID(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return hasIDDirective(fld) })
+}
+
 // fieldAny returns true if any field in fields satisfies pred
 func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	for _, fld := range fields {
@@ -639,8 +644,14 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
+	id := fld.Directives.ForName(idDirective)
 	if search == nil {
-		return nil
+		if id == nil {
+			return nil
+		}
+		// If search directive wasn't supplied but id was, then hash is the only index
+		// that we apply.
+		return []string{"hash"}
 	}
 	if len(search.Arguments) == 0 {
 		if search, ok := defaultSearches[fld.Type.Name()]; ok {
@@ -653,10 +664,17 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
 
+	hasHash := false
 	for i, child := range val.Children {
 		res[i] = child.Value.Raw
+		if res[i] == "hash" {
+			hasHash = true
+		}
 	}
 
+	if id != nil && !hasHash {
+		res = append(res, "hash")
+	}
 	sort.Strings(res)
 	return res
 }
@@ -770,7 +788,9 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	hasIDField := hasID(defn)
+	hasXIDField := hasXID(defn)
+	if !hasIDField && !hasXIDField {
 		return
 	}
 
@@ -780,15 +800,28 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		Type: &ast.Type{
 			NamedType: defn.Name,
 		},
-		Arguments: []*ast.ArgumentDefinition{
-			{
-				Name: "id",
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   true,
-				},
+	}
+
+	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
+	// both, then they are optional.
+	if hasIDField {
+		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+			Name: "id",
+			Type: &ast.Type{
+				NamedType: idTypeFor(defn),
+				NonNull:   !hasXIDField,
 			},
-		},
+		})
+	}
+	if hasXIDField {
+		name := xidTypeFor(defn)
+		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+			Name: name,
+			Type: &ast.Type{
+				NamedType: "String",
+				NonNull:   !hasIDField,
+			},
+		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
@@ -1145,6 +1178,15 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 func idTypeFor(defn *ast.Definition) string {
 	// Placeholder till more ID types are introduced.
 	return "ID"
+}
+
+func xidTypeFor(defn *ast.Definition) string {
+	for _, fld := range defn.Fields {
+		if hasIDDirective(fld) {
+			return fld.Name
+		}
+	}
+	return ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {

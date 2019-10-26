@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -84,6 +85,7 @@ func TestSchemaString(t *testing.T) {
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
 
+			fmt.Println(newSchemaStr)
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				t.Errorf("schema mismatch (-want +got):\n%s", diff)
 			}
