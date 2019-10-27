@@ -896,12 +896,14 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object &&
+		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
 			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object {
+		if schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface {
 			newDefn := &ast.FieldDefinition{
 				Name: fld.Name,
 			}

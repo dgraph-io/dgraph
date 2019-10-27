@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
@@ -38,6 +39,24 @@ type handler struct {
 	originalDefs   []string
 	completeSchema *ast.Schema
 	dgraphSchema   string
+}
+
+// FromString builds a GraphQL Schema from input string, or returns any parsing
+// or validation errors.
+func FromString(schema string) (Schema, error) {
+	// validator.Prelude includes a bunch of predefined types which help with schema introspection
+	// queries, hence we include it as part of the schema.
+	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: schema})
+	if gqlErr != nil {
+		return nil, errors.Wrap(gqlErr, "while parsing GraphQL schema")
+	}
+
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
+	}
+
+	return AsSchema(gqlSchema), nil
 }
 
 func (s *handler) GQLSchema() string {
