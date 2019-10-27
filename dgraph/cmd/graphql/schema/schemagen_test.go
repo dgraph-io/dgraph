@@ -80,6 +80,10 @@ func TestSchemaString(t *testing.T) {
 			require.NoError(t, errs)
 
 			newSchemaStr := schHandler.GQLSchema()
+
+			_, err = FromString(newSchemaStr)
+			require.NoError(t, errs)
+
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
