@@ -181,7 +181,7 @@ input HumanInput {
 	employeeId: String!
 	title: String!
 	name: String!
-	friends: [Character]
+	friends: [CharacterRef]
 	totalCredits: Int
 }
 
@@ -197,14 +197,14 @@ input HumanRef {
 
 input PatchCharacter {
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 }
 
 input PatchHuman {
 	employeeId: String
 	title: String
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 	totalCredits: Int
 }
 
