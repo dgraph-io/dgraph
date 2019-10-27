@@ -274,6 +274,10 @@ To run an RDF mutation via curl, you can use the curl option `--data-binary @/pa
 ### Adding indexes
 Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
+{{% notice "tip" %}}
+To make a schema changes from within Ratel, paste them into the popup that appears when clicking "Bulk Edit" in the "Schema" tab. Schema changes can also be made using the UI directly.
+{{% notice "tip" %}}
+
 ```sh
 curl localhost:8080/alter -XPOST -d $'
   name: string @index(term) .
