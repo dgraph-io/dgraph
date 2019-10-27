@@ -355,48 +355,105 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 	}
 }
 
-func TestUpdateMutation(t *testing.T) {
+func TestUpdateMutationByIds(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
-	newCountry.Name = "updated name"
+	anotherCountry := addCountry(t, postExecutor)
 
 	t.Run("update Country", func(t *testing.T) {
-		updateCountry(t, newCountry)
+		filter := map[string]interface{}{
+			"ids": []string{newCountry.ID, anotherCountry.ID},
+		}
+		newName := "updated name"
+		updateCountry(t, filter, newName)
+		newCountry.Name = newName
+		anotherCountry.Name = newName
+
+		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
 	})
 
-	t.Run("check updated Country", func(t *testing.T) {
+	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
+}
+
+func nameRegexFilter(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"name": map[string]interface{}{
+			"regexp": "/" + name + "/",
+		},
+	}
+}
+
+func TestUpdateMutationByName(t *testing.T) {
+	// Create two countries, update name of the first. Then do a conditional mutation which
+	// should only update the name of the second country.
+	newCountry := addCountry(t, postExecutor)
+	t.Run("update Country", func(t *testing.T) {
+		filter := nameRegexFilter(newCountry.Name)
+		newName := "updated name"
+		updateCountry(t, filter, newName)
+		newCountry.Name = newName
 		requireCountry(t, newCountry.ID, newCountry, postExecutor)
 	})
 
-	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
+	anotherCountry := addCountry(t, postExecutor)
+	// Update name for country where name is anotherCountry.Name
+	t.Run("update country by name", func(t *testing.T) {
+		filter := nameRegexFilter(anotherCountry.Name)
+		anotherCountry.Name = "updated another country name"
+		updateCountry(t, filter, anotherCountry.Name)
+	})
+
+	t.Run("check updated Country", func(t *testing.T) {
+		// newCountry should not have been updated.
+		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+	})
+
+	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
-func updateCountry(t *testing.T, updCountry *country) {
+func TestUpdateMutationByNameNoMatch(t *testing.T) {
+	// The countries shouldn't get updated as the query shouldn't match any nodes.
+	newCountry := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
+	t.Run("update Country", func(t *testing.T) {
+		filter := nameRegexFilter("no match")
+		updateCountry(t, filter, "new name")
+		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+
+	})
+
+	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
+}
+
+func updateCountry(t *testing.T, filter map[string]interface{}, newName string) {
 	updateParams := &GraphQLParams{
-		Query: `mutation newName($id: ID!, $newName: String!) {
-			updateCountry(input: { id: $id, patch: { name: $newName } }) {
+		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
+			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
 				country {
 					id
 					name
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"id": updCountry.ID, "newName": updCountry.Name},
+		Variables: map[string]interface{}{"filter": filter, "newName": newName},
 	}
 
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
-	var expected, result struct {
+	var result struct {
 		UpdateCountry struct {
-			Country *country
+			Country []*country
 		}
 	}
-	expected.UpdateCountry.Country = updCountry
+
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	for _, c := range result.UpdateCountry.Country {
+		require.NotNil(t, c.ID)
+		require.Equal(t, newName, c.Name)
 	}
 }
 
@@ -436,7 +493,10 @@ func TestDeleteMutationByName(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	anotherCountry.Name = "New country"
-	updateCountry(t, anotherCountry)
+	filter := map[string]interface{}{
+		"ids": []string{anotherCountry.ID},
+	}
+	updateCountry(t, filter, anotherCountry.Name)
 
 	deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 	t.Run("delete Country", func(t *testing.T) {
@@ -933,7 +993,9 @@ func updateCharacter(t *testing.T, id string) {
 			}
 		}`,
 		Variables: map[string]interface{}{"character": map[string]interface{}{
-			"id": id,
+			"filter": map[string]interface{}{
+				"ids": []string{id},
+			},
 			"patch": map[string]interface{}{
 				"name": "Han Solo",
 			},
