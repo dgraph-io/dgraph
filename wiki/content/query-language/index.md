@@ -2374,6 +2374,50 @@ The reverse edge of `anEdge` is `~anEdge`.
 
 For existing data, Dgraph computes all reverse edges.  For data added after the schema mutation, Dgraph computes and stores the reverse edge for each added triple.
 
+```
+type Person {
+  name string
+}
+type Car {
+  regnbr string
+  owner Person
+}
+owner uid @reverse .
+regnbr string @index(exact) .
+name string @index(exact) .
+```
+
+Makes it possible to query Persons and their cars by using:
+```
+q(func type(Person)) {
+  name
+  ~owner { name }
+}
+```
+And to get a different key than `~owner` in the result the query can be written with the wanted label (`cars`
+in this case):
+
+```
+q(func type(Person)) {
+  name
+  cars: ~owner { name }
+}
+```
+
+This also works if there can be multiple "owners" of a car
+```
+owner [uid] @reverse .
+```
+
+In both cases the `owner` edge should be set on the Car:
+```
+_:p1 <name> "Mary" .
+_:p1 <dgraph.type> "Person" .
+_:c1 <regnbr> "ABC123" .
+_:c1 <dgraph.type> "Car" .
+_:c1 <owner> _:p1
+```
+
 ### Querying Schema
 
 A schema query queries for the whole schema:
