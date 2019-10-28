@@ -67,6 +67,7 @@ import (
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	xxhash "github.com/OneOfOne/xxhash"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 	ed25519 "golang.org/x/crypto/ed25519"
 )
@@ -492,7 +493,22 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 //export ext_secp256k1_ecdsa_recover
 func ext_secp256k1_ecdsa_recover(context unsafe.Pointer, msgData, sigData, pubkeyData int32) int32 {
 	log.Debug("[ext_secp256k1_ecdsa_recover] executing...")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	// msg must be the 32-byte hash of the message to be signed.
+	// sig must be a 65-byte compact ECDSA signature containing the
+	// recovery id as the last element.
+	msg := memory[msgData : msgData+32]
+	sig := memory[sigData : sigData+65]
+
+	pub, err := secp256k1.RecoverPubkey(msg, sig)
+	if err != nil {
+		return 0
+	}
+
+	copy(memory[pubkeyData:pubkeyData+65], pub)
+	return 1
 }
 
 //export ext_is_validator

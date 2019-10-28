@@ -8,6 +8,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5
 	github.com/dgraph-io/badger v1.6.0-rc1
 	github.com/disiqueira/gotree v1.0.0
+	github.com/ethereum/go-ethereum v1.9.6
 	github.com/filecoin-project/go-leb128 v0.0.0-20190212224330-8d79a5489543
 	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/golang/protobuf v1.3.2 // indirect

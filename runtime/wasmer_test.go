@@ -847,3 +847,48 @@ func TestExt_free(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// test that ext_secp256k1_ecdsa_recover returns the correct public key
+func TestExt_secp256k1_ecdsa_recover(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	msgData, err := common.HexToBytes("0xce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigData, err := common.HexToBytes("0x90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc9301")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgPos := 1000
+	sigPos := msgPos + len(msgData)
+	copy(mem[msgPos:msgPos+len(msgData)], msgData)
+	copy(mem[sigPos:sigPos+len(sigData)], sigData)
+	pubkeyData := sigPos + len(sigData)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_secp256k1_ecdsa_recover"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(msgPos, sigPos, pubkeyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// test case from https://github.com/ethereum/go-ethereum/blob/master/crypto/signature_test.go
+	expected, err := common.HexToBytes("0x04e32df42865e97135acfb65f3bae71bdc86f4d49150ad6a440b6f15878109880a0a2b2667f7e725ceea70c673093bf67663e0312623c8e091b13cf2c0f11ef652")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(expected[:], mem[pubkeyData:pubkeyData+65]) {
+		t.Fatalf("fail: got %x expected %x", mem[pubkeyData:pubkeyData+65], expected)
+	}
+}
