@@ -74,6 +74,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/admin"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
@@ -87,9 +88,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
@@ -209,39 +207,33 @@ func run() error {
 		return fmt.Errorf("No GraphQL schema was found")
 	}
 
-	// validator.Prelude includes a bunch of predefined types which help with schema introspection
-	// queries, hence we include it as part of the schema.
-	doc, gqlErr := parser.ParseSchemas(validator.Prelude,
-		&ast.Source{Input: string(schemas.Schemas[0].Schema)})
-	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
+	gqlSchema, err := schema.FromString(string(schemas.Schemas[0].Schema))
+	if err != nil {
+		return err
 	}
 
-	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "while validating GraphQL schema")
-	}
+	fns := &resolve.ResolverFns{
+		Qrw: resolve.NewQueryRewriter(),
+		Mrw: resolve.NewMutationRewriter(),
+		Drw: resolve.NewDeleteRewriter(),
+		Qe:  resolve.DgoAsQueryExecutor(dgraphClient),
+		Me:  resolve.DgoAsMutationExecutor(dgraphClient)}
 
-	queryRewriter := resolve.NewQueryRewriter()
-	mutationRewriter := resolve.NewMutationRewriter()
-	queryExecutor := resolve.DgoAsQueryExecutor(dgraphClient)
-	mutationExecutor := resolve.DgoAsMutationExecutor(dgraphClient)
-
-	resolverFactory :=
-		resolve.NewResolverFactory(
-			queryRewriter,
-			mutationRewriter,
-			queryExecutor,
-			mutationExecutor)
+	resolverFactory := resolve.NewResolverFactory().
+		WithConventionResolvers(gqlSchema, fns)
 
 	// We don't have to add schema introspection here.  Often GraphQL servers turn
 	// off schema introspection in production.  So this can easily be optional.
 	resolverFactory.WithSchemaIntrospection()
 
-	resolvers := resolve.New(schema.AsSchema(gqlSchema), resolverFactory)
+	resolvers := resolve.New(gqlSchema, resolverFactory)
 	mainServer := web.NewServer(resolvers)
 
+	adminResolvers := admin.NewAdminResolver(dgraphClient, mainServer, fns)
+	adminServer := web.NewServer(adminResolvers)
+
 	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.Handle("/admin", adminServer.HTTPHandler())
 
 	trace.ApplyConfig(trace.Config{
 		DefaultSampler:             trace.ProbabilitySampler(GraphQL.Conf.GetFloat64("trace")),
@@ -255,6 +247,7 @@ func run() error {
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
 	glog.Infof("Bringing up GraphQL HTTP API at 127.0.0.1:9000/graphql")
+	glog.Infof("Bringing up GraphQL HTTP admin API at 127.0.0.1:9000/admin")
 	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
 }
 
