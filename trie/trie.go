@@ -27,12 +27,12 @@ import (
 // The zero value is an empty trie with no database.
 // Use NewTrie to create a trie that sits on top of a database.
 type Trie struct {
-	db   *StateDB
+	db   *Database
 	root node
 }
 
 // NewEmptyTrie creates a trie with a nil root and merkleRoot
-func NewEmptyTrie(db *StateDB) *Trie {
+func NewEmptyTrie(db *Database) *Trie {
 	return &Trie{
 		db:   db,
 		root: nil,
@@ -40,7 +40,7 @@ func NewEmptyTrie(db *StateDB) *Trie {
 }
 
 // NewTrie creates a trie with an existing root node from db
-func NewTrie(db *StateDB, root node) *Trie {
+func NewTrie(db *Database, root node) *Trie {
 	return &Trie{
 		db:   db,
 		root: root,
@@ -53,18 +53,18 @@ func (t *Trie) Root() node {
 }
 
 // Db returns the trie's underlying database
-func (t *Trie) Db() *StateDB {
+func (t *Trie) Db() *Database {
 	return t.db
 }
 
-// Encode returns the encoded root of the trie
-func (t *Trie) Encode() ([]byte, error) {
+// EncodeRoot returns the encoded root of the trie
+func (t *Trie) EncodeRoot() ([]byte, error) {
 	return Encode(t.root)
 }
 
 // Hash returns the hashed root of the trie
 func (t *Trie) Hash() (common.Hash, error) {
-	encRoot, err := t.Encode()
+	encRoot, err := t.EncodeRoot()
 	if err != nil {
 		return [32]byte{}, err
 	}

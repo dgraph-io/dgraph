@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 
 	db "github.com/ChainSafe/gossamer/polkadb"
@@ -37,7 +39,7 @@ func newTrie() (*Trie, error) {
 	}
 
 	trie := &Trie{
-		db: &StateDB{
+		db: &Database{
 			Db:     stateDB,
 			Hasher: hasher,
 		},
@@ -56,13 +58,15 @@ func (t *Trie) closeDb() {
 	}
 }
 
-func TestWriteToDB(t *testing.T) {
+func TestStoreAndLoadFromDB(t *testing.T) {
 	trie, err := newTrie()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rt := generateRandomTests(20000)
+	defer trie.closeDb()
+
+	rt := generateRandomTests(1000)
 	var val []byte
 	for _, test := range rt {
 		err = trie.Put(test.key, test.value)
@@ -78,40 +82,117 @@ func TestWriteToDB(t *testing.T) {
 		}
 	}
 
-	err = trie.WriteToDB()
+	err = trie.StoreInDB()
 	if err != nil {
-		t.Errorf("Fail: could not write to batch writer: %s", err)
+		t.Fatalf("Fail: could not write trie to DB: %s", err)
 	}
 
-	err = trie.Commit()
+	encroot, err := trie.Hash()
 	if err != nil {
-		t.Errorf("Fail: could not commit (batch write) to DB: %s", err)
+		t.Fatal(err)
 	}
 
-	trie.closeDb()
+	expected := &Trie{root: trie.root}
+
+	trie.root = nil
+	err = trie.LoadFromDB(encroot)
+	if err != nil {
+		t.Errorf("Fail: could not load trie from DB: %s", err)
+	}
+
+	if strings.Compare(expected.String(), trie.String()) != 0 {
+		t.Errorf("Fail: got\n %s expected\n %s", expected.String(), trie.String())
+	}
+
+	if !reflect.DeepEqual(expected.root, trie.root) {
+		t.Errorf("Fail: got\n %s expected\n %s", expected.String(), trie.String())
+	}
 }
 
-func TestWriteDirty(t *testing.T) {
+func TestEncodeAndDecodeFromDB(t *testing.T) {
+	trie := &Trie{}
+
+	tests := []trieTest{
+		{key: []byte{0x01, 0x35}, value: []byte("pen")},
+		{key: []byte{0x01, 0x35, 0x79}, value: []byte("penguin")},
+		{key: []byte{0x01, 0x35, 0x7}, value: []byte("g")},
+		{key: []byte{0xf2}, value: []byte("feather")},
+		{key: []byte{0xf2, 0x3}, value: []byte("f")},
+		{key: []byte{0x09, 0xd3}, value: []byte("noot")},
+		{key: []byte{0x07}, value: []byte("ramen")},
+		{key: []byte{0}, value: nil},
+	}
+
+	for _, test := range tests {
+		err := trie.Put(test.key, test.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	enc, err := trie.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testTrie := &Trie{}
+	err = testTrie.Decode(enc)
+	if err != nil {
+		testTrie.Print()
+		t.Fatal(err)
+	}
+
+	if strings.Compare(testTrie.String(), trie.String()) != 0 {
+		t.Errorf("Fail: got\n %s expected\n %s", testTrie.String(), trie.String())
+	}
+
+	if !reflect.DeepEqual(testTrie.root, trie.root) {
+		t.Errorf("Fail: got\n %s expected\n %s", testTrie.String(), trie.String())
+	}
+}
+
+func TestStoreAndLoadHash(t *testing.T) {
 	trie, err := newTrie()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dirtyNode := &leaf{key: generateRandBytes(10), value: generateRandBytes(10), dirty: true}
-	written, err := trie.writeNodeToDB(dirtyNode)
-	if err != nil {
-		t.Errorf("Fail: could not write to db: %s", err)
-	} else if !written {
-		t.Errorf("Fail: did not write dirty node to db")
+	defer trie.closeDb()
+
+	tests := []trieTest{
+		{key: []byte{0x01, 0x35}, value: []byte("pen")},
+		{key: []byte{0x01, 0x35, 0x79}, value: []byte("penguin")},
+		{key: []byte{0x01, 0x35, 0x7}, value: []byte("g")},
+		{key: []byte{0xf2}, value: []byte("feather")},
+		{key: []byte{0xf2, 0x3}, value: []byte("f")},
+		{key: []byte{0x09, 0xd3}, value: []byte("noot")},
+		{key: []byte{0x07}, value: []byte("ramen")},
+		{key: []byte{0}, value: nil},
 	}
 
-	cleanNode := &leaf{key: generateRandBytes(10), value: generateRandBytes(10), dirty: false}
-	written, err = trie.writeNodeToDB(cleanNode)
-	if err != nil {
-		t.Errorf("Fail: could not write to db: %s", err)
-	} else if written {
-		t.Errorf("Fail: wrote clean node to db")
+	for _, test := range tests {
+		err = trie.Put(test.key, test.value)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	trie.closeDb()
+	err = trie.StoreHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := trie.LoadHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected, err := trie.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hash != expected {
+		t.Fatalf("Fail: got %x expected %x", hash, expected)
+	}
 }

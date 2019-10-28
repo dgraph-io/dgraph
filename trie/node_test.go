@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -245,6 +246,125 @@ func TestEncodeRoot(t *testing.T) {
 			if err != nil {
 				t.Errorf("Fail to encode trie root: %s", err)
 			}
+		}
+	}
+}
+
+func TestBranchDecode(t *testing.T) {
+	tests := []*branch{
+		{[]byte{}, [16]node{}, nil, true},
+		{[]byte{0x00}, [16]node{}, nil, true},
+		{[]byte{0x00, 0x00, 0xf, 0x3}, [16]node{}, nil, true},
+		{[]byte{}, [16]node{}, []byte{0x01}, true},
+		{[]byte{}, [16]node{&leaf{}}, []byte{0x01}, true},
+		{[]byte{}, [16]node{&leaf{}, nil, &leaf{}}, []byte{0x01}, true},
+		{[]byte{}, [16]node{&leaf{}, nil, &leaf{}, nil, nil, nil, nil, nil, nil, &leaf{}, nil, &leaf{}}, []byte{0x01}, true},
+		{byteArray(62), [16]node{}, nil, true},
+		{byteArray(63), [16]node{}, nil, true},
+		{byteArray(64), [16]node{}, nil, true},
+		{byteArray(317), [16]node{}, []byte{0x01}, true},
+		{byteArray(318), [16]node{}, []byte{0x01}, true},
+		{byteArray(573), [16]node{}, []byte{0x01}, true},
+	}
+
+	for _, test := range tests {
+		enc, err := test.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res := new(branch)
+		r := &bytes.Buffer{}
+		_, err = r.Write(enc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = res.Decode(r, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(res, test) {
+			t.Fatalf("Fail: got %v expected %v encoding %x", res, test, enc)
+		}
+	}
+}
+
+func TestLeafDecode(t *testing.T) {
+	tests := []*leaf{
+		{[]byte{}, nil, true},
+		{[]byte{0x01}, nil, true},
+		{[]byte{0x00, 0x00, 0xf, 0x3}, nil, true},
+		{byteArray(62), nil, true},
+		{byteArray(63), nil, true},
+		{byteArray(64), []byte{0x01}, true},
+		{byteArray(318), []byte{0x01}, true},
+		{byteArray(573), []byte{0x01}, true},
+	}
+
+	for _, test := range tests {
+		enc, err := test.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res := new(leaf)
+		r := &bytes.Buffer{}
+		_, err = r.Write(enc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = res.Decode(r, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(res, test) {
+			t.Fatalf("Fail: got %v expected %v encoding %x", res, test, enc)
+		}
+	}
+}
+
+func TestDecode(t *testing.T) {
+	tests := []node{
+		&branch{[]byte{}, [16]node{}, nil, true},
+		&branch{[]byte{0x00}, [16]node{}, nil, true},
+		&branch{[]byte{0x00, 0x00, 0xf, 0x3}, [16]node{}, nil, true},
+		&branch{[]byte{}, [16]node{}, []byte{0x01}, true},
+		&branch{[]byte{}, [16]node{&leaf{}}, []byte{0x01}, true},
+		&branch{[]byte{}, [16]node{&leaf{}, nil, &leaf{}}, []byte{0x01}, true},
+		&branch{[]byte{}, [16]node{&leaf{}, nil, &leaf{}, nil, nil, nil, nil, nil, nil, &leaf{}, nil, &leaf{}}, []byte{0x01}, true},
+		&leaf{[]byte{}, nil, true},
+		&leaf{[]byte{0x00}, nil, true},
+		&leaf{[]byte{0x00, 0x00, 0xf, 0x3}, nil, true},
+		&leaf{byteArray(62), nil, true},
+		&leaf{byteArray(63), nil, true},
+		&leaf{byteArray(64), []byte{0x01}, true},
+		&leaf{byteArray(318), []byte{0x01}, true},
+		&leaf{byteArray(573), []byte{0x01}, true},
+	}
+
+	for _, test := range tests {
+		enc, err := test.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		r := &bytes.Buffer{}
+		_, err = r.Write(enc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := Decode(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(res, test) {
+			t.Fatalf("Fail: got %v expected %v encoding %x", res, test, enc)
 		}
 	}
 }
