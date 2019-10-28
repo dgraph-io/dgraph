@@ -268,7 +268,9 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 ```
 
 {{% notice "tip" %}}
-To run an RDF mutation via curl, you can use the curl option `--data-binary @/path/to/mutation.txt` instead of `-d $''`. The `--data-binary` option skips curl's default URL-encoding.
+To run an RDF mutation via curl, you can use the curl option `--data-binary @/path/to/mutation.txt` instead of `-d $''`. The `--data-binary` option skips curl's default URL-encoding which includes removal of all newlines, thus
+enabling use of `#` comments in the text. With the `-d` option anything after the first `#` in the text
+would be on the same line, and therefore be taken as one (long) comment.
 {{% /notice %}}
 
 ### Adding indexes
