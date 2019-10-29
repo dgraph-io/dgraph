@@ -1019,22 +1019,28 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 If we want to execute the mutation only when the user exists, we could use
 [Conditional Upsert]({{< relref "#conditional-upsert" >}}).
 
-### Bulk Update Example
+### Bulk Update With Value Variables
 
-Let's say we want to update all the users of `company1` to increase their age.
+Let's say we want to migrate the predicate `age` to `other`
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
-    v as var(func: regexp(email, /.*@company1.io$/)) {
-      updated_age as math(age+1)
+    v as var(func: has(age)) {
+      getValues as age
     }
   }
 
   mutation {
+    # We copy the values from the old predicate
     set {
-      uid(u) <age> val(updated_age)
+      uid(v) <other> val(getValues) .
+    }
+
+    # Now we delete the old predicate
+    delete {
+      uid(v) <age> * .
     }
   }
 }
