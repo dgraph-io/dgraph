@@ -13,19 +13,25 @@ RESET='\033[0m'
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
 GOPATH="/tmp/go"
+if [ -d $GOPATH ]; then
+   chmod -R 755 $GOPATH
+fi
 rm -Rf $GOPATH
 mkdir $GOPATH
+
 # Necessary to pick up Gobin binaries like protoc-gen-gofast
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
 GOVERSION="1.12.7"
 
+# Turn off go modules by default. Only enable go modules when needed.
+GO111MODULE=off
+
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DTAG=$(echo "$TAG" | tr '/' '-')
-
 
 # DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
 TMP="/tmp/build"
@@ -114,7 +120,7 @@ popd
 # Build Windows.
 pushd $basedir/dgraph/dgraph
   env GOOS=windows GOARCH=amd64 go get -v -d .
-  env GOOS=windows GOARCH=amd64 go build -v -o dgraph-windows-amd64.exe -ldflags \
+  env GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-windows-amd64.exe -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-amd64.exe $TMP/windows/dgraph.exe
@@ -122,7 +128,7 @@ popd
 
 pushd $basedir/badger/badger
   env GOOS=windows GOARCH=amd64 go get -v -d .
-  env GOOS=windows GOARCH=amd64 go build -v -o badger-windows-amd64.exe .
+  env GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o badger-windows-amd64.exe .
   mv badger-windows-amd64.exe $TMP/windows/badger.exe
 popd
 
@@ -135,7 +141,7 @@ popd
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
   env GOOS=darwin GOARCH=amd64 go get -v -d .
-  env GOOS=darwin GOARCH=amd64 go build -v -o dgraph-darwin-amd64 -ldflags \
+  env GOOS=darwin GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-darwin-amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-amd64 $TMP/darwin/dgraph
@@ -143,7 +149,7 @@ popd
 
 pushd $basedir/badger/badger
   env GOOS=darwin GOARCH=amd64 go get -v -d .
-  env GOOS=darwin GOARCH=amd64 go build -v -o badger-darwin-amd64 .
+  env GOOS=darwin GOARCH=amd64 GO111MODULE=on go build -v -o badger-darwin-amd64 .
   mv badger-darwin-amd64 $TMP/darwin/badger
 popd
 
@@ -156,7 +162,7 @@ popd
 # Build Linux.
 pushd $basedir/dgraph/dgraph
   env GOOS=linux GOARCH=amd64 go get -v -d .
-  env GOOS=linux GOARCH=amd64 go build -v -o dgraph-linux-amd64 -ldflags \
+  env GOOS=linux GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-linux-amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
@@ -165,7 +171,7 @@ popd
 
 pushd $basedir/badger/badger
   env GOOS=linux GOARCH=amd64 go get -v -d .
-  env GOOS=linux GOARCH=amd64 go build -v -o badger-linux-amd64 .
+  env GOOS=linux GOARCH=amd64 GO111MODULE=on go build -v -o badger-linux-amd64 .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
