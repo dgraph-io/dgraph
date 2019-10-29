@@ -70,6 +70,8 @@ func populateClusterWithFacets() {
 	triples += fmt.Sprintf("<1> <name> \"Michonne\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<23> <name> \"Rick Grimes\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
+	triples += fmt.Sprintf("<1> <alt_name> \"Michelle\" %s .\n", nameFacets)
+	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets)
 
 	addTriplesToCluster(triples)
 
@@ -873,6 +875,33 @@ func TestFacetsFilterAtValueBasic(t *testing.T) {
 		js)
 }
 
+func TestFacetsFilterAtValueListType(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			alt_name @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"alt_name": ["Michelle", "Michelin"]}]}}`, js)
+}
+
+func TestFacetsFilterAtValueComplex(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french") AND eq(dummy, false))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
 func TestFacetsFilterAtValueWithLangs(t *testing.T) {
 	populateClusterWithFacets()
 	query := `
@@ -885,6 +914,19 @@ func TestFacetsFilterAtValueWithLangs(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name@en": "Michelle"}]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithBadLang(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name@hi @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestFacetsFilterAtValueWithFacet(t *testing.T) {
