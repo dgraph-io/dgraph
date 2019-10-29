@@ -467,7 +467,7 @@ func resolveWithClient(
 	ex *executor) *schema.Response {
 	resolver := New(
 		gqlSchema,
-		NewResolverFactory().WithConventionResolvers(gqlSchema, &ResolverFns{
+		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{
 			Qrw: NewQueryRewriter(),
 			Mrw: NewMutationRewriter(),
 			Qe:  ex,

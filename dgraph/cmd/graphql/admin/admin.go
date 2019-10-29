@@ -39,6 +39,12 @@ import (
 const (
 	errMsgServerNotReady = "Unavailable: Server has not yet connected to Dgraph."
 
+	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
+		"Use the /admin API to add a GraphQL schema"
+	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
+		"this indicates a resolver or validation bug " +
+		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
+
 	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
 	// FIXME: dgraphAdminSchema will change to this once we have @dgraph(pred: "...")
 	// dgraphAdminSchema = `
@@ -178,8 +184,32 @@ type adminServer struct {
 	withIntrospection bool
 }
 
-// NewAdminResolver creates a GraphQL request resolver for the /admin endpoint.
-func NewAdminResolver(
+// NewServers initializes the GraphQL servers.  It sets up an empty server for the
+// main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
+func NewServers(
+	config *ConnectionConfig, withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
+
+	gqlSchema, err := schema.FromString("")
+	if err != nil {
+		panic(err)
+	}
+
+	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
+	mainServer := web.NewServer(resolvers)
+
+	fns := &resolve.ResolverFns{
+		Qrw: resolve.NewQueryRewriter(),
+		Mrw: resolve.NewMutationRewriter(),
+		Drw: resolve.NewDeleteRewriter(),
+	}
+	adminResolvers := newAdminResolver(config, mainServer, fns, withIntrospection)
+	adminServer := web.NewServer(adminResolvers)
+
+	return mainServer, adminServer
+}
+
+// newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
+func newAdminResolver(
 	config *ConnectionConfig,
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
@@ -208,7 +238,7 @@ func NewAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
-	rf := resolve.NewResolverFactory().
+	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health",
 			func(q schema.Query) resolve.QueryResolver {
 				health := &healthResolver{
@@ -387,9 +417,25 @@ func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*schemaDef, error) {
 	return result.QuerySchema[0], nil
 }
 
+func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
+	errFunc := func(name string) error { return errors.Errorf(msg, name) }
+	qErr :=
+		resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
+			return &resolve.Resolved{Err: errFunc(query.ResponseName())}
+		})
+
+	mErr := resolve.MutationResolverFunc(
+		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+		})
+
+	return resolve.NewResolverFactory(qErr, mErr)
+}
+
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 
-	resolverFactory := resolve.NewResolverFactory().WithConventionResolvers(gqlSchema, as.fns)
+	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound).
+		WithConventionResolvers(gqlSchema, as.fns)
 	if as.withIntrospection {
 		resolverFactory.WithSchemaIntrospection()
 	}

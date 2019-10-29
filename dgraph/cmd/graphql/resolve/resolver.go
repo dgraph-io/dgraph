@@ -214,27 +214,18 @@ func (rf *resolverFactory) WithConventionResolvers(
 }
 
 // NewResolverFactory returns a ResolverFactory that resolves requests via
-// query/mutation rewriting and execution through Dgraph.
-func NewResolverFactory() ResolverFactory {
-
-	errFunc := func(name string) error {
-		return errors.Errorf("%s was not executed because no suitable resolver could be found - "+
-			"this indicates a resolver or validation bug "+
-			"(Please let us know : https://github.com/dgraph-io/dgraph/issues)", name)
-	}
+// query/mutation rewriting and execution through Dgraph.  If the factory gets asked
+// to resolve a query/mutation it doesn't know how to rewrite, it uses
+// the queryError/mutationError to build an error result.
+func NewResolverFactory(
+	queryError QueryResolverFunc, mutationError MutationResolverFunc) ResolverFactory {
 
 	return &resolverFactory{
 		queryResolvers:    make(map[string]func(schema.Query) QueryResolver),
 		mutationResolvers: make(map[string]func(schema.Mutation) MutationResolver),
 
-		queryError: QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
-			return &Resolved{Err: errFunc(query.ResponseName())}
-		}),
-
-		mutationError: MutationResolverFunc(
-			func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
-				return &Resolved{Err: errFunc(mutation.ResponseName())}, resolverFailed
-			}),
+		queryError:    queryError,
+		mutationError: mutationError,
 	}
 }
 
