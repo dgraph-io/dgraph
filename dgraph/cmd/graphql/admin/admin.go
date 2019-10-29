@@ -17,25 +17,57 @@
 package admin
 
 import (
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgo/v2"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
+	errMsgServerNotReady = "Unavailable: Server has not yet connected to Dgraph."
+
+	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
+	// FIXME: dgraphAdminSchema will change to this once we have @dgraph(pred: "...")
+	// dgraphAdminSchema = `
+	// type dgraph.graphql {
+	// 	dgraph.graphql.schema
+	// 	dgraph.graphql.date
+	// }
+	// dgraph.graphql.schema string .
+	// dgraph.graphql.date @index(day) .
+	// `
+	dgraphAdminSchema = `
+	type Schema {
+		Schema.schema
+		Schema.date
+	}
+	Schema.schema: string .
+	Schema.date: dateTime @index(day) .
+	`
+
 	// GraphQL schema for /admin endpoint.
 	//
 	// Eventually we should generate this from just the types definition.
 	// But for now, that would add too much into the schema, so this is
 	// hand crafted to be one of our schemas so we can pass it into the
 	// pipeline.
-	adminSchema = `
+	graphqlAdminSchema = `
  type Schema {
 	schema: String!  # the input schema, not the expanded schema
-	date: DateTime!
+	date: DateTime! 
  }
  
  type Health {
@@ -66,7 +98,7 @@ const (
 	schema: Schema
 	diff: SchemaDiff
  }
- 
+
  type UpdateSchemaPayload {
 	schema: Schema
  }
@@ -86,7 +118,7 @@ const (
 	not: SchemaFilter
  }
  
- input SchemaInput {
+ input SchemaInput { 
 	schema: String!
 	dateAdded: DateTime
  }
@@ -112,54 +144,208 @@ const (
  `
 )
 
+// ConnectionConfig is the settings used in setting up the dgo connection from
+// GraphQL Layer -> Dgraph.
+type ConnectionConfig struct {
+	Alphas         string
+	TlScfg         *tls.Config
+	UseCompression bool
+}
+
 type schemaDef struct {
 	Schema string    `json:"schema,omitempty"`
 	Date   time.Time `json:"date,omitempty"`
 }
 
+type adminServer struct {
+	config   *ConnectionConfig
+	rf       resolve.ResolverFactory
+	resolver *resolve.RequestResolver
+	status   healthStatus
+
+	// The mutex that locks schema update operations
+	mux sync.Mutex
+
+	// the Dgraph that gets its schema changed
+	dgraph *dgo.Dgraph
+
+	// The GraphQL server that's being admin'd
+	gqlServer web.IServeGraphQL
+
+	// When the schema changes, we use these to create a new RequestResolver for
+	// the main graphql endpoint (gqlServer) and thus refresh the API.
+	fns               *resolve.ResolverFns
+	withIntrospection bool
+}
+
 // NewAdminResolver creates a GraphQL request resolver for the /admin endpoint.
 func NewAdminResolver(
-	dg *dgo.Dgraph,
+	config *ConnectionConfig,
 	gqlServer web.IServeGraphQL,
-	fns *resolve.ResolverFns) *resolve.RequestResolver {
+	fns *resolve.ResolverFns,
+	withIntrospection bool) *resolve.RequestResolver {
 
-	adminSchema, err := schema.FromString(adminSchema)
+	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
 		panic(err)
 	}
 
-	return resolve.New(adminSchema, newAdminResolverFactory(dg, gqlServer, fns))
+	rf := newAdminResolverFactory()
+
+	server := &adminServer{
+		config:            config,
+		rf:                rf,
+		resolver:          resolve.New(adminSchema, rf),
+		status:            errNoConnection,
+		gqlServer:         gqlServer,
+		fns:               fns,
+		withIntrospection: withIntrospection,
+	}
+
+	go server.initServer()
+
+	return server.resolver
 }
 
-func newAdminResolverFactory(
-	dg *dgo.Dgraph,
-	gqlServer web.IServeGraphQL,
-	fns *resolve.ResolverFns) resolve.ResolverFactory {
+func newAdminResolverFactory() resolve.ResolverFactory {
+	rf := resolve.NewResolverFactory().
+		WithQueryResolver("health",
+			func(q schema.Query) resolve.QueryResolver {
+				health := &healthResolver{
+					status: errNoConnection,
+				}
 
-	// The args are the rewriters and executors used by the endpoint being admin'd.
-	// These are the ones used by the admin endpoint itself.
-	mutRw := resolve.NewMutationRewriter()
+				return resolve.NewQueryResolver(
+					health,
+					health,
+					resolve.StdQueryCompletion())
+			}).
+		WithMutationResolver("addSchema", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(
+				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}, false
+				})
+		}).
+		WithQueryResolver("querySchema", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(
+				func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
+				})
+		}).
+		WithSchemaIntrospection()
+
+	return rf
+}
+
+func (as *adminServer) initServer() {
+	var waitFor time.Duration
+	for {
+		<-time.After(waitFor)
+		waitFor = 10 * time.Second
+
+		glog.Infof("Trying to connect to Dgraph at %s", as.config.Alphas)
+		dgraphClient, disconnect, err := connect(as.config)
+		if err != nil {
+			if glog.V(3) {
+				glog.Infof("Failed to connect to Dgraph: %s.  Trying again in %f seconds",
+					err, waitFor.Seconds())
+			}
+			continue
+		}
+		glog.Infof("Established Dgraph connection")
+
+		err = checkAdminSchemaExists(dgraphClient)
+		if err != nil {
+			if glog.V(3) {
+				glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
+					err, waitFor.Seconds())
+			}
+			disconnect()
+			continue
+		}
+
+		// Nothing else should be able to lock before here.  The admin resolvers aren't yet
+		// set up (they all just error), so we will obtain the lock here without contention.
+		// We then setup the admin resolvers and they must wait until we are done before the
+		// first admin calls will go through.
+		as.mux.Lock()
+		defer as.mux.Unlock()
+
+		as.dgraph = dgraphClient
+
+		as.addConnectedAdminResolvers(dgraphClient)
+
+		as.status = noGraphQLSchema
+
+		sch, err := getCurrentGraphQLSchema(as.resolver)
+		if err != nil {
+			glog.Infof("Error reading GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			break
+		} else if sch == nil {
+			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
+			break
+		}
+
+		schHandler, err := schema.NewHandler(sch.Schema)
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			break
+		}
+
+		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			break
+		}
+
+		glog.Infof("Successfully loaded GraphQL schema.  Now serving GraphQL API.")
+
+		as.status = healthy
+		as.resetSchema(gqlSchema)
+
+		break
+	}
+}
+
+func checkAdminSchemaExists(dg *dgo.Dgraph) error {
+	// We could query for existing schema and only alter if it's not there, but
+	// this has same effect.  We might eventually have to migrate old versions of the
+	// metadata here.
+	return dg.Alter(context.Background(), &dgoapi.Operation{Schema: dgraphAdminSchema})
+}
+
+// addConnectedAdminResolvers sets up the real resolvers now that there's a connection
+// to Dgraph (before there's a connection, addSchema etc just return errors).
+func (as *adminServer) addConnectedAdminResolvers(dg *dgo.Dgraph) {
+
 	qryRw := resolve.NewQueryRewriter()
+	mutRw := resolve.NewMutationRewriter()
 	qryExec := resolve.DgoAsQueryExecutor(dg)
 	mutExec := resolve.DgoAsMutationExecutor(dg)
 
-	return resolve.NewResolverFactory().
-		WithQueryResolver("health",
-			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					resolve.NoOpQueryRewrite(),
-					&healthResolver{status: healthy},
-					resolve.StdQueryCompletion())
-			}).
+	as.fns.Qe = qryExec
+	as.fns.Me = mutExec
+
+	as.rf.WithQueryResolver("health",
+		func(q schema.Query) resolve.QueryResolver {
+			health := &healthResolver{
+				status: as.status,
+			}
+
+			return resolve.NewQueryResolver(
+				health,
+				health,
+				resolve.StdQueryCompletion())
+		}).
 		WithMutationResolver("addSchema",
 			func(m schema.Mutation) resolve.MutationResolver {
 				addResolver := &addSchemaResolver{
-					gqlServer:            gqlServer,
-					dgraph:               dg,
+					admin:                as,
 					baseMutationRewriter: mutRw,
-					baseMutationExecutor: mutExec,
-					fns:                  fns,
-					withIntrospection:    true}
+					baseMutationExecutor: mutExec}
 
 				return resolve.NewMutationResolver(
 					addResolver,
@@ -173,6 +359,63 @@ func newAdminResolverFactory(
 					qryRw,
 					qryExec,
 					resolve.StdQueryCompletion())
-			}).
-		WithSchemaIntrospection()
+			})
+}
+
+func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*schemaDef, error) {
+	req := &schema.Request{
+		Query: `query { querySchema(order: { desc: date }, first: 1) { schema date } }`}
+	resp := r.Resolve(context.Background(), req)
+	if len(resp.Errors) > 0 {
+		return nil, resp.Errors
+	}
+
+	var result struct {
+		QuerySchema []*schemaDef
+	}
+
+	if resp.Data.Len() > 0 {
+		err := json.Unmarshal(resp.Data.Bytes(), &result)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(result.QuerySchema) == 0 {
+		return nil, nil
+	}
+	return result.QuerySchema[0], nil
+}
+
+func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
+
+	resolverFactory := resolve.NewResolverFactory().WithConventionResolvers(gqlSchema, as.fns)
+	if as.withIntrospection {
+		resolverFactory.WithSchemaIntrospection()
+	}
+
+	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
+
+	as.status = healthy
+}
+
+func connect(cc *ConnectionConfig) (*dgo.Dgraph, func(), error) {
+	var clients []dgoapi.DgraphClient
+	disconnect := func() {}
+
+	ds := strings.Split(cc.Alphas, ",")
+	for _, d := range ds {
+		conn, err := x.SetupConnection(d, cc.TlScfg, cc.UseCompression)
+		if err != nil {
+			disconnect()
+			return nil, nil, fmt.Errorf("couldn't connect to %s, %s", d, err)
+		}
+		disconnect = func(dis func()) func() {
+			return func() { dis(); conn.Close() }
+		}(disconnect)
+
+		clients = append(clients, dgoapi.NewDgraphClient(conn))
+	}
+
+	return dgo.NewDgraphClient(clients...), disconnect, nil
 }

@@ -40,8 +40,13 @@ import (
 )
 
 const (
-	graphqlURL = "http://localhost:9000/graphql"
-	alphagRPC  = "localhost:9180"
+	graphqlURL      = "http://localhost:9100/graphql"
+	graphqlAdminURL = "http://localhost:9100/admin"
+	alphagRPC       = "localhost:9180"
+
+	graphqlAdminTestURL      = "http://localhost:9200/graphql"
+	graphqlAdminTestAdminURL = "http://localhost:9200/admin"
+	alphaAdminTestgRPC       = "localhost:9280"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -119,55 +124,48 @@ type post struct {
 }
 
 func TestMain(m *testing.M) {
-
-	// Because of how the containers are brought up, there's no guarantee that the
-	// `graphql init` has been run by now, or that the GraphQL API is up.  So we
-	// need to try and connect and potentially retry a few times.
-
-	var ready bool
-	var err error
-	retries := 2
-	sleep := 10 * time.Second
-
-	for !ready && retries > 0 {
-		retries--
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
-		if err != nil {
-			time.Sleep(sleep)
-			continue
-		}
-
-		client := dgo.NewDgraphClient(api.NewDgraphClient(d))
-
-		err = ensureSchemaIsChanged(client)
-		if err != nil {
-			time.Sleep(sleep)
-			continue
-		}
-
-		err = ensureGraphQLRunning()
-		if err != nil {
-			time.Sleep(sleep)
-			continue
-		}
-
-		err = populateGraphQLData(client)
-		if err != nil {
-			time.Sleep(sleep)
-			continue
-		}
-
-		d.Close()
-		ready = true
-	}
-
+	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL server to become available, but it never did.\n"+
-			"Got error %+v", err.Error()))
+		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
+			"Got last error %+v", err.Error()))
 	}
+
+	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
+	if err != nil {
+		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
+			"but it never did.\n Got last error: %+v", err.Error()))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+
+	schemaFile := "e2e_test_schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	err = addSchema(graphqlAdminURL, string(schema))
+	if err != nil {
+		panic(err)
+	}
+
+	err = populateGraphQLData(client)
+	if err != nil {
+		panic(err)
+	}
+
+	err = checkGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
+	if err != nil {
+		panic(err)
+	}
+
+	d.Close()
 
 	os.Exit(m.Run())
 }
@@ -493,39 +491,109 @@ func allCountriesAdded() ([]*country, error) {
 	return result.Data.QueryCountry, nil
 }
 
-func ensureSchemaIsChanged(client *dgo.Dgraph) error {
+func checkGraphQLLayerStarted(url string) error {
+	var err error
+	retries := 6
+	sleep := 10 * time.Second
 
-	// A 'blank' schema should have just one predicate - dgraph.type.
-	// So if graphql initialization has been run, the schema will have more
-	// than one predicate.  A later test confirms that it's the schema we
-	// expect; here we just want to know that the containers are up.
+	// Because of how the test containers are brought up, there's no guarantee
+	// that the GraphQL layer is running by now.  So we
+	// need to try and connect and potentially retry a few times.
+	for retries > 0 {
+		retries--
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
+		// In local dev, we might already have an instance Healthy.  In CI,
+		// we expect the GraphQL layer to be waiting for a first schema.
+		err = checkGraphQLHealth(url, []string{"NoGraphQLSchema", "Healthy"})
+		if err == nil {
+			return nil
+		}
+		time.Sleep(sleep)
+	}
+	return err
+}
+
+func checkGraphQLHealth(url string, status []string) error {
+	health := &GraphQLParams{
+		Query: `query {
+			health {
+				message 
+				status
+			}
+		}`,
+	}
+	req, err := health.createGQLPost(url)
+
+	resp, err := runGQLRequest(req)
 	if err != nil {
-		return errors.Wrap(err, "unable to query Dgraph schema")
+		return errors.Wrap(err, "error running GraphQL query")
 	}
 
-	var resultSchema struct {
-		data struct {
-			schema []interface{}
+	var healthResult struct {
+		Data struct {
+			Health struct {
+				Message string
+				Status  string
+			}
+		}
+		Errors x.GqlErrorList
+	}
+
+	err = json.Unmarshal(resp, &healthResult)
+	if err != nil {
+		return errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	if len(healthResult.Errors) > 0 {
+		return healthResult.Errors
+	}
+
+	for _, s := range status {
+		if healthResult.Data.Health.Status == s {
+			return nil
 		}
 	}
-	err = json.Unmarshal(resp.Json, &resultSchema)
+
+	return errors.Errorf("GraphQL server was not at right health: found %s",
+		healthResult.Data.Health.Status)
+}
+
+func addSchema(url string, schema string) error {
+	add := &GraphQLParams{
+		Query: `mutation addSchema($sch: String!) {
+			addSchema(input: { schema: $sch }) {
+				schema {
+					schema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schema},
+	}
+	req, err := add.createGQLPost(url)
+
+	resp, err := runGQLRequest(req)
 	if err != nil {
-		return errors.Wrap(err, "couldn't unmarshal Dgraph schema")
+		return errors.Wrap(err, "error running GraphQL query")
 	}
 
-	if len(resultSchema.data.schema) == 1 {
-		return errors.New("GraphQL schema init has not yet been run")
+	var addResult struct {
+		Data struct {
+			AddSchema struct {
+				Schema struct {
+					Schema string
+				}
+			}
+		}
+	}
+
+	err = json.Unmarshal(resp, &addResult)
+	if err != nil {
+		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if addResult.Data.AddSchema.Schema.Schema == "" {
+		return errors.New("GraphQL schema mutation failed")
 	}
 
 	return nil
-}
-
-// ensureGraphQLRunning tests if the GraphQL server is up by running a query.  It
-// doesn't matter if there is data or not, just if contacting the server was
-// successful.
-func ensureGraphQLRunning() error {
-	_, err := allCountriesAdded()
-	return err
 }

@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
 )
 
 const (
 	errNoConnection healthStatus = "ErrNoConnection"
-	noGraphQLSchema healthStatus = "noGraphQLSchema"
+	noGraphQLSchema healthStatus = "NoGraphQLSchema"
 	healthy         healthStatus = "Healthy"
 )
 
@@ -33,6 +34,7 @@ type healthStatus string
 
 type healthResolver struct {
 	status healthStatus
+	format string
 }
 
 var statusMessage = map[healthStatus]string{
@@ -41,7 +43,23 @@ var statusMessage = map[healthStatus]string{
 	healthy:         "Dgraph connection established and serving GraphQL schema.",
 }
 
+func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+	msg := "message"
+	status := "status"
+
+	for _, f := range q.SelectionSet() {
+		if f.Name() == "message" {
+			msg = f.ResponseName()
+		}
+		if f.Name() == "status" {
+			status = f.ResponseName()
+		}
+	}
+
+	hr.format = fmt.Sprintf(`{"%s":[{"%s":"%%s","%s":"%%s"}]}`, q.ResponseName(), msg, status)
+	return nil, nil
+}
+
 func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	s := hr.status
-	return []byte(fmt.Sprintf(`{"message":"%s","status":%s`, statusMessage[s], string(s))), nil
+	return []byte(fmt.Sprintf(hr.format, statusMessage[hr.status], string(hr.status))), nil
 }

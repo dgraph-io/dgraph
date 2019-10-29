@@ -65,21 +65,14 @@
 package graphql
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/admin"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
-	"github.com/dgraph-io/dgo/v2"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -93,30 +86,12 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
-type options struct {
-	schemaFile     string
-	alpha          string
-	useCompression bool
-}
-
-type gqlSchema struct {
-	Type   string    `json:"dgraph.type,omitempty"`
-	Schema string    `json:"dgraph.graphql.schema,omitempty"`
-	Date   time.Time `json:"dgraph.graphql.date,omitempty"`
-}
-
-type gqlSchemas struct {
-	Schemas []gqlSchema `json:"gqlSchemas,omitempty"`
-}
-
-var opt options
-
 var GraphQL x.SubCommand
 
 func init() {
 	GraphQL.Cmd = &cobra.Command{
 		Use:   "graphql",
-		Short: "Run the Dgraph GraphQL tool",
+		Short: "Run the Dgraph GraphQL API",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(GraphQL.Conf).Stop()
 			if err := run(); err != nil {
@@ -131,12 +106,11 @@ func init() {
 	}
 	GraphQL.EnvPrefix = "DGRAPH_GRAPHQL"
 
-	// TODO: ones passed to sub commands should be persistent flags
 	flags := GraphQL.Cmd.Flags()
 	flags.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
-	flags.StringP("schema", "s", "schema.graphql",
-		"Location of GraphQL schema file")
+	flags.IntP("port", "p", 9000, "Port on which to run the HTTP service")
+	flags.Bool("introspection", true, "Set to false for no GraphQL schema introspection")
 
 	// OpenCensus flags.
 	flags.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -144,92 +118,40 @@ func init() {
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flags)
-
-	var cmdInit x.SubCommand
-	cmdInit.Cmd = &cobra.Command{
-		Use:   "init",
-		Short: "Initializes Dgraph for a GraphQL schema",
-		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(GraphQL.Conf).Stop()
-			if err := initDgraph(); err != nil {
-				if glog.V(2) {
-					fmt.Printf("Error : %+v\n", err)
-				} else {
-					fmt.Printf("Error : %s\n", err)
-				}
-				os.Exit(1)
-			}
-		},
-	}
-	GraphQL.Cmd.AddCommand(cmdInit.Cmd)
-
-	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("alpha"))
-	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("schema"))
-	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("jaeger.collector"))
 }
 
 func run() error {
 	x.PrintVersion()
-	opt = options{
-		schemaFile: GraphQL.Conf.GetString("schema"),
-		alpha:      GraphQL.Conf.GetString("alpha"),
-	}
 
-	glog.Infof("Connecting to Dgraph at: %s", opt.alpha)
-
-	dgraphClient, disconnect, err := connect()
+	bindall := GraphQL.Conf.GetBool("bindall")
+	port := GraphQL.Conf.GetInt("port")
+	introspection := GraphQL.Conf.GetBool("introspection")
+	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
 	if err != nil {
 		return err
 	}
-	defer disconnect()
 
-	q := `query {
-		gqlSchemas(func: type(dgraph.graphql)) {
-			dgraph.graphql.schema
-			dgraph.graphql.date
-		}
-	}`
-
-	ctx := context.Background()
-	resp, err := dgraphClient.NewTxn().Query(ctx, q)
-	if err != nil {
-		return errors.Wrap(err, "while querying GraphQL schema from Dgraph")
+	settings := &admin.ConnectionConfig{
+		Alphas:         GraphQL.Conf.GetString("alpha"),
+		TlScfg:         tlsCfg,
+		UseCompression: false,
 	}
 
-	var schemas gqlSchemas
-	err = json.Unmarshal(resp.Json, &schemas)
-	if err != nil {
-		return errors.Wrap(err, "while reading GraphQL schema")
-	}
+	glog.Infof("Starting GraphQL with Dgraph at: %s", settings.Alphas)
 
-	if len(schemas.Schemas) < 1 {
-		return fmt.Errorf("No GraphQL schema was found")
-	}
-
-	gqlSchema, err := schema.FromString(string(schemas.Schemas[0].Schema))
+	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		return err
 	}
+	resolvers := resolve.New(gqlSchema, resolve.NewResolverFactory())
+	mainServer := web.NewServer(resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
 		Mrw: resolve.NewMutationRewriter(),
 		Drw: resolve.NewDeleteRewriter(),
-		Qe:  resolve.DgoAsQueryExecutor(dgraphClient),
-		Me:  resolve.DgoAsMutationExecutor(dgraphClient)}
-
-	resolverFactory := resolve.NewResolverFactory().
-		WithConventionResolvers(gqlSchema, fns)
-
-	// We don't have to add schema introspection here.  Often GraphQL servers turn
-	// off schema introspection in production.  So this can easily be optional.
-	resolverFactory.WithSchemaIntrospection()
-
-	resolvers := resolve.New(gqlSchema, resolverFactory)
-	mainServer := web.NewServer(resolvers)
-
-	adminResolvers := admin.NewAdminResolver(dgraphClient, mainServer, fns)
+	}
+	adminResolvers := admin.NewAdminResolver(settings, mainServer, fns, introspection)
 	adminServer := web.NewServer(adminResolvers)
 
 	http.Handle("/graphql", mainServer.HTTPHandler())
@@ -244,109 +166,13 @@ func run() error {
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")
 
-	// TODO:
-	// the ports and urls etc that the endpoint serves should be input options
-	glog.Infof("Bringing up GraphQL HTTP API at 127.0.0.1:9000/graphql")
-	glog.Infof("Bringing up GraphQL HTTP admin API at 127.0.0.1:9000/admin")
-	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
-}
-
-func initDgraph() error {
-	x.PrintVersion()
-	opt = options{
-		schemaFile: GraphQL.Conf.GetString("schema"),
-		alpha:      GraphQL.Conf.GetString("alpha"),
+	bind := "localhost"
+	if bindall {
+		bind = "0.0.0.0"
 	}
+	addr := fmt.Sprintf("%s:%d", bind, port)
 
-	fmt.Printf("Processing schema file %q\n", opt.schemaFile)
-
-	b, err := ioutil.ReadFile(opt.schemaFile)
-	if err != nil {
-		return err
-	}
-	inputSchema := string(b)
-
-	schHandler, err := schema.NewHandler(inputSchema)
-	if err != nil {
-		return err
-	}
-
-	completeSchema := schHandler.GQLSchema()
-	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
-
-	dgSchema := schHandler.DGSchema()
-
-	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
-
-	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)
-	dgraphClient, disconnect, err := connect()
-	if err != nil {
-		return err
-	}
-	defer disconnect()
-
-	// TODO:
-	// check the current Dgraph schema, is it compatible with these additions.
-	// also need to check against any stored GraphQL schemas?
-	// - e.g. moving no ! to !, or redefining a type, or changing a relation's type
-	// ... need to allow for schema migrations, but probably should have some checks
-
-	op := &dgoapi.Operation{}
-	op.Schema = dgSchema
-
-	ctx := context.Background()
-	// plus auth token like live?
-	err = dgraphClient.Alter(ctx, op)
-	if err != nil {
-		return errors.Wrap(err, "failed to write Dgraph schema")
-	}
-
-	s := gqlSchema{
-		Type:   "dgraph.graphql",
-		Schema: completeSchema,
-		Date:   time.Now(),
-	}
-
-	mu := &dgoapi.Mutation{
-		CommitNow: true,
-	}
-	pb, err := json.Marshal(s)
-	if err != nil {
-		return errors.Wrap(err, "couldn't generate mutation to save schema")
-	}
-
-	mu.SetJson = pb
-	if _, err = dgraphClient.NewTxn().Mutate(ctx, mu); err != nil {
-		return errors.Wrap(err, "failed to save GraphQL schema to Dgraph")
-		// But this would mean we are in an inconsistent state,
-		// so would that mean they just had to re-apply the same schema?
-	}
-
-	return nil
-}
-
-func connect() (*dgo.Dgraph, func(), error) {
-	var clients []dgoapi.DgraphClient
-	disconnect := func() {}
-
-	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ds := strings.Split(opt.alpha, ",")
-	for _, d := range ds {
-		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
-		if err != nil {
-			disconnect()
-			return nil, nil, fmt.Errorf("couldn't connect to %s, %s", d, err)
-		}
-		disconnect = func(dis func()) func() {
-			return func() { dis(); conn.Close() }
-		}(disconnect)
-
-		clients = append(clients, dgoapi.NewDgraphClient(conn))
-	}
-
-	return dgo.NewDgraphClient(clients...), disconnect, nil
+	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
+	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
+	return errors.Wrap(http.ListenAndServe(addr, nil), "GraphQL server failed")
 }
