@@ -546,14 +546,6 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 					Name:   filterNames[i],
 					Fields: l,
 				}
-
-				other := "exact"
-				if search == "exact" {
-					other = "hash"
-				}
-
-				otherFilterName := filterName + "_" + fld.Name + "_" + other
-				filtersCollisions[filterNames[i]] = []string{otherFilterName}
 			}
 		}
 	} else {
