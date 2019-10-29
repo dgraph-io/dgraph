@@ -102,7 +102,7 @@ func TestPanicCatcher(t *testing.T) {
 		Qe:  &panicClient{},
 		Me:  &panicClient{}}
 
-	resolverFactory := resolve.NewResolverFactory().
+	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
