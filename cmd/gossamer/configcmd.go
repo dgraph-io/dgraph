@@ -71,8 +71,8 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 	// TODO: BABE
 
 	// P2P
-	fig.P2pCfg = setP2pConfig(ctx, fig.P2pCfg)
-	p2pSrvc, msgChan := createP2PService(fig.P2pCfg)
+	fig.P2p = setP2pConfig(ctx, fig.P2p)
+	p2pSrvc, msgChan := createP2PService(*fig)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// core.Service
@@ -93,8 +93,8 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 	srvcs = append(srvcs, apiSrvc)
 
 	// RPC
-	setRpcConfig(ctx, fig.RpcCfg)
-	rpcSrvr := startRpc(ctx, fig.RpcCfg, apiSrvc)
+	setRpcConfig(ctx, fig.Rpc)
+	rpcSrvr := startRpc(ctx, fig.Rpc, apiSrvc)
 
 	return dot.NewDot(srvcs, rpcSrvr), fig, nil
 }
@@ -162,7 +162,7 @@ func getDataDir(ctx *cli.Context, fig *cfg.Config) string {
 	}
 }
 
-func setP2pConfig(ctx *cli.Context, fig p2p.Config) p2p.Config {
+func setP2pConfig(ctx *cli.Context, fig cfg.P2pCfg) cfg.P2pCfg {
 	// Bootnodes
 	if bnodes := ctx.GlobalString(utils.BootnodesFlag.Name); bnodes != "" {
 		fig.BootstrapNodes = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
@@ -185,17 +185,27 @@ func setP2pConfig(ctx *cli.Context, fig p2p.Config) p2p.Config {
 }
 
 // createP2PService starts a p2p network layer from provided config
-func createP2PService(fig p2p.Config) (*p2p.Service, chan []byte) {
+func createP2PService(fig cfg.Config) (*p2p.Service, chan []byte) {
+	config := p2p.Config{
+		BootstrapNodes: fig.P2p.BootstrapNodes,
+		Port:           fig.P2p.Port,
+		RandSeed:       0,
+		NoBootstrap:    fig.P2p.NoBootstrap,
+		NoMdns:         fig.P2p.NoMdns,
+		// TODO: Set datadir from global
+		// DataDir: fig.Global.DataDir
+	}
+
 	msgChan := make(chan []byte)
 
-	srvc, err := p2p.NewService(&fig, msgChan)
+	srvc, err := p2p.NewService(&config, msgChan)
 	if err != nil {
 		log.Error("error starting p2p", "err", err.Error())
 	}
 	return srvc, msgChan
 }
 
-func setRpcConfig(ctx *cli.Context, fig rpc.Config) rpc.Config {
+func setRpcConfig(ctx *cli.Context, fig cfg.RpcCfg) cfg.RpcCfg {
 	// Modules
 	if mods := ctx.GlobalString(utils.RpcModuleFlag.Name); mods != "" {
 		fig.Modules = strToMods(strings.Split(ctx.GlobalString(utils.RpcModuleFlag.Name), ","))
@@ -213,9 +223,9 @@ func setRpcConfig(ctx *cli.Context, fig rpc.Config) rpc.Config {
 	return fig
 }
 
-func startRpc(ctx *cli.Context, fig rpc.Config, apiSrvc *api.Service) *rpc.HttpServer {
+func startRpc(ctx *cli.Context, fig cfg.RpcCfg, apiSrvc *api.Service) *rpc.HttpServer {
 	if ctx.GlobalBool(utils.RpcEnabledFlag.Name) {
-		return rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig)
+		return rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig.Host, fig.Port, fig.Modules)
 	}
 	return nil
 }

@@ -24,24 +24,19 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-// Config contains eneral RPC configuration options
-type Config struct {
-	Port    uint32       // Listening port
-	Host    string       // Listening hostname
-	Modules []api.Module // Enabled modules
-}
-
 // HttpServer acts as gateway to an RPC server
 type HttpServer struct {
-	cfg       *Config // Associated config
+	Port      uint32  // Listening port
+	Host      string  // Listening hostname
 	rpcServer *Server // Actual RPC call handler
 }
 
 // NewHttpServer creates a new http server and registers an associated rpc server
-func NewHttpServer(api *api.Api, codec Codec, cfg Config) *HttpServer {
+func NewHttpServer(api *api.Api, codec Codec, host string, port uint32, modules []api.Module) *HttpServer {
 	server := &HttpServer{
-		cfg:       &cfg,
-		rpcServer: NewApiServer(cfg.Modules, api),
+		Port:      port,
+		Host:      host,
+		rpcServer: NewApiServer(modules, api),
 	}
 
 	server.rpcServer.RegisterCodec(codec)
@@ -51,11 +46,11 @@ func NewHttpServer(api *api.Api, codec Codec, cfg Config) *HttpServer {
 
 // Start registers the rpc handler function and starts the server listening on `h.port`
 func (h *HttpServer) Start() {
-	log.Debug("[rpc] Starting HTTP Server...", "port", h.cfg.Port)
+	log.Debug("[rpc] Starting HTTP Server...", "port", h.Port)
 	http.HandleFunc("/rpc", h.rpcServer.ServeHTTP)
 
 	go func() {
-		err := http.ListenAndServe(fmt.Sprintf("%s:%d", h.cfg.Host, h.cfg.Port), nil)
+		err := http.ListenAndServe(fmt.Sprintf("%s:%d", h.Host, h.Port), nil)
 		if err != nil {
 			log.Error("[rpc] http error", "err", err)
 		}

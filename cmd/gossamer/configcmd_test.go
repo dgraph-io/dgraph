@@ -24,7 +24,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
-	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/rpc"
 
 	"flag"
@@ -107,14 +106,14 @@ func TestGetConfig(t *testing.T) {
 			t.Fatalf("failed to set fig %v", err)
 		}
 
-		r := fmt.Sprintf("%+v", fig.RpcCfg)
-		rpcExp := fmt.Sprintf("%+v", c.expected.RpcCfg)
+		r := fmt.Sprintf("%+v", fig.Rpc)
+		rpcExp := fmt.Sprintf("%+v", c.expected.Rpc)
 
 		db := fmt.Sprintf("%+v", fig.DbCfg)
 		dbExp := fmt.Sprintf("%+v", c.expected.DbCfg)
 
-		peer := fmt.Sprintf("%+v", fig.P2pCfg)
-		p2pExp := fmt.Sprintf("%+v", c.expected.P2pCfg)
+		peer := fmt.Sprintf("%+v", fig.P2p)
+		p2pExp := fmt.Sprintf("%+v", c.expected.P2p)
 
 		if !bytes.Equal([]byte(r), []byte(rpcExp)) {
 			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, r, rpcExp)
@@ -164,7 +163,7 @@ func TestGetDatabaseDir(t *testing.T) {
 
 func TestCreateP2PService(t *testing.T) {
 	_, cfgClone := createTempConfigFile()
-	srv, _ := createP2PService(cfgClone.P2pCfg)
+	srv, _ := createP2PService(*cfgClone)
 
 	if srv == nil {
 		t.Fatalf("failed to create p2p service")
@@ -180,22 +179,21 @@ func TestSetP2pConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    p2p.Config
+		expected    cfg.P2pCfg
 	}{
 		{
 			"config file",
 			[]string{"config"},
 			[]interface{}{tempFile.Name()},
-			cfgClone.P2pCfg,
+			cfgClone.P2p,
 		},
 		{
 			"no bootstrap, no mdns",
 			[]string{"nobootstrap", "nomdns"},
 			[]interface{}{true, true},
-			p2p.Config{
+			cfg.P2pCfg{
 				BootstrapNodes: cfg.DefaultP2PBootstrap,
 				Port:           cfg.DefaultP2PPort,
-				RandSeed:       cfg.DefaultP2PRandSeed,
 				NoBootstrap:    true,
 				NoMdns:         true,
 			},
@@ -204,10 +202,9 @@ func TestSetP2pConfig(t *testing.T) {
 			"bootstrap nodes",
 			[]string{"bootnodes"},
 			[]interface{}{"1234,5678"},
-			p2p.Config{
+			cfg.P2pCfg{
 				BootstrapNodes: []string{"1234", "5678"},
 				Port:           cfg.DefaultP2PPort,
-				RandSeed:       cfg.DefaultP2PRandSeed,
 				NoBootstrap:    false,
 				NoMdns:         false,
 			},
@@ -216,10 +213,9 @@ func TestSetP2pConfig(t *testing.T) {
 			"port",
 			[]string{"p2pport"},
 			[]interface{}{uint(1337)},
-			p2p.Config{
+			cfg.P2pCfg{
 				BootstrapNodes: cfg.DefaultP2PBootstrap,
 				Port:           1337,
-				RandSeed:       cfg.DefaultP2PRandSeed,
 				NoBootstrap:    false,
 				NoMdns:         false,
 			},
@@ -235,10 +231,10 @@ func TestSetP2pConfig(t *testing.T) {
 			}
 
 			input := cfg.DefaultConfig()
-			res := setP2pConfig(context, input.P2pCfg)
+			res := setP2pConfig(context, input.P2p)
 
 			if !reflect.DeepEqual(res, c.expected) {
-				t.Fatalf("\ngot %+v\nexpected %+v", input.P2pCfg, c.expected)
+				t.Fatalf("\ngot %+v\nexpected %+v", input.P2p, c.expected)
 			}
 		})
 	}
@@ -253,19 +249,19 @@ func TestSetRpcConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    rpc.Config
+		expected    cfg.RpcCfg
 	}{
 		{
 			"config file",
 			[]string{"config"},
 			[]interface{}{tempFile.Name()},
-			cfgClone.RpcCfg,
+			cfgClone.Rpc,
 		},
 		{
 			"host and port",
 			[]string{"rpchost", "rpcport"},
 			[]interface{}{"someHost", uint(1337)},
-			rpc.Config{
+			cfg.RpcCfg{
 				Port:    1337,
 				Host:    "someHost",
 				Modules: cfg.DefaultRpcModules,
@@ -275,7 +271,7 @@ func TestSetRpcConfig(t *testing.T) {
 			"modules",
 			[]string{"rpcmods"},
 			[]interface{}{"system,state"},
-			rpc.Config{
+			cfg.RpcCfg{
 				Port:    cfg.DefaultRpcHttpPort,
 				Host:    cfg.DefaultRpcHttpHost,
 				Modules: []api.Module{"system", "state"},
@@ -292,10 +288,10 @@ func TestSetRpcConfig(t *testing.T) {
 			}
 
 			input := cfg.DefaultConfig()
-			res := setRpcConfig(context, input.RpcCfg)
+			res := setRpcConfig(context, input.Rpc)
 
 			if !reflect.DeepEqual(res, c.expected) {
-				t.Fatalf("\ngot %+v\nexpected %+v", input.RpcCfg, c.expected)
+				t.Fatalf("\ngot %+v\nexpected %+v", input.Rpc, c.expected)
 			}
 		})
 	}

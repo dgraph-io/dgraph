@@ -1,19 +1,13 @@
-# filename: config.toml
+[db]
+  DataDir = "/home/d/.gossamer"
 
 [p2p]
-# Alexander testnet bootstrap nodes
-# TODO: move these to alexander genesis file
-BootstrapNodes=[
-			"/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj",
-			"/ip4/104.211.48.51/tcp/30363/p2p/16Uiu2HAmJqVCtF5oMvu1rbJvqWubMMRuWiKJtpoM8KSQ3JNnL5Ec",
-			"/ip4/104.211.48.247/tcp/30363/p2p/16Uiu2HAkyhNWHTPcA2dVKzMnLpFebXqsDQMpkuGnS9SqjJyDyULi",
-			"/ip4/40.117.153.33/tcp/30363/p2p/16Uiu2HAmKXzRnzgyVtSyyp6ozAk5aT9H7PEi2ozkHSzzg7vmX7LV",
-]
-Port= 7001
-RandSeed= 33
-
-[db]
-DataDir="chaindata"
+  bootstrap-nodes = []
+  no-bootstrap = false
+  no-mdns = false
+  port = 7001
 
 [rpc]
-Modules=["system"]
+  host = "localhost"
+  modules = ["system"]
+  port = 8545

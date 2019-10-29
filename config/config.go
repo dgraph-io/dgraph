@@ -21,17 +21,29 @@ import (
 	"os"
 
 	tml "github.com/BurntSushi/toml"
-	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/polkadb"
-	"github.com/ChainSafe/gossamer/rpc"
 	log "github.com/ChainSafe/log15"
 )
 
 // Config is a collection of configurations throughout the system
 type Config struct {
-	P2pCfg p2p.Config     `toml:"p2p"`
-	DbCfg  polkadb.Config `toml:"db"`
-	RpcCfg rpc.Config     `toml:"rpc"`
+	P2p   P2pCfg         `toml:"p2p"`
+	DbCfg polkadb.Config `toml:"db"`
+	Rpc   RpcCfg         `toml:"rpc"`
+}
+
+type P2pCfg struct {
+	BootstrapNodes []string `toml:"bootstrap-nodes"`
+	Port           uint32   `toml:"port"`
+	NoBootstrap    bool     `toml:"no-bootstrap"`
+	NoMdns         bool     `toml:"no-mdns"`
+}
+
+type RpcCfg struct {
+	Port    uint32       `toml:"port"`
+	Host    string       `toml:"host"`
+	Modules []api.Module `toml:"modules"`
 }
 
 // ToTOML encodes a state type into a TOML file.
