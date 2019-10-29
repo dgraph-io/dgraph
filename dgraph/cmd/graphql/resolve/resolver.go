@@ -215,7 +215,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 // NewResolverFactory returns a ResolverFactory that resolves requests via
 // query/mutation rewriting and execution through Dgraph.  If the factory gets asked
-// to resolve a query/mutation it doesn't know how to rewriter, it uses
+// to resolve a query/mutation it doesn't know how to rewrite, it uses
 // the queryError/mutationError to build an error result.
 func NewResolverFactory(
 	queryError QueryResolverFunc, mutationError MutationResolverFunc) ResolverFactory {
