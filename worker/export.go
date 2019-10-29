@@ -32,8 +32,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
+	badger "github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 

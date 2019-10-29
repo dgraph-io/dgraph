@@ -22,9 +22,9 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
-	bpb "github.com/dgraph-io/badger/pb"
+	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/posting"

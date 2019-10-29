@@ -19,11 +19,11 @@ package worker
 import (
 	"sync/atomic"
 
-	bpb "github.com/dgraph-io/badger/pb"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 
-	"github.com/dgraph-io/badger"
+	badger "github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"

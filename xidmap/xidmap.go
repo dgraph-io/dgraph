@@ -26,7 +26,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/badger"
+	badger "github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"

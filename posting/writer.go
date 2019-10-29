@@ -20,8 +20,8 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/pb"
+	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
 )
 

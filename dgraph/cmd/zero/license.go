@@ -21,7 +21,7 @@ package zero
 import (
 	"net/http"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 )
 
 // dummy function as enterprise features are not available in oss binary.

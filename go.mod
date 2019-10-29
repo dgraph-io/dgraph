@@ -15,7 +15,7 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/d4l3k/messagediff v1.2.1 // indirect
-	github.com/dgraph-io/badger v0.0.0-20191021140416-be6402f83d31
+	github.com/dgraph-io/badger/v2 v2.0.0-rc4
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
@@ -26,7 +26,6 @@ require (
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
@@ -52,8 +51,8 @@ require (
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-	golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3
+	golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
+	golang.org/x/sys v0.0.0-20191028164358-195ce5e7f934
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
