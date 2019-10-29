@@ -201,7 +201,8 @@ func isValidEnumSearchDirective(searchArg string) bool {
 	case
 		"trigram",
 		"regexp",
-		"exact":
+		"exact",
+		"hash":
 		return true
 	}
 	return false
@@ -238,7 +239,7 @@ func validateSearchArg(searchArg string,
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
 				"doesn't apply to field type %s which is an Enum. Enum only supports "+
-				"exact, regexp and trigram",
+				"hash, regexp and trigram",
 			typ.Name, field.Name, searchArg, field.Type.Name())
 	}
 

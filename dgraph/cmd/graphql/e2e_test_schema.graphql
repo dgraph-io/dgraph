@@ -20,7 +20,7 @@ type Post {
         topic: String @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
-        postType: PostType @search
+        postType: PostType @search(by: [exact, regexp])
         author: Author! @hasInverse(field: posts)
 }
 

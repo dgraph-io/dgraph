@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -86,6 +87,7 @@ func TestSchemaString(t *testing.T) {
 
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				t.Errorf("schema mismatch (-want +got):\n%s", diff)
+				fmt.Println(newSchemaStr)
 			}
 		})
 	}
@@ -227,7 +229,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				b4: DateTime @search(by: [bool])
 			}`,
 			expectedErrors: 4},
-		"Enums can only have exact, regexp and trigram": {schema: `
+		"Enums can only have hash, exact, regexp and trigram": {schema: `
 			type X {
 				e1: E @search(by: [int])
 				e2: E @search(by: [float])
@@ -236,14 +238,13 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				e5: E @search(by: [month])
 				e6: E @search(by: [day])
 				e7: E @search(by: [hour])
-				e8: E @search(by: [hash])
 				e9: E @search(by: [term])
 				e10: E @search(by: [fulltext])
 			}
 			enum E {
 				A
 			}`,
-			expectedErrors: 10},
+			expectedErrors: 9},
 	}
 
 	for name, test := range tests {

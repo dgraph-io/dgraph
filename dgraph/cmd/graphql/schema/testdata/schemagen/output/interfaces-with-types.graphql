@@ -191,10 +191,27 @@ enum StarshipOrderable {
 input CharacterFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: StringExactFilter_StringRegExpFilter
+	appearsIn: CharacterFilter_appearsIn_exact_StringRegExpFilter
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
+}
+
+input CharacterFilter_appearsIn_exact {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+}
+
+input CharacterFilter_appearsIn_exact_StringRegExpFilter {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+	regexp: String
 }
 
 input CharacterOrder {
@@ -210,10 +227,27 @@ input CharacterRef {
 input DroidFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: StringExactFilter_StringRegExpFilter
+	appearsIn: DroidFilter_appearsIn_exact_StringRegExpFilter
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
+}
+
+input DroidFilter_appearsIn_exact {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+}
+
+input DroidFilter_appearsIn_exact_StringRegExpFilter {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+	regexp: String
 }
 
 input DroidInput {
@@ -236,10 +270,27 @@ input DroidRef {
 input HumanFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: StringExactFilter_StringRegExpFilter
+	appearsIn: HumanFilter_appearsIn_exact_StringRegExpFilter
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
+}
+
+input HumanFilter_appearsIn_exact {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+}
+
+input HumanFilter_appearsIn_exact_StringRegExpFilter {
+	eq: [Episode!]!
+	le: [Episode!]!
+	lt: [Episode!]!
+	ge: [Episode!]!
+	gt: [Episode!]!
+	regexp: String
 }
 
 input HumanInput {
@@ -307,15 +358,6 @@ input StarshipOrder {
 
 input StarshipRef {
 	id: ID!
-}
-
-input StringExactFilter_StringRegExpFilter {
-	eq: String
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	regexp: String
 }
 
 input UpdateCharacterInput {

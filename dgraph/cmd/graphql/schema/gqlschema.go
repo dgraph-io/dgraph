@@ -508,20 +508,54 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 }
 
 // getFilterTypes converts search arguments of a field to graphql filter types.
-func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition) []string {
+func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName string) []string {
 	searchArgs := getSearchArgs(fld)
 	filterNames := make([]string, len(searchArgs))
-	if schema.Types[fld.Type.Name()].Kind == ast.Enum &&
-		len(searchArgs) == 1 && searchArgs[0] == "exact" {
-		// If the field is an enum type, and has only exact filter,
-		// We allow to write `typeName: enumValue` in the filter.
-		// So, for example : `filter: { postType: Answer }`
-		// rather than : `filter: { postType: { eq: Answer } }`
-		//
-		// Booleans are the same, allowing:
-		// `filter: { isPublished: true }
-		// but that case is already handled by builtInFilters
-		filterNames[0] = fld.Type.Name()
+	if schema.Types[fld.Type.Name()].Kind == ast.Enum {
+		if len(searchArgs) == 1 && searchArgs[0] == "hash" {
+			// If the field is an enum type, and has only hash filter,
+			// We allow to write `typeName: enumValue` in the filter.
+			// So, for example : `filter: { postType: Answer }`
+			// rather than : `filter: { postType: { eq: Answer } }`
+			//
+			// Booleans are the same, allowing:
+			// `filter: { isPublished: true }
+			// but that case is already handled by builtInFilters
+			filterNames[0] = fld.Type.Name()
+			return filterNames
+		}
+
+		for i, search := range searchArgs {
+			filterNames[i] = builtInFilters[search]
+			if search == "hash" || search == "exact" {
+				stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
+				var l ast.FieldList
+
+				for _, i := range schema.Types[stringFilterName].Fields {
+					l = append(l, &ast.FieldDefinition{
+						Name:         i.Name,
+						Type:         fld.Type,
+						Description:  i.Description,
+						DefaultValue: i.DefaultValue,
+					})
+				}
+
+				filterNames[i] = filterName + "_" + fld.Name + "_" + search
+				schema.Types[filterNames[i]] = &ast.Definition{
+					Kind:   ast.InputObject,
+					Name:   filterNames[i],
+					Fields: l,
+				}
+
+				other := "exact"
+				if search == "exact" {
+					other = "hash"
+				}
+
+				otherFilterName := filterName + "_" + fld.Name + "_" + other
+				filtersCollisions[filterNames[i]] = []string{otherFilterName}
+			}
+		}
 	} else {
 		for i, search := range searchArgs {
 			filterNames[i] = builtInFilters[search]
@@ -583,7 +617,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		filterTypes := getFilterTypes(schema, fld)
+		filterTypes := getFilterTypes(schema, fld, filterName)
 		if len(filterTypes) > 0 {
 			filterName := strings.Join(filterTypes, "_")
 			filter.Fields = append(filter.Fields,
@@ -643,8 +677,8 @@ func getDefaultSearchType(fldName string) []string {
 	if search, ok := defaultSearches[fldName]; ok {
 		return []string{search}
 	}
-	// it's an enum - always has exact index
-	return []string{"exact"}
+	// it's an enum - always has hash index
+	return []string{"hash"}
 
 }
 

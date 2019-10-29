@@ -185,12 +185,37 @@ input PostFilter {
 	postType: PostType
 	postTypeTrigram: StringRegExpFilter
 	postTypeRegexp: StringRegExpFilter
-	postTypeExact: PostType
-	postTypeRegexpExact: StringExactFilter_StringRegExpFilter
+	postTypeExact: PostFilter_postTypeExact_exact
+	postTypeRegexpExact: PostFilter_postTypeRegexpExact_exact_StringRegExpFilter
 	postTypeNone: PostType
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
+}
+
+input PostFilter_postTypeExact_exact {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+}
+
+input PostFilter_postTypeRegexpExact_exact {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+}
+
+input PostFilter_postTypeRegexpExact_exact_StringRegExpFilter {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+	regexp: String
 }
 
 input PostInput {
@@ -223,15 +248,6 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
-}
-
-input StringExactFilter_StringRegExpFilter {
-	eq: String
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	regexp: String
 }
 
 input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
