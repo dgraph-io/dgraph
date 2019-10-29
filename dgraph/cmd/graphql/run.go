@@ -70,8 +70,6 @@ import (
 	"os"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/admin"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
 
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/trace"
@@ -82,8 +80,6 @@ import (
 	"github.com/spf13/cobra"
 
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
-
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
 var GraphQL x.SubCommand
@@ -131,28 +127,15 @@ func run() error {
 		return err
 	}
 
-	settings := &admin.ConnectionConfig{
+	config := &admin.ConnectionConfig{
 		Alphas:         GraphQL.Conf.GetString("alpha"),
 		TlScfg:         tlsCfg,
 		UseCompression: false,
 	}
 
-	glog.Infof("Starting GraphQL with Dgraph at: %s", settings.Alphas)
+	glog.Infof("Starting GraphQL with Dgraph at: %s", config.Alphas)
 
-	gqlSchema, err := schema.FromString("")
-	if err != nil {
-		return err
-	}
-	resolvers := resolve.New(gqlSchema, resolve.NewResolverFactory())
-	mainServer := web.NewServer(resolvers)
-
-	fns := &resolve.ResolverFns{
-		Qrw: resolve.NewQueryRewriter(),
-		Mrw: resolve.NewMutationRewriter(),
-		Drw: resolve.NewDeleteRewriter(),
-	}
-	adminResolvers := admin.NewAdminResolver(settings, mainServer, fns, introspection)
-	adminServer := web.NewServer(adminResolvers)
+	mainServer, adminServer := admin.NewServers(config, introspection)
 
 	http.Handle("/graphql", mainServer.HTTPHandler())
 	http.Handle("/admin", adminServer.HTTPHandler())

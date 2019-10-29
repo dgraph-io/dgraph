@@ -178,8 +178,37 @@ type adminServer struct {
 	withIntrospection bool
 }
 
-// NewAdminResolver creates a GraphQL request resolver for the /admin endpoint.
-func NewAdminResolver(
+// NewServers initializes the GraphQL servers.  It sets up an empty server for the
+// main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
+func NewServers(
+	config *ConnectionConfig, withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
+
+	gqlSchema, err := schema.FromString("")
+	if err != nil {
+		panic(err)
+	}
+
+	rf := resolve.NewResolverFactory()
+	if withIntrospection {
+		rf.WithSchemaIntrospection()
+	}
+
+	resolvers := resolve.New(gqlSchema, rf)
+	mainServer := web.NewServer(resolvers)
+
+	fns := &resolve.ResolverFns{
+		Qrw: resolve.NewQueryRewriter(),
+		Mrw: resolve.NewMutationRewriter(),
+		Drw: resolve.NewDeleteRewriter(),
+	}
+	adminResolvers := newAdminResolver(config, mainServer, fns, withIntrospection)
+	adminServer := web.NewServer(adminResolvers)
+
+	return mainServer, adminServer
+}
+
+// newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
+func newAdminResolver(
 	config *ConnectionConfig,
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
