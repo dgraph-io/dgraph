@@ -131,7 +131,7 @@ func run() error {
 		return err
 	}
 
-	settings := &admin.ConnectionSettings{
+	settings := &admin.ConnectionConfig{
 		Alphas:         GraphQL.Conf.GetString("alpha"),
 		TlScfg:         tlsCfg,
 		UseCompression: false,

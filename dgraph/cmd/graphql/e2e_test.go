@@ -124,13 +124,13 @@ type post struct {
 }
 
 func TestMain(m *testing.M) {
-	err := ensureGraphQLLayerStarted(graphqlAdminURL)
+	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
 			"Got last error %+v", err.Error()))
 	}
 
-	err = ensureGraphQLLayerStarted(graphqlAdminTestAdminURL)
+	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
 			"but it never did.\n Got last error: %+v", err.Error()))
@@ -155,17 +155,12 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	err = addSchema(graphqlAdminURL, string(schema))
-	if err != nil {
-		panic(err)
-	}
-
 	err = populateGraphQLData(client)
 	if err != nil {
 		panic(err)
 	}
 
-	err = ensureGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
+	err = checkGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
 	if err != nil {
 		panic(err)
 	}
@@ -496,7 +491,7 @@ func allCountriesAdded() ([]*country, error) {
 	return result.Data.QueryCountry, nil
 }
 
-func ensureGraphQLLayerStarted(url string) error {
+func checkGraphQLLayerStarted(url string) error {
 	var err error
 	retries := 6
 	sleep := 10 * time.Second
@@ -509,7 +504,7 @@ func ensureGraphQLLayerStarted(url string) error {
 
 		// In local dev, we might already have an instance Healthy.  In CI,
 		// we expect the GraphQL layer to be waiting for a first schema.
-		err = ensureGraphQLHealth(url, []string{"NoGraphQLSchema", "Healthy"})
+		err = checkGraphQLHealth(url, []string{"NoGraphQLSchema", "Healthy"})
 		if err == nil {
 			return nil
 		}
@@ -518,7 +513,7 @@ func ensureGraphQLLayerStarted(url string) error {
 	return err
 }
 
-func ensureGraphQLHealth(url string, status []string) error {
+func checkGraphQLHealth(url string, status []string) error {
 	health := &GraphQLParams{
 		Query: `query {
 			health {

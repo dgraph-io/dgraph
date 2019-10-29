@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -217,7 +216,7 @@ func TestAdmin(t *testing.T) {
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = ensureGraphQLHealth(graphqlAdminTestAdminURL, []string{"NoGraphQLSchema"})
+	err = checkGraphQLHealth(graphqlAdminTestAdminURL, []string{"NoGraphQLSchema"})
 	require.NoError(t, err)
 
 	schemaIsInInitialState(t, client)
@@ -251,8 +250,6 @@ func updateSchema(t *testing.T, client *dgo.Dgraph) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
 
-	fmt.Println(string(resp.GetJson()))
-
 	require.JSONEq(t, updatedSchema, string(resp.GetJson()))
 
 	introspect(t, updatedGQLSchema)
@@ -272,8 +269,6 @@ func introspect(t *testing.T, expected string) {
 
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
 	requireNoGQLErrors(t, gqlResponse)
-
-	fmt.Println(string(gqlResponse.Data))
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }

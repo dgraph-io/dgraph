@@ -41,7 +41,7 @@ type IServeGraphQL interface {
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
 	ServeGQL(resolver *resolve.RequestResolver)
 
-	// GraphQLHTTPHandler returns a http.Handler that serves GraphQL.
+	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
 }
 

@@ -37,8 +37,10 @@ import (
 )
 
 const (
+	errMsgServerNotReady = "Unavailable: Server has not yet connected to Dgraph."
+
 	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
-	// FIXME: will change to this once we have the edge names done
+	// FIXME: dgraphAdminSchema will change to this once we have @dgraph(pred: "...")
 	// dgraphAdminSchema = `
 	// type dgraph.graphql {
 	// 	dgraph.graphql.schema
@@ -62,7 +64,7 @@ const (
 	// But for now, that would add too much into the schema, so this is
 	// hand crafted to be one of our schemas so we can pass it into the
 	// pipeline.
-	adminSchema = `
+	graphqlAdminSchema = `
  type Schema {
 	schema: String!  # the input schema, not the expanded schema
 	date: DateTime! 
@@ -142,9 +144,9 @@ const (
  `
 )
 
-// ConnectionSettings is the settings used in setting up the dgo connection from
+// ConnectionConfig is the settings used in setting up the dgo connection from
 // GraphQL Layer -> Dgraph.
-type ConnectionSettings struct {
+type ConnectionConfig struct {
 	Alphas         string
 	TlScfg         *tls.Config
 	UseCompression bool
@@ -156,7 +158,7 @@ type schemaDef struct {
 }
 
 type adminServer struct {
-	settings *ConnectionSettings
+	config   *ConnectionConfig
 	rf       resolve.ResolverFactory
 	resolver *resolve.RequestResolver
 	status   healthStatus
@@ -178,37 +180,34 @@ type adminServer struct {
 
 // NewAdminResolver creates a GraphQL request resolver for the /admin endpoint.
 func NewAdminResolver(
-	settings *ConnectionSettings,
+	config *ConnectionConfig,
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
-	introspection bool) *resolve.RequestResolver {
+	withIntrospection bool) *resolve.RequestResolver {
 
-	adminSchema, err := schema.FromString(adminSchema)
+	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
 		panic(err)
 	}
 
 	rf := newAdminResolverFactory()
 
-	admin := &adminServer{
-		settings:          settings,
+	server := &adminServer{
+		config:            config,
 		rf:                rf,
 		resolver:          resolve.New(adminSchema, rf),
 		status:            errNoConnection,
 		gqlServer:         gqlServer,
 		fns:               fns,
-		withIntrospection: introspection,
+		withIntrospection: withIntrospection,
 	}
 
-	go admin.pollForConnection()
+	go server.initServer()
 
-	return admin.resolver
+	return server.resolver
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
-
-	errResult := errors.Errorf("Unavailable: Server has not yet connected to Dgraph.")
-
 	rf := resolve.NewResolverFactory().
 		WithQueryResolver("health",
 			func(q schema.Query) resolve.QueryResolver {
@@ -224,13 +223,13 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithMutationResolver("addSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errResult}, false
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}, false
 				})
 		}).
 		WithQueryResolver("querySchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
-					return &resolve.Resolved{Err: errResult}
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
 				})
 		}).
 		WithSchemaIntrospection()
@@ -238,29 +237,39 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf
 }
 
-func (as *adminServer) pollForConnection() {
-
+func (as *adminServer) initServer() {
 	var waitFor time.Duration
 	for {
 		<-time.After(waitFor)
 		waitFor = 10 * time.Second
 
-		glog.Infof("Trying to connect to Dgraph at %s", as.settings.Alphas)
-		dgraphClient, disconnect, err := connect(as.settings)
+		glog.Infof("Trying to connect to Dgraph at %s", as.config.Alphas)
+		dgraphClient, disconnect, err := connect(as.config)
 		if err != nil {
-			glog.Infof("Failed to connect to Dgraph: %s.  Trying again in %f seconds",
-				err, waitFor.Seconds())
+			if glog.V(3) {
+				glog.Infof("Failed to connect to Dgraph: %s.  Trying again in %f seconds",
+					err, waitFor.Seconds())
+			}
 			continue
 		}
 		glog.Infof("Established Dgraph connection")
 
-		err = ensureAdminSchemaExists(dgraphClient)
+		err = checkAdminSchemaExists(dgraphClient)
 		if err != nil {
-			glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
-				err, waitFor.Seconds())
+			if glog.V(3) {
+				glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
+					err, waitFor.Seconds())
+			}
 			disconnect()
 			continue
 		}
+
+		// Nothing else should be able to lock before here.  The admin resolvers aren't yet
+		// set up (they all just error), so we will obtain the lock here without contention.
+		// We then setup the admin resolvers and they must wait until we are done before the
+		// first admin calls will go through.
+		as.mux.Lock()
+		defer as.mux.Unlock()
 
 		as.dgraph = dgraphClient
 
@@ -272,11 +281,9 @@ func (as *adminServer) pollForConnection() {
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.  "+
 				"Admin server is connected, but no GraphQL schema is being served.", err)
+			break
 		} else if sch == nil {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
-		}
-
-		if sch == nil {
 			break
 		}
 
@@ -303,7 +310,7 @@ func (as *adminServer) pollForConnection() {
 	}
 }
 
-func ensureAdminSchemaExists(dg *dgo.Dgraph) error {
+func checkAdminSchemaExists(dg *dgo.Dgraph) error {
 	// We could query for existing schema and only alter if it's not there, but
 	// this has same effect.  We might eventually have to migrate old versions of the
 	// metadata here.
@@ -392,13 +399,13 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.status = healthy
 }
 
-func connect(cs *ConnectionSettings) (*dgo.Dgraph, func(), error) {
+func connect(cc *ConnectionConfig) (*dgo.Dgraph, func(), error) {
 	var clients []dgoapi.DgraphClient
 	disconnect := func() {}
 
-	ds := strings.Split(cs.Alphas, ",")
+	ds := strings.Split(cc.Alphas, ",")
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, cs.TlScfg, cs.UseCompression)
+		conn, err := x.SetupConnection(d, cc.TlScfg, cc.UseCompression)
 		if err != nil {
 			disconnect()
 			return nil, nil, fmt.Errorf("couldn't connect to %s, %s", d, err)
