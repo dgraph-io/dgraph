@@ -17,14 +17,8 @@
 package main
 
 import (
-	"bytes"
+	"path/filepath"
 	"reflect"
-
-	cfg "github.com/ChainSafe/gossamer/config"
-	"github.com/ChainSafe/gossamer/dot"
-	"github.com/ChainSafe/gossamer/internal/api"
-	"github.com/ChainSafe/gossamer/internal/services"
-	"github.com/ChainSafe/gossamer/rpc"
 
 	"flag"
 	"fmt"
@@ -32,6 +26,8 @@ import (
 	"os"
 	"testing"
 
+	cfg "github.com/ChainSafe/gossamer/config"
+	"github.com/ChainSafe/gossamer/internal/api"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -40,19 +36,23 @@ const TestDataDir = "./test_data"
 
 func teardown(tempFile *os.File) {
 	if err := os.Remove(tempFile.Name()); err != nil {
-		log.Warn("cannot create temp file", err)
+		log.Warn("cannot remove temp file", "err", err)
 	}
-	if err := os.RemoveAll("./chaingang"); err != nil {
-		log.Warn("removal of temp directory bin failed", "err", err)
+}
+
+func removeTestDataDir() {
+	if err := os.RemoveAll(TestDataDir); err != nil {
+		log.Warn("cannot remove test data dir", "err", err)
 	}
 }
 
 func createTempConfigFile() (*os.File, *cfg.Config) {
 	testConfig := cfg.DefaultConfig()
-	testConfig.DbCfg.DataDir = TestDataDir
+	testConfig.Global.DataDir = TestDataDir
+
 	tmpFile, err := ioutil.TempFile(os.TempDir(), "prefix-")
 	if err != nil {
-		log.Crit("Cannot create temporary file", err)
+		log.Crit("Cannot create temporary file", "err", err)
 		os.Exit(1)
 	}
 
@@ -81,6 +81,7 @@ func createCliContext(description string, flags []string, values []interface{}) 
 
 func TestGetConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
+	defer teardown(tempFile)
 
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
@@ -88,82 +89,66 @@ func TestGetConfig(t *testing.T) {
 	tc := []struct {
 		name     string
 		value    string
-		usage    string
 		expected *cfg.Config
 	}{
-		{"", "", "", cfg.DefaultConfig()},
-		{"config", tempFile.Name(), "TOML configuration file", cfgClone},
+		{"", "", cfg.DefaultConfig()},
+		{"config", tempFile.Name(), cfgClone},
 	}
 
 	for _, c := range tc {
 		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
+		set.String(c.name, c.value, "")
 		context := cli.NewContext(app, set, nil)
 
 		fig, err := getConfig(context)
 		if err != nil {
-			teardown(tempFile)
 			t.Fatalf("failed to set fig %v", err)
 		}
 
-		r := fmt.Sprintf("%+v", fig.Rpc)
-		rpcExp := fmt.Sprintf("%+v", c.expected.Rpc)
-
-		db := fmt.Sprintf("%+v", fig.DbCfg)
-		dbExp := fmt.Sprintf("%+v", c.expected.DbCfg)
-
-		peer := fmt.Sprintf("%+v", fig.P2p)
-		p2pExp := fmt.Sprintf("%+v", c.expected.P2p)
-
-		if !bytes.Equal([]byte(r), []byte(rpcExp)) {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, r, rpcExp)
-		}
-		if !bytes.Equal([]byte(db), []byte(dbExp)) {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, db, dbExp)
-		}
-		if !bytes.Equal([]byte(peer), []byte(p2pExp)) {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, peer, p2pExp)
+		if !reflect.DeepEqual(fig, c.expected) {
+			t.Errorf("\ngot: %+v \nexpected: %+v", fig, c.expected)
 		}
 	}
-	defer teardown(tempFile)
 }
 
-func TestGetDatabaseDir(t *testing.T) {
-	tempFile, cfgClone := createTempConfigFile()
-
+func TestSetGlobalConfig(t *testing.T) {
+	tempPath, _ := filepath.Abs("test1")
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
 	tc := []struct {
-		name     string
-		value    string
-		usage    string
-		expected string
+		description string
+		flags       []string
+		values      []interface{}
+		expected    cfg.GlobalConfig
 	}{
-		{"", "", "", cfg.DefaultDBConfig.DataDir},
-		{"config", tempFile.Name(), "TOML configuration file", "chaingang"},
-		{"datadir", "test1", "sets database directory", "test1"},
+		{"datadir flag",
+			[]string{"datadir"},
+			[]interface{}{"test1"},
+			cfg.GlobalConfig{DataDir: tempPath},
+		},
 	}
 
-	for i, c := range tc {
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
-		context := cli.NewContext(app, set, nil)
-		if i == 0 {
-			cfgClone.DbCfg.DataDir = ""
-		} else {
-			cfgClone.DbCfg.DataDir = "chaingang"
-		}
-		dir := getDataDir(context, cfgClone)
+	for _, c := range tc {
+		c := c // bypass scopelint false positive
+		t.Run(c.description, func(t *testing.T) {
+			context, err := createCliContext(c.description, c.flags, c.values)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		if dir != c.expected {
-			t.Fatalf("test failed: %v, got %+v expected %+v", c.name, dir, c.expected)
-		}
+			tCfg := &cfg.GlobalConfig{}
+
+			setGlobalConfig(context, tCfg)
+
+			if !reflect.DeepEqual(*tCfg, c.expected) {
+				t.Errorf("\ngot: %+v \nexpected: %+v", tCfg, c.expected)
+			}
+		})
 	}
 }
 
 func TestCreateP2PService(t *testing.T) {
-	_, cfgClone := createTempConfigFile()
-	srv, _ := createP2PService(*cfgClone)
+	srv, _ := createP2PService(cfg.DefaultConfig())
 
 	if srv == nil {
 		t.Fatalf("failed to create p2p service")
@@ -172,7 +157,6 @@ func TestCreateP2PService(t *testing.T) {
 
 func TestSetP2pConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
-
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
 	tc := []struct {
@@ -231,9 +215,10 @@ func TestSetP2pConfig(t *testing.T) {
 			}
 
 			input := cfg.DefaultConfig()
-			res := setP2pConfig(context, input.P2p)
+			// Must call global setup to set data dir
+			setP2pConfig(context, &input.P2p)
 
-			if !reflect.DeepEqual(res, c.expected) {
+			if !reflect.DeepEqual(input.P2p, c.expected) {
 				t.Fatalf("\ngot %+v\nexpected %+v", input.P2p, c.expected)
 			}
 		})
@@ -288,9 +273,9 @@ func TestSetRpcConfig(t *testing.T) {
 			}
 
 			input := cfg.DefaultConfig()
-			res := setRpcConfig(context, input.Rpc)
+			setRpcConfig(context, &input.Rpc)
 
-			if !reflect.DeepEqual(res, c.expected) {
+			if !reflect.DeepEqual(input.Rpc, c.expected) {
 				t.Fatalf("\ngot %+v\nexpected %+v", input.Rpc, c.expected)
 			}
 		})
@@ -308,42 +293,41 @@ func TestStrToMods(t *testing.T) {
 
 func TestMakeNode(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
+	defer teardown(tempFile)
+	defer removeTestDataDir()
 
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
 	tc := []struct {
 		name     string
-		value    string
-		usage    string
+		flags    []string
+		values   []interface{}
 		expected *cfg.Config
 	}{
-		{"config", tempFile.Name(), "TOML configuration file", cfgClone},
+		{"node from config (norpc)", []string{"config"}, []interface{}{tempFile.Name()}, cfgClone},
+		{"default node (norpc)", []string{}, []interface{}{}, cfgClone},
+		{"default node (rpc)", []string{"rpc"}, []interface{}{true}, cfgClone},
 	}
 
 	for _, c := range tc {
 		c := c // bypass scopelint false positive
-		set := flag.NewFlagSet(c.name, 0)
-		set.String(c.name, c.value, c.usage)
-		context := cli.NewContext(nil, set, nil)
-		d, fig, _ := makeNode(context, nil)
-		if reflect.TypeOf(d) != reflect.TypeOf(&dot.Dot{}) {
-			t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d), reflect.TypeOf(&dot.Dot{}))
-		}
-		if reflect.TypeOf(d.Services) != reflect.TypeOf(&services.ServiceRegistry{}) {
-			t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d.Services), reflect.TypeOf(&services.ServiceRegistry{}))
-		}
-		if reflect.TypeOf(d.Rpc) != reflect.TypeOf(&rpc.HttpServer{}) {
-			t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d.Rpc), reflect.TypeOf(&rpc.HttpServer{}))
-		}
-		if reflect.TypeOf(fig) != reflect.TypeOf(&cfg.Config{}) {
-			t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(fig), reflect.TypeOf(&cfg.Config{}))
-		}
+		t.Run(c.name, func(t *testing.T) {
+			context, err := createCliContext(c.name, c.flags, c.values)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = makeNode(context)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
-	defer teardown(tempFile)
 }
 
 func TestCommands(t *testing.T) {
 	tempFile, _ := createTempConfigFile()
+	defer teardown(tempFile)
+	defer removeTestDataDir()
 
 	tc := []struct {
 		description string
@@ -373,5 +357,4 @@ func TestCommands(t *testing.T) {
 			t.Fatalf("should have ran dumpConfig command. err: %s", err)
 		}
 	}
-	defer teardown(tempFile)
 }

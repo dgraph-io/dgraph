@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -46,11 +47,16 @@ func startNewService(t *testing.T, cfg *Config, msgChan chan []byte) *Service {
 }
 
 func TestBuildOpts(t *testing.T) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "p2p-test")
+	tmpPDir, err := ioutil.TempDir(os.TempDir(), "p2p-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpPDir)
+	tmpDir := path.Join(tmpPDir, "data")
+	err = os.Mkdir(tmpDir, os.ModePerm+os.ModeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	testCfgA := &Config{
 		BootstrapNodes: []string{},
@@ -87,7 +93,7 @@ func TestBootstrapConnect(t *testing.T) {
 	bootnodeCfg := &Config{
 		BootstrapNodes: nil,
 		Port:           7000,
-		RandSeed:       0,
+		RandSeed:       1,
 		NoBootstrap:    true,
 		NoMdns:         true,
 	}
@@ -99,7 +105,7 @@ func TestBootstrapConnect(t *testing.T) {
 	nodeCfg := &Config{
 		BootstrapNodes: []string{bootnodeAddr.String()},
 		Port:           7001,
-		RandSeed:       1,
+		RandSeed:       2,
 		NoBootstrap:    false,
 		NoMdns:         true,
 	}
@@ -118,6 +124,7 @@ func TestNoBootstrap(t *testing.T) {
 	testServiceConfigA := &Config{
 		NoBootstrap: true,
 		Port:        7006,
+		RandSeed:    1,
 	}
 
 	sa := startNewService(t, testServiceConfigA, nil)
@@ -170,6 +177,7 @@ func TestSend(t *testing.T) {
 		NoBootstrap: true,
 		Port:        7004,
 		RandSeed:    1,
+		DataDir:     path.Join(os.TempDir(), "gossamer"),
 	}
 
 	sa := startNewService(t, testServiceConfigA, nil)
@@ -179,6 +187,7 @@ func TestSend(t *testing.T) {
 		NoBootstrap: true,
 		Port:        7005,
 		RandSeed:    2,
+		DataDir:     path.Join(os.TempDir(), "gossamer2"),
 	}
 
 	msgChan := make(chan []byte)

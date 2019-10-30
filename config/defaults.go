@@ -23,7 +23,6 @@ import (
 	"runtime"
 
 	"github.com/ChainSafe/gossamer/internal/api"
-	"github.com/ChainSafe/gossamer/polkadb"
 )
 
 const (
@@ -36,22 +35,24 @@ const (
 	DefaultGenesisPath = "./genesis.json"
 )
 
-var DefaultP2PBootstrap []string
-
-var DefaultRpcModules = []api.Module{"system"}
+var (
+	// Must be non-nil to match toml parsing semantics
+	DefaultP2PBootstrap = []string{}
+	DefaultRpcModules   = []api.Module{"system"}
+)
 
 var (
+	// Global
+	DefaultGlobalConfig = GlobalConfig{
+		DataDir: DefaultDataDir(),
+	}
+
 	// P2P
 	DefaultP2PConfig = P2pCfg{
 		Port:           DefaultP2PPort,
 		BootstrapNodes: DefaultP2PBootstrap,
 		NoBootstrap:    false,
 		NoMdns:         false,
-	}
-
-	// DB
-	DefaultDBConfig = polkadb.Config{
-		DataDir: DefaultDataDir(),
 	}
 
 	// RPC
@@ -65,9 +66,9 @@ var (
 // DefaultConfig is the default settings used when a config.toml file is not passed in during instantiation
 func DefaultConfig() *Config {
 	return &Config{
-		P2p:   DefaultP2PConfig,
-		DbCfg: DefaultDBConfig,
-		Rpc:   DefaultRpcConfig,
+		Global: DefaultGlobalConfig,
+		P2p:    DefaultP2PConfig,
+		Rpc:    DefaultRpcConfig,
 	}
 }
 

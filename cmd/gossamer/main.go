@@ -103,7 +103,7 @@ func gossamer(ctx *cli.Context) error {
 		return err
 	}
 
-	node, _, err := makeNode(ctx, genesisState)
+	node, _, err := makeNode(ctx)
 	if err != nil {
 		log.Error("error starting gossamer", "err", err)
 		return err

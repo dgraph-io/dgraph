@@ -17,20 +17,23 @@
 package cfg
 
 import (
-	"bytes"
+	"encoding/json"
 	"os"
 
-	tml "github.com/BurntSushi/toml"
 	"github.com/ChainSafe/gossamer/internal/api"
-	"github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
+	"github.com/naoina/toml"
 )
 
 // Config is a collection of configurations throughout the system
 type Config struct {
-	P2p   P2pCfg         `toml:"p2p"`
-	DbCfg polkadb.Config `toml:"db"`
-	Rpc   RpcCfg         `toml:"rpc"`
+	Global GlobalConfig `toml:"global"`
+	P2p    P2pCfg       `toml:"p2p"`
+	Rpc    RpcCfg       `toml:"rpc"`
+}
+
+type GlobalConfig struct {
+	DataDir string `toml:"data-dir"`
 }
 
 type P2pCfg struct {
@@ -46,26 +49,31 @@ type RpcCfg struct {
 	Modules []api.Module `toml:"modules"`
 }
 
+func (c *Config) String() string {
+	out, _ := json.MarshalIndent(c, "", "\t")
+	return string(out)
+}
+
 // ToTOML encodes a state type into a TOML file.
 func ToTOML(file string, s *Config) *os.File {
-	var buff bytes.Buffer
 	var (
 		newFile *os.File
 		err     error
 	)
 
-	if err = tml.NewEncoder(&buff).Encode(s); err != nil {
-		log.Warn("error closing file", "err", err)
+	var raw []byte
+	if raw, err = toml.Marshal(*s); err != nil {
+		log.Warn("error marshalling toml", "err", err)
 		os.Exit(1)
 	}
 
 	newFile, err = os.Create(file)
 	if err != nil {
-		log.Warn("error closing file", "err", err)
+		log.Warn("error creating config file", "err", err)
 	}
-	_, err = newFile.Write([]byte(buff.Bytes()))
+	_, err = newFile.Write(raw)
 	if err != nil {
-		log.Warn("error closing file", "err", err)
+		log.Warn("error writing to config file", "err", err)
 	}
 
 	if err := newFile.Close(); err != nil {

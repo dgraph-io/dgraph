@@ -1,13 +1,13 @@
-[db]
-  DataDir = "/home/d/.gossamer"
+[global]
+data-dir = "./.gossamer"
 
 [p2p]
-  bootstrap-nodes = []
-  no-bootstrap = false
-  no-mdns = false
-  port = 7001
+bootstrap-nodes = []
+port = 7001
+no-bootstrap = false
+no-mdns = false
 
 [rpc]
-  host = "localhost"
-  modules = ["system"]
-  port = 8545
+port = 8545
+host = "localhost"
+modules = ["system"]

@@ -25,7 +25,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
-	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
@@ -57,7 +56,8 @@ var (
 )
 
 // makeNode sets up node; opening badgerDB instance and returning the Dot container
-func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Config, error) {
+func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
+
 	fig, err := getConfig(ctx)
 	if err != nil {
 		log.Crit("unable to extract required config", "err", err)
@@ -66,13 +66,17 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 
 	var srvcs []services.Service
 
+	// Parse CLI flags
+	setGlobalConfig(ctx, &fig.Global)
+	setP2pConfig(ctx, &fig.P2p)
+	setRpcConfig(ctx, &fig.Rpc)
+
 	// TODO: trie and runtime
 
 	// TODO: BABE
 
 	// P2P
-	fig.P2p = setP2pConfig(ctx, fig.P2p)
-	p2pSrvc, msgChan := createP2PService(*fig)
+	p2pSrvc, msgChan := createP2PService(fig)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// core.Service
@@ -81,8 +85,7 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 
 	// DB
 	// Create database dir and initialize stateDB and blockDB
-	dataDir := getDataDir(ctx, fig)
-	dbSrv, err := polkadb.NewDbService(dataDir)
+	dbSrv, err := polkadb.NewDbService(fig.Global.DataDir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,7 +96,6 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 	srvcs = append(srvcs, apiSrvc)
 
 	// RPC
-	setRpcConfig(ctx, fig.Rpc)
 	rpcSrvr := startRpc(ctx, fig.Rpc, apiSrvc)
 
 	return dot.NewDot(srvcs, rpcSrvr), fig, nil
@@ -101,68 +103,45 @@ func makeNode(ctx *cli.Context, gen *genesis.GenesisState) (*dot.Dot, *cfg.Confi
 
 // getConfig checks for config.toml if --config flag is specified
 func getConfig(ctx *cli.Context) (*cfg.Config, error) {
-	var fig *cfg.Config
+	fig := cfg.DefaultConfig()
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
-		config, err := loadConfig(file)
+		err := loadConfig(file, fig)
 		if err != nil {
 			log.Warn("err loading toml file", "err", err.Error())
 			return fig, err
 		}
-		return config, nil
+		return fig, nil
 	} else {
 		return cfg.DefaultConfig(), nil
 	}
 }
 
-// loadConfig loads the contents from config.toml and inits Config object
-func loadConfig(file string) (*cfg.Config, error) {
+// loadConfig loads the contents from config toml and inits Config object
+func loadConfig(file string, config *cfg.Config) error {
 	fp, err := filepath.Abs(file)
 	if err != nil {
-		log.Warn("error finding working directory", "err", err)
+		return err
 	}
-	filep := filepath.Join(filepath.Clean(fp))
-	info, err := os.Lstat(filep)
+	log.Debug("Loading configuration", "path", filepath.Clean(fp))
+	f, err := os.Open(filepath.Clean(fp))
 	if err != nil {
-		log.Crit("config file err ", "err", err)
-		os.Exit(1)
+		return err
 	}
-	if info.IsDir() {
-		log.Crit("cannot pass in a directory, expecting file ")
-		os.Exit(1)
-	}
-	/* #nosec */
-	f, err := os.Open(filep)
-	if err != nil {
-		log.Crit("opening file err ", "err", err)
-		os.Exit(1)
-	}
-	defer func() {
-		err = f.Close()
-		if err != nil {
-			log.Warn("err closing conn", "err", err.Error())
-		}
-	}()
-	var config *cfg.Config
 	if err = tomlSettings.NewDecoder(f).Decode(&config); err != nil {
-		log.Error("decoding toml error", "err", err.Error())
+		return err
 	}
-	return config, err
+	return nil
 }
 
-// getDataDir initializes directory for gossamer data
-func getDataDir(ctx *cli.Context, fig *cfg.Config) string {
-	if file := ctx.GlobalString(utils.DataDirFlag.Name); file != "" {
-		fig.DbCfg.DataDir = file
-		return file
-	} else if fig.DbCfg.DataDir != "" {
-		return fig.DbCfg.DataDir
-	} else {
-		return cfg.DefaultDataDir()
+func setGlobalConfig(ctx *cli.Context, fig *cfg.GlobalConfig) {
+	if dir := ctx.GlobalString(utils.DataDirFlag.Name); dir != "" {
+		fig.DataDir = dir
 	}
+	fig.DataDir, _ = filepath.Abs(fig.DataDir)
 }
 
-func setP2pConfig(ctx *cli.Context, fig cfg.P2pCfg) cfg.P2pCfg {
+func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 	// Bootnodes
 	if bnodes := ctx.GlobalString(utils.BootnodesFlag.Name); bnodes != "" {
 		fig.BootstrapNodes = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
@@ -181,19 +160,17 @@ func setP2pConfig(ctx *cli.Context, fig cfg.P2pCfg) cfg.P2pCfg {
 	if off := ctx.GlobalBool(utils.NoMdnsFlag.Name); off {
 		fig.NoMdns = true
 	}
-	return fig
 }
 
 // createP2PService starts a p2p network layer from provided config
-func createP2PService(fig cfg.Config) (*p2p.Service, chan []byte) {
+func createP2PService(fig *cfg.Config) (*p2p.Service, chan []byte) {
 	config := p2p.Config{
 		BootstrapNodes: fig.P2p.BootstrapNodes,
 		Port:           fig.P2p.Port,
 		RandSeed:       0,
 		NoBootstrap:    fig.P2p.NoBootstrap,
 		NoMdns:         fig.P2p.NoMdns,
-		// TODO: Set datadir from global
-		// DataDir: fig.Global.DataDir
+		DataDir:        fig.Global.DataDir,
 	}
 
 	msgChan := make(chan []byte)
@@ -205,7 +182,7 @@ func createP2PService(fig cfg.Config) (*p2p.Service, chan []byte) {
 	return srvc, msgChan
 }
 
-func setRpcConfig(ctx *cli.Context, fig cfg.RpcCfg) cfg.RpcCfg {
+func setRpcConfig(ctx *cli.Context, fig *cfg.RpcCfg) {
 	// Modules
 	if mods := ctx.GlobalString(utils.RpcModuleFlag.Name); mods != "" {
 		fig.Modules = strToMods(strings.Split(ctx.GlobalString(utils.RpcModuleFlag.Name), ","))
@@ -220,7 +197,7 @@ func setRpcConfig(ctx *cli.Context, fig cfg.RpcCfg) cfg.RpcCfg {
 	if port := ctx.GlobalUint(utils.RpcPortFlag.Name); port != 0 {
 		fig.Port = uint32(port)
 	}
-	return fig
+
 }
 
 func startRpc(ctx *cli.Context, fig cfg.RpcCfg, apiSrvc *api.Service) *rpc.HttpServer {
@@ -241,13 +218,13 @@ func strToMods(strs []string) []api.Module {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	_, fig, err := makeNode(ctx, nil)
+	_, fig, err := makeNode(ctx)
 	if err != nil {
 		return err
 	}
 	comment := ""
 
-	out, err := tomlSettings.Marshal(&fig)
+	out, err := toml.Marshal(fig)
 	if err != nil {
 		return err
 	}
