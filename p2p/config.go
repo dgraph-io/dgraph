@@ -17,6 +17,8 @@
 package p2p
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,7 +30,7 @@ import (
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -121,7 +123,13 @@ func tryLoadPrivKey(fp string) (crypto.PrivKey, error) {
 		return nil, err
 	}
 
-	return crypto.UnmarshalPrivateKey(keyData)
+	dec := make([]byte, hex.DecodedLen(len(keyData)))
+	_, err = hex.Decode(dec, keyData)
+	if err != nil {
+		return nil, err
+	}
+
+	return crypto.UnmarshalECDSAPrivateKey(dec)
 }
 
 // generateKey generates an ed25519 private key and writes it to the data directory
@@ -131,14 +139,14 @@ func tryLoadPrivKey(fp string) (crypto.PrivKey, error) {
 func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
 	var r io.Reader
 	if seed == 0 {
-		r = nil // GenerateEd25519Key uses crypto/rand under the hood if nil
+		r = crand.Reader
 	} else {
 		r = mrand.New(mrand.NewSource(seed))
 	}
 
 	// Generate a key pair for this host. We will use it at least
 	// to obtain a valid host ID.
-	priv, _, err := crypto.GenerateEd25519Key(r)
+	priv, _, err := crypto.GenerateECDSAKeyPair(r)
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +155,7 @@ func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
 
 	// Save the key if its secure
 	if seed == 0 {
-		err = saveKey(priv, fp)
-		if err != nil {
+		if err = saveKey(priv, fp); err != nil {
 			return nil, err
 		}
 	}
@@ -157,15 +164,9 @@ func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
 }
 
 func saveKey(priv crypto.PrivKey, fp string) error {
-	raw, err := crypto.MarshalPrivateKey(priv)
-	if err != nil {
-		return err
-	}
-
 	// Create `.gossamer` if it doesn't exist
 	if _, e := os.Stat(fp); os.IsNotExist(e) {
-		e = os.Mkdir(fp, os.ModePerm)
-		if e != nil {
+		if e = os.Mkdir(fp, os.ModePerm); e != nil {
 			return e
 		}
 	} else if e != nil {
@@ -178,8 +179,15 @@ func saveKey(priv crypto.PrivKey, fp string) error {
 		return err
 	}
 
-	_, err = f.Write(raw)
+	raw, err := priv.Raw()
 	if err != nil {
+		return err
+	}
+
+	enc := make([]byte, hex.EncodedLen(len(raw)))
+	hex.Encode(enc, raw)
+
+	if _, err = f.Write(enc); err != nil {
 		return err
 	}
 
