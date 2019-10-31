@@ -17,17 +17,22 @@
 package main
 
 import (
-	"path/filepath"
-	"reflect"
-
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	cfg "github.com/ChainSafe/gossamer/config"
+	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/internal/api"
+	"github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -79,9 +84,100 @@ func createCliContext(description string, flags []string, values []interface{}) 
 	return context, nil
 }
 
+const TESTS_FP string = "../../runtime/test_wasm.wasm"
+const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/c0ff6e519676affd727a45fe605bc7c84a0a536d/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
+
+// Exists reports whether the named file or directory exists.
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
+// getTestBlob checks if the test wasm file exists and if not, it fetches it from github
+func getTestBlob() (n int64, err error) {
+	if Exists(TESTS_FP) {
+		return 0, nil
+	}
+
+	out, err := os.Create(TESTS_FP)
+	if err != nil {
+		return 0, err
+	}
+	defer out.Close()
+
+	resp, err := http.Get(TEST_WASM_URL)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	n, err = io.Copy(out, resp.Body)
+	return n, err
+}
+
+var tmpGenesis = &genesis.Genesis{
+	Name:       "gossamer",
+	Id:         "gossamer",
+	Bootnodes:  []string{"/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj"},
+	ProtocolId: "gossamer",
+	Genesis:    genesis.GenesisFields{},
+}
+
+func createTempGenesisFile(t *testing.T) string {
+	_, err := getTestBlob()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fp, err := filepath.Abs(TESTS_FP)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testbytes, err := ioutil.ReadFile(fp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testhex := hex.EncodeToString(testbytes)
+	tmpGenesis.Genesis = genesis.GenesisFields{
+		Raw: map[string]string{"0x3a636f6465": "0x" + testhex},
+	}
+
+	// Create temp file
+	file, err := ioutil.TempFile("", "genesis-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Grab json encoded bytes
+	bz, err := json.Marshal(tmpGenesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write to temp file
+	_, err = file.Write(bz)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return file.Name()
+}
+
 func TestGetConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
 	defer teardown(tempFile)
+
+	var err error
+	cfgClone.Global.DataDir, err = filepath.Abs(cfgClone.Global.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
@@ -296,6 +392,9 @@ func TestMakeNode(t *testing.T) {
 	defer teardown(tempFile)
 	defer removeTestDataDir()
 
+	genesispath := createTempGenesisFile(t)
+	defer os.Remove(genesispath)
+
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
 	tc := []struct {
@@ -304,19 +403,33 @@ func TestMakeNode(t *testing.T) {
 		values   []interface{}
 		expected *cfg.Config
 	}{
-		{"node from config (norpc)", []string{"config"}, []interface{}{tempFile.Name()}, cfgClone},
-		{"default node (norpc)", []string{}, []interface{}{}, cfgClone},
-		{"default node (rpc)", []string{"rpc"}, []interface{}{true}, cfgClone},
+		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesispath}, cfgClone},
+		{"default node (norpc)", []string{"genesis"}, []interface{}{genesispath}, cfgClone},
+		{"default node (rpc)", []string{"rpc", "genesis"}, []interface{}{true, genesispath}, cfgClone},
 	}
 
 	for _, c := range tc {
 		c := c // bypass scopelint false positive
+
 		t.Run(c.name, func(t *testing.T) {
 			context, err := createCliContext(c.name, c.flags, c.values)
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, err = makeNode(context)
+
+			err = loadGenesis(context)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			node, _, err := makeNode(context)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			db := node.Services.Get(&polkadb.DbService{})
+
+			err = db.Stop()
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -40,8 +40,11 @@ func NewDbService(path string) (*DbService, error) {
 	}, nil
 }
 
-// Start...
+// Start instantiates the StateDB and BlockDB if they do not exist
 func (s *DbService) Start() error {
+	if s.StateDB != nil || s.BlockDB != nil {
+		return nil
+	}
 
 	stateDataDir := filepath.Join(s.path, "state")
 	blockDataDir := filepath.Join(s.path, "block")

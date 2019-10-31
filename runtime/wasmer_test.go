@@ -81,7 +81,7 @@ func newRuntime(t *testing.T) (*Runtime, error) {
 
 	tt := &trie.Trie{}
 
-	r, err := NewRuntime(fp, tt)
+	r, err := NewRuntimeFromFile(fp, tt)
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
@@ -166,7 +166,7 @@ func newTestRuntime() (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := NewRuntime(fp, t)
+	r, err := NewRuntimeFromFile(fp, t)
 	if err != nil {
 		return nil, err
 	}

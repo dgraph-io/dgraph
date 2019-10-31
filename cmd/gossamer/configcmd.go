@@ -33,45 +33,43 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/rpc"
 	"github.com/ChainSafe/gossamer/rpc/json2"
+	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli"
 )
 
-var (
-	dumpConfigCommand = cli.Command{
-		Action:      dumpConfig,
-		Name:        "dumpconfig",
-		Usage:       "Show configuration values",
-		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...)),
-		Category:    "CONFIGURATION DEBUGGING",
-		Description: `The dumpconfig command shows configuration values.`,
-	}
-
-	configFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
-	}
-)
-
 // makeNode sets up node; opening badgerDB instance and returning the Dot container
 func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
-
 	fig, err := getConfig(ctx)
 	if err != nil {
-		log.Crit("unable to extract required config", "err", err)
 		return nil, nil, err
 	}
 
 	var srvcs []services.Service
 
-	// Parse CLI flags
-	setGlobalConfig(ctx, &fig.Global)
-	setP2pConfig(ctx, &fig.P2p)
-	setRpcConfig(ctx, &fig.Rpc)
+	log.Info("🕸\t Starting gossamer...", "datadir", fig.Global.DataDir)
 
-	// TODO: trie and runtime
+	// DB: Create database dir and initialize stateDB and blockDB
+	dbSrv, err := polkadb.NewDbService(fig.Global.DataDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot create db service: %s", err)
+	}
+	srvcs = append(srvcs, dbSrv)
+
+	err = dbSrv.Start()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot start db service: %s", err)
+	}
+
+	// Trie, runtime: load most recent state from DB, load runtime code from trie and create runtime executor
+	db := trie.NewDatabase(dbSrv.StateDB.Db)
+	state := trie.NewEmptyTrie(db)
+	r, err := loadStateAndRuntime(state)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error loading state and runtime: %s", err)
+	}
 
 	// TODO: BABE
 
@@ -80,16 +78,8 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	srvcs = append(srvcs, p2pSrvc)
 
 	// core.Service
-	coreSrvc := core.NewService(nil, nil, msgChan)
+	coreSrvc := core.NewService(r, nil, msgChan)
 	srvcs = append(srvcs, coreSrvc)
-
-	// DB
-	// Create database dir and initialize stateDB and blockDB
-	dbSrv, err := polkadb.NewDbService(fig.Global.DataDir)
-	if err != nil {
-		return nil, nil, err
-	}
-	srvcs = append(srvcs, dbSrv)
 
 	// API
 	apiSrvc := api.NewApiService(p2pSrvc, nil)
@@ -98,10 +88,37 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	// RPC
 	rpcSrvr := startRpc(ctx, fig.Rpc, apiSrvc)
 
-	return dot.NewDot(srvcs, rpcSrvr), fig, nil
+	// load extra genesis data from DB
+	gendata, err := state.Db().LoadGenesisData()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Debug("genesisdata", "data", gendata)
+
+	return dot.NewDot(string(gendata.Name), srvcs, rpcSrvr), fig, nil
 }
 
-// getConfig checks for config.toml if --config flag is specified
+func loadStateAndRuntime(t *trie.Trie) (*runtime.Runtime, error) {
+	latestState, err := t.LoadHash()
+	if err != nil {
+		return nil, fmt.Errorf("cannot load latest state root hash: %s", err)
+	}
+
+	err = t.LoadFromDB(latestState)
+	if err != nil {
+		return nil, fmt.Errorf("cannot load latest state: %s", err)
+	}
+
+	code, err := t.Get([]byte(":code"))
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving :code from trie: %s", err)
+	}
+
+	return runtime.NewRuntime(code, t)
+}
+
+// getConfig checks for config.toml if --config flag is specified and sets CLI flags
 func getConfig(ctx *cli.Context) (*cfg.Config, error) {
 	fig := cfg.DefaultConfig()
 	// Load config file.
@@ -111,10 +128,13 @@ func getConfig(ctx *cli.Context) (*cfg.Config, error) {
 			log.Warn("err loading toml file", "err", err.Error())
 			return fig, err
 		}
-		return fig, nil
-	} else {
-		return cfg.DefaultConfig(), nil
 	}
+
+	// Parse CLI flags
+	setGlobalConfig(ctx, &fig.Global)
+	setP2pConfig(ctx, &fig.P2p)
+	setRpcConfig(ctx, &fig.Rpc)
+	return fig, nil
 }
 
 // loadConfig loads the contents from config toml and inits Config object
@@ -136,7 +156,7 @@ func loadConfig(file string, config *cfg.Config) error {
 
 func setGlobalConfig(ctx *cli.Context, fig *cfg.GlobalConfig) {
 	if dir := ctx.GlobalString(utils.DataDirFlag.Name); dir != "" {
-		fig.DataDir = dir
+		fig.DataDir, _ = filepath.Abs(dir)
 	}
 	fig.DataDir, _ = filepath.Abs(fig.DataDir)
 }
@@ -218,10 +238,11 @@ func strToMods(strs []string) []api.Module {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	_, fig, err := makeNode(ctx)
+	fig, err := getConfig(ctx)
 	if err != nil {
 		return err
 	}
+
 	comment := ""
 
 	out, err := toml.Marshal(fig)

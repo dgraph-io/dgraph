@@ -196,3 +196,34 @@ func TestStoreAndLoadHash(t *testing.T) {
 		t.Fatalf("Fail: got %x expected %x", hash, expected)
 	}
 }
+
+func TestStoreAndLoadGenesisData(t *testing.T) {
+	trie, err := newTrie()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer trie.closeDb()
+
+	expected := &Genesis{
+		Name:       []byte("gossamer"),
+		Id:         []byte("gossamer"),
+		ProtocolId: []byte("gossamer"),
+		Bootnodes:  nil,
+	}
+
+	err = trie.db.StoreGenesisData(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gen, err := trie.db.LoadGenesisData()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(gen, expected) {
+		t.Fatalf("Fail: got %v expected %v", gen, expected)
+	}
+
+}

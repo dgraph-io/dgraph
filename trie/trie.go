@@ -240,6 +240,25 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	return ok, br, err
 }
 
+func (t *Trie) Load(data map[string]string) error {
+	for key, value := range data {
+		keyBytes, err := common.HexToBytes(key)
+		if err != nil {
+			return err
+		}
+		valueBytes, err := common.HexToBytes(value)
+		if err != nil {
+			return err
+		}
+		err = t.Put(keyBytes, valueBytes)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Get returns the value for key stored in the trie at the corresponding key
 func (t *Trie) Get(key []byte) (value []byte, err error) {
 	l, err := t.tryGet(key)

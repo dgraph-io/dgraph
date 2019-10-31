@@ -28,6 +28,7 @@ import (
 
 // Dot is a container for all the components of a node.
 type Dot struct {
+	Name      string
 	Services  *services.ServiceRegistry // Registry of all core services
 	Rpc       *rpc.HttpServer           // HTTP instance for RPC server
 	IsStarted chan struct{}             // Signals node startup complete
@@ -35,8 +36,9 @@ type Dot struct {
 }
 
 // NewDot initializes a Dot with provided components.
-func NewDot(srvcs []services.Service, rpc *rpc.HttpServer) *Dot {
+func NewDot(name string, srvcs []services.Service, rpc *rpc.HttpServer) *Dot {
 	d := &Dot{
+		Name:      name,
 		Services:  services.NewServiceRegistry(),
 		Rpc:       rpc,
 		IsStarted: make(chan struct{}),
