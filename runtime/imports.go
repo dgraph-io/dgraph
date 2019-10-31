@@ -64,12 +64,12 @@ import (
 	"unsafe"
 
 	common "github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/crypto"
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	xxhash "github.com/OneOfOne/xxhash"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
-	ed25519 "golang.org/x/crypto/ed25519"
 )
 
 var registry map[int]RuntimeCtx
@@ -507,9 +507,12 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 
 	msg := memory[msgData : msgData+msgLen]
 	sig := memory[sigData : sigData+64]
-	pubkey := ed25519.PublicKey(memory[pubkeyData : pubkeyData+32])
+	pubkey, err := crypto.NewEd25519PublicKey(memory[pubkeyData : pubkeyData+32])
+	if err != nil {
+		return 1
+	}
 
-	if ed25519.Verify(pubkey, msg, sig) {
+	if crypto.Verify(pubkey, msg, sig) {
 		return 0
 	}
 
