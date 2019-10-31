@@ -487,6 +487,24 @@ func TestHasFirst(t *testing.T) {
 	}`, js)
 }
 
+func TestRegExpVariableReplacement(t *testing.T) {
+	query := `
+		query all($regexp_query: string = "/King*/" ) {
+			q (func: has(name)) @filter( regexp(name, $regexp_query) ) {
+				name
+			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [{
+				"name": "King Lear"
+			}]
+		}
+	}`, js)
+}
+
 func TestHasFirstOffset(t *testing.T) {
 	query := `{
 		q(func:has(name),first:5, offset: 5) {
