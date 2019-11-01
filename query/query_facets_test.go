@@ -36,7 +36,9 @@ func populateClusterWithFacets() {
 	triples := `
 		<1> <name> "Michelle"@en (origin = "french") .
 		<25> <name> "Daryl Dixon" .
+		<25> <alt_name> "Daryl Dick" .
 		<31> <name> "Andrea" .
+		<31> <alt_name> "Andy" .
 		<33> <name> "Michale" .
 		<320> <name> "Test facet"@en (type = "Test facet with lang") .
 
@@ -889,7 +891,22 @@ func TestFacetsFilterAtValueListType(t *testing.T) {
 		`{"data": {"me":[{"alt_name": ["Michelle", "Michelin"]}]}}`, js)
 }
 
-func TestFacetsFilterAtValueComplex(t *testing.T) {
+func TestFacetsFilterAtValueComplex1(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french") AND eq(dummy, true))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne"}, {"name":"Rick Grimes"}, {"name": "Glenn Rhee"}]}}`,
+		js)
+}
+
+func TestFacetsFilterAtValueComplex2(t *testing.T) {
 	populateClusterWithFacets()
 	query := `
 	{
