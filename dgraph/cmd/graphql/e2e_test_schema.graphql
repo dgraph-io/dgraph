@@ -8,10 +8,22 @@ type Country {
 }
 
 # **Don't delete** Comments in the middle of schemas should work
+# Comments in input schemas should _not_ make it through to the
+# generated schema.
 
+"""
+GraphQL descriptions look like this.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 type Author {
         id: ID!
+
+        """
+        GraphQL descriptions can be on fields.  They should work in the input 
+        schema and should make their way into the generated schema.
+        """
         name: String! @search(by: [hash, trigram])
+
         dob: DateTime @search
         reputation: Float @search
         country: Country
