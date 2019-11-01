@@ -1,10 +1,13 @@
-# Comments in schemas should work
+# **Don't delete** Comments at top of schemas should work
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
 type Country {
-        id: ID!
+        # **Don't delete** Comments in types should work
+        id: ID! # **Don't delete** Comments in in lines should work
         name: String! @search(by: [trigram, hash])
 }
+
+# **Don't delete** Comments in the middle of schemas should work
 
 type Author {
         id: ID!
