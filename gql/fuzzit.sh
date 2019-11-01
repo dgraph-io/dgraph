@@ -20,7 +20,7 @@ go get -u github.com/dvyukov/go-fuzz/go-fuzz github.com/dvyukov/go-fuzz/go-fuzz-
 # go get -d -v -u ./...
 
 go-fuzz-build -libfuzzer -o parser-fuzz-target.a $GOPATH/src/github.com/dgraph-io/dgraph/gql/
-clang -fsanitize=fuzzer parser-fuzz-target.a -o parser-fuzz-target
+docker run --rm -v $(pwd):/tmp rsmmr/clang clang -fsanitize=fuzzer /tmp/parser-fuzz-target.a -o /tmp/parser-fuzz-target
 
 ## Install fuzzit latest version:
 wget -O fuzzit https://github.com/fuzzitdev/fuzzit/releases/latest/download/fuzzit_Linux_x86_64
@@ -30,4 +30,4 @@ chmod a+x fuzzit
 ./fuzzit create target --skip-if-exists --seed ./gql/fuzz-data/corpus.tar.gz parser-fuzz-target
 ./fuzzit create job --type ${1} dgraph-io-gh/parser-fuzz-target parser-fuzz-target
 
-rm parser-fuzz-target parser-fuzz-target.a fuzzit
+rm -f parser-fuzz-target parser-fuzz-target.a fuzzit
