@@ -21,7 +21,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -36,11 +35,6 @@ var (
 // CmdOpts sets the options to run a single command.
 type CmdOpts struct {
 	Dir string
-}
-
-// RepoPath converts a path relative to the root of the repo into an absolute path.
-func RepoPath(p string) string {
-	return path.Join(os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph"), p)
 }
 
 // Exec runs a single external command.
