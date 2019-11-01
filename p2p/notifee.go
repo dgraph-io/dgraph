@@ -20,15 +20,15 @@ import (
 	"context"
 
 	log "github.com/ChainSafe/log15"
-	host "github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	libp2phost "github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	ps "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
 // See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
 type Notifee struct {
 	ctx  context.Context
-	host host.Host
+	host libp2phost.Host
 }
 
 // HandlePeerFound is invoked when a peer in discovered via mDNS
