@@ -1,3 +1,6 @@
+# Comments in schemas should work
+# See: https://github.com/dgraph-io/dgraph/issues/4227
+
 type Country {
         id: ID!
         name: String! @search(by: [trigram, hash])
