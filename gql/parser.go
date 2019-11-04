@@ -450,7 +450,8 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				return err
 			}
 
-			if f.Func.Name == "regexp" {
+			_, present := vmap[v.Value]
+			if f.Func.Name == "regexp" && present {
 				if err := regExpVariableFilter(f.Func, idx); err != nil {
 					return err
 				}
