@@ -2695,6 +2695,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 			if peekIt[0].Typ == itemColon {
+				if len(alias) > 0 {
+					return item.Errorf("Invalid colon after alias declaration")
+				}
 				alias = val
 				it.Next() // Consume the itemcolon
 				continue
