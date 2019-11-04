@@ -1021,6 +1021,13 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 	return valueToTypesVal(p), nil
 }
 
+// PostingFor returns the posting according to the preferred language list.
+func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.postingFor(readTs, langs)
+}
+
 func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
 	l.AssertRLock() // Avoid recursive locking by asserting a lock here.
 	return l.postingForLangs(readTs, langs)
