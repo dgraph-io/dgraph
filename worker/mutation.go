@@ -207,10 +207,7 @@ func createSchema(attr string, typ types.TypeID) error {
 	if err := checkSchema(&s); err != nil {
 		return err
 	}
-	if err := updateSchema(&s); err != nil {
-		return err
-	}
-	return nil
+	return updateSchema(&s)
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
