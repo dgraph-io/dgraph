@@ -85,6 +85,7 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
 	t.Run("type predicate check", wrap(TypePredicateCheck))
+	t.Run("internal predicate check", wrap(InternalPredicateCheck))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1714,4 +1715,22 @@ func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
 	ctx = context.Background()
 	err = c.Alter(ctx, op)
 	require.NoError(t, err)
+}
+
+func InternalPredicateCheck(t *testing.T, c *dgo.Dgraph) {
+	// Schema update is rejected because uid is reserved for internal use.
+	op := &api.Operation{}
+	op.Schema = `uid: string .`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:bob <uid> "bobId" .`),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
 }
