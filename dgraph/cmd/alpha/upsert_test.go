@@ -1974,7 +1974,6 @@ amount: float .`))
 upsert {
   query {
     u as var(func: has(branch))
-
   }
 
   mutation {
@@ -2180,3 +2179,145 @@ func TestMultiMutationNoUpsert(t *testing.T) {
 	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, resp.Txn.Preds)
 	testutil.CompareJSON(t, `{"empty": []}`, string(resp.Json))
 }
+
+func TestMultipleMutation(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+	m1 := `
+upsert {
+  query {
+    me(func: eq(email, "email@company.io")) {
+      v as uid
+    }
+  }
+
+  mutation @if(not(eq(len(v), 0))) {
+    set {
+      uid(v) <name> "not_name" .
+      uid(v) <email> "not_email@company.io" .
+    }
+  }
+
+  mutation @if(eq(len(v), 0)) {
+    set {
+      _:user <name> "name" .
+      _:user <email> "email@company.io" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.True(t, contains(mr.preds, "email"))
+	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, 0, len(mr.vars))
+
+	q1 := `
+{
+  q(func: eq(email, "email@company.io")) {
+    name
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "name"
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+
+	// This time the other mutation will get executed
+	_, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q2 := `
+{
+  q(func: eq(email, "not_email@company.io")) {
+    name
+  }
+}`
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	expectedRes = `
+{
+  "data": {
+    "q": [{
+       "name": "not_name"
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+// func TestMultiMutationWithoutIf(t *testing.T) {
+// 	require.NoError(t, dropAll())
+// 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+// 	m1 := `
+// upsert {
+//   query {
+//     me(func: eq(email, "email@company.io")) {
+//       v as uid
+//     }
+//   }
+
+//   mutation @if(not(eq(len(v), 0))) {
+//     set {
+//       uid(v) <name> "not_name" .
+//       uid(v) <email> "not_email@company.io" .
+//     }
+//   }
+
+//   mutation @if(eq(len(v), 0)) {
+//     set {
+//       _:user <name> "name" .
+//       _:user <email> "email@company.io" .
+//     }
+//   }
+
+//   mutation {
+//     set {
+//       _:user <name> "name2" .
+//       _:user <email> "email2@company.io" .
+//     }
+//   }
+
+//   mutation {
+//     set {
+//       _:user <name> "name3" .
+//       _:user <email> "email3@company.io" .
+//     }
+//   }
+// }`
+// 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+// 	require.NoError(t, err)
+// 	require.True(t, len(mr.keys) == 0)
+// 	require.True(t, contains(mr.preds, "email"))
+// 	require.True(t, contains(mr.preds, "name"))
+// 	require.Equal(t, 0, len(mr.vars))
+
+// 	q1 := `
+// {
+//   q(func: has(email)) {
+//     name
+//   }
+// }`
+// 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+// 	expectedRes := `
+// {
+//   "data": {
+//     "q": [{
+//        "name": "name"
+//      }]
+//    }
+// }`
+// 	require.NoError(t, err)
+// 	testutil.CompareJSON(t, res, expectedRes)
+// }

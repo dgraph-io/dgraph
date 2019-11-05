@@ -791,6 +791,17 @@ func updateMutations(qc *queryContext) {
 		updateUIDInMutations(gmu, qc)
 		updateValInMutations(gmu, qc)
 	}
+
+	// Remove condition vars from the response
+	for _, v := range qc.condVars {
+		delete(qc.uidRes, v)
+	}
+	// Remove empty valued varibales from the response
+	for n, v := range qc.uidRes {
+		if len(v) == 0 {
+			delete(qc.uidRes, n)
+		}
+	}
 }
 
 // findVars finds all the variables used in mutation block
@@ -918,12 +929,10 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
 //   * uid(v) -> _:uid(v)  -- Otherwise
 func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 	// usedMutationVars keeps track of variables that are used in mutations.
-	usedMutationVars := make(map[string]bool)
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
 			if uids, ok := qc.uidRes[varName]; ok && len(uids) != 0 {
-				usedMutationVars[varName] = true
 				return uids
 			}
 
@@ -975,12 +984,6 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 			for _, o := range newObs {
 				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
 			}
-		}
-	}
-	for v := range qc.uidRes {
-		// We only want to return the vars which are used in the mutation.
-		if _, ok := usedMutationVars[v]; !ok {
-			delete(qc.uidRes, v)
 		}
 	}
 	gmu.Set = gmuSet
