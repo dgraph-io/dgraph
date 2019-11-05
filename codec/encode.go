@@ -19,7 +19,7 @@ package codec
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"reflect"
@@ -50,7 +50,7 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 		n, err = se.encodeByteArray(v[:])
 	case *big.Int:
 		n, err = se.encodeBigInteger(v)
-	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+	case int, uint, int8, uint8, int16, uint16, int32, uint32, int64, uint64:
 		n, err = se.encodeFixedWidthInteger(v)
 	case string:
 		n, err = se.encodeByteArray([]byte(v))
@@ -68,10 +68,10 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 		case reflect.Slice, reflect.Array:
 			n, err = se.encodeArray(v)
 		default:
-			return 0, errors.New("unsupported type")
+			return 0, fmt.Errorf("unsupported type: %T", b)
 		}
 	default:
-		return 0, errors.New("unsupported type")
+		return 0, fmt.Errorf("unsupported type: %T", b)
 	}
 
 	return n, err
@@ -120,8 +120,14 @@ func (se *Encoder) encodeFixedWidthInteger(in interface{}) (bytesEncoded int, er
 	case uint64:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
 		bytesEncoded = 8
+	case int:
+		err = binary.Write(se.Writer, binary.LittleEndian, int64(i))
+		bytesEncoded = 8
+	case uint:
+		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
+		bytesEncoded = 8
 	default:
-		err = errors.New("could not encode fixed width int: invalid type")
+		err = fmt.Errorf("could not encode fixed width int, invalid type: %T", in)
 	}
 
 	return bytesEncoded, err
@@ -223,7 +229,7 @@ func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
 	switch reflect.ValueOf(t).Kind() {
 	case reflect.Ptr:
 		v = reflect.ValueOf(t).Elem()
-	case reflect.Slice, reflect.Array:
+	case reflect.Slice, reflect.Array, reflect.Struct:
 		v = reflect.ValueOf(t)
 	}
 

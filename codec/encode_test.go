@@ -19,6 +19,7 @@ package codec
 import (
 	"bytes"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -165,5 +166,27 @@ func TestEncode(t *testing.T) {
 		} else if bytesEncoded != test.bytesEncoded {
 			t.Errorf("Fail: input %x  got %d bytes encoded expected %d", test.val, bytesEncoded, test.bytesEncoded)
 		}
+	}
+}
+
+func TestEncodeAndDecodeStringInStruct(t *testing.T) {
+	test := &struct {
+		A string
+	}{
+		A: "noot",
+	}
+
+	enc, err := Encode(test)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dec, err := Decode(enc, &struct{ A string }{A: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(test, dec) {
+		t.Fatalf("Fail: got %v expected %v", dec, test)
 	}
 }
