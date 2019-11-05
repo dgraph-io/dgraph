@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"fmt"
 	"math"
 	"unsafe"
 
@@ -25,22 +26,26 @@ import (
 
 // DeepSize computes the memory taken by a Posting List
 func (l *List) DeepSize() int {
+	var size int
+	// safe mutex is of 4 words.
+	size = 4 * 8
+	// plist pointer is of 1 word.
+	size += 1 * 8
+	// mutation map pointer is of 1 word.
+	size += 1 * 8
+	// minTs and maxTs takes 1 word each
+	size += 2 * 8
+	// So far 11 words, in order to round the slab we're adding one
+	// more word
+	size += 1 * 8
+	// so far basic struct layout has been calculated.
 	// A map bucket is 16 + 8*sizeof(key) + 8*sizeof(value) bytes.
 	// size of each bucket is 2 words + (8*sizeof(key)) + (8*sizeof(value))
 	sizeOfBucket := 16 + (8 * 8) + (int(unsafe.Sizeof(&pb.PostingList{})) * 8)
-	var size int
 
 	if l == nil {
 		return size
 	}
-
-	// struct size
-	// 4 + 3 + 1 + 1 (map is just a pointer) + 2 = 11
-	// TODO: Russ Cox says that List will take 12 words instead of 11.
-	// "I count 11 words, which will round up to 12 in the allocator"
-	// Ref: https://github.com/golang/go/issues/34561
-	size += 11 * 8
-
 	// List.key
 	size += cap(l.key)
 
@@ -56,12 +61,18 @@ func (l *List) DeepSize() int {
 	// size of hmap struct
 	// Ref: https://golang.org/src/runtime/map.go?#L114
 	size += 6 * 8
-
 	if l.mutationMap != nil {
+		// struct size
+		// 4 + 3 + 1 + 1 (map is just a pointer) + 2 = 11
+		// TODO: Russ Cox says that List will take 12 words instead of 11.
+		// "I count 11 words, which will round up to 12 in the allocator"
+		// Ref: https://github.com/golang/go/issues/34561
+		size += 11 * 8
 		// refer this for calculating number of buckets.
 		// https://groups.google.com/forum/#!topic/golang-nuts/L8GbX2co3dU
 		// each bucket holds 8 keys. every times map grows. size of buckets doubles.
 		nb := math.Pow(2, math.Log2(float64(len(l.mutationMap))/8)+1)
+		fmt.Println(nb)
 		size += int(nb) * sizeOfBucket
 	}
 
