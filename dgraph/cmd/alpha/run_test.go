@@ -44,46 +44,6 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 )
 
-var q0 = `
-	{
-		user(func: uid(0x1)) {
-			name
-		}
-	}
-`
-
-var m = `
-	mutation {
-		set {
-                        # comment line should be ignored
-			<0x1> <name> "Alice" .
-		}
-	}
-`
-
-type raftServer struct {
-}
-
-func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return in, nil
-}
-
-func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func (c *raftServer) JoinCluster(ctx context.Context, in *pb.RaftContext) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func childAttrs(sg *query.SubGraph) []string {
-	var out []string
-	for _, c := range sg.Children {
-		out = append(out, c.Attr)
-	}
-	return out
-}
-
 type defaultContextKey int
 
 const (
@@ -937,44 +897,6 @@ func TestSchemaValidationError(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
-var m6 = `
-	{
-		set {
-                        # comment line should be ignored
-			<0x5> <name2> "1"^^<xs:int> .
-			<0x6> <name2> "1.5"^^<xs:float> .
-		}
-	}
-`
-
-var q6 = `
-	{
-		user(func: uid(<id>)) {
-			name2
-		}
-	}
-`
-
-//func TestSchemaConversion(t *testing.T) {
-//	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
-//	require.NoError(t, err)
-//
-//	var l query.Latency
-//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-//	_, err = qr.ProcessWithMutation(defaultContext())
-//
-//	require.NoError(t, err)
-//	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-//	require.JSONEq(t, `{"data": {"user":[{"name2":1}]}}`, output)
-//
-//	s, ok := schema.State().Get("name2")
-//	require.True(t, ok)
-//	s.ValueType = uint32(types.FloatID)
-//	schema.State().Set("name2", s)
-//	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-//	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
-//}
-
 func TestMutationError(t *testing.T) {
 	var qErr = `
  	{
@@ -986,33 +908,6 @@ func TestMutationError(t *testing.T) {
 	err := runMutation(qErr)
 	require.Error(t, err)
 }
-
-var qm = `
-	{
-		set {
-			<0x0a> <pred.rel> _:x .
-			_:x <pred.val> "value" .
-			_:x <pred.rel> _:y .
-			_:y <pred.val> "value2" .
-		}
-	}
-`
-
-//func TestAssignUid(t *testing.T) {
-//	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
-//	require.NoError(t, err)
-//
-//	var l query.Latency
-//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-//	er, err := qr.ProcessWithMutation(defaultContext())
-//	require.NoError(t, err)
-//
-//	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
-//	_, ok := er.Allocations["x"]
-//	require.True(t, ok)
-//	_, ok = er.Allocations["y"]
-//	require.True(t, ok)
-//}
 
 var q1 = `
 {
@@ -1038,26 +933,6 @@ func BenchmarkQuery(b *testing.B) {
 		processToFastJSON(q1)
 	}
 }
-
-var threeNiceFriends = `{
-	"data": {
-	  "me": [
-	    {
-	      "friend": [
-	        {
-	          "nice": "true"
-	        },
-	        {
-	          "nice": "true"
-	        },
-	        {
-	          "nice": "true"
-	        }
-	      ]
-	    }
-	  ]
-	}
-}`
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
