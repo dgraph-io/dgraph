@@ -17,13 +17,16 @@
 package alpha
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -170,7 +173,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 	m1 := `
 {
-  "query": "{ u as var(func: has(amount)) { amt as amount} me () {  updated_amt as math(amt+1)}}",
+  "query": "{ u as var(func: has(amount)) { amt as amount \n updated_amt as math(amt+1)}}",
   "set": [
     {
       "uid": "uid(u)",
@@ -298,8 +301,9 @@ upsert {
     }
   }
 }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
-	require.Contains(t, err.Error(), "upsert query block has no variables")
+	resp, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.Equal(t, []string{"1-age"}, resp.preds)
 }
 
 func TestUpsertWithFragment(t *testing.T) {
@@ -354,7 +358,7 @@ friend: uid @reverse .`))
   }
 }`
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
-	require.Contains(t, err.Error(), "invalid syntax")
+	require.Contains(t, err.Error(), "variables [variable] not defined")
 }
 
 func TestUpsertUndefinedVarErr(t *testing.T) {
@@ -1743,8 +1747,6 @@ upsert {
   query {
     u as var(func: has(amount)) {
       amt as amount
-    }
-    me() {
       updated_amt as  math(amt+1)
     }
   }
@@ -1815,8 +1817,6 @@ upsert {
   query {
     u as var(func: has(amount)) {
       amt as amount
-    }
-    me () {
       updated_amt as math(amt+1)
     }
   }
@@ -2117,4 +2117,66 @@ upsert {
 	// The uid variable is only used in the query and not in mutation and hence shouldn't be part
 	// of vars.
 	require.Equal(t, 0, len(mr.vars))
+}
+
+func TestMultiMutationEmptyRequest(t *testing.T) {
+	// We are using the dgo client in this test here to test the grpc interface
+	dg, err := testutil.DgraphClientWithGroot("localhost:9180")
+	require.NoError(t, err, "error while getting a dgraph client")
+
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
+		DropOp: api.Operation_ALL,
+	}))
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
+		Schema: `
+      name: string @index(exact) .
+      branch: string .
+      amount: float .
+    `,
+	}))
+
+	req := &api.Request{}
+	_, err = dg.NewTxn().Do(context.Background(), req)
+	require.Contains(t, strings.ToLower(err.Error()), "empty request")
+}
+
+// This mutation (upsert) has one independent query and one independent mutation.
+func TestMultiMutationNoUpsert(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot("localhost:9180")
+	require.NoError(t, err, "error while getting a dgraph client")
+
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
+		DropOp: api.Operation_ALL,
+	}))
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
+		Schema: `
+      email: string @index(exact) .
+      works_for: string @index(exact) .
+      works_with: [uid] .
+    `,
+	}))
+
+	req := &api.Request{
+		Query: `
+      query {
+        empty(func: eq(works_for, "company1")) {
+          uid
+          name
+        }
+      }`,
+		Mutations: []*api.Mutation{
+			&api.Mutation{
+				SetNquads: []byte(`
+        _:user1 <name> "user1" .
+        _:user1 <email> "user1@company1.io" .
+        _:user1 <works_for> "company1" .`),
+			},
+		},
+		CommitNow: true,
+	}
+	resp, err := dg.NewTxn().Do(context.Background(), req)
+	require.NoError(t, err)
+	sort.Strings(resp.Txn.Preds)
+	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, resp.Txn.Preds)
+	testutil.CompareJSON(t, `{"empty": []}`, string(resp.Json))
 }
