@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -175,7 +174,6 @@ var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
 var unusedGroup = "unusedGroup"
-var rootDir = filepath.Join(os.TempDir(), "acl_test")
 var query = fmt.Sprintf(`
 	{
 		q(func: eq(%s, "SF")) {
