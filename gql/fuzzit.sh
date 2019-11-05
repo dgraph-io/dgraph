@@ -1,6 +1,7 @@
 #!/bin/bash
 set -xe
 
+export GO111MODULE="on"
 ## Step 1:  Build fuzzing targets
 
 ## Install go-fuzz
