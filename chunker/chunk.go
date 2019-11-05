@@ -358,13 +358,13 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 	x.Check(err)
 
-	cleanup = func() { f.Close() }
+	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
 		gzr, err := gzip.NewReader(f)
 		x.Check(err)
 		rd = bufio.NewReader(gzr)
-		cleanup = func() { f.Close(); gzr.Close() }
+		cleanup = func() { _ = f.Close(); _ = gzr.Close() }
 	} else {
 		rd = bufio.NewReader(f)
 		buf, _ := rd.Peek(512)
@@ -374,7 +374,7 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 			gzr, err := gzip.NewReader(rd)
 			x.Check(err)
 			rd = bufio.NewReader(gzr)
-			cleanup = func() { f.Close(); gzr.Close() }
+			cleanup = func() { _ = f.Close(); _ = gzr.Close() }
 		}
 	}
 
