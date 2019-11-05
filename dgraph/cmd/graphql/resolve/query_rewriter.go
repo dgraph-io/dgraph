@@ -76,6 +76,8 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 		},
 	}
 
+	filter, _ := field.ArgValue("filter").(map[string]interface{})
+	addFilter(dgQuery, field.Type(), filter)
 	addSelectionSetFrom(dgQuery, field)
 
 	return dgQuery
