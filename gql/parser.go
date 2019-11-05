@@ -1375,7 +1375,9 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	buf := new(bytes.Buffer)
-	buf.WriteString("[")
+	if _, err := buf.WriteString("["); err != nil {
+		return err
+	}
 	depth := 1
 	for {
 		if valid := it.Next(); !valid {
@@ -1384,14 +1386,20 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 		item := it.Item()
 		switch item.Typ {
 		case itemLeftSquare:
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 			depth++
 		case itemRightSquare:
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 			depth--
 		case itemMathOp, itemComma, itemName:
 			// Writing tokens to buffer.
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 		default:
 			return item.Errorf("Found invalid item: %s while parsing geo arguments.",
 				item.Val)
@@ -2144,7 +2152,9 @@ func parseID(val string) ([]uint64, error) {
 		if c == '[' || c == ')' {
 			return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 		}
-		buf.WriteRune(c)
+		if _, err := buf.WriteRune(c); err != nil {
+			return nil, err
+		}
 	}
 	return uids, nil
 }
