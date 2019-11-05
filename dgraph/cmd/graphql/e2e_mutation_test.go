@@ -457,6 +457,57 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 	}
 }
 
+func TestFilterInUpdate(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	anotherCountry := addCountry(t, postExecutor)
+
+	t.Run("Update Country", func(t *testing.T) {
+		filter := map[string]interface{}{
+			"name": map[string]interface{}{
+				"eq": "Testland",
+			},
+		}
+
+		filterCountries := map[string]interface{}{
+			"ids": []string{anotherCountry.ID},
+		}
+
+		updateParams := &GraphQLParams{
+			Query: `mutation newName($filter: CountryFilter!, $newName: String!, 
+					 $filterCountries: CountryFilter!) {
+			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
+				country(filter: $filterCountries) {
+					id
+					name
+				}
+			}
+		}`,
+			Variables: map[string]interface{}{
+				"filter":          filter,
+				"newName":         "updatedValue",
+				"filterCountries": filterCountries,
+			},
+		}
+
+		gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		var result struct {
+			UpdateCountry struct {
+				Country []*country
+			}
+		}
+
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+
+		require.Equal(t, len(result.UpdateCountry.Country), 1)
+		require.Equal(t, result.UpdateCountry.Country[0].Name, "updatedValue")
+	})
+
+	cleanUp(t, []*country{newCountry, anotherCountry}, nil, nil)
+}
+
 func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	country := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
