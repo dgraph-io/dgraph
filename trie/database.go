@@ -73,15 +73,16 @@ type Genesis struct {
 	Name       []byte
 	Id         []byte
 	ProtocolId []byte
-	Bootnodes  []string
+	Bootnodes  [][]byte
 }
 
 func NewGenesisFromData(gen *genesis.Genesis) *Genesis {
+	bnodes := common.StringArrayToBytes(gen.Bootnodes)
 	return &Genesis{
 		Name:       []byte(gen.Name),
 		Id:         []byte(gen.Id),
 		ProtocolId: []byte(gen.ProtocolId),
-		Bootnodes:  gen.Bootnodes,
+		Bootnodes:  bnodes,
 	}
 }
 
@@ -107,7 +108,9 @@ func (db *Database) LoadGenesisData() (*Genesis, error) {
 		return nil, err
 	}
 
-	data, err := scale.Decode(enc, &Genesis{})
+	data, err := scale.Decode(enc, &Genesis{
+		Bootnodes: [][]byte{{}},
+	})
 	if err != nil {
 		return nil, err
 	}

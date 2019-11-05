@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
@@ -62,11 +63,11 @@ func TestStoreGenesisInfo(t *testing.T) {
 	expected := &trie.Genesis{
 		Name:       []byte(tmpGenesis.Name),
 		Id:         []byte(tmpGenesis.Id),
-		Bootnodes:  tmpGenesis.Bootnodes,
 		ProtocolId: []byte(tmpGenesis.ProtocolId),
+		Bootnodes:  common.StringArrayToBytes(tmpGenesis.Bootnodes),
 	}
 
-	if reflect.DeepEqual(gendata, expected) {
+	if !reflect.DeepEqual(gendata, expected) {
 		t.Fatalf("Fail to get genesis data: got %s expected %s", gendata, expected)
 	}
 }

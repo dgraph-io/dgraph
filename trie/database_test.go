@@ -209,7 +209,7 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 		Name:       []byte("gossamer"),
 		Id:         []byte("gossamer"),
 		ProtocolId: []byte("gossamer"),
-		Bootnodes:  nil,
+		Bootnodes:  [][]byte{[]byte("noot")},
 	}
 
 	err = trie.db.StoreGenesisData(expected)
@@ -225,5 +225,4 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 	if !reflect.DeepEqual(gen, expected) {
 		t.Fatalf("Fail: got %v expected %v", gen, expected)
 	}
-
 }

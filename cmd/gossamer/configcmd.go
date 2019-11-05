@@ -24,6 +24,7 @@ import (
 	"unicode"
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
+	"github.com/ChainSafe/gossamer/common"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
@@ -49,8 +50,6 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	var srvcs []services.Service
 
-	log.Info("🕸\t Starting gossamer...", "datadir", fig.Global.DataDir)
-
 	// DB: Create database dir and initialize stateDB and blockDB
 	dbSrv, err := polkadb.NewDbService(fig.Global.DataDir)
 	if err != nil {
@@ -71,10 +70,18 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, fmt.Errorf("error loading state and runtime: %s", err)
 	}
 
+	// load extra genesis data from DB
+	gendata, err := state.Db().LoadGenesisData()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Info("🕸\t Configuring node...", "datadir", fig.Global.DataDir, "protocolID", string(gendata.ProtocolId), "bootnodes", fig.P2p.BootstrapNodes)
+
 	// TODO: BABE
 
 	// P2P
-	p2pSrvc, msgChan := createP2PService(fig)
+	p2pSrvc, msgChan := createP2PService(fig, gendata)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// core.Service
@@ -87,14 +94,6 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	// RPC
 	rpcSrvr := startRpc(ctx, fig.Rpc, apiSrvc)
-
-	// load extra genesis data from DB
-	gendata, err := state.Db().LoadGenesisData()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	log.Debug("genesisdata", "data", gendata)
 
 	return dot.NewDot(string(gendata.Name), srvcs, rpcSrvr), fig, nil
 }
@@ -183,14 +182,15 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 }
 
 // createP2PService starts a p2p network layer from provided config
-func createP2PService(fig *cfg.Config) (*p2p.Service, chan []byte) {
+func createP2PService(fig *cfg.Config, gendata *trie.Genesis) (*p2p.Service, chan []byte) {
 	config := p2p.Config{
-		BootstrapNodes: fig.P2p.BootstrapNodes,
+		BootstrapNodes: append(fig.P2p.BootstrapNodes, common.BytesToStringArray(gendata.Bootnodes)...),
 		Port:           fig.P2p.Port,
 		RandSeed:       0,
 		NoBootstrap:    fig.P2p.NoBootstrap,
 		NoMdns:         fig.P2p.NoMdns,
 		DataDir:        fig.Global.DataDir,
+		ProtocolId:     string(gendata.ProtocolId),
 	}
 
 	msgChan := make(chan []byte)

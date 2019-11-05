@@ -14,6 +14,7 @@ import (
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
@@ -23,7 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
-const ProtocolPrefix = "/substrate/dot/2"
+const DefaultProtocolId = protocol.ID("/gossamer/dot/0")
 const mdnsPeriod = time.Minute
 
 // host is a wrapper around libp2p's host.host
@@ -37,6 +38,7 @@ type host struct {
 	noBootstrap bool
 	noMdns      bool
 	mdns        discovery.Service
+	protocolId  protocol.ID
 }
 
 func newHost(ctx context.Context, cfg *Config) (*host, error) {
@@ -48,6 +50,11 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 	h, err := libp2p.New(ctx, opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	protocolId := protocol.ID(cfg.ProtocolId)
+	if protocolId == "" {
+		protocolId = DefaultProtocolId
 	}
 
 	dstore := dsync.MutexWrap(ds.NewMapDatastore())
@@ -79,6 +86,7 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 		dht:         dht,
 		dhtConfig:   dhtConfig,
 		bootnodes:   bootstrapNodes,
+		protocolId:  protocolId,
 		noBootstrap: cfg.NoBootstrap,
 		noMdns:      cfg.NoMdns,
 	}, nil
@@ -102,7 +110,7 @@ func (h *host) bootstrap() {
 
 func (h *host) startMdns() {
 	if !h.noMdns {
-		mdns, err := discovery.NewMdnsService(h.ctx, h.h, mdnsPeriod, ProtocolPrefix)
+		mdns, err := discovery.NewMdnsService(h.ctx, h.h, mdnsPeriod, string(h.protocolId))
 		if err != nil {
 			log.Error("error starting MDNS", "err", err)
 		}
@@ -122,7 +130,7 @@ func (h *host) logAddrs() {
 }
 
 func (h *host) registerStreamHandler(handler func(net.Stream)) {
-	h.h.SetStreamHandler(ProtocolPrefix, handler)
+	h.h.SetStreamHandler(h.protocolId, handler)
 }
 
 func (h *host) connect(addrInfo peer.AddrInfo) (err error) {
@@ -130,13 +138,13 @@ func (h *host) connect(addrInfo peer.AddrInfo) (err error) {
 	return err
 }
 
-// getExistingStream gets an existing stream for a peer that uses ProtocolPrefix
+// getExistingStream gets an existing stream for a peer that uses the host's protocolId
 func (h *host) getExistingStream(p peer.ID) net.Stream {
 	conns := h.h.Network().ConnsToPeer(p)
 	for _, conn := range conns {
 		streams := conn.GetStreams()
 		for _, stream := range streams {
-			if stream.Protocol() == ProtocolPrefix {
+			if stream.Protocol() == h.protocolId {
 				return stream
 			}
 		}
@@ -151,7 +159,7 @@ func (h *host) send(peer core.PeerAddrInfo, msg []byte) (err error) {
 
 	stream := h.getExistingStream(peer.ID)
 	if stream == nil {
-		stream, err = h.h.NewStream(h.ctx, peer.ID, ProtocolPrefix)
+		stream, err = h.h.NewStream(h.ctx, peer.ID, h.protocolId)
 		log.Debug("opening new stream ", "to", peer.ID)
 		if err != nil {
 			log.Error("failed to open stream", "error", err)

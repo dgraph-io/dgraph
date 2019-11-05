@@ -28,6 +28,24 @@ const (
 	HashLength = 32
 )
 
+// StringArrayToBytes turns an array of strings into an array of byte arrays
+func StringArrayToBytes(in []string) [][]byte {
+	b := [][]byte{}
+	for _, str := range in {
+		b = append(b, []byte(str))
+	}
+	return b
+}
+
+// BytesToStringArray turns an array of byte arrays into an array strings
+func BytesToStringArray(in [][]byte) []string {
+	strs := []string{}
+	for _, b := range in {
+		strs = append(strs, string(b))
+	}
+	return strs
+}
+
 // HexToBytes turns a 0x prefixed hex string into a byte slice
 func HexToBytes(in string) ([]byte, error) {
 	if strings.Compare(in[:2], "0x") != 0 {

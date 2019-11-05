@@ -40,6 +40,8 @@ const KeyFile = "node.key"
 type Config struct {
 	// Peers used for bootstrapping
 	BootstrapNodes []string
+	// Protocol ID for network messages
+	ProtocolId string
 	// Listening port
 	Port uint32
 	// If 0, random host ID will be generated; If non-0, deterministic ID will be produced, keys will not be loaded from data dir
