@@ -751,7 +751,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 				Arguments: []*ast.ArgumentDefinition{
 					{
 						Name: "filter",
-						Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: true},
+						Type: &ast.Type{NamedType: defn.Name + "Filter", NonNull: false},
 					},
 				},
 			},
