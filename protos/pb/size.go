@@ -53,8 +53,8 @@ func (m *Posting) DeepSize() int {
 		return size
 	}
 
-	// 1 + 3 + 1/2 + 1/2 + 3 + 2 + 3 + 1 + 1 + 1 + 0 + 3 + 1
-	size += 20 * 8
+	// 1 + 3 + 1 + 1 + 3 + 2 + 3 + 1 + 1 + 1 + 0 + 3 + 1
+	size += 22 * 8
 
 	// Posting.Value
 	size += cap(m.Value)
@@ -128,7 +128,8 @@ func (m *UidBlock) DeepSize() int {
 
 	// size of struct UidBlock (1 + 3 + 1 + 0 + 3 + 1)
 	// Due to alignment, both NumUids and XXX_sizecache consume 8 bytes instead of 4 bytes
-	size += 9 * 8
+	// to round the word making it 10
+	size += 10 * 8
 
 	// UidBlock.Deltas
 	size += cap(m.Deltas)

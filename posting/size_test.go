@@ -1,7 +1,10 @@
 package posting
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 /*
@@ -21,8 +24,44 @@ import (
  */
 var a *List
 
+var c *pb.PostingList
+
+var d *pb.UidPack
+
+var e *pb.UidBlock
+
+func TestYo(t *testing.T) {
+	fmt.Println("SD")
+	a = &List{}
+	a.mutationMap = make(map[uint64]*pb.PostingList)
+	fmt.Println("SD3245")
+	a.mutationMap[1] = &pb.PostingList{}
+	fmt.Println(a.mutationMap[1])
+}
 func BenchmarkPosting(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		a = &List{}
+		a.mutationMap = make(map[uint64]*pb.PostingList)
+		a.mutationMap[1] = &pb.PostingList{}
+		a.mutationMap[2] = &pb.PostingList{}
+		fmt.Println(a.DeepSize())
+	}
+}
+
+func BenchmarkPostingList(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		c = &pb.PostingList{}
+	}
+}
+
+func BenchmarkUidPack(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		d = &pb.UidPack{}
+	}
+}
+
+func BenchmarkUidBlock(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		e = &pb.UidBlock{}
 	}
 }
