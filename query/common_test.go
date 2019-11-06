@@ -234,6 +234,7 @@ type Node {
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
+alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 abbr                           : string .
 dob                            : dateTime @index(year) .

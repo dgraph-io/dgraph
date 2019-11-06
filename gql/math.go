@@ -334,28 +334,28 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTruef(t != nil, "Nil Math tree")
 	if t.Var != "" {
 		// Leaf node.
-		buf.WriteString(t.Var)
+		x.Check2(buf.WriteString(t.Var))
 		return
 	}
 	if t.Const.Value != nil {
 		// Leaf node.
-		buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
+		x.Check2(buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64)))
 		return
 	}
 	// Non-leaf node.
-	buf.WriteRune('(')
+	x.Check2(buf.WriteRune('('))
 	switch t.Fn {
 	case "+", "-", "/", "*", "%", "exp", "ln", "cond", "min",
 		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
 		"logbase", "pow":
-		buf.WriteString(t.Fn)
+		x.Check2(buf.WriteString(t.Fn))
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
 	}
 
 	for _, c := range t.Child {
-		buf.WriteRune(' ')
+		x.Check2(buf.WriteRune(' '))
 		c.stringHelper(buf)
 	}
-	buf.WriteRune(')')
+	x.Check2(buf.WriteRune(')'))
 }

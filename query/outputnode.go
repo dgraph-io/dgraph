@@ -193,14 +193,23 @@ func (n nodeSlice) Swap(i, j int) {
 	n[i], n[j] = n[j], n[i]
 }
 
-func (fj *fastJsonNode) writeKey(out *bytes.Buffer) {
-	out.WriteRune('"')
-	out.WriteString(fj.attr)
-	out.WriteRune('"')
-	out.WriteRune(':')
+func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
+	if _, err := out.WriteRune('"'); err != nil {
+		return err
+	}
+	if _, err := out.WriteString(fj.attr); err != nil {
+		return err
+	}
+	if _, err := out.WriteRune('"'); err != nil {
+		return err
+	}
+	if _, err := out.WriteRune(':'); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (fj *fastJsonNode) encode(out *bytes.Buffer) {
+func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 	// set relative ordering
 	for i, a := range fj.attrs {
 		a.order = i
@@ -208,7 +217,9 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 
 	i := 0
 	if i < len(fj.attrs) {
-		out.WriteRune('{')
+		if _, err := out.WriteRune('{'); err != nil {
+			return err
+		}
 		cur := fj.attrs[i]
 		i++
 		cnt := 1
@@ -226,48 +237,78 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 			if !last {
 				if cur.attr == next.attr {
 					if cnt == 1 {
-						cur.writeKey(out)
-						out.WriteRune('[')
+						if err := cur.writeKey(out); err != nil {
+							return err
+						}
+						if _, err := out.WriteRune('['); err != nil {
+							return err
+						}
 						inArray = true
 					}
-					cur.encode(out)
+					if err := cur.encode(out); err != nil {
+						return err
+					}
 					cnt++
 				} else {
 					if cnt == 1 {
-						cur.writeKey(out)
+						if err := cur.writeKey(out); err != nil {
+							return err
+						}
 						if cur.isChild || cur.list {
-							out.WriteRune('[')
+							if _, err := out.WriteRune('['); err != nil {
+								return err
+							}
 							inArray = true
 						}
 					}
-					cur.encode(out)
+					if err := cur.encode(out); err != nil {
+						return err
+					}
 					if cnt != 1 || (cur.isChild || cur.list) {
-						out.WriteRune(']')
+						if _, err := out.WriteRune(']'); err != nil {
+							return err
+						}
 						inArray = false
 					}
 					cnt = 1
 				}
-				out.WriteRune(',')
+				if _, err := out.WriteRune(','); err != nil {
+					return err
+				}
 
 				cur = next
 			} else {
 				if cnt == 1 {
-					cur.writeKey(out)
+					if err := cur.writeKey(out); err != nil {
+						return err
+					}
 				}
 				if (cur.isChild || cur.list) && !inArray {
-					out.WriteRune('[')
+					if _, err := out.WriteRune('['); err != nil {
+						return err
+					}
 				}
-				cur.encode(out)
+				if err := cur.encode(out); err != nil {
+					return err
+				}
 				if cnt != 1 || (cur.isChild || cur.list) {
-					out.WriteRune(']')
+					if _, err := out.WriteRune(']'); err != nil {
+						return err
+					}
 				}
 				break
 			}
 		}
-		out.WriteRune('}')
+		if _, err := out.WriteRune('}'); err != nil {
+			return err
+		}
 	} else {
-		out.Write(fj.scalarVal)
+		if _, err := out.Write(fj.scalarVal); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode, error) {
@@ -535,9 +576,13 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 
 	var bufw bytes.Buffer
 	if len(n.(*fastJsonNode).attrs) == 0 {
-		bufw.WriteString(`{}`)
+		if _, err := bufw.WriteString(`{}`); err != nil {
+			return nil, err
+		}
 	} else {
-		n.(*fastJsonNode).encode(&bufw)
+		if err := n.(*fastJsonNode).encode(&bufw); err != nil {
+			return nil, err
+		}
 	}
 	return bufw.Bytes(), nil
 }

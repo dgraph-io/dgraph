@@ -1262,62 +1262,62 @@ func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(f != nil)
 	if f.Func != nil && len(f.Func.Name) > 0 {
 		// Leaf node.
-		buf.WriteRune('(')
-		buf.WriteString(f.Func.Name)
+		x.Check2(buf.WriteRune('('))
+		x.Check2(buf.WriteString(f.Func.Name))
 
 		if len(f.Func.Attr) > 0 {
-			buf.WriteRune(' ')
+			x.Check2(buf.WriteRune(' '))
 			if f.Func.IsCount {
-				buf.WriteString("count(")
+				x.Check2(buf.WriteString("count("))
 			} else if f.Func.IsValueVar {
-				buf.WriteString("val(")
+				x.Check2(buf.WriteString("val("))
 			} else if f.Func.IsLenVar {
-				buf.WriteString("len(")
+				x.Check2(buf.WriteString("len("))
 			}
-			buf.WriteString(f.Func.Attr)
+			x.Check2(buf.WriteString(f.Func.Attr))
 			if f.Func.IsCount || f.Func.IsValueVar || f.Func.IsLenVar {
-				buf.WriteRune(')')
+				x.Check2(buf.WriteRune(')'))
 			}
 			if len(f.Func.Lang) > 0 {
-				buf.WriteRune('@')
-				buf.WriteString(f.Func.Lang)
+				x.Check2(buf.WriteRune('@'))
+				x.Check2(buf.WriteString(f.Func.Lang))
 			}
 
 			for _, arg := range f.Func.Args {
 				if arg.IsValueVar {
-					buf.WriteString(" val(")
+					x.Check2(buf.WriteString(" val("))
 				} else {
-					buf.WriteString(" \"")
+					x.Check2(buf.WriteString(" \""))
 				}
-				buf.WriteString(arg.Value)
+				x.Check2(buf.WriteString(arg.Value))
 				if arg.IsValueVar {
-					buf.WriteRune(')')
+					x.Check2(buf.WriteRune(')'))
 				} else {
-					buf.WriteRune('"')
+					x.Check2(buf.WriteRune('"'))
 				}
 			}
 		}
-		buf.WriteRune(')')
+		x.Check2(buf.WriteRune(')'))
 		return
 	}
 	// Non-leaf node.
-	buf.WriteRune('(')
+	x.Check2(buf.WriteRune('('))
 	switch f.Op {
 	case "and":
-		buf.WriteString("AND")
+		x.Check2(buf.WriteString("AND"))
 	case "or":
-		buf.WriteString("OR")
+		x.Check2(buf.WriteString("OR"))
 	case "not":
-		buf.WriteString("NOT")
+		x.Check2(buf.WriteString("NOT"))
 	default:
 		x.Fatalf("Unknown operator: %q", f.Op)
 	}
 
 	for _, c := range f.Child {
-		buf.WriteRune(' ')
+		x.Check2(buf.WriteRune(' '))
 		c.stringHelper(buf)
 	}
-	buf.WriteRune(')')
+	x.Check2(buf.WriteRune(')'))
 }
 
 type filterTreeStack struct{ a []*FilterTree }
@@ -1375,7 +1375,9 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	buf := new(bytes.Buffer)
-	buf.WriteString("[")
+	if _, err := buf.WriteString("["); err != nil {
+		return err
+	}
 	depth := 1
 	for {
 		if valid := it.Next(); !valid {
@@ -1384,14 +1386,20 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 		item := it.Item()
 		switch item.Typ {
 		case itemLeftSquare:
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 			depth++
 		case itemRightSquare:
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 			depth--
 		case itemMathOp, itemComma, itemName:
 			// Writing tokens to buffer.
-			buf.WriteString(item.Val)
+			if _, err := buf.WriteString(item.Val); err != nil {
+				return err
+			}
 		default:
 			return item.Errorf("Found invalid item: %s while parsing geo arguments.",
 				item.Val)
@@ -2144,7 +2152,9 @@ func parseID(val string) ([]uint64, error) {
 		if c == '[' || c == ')' {
 			return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 		}
-		buf.WriteRune(c)
+		if _, err := buf.WriteRune(c); err != nil {
+			return nil, err
+		}
 	}
 	return uids, nil
 }

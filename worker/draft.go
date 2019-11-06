@@ -253,7 +253,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			createSchema(attr, storageType)
+			if err := createSchema(attr, storageType); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -69,7 +69,7 @@ func readShardDirs(d string) []string {
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
-	dir.Close()
+	x.Check(dir.Close())
 	for i, shard := range shards {
 		shards[i] = filepath.Join(d, shard)
 	}

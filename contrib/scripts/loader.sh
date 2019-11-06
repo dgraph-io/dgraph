@@ -37,3 +37,5 @@ rm -rf $tmpdir
 
 echo "Running queries"
 $basedir/contrib/scripts/goldendata-queries.sh
+
+stopCluster
