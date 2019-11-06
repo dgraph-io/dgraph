@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -91,10 +90,16 @@ func TestReservedPredicates(t *testing.T) {
 	// cannot be altered even if the permissions allow it.
 	ctx := context.Background()
 
-	dg1 := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	alterReservedPredicates(t, dg1)
 
-	dg2 := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg2, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
 		t.Fatalf("unable to login using the groot account:%v", err)
 	}
@@ -107,12 +112,18 @@ func TestAuthorization(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg1 := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	testAuthorization(t, dg1)
 	glog.Infof("done")
 
 	glog.Infof("testing with port 9182")
-	dg2 := testutil.DgraphClientWithGroot(":9182")
+	dg2, err := testutil.DgraphClientWithGroot(":9182")
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	testAuthorization(t, dg2)
 	glog.Infof("done")
 }
@@ -163,13 +174,13 @@ var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
 var unusedGroup = "unusedGroup"
-var rootDir = filepath.Join(os.TempDir(), "acl_test")
 var query = fmt.Sprintf(`
 	{
 		q(func: eq(%s, "SF")) {
 			%s
 		}
 	}`, predicateToRead, queryAttr)
+var schemaQuery = "schema {}"
 
 func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
@@ -205,10 +216,21 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
-	// login with alice's account
 	ctx := context.Background()
 	txn := dg.NewTxn()
 	_, err := txn.Query(ctx, query)
+
+	if shouldFail {
+		require.Error(t, err, "the query should have failed")
+	} else {
+		require.NoError(t, err, "the query should have succeeded")
+	}
+}
+
+func querySchemaWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
+	ctx := context.Background()
+	txn := dg.NewTxn()
+	_, err := txn.Query(ctx, schemaQuery)
 
 	if shouldFail {
 		require.Error(t, err, "the query should have failed")
@@ -346,28 +368,34 @@ func TestPredicateRegex(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	createAccountAndData(t, dg)
 	ctx := context.Background()
-	err := dg.Login(ctx, userid, userpassword)
+	err = dg.Login(ctx, userid, userpassword)
 	require.NoError(t, err, "Logging in with the current password should have succeeded")
 
-	// the operations should be allowed when no rule is defined (the fail open approach)
+	// The operations should be allowed when no rule is defined (the fail open approach).
 	queryPredicateWithUserAccount(t, dg, false)
+	querySchemaWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
 	createGroupAndAcls(t, unusedGroup, false)
 
-	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	// the operations should all fail when there is a rule defined, but the current user is not
-	// allowed
+	// The operations should all fail when there is a rule defined, but the current user
+	// is not allowed.
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
+	// Schema queries should still succeed since they are not tied to specific predicates.
+	querySchemaWithUserAccount(t, dg, false)
 
-	// create a new group
+	// Create a new group.
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "add",
 		"-a", dgraphEndpoint,
@@ -376,7 +404,7 @@ func TestPredicateRegex(t *testing.T) {
 		t.Fatalf("Unable to create group:%v", string(errOutput))
 	}
 
-	// add the user to the group
+	// Add the user to the group.
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "mod",
 		"-a", dgraphEndpoint,
@@ -396,7 +424,7 @@ func TestPredicateRegex(t *testing.T) {
 			"name", devGroup, string(errOutput))
 	}
 
-	// add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group
+	// Add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group.
 	predRegex := "^predicate_to(.*)$"
 	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "mod",
@@ -412,19 +440,28 @@ func TestPredicateRegex(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
-	// the alter operation should still fail since the regex pred does not have the Modify
-	// permission
+	// The alter operation should still fail since the regex pred does not have the Modify
+	// permission.
 	alterPredicateWithUserAccount(t, dg, true)
+	// Schema queries should still succeed since they are not tied to specific predicates.
+	querySchemaWithUserAccount(t, dg, false)
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
 
 	createAccountAndData(t, dg)
-	// without logging in,
-	// the anonymous user should be evaluated as if the user does not belong to any group,
-	// and access should be granted if there is no ACL rule defined for a predicate (fail open)
+	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// Without logging in, the anonymous user should be evaluated as if the user does not
+	// belong to any group, and access should be granted if there is no ACL rule defined
+	// for a predicate (fail open).
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
+
+	// Schema queries should fail if the user has not logged in.
+	querySchemaWithUserAccount(t, dg, true)
 }

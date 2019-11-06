@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"testing"
 
@@ -34,7 +35,10 @@ import (
 func TestQuery(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
 		}
@@ -501,9 +505,24 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
+	var loginBb bytes.Buffer
+	loginBb.WriteString(`{"userid":"groot","password":"password"}`)
+	loginRes, err := http.Post("http://localhost:8180/login", "application/json", &loginBb)
+	require.NoError(t, err)
+	loginBody, err := ioutil.ReadAll(loginRes.Body)
+	require.NoError(t, err)
+	loginMap := make(map[string]map[string]string)
+	require.NoError(t, json.Unmarshal(loginBody, &loginMap))
+	accessJwt := loginMap["data"]["accessJWT"]
+
 	var bb bytes.Buffer
 	bb.WriteString(`schema{}`)
-	res, err := http.Post("http://localhost:8180/query", "application/graphql+-", &bb)
+	client := http.Client{}
+	req, err := http.NewRequest("POST", "http://localhost:8180/query", &bb)
+	require.NoError(t, err)
+	req.Header.Add("Content-Type", "application/graphql+-")
+	req.Header.Add("X-Dgraph-AccessToken", accessJwt)
+	res, err := client.Do(req)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	defer res.Body.Close()

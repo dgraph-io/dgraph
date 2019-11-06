@@ -1,3 +1,5 @@
+# Auto-generated with: [./../../../../compose/compose -a 1 -z 1]
+#
 version: "3.5"
 services:
   alpha1:
@@ -14,11 +16,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ../tls
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth REQUIREANDVERIFY
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=1
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -33,6 +32,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr
-      -v=2 --bindall
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr -v=2
+      --bindall
 volumes: {}

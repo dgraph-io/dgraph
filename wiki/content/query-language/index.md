@@ -2086,6 +2086,33 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+
+### Predicate name rules
+
+Any alphanumeric combination of a predicate name is permitted.
+Dgraph also supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs).
+You can read more in [Predicates i18n](#predicates-i18n).
+
+#### Allowed special characters
+
+Single special characters are not accepted, which includes the special characters from IRIs.
+They have to be prefixed/suffixed with alphanumeric characters.
+
+```
+][&*()_-+=!#$%
+```
+
+*Note: You are not restricted to use @ suffix, but the suffix character gets ignored.*
+
+#### Forbidden special characters
+
+The special characters below are not accepted.
+
+```
+^}|{`\~
+```
+
+
 ### Predicates i18n
 
 If your predicate is a URI or has language-specific characters, then enclose
@@ -2127,6 +2154,7 @@ Query:
   }
 }
 ```
+
 
 ### Upsert directive
 
