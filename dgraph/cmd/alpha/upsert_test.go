@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -76,6 +77,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
+	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.result, &result))
@@ -948,6 +950,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
+	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.result, &result))
@@ -2223,6 +2226,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
+	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.result, &result))
@@ -2271,68 +2275,141 @@ upsert {
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
-// func TestMultiMutationWithoutIf(t *testing.T) {
-// 	require.NoError(t, dropAll())
-// 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+func TestMultiMutationWithoutIf(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
 
-// 	m1 := `
-// upsert {
-//   query {
-//     me(func: eq(email, "email@company.io")) {
-//       v as uid
-//     }
-//   }
+	m1 := `
+upsert {
+  query {
+    me(func: eq(email, "email@company.io")) {
+      v as uid
+    }
+  }
 
-//   mutation @if(not(eq(len(v), 0))) {
-//     set {
-//       uid(v) <name> "not_name" .
-//       uid(v) <email> "not_email@company.io" .
-//     }
-//   }
+  mutation @if(not(eq(len(v), 0))) {
+    set {
+      uid(v) <name> "not_name" .
+      uid(v) <email> "not_email@company.io" .
+    }
+  }
 
-//   mutation @if(eq(len(v), 0)) {
-//     set {
-//       _:user <name> "name" .
-//       _:user <email> "email@company.io" .
-//     }
-//   }
+  mutation @if(eq(len(v), 0)) {
+    set {
+      _:user <name> "name" .
+    }
+  }
 
-//   mutation {
-//     set {
-//       _:user <name> "name2" .
-//       _:user <email> "email2@company.io" .
-//     }
-//   }
+  mutation {
+    set {
+      _:user <email> "email@company.io" .
+    }
+  }
 
-//   mutation {
-//     set {
-//       _:user <name> "name3" .
-//       _:user <email> "email3@company.io" .
-//     }
-//   }
-// }`
-// 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
-// 	require.NoError(t, err)
-// 	require.True(t, len(mr.keys) == 0)
-// 	require.True(t, []string{"email"}, mr.preds)
-// 	require.True(t, []string{"1-name"}, mr.preds)
-// 	require.Equal(t, 0, len(mr.vars))
+  mutation {
+    set {
+      _:other <name> "other" .
+      _:other <email> "other@company.io" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	sort.Strings(mr.preds)
+	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 
-// 	q1 := `
-// {
-//   q(func: has(email)) {
-//     name
-//   }
-// }`
-// 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
-// 	expectedRes := `
-// {
-//   "data": {
-//     "q": [{
-//        "name": "name"
-//      }]
-//    }
-// }`
-// 	require.NoError(t, err)
-// 	testutil.CompareJSON(t, res, expectedRes)
-// }
+	q1 := `
+{
+  q(func: has(email)) {
+    name
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "name": "name"
+     },
+     {
+      "name": "other"
+    }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestMultiMutationCount(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+  email: string @index(exact) .
+  count: int .`))
+
+	m1 := `
+upsert {
+  query {
+    q(func: eq(email, "email@company.io")) {
+      v as uid
+      c as count
+      nc as math(c+1)
+    }
+  }
+
+  mutation @if(eq(len(v), 0)) {
+    set {
+      uid(v) <name> "name" .
+      uid(v) <email> "email@company.io" .
+      uid(v) <count> "1" .
+    }
+  }
+
+  mutation @if(not(eq(len(v), 0))) {
+    set {
+      uid(v) <count> val(nc) .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	sort.Strings(mr.preds)
+	require.Equal(t, []string{"1-count", "1-email", "1-name"}, mr.preds)
+
+	q1 := `
+{
+  q(func: has(email)) {
+    count
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "count": 1
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+
+	// second time
+	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"1-count"}, mr.preds)
+
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes = `
+{
+  "data": {
+    "q": [{
+       "count": 2
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+}
