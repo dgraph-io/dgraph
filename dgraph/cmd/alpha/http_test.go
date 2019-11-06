@@ -162,11 +162,21 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
+type muRes struct {
+	Data struct {
+		Uids   map[string]string `json:"uids,omitempty"`
+		Result json.RawMessage   `json:"result,omitempty"`
+	} `json:"data,omitempty"`
+	Extensions *query.Extensions `json:"extensions,omitempty"`
+	Errors     []x.GqlError      `json:"errors,omitempty"`
+}
+
 type mutationResponse struct {
 	keys    []string
 	preds   []string
 	startTs uint64
-	vars    map[string][]string
+	uids    map[string]string
+	result  json.RawMessage
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -188,23 +198,16 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 		return mr, err
 	}
 
-	var r res
+	var r muRes
 	if err := json.Unmarshal(body, &r); err != nil {
 		return mr, err
 	}
 
-	type resData struct {
-		MutationVars map[string][]string `json:"vars"`
-	}
-	var rd resData
-	if err := json.Unmarshal(r.Data, &rd); err != nil {
-		return mr, err
-	}
-
-	mr.vars = rd.MutationVars
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	mr.uids = r.Data.Uids
+	mr.result = r.Data.Result
 	return mr, nil
 }
 

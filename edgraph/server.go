@@ -791,17 +791,6 @@ func updateMutations(qc *queryContext) {
 		updateUIDInMutations(gmu, qc)
 		updateValInMutations(gmu, qc)
 	}
-
-	// Remove condition vars from the response
-	for _, v := range qc.condVars {
-		delete(qc.uidRes, v)
-	}
-	// Remove empty valued varibales from the response
-	for n, v := range qc.uidRes {
-		if len(v) == 0 {
-			delete(qc.uidRes, n)
-		}
-	}
 }
 
 // findVars finds all the variables used in mutation block
@@ -1000,30 +989,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 
 	if err := x.HealthCheck(); err != nil {
 		return err
-	}
-
-	if len(qc.uidRes) > 0 {
-		resp.Vars = make(map[string]*api.Uids, len(qc.uidRes))
-		for v, uids := range qc.uidRes {
-			// There could be a lot of these uids which could blow up the response size, especially
-			// for bulk mutations, hence only return variables which have less than a million uids.
-			if len(uids) <= 1e6 {
-				hexUids := make([]string, 0, len(uids))
-				// doQueryInUpsert returns uids as base10 string representation. We convert them
-				// to base16 string so that response format is consistent with assigned uids.
-				for _, uid := range uids {
-					u, err := strconv.ParseUint(uid, 10, 64)
-					if err != nil {
-						return errors.Errorf("couldn't parse uid: [%v] as base 10 uint64", uid)
-					}
-					huid := fmt.Sprintf("%#x", u)
-					hexUids = append(hexUids, huid)
-				}
-				resp.Vars[v] = &api.Uids{
-					Uids: hexUids,
-				}
-			}
-		}
 	}
 
 	newUids, err := query.AssignUids(ctx, qc.gmuList)

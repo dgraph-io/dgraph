@@ -988,10 +988,7 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }
@@ -999,8 +996,7 @@ Result:
 
 Here, the query block queries for a user with `email` as `user@company1.io`. It stores
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
-of `vars` which has a list of uids that were used in the set mutation.
+user by extracting the uid from the variable `v` using `uid` function.
 
 We can achieve the same result using `json` dataset as follows:
 
@@ -1049,10 +1045,7 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }

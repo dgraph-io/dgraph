@@ -18,9 +18,8 @@ package alpha
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -31,15 +30,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// assertAsHex checks that uids returned as part of the vars map should be valid hex encoded uids.
-func assertAsHex(t *testing.T, vars map[string][]string) {
-	for _, uids := range vars {
-		for _, uid := range uids {
-			require.True(t, strings.HasPrefix(uid, "0x"), "uid: [%v] should be a hex encoded string", uid)
-			// ParseUint throws an error if the string has 0x prefix, so we need to strip the prefix here.
-			_, err := strconv.ParseUint(uid[2:], 16, 64)
-			require.NoErrorf(t, err, "while parsing: [%v] as hex encoded uint64", uid)
-		}
+type QueryResult struct {
+	Q []struct {
+		UID string
+	}
+	User1 []struct {
+		UID string
+	}
+	User2 []struct {
+		UID string
 	}
 }
 
@@ -62,7 +61,7 @@ func TestUpsertExample0(t *testing.T) {
 	m1 := `
 upsert {
   query {
-    me(func: eq(email, "email@company.io")) {
+    q(func: eq(email, "email@company.io")) {
       v as uid
     }
   }
@@ -77,10 +76,10 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, 0, len(mr.vars))
-	require.True(t, contains(mr.preds, "email"))
-	require.True(t, contains(mr.preds, "name"))
-	assertAsHex(t, mr.vars)
+	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 
 	// query should return the wrong name
 	q1 := `
@@ -99,7 +98,7 @@ upsert {
 	m2 := `
 upsert {
   query {
-    me(func: eq(email, "email@company.io")) {
+    q(func: eq(email, "email@company.io")) {
       v as uid
     }
   }
@@ -113,12 +112,10 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, 1, len(mr.vars))
-	uids, ok := mr.vars["uid(v)"]
-	require.True(t, ok)
-	require.Equal(t, 1, len(uids))
-	assertAsHex(t, mr.vars)
-	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, []string{"1-name"}, mr.preds)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.Q))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -173,7 +170,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 	m1 := `
 {
-  "query": "{ u as var(func: has(amount)) { amt as amount \n updated_amt as math(amt+1)}}",
+  "query": "{ q(func: has(amount)) { u as uid \n amt as amount \n updated_amt as math(amt+1)}}",
   "set": [
     {
       "uid": "uid(u)",
@@ -184,9 +181,9 @@ func TestUpsertExampleJSON(t *testing.T) {
 `
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 3, len(mr.vars["uid(u)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 3, len(result.Q))
 
 	q1 := `
 {
@@ -265,7 +262,7 @@ func TestUpsertExample0JSON(t *testing.T) {
 	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "name"))
+	require.Equal(t, []string{"1-name"}, mr.preds)
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -335,13 +332,13 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, 0 == len(mr.keys))
-	require.True(t, contains(mr.preds, "age"))
+	require.Equal(t, []string{"1-age"}, mr.preds)
 
 	// Ensure that another run works too
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, 0 == len(mr.keys))
-	require.True(t, contains(mr.preds, "age"))
+	require.Equal(t, []string{"1-age"}, mr.preds)
 }
 
 func TestUpsertInvalidErr(t *testing.T) {
@@ -458,7 +455,7 @@ upsert {
       a as age
     }
 
-    oldest(func: uid(a), orderdesc: val(a), first: 1) {
+    q(func: uid(a), orderdesc: val(a), first: 1) {
       u as uid
       name
       age
@@ -473,9 +470,9 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.Q))
 
 	q1 := `
 {
@@ -494,7 +491,7 @@ upsert {
 	m2 := `
 upsert {
   query {
-    user1(func: eq(name@en, "user1")) {
+    q(func: eq(name@en, "user1")) {
       u1 as uid
     }
   }
@@ -507,9 +504,9 @@ upsert {
 }`
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
-	assertAsHex(t, mr.vars)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.Q))
 
 	q2 := `
 {
@@ -564,10 +561,10 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
-	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.User1))
+	require.Equal(t, 1, len(result.User2))
 
 	q1 := `
 {
@@ -601,10 +598,10 @@ upsert {
 }`
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
-	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
-	assertAsHex(t, mr.vars)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.User1))
+	require.Equal(t, 1, len(result.User2))
 
 	q2 := `
 {
@@ -725,10 +722,10 @@ friend: uid @reverse .`))
 }`
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
-	require.Equal(t, 1, len(mr.vars["uid(u2)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.User1))
+	require.Equal(t, 1, len(result.User2))
 
 	q1 := `
 {
@@ -775,7 +772,7 @@ func TestUpsertBlankNodeWithVar(t *testing.T) {
 	m := `
 upsert {
   query {
-    users(func: eq(name, "user1")) {
+    q(func: eq(name, "user1")) {
       u as uid
     }
   }
@@ -789,8 +786,9 @@ upsert {
 }`
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(mr.vars))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 
 	q := `
 {
@@ -921,10 +919,10 @@ upsert {
   }
 }`
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
-	require.Equal(t, 0, len(mr.vars))
 	require.NoError(t, err)
-	assertAsHex(t, mr.vars)
-
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 }
 
 func TestConditionalUpsertExample0(t *testing.T) {
@@ -935,7 +933,7 @@ func TestConditionalUpsertExample0(t *testing.T) {
 	m1 := `
 upsert {
   query {
-    me(func: eq(email, "email@company.io")) {
+    q(func: eq(email, "email@company.io")) {
       v as uid
     }
   }
@@ -950,14 +948,16 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "email"))
-	require.True(t, contains(mr.preds, "name"))
-	require.Equal(t, 0, len(mr.vars))
+	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 
 	// Trying again, should be a NOOP
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(mr.vars))
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
 
 	// query should return the wrong name
 	q1 := `
@@ -976,7 +976,7 @@ upsert {
 	m2 := `
 upsert {
   query {
-    me(func: eq(email, "email@company.io")) {
+    q(func: eq(email, "email@company.io")) {
       v as uid
     }
   }
@@ -990,10 +990,10 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "name"))
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(v)"]))
-	assertAsHex(t, mr.vars)
+	require.Equal(t, []string{"1-name"}, mr.preds)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.Q))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1008,7 +1008,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	// Mutation with wrong name
 	m1 := `
 {
-  "query": "{me(func: eq(email, \"email@company.io\")) {v as uid}}",
+  "query": "{q(func: eq(email, \"email@company.io\")) {v as uid}}",
   "cond": " @if(eq(len(v), 0)) ",
   "set": [
     {
@@ -1024,7 +1024,9 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, 0, len(mr.vars))
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 
 	// query should return the wrong name
 	q1 := `
@@ -1042,7 +1044,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	// mutation with correct name
 	m2 := `
 {
-  "query": "{me(func: eq(email, \"email@company.io\")) {v as uid}}",
+  "query": "{q(func: eq(email, \"email@company.io\")) {v as uid}}",
   "cond": "@if(eq(len(v), 1))",
   "set": [
     {
@@ -1054,10 +1056,10 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "name"))
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(v)"]))
-
+	require.Equal(t, []string{"1-name"}, mr.preds)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.Q))
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1102,7 +1104,7 @@ func TestUpsertMultiValue(t *testing.T) {
 	m2 := `
 upsert {
   query {
-    me(func: eq(works_for, "company1")) {
+    q(func: eq(works_for, "company1")) {
       u as uid
     }
   }
@@ -1116,12 +1118,10 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "color"))
-	require.False(t, contains(mr.preds, "works_for"))
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 2, len(mr.vars["uid(u)"]))
-	assertAsHex(t, mr.vars)
-
+	require.Equal(t, []string{"1-color"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 2, len(result.Q))
 	q2 := `
 {
   q(func: eq(works_for, "%s")) {
@@ -1140,8 +1140,12 @@ upsert {
 	m3 := `
 upsert {
   query {
-    c1 as var(func: eq(works_for, "company1"))
-    c2 as var(func: eq(works_for, "company2"))
+    user1(func: eq(works_for, "company1")) {
+      c1 as uid
+    }
+    user2(func: eq(works_for, "company2")) {
+      c2 as uid
+    }
   }
 
   mutation @if(le(len(c1), 100) AND lt(len(c2), 100)) {
@@ -1156,10 +1160,10 @@ upsert {
 }`
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(mr.vars))
-	require.Equal(t, 2, len(mr.vars["uid(c1)"]))
-	require.Equal(t, 2, len(mr.vars["uid(c2)"]))
-	assertAsHex(t, mr.vars)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 2, len(result.User1))
+	require.Equal(t, 2, len(result.User2))
 
 	// The following mutation should have no effect on the state of the database
 	m4 := `
@@ -1181,7 +1185,6 @@ upsert {
 }`
 	mr, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(mr.vars))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1239,8 +1242,12 @@ upsert {
 	m2 := `
 upsert {
   query {
-    u1 as var(func: eq(email, "user1@company1.io"))
-    u3 as var(func: eq(email, "user3@company2.io"))
+    user1(func: eq(email, "user1@company1.io")) {
+      u1 as uid
+    }
+    user2(func: eq(email, "user3@company2.io")) {
+      u3 as uid
+    }
   }
 
   mutation @if(eq(len(u1), 1) AND eq(len(u3), 1)) {
@@ -1252,10 +1259,10 @@ upsert {
 }`
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(mr.vars))
-	require.Equal(t, 1, len(mr.vars["uid(u1)"]))
-	require.Equal(t, 1, len(mr.vars["uid(u3)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 1, len(result.User1))
+	require.Equal(t, 1, len(result.User2))
 
 	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1599,11 +1606,8 @@ upsert {
 	// parsed correctly by the val function.
 	// User3 doesn't have all the fields. This test also ensures
 	// that val works when not all records have the values
-	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 3, len(mr.vars["uid(u)"]))
-	assertAsHex(t, mr.vars)
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -1875,7 +1879,7 @@ func TestAggregateValBulkUpdate(t *testing.T) {
 	m1 := `
 upsert {
   query {
-    u as var(func: has(amount)) {
+    u as q(func: has(amount)) {
       amt as amount
     }
     me() {
@@ -1891,9 +1895,9 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 3, len(mr.vars["uid(u)"]))
-	assertAsHex(t, mr.vars)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 3, len(result.Q))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes := `
@@ -1926,7 +1930,7 @@ upsert {
     me() {
       max_amt as max(val(amt))
     }
-    v as var(func: eq(name, "Michael")) {
+    v as q(func: eq(name, "Michael")) {
       amount
     }
   }
@@ -1939,7 +1943,9 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(mr.vars))
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 }
 
 func TestUpsertBulkUpdateBranch(t *testing.T) {
@@ -1973,7 +1979,9 @@ amount: float .`))
 	m2 := `
 upsert {
   query {
-    u as var(func: has(branch))
+    q(func: has(branch)) {
+      u as uid
+    }
   }
 
   mutation {
@@ -1984,8 +1992,9 @@ upsert {
 }`
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 3, len(result.Q))
 
 	q2 := `
 {
@@ -2006,7 +2015,9 @@ upsert {
 	m3 := `
 upsert {
   query {
-    u as var(func: has(branch))
+    q(func: has(branch)) {
+      u as uid
+    }
   }
 
   mutation {
@@ -2017,8 +2028,9 @@ upsert {
 }`
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(mr.vars))
-	require.Equal(t, 3, len(mr.vars["uid(u)"]))
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 3, len(result.Q))
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -2113,9 +2125,12 @@ upsert {
 }`
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	// The uid variable is only used in the query and not in mutation and hence shouldn't be part
-	// of vars.
-	require.Equal(t, 0, len(mr.vars))
+	// The uid variable is only used in the query and not in mutation
+	// and hence shouldn't be part of vars.
+
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 }
 
 func TestMultiMutationEmptyRequest(t *testing.T) {
@@ -2175,7 +2190,6 @@ func TestMultiMutationNoUpsert(t *testing.T) {
 	}
 	resp, err := dg.NewTxn().Do(context.Background(), req)
 	require.NoError(t, err)
-	sort.Strings(resp.Txn.Preds)
 	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, resp.Txn.Preds)
 	testutil.CompareJSON(t, `{"empty": []}`, string(resp.Json))
 }
@@ -2187,7 +2201,7 @@ func TestMultipleMutation(t *testing.T) {
 	m1 := `
 upsert {
   query {
-    me(func: eq(email, "email@company.io")) {
+    q(func: eq(email, "email@company.io")) {
       v as uid
     }
   }
@@ -2209,9 +2223,10 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.True(t, contains(mr.preds, "email"))
-	require.True(t, contains(mr.preds, "name"))
-	require.Equal(t, 0, len(mr.vars))
+	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.Equal(t, 0, len(result.Q))
 
 	q1 := `
 {
@@ -2299,8 +2314,8 @@ upsert {
 // 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 // 	require.NoError(t, err)
 // 	require.True(t, len(mr.keys) == 0)
-// 	require.True(t, contains(mr.preds, "email"))
-// 	require.True(t, contains(mr.preds, "name"))
+// 	require.True(t, []string{"email"}, mr.preds)
+// 	require.True(t, []string{"1-name"}, mr.preds)
 // 	require.Equal(t, 0, len(mr.vars))
 
 // 	q1 := `
