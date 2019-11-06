@@ -60,10 +60,10 @@ func TestStoreGenesisInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := &trie.Genesis{
-		Name:       []byte(tmpGenesis.Name),
-		Id:         []byte(tmpGenesis.Id),
-		ProtocolId: []byte(tmpGenesis.ProtocolId),
+	expected := &genesis.GenesisData{
+		Name:       tmpGenesis.Name,
+		Id:         tmpGenesis.Id,
+		ProtocolId: tmpGenesis.ProtocolId,
 		Bootnodes:  common.StringArrayToBytes(tmpGenesis.Bootnodes),
 	}
 

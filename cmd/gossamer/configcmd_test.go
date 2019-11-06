@@ -33,7 +33,6 @@ import (
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/polkadb"
-	"github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -245,8 +244,8 @@ func TestSetGlobalConfig(t *testing.T) {
 }
 
 func TestCreateP2PService(t *testing.T) {
-	gendata := &trie.Genesis{
-		ProtocolId: []byte("gossamer"),
+	gendata := &genesis.GenesisData{
+		ProtocolId: "gossamer",
 	}
 
 	srv, _ := createP2PService(cfg.DefaultConfig(), gendata)

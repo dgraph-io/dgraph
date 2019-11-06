@@ -26,6 +26,7 @@ import (
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	"github.com/ChainSafe/gossamer/common"
 	cfg "github.com/ChainSafe/gossamer/config"
+	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
@@ -182,7 +183,7 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 }
 
 // createP2PService starts a p2p network layer from provided config
-func createP2PService(fig *cfg.Config, gendata *trie.Genesis) (*p2p.Service, chan []byte) {
+func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Service, chan []byte) {
 	config := p2p.Config{
 		BootstrapNodes: append(fig.P2p.BootstrapNodes, common.BytesToStringArray(gendata.Bootnodes)...),
 		Port:           fig.P2p.Port,

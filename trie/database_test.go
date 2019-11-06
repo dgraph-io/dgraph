@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/config/genesis"
 	db "github.com/ChainSafe/gossamer/polkadb"
 )
 
@@ -205,10 +206,10 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 
 	defer trie.closeDb()
 
-	expected := &Genesis{
-		Name:       []byte("gossamer"),
-		Id:         []byte("gossamer"),
-		ProtocolId: []byte("gossamer"),
+	expected := &genesis.GenesisData{
+		Name:       "gossamer",
+		Id:         "gossamer",
+		ProtocolId: "gossamer",
 		Bootnodes:  [][]byte{[]byte("noot")},
 	}
 

@@ -233,10 +233,12 @@ func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
 		v = reflect.ValueOf(t)
 	}
 
-	values := make([]interface{}, v.NumField())
+	values := make([]interface{}, 0)
 
 	for i := 0; i < v.NumField(); i++ {
-		values[i] = v.Field(i).Interface()
+		if v.Field(i).CanInterface() {
+			values = append(values, v.Field(i).Interface())
+		}
 	}
 
 	for _, item := range values {
