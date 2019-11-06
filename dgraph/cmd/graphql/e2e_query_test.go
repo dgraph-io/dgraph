@@ -358,6 +358,61 @@ func TestManyQueries(t *testing.T) {
 	}
 }
 
+func TestQueryOrderAtRoot(t *testing.T) {
+	posts := allPosts(t)
+
+	filter := map[string]interface{}{
+		"ids": []string{posts[0].PostID, posts[1].PostID},
+	}
+
+	getParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter!) {
+			queryPost(
+				filter: $filter,
+				order: {
+					desc: text,
+				}
+			) {
+				title
+				text
+				postID
+			}
+		}
+		`,
+		Variables: map[string]interface{}{
+			"filter": filter,
+		},
+	}
+
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result, expected struct {
+		QueryPost []*post
+	}
+
+	expected.QueryPost = []*post{
+		{
+			Title:  "Random post",
+			Text:   "this post is not worth publishing",
+			PostID: "0x16e4cf",
+		},
+		{
+			Title:  "Learning GraphQL in Dgraph",
+			Text:   "Where do I learn more about GraphQL support in Dgraph?",
+			PostID: "0x16e4ce",
+		},
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	require.Equal(t, len(result.QueryPost), 2)
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
 // an error.  Internally, the GraphQL server should run those concurrently, and
 // an error in one query should not affect the results of any others.
