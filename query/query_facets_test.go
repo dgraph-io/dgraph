@@ -40,6 +40,7 @@ func populateClusterWithFacets() {
 		<31> <name> "Andrea" .
 		<31> <alt_name> "Andy" .
 		<33> <name> "Michale" .
+		<34> <name> "Roger" .
 		<320> <name> "Test facet"@en (type = "Test facet with lang") .
 
 		<31> <friend> <24> .
@@ -74,6 +75,9 @@ func populateClusterWithFacets() {
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<1> <alt_name> \"Michelle\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets)
+
+	bossFacet := "(company = \"company1\")"
+	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
 
 	addTriplesToCluster(triples)
 
@@ -1142,4 +1146,52 @@ func TestTypeExpandFacets(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[
 		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス",
 			"model|type":"Electric", "year":2009, "owner": [{"uid": "0xcb"}]}]}}`, js)
+}
+
+func TestFacetUIDPredicate(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) {
+			name
+			boss @facets {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name": "Michonne", "boss": {"name": "Roger"}, "boss|company": "company1"}]}}`, js)
+}
+
+func TestFacetUIDListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) {
+			name
+			friend @facets(since) {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name": "Michonne",
+		"friend": [{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},
+		{"name":"Andrea"}],"friend|since":{"0":"2006-01-02T15:04:05Z","1":"2004-05-02T15:04:05Z",
+		"2":"2007-05-02T15:04:05Z","3":"2006-01-02T15:04:05Z"}}]}}`, js)
+}
+
+func TestFacetValueListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) {
+			name@en
+			alt_name @facets
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [
+		{"name@en": "Michelle", "alt_name": ["Michelle", "Michelin"],
+	 "alt_name|origin": {"0": "french", "1": "french"},
+	 "alt_name|dummy": {"0": true, "1": true}}]}}`, js)
 }

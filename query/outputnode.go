@@ -767,19 +767,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
-			for childIdx := range ul.Uids {
-				if pc.Params.Facet != nil && len(fcsList) > childIdx {
-					fs := fcsList[childIdx]
-					err := attachFacets(dst.(*fastJsonNode),
-						fieldName, pc.List, fs.Facets, childIdx+1)
-					if err != nil {
-						return err
-					}
-				}
 
-			}
-
-			for _, childUID := range ul.Uids {
+			for childIdx, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
 				}
@@ -802,6 +791,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
+					// once we know that us is not empty, we can add facets for it.
+					if pc.Params.Facet != nil && len(fcsList) > childIdx {
+						fs := fcsList[childIdx]
+						err := attachFacets(dst.(*fastJsonNode),
+							fieldName, pc.List, fs.Facets, childIdx)
+						if err != nil {
+							return err
+						}
+					}
+
 					if pc.Params.Normalize {
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
@@ -868,7 +867,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				err := attachFacets(dst.(*fastJsonNode), fieldName,
-					pc.List, pc.facetsMatrix[idx].FacetsList[0].Facets, idx+1)
+					pc.List, pc.facetsMatrix[idx].FacetsList[0].Facets, idx)
 				if err != nil {
 					return err
 				}
