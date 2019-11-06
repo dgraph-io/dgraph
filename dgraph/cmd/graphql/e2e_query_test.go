@@ -365,52 +365,92 @@ func TestQueryOrderAtRoot(t *testing.T) {
 		"ids": []string{posts[0].PostID, posts[1].PostID},
 	}
 
-	getParams := &GraphQLParams{
-		Query: `query queryPost($filter: PostFilter!) {
-			queryPost(
-				filter: $filter,
-				order: {
-					desc: text,
-				}
-			) {
-				title
-				text
-				postID
-			}
-		}
-		`,
-		Variables: map[string]interface{}{
-			"filter": filter,
-		},
+	orderNameDesc := map[string]interface{}{
+		"desc": "text",
 	}
 
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	orderNameAsc := map[string]interface{}{
+		"asc": "text",
+	}
 
 	var result, expected struct {
 		QueryPost []*post
 	}
 
-	expected.QueryPost = []*post{
-		{
-			Title:  "Random post",
-			Text:   "this post is not worth publishing",
-			PostID: "0x16e4cf",
+	cases := map[string]struct {
+		Order    map[string]interface{}
+		First    int
+		Offset   int
+		Expected []*post
+	}{
+		"order": {
+			Order:    orderNameAsc,
+			First:    0,
+			Offset:   0,
+			Expected: []*post{posts[0], posts[1]},
 		},
-		{
-			Title:  "Learning GraphQL in Dgraph",
-			Text:   "Where do I learn more about GraphQL support in Dgraph?",
-			PostID: "0x16e4ce",
+		"orderDesc": {
+			Order:    orderNameDesc,
+			First:    0,
+			Offset:   0,
+			Expected: []*post{posts[1], posts[0]},
+		},
+		"first": {
+			Order:    orderNameDesc,
+			First:    1,
+			Offset:   0,
+			Expected: []*post{posts[1]},
+		},
+		"offset": {
+			Order:    orderNameDesc,
+			First:    0,
+			Offset:   1,
+			Expected: []*post{posts[0]},
 		},
 	}
 
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			getParams := &GraphQLParams{
+				Query: `query queryPost($filter: PostFilter, $order: PostOrder,
+		$first: Int, $offset: Int) {
+			queryPost(
+			  filter: $filter,
+			  order: $order,
+			  first: $first,
+			  offset: $offset) {
+				postID
+				title
+				text
+				tags
+				isPublished
+				postType
+				numLikes
+			}
+		}
+		`,
+				Variables: map[string]interface{}{
+					"filter": filter,
+					"order":  test.Order,
+					"first":  test.First,
+					"offset": test.Offset,
+				},
+			}
 
-	require.Equal(t, len(result.QueryPost), 2)
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
+			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			expected.QueryPost = test.Expected
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			require.Equal(t, len(result.QueryPost), len(expected.QueryPost))
+			if diff := cmp.Diff(expected, result); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
+
 }
 
 // TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
