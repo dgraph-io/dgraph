@@ -374,8 +374,12 @@ func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	if err != nil {
 		// This should cause Write to fail as well.
 		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
-		h.pwriter.Close()
-		h.preader.Close()
+		if err := h.pwriter.Close(); err != nil {
+			return err
+		}
+		if err := h.preader.Close(); err != nil {
+			return err
+		}
 	}
 	return err
 }

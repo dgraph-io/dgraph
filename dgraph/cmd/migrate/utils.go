@@ -90,7 +90,7 @@ func getFileWriter(filename string) (*bufio.Writer, func(), error) {
 		return nil, nil, err
 	}
 
-	return bufio.NewWriter(output), func() { output.Close() }, nil
+	return bufio.NewWriter(output), func() { _ = output.Close() }, nil
 }
 
 func getColumnValues(columns []string, dataTypes []dataType,
