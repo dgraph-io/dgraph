@@ -15,7 +15,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/d4l3k/messagediff v1.2.1 // indirect
 	github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7
-	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191011032519-062f5605f6da
+	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191021171913-3efa60e5593b
 	github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
@@ -23,7 +23,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
-	github.com/gogo/protobuf v1.2.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.3.2

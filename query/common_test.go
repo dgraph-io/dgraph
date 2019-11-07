@@ -69,6 +69,16 @@ func processQueryNoErr(t *testing.T, query string) string {
 	return res
 }
 
+// processQueryForMetrics works like processQuery but returns metrics instead of response.
+func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
+	txn := client.NewTxn()
+	defer txn.Discard(context.Background())
+
+	res, err := txn.Query(context.Background(), query)
+	require.NoError(t, err)
+	return res.Metrics
+}
+
 func processQueryWithVars(t *testing.T, query string,
 	vars map[string]string) (string, error) {
 	txn := client.NewTxn()

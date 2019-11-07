@@ -276,6 +276,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
+		Metrics: resp.Metrics,
 	}
 	js, err := json.Marshal(e)
 	if err != nil {

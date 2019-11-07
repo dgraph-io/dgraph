@@ -2699,6 +2699,7 @@ type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*pb.SchemaNode
 	Types      []*pb.TypeUpdate
+	Metrics    map[string]uint64
 }
 
 // Process handles a query request.
@@ -2708,6 +2709,12 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		return er, err
 	}
 	er.Subgraphs = req.Subgraphs
+	// calculate metrics.
+	metrics := make(map[string]uint64)
+	for _, sg := range er.Subgraphs {
+		calculateMetrics(sg, metrics)
+	}
+	er.Metrics = metrics
 
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
@@ -2732,4 +2739,24 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 		}
 	}
 	return temp
+}
+
+// calculateMetrics populates the given map with the number of uids are gathered for each
+// attributes.
+func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
+
+	// skip internal nodes.
+	if !sg.IsInternal() {
+		// we'll calculate srcUid of the each attribute. because, these are number of uids
+		// processed by this attribute.
+		metrics[sg.Attr] = metrics[sg.Attr] + uint64(len(sg.SrcUIDs.GetUids()))
+	}
+	// add all the uids gathered by filters
+	for _, filter := range sg.Filters {
+		calculateMetrics(filter, metrics)
+	}
+	// calculate metrics for the children as well.
+	for _, child := range sg.Children {
+		calculateMetrics(child, metrics)
+	}
 }
