@@ -196,6 +196,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	sort.Strings(mr.preds)
 
 	var d map[string]interface{}
 	if err := json.Unmarshal(r.Data, &d); err != nil {

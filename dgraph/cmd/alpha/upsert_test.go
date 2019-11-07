@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -77,7 +76,6 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
@@ -493,7 +491,7 @@ upsert {
 	m2 := `
 upsert {
   query {
-    q(func: eq(name@en, "user1")) {
+    user1(func: eq(name@en, "user1")) {
       u1 as uid
     }
   }
@@ -508,7 +506,7 @@ upsert {
 	require.NoError(t, err)
 	result = QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
-	require.Equal(t, 1, len(result.Q))
+	require.Equal(t, 1, len(result.User1))
 
 	q2 := `
 {
@@ -950,7 +948,6 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
@@ -1578,7 +1575,8 @@ amount: float .`))
 	m2 := `
 upsert {
   query {
-    u as var(func: has(amount)) {
+    q(func: has(amount)) {
+      u as uid
       amt as amount
       n as name
       b as branch
@@ -1602,15 +1600,17 @@ upsert {
       uid(u) <loc> val(l) .
     }
   }
-}
-  `
+}`
 
 	// This test is to ensure that all the types are being
 	// parsed correctly by the val function.
 	// User3 doesn't have all the fields. This test also ensures
 	// that val works when not all records have the values
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 3, len(result.Q))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -2128,9 +2128,6 @@ upsert {
 }`
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	// The uid variable is only used in the query and not in mutation
-	// and hence shouldn't be part of vars.
-
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
@@ -2146,11 +2143,9 @@ func TestMultiMutationEmptyRequest(t *testing.T) {
 	}))
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
 		Schema: `
-      name: string @index(exact) .
-      branch: string .
-      amount: float .
-    `,
-	}))
+name: string @index(exact) .
+branch: string .
+amount: float .`}))
 
 	req := &api.Request{}
 	_, err = dg.NewTxn().Do(context.Background(), req)
@@ -2159,42 +2154,35 @@ func TestMultiMutationEmptyRequest(t *testing.T) {
 
 // This mutation (upsert) has one independent query and one independent mutation.
 func TestMultiMutationNoUpsert(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot("localhost:9180")
-	require.NoError(t, err, "error while getting a dgraph client")
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+email: string @index(exact) .
+works_for: string @index(exact) .
+works_with: [uid] .`))
 
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
-		DropOp: api.Operation_ALL,
-	}))
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
-		Schema: `
-      email: string @index(exact) .
-      works_for: string @index(exact) .
-      works_with: [uid] .
-    `,
-	}))
+	m1 := `
+upsert {
+  query {
+    q(func: eq(works_for, "company1")) {
+      uid
+      name
+    }
+  }
 
-	req := &api.Request{
-		Query: `
-      query {
-        empty(func: eq(works_for, "company1")) {
-          uid
-          name
-        }
-      }`,
-		Mutations: []*api.Mutation{
-			&api.Mutation{
-				SetNquads: []byte(`
-        _:user1 <name> "user1" .
-        _:user1 <email> "user1@company1.io" .
-        _:user1 <works_for> "company1" .`),
-			},
-		},
-		CommitNow: true,
-	}
-	resp, err := dg.NewTxn().Do(context.Background(), req)
+  mutation {
+    set {
+      _:user1 <name> "user1" .
+      _:user1 <email> "user1@company1.io" .
+      _:user1 <works_for> "company1" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, resp.Txn.Preds)
-	testutil.CompareJSON(t, `{"empty": []}`, string(resp.Json))
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 0, len(result.Q))
+	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, mr.preds)
 }
 
 func TestMultipleMutation(t *testing.T) {
@@ -2226,7 +2214,6 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
@@ -2243,7 +2230,7 @@ upsert {
 {
   "data": {
     "q": [{
-       "name": "name"
+      "name": "name"
      }]
    }
 }`
@@ -2267,7 +2254,7 @@ upsert {
 {
   "data": {
     "q": [{
-       "name": "not_name"
+      "name": "not_name"
      }]
    }
 }`
@@ -2316,7 +2303,6 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 
 	q1 := `
@@ -2330,7 +2316,7 @@ upsert {
 {
   "data": {
     "q": [{
-       "name": "name"
+      "name": "name"
      },
      {
       "name": "other"
@@ -2374,7 +2360,6 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-count", "1-email", "1-name"}, mr.preds)
 
 	q1 := `

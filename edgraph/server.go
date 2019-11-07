@@ -462,9 +462,10 @@ type queryContext struct {
 	condVars []string
 	// uidRes stores mapping from variable names to UIDs for UID variables.
 	// These variables are either dummy variables used for Conditional
-	// Upsert or variables defined in the query in the incoming request.
+	// Upsert or variables used in the mutation block in the incoming request.
 	uidRes map[string][]string
-	// valRes stores mapping from variable names to values for value variables.
+	// valRes stores mapping from variable names to values for value
+	// variables used in the mutation block of incoming request.
 	valRes map[string]map[uint64]types.Val
 	// l stores latency numbers
 	latency *query.Latency
@@ -487,9 +488,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	// let's divide the request in two categories:
-	// 1. query
-	// 2. mutation (upsert is also a mutation)
 	isMutation := len(req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
@@ -521,7 +519,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}()
 
 	span.Annotatef(nil, "Request received: %v", req)
-	if len(req.Query) == 0 && len(req.Mutations) == 0 {
+	req.Query = strings.TrimSpace(req.Query)
+	isQuery := len(req.Query) != 0
+	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
@@ -546,16 +546,19 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 
 	if qc.req.StartTs == 0 {
 		start := time.Now()
-		qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		if qc.req.BestEffort {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		} else {
+			qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		}
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
-	if qc.req.Query != "" {
+	resp = &api.Response{}
+	if isQuery {
 		if resp, rerr = processQuery(ctx, qc); rerr != nil {
 			return
 		}
-	} else {
-		resp = &api.Response{}
 	}
 
 	if isMutation {
@@ -599,7 +602,7 @@ func parseRequest(qc *queryContext) error {
 	// updating queries to include dummy variables for conditional upsert
 	upsertQuery := buildUpsertQuery(qc)
 	needVars := findVars(qc)
-	if upsertQuery == "" {
+	if len(upsertQuery) == 0 {
 		if len(needVars) > 0 {
 			return errors.Errorf("variables %v not defined", needVars)
 		}
@@ -626,8 +629,7 @@ func parseRequest(qc *queryContext) error {
 // buildUpsertQuery modifies the query to evaluate the
 // @if condition defined in Conditional Upsert.
 func buildUpsertQuery(qc *queryContext) string {
-	qc.req.Query = strings.TrimSpace(qc.req.Query)
-	if qc.req.Query == "" {
+	if len(qc.req.Query) == 0 {
 		return qc.req.Query
 	}
 
@@ -704,10 +706,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			return nil, errors.Errorf("best effort query must be read-only")
 		}
 
-		if qc.req.StartTs == 0 {
-			qc.req.StartTs = posting.Oracle().MaxAssigned()
-		}
-
 		qr.Cache = worker.NoCache
 	}
 
@@ -780,7 +778,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 func updateMutations(qc *queryContext) {
 	for i, gmu := range qc.gmuList {
 		condVar := qc.condVars[i]
-		if condVar != "" {
+		if len(condVar) != 0 {
 			uids, ok := qc.uidRes[condVar]
 			if !(ok && len(uids) == 1) {
 				gmu.Set = nil
