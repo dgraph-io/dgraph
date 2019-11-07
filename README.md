@@ -21,8 +21,10 @@ Our packages:
 | `codec` | SCALE codec; used for encoding and decoding |
 | `common` | commonly used types and functions |
 | `config` | client configuration |
+| `consensus` | BABE/GRANDPA implementations |
+| `core` | Core service to orchestrate system interations |
 | `dot` | wraps other packages to allow a complete client |
-| `internal` | internal RPC functions |
+| `internal` | internal api  |
 | `p2p` | peer-to-peer service using libp2p |
 | `polkadb` | database implemenation using badgerDB |
 | `rpc` | RPC server |
@@ -30,7 +32,7 @@ Our packages:
 | `trie` | implementation of a modified Merkle-Patricia trie |
 
 ## Dependencies
-go 1.12
+go 1.13
 
 ## Install
 
@@ -42,35 +44,10 @@ go get -u github.com/ChainSafe/gossamer
 
 ```
 make gossamer
-gossamer --config config.toml
+gossamer init
+gossamer
 ```
 
-### Docker
-
-To start Gossamer in a docker container, run:
-
-```
-make docker
-```
-
-#### Running Manually
-
-To build the image, run this command:
-
-```
-docker build -t chainsafe/gossamer -f Dockerfile.dev
-```
-
-Start an instance with:
-
-```
-docker run chainsafe/gossamer
-```
-
-## Test
-```
-go test -v ./...
-```
 
 ## Contributing
 - Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
