@@ -565,9 +565,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		}
 	}
 
-	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
-	// since it involves modifying the API protos.
-	// TODO (Aman): may need to calculate processing time here!!!
+	// TODO(martinmr): Include Transport as part of the latency. Need to do
+	// this separately since it involves modifying the API protos.
+	l.Processing = time.Since(l.Start) - l.Parsing - l.AssignTimestamp - l.Json
 	resp.Latency = &api.Latency{
 		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
 		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
