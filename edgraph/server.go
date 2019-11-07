@@ -1273,6 +1273,11 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
+		// These are used in the response of a mutation in HTTP API.
+		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
+			return errors.Errorf("query alias [%v] not allowed", a)
+		}
+
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}

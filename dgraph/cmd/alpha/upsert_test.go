@@ -80,7 +80,7 @@ upsert {
 	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 
 	// query should return the wrong name
@@ -116,7 +116,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"1-name"}, mr.preds)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Q))
 
 	// query should return correct name
@@ -184,7 +184,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Q))
 
 	q1 := `
@@ -473,7 +473,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Q))
 
 	q1 := `
@@ -507,7 +507,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Q))
 
 	q2 := `
@@ -564,7 +564,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.User1))
 	require.Equal(t, 1, len(result.User2))
 
@@ -601,7 +601,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.User1))
 	require.Equal(t, 1, len(result.User2))
 
@@ -725,7 +725,7 @@ friend: uid @reverse .`))
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.User1))
 	require.Equal(t, 1, len(result.User2))
 
@@ -789,7 +789,7 @@ upsert {
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 
 	q := `
@@ -923,7 +923,7 @@ upsert {
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 }
 
@@ -953,14 +953,14 @@ upsert {
 	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 
 	// Trying again, should be a NOOP
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 
 	// query should return the wrong name
 	q1 := `
@@ -995,7 +995,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"1-name"}, mr.preds)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Q))
 
 	// query should return correct name
@@ -1028,7 +1028,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 
 	// query should return the wrong name
@@ -1061,7 +1061,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"1-name"}, mr.preds)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Q))
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1123,7 +1123,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"1-color"}, mr.preds)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Q))
 	q2 := `
 {
@@ -1164,7 +1164,7 @@ upsert {
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.User1))
 	require.Equal(t, 2, len(result.User2))
 
@@ -1263,7 +1263,7 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.User1))
 	require.Equal(t, 1, len(result.User2))
 
@@ -1899,7 +1899,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Q))
 
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
@@ -1947,7 +1947,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 }
 
@@ -1996,7 +1996,7 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Q))
 
 	q2 := `
@@ -2032,7 +2032,7 @@ upsert {
 	mr, err = mutationWithTs(m3, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	result = QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Q))
 
 	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
@@ -2132,7 +2132,7 @@ upsert {
 	// and hence shouldn't be part of vars.
 
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 }
 
@@ -2229,7 +2229,7 @@ upsert {
 	sort.Strings(mr.preds)
 	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
 	result := QueryResult{}
-	require.NoError(t, json.Unmarshal(mr.result, &result))
+	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Q))
 
 	q1 := `
@@ -2412,4 +2412,61 @@ upsert {
 }`
 	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestInvalidAliasCode(t *testing.T) {
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        _:user <age> "45" .
+      }
+    }
+
+    query {
+      code(func: eq(age, 34)) @filter(ge(name, "user")) {
+        uid
+      }
+    }
+  }`
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, "query alias [code] not allowed", err.Error())
+}
+
+func TestInvalidAliasMessage(t *testing.T) {
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        _:user <age> "45" .
+      }
+    }
+
+    query {
+      message(func: eq(age, 34)) @filter(ge(name, "user")) {
+        uid
+      }
+    }
+  }`
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, "query alias [message] not allowed", err.Error())
+}
+
+func TestInvalidAliasUids(t *testing.T) {
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        _:user <age> "45" .
+      }
+    }
+
+    query {
+      uids(func: eq(age, 34)) @filter(ge(name, "user")) {
+        uid
+      }
+    }
+  }`
+	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.Contains(t, "query alias [uids] not allowed", err.Error())
 }

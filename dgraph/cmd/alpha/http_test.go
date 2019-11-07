@@ -162,21 +162,11 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
-type muRes struct {
-	Data struct {
-		Uids   map[string]string `json:"uids,omitempty"`
-		Result json.RawMessage   `json:"result,omitempty"`
-	} `json:"data,omitempty"`
-	Extensions *query.Extensions `json:"extensions,omitempty"`
-	Errors     []x.GqlError      `json:"errors,omitempty"`
-}
-
 type mutationResponse struct {
 	keys    []string
 	preds   []string
 	startTs uint64
-	uids    map[string]string
-	result  json.RawMessage
+	data    json.RawMessage
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -198,7 +188,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 		return mr, err
 	}
 
-	var r muRes
+	var r res
 	if err := json.Unmarshal(body, &r); err != nil {
 		return mr, err
 	}
@@ -206,8 +196,18 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
-	mr.uids = r.Data.Uids
-	mr.result = r.Data.Result
+
+	var d map[string]interface{}
+	if err := json.Unmarshal(r.Data, &d); err != nil {
+		return mr, err
+	}
+	delete(d, "code")
+	delete(d, "message")
+	delete(d, "uids")
+	mr.data, err = json.Marshal(d)
+	if err != nil {
+		return mr, err
+	}
 	return mr, nil
 }
 

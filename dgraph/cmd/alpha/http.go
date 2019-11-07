@@ -411,10 +411,15 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{}
 	response["extensions"] = e
 	mp := map[string]interface{}{}
+	if len(resp.Json) != 0 {
+		if err := json.Unmarshal(resp.Json, &mp); err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
+		}
+	}
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
-	mp["result"] = json.RawMessage(resp.Json)
 	response["data"] = mp
 
 	js, err := json.Marshal(response)
