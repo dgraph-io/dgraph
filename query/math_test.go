@@ -37,6 +37,14 @@ func TestProcessBinary(t *testing.T) {
 			out: types.Val{Tid: types.IntID, Value: int64(4)},
 		},
 		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(48038396025285290)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+			}},
+			out: types.Val{Tid: types.IntID, Value: int64(48038396025285292)},
+		},
+		{in: &mathTree{
 			Fn: "-",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},

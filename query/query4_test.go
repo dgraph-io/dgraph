@@ -23,6 +23,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBigMathValue(t *testing.T) {
+	s1 := testSchema + "\n money: int .\n"
+	setSchema(s1)
+	triples := `
+		_:user1 <money> "48038396025285290" .
+	`
+	addTriplesToCluster(triples)
+
+	q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(2+f)
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":48038396025285292}
+	]}}`, js)
+}
+
 func TestDeleteAndReaddIndex(t *testing.T) {
 	// Add new predicate with several indices.
 	s1 := testSchema + "\n numerology: string @index(exact, term, fulltext) .\n"

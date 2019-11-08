@@ -233,15 +233,24 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				}
 				continue
 			}
+			// We will try to parse it as an Int first, if that fails we move to float
 			// Try to parse it as a constant.
 			child := &MathTree{}
-			v, err := strconv.ParseFloat(item.Val, 64)
+			i, err := strconv.ParseInt(item.Val, 10, 64)
 			if err != nil {
-				child.Var = item.Val
+				v, err := strconv.ParseFloat(item.Val, 64)
+				if err != nil {
+					child.Var = item.Val
+				} else {
+					child.Const = types.Val{
+						Tid:   types.FloatID,
+						Value: v,
+					}
+				}
 			} else {
 				child.Const = types.Val{
-					Tid:   types.FloatID,
-					Value: v,
+					Tid:   types.IntID,
+					Value: i,
 				}
 			}
 			valueStack.push(child)
