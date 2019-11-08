@@ -1353,7 +1353,7 @@ func TestMathCeil2(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
 }
 
 func TestUidAttr(t *testing.T) {

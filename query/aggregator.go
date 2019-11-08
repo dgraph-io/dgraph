@@ -111,6 +111,314 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	return false, errors.Errorf("Invalid compare function %q", ag)
 }
 
+func ApplyIntAdd(a, b, c *types.Val) error {
+	c.Value = a.Value.(int64) + b.Value.(int64)
+	return nil
+}
+
+func ApplyFloatAdd(a, b, c *types.Val) error {
+	c.Value = a.Value.(float64) + b.Value.(float64)
+	return nil
+}
+
+func ApplyOtherAdd(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func +")
+}
+
+func ApplyIntSub(a, b, c *types.Val) error {
+	c.Value = a.Value.(int64) - b.Value.(int64)
+	return nil
+}
+
+func ApplyFloatSub(a, b, c *types.Val) error {
+	c.Value = a.Value.(float64) - b.Value.(float64)
+	return nil
+}
+
+func ApplyOtherSub(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func -")
+}
+
+func ApplyIntMul(a, b, c *types.Val) error {
+	c.Value = a.Value.(int64) * b.Value.(int64)
+	return nil
+}
+
+func ApplyFloatMul(a, b, c *types.Val) error {
+	c.Value = a.Value.(float64) * b.Value.(float64)
+	return nil
+}
+
+func ApplyOtherMul(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func *")
+}
+
+func ApplyIntDiv(a, b, c *types.Val) error {
+	if b.Value.(int64) == 0 {
+		return errors.Errorf("Division by zero")
+	}
+	c.Value = a.Value.(int64) / b.Value.(int64)
+	return nil
+}
+
+func ApplyFloatDiv(a, b, c *types.Val) error {
+	if b.Value.(float64) == 0 {
+		return errors.Errorf("Division by zero")
+	}
+	c.Value = a.Value.(float64) / b.Value.(float64)
+	return nil
+}
+
+func ApplyOtherDiv(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func /")
+}
+
+func ApplyIntMod(a, b, c *types.Val) error {
+	if b.Value.(int64) == 0 {
+		return errors.Errorf("Division by zero")
+	}
+	c.Value = a.Value.(int64) % b.Value.(int64)
+	return nil
+}
+
+func ApplyFloatMod(a, b, c *types.Val) error {
+	if b.Value.(float64) == 0 {
+		return errors.Errorf("Division by zero")
+	}
+	c.Value = math.Mod(a.Value.(float64), b.Value.(float64))
+	return nil
+}
+
+func ApplyOtherMod(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func %s", "%")
+}
+
+func ApplyIntPow(a, b, c *types.Val) error {
+	c.Value = math.Pow(float64(a.Value.(int64)), float64(b.Value.(int64)))
+	c.Tid = types.FloatID
+	return nil
+}
+
+func ApplyFloatPow(a, b, c *types.Val) error {
+	c.Value = math.Pow(a.Value.(float64), b.Value.(float64))
+	return nil
+}
+
+func ApplyOtherPow(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func ^")
+}
+
+func ApplyIntLog(a, b, c *types.Val) error {
+	c.Value = math.Log(float64(a.Value.(int64))) / math.Log(float64(b.Value.(int64)))
+	c.Tid = types.FloatID
+	return nil
+}
+
+func ApplyFloatLog(a, b, c *types.Val) error {
+	c.Value = math.Log(a.Value.(float64)) / math.Log(b.Value.(float64))
+	return nil
+}
+
+func ApplyOtherLog(a, b, c *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func ln")
+}
+
+func ApplyMin(a, b, c *types.Val) error {
+	r, err := types.Less(*a, *b)
+	if err != nil {
+		return err
+	}
+	if r {
+		*c = *a
+		return nil
+	}
+	*c = *b
+	return nil
+}
+
+func ApplyMax(a, b, c *types.Val) error {
+	r, err := types.Less(*a, *b)
+	if err != nil {
+		return err
+	}
+	if r {
+		*c = *b
+		return nil
+	}
+	*c = *a
+	return nil
+}
+
+func ApplyLnInt(a, res *types.Val) error {
+	res.Value = math.Log(float64(a.Value.(int64)))
+	res.Tid = types.FloatID
+	return nil
+}
+
+func ApplyLnFloat(a, res *types.Val) error {
+	res.Value = math.Log(a.Value.(float64))
+	return nil
+}
+
+func ApplyLnOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func ln")
+}
+
+func ApplyExpInt(a, res *types.Val) error {
+	res.Value = math.Exp(float64(a.Value.(int64)))
+	res.Tid = types.FloatID
+	return nil
+}
+
+func ApplyExpFloat(a, res *types.Val) error {
+	res.Value = math.Exp(a.Value.(float64))
+	return nil
+}
+
+func ApplyExpOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func exp")
+}
+
+func ApplyNegInt(a, res *types.Val) error {
+	res.Value = -a.Value.(int64)
+	return nil
+}
+
+func ApplyNegFloat(a, res *types.Val) error {
+	res.Value = -a.Value.(float64)
+	return nil
+}
+
+func ApplyNegOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func u-")
+}
+
+func ApplySqrtInt(a, res *types.Val) error {
+	res.Value = math.Sqrt(float64(a.Value.(int64)))
+	res.Tid = types.FloatID
+	return nil
+}
+
+func ApplySqrtFloat(a, res *types.Val) error {
+	res.Value = math.Sqrt(a.Value.(float64))
+	return nil
+}
+
+func ApplySqrtOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func sqrt")
+}
+
+func ApplyFloorInt(a, res *types.Val) error {
+	res.Value = math.Floor(float64(a.Value.(int64)))
+	res.Tid = types.FloatID
+	return nil
+}
+
+func ApplyFloorFloat(a, res *types.Val) error {
+	res.Value = math.Floor(a.Value.(float64))
+	return nil
+}
+
+func ApplyFloorOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for func floor")
+}
+
+func ApplyCeilInt(a, res *types.Val) error {
+	res.Value = math.Ceil(float64(a.Value.(int64)))
+	res.Tid = types.FloatID
+	return nil
+}
+
+func ApplyCeilFloat(a, res *types.Val) error {
+	res.Value = math.Ceil(a.Value.(float64))
+	return nil
+}
+
+func ApplyCeilOther(a, res *types.Val) error {
+	return errors.Errorf("Wrong type encountered for fun ceil")
+}
+
+func ApplySince(a, res *types.Val) error {
+	if a.Tid == types.DateTimeID {
+		a.Value = float64(time.Since(a.Value.(time.Time))) / 1000000000.0
+		a.Tid = types.FloatID
+		*res = *a
+		return nil
+	} else {
+		return errors.Errorf("Wrong type encountered for func since")
+	}
+}
+
+type MathUnaryFunction func(a, res *types.Val) error
+type MathBinaryFunction func(a, b, res *types.Val) error
+
+var supportedUnaryFunctions = map[string][]MathUnaryFunction{
+	"ln":    {ApplyLnInt, ApplyLnFloat, ApplyLnOther},
+	"exp":   {ApplyExpInt, ApplyExpFloat, ApplyExpOther},
+	"u-":    {ApplyNegInt, ApplyNegFloat, ApplyNegOther},
+	"sqrt":  {ApplySqrtInt, ApplySqrtFloat, ApplySqrtOther},
+	"floor": {ApplyFloorInt, ApplyFloorFloat, ApplyFloorOther},
+	"ceil":  {ApplyCeilInt, ApplyCeilFloat, ApplyCeilOther},
+	"since": {ApplySince, ApplySince, ApplySince},
+}
+
+var supportedBinaryFunctions = map[string][]MathBinaryFunction{
+	"+":       {ApplyIntAdd, ApplyFloatAdd, ApplyOtherAdd},
+	"-":       {ApplyIntSub, ApplyFloatSub, ApplyOtherSub},
+	"*":       {ApplyIntMul, ApplyFloatMul, ApplyOtherMul},
+	"/":       {ApplyIntDiv, ApplyFloatDiv, ApplyOtherDiv},
+	"%":       {ApplyIntMod, ApplyFloatMod, ApplyOtherMod},
+	"pow":     {ApplyIntPow, ApplyFloatPow, ApplyOtherPow},
+	"logbase": {ApplyIntLog, ApplyFloatLog, ApplyOtherLog},
+	"min":     {ApplyMin, ApplyMin, ApplyMin},
+	"max":     {ApplyMax, ApplyMax, ApplyMax},
+}
+
+type valType int
+
+const (
+	INT valType = iota
+	FLOAT
+	DEFAULT
+)
+
+func getValType(v *types.Val) valType {
+	var vBase valType
+	if v.Tid == types.IntID {
+		vBase = INT
+	} else if v.Tid == types.FloatID {
+		vBase = FLOAT
+	} else {
+		vBase = DEFAULT
+	}
+	return vBase
+}
+
+func (ag *aggregator) MatchType(vBase, vaBase *valType, v, va *types.Val) error {
+	if *vBase == *vaBase {
+		return nil
+	}
+
+	if *vBase == DEFAULT || *vaBase == DEFAULT {
+		return errors.Errorf("Wrong type encontered for func %s", ag.name)
+	}
+
+	// One of them is int and one is float
+	if *vBase == INT {
+		*vBase = FLOAT
+		v.Tid = types.FloatID
+		v.Value = float64(v.Value.(int64))
+	}
+
+	if *vaBase == INT {
+		*vaBase = FLOAT
+		va.Tid = types.FloatID
+		va.Value = float64(va.Value.(int64))
+	}
+
+	return nil
+}
+
 func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
 		// If the value is missing, treat it as 0.
@@ -118,66 +426,14 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		v.Tid = types.IntID
 	}
 
-	var isIntOrFloat bool
-	var l float64
-	if v.Tid == types.IntID {
-		l = float64(v.Value.(int64))
-		v.Value = l
-		v.Tid = types.FloatID
-		isIntOrFloat = true
-	} else if v.Tid == types.FloatID {
-		l = v.Value.(float64)
-		isIntOrFloat = true
-	}
-	// If its not int or float, keep the type.
+	vBase := getValType(&v)
 
 	var res types.Val
 	if isUnary(ag.name) {
-		switch ag.name {
-		case "ln":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Log(l)
-			res = v
-		case "exp":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Exp(l)
-			res = v
-		case "u-":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = -l
-			res = v
-		case "sqrt":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Sqrt(l)
-			res = v
-		case "floor":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Floor(l)
-			res = v
-		case "ceil":
-			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			v.Value = math.Ceil(l)
-			res = v
-		case "since":
-			if v.Tid == types.DateTimeID {
-				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
-				v.Tid = types.FloatID
-			} else {
-				return errors.Errorf("Wrong type encountered for func %q", ag.name)
-			}
-			res = v
+		res.Tid = v.Tid
+		err := supportedUnaryFunctions[ag.name][vBase](&v, &res)
+		if err != nil {
+			return err
 		}
 		ag.result = res
 		return nil
@@ -189,79 +445,23 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	va := ag.result
-	if va.Tid != types.IntID && va.Tid != types.FloatID {
-		isIntOrFloat = false
+	vaBase := getValType(&va)
+
+	if err := ag.MatchType(&vBase, &vaBase, &v, &va); err != nil {
+		return err
 	}
-	switch ag.name {
-	case "+":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
+
+	if function, ok := supportedBinaryFunctions[ag.name]; ok {
+		res.Tid = va.Tid
+		err := function[vaBase](&va, &v, &res)
+		if err != nil {
+			return err
 		}
-		va.Value = va.Value.(float64) + l
-		res = va
-	case "-":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
-		}
-		va.Value = va.Value.(float64) - l
-		res = va
-	case "*":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
-		}
-		va.Value = va.Value.(float64) * l
-		res = va
-	case "/":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q %q %q", ag.name, va.Tid, v.Tid)
-		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
-		}
-		va.Value = va.Value.(float64) / l
-		res = va
-	case "%":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
-		}
-		if l == 0 {
-			return errors.Errorf("Division by zero")
-		}
-		va.Value = math.Mod(va.Value.(float64), l)
-		res = va
-	case "pow":
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
-		}
-		va.Value = math.Pow(va.Value.(float64), l)
-		res = va
-	case "logbase":
-		if l == 1 {
-			return nil
-		}
-		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %q", ag.name)
-		}
-		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
-		res = va
-	case "min":
-		r, err := types.Less(va, v)
-		if err == nil && !r {
-			res = v
-		} else {
-			res = va
-		}
-	case "max":
-		r, err := types.Less(va, v)
-		if err == nil && r {
-			res = v
-		} else {
-			res = va
-		}
-	default:
+		ag.result = res
+	} else {
 		return errors.Errorf("Unhandled aggregator function %q", ag.name)
 	}
-	ag.result = res
+
 	return nil
 }
 
