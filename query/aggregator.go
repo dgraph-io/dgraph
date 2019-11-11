@@ -344,9 +344,8 @@ func ApplySince(a, res *types.Val) error {
 		a.Tid = types.FloatID
 		*res = *a
 		return nil
-	} else {
-		return errors.Errorf("Wrong type encountered for func since")
 	}
+	return errors.Errorf("Wrong type encountered for func since")
 }
 
 type MathUnaryFunction func(a, res *types.Val) error
