@@ -8,6 +8,7 @@ type Country {
 
 type Author {
         id: ID!
+        xid: String! @id
         name: String! @search(by: [hash])
         dob: DateTime @search
         reputation: Float @search

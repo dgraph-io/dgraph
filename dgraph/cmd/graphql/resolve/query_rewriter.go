@@ -50,12 +50,12 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 		// way up when the query first comes in.  All other possible problems with
 		// the query are caught by validation.
 		// ATM, I'm not sure how to hook into the GraphQL validator to get that to happen
-		uid, err := gqlQuery.IDArgValue()
+		xid, uid, err := gqlQuery.IDArgValue()
 		if err != nil {
 			return nil, err
 		}
 
-		dgQuery := rewriteAsGet(gqlQuery, uid)
+		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
 		return dgQuery, nil
@@ -81,8 +81,42 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	return dgQuery
 }
 
-func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
-	return rewriteAsQueryByIds(field, []uint64{uid})
+func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
+	fmt.Println("uid", uid, "xid", xid)
+	if xid == nil {
+		return rewriteAsQueryByIds(field, []uint64{uid})
+	}
+
+	xidArgName := field.XIDArg()
+	eqXidFunc := &gql.Function{
+		Name: "eq",
+		Args: []gql.Arg{
+			{Value: xidArgName},
+			{Value: maybeQuoteArg("eq", *xid)},
+		},
+	}
+
+	var dgQuery *gql.GraphQuery
+	if uid > 0 {
+		dgQuery = &gql.GraphQuery{
+			Attr: field.ResponseName(),
+			Func: &gql.Function{
+				Name: "uid",
+				UID:  []uint64{uid},
+			},
+		}
+		dgQuery.Filter = &gql.FilterTree{
+			Func: eqXidFunc,
+		}
+
+	} else {
+		dgQuery = &gql.GraphQuery{
+			Attr: field.ResponseName(),
+			Func: eqXidFunc,
+		}
+	}
+	addSelectionSetFrom(dgQuery, field)
+	return dgQuery
 }
 
 func rewriteAsQuery(field schema.Field) *gql.GraphQuery {

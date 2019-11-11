@@ -186,7 +186,7 @@ func (mrw *mutationRewriter) FromMutationResult(
 				assigned[createdNode])
 		}
 
-		return rewriteAsGet(mutation.QueryField(), uid), nil
+		return rewriteAsGet(mutation.QueryField(), uid, nil), nil
 
 	case schema.UpdateMutation:
 		var uids []uint64

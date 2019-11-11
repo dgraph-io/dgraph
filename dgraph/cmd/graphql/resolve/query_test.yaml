@@ -856,3 +856,33 @@
         name : Author.name
       }
     }
+
+-
+  name: "Query author using xid"
+  gqlquery: |
+    query {
+      getAuthor(xid: "tolstoy") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: eq(Author.xid, "tolstoy")) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Query author using both xid and id"
+  gqlquery: |
+    query {
+      getAuthor(xid: "tolstoy", id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter((eq(Author.xid, "tolstoy") AND type(Author))) {
+        name : Author.name
+      }
+    }

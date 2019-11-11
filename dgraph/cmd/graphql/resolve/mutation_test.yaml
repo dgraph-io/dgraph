@@ -12,7 +12,8 @@
     { "auth":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
-        "posts": []
+        "posts": [],
+        "xid": "author"
       }
     }
   explanation: "A uid and type should get injected and all data transformed to
@@ -22,7 +23,8 @@
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.dob":"2000-01-01",
-      "Author.posts":[]
+      "Author.posts":[],
+      "Author.xid": "author"
     }
 
 -
@@ -79,7 +81,8 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "0x123" },
-        "posts": []
+        "posts": [],
+        "xid": "author"
       }
     }
   explanation: "The reference to country should get transformed to 'uid' for the
@@ -89,7 +92,8 @@
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.country": { "uid": "0x123" },
-      "Author.posts":[]
+      "Author.posts":[],
+      "Author.xid": "author"
     }
 
 -
@@ -106,7 +110,8 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "HI!" },
-        "posts": []
+        "posts": [],
+        "xid": "author"
       }
     }
   explanation: "A reference must be a valid UID"
