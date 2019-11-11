@@ -82,7 +82,6 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 }
 
 func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
-	fmt.Println("uid", uid, "xid", xid)
 	if xid == nil {
 		return rewriteAsQueryByIds(field, []uint64{uid})
 	}
