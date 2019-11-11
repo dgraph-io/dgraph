@@ -1014,21 +1014,22 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
 	l.RLock() // All public methods should acquire locks, while private ones should assert them.
 	defer l.RUnlock()
-	p, err := l.postingFor(readTs, langs)
+	p, lang, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return rval, err
 	}
-	return valueToTypesVal(p), nil
+	return valueToTypesVal(p, lang), nil
 }
 
 // PostingFor returns the posting according to the preferred language list.
-func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+// It also returns the first available language.
+func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, lang string, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 	return l.postingFor(readTs, langs)
 }
 
-func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, lang string, rerr error) {
 	l.AssertRLock() // Avoid recursive locking by asserting a lock here.
 	return l.postingForLangs(readTs, langs)
 }
@@ -1041,18 +1042,19 @@ func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr erro
 	if err != nil {
 		return rval, err
 	}
-	return valueToTypesVal(p), nil
+	return valueToTypesVal(p, tag), nil
 }
 
-func valueToTypesVal(p *pb.Posting) (rval types.Val) {
+func valueToTypesVal(p *pb.Posting, lang string) (rval types.Val) {
 	// This is ok because we dont modify the value of a posting. We create a newPosting
 	// and add it to the PostingList to do a set.
 	rval.Value = p.Value
 	rval.Tid = types.TypeID(p.ValType)
+	rval.Lang = lang
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, lang string, rerr error) {
 	l.AssertRLock()
 
 	any := false
@@ -1064,16 +1066,16 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 		}
 		pos, rerr = l.postingForTag(readTs, lang)
 		if rerr == nil {
-			return pos, nil
+			return pos, lang, nil
 		}
 	}
 
 	// look for value without language
 	if any || len(langs) == 0 {
 		if found, pos, err := l.findPosting(readTs, math.MaxUint64); err != nil {
-			return nil, err
+			return nil, "", err
 		} else if found {
-			return pos, nil
+			return pos, "", nil
 		}
 	}
 
@@ -1089,15 +1091,15 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
 	if found {
-		return pos, nil
+		return pos, "", nil
 	}
 
-	return pos, ErrNoValue
+	return pos, "", ErrNoValue
 }
 
 func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr error) {
@@ -1121,7 +1123,7 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 		return rval, found, err
 	}
 
-	return valueToTypesVal(p), true, nil
+	return valueToTypesVal(p, ""), true, nil
 }
 
 func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
@@ -1142,7 +1144,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 	ferr error) {
 	l.RLock()
 	defer l.RUnlock()
-	p, err := l.postingFor(readTs, langs)
+	p, _, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}

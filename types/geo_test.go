@@ -27,7 +27,7 @@ func TestParse(t *testing.T) {
 		`{'type':'MultiLineString','coordinates':[[[1,2,3],[4,5,6],[7,8,9],[1,2,3]]]}`,
 	}
 	for _, v := range array {
-		src := Val{StringID, []byte(v)}
+		src := Val{StringID, []byte(v), ""}
 
 		if g, err := Convert(src, GeoID); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
@@ -45,7 +45,7 @@ func TestParse(t *testing.T) {
 				t.Errorf("Error marshaling to WKB: %v", err)
 			}
 
-			src := Val{GeoID, []byte(wkb.Value.([]byte))}
+			src := Val{GeoID, []byte(wkb.Value.([]byte)), ""}
 
 			if bg, err := Convert(src, GeoID); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)
@@ -64,7 +64,7 @@ func TestParseGeoJsonErrors(t *testing.T) {
 		`thisisntjson`,
 	}
 	for _, v := range array {
-		src := Val{StringID, []byte(v)}
+		src := Val{StringID, []byte(v), ""}
 		if _, err := Convert(src, GeoID); err == nil {
 			t.Errorf("Expected error parsing %s: %v", v, err)
 		}

@@ -115,6 +115,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = val
 			case StringID, DefaultID:
+				to.Lang = from.Lang
 				*res = vc
 			case BoolID:
 				val, err := strconv.ParseBool(vc)
@@ -508,7 +509,7 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 
 func toBinary(id TypeID, b interface{}) ([]byte, error) {
 	p1 := ValueForType(BinaryID)
-	if err := Marshal(Val{id, b}, &p1); err != nil {
+	if err := Marshal(Val{id, b, ""}, &p1); err != nil {
 		return nil, err
 	}
 	return p1.Value.([]byte), nil

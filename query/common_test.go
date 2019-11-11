@@ -224,6 +224,8 @@ type Node {
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
+name_lang   				   : string @lang .
+lang_type                      : string @index(exact) .
 alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 abbr                           : string .
@@ -348,7 +350,12 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
-
+		<10101> <name_lang> "zon"@sv .
+		<10101> <name_lang> "öffnen"@de .
+		<10101> <lang_type> "Test" .
+		<10102> <name_lang> "öppna0"@sv .
+		<10102> <name_lang> "zumachen"@de .   
+		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
 		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .

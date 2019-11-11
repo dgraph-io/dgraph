@@ -106,6 +106,7 @@ func (t TypeID) Name() string {
 type Val struct {
 	Tid   TypeID
 	Value interface{}
+	Lang  string
 }
 
 // Safe ensures that Val's Value is not nil. This is useful when doing type
@@ -144,43 +145,43 @@ func ValueForType(id TypeID) Val {
 	switch id {
 	case BinaryID:
 		var b []byte
-		return Val{BinaryID, &b}
+		return Val{BinaryID, &b, ""}
 
 	case IntID:
 		var i int64
-		return Val{IntID, &i}
+		return Val{IntID, &i, ""}
 
 	case FloatID:
 		var f float64
-		return Val{FloatID, &f}
+		return Val{FloatID, &f, ""}
 
 	case BoolID:
 		var b bool
-		return Val{BoolID, &b}
+		return Val{BoolID, &b, ""}
 
 	case DateTimeID:
 		var t time.Time
-		return Val{DateTimeID, &t}
+		return Val{DateTimeID, &t, ""}
 
 	case StringID:
 		var s string
-		return Val{StringID, s}
+		return Val{StringID, s, ""}
 
 	case DefaultID:
 		var s string
-		return Val{DefaultID, s}
+		return Val{DefaultID, s, ""}
 
 	case GeoID:
 		var g geom.T
-		return Val{GeoID, &g}
+		return Val{GeoID, &g, ""}
 
 	case UidID:
 		var i uint64
-		return Val{UidID, &i}
+		return Val{UidID, &i, ""}
 
 	case PasswordID:
 		var p string
-		return Val{PasswordID, p}
+		return Val{PasswordID, p, ""}
 
 	default:
 		return Val{}

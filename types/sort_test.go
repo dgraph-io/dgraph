@@ -36,7 +36,7 @@ func toString(t *testing.T, values [][]Val, vID TypeID) []string {
 func getInput(t *testing.T, tid TypeID, in []string) [][]Val {
 	list := make([][]Val, len(in))
 	for i, s := range in {
-		va := Val{StringID, []byte(s)}
+		va := Val{StringID, []byte(s), ""}
 		v, err := Convert(va, tid)
 		require.NoError(t, err)
 		list[i] = []Val{v}

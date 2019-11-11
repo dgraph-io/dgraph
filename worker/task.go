@@ -534,7 +534,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 	}
 
 	// Retrieve the posting that matches the language preferences.
-	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
+	langMatch, _, err := pl.PostingFor(q.ReadTs, q.Langs)
 	if err != nil && err != posting.ErrNoValue {
 		return nil, nil, err
 	}

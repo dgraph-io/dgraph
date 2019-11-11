@@ -855,6 +855,38 @@ func TestToFastJSONOrderDesc2(t *testing.T) {
 		js)
 }
 
+func TestLanguageOrderNonIndexed1(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang@de)  {
+			name_lang@de
+			name_lang@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{ "data": { "q": [ { "name_lang@de": "öffnen", "name_lang@sv": "zon" }, { "name_lang@de": "zumachen", "name_lang@sv": "öppna0" } ] } }`,
+		js)
+}
+
+func TestLanguageOrderNonIndexed2(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang@sv)  {
+			name_lang@de
+			name_lang@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{ "data": { "q": [ { "name_lang@de": "öffnen", "name_lang@sv": "zon" }, { "name_lang@de": "zumachen", "name_lang@sv": "öppna0" } ] } }`,
+		js)
+}
+
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 

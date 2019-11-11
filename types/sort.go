@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/types/collate"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -134,6 +135,11 @@ func less(a, b Val) bool {
 	case UidID:
 		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
+		// Use language comparator.
+		if a.Lang != "" {
+			cl := collate.Collator(a.Lang)
+			return cl.CompareString(a.Safe().(string), b.Safe().(string)) < 0
+		}
 		return (a.Safe().(string)) < (b.Safe().(string))
 	}
 	return false
