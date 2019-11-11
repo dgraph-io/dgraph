@@ -814,7 +814,6 @@ func TestShortestPathWeights(t *testing.T) {
 			}
 		}`
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `
 		{
 			"data": {
