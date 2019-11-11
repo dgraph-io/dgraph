@@ -15,8 +15,8 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/d4l3k/messagediff v1.2.1 // indirect
 	github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7
+	github.com/dgraph-io/badger/v2 v2.0.0-rc4.0.20191104090122-cbbaefa2c523
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191021171913-3efa60e5593b
-	github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
@@ -56,6 +56,7 @@ require (
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
+	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2
