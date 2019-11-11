@@ -165,13 +165,32 @@ func (r *reducer) encodeAndWrite(
 		kv.StreamId = streamId
 	}
 
+	addDone := func(l *bpb.KVList, doneSteams []uint32) *bpb.KVList {
+		for _, SID := range doneSteams {
+			l.Kv = append(l.Kv, &bpb.KV{StreamId: SID, StreamDone: true})
+		}
+		return l
+	}
+
+	var doneStreams []uint32
+	var prevSID uint32
+	updateDoneStreams := func(curSID uint32) {
+		if prevSID != 0 && (prevSID != curSID) {
+			doneStreams = append(doneStreams, prevSID)
+		}
+	}
+
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
+				updateDoneStreams(kv.StreamId)
+				prevSID = kv.StreamId
 			}
+			list = addDone(list, doneStreams)
 			x.Check(writer.Write(list))
+			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
 			listSize = 0
 		}
