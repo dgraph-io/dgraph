@@ -309,8 +309,7 @@ func ApplySqrtOther(a, res *types.Val) error {
 }
 
 func ApplyFloorInt(a, res *types.Val) error {
-	res.Value = math.Floor(float64(a.Value.(int64)))
-	res.Tid = types.FloatID
+	res.Value = a.Value.(int64)
 	return nil
 }
 
@@ -324,8 +323,7 @@ func ApplyFloorOther(a, res *types.Val) error {
 }
 
 func ApplyCeilInt(a, res *types.Val) error {
-	res.Value = math.Ceil(float64(a.Value.(int64)))
-	res.Tid = types.FloatID
+	res.Value = a.Value.(int64)
 	return nil
 }
 
