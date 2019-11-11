@@ -19,10 +19,12 @@ package schema
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/validator"
 )
 
 func init() {
@@ -31,6 +33,20 @@ func init() {
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
+	validator.AddRule("ValidIDValidationGetQuery", ValidIDValidationGetQuery)
+}
+
+func ValidIDValidationGetQuery(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition.Name == "ID" {
+			if _, err := strconv.ParseUint(value.Raw, 0, 64); err != nil {
+				addError(
+					validator.Message("Failed to parse ID (%s)", value.Raw),
+					validator.At(value.Position),
+				)
+			}
+		}
+	})
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {

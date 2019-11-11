@@ -29,6 +29,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestQueryInvalidId(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			getCountry(id: "hi") {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsGet(t, graphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Contains(t, gqlResponse.Errors[0].Error(), "Failed to parse ID (hi)")
+}
+
 func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*country) {
 	getCountryParams := &GraphQLParams{
 		Query: `query queryCountry($regexp: String!) {
