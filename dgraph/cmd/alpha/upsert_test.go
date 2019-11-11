@@ -42,17 +42,6 @@ type QueryResult struct {
 	}
 }
 
-// contains checks whether given element is contained
-// in any of the elements of the given list of strings.
-func contains(ps []string, p string) bool {
-	var res bool
-	for _, v := range ps {
-		res = res || strings.Contains(v, p)
-	}
-
-	return res
-}
-
 func TestUpsertExample0(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
