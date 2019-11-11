@@ -4876,17 +4876,17 @@ func TestParseVarAfterCountQry(t *testing.T) {
 	query := `
 		{
 			q(func: allofterms(name@en, "steven spielberg")) {
-			  director.film {
-				u1 as count(uid)
-				genre {
-				  u2 as math(1)
-				}
-			  }
+				director.film {
+					u1 as count(uid)
+					genre {
+						u2 as math(1)
+					}
+			  	}
 			}
 
 			sum() {
-			  totalMovies: sum(val(u1))
-			  totalGenres: sum(val(u2))
+				totalMovies: sum(val(u1))
+				totalGenres: sum(val(u2))
 			}
 		}
 	`
