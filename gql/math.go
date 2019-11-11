@@ -77,21 +77,34 @@ func isTernary(f string) bool {
 }
 
 func isZero(f string, rval types.Val) bool {
-	if rval.Tid != types.FloatID {
+	if rval.Tid == types.FloatID {
+		g, ok := rval.Value.(float64)
+		if !ok {
+			return false
+		}
+		switch f {
+		case "floor":
+			return g >= 0 && g < 1.0
+		case "/", "%", "ceil", "sqrt", "u-":
+			return g == 0
+		case "ln":
+			return g == 1
+		}
+		return false
+	} else if rval.Tid == types.IntID {
+		g, ok := rval.Value.(int64)
+		if !ok {
+			return false
+		}
+		switch f {
+		case "floor", "/", "%", "ceil", "sqrt", "u-":
+			return g == 0
+		case "ln":
+			return g == 1
+		}
 		return false
 	}
-	g, ok := rval.Value.(float64)
-	if !ok {
-		return false
-	}
-	switch f {
-	case "floor":
-		return g >= 0 && g < 1.0
-	case "/", "%", "ceil", "sqrt", "u-":
-		return g == 0
-	case "ln":
-		return g == 1
-	}
+
 	return false
 }
 
