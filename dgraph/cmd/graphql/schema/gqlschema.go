@@ -216,6 +216,13 @@ var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Erro
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
+	var dirs ast.DirectiveList
+	for _, d := range src.Directives {
+		if d.Name != inverseDirective {
+			dirs = append(dirs, d)
+		}
+	}
+
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
 	// them. We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
@@ -223,7 +230,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
-		Directives:   src.Directives,
+		Directives:   dirs,
 		Position:     src.Position,
 	}
 	return dst
@@ -926,12 +933,14 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object &&
+		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
 			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object {
+		if schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface {
 			newDefn := &ast.FieldDefinition{
 				Name: fld.Name,
 			}

@@ -35,25 +35,32 @@ import (
 	"github.com/pkg/errors"
 )
 
+// An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
+
+	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
 	ServeGQL(resolver *resolve.RequestResolver)
+
+	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
 }
 
 type graphqlHandler struct {
 	resolver *resolve.RequestResolver
+	handler  http.Handler
 }
 
+// NewServer returns a new IServeGraphQL that can serve the given resolvers
 func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
-	return &graphqlHandler{resolver: resolver}
+	gh := &graphqlHandler{resolver: resolver}
+	gh.handler = api.WithRequestID(recoveryHandler(commonHeaders(gh)))
+	return gh
 }
 
-// GraphQLHTTPHandler returns a http.Handler that serves GraphQL.
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
-	return api.WithRequestID(recoveryHandler(commonHeaders(gh)))
+	return gh.handler
 }
 
-// ServeGQL tells the hander that the schema and resolvers it serves has changed.
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 	gh.resolver = resolver
 }

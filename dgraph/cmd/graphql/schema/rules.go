@@ -190,7 +190,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error {
 
 	invTypeName := field.Type.Name()
-	if sch.Types[invTypeName].Kind != ast.Object {
+	if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
 		return gqlerror.ErrorPosf(
 			field.Position,
 			"Type %s; Field %s: Field %[2]s is of type %s, but @hasInverse directive only applies"+
