@@ -43,7 +43,7 @@ func TestHasOrderDesc(t *testing.T) {
 				"name": "Badger"
 			  },
 			  {
-				"name": "name"
+				"name": "mystocks"
 			  },
 			  {
 				"name": "expand"
@@ -156,16 +156,16 @@ func TestHasFirst(t *testing.T) {
 				"name": "Michonne"
 			  },
 			  {
-				"name": "King Lear"
+				"name": "Rick Grimes"
 			  },
 			  {
-				"name": "Margaret"
+				"name": "Glenn Rhee"
 			  },
 			  {
-				"name": "Leonard"
+				"name": "Daryl Dixon"
 			  },
 			  {
-				"name": "Garfield"
+				"name": "Andrea"
 			  }
 			]
 		  }
@@ -183,19 +183,19 @@ func TestHasFirstOffset(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "Bear"
+				"name": "San Mateo High School"
 			  },
 			  {
-				"name": "Nemo"
+				"name": "San Mateo School District"
 			  },
 			  {
-				"name": "name"
+				"name": "San Mateo County"
 			  },
 			  {
-				"name": "Rick Grimes"
+				"name": "California"
 			  },
 			  {
-				"name": "Glenn Rhee"
+				"name": "Alice"
 			  }
 			]
 		  }
