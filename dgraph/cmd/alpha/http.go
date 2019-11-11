@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -158,6 +157,25 @@ func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 	return out.Write(b)
 }
 
+func writeEntry(out *bytes.Buffer, key string, js []byte) error {
+	if _, err := out.WriteRune('"'); err != nil {
+		return err
+	}
+	if _, err := out.WriteString(key); err != nil {
+		return err
+	}
+	if _, err := out.WriteRune('"'); err != nil {
+		return err
+	}
+	if _, err := out.WriteRune(':'); err != nil {
+		return err
+	}
+	if _, err := out.Write(js); err != nil {
+		return err
+	}
+	return nil
+}
+
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -254,25 +272,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var out bytes.Buffer
-	writeEntry := func(key string, js []byte) error {
-		if _, err := out.WriteRune('"'); err != nil {
-			return err
-		}
-		if _, err := out.WriteString(key); err != nil {
-			return err
-		}
-		if _, err := out.WriteRune('"'); err != nil {
-			return err
-		}
-		if _, err := out.WriteRune(':'); err != nil {
-			return err
-		}
-		if _, err := out.Write(js); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
@@ -288,7 +287,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	if err := writeEntry("data", resp.Json); err != nil {
+	if err := writeEntry(&out, "data", resp.Json); err != nil {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
@@ -296,7 +295,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	if err := writeEntry("extensions", js); err != nil {
+	if err := writeEntry(&out, "extensions", js); err != nil {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
@@ -409,22 +408,61 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 
+	var out bytes.Buffer
+	// If response is either empty or only contains empty braces {}, it's a no-op
+	if len(resp.Json) > 2 {
+		var i int
+		for i = len(resp.Json) - 1; i >= 0; i-- {
+			if resp.Json[i] == '}' {
+				break
+			}
+		}
+
+		out = *bytes.NewBuffer(resp.Json[:i])
+		if _, err := out.WriteRune(','); err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
+		}
+	} else {
+		if _, err := out.WriteRune('{'); err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
+		}
+	}
+
+	if err := writeEntry(&out, "code", []byte("\""+x.Success+"\"")); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if _, err := out.WriteRune(','); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if err := writeEntry(&out, "message", []byte("\"Done\"")); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if _, err := out.WriteRune(','); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	uids, err := json.Marshal(resp.Uids)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if err := writeEntry(&out, "uids", uids); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if _, err := out.WriteRune('}'); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+
 	response := map[string]interface{}{}
 	response["extensions"] = e
-	mp := map[string]interface{}{}
-	mp["code"] = x.Success
-	mp["message"] = "Done"
-	mp["uids"] = resp.Uids
-	if len(resp.Vars) > 0 {
-		vars := make(map[string][]string)
-		// Flatten the mutated map so that it is easier to parse for the client.
-		for v, uids := range resp.Vars {
-			vars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
-		}
-		mp["vars"] = vars
-	}
-	response["data"] = mp
-
+	response["data"] = json.RawMessage(out.Bytes())
 	js, err := json.Marshal(response)
 	if err != nil {
 		x.SetStatusWithData(w, x.Error, err.Error())
