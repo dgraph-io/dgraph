@@ -348,7 +348,11 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	}
 	if t.Const.Value != nil {
 		// Leaf node.
-		x.Check2(buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64)))
+		if t.Const.Tid == types.FloatID {
+			x.Check2(buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64)))
+		} else if t.Const.Tid == types.IntID {
+			x.Check2(buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10)))
+		}
 		return
 	}
 	// Non-leaf node.

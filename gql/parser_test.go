@@ -494,8 +494,8 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - ln(c))
-				q as math(c*-1+-b+(-b*c))
+				d as math(exp(a + b + 1.0) - ln(c))
+				q as math(c*-1.0+-b+(-b*c))
 			}
 		}
 	}
