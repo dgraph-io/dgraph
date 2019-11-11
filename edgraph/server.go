@@ -446,6 +446,10 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
+	if len(qc.gmuList) == 0 {
+		return nil
+	}
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -454,9 +458,8 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return errors.Errorf("no mutations allowed")
 	}
 
-	if err := x.HealthCheck(); err != nil {
-		return err
-	}
+	// update mutations from the query results before assigning UIDs
+	updateMutations(qc)
 
 	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
@@ -533,6 +536,7 @@ func buildUpsertQuery(qc *queryContext) string {
 		return qc.req.Query
 	}
 
+	qc.condVars = make([]string, len(qc.req.Mutations))
 	upsertQuery := strings.TrimSuffix(qc.req.Query, "}")
 	for i, gmu := range qc.gmuList {
 		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
@@ -568,13 +572,14 @@ func buildUpsertQuery(qc *queryContext) string {
 }
 
 func updateMutations(qc *queryContext) {
-	for i, gmu := range qc.gmuList {
-		condVar := qc.condVars[i]
+	for i, condVar := range qc.condVars {
+		gmu := qc.gmuList[i]
 		if len(condVar) != 0 {
 			uids, ok := qc.uidRes[condVar]
 			if !(ok && len(uids) == 1) {
 				gmu.Set = nil
 				gmu.Del = nil
+				continue
 			}
 		}
 
@@ -836,12 +841,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		return
 	}
 
-	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
-	defer func() {
-		measurements = append(measurements, x.PendingQueries.M(-1))
-	}()
-
-	span.Annotatef(nil, "Request received: %v", req)
 	req.Query = strings.TrimSpace(req.Query)
 	isQuery := len(req.Query) != 0
 	if !isQuery && !isMutation {
@@ -849,14 +848,18 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		return nil, errors.Errorf("empty request")
 	}
 
-	qc := &queryContext{
-		req:      req,
-		condVars: make([]string, len(req.Mutations)),
-		uidRes:   make(map[string][]string),
-		valRes:   make(map[string]map[uint64]types.Val),
-		latency:  l,
-		span:     span,
+	span.Annotatef(nil, "Request received: %v", req)
+	if isQuery {
+		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
+		defer func() {
+			measurements = append(measurements, x.PendingQueries.M(-1))
+		}()
 	}
+	if isMutation {
+		ostats.Record(ctx, x.NumMutations.M(1))
+	}
+
+	qc := &queryContext{req: req, latency: l, span: span}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -876,19 +879,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		}
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
+	annotateStartTs(span, req.StartTs)
 
-	resp = &api.Response{}
-	if isQuery {
-		if resp, rerr = processQuery(ctx, qc); rerr != nil {
-			return
-		}
+	if resp, rerr = processQuery(ctx, qc); rerr != nil {
+		return
 	}
 
-	if isMutation {
-		updateMutations(qc)
-		if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
-			return
-		}
+	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
+		return
 	}
 
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
@@ -905,6 +903,11 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
+	resp := &api.Response{}
+	if len(qc.req.Query) == 0 {
+		return resp, nil
+	}
+
 	qr := query.Request{
 		Latency:  qc.latency,
 		GqlQuery: &qc.gqlRes,
@@ -925,21 +928,20 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if qc.req.BestEffort {
 		// Sanity: check that request is read-only too.
 		if !qc.req.ReadOnly {
-			return nil, errors.Errorf("best effort query must be read-only")
+			return resp, errors.Errorf("best effort query must be read-only")
 		}
 
 		qr.Cache = worker.NoCache
 	}
 
 	qr.ReadTs = qc.req.StartTs
-	resp := &api.Response{}
 	resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
 	annotateStartTs(qc.span, qc.req.StartTs)
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "")
+		return resp, errors.Wrap(err, "")
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
@@ -962,7 +964,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
 	}
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	qc.span.Annotatef(nil, "Response = %s", resp.Json)
 
@@ -1004,26 +1006,31 @@ func parseRequest(qc *queryContext) error {
 		qc.latency.Parsing = time.Since(parsingStartTime)
 	}()
 
-	// parsing mutations
-	qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
-	for _, mu := range qc.req.Mutations {
-		gmu, err := parseMutationObject(mu)
-		if err != nil {
-			return err
+	var needVars []string
+	upsertQuery := qc.req.Query
+	if len(qc.req.Mutations) > 0 {
+		// parsing mutations
+		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
+		for _, mu := range qc.req.Mutations {
+			gmu, err := parseMutationObject(mu)
+			if err != nil {
+				return err
+			}
+
+			qc.gmuList = append(qc.gmuList, gmu)
 		}
 
-		qc.gmuList = append(qc.gmuList, gmu)
-	}
+		qc.uidRes = make(map[string][]string)
+		qc.valRes = make(map[string]map[uint64]types.Val)
+		upsertQuery = buildUpsertQuery(qc)
+		needVars = findVars(qc)
+		if len(upsertQuery) == 0 {
+			if len(needVars) > 0 {
+				return errors.Errorf("variables %v not defined", needVars)
+			}
 
-	// updating queries to include dummy variables for conditional upsert
-	upsertQuery := buildUpsertQuery(qc)
-	needVars := findVars(qc)
-	if len(upsertQuery) == 0 {
-		if len(needVars) > 0 {
-			return errors.Errorf("variables %v not defined", needVars)
+			return nil
 		}
-
-		return nil
 	}
 
 	// parsing the updated query
