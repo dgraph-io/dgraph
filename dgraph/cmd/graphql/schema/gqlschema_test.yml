@@ -12,6 +12,16 @@ invalid_schemas:
     ]
 
   -
+    name: "UID as a field name"
+    input: |
+      type P {
+        uid: String
+      }
+    errlist: [
+      {"message":"Type P; Field uid: uid is a reserved keyword and you cannot declare a field with this name.", "locations": [{"line":2, "column": 3}]},
+    ]
+
+  -
     name: "Query, Mutation in initial schema"
     input: |
       type Query {
@@ -26,13 +36,45 @@ invalid_schemas:
     ]
 
   -
-    name: "Invalid list type"
+    name: "No ID list of any kind"
     input: |
       type A {
-        posts: [A]!
+        f: [ID]
       }
     errlist: [
-      {"message":"[A]! lists are invalid. Valid options are [A!]! and [A!].", "locations":[{"line":2, "column":3}]},
+      {"message": "Type A; Field f: ID lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+
+  -
+    name: "No nested list of any kind"
+    input: |
+      type A {
+        f: [[String]]
+      }
+    errlist: [
+      {"message": "Type A; Field f: Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+  -
+    name: "There shoudnt be arguments on any field"
+    input: |
+      type T {
+        f(a: Int): String
+      }
+    errlist: [
+      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
+    ]
+
+
+  -
+    name: "Reference type that is not in input schema"
+    input: |
+      type T {
+          f: Author
+      }
+    errlist: [
+      {"message": "Undefined type Author.", "locations": [{"line": 2, "column": 8}]}
     ]
 
   -
@@ -70,10 +112,11 @@ invalid_schemas:
         i2: ID!
         i3: ID!
         l1: [X]!
+        l2: [ID]
       }
     errlist: [
-      {"message":"Fields i1, i2 and i3 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
-      {"message":"[X]! lists are invalid. Valid options are [X!]! and [X!].", "locations":[{"line":5, "column":3}]},
+      {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
+      {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
     ]
 
   -
@@ -359,7 +402,7 @@ invalid_schemas:
         q: [Boolean]
       }
     errlist: [
-      {"message": "[Boolean] lists are invalid. Only Boolean scalar fields are allowed.",
+      {"message": "Type X; Field q: Boolean lists are invalid.",
       "locations":[{"line":2, "column":3}]}
       ]
 

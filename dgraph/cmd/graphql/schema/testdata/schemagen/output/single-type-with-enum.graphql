@@ -103,7 +103,7 @@ type DeletePostPayload {
 }
 
 type UpdatePostPayload {
-	post: Post
+	post: [Post]
 }
 
 #######################
@@ -147,7 +147,7 @@ input PostRef {
 }
 
 input UpdatePostInput {
-	id: ID!
+	filter: PostFilter!
 	patch: PatchPost!
 }
 

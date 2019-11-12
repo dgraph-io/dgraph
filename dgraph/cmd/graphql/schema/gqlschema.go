@@ -209,9 +209,16 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
+	var dirs ast.DirectiveList
+	for _, d := range src.Directives {
+		if d.Name != inverseDirective {
+			dirs = append(dirs, d)
+		}
+	}
+
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
 	// them. We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
@@ -219,7 +226,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
-		Directives:   src.Directives,
+		Directives:   dirs,
 		Position:     src.Position,
 	}
 	return dst
@@ -302,7 +309,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
-			errs = append(errs, applyFieldValidations(field)...)
+			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
@@ -325,11 +332,11 @@ func applyDefnValidations(defn *ast.Definition,
 	return errs
 }
 
-func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
+func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(field))
+		errs = appendIfNotNull(errs, rule(typ, field))
 	}
 
 	return errs
@@ -409,7 +416,7 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -417,7 +424,13 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.InputObject,
 		Name: "Update" + defn.Name + "Input",
 		Fields: append(
-			getIDField(defn),
+			ast.FieldList{&ast.FieldDefinition{
+				Name: "filter",
+				Type: &ast.Type{
+					NamedType: defn.Name + "Filter",
+					NonNull:   true,
+				},
+			}},
 			&ast.FieldDefinition{
 				Name: "patch",
 				Type: &ast.Type{
@@ -430,7 +443,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addPatchType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -731,7 +744,9 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
-					NamedType: defn.Name,
+					Elem: &ast.Type{
+						NamedType: defn.Name,
+					},
 				},
 			},
 		},
@@ -824,7 +839,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
@@ -881,12 +896,14 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object &&
+		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
 			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object {
+		if schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface {
 			newDefn := &ast.FieldDefinition{
 				Name: fld.Name,
 			}

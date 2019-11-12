@@ -146,19 +146,19 @@ type DeleteStarshipPayload {
 }
 
 type UpdateCharacterPayload {
-	character: Character
+	character: [Character]
 }
 
 type UpdateDroidPayload {
-	droid: Droid
+	droid: [Droid]
 }
 
 type UpdateHumanPayload {
-	human: Human
+	human: [Human]
 }
 
 type UpdateStarshipPayload {
-	starship: Starship
+	starship: [Starship]
 }
 
 #######################
@@ -218,7 +218,7 @@ input DroidFilter {
 
 input DroidInput {
 	name: String!
-	friends: [Character]
+	friends: [CharacterRef]
 	appearsIn: [Episode!]!
 	primaryFunction: String
 }
@@ -244,7 +244,7 @@ input HumanFilter {
 
 input HumanInput {
 	name: String!
-	friends: [Character]
+	friends: [CharacterRef]
 	appearsIn: [Episode!]!
 	starships: [StarshipRef]
 	totalCredits: Int
@@ -262,20 +262,20 @@ input HumanRef {
 
 input PatchCharacter {
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 	appearsIn: [Episode!]
 }
 
 input PatchDroid {
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 	appearsIn: [Episode!]
 	primaryFunction: String
 }
 
 input PatchHuman {
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 	appearsIn: [Episode!]
 	starships: [StarshipRef]
 	totalCredits: Int
@@ -310,22 +310,22 @@ input StarshipRef {
 }
 
 input UpdateCharacterInput {
-	id: ID!
+	filter: CharacterFilter!
 	patch: PatchCharacter!
 }
 
 input UpdateDroidInput {
-	id: ID!
+	filter: DroidFilter!
 	patch: PatchDroid!
 }
 
 input UpdateHumanInput {
-	id: ID!
+	filter: HumanFilter!
 	patch: PatchHuman!
 }
 
 input UpdateStarshipInput {
-	id: ID!
+	filter: StarshipFilter!
 	patch: PatchStarship!
 }
 
