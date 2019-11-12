@@ -230,18 +230,6 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	return true
 }
 
-func isValidEnumSearchDirective(searchArg string) bool {
-	switch searchArg {
-	case
-		"trigram",
-		"regexp",
-		"exact",
-		"hash":
-		return true
-	}
-	return false
-}
-
 // validateSearchArg checks that the argument for search is valid and compatible
 // with the type it is applied to.
 func validateSearchArg(searchArg string,
@@ -250,7 +238,7 @@ func validateSearchArg(searchArg string,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
 
-	isEnum := isFieldEnum(sch, field)
+	isEnum := sch.Types[field.Type.Name()].Kind == ast.Enum
 	if search, ok := supportedSearches[searchArg]; !ok {
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
@@ -268,12 +256,12 @@ func validateSearchArg(searchArg string,
 				"Fields of type %[4]s %[6]s.",
 			typ.Name, field.Name, searchArg, field.Type.Name(),
 			supportedSearches[searchArg].gqlType, searchMessage(sch, field))
-	} else if isEnum && !isValidEnumSearchDirective(searchArg) {
+	} else if isEnum && !enumDirectives[searchArg] {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
 				"doesn't apply to field type %s which is an Enum. Enum only supports "+
-				"hash, regexp and trigram",
+				"hash, exact, regexp and trigram",
 			typ.Name, field.Name, searchArg, field.Type.Name())
 	}
 
@@ -353,10 +341,6 @@ func searchValidation(
 	}
 
 	return nil
-}
-
-func isFieldEnum(sch *ast.Schema, field *ast.FieldDefinition) bool {
-	return sch.Types[field.Type.Name()].Kind == ast.Enum
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
