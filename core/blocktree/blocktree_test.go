@@ -31,7 +31,7 @@ import (
 var zeroHash, _ = common.HexToHash("0x00")
 
 func createGenesisBlock() types.Block {
-	return types.Block{
+	b := types.Block{
 		Header: types.BlockHeader{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
@@ -39,6 +39,8 @@ func createGenesisBlock() types.Block {
 		},
 		Body: types.BlockBody{},
 	}
+	b.SetBlockArrivalTime(uint64(0))
+	return b
 }
 
 func intToHashable(in int) string {
@@ -61,6 +63,7 @@ func createFlatTree(t *testing.T, depth int) *BlockTree {
 	bt := NewBlockTreeFromGenesis(createGenesisBlock(), d)
 
 	previousHash := bt.head.hash
+	previousAT := bt.head.arrivalTime
 
 	for i := 1; i <= depth; i++ {
 		hash, err := common.HexToHash(intToHashable(i))
@@ -78,8 +81,11 @@ func createFlatTree(t *testing.T, depth int) *BlockTree {
 			Body: types.BlockBody{},
 		}
 
+		block.SetBlockArrivalTime(previousAT + uint64(1000))
+
 		bt.AddBlock(block)
 		previousHash = hash
+		previousAT = block.GetBlockArrivalTime()
 	}
 
 	return bt
@@ -91,7 +97,7 @@ func TestBlockTree_GetBlock(t *testing.T) {
 
 	h, err := common.HexToHash(intToHashable(2))
 	if err != nil {
-		log.Error("failed to create hash", "err", err)
+		log.Error("failed to create Hash", "err", err)
 	}
 
 	n := bt.GetNode(h)
@@ -133,7 +139,7 @@ func TestNode_isDecendantOf(t *testing.T) {
 	// Create tree with depth 4 (with 4 nodes)
 	bt := createFlatTree(t, 4)
 
-	// Compute hash of leaf and fetch node
+	// Compute Hash of leaf and fetch node
 	hashFour, err := common.HexToHash(intToHashable(4))
 	if err != nil {
 		t.Error(err)
@@ -178,9 +184,51 @@ func TestBlockTree_LongestPath(t *testing.T) {
 
 	for i, n := range longestPath {
 		if n.hash != expectedPath[i].hash {
-			t.Errorf("expected hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
+			t.Errorf("expected Hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
 		}
 	}
+}
+
+func TestBlockTree_Subchain(t *testing.T) {
+	bt := createFlatTree(t, 4)
+
+	// Insert a block to create a competing path
+	extraBlock := types.Block{
+		Header: types.BlockHeader{
+			ParentHash: zeroHash,
+			Number:     big.NewInt(1),
+			Hash:       common.Hash{0xAB},
+		},
+		Body: types.BlockBody{},
+	}
+
+	bt.AddBlock(extraBlock)
+
+	expectedPath := []*node{
+		bt.GetNode(common.Hash{0x01}),
+		bt.GetNode(common.Hash{0x02}),
+		bt.GetNode(common.Hash{0x03}),
+	}
+
+	subChain := bt.SubChain(common.Hash{0x01}, common.Hash{0x03})
+
+	for i, n := range subChain {
+		if n.hash != expectedPath[i].hash {
+			t.Errorf("expected Hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
+		}
+	}
+}
+
+func TestBlockTree_ComputeSlotForBlock(t *testing.T) {
+	bt := createFlatTree(t, 9)
+
+	expectedSlotNumber := uint64(9)
+	slotNumber := bt.ComputeSlotForBlock(bt.GetNode(common.Hash{0x09}).getBlockFromNode(), 1000)
+
+	if slotNumber != expectedSlotNumber {
+		t.Errorf("expected Slot Number: %d got: %d", expectedSlotNumber, slotNumber)
+	}
+
 }
 
 // TODO: Need to define leftmost (see BlockTree.LongestPath)
@@ -206,7 +254,7 @@ func TestBlockTree_LongestPath(t *testing.T) {
 //
 //	for i, n := range longestPath {
 //		if n.hash != expectedPath[i].hash {
-//			t.Errorf("expected hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
+//			t.Errorf("expected Hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
 //		}
 //	}
 //}

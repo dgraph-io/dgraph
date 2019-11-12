@@ -21,16 +21,18 @@ import (
 	"math/big"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/disiqueira/gotree"
 )
 
 // node is an element in the BlockTree
 type node struct {
-	hash     common.Hash // Block hash
-	parent   *node       // Parent node
-	number   *big.Int    // Block number
-	children []*node     // Nodes of children blocks
-	depth    *big.Int    // Depth within the tree
+	hash        common.Hash // Block hash
+	parent      *node       // Parent node
+	number      *big.Int    // Block Number
+	children    []*node     // Nodes of children blocks
+	depth       *big.Int    // Depth within the tree
+	arrivalTime uint64      // Arrival time of the block
 }
 
 // addChild appends node to n's list of children
@@ -66,6 +68,52 @@ func (n *node) getNode(h common.Hash) *node {
 		}
 	}
 	return nil
+}
+
+// getNodeFromBlockNumber recursively searches for a node with a given Number
+func (n *node) getNodeFromBlockNumber(b *big.Int) *node {
+	if b.Cmp(n.number) == 0 {
+		return n
+	} else if len(n.children) == 0 {
+		return nil
+	} else {
+		for _, child := range n.children {
+			if n := child.getNodeFromBlockNumber(b); n != nil {
+				return n
+			}
+		}
+	}
+	return nil
+}
+
+func (n *node) getBlockFromNode() *types.Block {
+	bh := types.BlockHeader{
+		ParentHash: n.parent.hash,
+		Number:     n.number,
+		Hash:       n.hash,
+	}
+
+	b := &types.Block{
+		Header: bh,
+		Body:   types.BlockBody{},
+	}
+	b.SetBlockArrivalTime(n.arrivalTime)
+
+	return b
+}
+
+// subChain recursively searches for a chain with head n and end descendant
+func (n *node) subChain(descendant *node) []*node {
+	if descendant == nil {
+		return nil
+	}
+	var path []*node
+	for curr := descendant; ; curr = curr.parent {
+		path = append([]*node{curr}, path...)
+		if curr == n {
+			return path
+		}
+	}
 }
 
 // TODO: This would improved by using parent in node struct and searching child -> parent

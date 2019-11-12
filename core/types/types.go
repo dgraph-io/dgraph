@@ -27,8 +27,19 @@ type Extrinsic []byte
 
 // Block defines a state block
 type Block struct {
-	Header BlockHeader
-	Body   BlockBody
+	Header      BlockHeader
+	Body        BlockBody
+	arrivalTime uint64 // arrival time of this block
+}
+
+// GetBlockArrivalTime returns the arrival time for a block
+func (b *Block) GetBlockArrivalTime() uint64 {
+	return b.arrivalTime
+}
+
+// SetBlockArrivalTime sets the arrival time for a block
+func (b *Block) SetBlockArrivalTime(t uint64) {
+	b.arrivalTime = t
 }
 
 // BlockHeader is a state block header
