@@ -517,7 +517,7 @@ func checkGraphQLHealth(url string, status []string) error {
 	health := &GraphQLParams{
 		Query: `query {
 			health {
-				message 
+				message
 				status
 			}
 		}`,
@@ -570,6 +570,9 @@ func addSchema(url string, schema string) error {
 		Variables: map[string]interface{}{"sch": schema},
 	}
 	req, err := add.createGQLPost(url)
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
 
 	resp, err := runGQLRequest(req)
 	if err != nil {

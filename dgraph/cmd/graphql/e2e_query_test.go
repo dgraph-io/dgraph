@@ -856,3 +856,31 @@ func TestQueryByMultipleInvalidIds(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(result.QueryPost))
 }
+
+func TestGetStateByXid(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `{
+			getState(xid: "nsw") {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.Equal(t, `{"getState":{"name":"NSW"}}`, string(gqlResponse.Data))
+}
+
+func TestQueryCountryByXid(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `{
+			queryState(filter: { xid: { eq: "nsw"}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
+}

@@ -3,6 +3,12 @@ type Country {
         name: String! @search(by: [trigram, hash])
 }
 
+type State {
+        id: ID!
+        xid: String! @id
+        name: String
+}
+
 type Author {
         id: ID!
         name: String! @search(by: [hash, trigram])
@@ -60,3 +66,4 @@ type Starship {
         name: String! @search(by: [term])
         length: Float
 }
+

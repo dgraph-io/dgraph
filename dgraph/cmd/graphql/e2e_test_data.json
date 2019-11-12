@@ -87,5 +87,11 @@
         "Post.isPublished": false,
         "Post.postType": "Fact",
         "Post.author": { "uid": "_:author2" }
+    },
+    {
+        "uid": "_:nsw",
+        "dgraph.type": "State",
+        "State.name": "NSW",
+        "State.xid": "nsw"
     }
 ]
