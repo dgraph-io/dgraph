@@ -671,17 +671,10 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
 
-	hasHash := false
 	for i, child := range val.Children {
 		res[i] = child.Value.Raw
-		if res[i] == "hash" {
-			hasHash = true
-		}
 	}
 
-	if id != nil && !hasHash {
-		res = append(res, "hash")
-	}
 	sort.Strings(res)
 	return res
 }
