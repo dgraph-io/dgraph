@@ -2,7 +2,8 @@
 title = "Get Started - Basic Operations"
 +++
 
-Welcome to the second tutorial of getting started with Dgraph.
+**Welcome to the second tutorial of getting started with Dgraph.**
+
 In the [previous tutorial](/tutorial-1/) of getting started,
 we learned some of the basics of Dgraph. 
 Including how to run the database, add new nodes and predicates, and query them back.
@@ -16,6 +17,8 @@ Specifically, we'll learn about:
 - Adding an edge between existing nodes.
 - Adding a new predicate to an existing node.
 - Traversing the Graph.
+
+You can see the accompanying video [here](https://www.youtube.com/watch?v=8TKD-FFBVgE).
 
 First, let's create our Graph.
 
@@ -354,5 +357,4 @@ Did you know that you could search predicates based on their value?
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series about
-[Basic Operations](tutorial-3/).
+Check out our next tutorial of the getting started series [here](/tutorial-3/).

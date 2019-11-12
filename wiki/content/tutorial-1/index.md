@@ -2,9 +2,9 @@
 title = "Get Started - Introduction"
 +++
 
-Welcome to getting started with Dgraph.
-[Dgraph](https://dgraph.io) is an open-source, transactional, distributed, native Graph Database.
-Here is the first tutorial of the get started series on using Dgraph.
+**Welcome to getting started with Dgraph.**
+
+[Dgraph](https://dgraph.io) is an open-source, transactional, distributed, native Graph Database. Here is the first tutorial of the get started series on using Dgraph.
 
 In this tutorial, we'll learn how to build the following graph on Dgraph,
 
@@ -17,6 +17,8 @@ In the process, we'll learn about:
  - Creating a node.
  - Creating an edge between two nodes.
  - Querying for the nodes.
+
+You can see the accompanying video [here](https://www.youtube.com/watch?v=u73ovhDCPQQ).
 
 ## Running Dgraph
 Running the `dgraph/standalone` docker image is the quickest way to get started with Dgraph.
@@ -221,5 +223,4 @@ They also can be used to create an edge between existing nodes!
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series about
-[Basic Operations](/tutorial-2/).
+Check out our next tutorial of the getting started series [here](/tutorial-2/).

@@ -2,11 +2,11 @@
 title = "Get Started - Basic Types and Operations on them"
 +++
 
-Welcome to the third tutorial of getting started with Dgraph.
+**Welcome to the third tutorial of getting started with Dgraph.**
+
 In the [previous tutorial](/tutorial-2/) of getting started,
 we learned about the CRUD operations using UIDs.
 We also learned about traversals and recursive traversals.
-
 
 In this tutorial, we'll learn about Dgraph's basic types and how to query for them.
 Specifically, we'll learn about:
@@ -17,6 +17,7 @@ Specifically, we'll learn about:
 - Filtering nodes.
 - Traversing in reverse direction.
 
+You can see the accompanying video [here](https://www.youtube.com/watch?v=f401or0hg5E).
 
 Let's start by building the following graph of a simple blog application.
 Here's the Graph model of our application
