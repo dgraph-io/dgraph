@@ -415,25 +415,25 @@ func TestQueryOrderAtRoot(t *testing.T) {
 			Order:    orderNameAsc,
 			First:    0,
 			Offset:   0,
-			Expected: []*post{posts[0], posts[1]},
+			Expected: []*post{posts[1], posts[0]},
 		},
 		"orderDesc": {
 			Order:    orderNameDesc,
 			First:    0,
 			Offset:   0,
-			Expected: []*post{posts[1], posts[0]},
+			Expected: []*post{posts[0], posts[1]},
 		},
 		"first": {
 			Order:    orderNameDesc,
 			First:    1,
 			Offset:   0,
-			Expected: []*post{posts[1]},
+			Expected: []*post{posts[0]},
 		},
 		"offset": {
 			Order:    orderNameDesc,
 			First:    0,
 			Offset:   1,
-			Expected: []*post{posts[0]},
+			Expected: []*post{posts[1]},
 		},
 	}
 

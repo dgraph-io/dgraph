@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
