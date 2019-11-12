@@ -43,9 +43,7 @@ func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]by
 		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
 	}
 
-	resp, err := client.NewTxn().
-		Query(context.Background(), queryStr)
-
+	resp, err := client.NewTxn().Query(ctx, queryStr)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 

@@ -121,6 +121,9 @@ func TestUIDAlias(t *testing.T) {
 			}
 		}`,
 	}
+	type countryUID struct {
+		UID string
+	}
 
 	gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)

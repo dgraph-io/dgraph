@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,21 +95,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 		Attr: "uid",
 	}
 	if aliasUID {
-		candidateFound := false
-		for !candidateFound {
-			candidateFound = true
-			uidCandidate := fmt.Sprintf("uid_%d", rand.Int())
-			for _, c := range dgQuery.Children {
-				if (c.Alias == "" && c.Attr == uidCandidate) ||
-					(c.Alias == uidCandidate) {
-					candidateFound = false
-					break
-				}
-			}
-			if candidateFound {
-				uidChild.Alias = uidCandidate
-			}
-		}
+		uidChild.Alias = "uid.uid"
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
 }

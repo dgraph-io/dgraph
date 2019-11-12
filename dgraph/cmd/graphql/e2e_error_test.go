@@ -45,11 +45,6 @@ type ErrorCase struct {
 	Errors     x.GqlErrorList
 }
 
-type countryUID struct {
-	Name string
-	UID  string
-}
-
 func TestGraphQLCompletionOn(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 
@@ -67,7 +62,11 @@ func TestGraphQLCompletionOn(t *testing.T) {
 	_, err = client.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err)
 
-	tests := [2]string{"name", "uid: name"}
+	type countryUID struct {
+		UID string
+	}
+
+	tests := [2]string{"name", "id name"}
 	for _, test := range tests {
 		t.Run(test, func(t *testing.T) {
 			queryCountry := &GraphQLParams{
