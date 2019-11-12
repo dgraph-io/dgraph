@@ -118,7 +118,7 @@ type Mutation {
 }
 `
 
-func (ex *executor) Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byte, error) {
+func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ex.failQuery--
 	if ex.failQuery == 0 {
 		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
@@ -126,7 +126,7 @@ func (ex *executor) Query(resCtx *ResolverContext, query *gql.GraphQuery) ([]byt
 	return []byte(ex.resp), nil
 }
 
-func (ex *executor) Mutate(resCtx *ResolverContext,
+func (ex *executor) Mutate(ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 	ex.failMutation--
@@ -294,7 +294,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 
 func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		updatePost(input: { id: "0x1", patch: { text: "Some more text" } }) {
+		updatePost(input: { filter: { ids: ["0x1"] }, patch: { text: "Some more text" } }) {
 			post {
 				title
 				text
@@ -385,7 +385,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			add2: addPost(input: {title: "A Post", text: "Some text", author: {id: $id}}) {
 				post { title }
 			}
-			
+
 			add3: addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
 				post { title }
 			}
@@ -467,11 +467,12 @@ func resolveWithClient(
 	ex *executor) *schema.Response {
 	resolver := New(
 		gqlSchema,
-		NewResolverFactory(
-			NewQueryRewriter(),
-			NewMutationRewriter(),
-			ex,
-			ex))
+		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{
+			Qrw: NewQueryRewriter(),
+			Mrw: NewMutationRewriter(),
+			Qe:  ex,
+			Me:  ex,
+		}))
 
 	return resolver.Resolve(context.Background(), &schema.Request{Query: gqlQuery, Variables: vars})
 }

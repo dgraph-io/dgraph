@@ -17,6 +17,7 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -94,12 +95,15 @@ func TestPanicCatcher(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
 
-	resolverFactory :=
-		resolve.NewResolverFactory(
-			resolve.NewQueryRewriter(),
-			resolve.NewMutationRewriter(),
-			&panicClient{},
-			&panicClient{})
+	fns := &resolve.ResolverFns{
+		Qrw: resolve.NewQueryRewriter(),
+		Mrw: resolve.NewMutationRewriter(),
+		Drw: resolve.NewDeleteRewriter(),
+		Qe:  &panicClient{},
+		Me:  &panicClient{}}
+
+	resolverFactory := resolve.NewResolverFactory(nil, nil).
+		WithConventionResolvers(gqlSchema, fns)
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
 	server := web.NewServer(resolvers)
@@ -125,14 +129,12 @@ func TestPanicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(
-	resCtx *resolve.ResolverContext,
-	query *gql.GraphQuery) ([]byte, error) {
+func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	panic("bugz!!!")
 }
 
 func (dg *panicClient) Mutate(
-	resCtx *resolve.ResolverContext,
+	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 	panic("bugz!!!")

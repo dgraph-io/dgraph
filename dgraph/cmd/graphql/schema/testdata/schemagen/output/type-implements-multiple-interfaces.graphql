@@ -114,11 +114,11 @@ type DeleteHumanPayload {
 }
 
 type UpdateCharacterPayload {
-	character: Character
+	character: [Character]
 }
 
 type UpdateHumanPayload {
-	human: Human
+	human: [Human]
 }
 
 #######################
@@ -181,7 +181,7 @@ input HumanInput {
 	employeeId: String!
 	title: String!
 	name: String!
-	friends: [Character]
+	friends: [CharacterRef]
 	totalCredits: Int
 }
 
@@ -197,24 +197,24 @@ input HumanRef {
 
 input PatchCharacter {
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 }
 
 input PatchHuman {
 	employeeId: String
 	title: String
 	name: String
-	friends: [Character]
+	friends: [CharacterRef]
 	totalCredits: Int
 }
 
 input UpdateCharacterInput {
-	id: ID!
+	filter: CharacterFilter!
 	patch: PatchCharacter!
 }
 
 input UpdateHumanInput {
-	id: ID!
+	filter: HumanFilter!
 	patch: PatchHuman!
 }
 

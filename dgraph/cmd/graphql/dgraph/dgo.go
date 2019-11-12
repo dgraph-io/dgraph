@@ -90,6 +90,9 @@ func Mutate(
 	}
 	resp, err := client.NewTxn().Do(ctx, req)
 
-	// FIXME: returning nil from here until the Dgraph upsert changes are merged
-	return resp.GetUids(), nil, schema.GQLWrapf(err, "Dgraph mutation failed")
+	vars := make(map[string][]string, len(resp.GetVars()))
+	for k, v := range resp.GetVars() {
+		vars[k] = v.GetUids()
+	}
+	return resp.GetUids(), vars, schema.GQLWrapf(err, "Dgraph mutation failed")
 }

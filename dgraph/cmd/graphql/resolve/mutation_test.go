@@ -77,7 +77,6 @@ func TestMutationRewriting(t *testing.T) {
 			mut := test.GetMutation(t, op)
 
 			q, muts, err := rewriterToTest.Rewrite(mut)
-			require.Nil(t, q)
 
 			if tcase.Error != nil || err != nil {
 				require.Equal(t, tcase.Error.Error(), err.Error())
@@ -85,6 +84,7 @@ func TestMutationRewriting(t *testing.T) {
 				require.Len(t, muts, 1)
 				jsonMut := string(muts[0].SetJson)
 				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
+				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
 			}
 		})
 	}
@@ -93,7 +93,7 @@ func TestMutationRewriting(t *testing.T) {
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]string{
 		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-		"Update Post ": `updatePost(input: { postID: "0x4", patch: { text: "Updated text" } }) `,
+		"Update Post ": `updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) `,
 	}
 
 	b, err := ioutil.ReadFile("mutation_query_test.yaml")
@@ -121,7 +121,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 				gqlMutation := test.GetMutation(t, op)
 
 				dgQuery, err := testRewriter.FromMutationResult(
-					gqlMutation, map[string]string{"newnode": "0x4"}, nil)
+					gqlMutation, map[string]string{"newnode": "0x4"},
+					map[string][]string{mutationQueryVar: []string{"0x4"}})
 
 				require.Nil(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))

@@ -52,11 +52,14 @@ const (
 	IDType                            = "ID"
 	IDArgName                         = "id"
 	InputArgName                      = "input"
+	FilterArgName                     = "filter"
 )
 
 // Schema represents a valid GraphQL schema
 type Schema interface {
 	Operation(r *Request) (Operation, error)
+	Queries(t QueryType) []string
+	Mutations(t MutationType) []string
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -77,6 +80,7 @@ type Field interface {
 	ResponseName() string
 	ArgValue(name string) interface{}
 	IDArgValue() (uint64, error)
+	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
 	Type() Type
@@ -172,6 +176,26 @@ type fieldDefinition struct {
 type mutation field
 type query field
 
+func (s *schema) Queries(t QueryType) []string {
+	var result []string
+	for _, q := range s.schema.Query.Fields {
+		if queryType(q.Name) == t {
+			result = append(result, q.Name)
+		}
+	}
+	return result
+}
+
+func (s *schema) Mutations(t MutationType) []string {
+	var result []string
+	for _, m := range s.schema.Mutation.Fields {
+		if mutationType(m.Name) == t {
+			result = append(result, m.Name)
+		}
+	}
+	return result
+}
+
 func (o *operation) IsQuery() bool {
 	return o.op.Operation == ast.Query
 }
@@ -248,6 +272,7 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
+		update  = "Update"
 		del     = "Delete"
 		payload = "Payload"
 	)
@@ -265,9 +290,15 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		dgraphPredicate[originalTyp.Name] = make(map[string]string)
 		inputTypeName := inputTyp.Name
 
-		if strings.HasPrefix(inputTypeName, del) && strings.HasSuffix(inputTypeName, payload) {
-			// For DeleteTypePayload, inputTyp should be Type.
-			inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+		if (strings.HasPrefix(inputTypeName, update) || strings.HasPrefix(inputTypeName, del)) &&
+			strings.HasSuffix(inputTypeName, payload) {
+			// For UpdateTypePayload and DeleteTypePayload, inputTyp should be Type.
+			if strings.HasPrefix(inputTypeName, update) {
+				inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, update),
+					payload)
+			} else if strings.HasPrefix(inputTypeName, del) {
+				inputTypeName = strings.TrimSuffix(strings.TrimPrefix(inputTypeName, del), payload)
+			}
 			inputTyp = sch.Types[inputTypeName]
 		}
 
@@ -311,7 +342,10 @@ func mutatedTypeMapping(s *ast.Schema,
 		// for UpdateTPayload and get the type from the first field. There is no direct way to get
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
-		def := s.Types["Update"+mutatedTypeName+"Payload"]
+		var def *ast.Definition
+		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		}
 
 		if def == nil {
 			continue
@@ -354,6 +388,10 @@ func (f *field) Alias() string {
 
 func (f *field) ResponseName() string {
 	return responseName(f.field)
+}
+
+func (f *field) SetArgTo(arg string, val interface{}) {
+	f.arguments[arg] = val
 }
 
 func (f *field) ArgValue(name string) interface{} {
@@ -476,6 +514,10 @@ func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
 
+func (q *query) SetArgTo(arg string, val interface{}) {
+	(*field)(q).SetArgTo(arg, val)
+}
+
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
@@ -509,12 +551,16 @@ func (q *query) ResponseName() string {
 }
 
 func (q *query) QueryType() QueryType {
+	return queryType(q.Name())
+}
+
+func queryType(name string) QueryType {
 	switch {
-	case strings.HasPrefix(q.Name(), "get"):
+	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case q.Name() == "__schema" || q.Name() == "__type":
+	case name == "__schema" || name == "__type":
 		return SchemaQuery
-	case strings.HasPrefix(q.Name(), "query"):
+	case strings.HasPrefix(name, "query"):
 		return FilterQuery
 	default:
 		return NotSupportedQuery
@@ -543,6 +589,10 @@ func (m *mutation) Name() string {
 
 func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
+}
+
+func (m *mutation) SetArgTo(arg string, val interface{}) {
+	(*field)(m).SetArgTo(arg, val)
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
@@ -598,12 +648,16 @@ func (m *mutation) MutatedType() Type {
 }
 
 func (m *mutation) MutationType() MutationType {
+	return mutationType(m.Name())
+}
+
+func mutationType(name string) MutationType {
 	switch {
-	case strings.HasPrefix(m.Name(), "add"):
+	case strings.HasPrefix(name, "add"):
 		return AddMutation
-	case strings.HasPrefix(m.Name(), "update"):
+	case strings.HasPrefix(name, "update"):
 		return UpdateMutation
-	case strings.HasPrefix(m.Name(), "delete"):
+	case strings.HasPrefix(name, "delete"):
 		return DeleteMutation
 	default:
 		return NotSupportedMutation
@@ -623,9 +677,16 @@ func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
 }
 
 func (t *astType) Field(name string) FieldDefinition {
+
+	typName := t.Name()
+	parentInt := parentInterface(t.inSchema, t.inSchema.Types[typName], name)
+	if parentInt != "" {
+		typName = parentInt
+	}
+
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef: t.inSchema.Types[t.Name()].Fields.ForName(name),
+		fieldDef: t.inSchema.Types[typName].Fields.ForName(name),
 		inSchema: t.inSchema,
 	}
 }
