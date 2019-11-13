@@ -93,19 +93,28 @@ func TestFacets(t *testing.T) {
 
 	t.Run("facets on fwd uid edge", s.testCase(`
 		{q(func: eq(name, "Bob")) {
-			boss @facets(since)
+			boss @facets(since) {
+				name
+			}
 		}}
 	`, `
-		{"q": [ {
-			"boss": {
-				"boss|since": "2017-04-26T00:00:00Z"
+	{
+		"q":[
+			{
+				"boss":{
+					"name":"Alice"
+				},
+				"boss|since":"2017-04-26T00:00:00Z"
 			}
-		} ]}
+		]
+	}
 	`))
 
 	t.Run("facets on rev uid edge", s.testCase(`
 		{q(func: eq(name, "Alice")) {
-			~boss @facets(since)
+			~boss @facets(since) {
+				name
+			}
 		}}
 	`, `
 		{"q": [ {
