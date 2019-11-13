@@ -53,7 +53,7 @@ func TestLangBase(t *testing.T) {
 
 	var out string
 	for _, tc := range tests {
-		out = langBase(tc.in)
+		out = LangBase(tc.in)
 		require.Equal(t, tc.out, out)
 	}
 }

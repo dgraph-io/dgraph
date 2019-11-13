@@ -204,8 +204,8 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				friend(first:2, orderdesc: alias@en) {
-					alias
+				friend(first: 2, orderdesc: alias_lang@en) {
+					alias_lang@en
 				}
 			}
 		}
@@ -213,7 +213,17 @@ func TestToFastJSONOrderLang(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"}]}]}}`,
+		`{
+			"data": {
+				"me": [{
+					"friend": [{
+						"alias_lang@en": "Zambo Alice"
+					}, {
+						"alias_lang@en": "John Oliver"
+					}]
+				}]
+			}
+		}`,
 		js)
 }
 

@@ -110,7 +110,7 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
-func getInequalityTokens(readTs uint64, attr, f string,
+func getInequalityTokens(readTs uint64, attr, f, lang string,
 	ineqValue types.Val) ([]string, string, error) {
 	tokenizer, err := pickTokenizer(attr, f)
 	if err != nil {
@@ -119,7 +119,8 @@ func getInequalityTokens(readTs uint64, attr, f string,
 
 	// Get the token for the value passed in function.
 	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tok.GetLangTokenizer(tokenizer, "en"))
+	tokenizer = tok.GetLangTokenizer(tokenizer, lang)
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
 	if err != nil {
 		return nil, "", err
 	}

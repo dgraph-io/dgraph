@@ -457,19 +457,19 @@ func TestHasOrderDesc(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": ""
-			  },
-			  {
-				"name": ""
-			  },
-			  {
-				"name": "Badger"
-			  },
-			  {
 				"name": "name"
 			  },
 			  {
 				"name": "expand"
+			  },
+			  {
+				"name": "Shoreline Amphitheater"
+			  },
+			  {
+				"name": "School B"
+			  },
+			  {
+				"name": "School A"
 			  }
 			]
 		  }
@@ -486,19 +486,19 @@ func TestHasOrderDescOffset(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "Shoreline Amphitheater"
-			  },
-			  {
-				"name": "School B"
-			  },
-			  {
-				"name": "School A"
-			  },
-			  {
 				"name": "San Mateo School District"
 			  },
 			  {
 				"name": "San Mateo High School"
+			  },
+			  {
+				"name": "San Mateo County"
+			  },
+			  {
+				"name": "San Carlos Airport"
+			  },
+			  {
+				"name": "San Carlos"
 			  }
 			]
 		  }

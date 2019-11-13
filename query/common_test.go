@@ -236,8 +236,10 @@ type Node {
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang					   : string @lang .
 lang_type                      : string @index(exact) .
+name_lang_index				   : string @index(exact) @lang .
 alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
+alias_lang					   : string @index(exact) @lang .
 abbr                           : string .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
@@ -362,9 +364,13 @@ func populateCluster() {
 		<10007> <name> "Elizabeth" .
 		<10101> <name_lang> "zon"@sv .
 		<10101> <name_lang> "öffnen"@de .
+		<10101> <name_lang_index> "zon"@sv .
+		<10101> <name_lang_index> "öffnen"@de .
 		<10101> <lang_type> "Test" .
 		<10102> <name_lang> "öppna"@sv .
 		<10102> <name_lang> "zumachen"@de .
+		<10102> <name_lang_index> "öppna"@sv .
+		<10102> <name_lang_index> "zumachen"@de .
 		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
@@ -471,6 +477,12 @@ func populateCluster() {
 		<25> <alias> "Bob Joe" .
 		<31> <alias> "Allan Matt" .
 		<101> <alias> "John Oliver" .
+
+		<23> <alias_lang> "Zambo Alice"@en .
+		<24> <alias_lang> "John Alice"@en .
+		<25> <alias_lang> "Bob Joe"@en .
+		<31> <alias_lang> "Allan Matt"@en .
+		<101> <alias_lang> "John Oliver"@en .
 
 		<1> <bin_data> "YmluLWRhdGE=" .
 
