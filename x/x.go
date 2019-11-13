@@ -109,6 +109,9 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
 `
+
+	// BlockSize is the size of the block used to compress a list of UIDs.
+	BlockSize = 256
 )
 
 var (

@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -327,4 +328,26 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 
 func match32MSB(num1, num2 uint64) bool {
 	return (num1 & bitMask) == (num2 & bitMask)
+}
+
+func DecodeList(l *pb.List) {
+	if l == nil {
+		return
+	}
+	if l.PackedUids == nil {
+		return
+	}
+
+	l.Uids = Decode(l.PackedUids, 0)
+}
+
+func EncodeList(l *pb.List) {
+	if l == nil {
+		return
+	}
+	if l.Uids == nil {
+		return
+	}
+
+	l.PackedUids = Encode(l.Uids, x.BlockSize)
 }

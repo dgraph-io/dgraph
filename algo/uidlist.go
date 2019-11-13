@@ -28,13 +28,14 @@ const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
-	out := u.Uids[:0]
+	enc := codec.Encoder{}
 	for i, uid := range u.Uids {
 		if f(uid, i) {
-			out = append(out, uid)
+			enc.Add(uid)
 		}
 	}
-	u.Uids = out
+	u.PackedUids = enc.Done()
+	u.Uids = nil
 }
 
 // IntersectCompressedWith intersects a packed list of UIDs with another list
@@ -43,6 +44,8 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if pack == nil {
 		return
 	}
+	codec.DecodeList(v)
+
 	dec := codec.Decoder{Pack: pack}
 	dec.Seek(afterUID, codec.SeekStart)
 	n := dec.ApproxLen()
@@ -51,7 +54,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if n > m {
 		n, m = m, n
 	}
-	dst := o.Uids[:0]
+	dst := make([]uint64, 0)
 
 	// If n equals 0, set it to 1 to avoid division by zero.
 	if n == 0 {
@@ -65,7 +68,10 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	} else {
 		IntersectCompressedWithBin(&dec, v.Uids, &dst)
 	}
+
 	o.Uids = dst
+	codec.EncodeList(o)
+	o.Uids = nil
 }
 
 // IntersectCompressedWithLinJump performs the intersection linearly.
@@ -135,6 +141,9 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
 func IntersectWith(u, v, o *pb.List) {
+	codec.DecodeList(u)
+	codec.DecodeList(v)
+
 	n := len(u.Uids)
 	m := len(v.Uids)
 
@@ -157,7 +166,10 @@ func IntersectWith(u, v, o *pb.List) {
 	} else {
 		IntersectWithBin(u.Uids, v.Uids, &dst)
 	}
+
 	o.Uids = dst
+	codec.EncodeList(o)
+	o.Uids = nil
 }
 
 // IntersectWithLin performs the intersection linearly.
@@ -290,6 +302,7 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 	}
 	ls := make([]listInfo, 0, len(lists))
 	for _, list := range lists {
+		codec.DecodeList(list)
 		ls = append(ls, listInfo{
 			l:      list,
 			length: len(list.Uids),
@@ -302,6 +315,8 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 	out := &pb.List{Uids: make([]uint64, ls[0].length)}
 	if len(ls) == 1 {
 		copy(out.Uids, ls[0].l.Uids)
+		codec.EncodeList(out)
+		out.Uids = nil
 		return out
 	}
 
@@ -315,24 +330,31 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 			break
 		}
 	}
+
+	codec.EncodeList(out)
+	out.Uids = nil
 	return out
 }
 
 // Difference returns the difference of two lists.
 func Difference(u, v *pb.List) *pb.List {
 	if u == nil || v == nil {
-		return &pb.List{Uids: make([]uint64, 0)}
+		enc := codec.Encoder{}
+		return &pb.List{PackedUids: enc.Done()}
 	}
+
+	codec.DecodeList(u)
+	codec.DecodeList(v)
 	n := len(u.Uids)
 	m := len(v.Uids)
-	out := make([]uint64, 0, n/2)
+	dst := make([]uint64, 0, n/2)
 	i, k := 0, 0
 	for i < n && k < m {
 		uid := u.Uids[i]
 		vid := v.Uids[k]
 		if uid < vid {
 			for i < n && u.Uids[i] < vid {
-				out = append(out, u.Uids[i])
+				dst = append(dst, u.Uids[i])
 				i++
 			}
 		} else if uid == vid {
@@ -344,10 +366,15 @@ func Difference(u, v *pb.List) *pb.List {
 		}
 	}
 	for i < n && k >= m {
-		out = append(out, u.Uids[i])
+		dst = append(dst, u.Uids[i])
 		i++
 	}
-	return &pb.List{Uids: out}
+
+	out := &pb.List{}
+	out.Uids = dst
+	codec.EncodeList(out)
+	out.Uids = nil
+	return out
 }
 
 // MergeSorted merges sorted lists.
@@ -364,6 +391,7 @@ func MergeSorted(lists []*pb.List) *pb.List {
 		if l == nil {
 			continue
 		}
+		codec.DecodeList(l)
 		lenList := len(l.Uids)
 		if lenList > 0 {
 			heap.Push(h, elem{
@@ -397,16 +425,24 @@ func MergeSorted(lists []*pb.List) *pb.List {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &pb.List{Uids: output}
+
+	out := &pb.List{}
+	out.Uids = output
+	codec.EncodeList(out)
+	out.Uids = nil
+	return out
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *pb.List, uid uint64) int {
+	codec.DecodeList(u)
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
+		u.Uids = nil
 		return i
 	}
+	u.Uids = nil
 	return -1
 }
 
@@ -414,6 +450,7 @@ func IndexOf(u *pb.List, uid uint64) int {
 func ToUintsListForTest(ul []*pb.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
+		codec.DecodeList(u)
 		out = append(out, u.Uids)
 	}
 	return out

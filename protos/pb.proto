@@ -35,7 +35,8 @@ import "github.com/dgraph-io/badger/pb/pb.proto";
 /* option (gogoproto.goproto_getters_all) = true; */
 
 message List {
-	repeated fixed64 uids = 1;
+	UidPack packed_uids = 1;
+	repeated fixed64 uids = 2;
 }
 
 message TaskValue {

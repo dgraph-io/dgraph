@@ -783,8 +783,6 @@ func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	return data, BitCompletePosting
 }
 
-const blockSize int = 256
-
 type rollupOutput struct {
 	plist    *pb.PostingList
 	parts    map[uint64]*pb.PostingList
@@ -818,7 +816,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
 	initializeSplit := func() {
-		enc = codec.Encoder{BlockSize: blockSize}
+		enc = codec.Encoder{BlockSize: x.BlockSize}
 
 		// Otherwise, load the corresponding part and set endUid to correctly
 		// detect the end of the list.
@@ -898,8 +896,6 @@ func (l *List) ApproxLen() int {
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
 	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
@@ -911,9 +907,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
+
+	enc := codec.Encoder{}
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+			enc.Add(p.Uid)
 		}
 		return nil
 	})
@@ -923,7 +921,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	// Do The intersection here as it's optimized.
-	out.Uids = res
+	out.PackedUids = enc.Done()
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
@@ -1342,7 +1340,7 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	l.Pack = codec.Encode(bl.Uids, x.BlockSize)
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits
