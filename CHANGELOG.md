@@ -51,29 +51,31 @@ Enterprise features
 ### Fixed
 
 - Avoid changing order if multiple versions of the same edge is found.
-- Consider reverse count index keys for conflict detection in transactions. (#3932)
+- Consider reverse count index keys for conflict detection in transactions. Fixes #3893. (#3932)
 - Clear the unused variable tlsCfg. (#3937)
 - Do not require the last type declaration to have a new line. (#3926)
-- Verify type definitions do not have duplicate fields. (#3925)
-- Fix bug in bulk loader when store_xids is true. (#3950)
-- Call cancel function only if err is not nil. (#3990)
+- Verify type definitions do not have duplicate fields. Fixes #3924. (#3925)
+- Fix bug in bulk loader when store_xids is true. Fixes #3922. (#3950)
+- Call cancel function only if err is not nil. Fixes #3966. (#3990)
 - Change the mapper output directory from $TMP/shards to $TMP/map_output. Fixes #3959. (#3960)
-- Return error if keywords used as alias in groupby (#3725)
-- Apply filterStringFunction when calling customIndexFn (#3992)
-- Named queries without variables support (#4028)
+- Return error if keywords used as alias in groupby. (#3725)
+- Fix bug where language strings are not filtered when using custom tokenizer. Fixes #3991. (#3992)
+- Support named queries without query variables. Fixes #3994. (#4028)
 - Correctly set up client connection in x package. (#4036)
-- Fix bug in credential overriding in backup. (#4047)
-- Check for n.Raft() to be nil, fixes #4053 (#4084)
-- Fix file and directory permissions. (#4088)
-- Bug Fix: Ensure that client can send OpenCensus spans over to the server. (#4144)
-- Change lexer to allow unicode escape sequences. (#4175)
-- Handle the count(uid) subgraph correctly, fixes #4038 (#4122)
-- Don't traverse immutable layer while calling iterate if deleteBelowTs > 0 (#4204)
-- Bulk loader allocates reserved predicates in first reduce shard. (#4202)
+- Check for n.Raft() to be nil, Fixes #4053. (#4084)
+- Fix file and directory permissions for bulk loader. (#4088)
+- Ensure that clients can send OpenCensus spans over to the server. (#4144)
+- Change lexer to allow unicode escape sequences. Fixes #4157.(#4175)
+- Handle the count(uid) subgraph correctly. Fixes #4038. (#4122)
+- Don't traverse immutable layer while calling iterate if deleteBelowTs > 0. Fixes #4182. (#4204)
+- Bulk loader allocates reserved predicates in first reduce shard. Fixes #3968. (#4202)
 - Only allow one alias per predicate. (#4236)
 - Change member removal logic to remove members only once. (#4254)
 - Disallow uid as a predicate name. (#4219)
 
+Enterprise features:
+
+- Fix bug when overriding credentials in backup request. Fixes #4044. (#4047)
 
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
