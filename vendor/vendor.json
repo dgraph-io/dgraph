@@ -495,6 +495,12 @@
 			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
+			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
+			"path": "github.com/dgraph-io/dgo/x",
+			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
+			"revisionTime": "2019-03-01T02:09:43Z"
+		},
+		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
 			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
@@ -655,6 +661,12 @@
 			"path": "github.com/google/uuid",
 			"revision": "c2e93f3ae59f2904160ceaab466009f965df46d6",
 			"revisionTime": "2019-04-16T17:24:45Z"
+		},
+		{
+			"checksumSHA1": "UThRII2e7MEeIJ2sTHbCXC+4tKU=",
+			"path": "github.com/hashicorp/golang-lru/simplelru",
+			"revision": "7f827b33c0f158ec5dfbba01bb0b14a4541fd81d",
+			"revisionTime": "2019-07-26T16:11:22Z"
 		},
 		{
 			"checksumSHA1": "HtpYAWHvd9mq+mHkpo7z8PGzMik=",
@@ -989,6 +1001,12 @@
 			"path": "go.opencensus.io/metric/metricdata",
 			"revision": "3b5a343282fe4b4fccdb0f24cbd1d7169d20858a",
 			"revisionTime": "2019-10-15T19:20:41Z"
+		},
+		{
+			"checksumSHA1": "DioptO0gMbOktX1LQkJiZQfWKI4=",
+			"path": "go.opencensus.io/metric/metricexport",
+			"revision": "aad2c527c5defcf89b5afab7f37274304195a6b2",
+			"revisionTime": "2019-11-09T00:00:05Z"
 		},
 		{
 			"checksumSHA1": "kWj13srwY1SH5KgFecPhEfHnzVc=",
