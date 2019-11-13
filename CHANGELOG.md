@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## [Unreleased]- 1.1.1
+## [Unreleased] - 1.1.1
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...master
 
 ### Changed
@@ -22,7 +22,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Add support for first and offset directive in has function. (#3970)
 - Pad encData to 17 bytes before decoding. (#4066)
 - Remove usage of deprecated methods. (#4076)
-- Only run GC if the memory has shrunk or expanded by more than 0.5GB. (
 - Show line and column numbers for errors in HTTP API responses. (#4012)
 - Handle errors on Close(). (#4068)
 - Fix data race in regular expression processing (#4065)
