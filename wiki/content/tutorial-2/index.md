@@ -1,5 +1,5 @@
 +++
-title = "Get Started - Basic Operations"
+title = "Get Started with Dgraph - Basic Operations"
 +++
 
 **Welcome to the second tutorial of getting started with Dgraph.**
@@ -18,7 +18,11 @@ Specifically, we'll learn about:
 - Adding a new predicate to an existing node.
 - Traversing the Graph.
 
-You can see the accompanying video [here](https://www.youtube.com/watch?v=8TKD-FFBVgE).
+You can see the accompanying video below.
+
+{{< youtube 8TKD-FFBVgE >}}
+
+----
 
 First, let's create our Graph.
 

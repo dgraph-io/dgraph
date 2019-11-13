@@ -1,8 +1,8 @@
 +++
-title = "Get Started"
+title = "Get Started with Dgraph"
 +++
 
-{{% notice "note" %}}You can see older version of Getting Started page [here](/get-started-old).{{% /notice %}}
+{{% notice "note" %}}You can see an older version of the Getting Started page [here](/get-started-old).{{% /notice %}}
 
 ## Tutorials
 
@@ -19,7 +19,7 @@ title = "Get Started"
             </a>
           </div>
           <p class="section-desc">
-            Run `dgraph/standalone` and learn about node, edge, query, mutation, and schema.
+            Run dgraph and learn about nodes and edges, as well as basic queries and mutations.
           </p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 +++
-title = "Get Started - Introduction"
+title = "Get Started with Dgraph - Introduction"
 +++
 
 **Welcome to getting started with Dgraph.**
@@ -18,7 +18,9 @@ In the process, we'll learn about:
  - Creating an edge between two nodes.
  - Querying for the nodes.
 
-You can see the accompanying video [here](https://www.youtube.com/watch?v=u73ovhDCPQQ).
+You can see the accompanying video below.
+
+{{< youtube u73ovhDCPQQ >}}
 
 ## Running Dgraph
 Running the `dgraph/standalone` docker image is the quickest way to get started with Dgraph.

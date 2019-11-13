@@ -2,7 +2,7 @@
 title = "Get Started (Old)"
 +++
 
-{{% notice "note" %}}This is the older version of Getting Started page. You can see the latest page [here](/get-started). {{% /notice %}}
+{{% notice "note" %}}This is an older version of the Getting Started page. You can see the latest page [here](/get-started). {{% /notice %}}
 
 ## Dgraph
 

@@ -1,5 +1,5 @@
 +++
-title = "Get Started - Basic Types and Operations on them"
+title = "Get Started with Dgraph - Basic Types and Operations on them"
 +++
 
 **Welcome to the third tutorial of getting started with Dgraph.**
@@ -17,7 +17,11 @@ Specifically, we'll learn about:
 - Filtering nodes.
 - Traversing in reverse direction.
 
-You can see the accompanying video [here](https://www.youtube.com/watch?v=f401or0hg5E).
+You can see the accompanying video below.
+
+{{< youtube f401or0hg5E >}}
+
+----
 
 Let's start by building the following graph of a simple blog application.
 Here's the Graph model of our application
