@@ -659,7 +659,6 @@ func (n *node) updateRaftProgress() error {
 	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		return err
@@ -736,11 +735,11 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	}
 }
 
-func (n* node) drainApplyChan() {
+func (n *node) drainApplyChan() {
 	for {
 		select {
 		case proposals := <-n.applyCh:
-			glog.Infof("Draining %d proposals\n",  len(proposals))
+			glog.Infof("Draining %d proposals\n", len(proposals))
 			for _, proposal := range proposals {
 				n.Proposals.Done(proposal.Key, nil)
 				n.Applied.Done(proposal.Index)
@@ -841,7 +840,7 @@ func (n *node) Run() {
 					maxIndex := n.Applied.LastIndex()
 					glog.Infof("Drain applyCh by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
-					n.drainApplyChan() 
+					n.drainApplyChan()
 
 					if err := n.Applied.WaitForMark(context.Background(), maxIndex); err != nil {
 						glog.Errorf("Error waiting for mark for index %d: %+v", maxIndex, err)
