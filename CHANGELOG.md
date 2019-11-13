@@ -4,6 +4,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [Unreleased]- 1.1.1
+[1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...master
+
+### Changed
+
+- **Breaking changes for expand() queries**
+  - Remove `expand(_forward_)` and `expand(_reverse_)`. (#4119)
+  - Change `expand(_all_)` functionality to only include the predicates in the type. (#4171)
+- Add support for Go Modules. (#4146)
+- Simplify type definitions: type definitions no longer require the type (string, int, etc.) per field name. (#4017)
+- Adding log lines to help troubleshoot snapshot and rollup. (#3889)
+- Add `--http` flag to configure pprof endpoint for live loader. (#3846)
+- Use snappy compression for internal gRPC communication. (#3368)
+- Periodically run GC in all dgraph commands. (#4032, #4075)
+- Exit early if data files given to bulk loader are empty. (#4253)
+- Add support for first and offset directive in has function. (#3970)
+- Pad encData to 17 bytes before decoding. (#4066)
+- Remove usage of deprecated methods. (#4076)
+- Only run GC if the memory has shrunk or expanded by more than 0.5GB. (
+- Show line and column numbers for errors in HTTP API responses. (#4012)
+- Handle errors on Close(). (#4068)
+- Fix data race in regular expression processing (#4065)
+- Do not store non-pointer values in sync.Pool. (#4089)
+- Verify that all the fields in a type exist in the schema. (#4114)
+
+Enterprise features
+
+- ACL: Disallow schema queries when an user has not logged in. (#4107)
+
+### Added
+
+- Support `@cascade` directive at subqueries. (#4006)
+- Support `@normalize` directive for subqueries. (#4042)
+- Support `val()` function inside upsert mutations (both RDF and JSON). (#3877, #3947)
+- Return mutated UIDs which are part of an upsert operation in the mutation response. (#4145)
+- Support GraphQL Variables for facet values in `@facets` filters. (#4061)
+- Support filtering by facets on values. (#4217)
+- Add ability to query `expand(TypeName)` only on certain types. (#3920)
+- Expose numUids metrics per query to estimate query cost. (#4033)
+
+### Removed
+
+- Remove `@type` directive from query language. (#4016)
+
+### Fixed
+
+- Avoid changing order if multiple versions of the same edge is found.
+- Consider reverse count index keys for conflict detection in transactions. (#3932)
+- Clear the unused variable tlsCfg. (#3937)
+- Do not require the last type declaration to have a new line. (#3926)
+- Verify type definitions do not have duplicate fields. (#3925)
+- Fix bug in bulk loader when store_xids is true. (#3950)
+- Call cancel function only if err is not nil. (#3990)
+- Change the mapper output directory from $TMP/shards to $TMP/map_output. Fixes #3959. (#3960)
+- Return error if keywords used as alias in groupby (#3725)
+- Apply filterStringFunction when calling customIndexFn (#3992)
+- Named queries without variables support (#4028)
+- Correctly set up client connection in x package. (#4036)
+- Fix bug in credential overriding in backup. (#4047)
+- Check for n.Raft() to be nil, fixes #4053 (#4084)
+- Fix file and directory permissions. (#4088)
+- Bug Fix: Ensure that client can send OpenCensus spans over to the server. (#4144)
+- Change lexer to allow unicode escape sequences. (#4175)
+- Handle the count(uid) subgraph correctly, fixes #4038 (#4122)
+- Don't traverse immutable layer while calling iterate if deleteBelowTs > 0 (#4204)
+- Bulk loader allocates reserved predicates in first reduce shard. (#4202)
+- Only allow one alias per predicate. (#4236)
+- Change member removal logic to remove members only once. (#4254)
+- Disallow uid as a predicate name. (#4219)
+
+
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
 
