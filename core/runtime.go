@@ -28,9 +28,8 @@ import (
 // and returns *Validity
 func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 	var loc int32 = 1000
-	s.rt.Store(e, loc)
 
-	ret, err := s.rt.Exec("TaggedTransactionQueue_validate_transaction", loc, int32(len(e)))
+	ret, err := s.rt.Exec("TaggedTransactionQueue_validate_transaction", loc, e)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +48,8 @@ func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 // doesn't return data, but will error if the call isn't successful
 func (s *Service) validateBlock(b []byte) error {
 	var loc int32 = 1000
-	s.rt.Store(b, loc)
 
-	_, err := s.rt.Exec("Core_execute_block", loc, int32(len(b)))
+	_, err := s.rt.Exec("Core_execute_block", loc, b)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 	"unsafe"
 
 	scale "github.com/ChainSafe/gossamer/codec"
@@ -36,8 +37,9 @@ type RuntimeCtx struct {
 }
 
 type Runtime struct {
-	vm   wasm.Instance
-	trie *trie.Trie
+	vm    wasm.Instance
+	trie  *trie.Trie
+	mutex sync.Mutex
 }
 
 // NewRuntimeFromFile instantiates a runtime from a .wasm file
@@ -92,8 +94,9 @@ func NewRuntime(code []byte, t *trie.Trie) (*Runtime, error) {
 	instance.SetContextData(data)
 
 	return &Runtime{
-		vm:   instance,
-		trie: t,
+		vm:    instance,
+		trie:  t,
+		mutex: sync.Mutex{},
 	}, nil
 }
 
@@ -115,12 +118,18 @@ func (r *Runtime) Load(location, length int32) []byte {
 	return mem[location : location+length]
 }
 
-func (r *Runtime) Exec(function string, data, len int32) ([]byte, error) {
+func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) {
+	r.mutex.Lock()
+
+	// Store the data into memory
+	r.Store(data, loc)
+	leng := int32(len(data))
+
 	runtimeFunc, ok := r.vm.Exports[function]
 	if !ok {
 		return nil, errors.New("could not find exported function")
 	}
-	res, err := runtimeFunc(data, len)
+	res, err := runtimeFunc(loc, leng)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +141,8 @@ func (r *Runtime) Exec(function string, data, len int32) ([]byte, error) {
 	mem := r.vm.Memory.Data()
 	rawdata := make([]byte, length)
 	copy(rawdata, mem[offset:offset+length])
+
+	r.mutex.Unlock()
 
 	return rawdata, err
 }

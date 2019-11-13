@@ -18,3 +18,7 @@
 echo ">> Running tests..."
 go test -short -coverprofile c.out ./...
 ./cc-test-reporter after-build --exit-code $?
+echo ">> Running race condition test on runtime"
+go test -short -race ./runtime
+echo ">> Running race condition test on priority queue"
+go test -short -race ./common/transaction/

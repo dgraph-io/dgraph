@@ -40,7 +40,7 @@ func TestPriorityQueue(t *testing.T) {
 		},
 	}
 
-	pq := new(PriorityQueue)
+	pq := NewPriorityQueue()
 	expected := []int{3, 1, 2, 4, 0}
 
 	for _, node := range tests {
@@ -74,7 +74,7 @@ func TestPriorityQueueAgain(t *testing.T) {
 		},
 	}
 
-	pq := new(PriorityQueue)
+	pq := NewPriorityQueue()
 	expected := []int{1, 3, 0, 2, 4}
 
 	for _, node := range tests {
@@ -90,7 +90,7 @@ func TestPriorityQueueAgain(t *testing.T) {
 }
 
 func TestPeek_Empty(t *testing.T) {
-	pq := new(PriorityQueue)
+	pq := NewPriorityQueue()
 	vt := pq.Peek()
 	if vt != nil {
 		t.Fatalf("Fail: expected nil for empty queue")
@@ -116,7 +116,7 @@ func TestPeek(t *testing.T) {
 		},
 	}
 
-	pq := new(PriorityQueue)
+	pq := NewPriorityQueue()
 	expected := []int{1, 3, 0, 2, 4}
 
 	for _, node := range tests {
@@ -130,4 +130,31 @@ func TestPeek(t *testing.T) {
 		}
 		pq.Pop()
 	}
+}
+
+func TestPriorityQueueConcurrentCalls(t *testing.T) {
+
+	pq := NewPriorityQueue()
+
+	go func() {
+		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
+	}()
+	go func() {
+		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
+	}()
+
+	go func() {
+		pq.Pop()
+	}()
+
+	go func() {
+		pq.Pop()
+	}()
+
+	go func() {
+		pq.Peek()
+	}()
+	go func() {
+		pq.Peek()
+	}()
 }

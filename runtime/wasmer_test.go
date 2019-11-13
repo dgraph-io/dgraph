@@ -106,7 +106,7 @@ func TestExecVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, err := r.Exec("Core_version", 1, 1)
+	ret, err := r.Exec("Core_version", 1, []byte{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -891,4 +891,20 @@ func TestExt_secp256k1_ecdsa_recover(t *testing.T) {
 	if !bytes.Equal(expected[:], mem[pubkeyData:pubkeyData+65]) {
 		t.Fatalf("fail: got %x expected %x", mem[pubkeyData:pubkeyData+65], expected)
 	}
+}
+
+// test used for ensuring runtime Exec calls can me made conrurrently
+func TestConcurrentRuntimeCalls(t *testing.T) {
+	r, err := newRuntime(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Execute 2 concurrent calls to the runtime
+	go func() {
+		_, _ = r.Exec("Core_version", 1, []byte{})
+	}()
+	go func() {
+		_, _ = r.Exec("Core_version", 1, []byte{})
+	}()
 }
