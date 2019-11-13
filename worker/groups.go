@@ -286,6 +286,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
+	oldState := g.state
 	g.state = state
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
@@ -324,11 +325,24 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if g.Node != nil {
 		// Lets have this block before the one that adds the new members, else we may end up
 		// removing a freshly added node.
-		for _, member := range g.state.Removed {
-			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+
+		for _, member := range g.state.GetRemoved() {
+			if member.GetGroupId() == g.Node.gid && g.Node.AmLeader() {
 				go func() {
+					// Don't try to remove a member if it's already marked as removed in
+					// the membership state and is not a current peer of the node.
+					_, isPeer := g.Node.Peer(member.GetId())
+					// isPeer should only be true if the rmeoved node is not the same as this node.
+					isPeer = isPeer && member.GetId() != g.Node.RaftContext.Id
+
+					for _, oldMember := range oldState.GetRemoved() {
+						if oldMember.GetId() == member.GetId() && !isPeer {
+							return
+						}
+					}
+
 					if err := g.Node.ProposePeerRemoval(
-						context.Background(), member.Id); err != nil {
+						context.Background(), member.GetId()); err != nil {
 						glog.Errorf("Error while proposing node removal: %+v", err)
 					}
 				}()
