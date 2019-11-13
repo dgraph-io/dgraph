@@ -6,14 +6,25 @@ type Country {
         name: String! @search(by: [trigram])
 }
 
+type State {
+        xid: String! @id
+        country: Country
+        name: String
+}
+
 type Author {
         id: ID!
-        xid: String! @id
         name: String! @search(by: [hash])
         dob: DateTime @search
         reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: author)
+}
+
+type Editor {
+        id: ID!
+        xid: String! @id
+        name: String! @search(by: [hash])
 }
 
 type Post {

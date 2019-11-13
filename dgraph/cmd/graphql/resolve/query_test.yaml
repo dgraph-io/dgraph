@@ -858,62 +858,62 @@
     }
 
 -
-  name: "Get author using xid"
+  name: "Get editor using xid"
   gqlquery: |
     query {
-      getAuthor(xid: "tolstoy") {
+      getEditor(xid: "tolstoy") {
         name
       }
     }
   dgquery: |-
     query {
-      getAuthor(func: eq(Author.xid, "tolstoy")) @filter(type(Author)) {
-        name : Author.name
+      getEditor(func: eq(Editor.xid, "tolstoy")) @filter(type(Editor)) {
+        name : Editor.name
       }
     }
 
 -
-  name: "Get author using both xid and id"
+  name: "Get editor using both xid and id"
   gqlquery: |
     query {
-      getAuthor(xid: "tolstoy", id: "0x1") {
+      getEditor(xid: "tolstoy", id: "0x1") {
         name
       }
     }
   dgquery: |-
     query {
-      getAuthor(func: uid(0x1)) @filter((eq(Author.xid, "tolstoy") AND type(Author))) {
-        name : Author.name
+      getEditor(func: uid(0x1)) @filter((eq(Editor.xid, "tolstoy") AND type(Editor))) {
+        name : Editor.name
       }
     }
 
 -
-  name: "Query author using xid"
+  name: "Query editor using xid"
   gqlquery: |
     query {
-      queryAuthor(filter: { xid: { eq: "author" }, and: { name: { eq: "A. N. Author" }}}) {
+      queryEditor(filter: { xid: { eq: "editor" }, and: { name: { eq: "A. N. Editor" }}}) {
         name
       }
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") AND eq(Author.xid, "author"))) {
-        name : Author.name
+      queryEditor(func: type(Editor)) @filter((eq(Editor.name, "A. N. Editor") AND eq(Editor.xid, "editor"))) {
+        name : Editor.name
       }
     }
 
 -
-  name: "Query author using xid and uid"
+  name: "Query editor using xid and uid"
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["0x1"], and: { xid: { eq: "author"}}}) {
+      queryEditor(filter: { ids: ["0x1"], and: { xid: { eq: "editor"}}}) {
         name
       }
     }
   dgquery: |-
     query {
-      queryAuthor(func: uid(0x1)) @filter((eq(Author.xid, "author") AND type(Author))) {
-        name : Author.name
+      queryEditor(func: uid(0x1)) @filter((eq(Editor.xid, "editor") AND type(Editor))) {
+        name : Editor.name
       }
     }
 

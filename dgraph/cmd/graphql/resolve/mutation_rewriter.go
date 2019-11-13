@@ -112,7 +112,14 @@ func (mrw *mutationRewriter) Rewrite(
 	case map[string]interface{}:
 		var srcUID string
 		if m.MutationType() == schema.AddMutation {
-			srcUID = "_:" + createdNode
+			xidField := mutatedType.XIDField()
+			if xidField == nil || xidField.Name() == "" {
+				srcUID = "_:" + createdNode
+			} else {
+				srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
+				xidVal := val[xidField.Name()].(string)
+				gqlQuery = rewriteUpsertQueryFromAddMutation(m, xidField.Name(), xidVal)
+			}
 		} else {
 			// must be schema.UpdateMutation, so the mutation payload came in like
 			// { id: 0x123, patch { ... the actual changes ... } }
@@ -224,6 +231,24 @@ func extractFilter(m schema.Mutation) map[string]interface{} {
 		filter, _ = m.ArgValue("filter").(map[string]interface{})
 	}
 	return filter
+}
+
+// For a mutation on a type with a field which has @id directive, this function rewrites it as an
+// upsert query.
+func rewriteUpsertQueryFromAddMutation(m schema.Mutation, xidField, xidVal string) *gql.GraphQuery {
+	gqlQuery := &gql.GraphQuery{
+		Var:  mutationQueryVar,
+		Attr: m.ResponseName(),
+	}
+	gqlQuery.Func = &gql.Function{
+		Name: "eq",
+		Args: []gql.Arg{
+			{Value: m.MutatedType().DgraphPredicate(xidField)},
+			{Value: maybeQuoteArg("eq", xidVal)},
+		},
+	}
+	addTypeFilter(gqlQuery, m.MutatedType())
+	return gqlQuery
 }
 
 func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {

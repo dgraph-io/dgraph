@@ -12,8 +12,7 @@
     { "auth":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
-        "posts": [],
-        "xid": "author"
+        "posts": []
       }
     }
   explanation: "A uid and type should get injected and all data transformed to
@@ -23,8 +22,7 @@
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.dob":"2000-01-01",
-      "Author.posts":[],
-      "Author.xid": "author"
+      "Author.posts":[]
     }
 
 -
@@ -81,8 +79,7 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "0x123" },
-        "posts": [],
-        "xid": "author"
+        "posts": []
       }
     }
   explanation: "The reference to country should get transformed to 'uid' for the
@@ -92,8 +89,7 @@
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.country": { "uid": "0x123" },
-      "Author.posts":[],
-      "Author.xid": "author"
+      "Author.posts":[]
     }
 
 -
@@ -110,8 +106,7 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "HI!" },
-        "posts": [],
-        "xid": "author"
+        "posts": []
       }
     }
   explanation: "A reference must be a valid UID"
@@ -296,4 +291,38 @@
   dgraphquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
+    }
+
+
+-
+  name: "Add mutation using xid"
+  gqlmutation: |
+    mutation addState($input: StateInput!) {
+      addState(input: $input) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "xid": "nsw",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "dgraph.type": ["State"],
+      "State.name": "NSW",
+      "State.xid": "nsw",
+      "State.country": {
+        "uid": "0x12"
+      }
+    }
+  dgraphquery: |-
+    query {
+      x as addState(func: eq(State.xid, "nsw")) @filter(type(State))
     }

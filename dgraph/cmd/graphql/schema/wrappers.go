@@ -114,6 +114,7 @@ type Query interface {
 type Type interface {
 	Field(name string) FieldDefinition
 	IDField() FieldDefinition
+	XIDField() FieldDefinition
 	Name() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
@@ -843,6 +844,24 @@ func (t *astType) IDField() FieldDefinition {
 
 	for _, fd := range def.Fields {
 		if isID(fd) {
+			return &fieldDefinition{
+				fieldDef: fd,
+				inSchema: t.inSchema,
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *astType) XIDField() FieldDefinition {
+	def := t.inSchema.Types[t.Name()]
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
+		return nil
+	}
+
+	for _, fd := range def.Fields {
+		if hasIDDirective(fd) {
 			return &fieldDefinition{
 				fieldDef: fd,
 				inSchema: t.inSchema,

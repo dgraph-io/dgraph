@@ -122,6 +122,10 @@ type UpdateAuthorPayload {
 	author: [Author]
 }
 
+type UpdatePostPayload {
+	post: [Post]
+}
+
 #######################
 # Generated Enums
 #######################
