@@ -461,8 +461,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// update mutations from the query results before assigning UIDs
 	updateMutations(qc)
 
-	gmu := qc.gmuList[0]
-	newUids, err := query.AssignUids(ctx, gmu.Set)
+	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
 		return err
 	}
@@ -472,7 +471,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// 2. For a uid variable that is part of an upsert query,
 	//    like uid(foo), the key would be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(gmu, newUids)
+	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
 	if err != nil {
 		return err
 	}
@@ -537,35 +536,35 @@ func buildUpsertQuery(qc *queryContext) string {
 		return qc.req.Query
 	}
 
-	gmu := qc.gmuList[0]
-	qc.condVars = make([]string, 1)
+	qc.condVars = make([]string, len(qc.req.Mutations))
 	upsertQuery := strings.TrimSuffix(qc.req.Query, "}")
+	for i, gmu := range qc.gmuList {
+		isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
+		if isCondUpsert {
+			qc.condVars[i] = fmt.Sprintf("__dgraph_%d__", rand.Int())
+			qc.uidRes[qc.condVars[i]] = nil
+			// @if in upsert is same as @filter in the query
+			cond := strings.Replace(gmu.Cond, "@if", "@filter", 1)
 
-	isCondUpsert := strings.TrimSpace(gmu.Cond) != ""
-	if isCondUpsert {
-		qc.condVars[0] = fmt.Sprintf("__dgraph_%d__", rand.Int())
-		qc.uidRes[qc.condVars[0]] = nil
-		// @if in upsert is same as @filter in the query
-		cond := strings.Replace(gmu.Cond, "@if", "@filter", 1)
-
-		// Add dummy query to evaluate the @if directive, ok to use uid(0) because
-		// dgraph doesn't check for existence of UIDs until we query for other predicates.
-		// Here, we are only querying for uid predicate in the dummy query.
-		//
-		// For example if - mu.Query = {
-		//      me(...) {...}
-		//   }
-		//
-		// Then, upsertQuery = {
-		//      me(...) {...}
-		//      __dgraph_0__ as var(func: uid(0)) @filter(...)
-		//   }
-		//
-		// The variable __dgraph_0__ will -
-		//      * be empty if the condition is true
-		//      * have 1 UID (the 0 UID) if the condition is false
-		upsertQuery += qc.condVars[0] + ` as var(func: uid(0)) ` + cond + `
-`
+			// Add dummy query to evaluate the @if directive, ok to use uid(0) because
+			// dgraph doesn't check for existence of UIDs until we query for other predicates.
+			// Here, we are only querying for uid predicate in the dummy query.
+			//
+			// For example if - mu.Query = {
+			//      me(...) {...}
+			//   }
+			//
+			// Then, upsertQuery = {
+			//      me(...) {...}
+			//      __dgraph_0__ as var(func: uid(0)) @filter(...)
+			//   }
+			//
+			// The variable __dgraph_0__ will -
+			//      * be empty if the condition is true
+			//      * have 1 UID (the 0 UID) if the condition is false
+			upsertQuery += qc.condVars[i] + ` as var(func: uid(0)) ` + cond + `
+			 `
+		}
 	}
 	upsertQuery += `}`
 
@@ -860,10 +859,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if isMutation && len(req.Mutations) != 1 {
-		return nil, errors.Errorf("Only 1 mutation per request is supported")
-	}
-
 	qc := &queryContext{req: req, latency: l, span: span}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
@@ -1059,8 +1054,9 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 		return err
 	}
 
-	if len(qc.gmuList) > 0 {
-		if err := authorizeMutation(ctx, qc.gmuList[0]); err != nil {
+	// TODO(Aman): can be optimized to do the authorization in just one func call
+	for _, gmu := range qc.gmuList {
+		if err := authorizeMutation(ctx, gmu); err != nil {
 			return err
 		}
 	}
