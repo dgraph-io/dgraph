@@ -495,12 +495,6 @@
 			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
-			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
-			"path": "github.com/dgraph-io/dgo/x",
-			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
-			"revisionTime": "2019-03-01T02:09:43Z"
-		},
-		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
 			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
