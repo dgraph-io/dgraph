@@ -18,6 +18,8 @@ package tok
 
 import (
 	"github.com/pkg/errors"
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // GetLangTokenizer returns the correct full-text tokenizer for the given language.
@@ -30,6 +32,12 @@ func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 		// We must return a new instance because another goroutine might be calling this
 		// with a different lang.
 		return FullTextTokenizer{lang: lang}
+	case ExactTokenizer:
+		langTag, err := language.Parse(lang)
+		if err != nil {
+			langTag, _ = language.Parse("en")
+		}
+		return LangTokenizer{lang: lang, cl: collate.New(langTag), buffer: &collate.Buffer{}}
 	}
 	return t
 }

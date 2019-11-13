@@ -1618,8 +1618,15 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 				// In case of non-indexed predicate we won't have any tokens.
 				continue
 			}
+
+			var lang string
+			if len(q.Langs) > 0 {
+				// Only one languge is allowed.
+				lang = q.Langs[0]
+			}
+
 			// Get tokens ge / le ineqValueToken.
-			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f,
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f, lang,
 				fc.ineqValue); err != nil {
 				return nil, err
 			}
