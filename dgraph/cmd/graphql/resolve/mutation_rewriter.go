@@ -30,6 +30,7 @@ import (
 const (
 	createdNode          = "newnode"
 	mutationQueryVar     = "x"
+	createdUpsertNode    = "uid(x)"
 	deleteUidVarMutation = `uid(x) * * .`
 )
 
@@ -186,11 +187,38 @@ func (mrw *mutationRewriter) FromMutationResult(
 
 	switch mutation.MutationType() {
 	case schema.AddMutation:
-		uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
-		if err != nil {
-			return nil, schema.GQLWrapf(err,
-				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-				assigned[createdNode])
+		var uid uint64
+		var err error
+		if len(assigned) > 0 {
+			// This would be true for upsert operations when a new node is created and also for
+			// normal add operations.
+			node := createdNode
+			xidField := mutation.MutatedType().XIDField()
+			if xidField != nil && xidField.Name() != "" {
+				node = createdUpsertNode
+			}
+			uid, err = strconv.ParseUint(assigned[node], 0, 64)
+			if err != nil {
+				return nil, schema.GQLWrapf(err,
+					"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+					assigned[node])
+			}
+		} else {
+			stringUids := mutated[mutationQueryVar]
+			if len(stringUids) == 0 {
+				return nil,
+					schema.GQLWrapf(errors.New("unexpected number of uids returned"),
+						"expected atleast one uid to be returned from Dgraph. Got 0.")
+			}
+			// There can be more than one ids returned here as the query is done based on xid, we
+			// just pick the first one.
+			id := stringUids[0]
+			uid, err = strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				return nil, schema.GQLWrapf(err,
+					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
+						"uint64", id)
+			}
 		}
 
 		return rewriteAsGet(mutation.QueryField(), uid, nil), nil

@@ -123,6 +123,12 @@ type post struct {
 	Author      author
 }
 
+type state struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Xid  string `json:"xid"`
+}
+
 func TestMain(m *testing.M) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
