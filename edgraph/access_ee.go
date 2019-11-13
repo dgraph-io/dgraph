@@ -395,7 +395,7 @@ func ResetAcl() {
 			},
 		}
 
-		_, err = (&Server{}).doMutate(context.Background(), req, NoAuthorize)
+		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
 		if err != nil {
 			return err
 		}
