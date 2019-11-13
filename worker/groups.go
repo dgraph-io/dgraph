@@ -326,23 +326,19 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// Lets have this block before the one that adds the new members, else we may end up
 		// removing a freshly added node.
 
-		// Make a map of members removed in the old state so that we avoid removing nodes
-		// more than once.
-		oldRemovedMembers := make(map[uint64]*pb.Member)
-		for _, removedMember := range oldState.GetRemoved() {
-			oldRemovedMembers[removedMember.GetId()] = removedMember
-		}
-
 		for _, member := range g.state.GetRemoved() {
 			if member.GetGroupId() == g.Node.gid && g.Node.AmLeader() {
 				go func() {
 					// Don't try to remove a member if it's already marked as removed in
 					// the membership state and is not a current peer of the node.
 					_, isPeer := g.Node.Peer(member.GetId())
+					// isPeer should only be true if the rmeoved node is not the same as this node.
 					isPeer = isPeer && member.GetId() != g.Node.RaftContext.Id
-					if oldMember, ok := oldRemovedMembers[member.GetId()]; ok &&
-						proto.Equal(member, oldMember) && !isPeer {
-						return
+
+					for _, oldMember := range oldState.GetRemoved() {
+						if oldMember.GetId() == member.GetId() && !isPeer {
+							return
+						}
 					}
 
 					if err := g.Node.ProposePeerRemoval(
