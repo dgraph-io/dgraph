@@ -884,6 +884,96 @@ func TestQueryVarValAggMul(t *testing.T) {
 		js)
 }
 
+func TestCountUIDToVar2(t *testing.T) {
+	query := `
+		{
+			q(func: uid( 1)) {
+				f as friend {
+					n as age
+					s as count(uid)
+					friend {
+						n1 as name
+					}
+					mul as math(n * s)
+			  	}
+			}
+
+			me(func: uid(f), orderdesc: val(mul)) {
+				name
+				val(n1)
+				val(s)
+				val(n)
+				val(mul)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"q": [
+					{
+						"friend": [
+							{
+								"age": 15,
+								"friend": [
+									{
+									  "name": "Michonne"
+									}
+						  		],
+								"val(mul)": 75
+							},
+							{
+								"age": 15,
+								"val(mul)": 75
+							},
+							{
+								"age": 17,
+								"val(mul)": 85
+							},
+							{
+								"age": 19,
+								"friend": [
+									{
+										"name": "Glenn Rhee"
+									}
+								],
+								"val(mul)": 95
+							},
+							{
+							  "count": 5
+							}
+						]
+					}
+				],
+				"me": [
+					{
+						"name": "Andrea",
+						"val(n)": 19,
+						"val(mul)": 95
+					},
+					{
+						"name": "Daryl Dixon",
+						"val(n)": 17,
+						"val(mul)": 85
+					},
+					{
+						"name": "Rick Grimes",
+						"val(n)": 15,
+						"val(mul)": 75
+					},
+					{
+						"name": "Glenn Rhee",
+						"val(n1)": "Glenn Rhee",
+						"val(n)": 15,
+						"val(mul)": 75
+					}
+				]
+			}
+		}
+	`, js)
+}
+
 func TestQueryVarValAggOrderDesc(t *testing.T) {
 	query := `
 		{
