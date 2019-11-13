@@ -2897,7 +2897,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						IsInternal: true,
 					}
 					gq.Children = append(gq.Children, child)
-					alias = ""
+					varName, alias = "", ""
 
 					it.Next()
 					it.Next()

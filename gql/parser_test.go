@@ -4871,3 +4871,26 @@ func TestParseExpandType(t *testing.T) {
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
 }
+
+func TestParseVarAfterCountQry(t *testing.T) {
+	query := `
+		{
+			q(func: allofterms(name@en, "steven spielberg")) {
+				director.film {
+					u1 as count(uid)
+					genre {
+						u2 as math(1)
+					}
+			  	}
+			}
+
+			sum() {
+				totalMovies: sum(val(u1))
+				totalGenres: sum(val(u2))
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
