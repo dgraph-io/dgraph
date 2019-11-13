@@ -659,6 +659,7 @@ func (n *node) updateRaftProgress() error {
 	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
+	
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		return err
@@ -730,6 +731,21 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			close(done)
+			return
+		}
+	}
+}
+
+func (n* node) drainApplyChan() {
+	for {
+		select {
+		case proposals := <-n.applyCh:
+			glog.Infof("Draining %d proposals\n",  len(proposals))
+			for _, proposal := range proposals {
+				n.Proposals.Done(proposal.Key, nil)
+				n.Applied.Done(proposal.Index)
+			}
+		default:
 			return
 		}
 	}
@@ -814,12 +830,19 @@ func (n *node) Run() {
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
+					// Set node to unhealthy state here while it applies the snapshot.
+					x.UpdateHealthStatus(false)
+
 					// We are getting a new snapshot from leader. We need to wait for the applyCh to
 					// finish applying the updates, otherwise, we'll end up overwriting the data
 					// from the new snapshot that we retrieved.
+
+					// Drain the apply channel. Snapshot will be retrieved next.
 					maxIndex := n.Applied.LastIndex()
-					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
+					glog.Infof("Drain applyCh by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
+					n.drainApplyChan() 
+
 					if err := n.Applied.WaitForMark(context.Background(), maxIndex); err != nil {
 						glog.Errorf("Error waiting for mark for index %d: %+v", maxIndex, err)
 					}
@@ -847,6 +870,9 @@ func (n *node) Run() {
 						time.Sleep(100 * time.Millisecond) // Wait for a bit.
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
+
+					// Set node to healthy state here.
+					x.UpdateHealthStatus(true)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
