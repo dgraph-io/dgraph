@@ -858,6 +858,21 @@
     }
 
 -
+  name: "Get editor without supplying anything"
+  gqlquery: |
+    query {
+      getEditor {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getEditor(func: uid(0x0)) @filter(type(Editor)) {
+        name : Editor.name
+      }
+    }
+
+-
   name: "Get editor using xid"
   gqlquery: |
     query {

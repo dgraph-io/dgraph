@@ -456,9 +456,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 
 	idArg := f.ArgValue(IDArgName)
 	if idArg == nil && xid == nil {
-		pos := f.field.GetPosition()
-		err = x.GqlErrorf("ID argument not available on field %s", f.Name()).
-			WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+		// This means that both were optional and were not supplied, lets return here.
 		return
 	}
 
