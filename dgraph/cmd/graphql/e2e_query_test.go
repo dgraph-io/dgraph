@@ -358,6 +358,101 @@ func TestManyQueries(t *testing.T) {
 	}
 }
 
+func TestQueryOrderAtRoot(t *testing.T) {
+	posts := allPosts(t)
+
+	filter := map[string]interface{}{
+		"ids": []string{posts[0].PostID, posts[1].PostID},
+	}
+
+	orderNameDesc := map[string]interface{}{
+		"desc": "text",
+	}
+
+	orderNameAsc := map[string]interface{}{
+		"asc": "text",
+	}
+
+	var result, expected struct {
+		QueryPost []*post
+	}
+
+	cases := map[string]struct {
+		Order    map[string]interface{}
+		First    int
+		Offset   int
+		Expected []*post
+	}{
+		"order": {
+			Order:    orderNameAsc,
+			First:    0,
+			Offset:   0,
+			Expected: []*post{posts[0], posts[1]},
+		},
+		"orderDesc": {
+			Order:    orderNameDesc,
+			First:    0,
+			Offset:   0,
+			Expected: []*post{posts[1], posts[0]},
+		},
+		"first": {
+			Order:    orderNameDesc,
+			First:    1,
+			Offset:   0,
+			Expected: []*post{posts[1]},
+		},
+		"offset": {
+			Order:    orderNameDesc,
+			First:    0,
+			Offset:   1,
+			Expected: []*post{posts[0]},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			getParams := &GraphQLParams{
+				Query: `query queryPost($filter: PostFilter, $order: PostOrder,
+		$first: Int, $offset: Int) {
+			queryPost(
+			  filter: $filter,
+			  order: $order,
+			  first: $first,
+			  offset: $offset) {
+				postID
+				title
+				text
+				tags
+				isPublished
+				postType
+				numLikes
+			}
+		}
+		`,
+				Variables: map[string]interface{}{
+					"filter": filter,
+					"order":  test.Order,
+					"first":  test.First,
+					"offset": test.Offset,
+				},
+			}
+
+			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			expected.QueryPost = test.Expected
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			require.Equal(t, len(result.QueryPost), len(expected.QueryPost))
+			if diff := cmp.Diff(expected, result); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+}
+
 // TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
 // an error.  Internally, the GraphQL server should run those concurrently, and
 // an error in one query should not affect the results of any others.

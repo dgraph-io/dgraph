@@ -100,16 +100,13 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	if q.Func.Name == "uid" {
 		b.WriteString("(func: ")
 		writeUidFunc(b, q.Func.UID)
-		b.WriteString(")")
 	} else if q.Func.Name == "type" && len(q.Func.Args) == 1 {
 		b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value))
-		writeOrderAndPage(b, q, true)
-		b.WriteRune(')')
 	} else if q.Func.Name == "eq" && len(q.Func.Args) == 2 {
 		b.WriteString(fmt.Sprintf("(func: eq(%s, %s)", q.Func.Args[0].Value, q.Func.Args[1].Value))
-		writeOrderAndPage(b, q, true)
-		b.WriteRune(')')
 	}
+	writeOrderAndPage(b, q, true)
+	b.WriteRune(')')
 }
 
 func writeFilterFunction(b *strings.Builder, f *gql.Function) {
