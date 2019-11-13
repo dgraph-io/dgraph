@@ -33,8 +33,13 @@ const (
 
 func mergeMapShardsIntoReduceShards(opt options) {
 	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
+	if len(shardDirs) == 0 {
+		fmt.Printf(
+			"No map shards found. Possibly caused by empty data files passed to the bulk loader.\n")
+		os.Exit(1)
+	}
+
 	// First shard is handled differently because it contains reserved predicates.
-	x.AssertTrue(len(shardDirs) > 0)
 	firstShard := shardDirs[0]
 	// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
 	shardDirs = shardDirs[1:]
@@ -65,6 +70,10 @@ func mergeMapShardsIntoReduceShards(opt options) {
 }
 
 func readShardDirs(d string) []string {
+	_, err := os.Stat(d)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	dir, err := os.Open(d)
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
