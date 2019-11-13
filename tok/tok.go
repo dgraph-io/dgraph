@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/text/collate"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,21 +36,23 @@ import (
 // The range 0x80 - 0xff is for custom tokenizers.
 // TODO: use these everywhere where we must ensure a system tokenizer.
 const (
-	IdentNone     = 0x0
-	IdentTerm     = 0x1
-	IdentExact    = 0x2
-	IdentYear     = 0x4
-	IdentMonth    = 0x41
-	IdentDay      = 0x42
-	IdentHour     = 0x43
-	IdentGeo      = 0x5
-	IdentInt      = 0x6
-	IdentFloat    = 0x7
-	IdentFullText = 0x8
-	IdentBool     = 0x9
-	IdentTrigram  = 0xA
-	IdentHash     = 0xB
-	IdentCustom   = 0x80
+	IdentNone      = 0x0
+	IdentTerm      = 0x1
+	IdentExact     = 0x2
+	IdentExactLang = 0x3
+	IdentYear      = 0x4
+	IdentMonth     = 0x41
+	IdentDay       = 0x42
+	IdentHour      = 0x43
+	IdentGeo       = 0x5
+	IdentInt       = 0x6
+	IdentFloat     = 0x7
+	IdentFullText  = 0x8
+	IdentBool      = 0x9
+	IdentTrigram   = 0xA
+	IdentHash      = 0xB
+	IdentCustom    = 0x80
+	IdentDelimiter = 0x1f // ASCII 31 - Unit seperator
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -90,6 +93,7 @@ func init() {
 	registerTokenizer(MonthTokenizer{})
 	registerTokenizer(DayTokenizer{})
 	registerTokenizer(ExactTokenizer{})
+	registerTokenizer(LangTokenizer{})
 	registerTokenizer(BoolTokenizer{})
 	registerTokenizer(TrigramTokenizer{})
 	registerTokenizer(HashTokenizer{})
@@ -303,6 +307,34 @@ func (t ExactTokenizer) Identifier() byte { return IdentExact }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 
+// LangTokenizer returns the exact string along with language prefix as a token.
+type LangTokenizer struct {
+	lang string
+	cl   *collate.Collator
+	buffer *collate.Buffer
+}
+
+func (t LangTokenizer) Name() string { return "lang" }
+func (t LangTokenizer) Type() string { return "string" }
+func (t LangTokenizer) Tokens(v interface{}) ([]string, error) {
+	if term, ok := v.(string); ok {
+		lang := LangBase(t.lang)
+		encodedTerm := t.cl.KeyFromString(t.buffer, term)
+
+		term := make([]byte, 0, len(lang) + 2 + len(encodedTerm))
+		term = append(term, []byte(lang)...)
+		term = append(term, IdentDelimiter)
+		term = append(term, encodedTerm...)
+		
+		t.buffer.Reset()
+		return []string{string(term)}, nil
+	}
+	return nil, errors.Errorf("Lang indices only supported for string types")
+}
+func (t LangTokenizer) Identifier() byte { return IdentExactLang }
+func (t LangTokenizer) IsSortable() bool { return true }
+func (t LangTokenizer) IsLossy() bool    { return false }
+
 // FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }
 
@@ -313,7 +345,7 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok || str == "" {
 		return []string{}, nil
 	}
-	lang := langBase(t.lang)
+	lang := LangBase(t.lang)
 	// pass 1 - lowercase and normalize input
 	tokens := fulltextAnalyzer.Analyze([]byte(str))
 	// pass 2 - filter stop words
