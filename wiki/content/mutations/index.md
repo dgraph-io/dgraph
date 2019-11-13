@@ -873,6 +873,9 @@ results of executing the query block:
 * If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
+Execution of an upsert block also returns the response of the query executed on the state
+of the database *before mutation was executed*. To get the latest result, we should commit
+the mutation before executing the query.
 
 ### Example
 
@@ -899,7 +902,9 @@ We can do this using the upsert block as follows:
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+    }
   }
 
   mutation {
@@ -917,10 +922,11 @@ Result:
 ```json
 {
   "data": {
+    "q": [],
     "code": "Success",
     "message": "Done",
     "uids": {
-      "uid(v)": "0x2"
+      "uid(v)": "0x1"
     }
   },
   "extensions": {...}
@@ -934,11 +940,17 @@ the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
 If we run the same mutation again, the data would just be overwritten, and no new uid is
-created. Note that the `uids` map is empty in the response when the mutation is executed again:
+created. Note that the `uids` map is empty in the response when the mutation is executed
+again and the query response (key `q`) contains the uid that was created in the previous upsert.
 
 ```json
 {
   "data": {
+    "q": [
+      {
+        "uid": "0x1"
+      }
+    ],
     "code": "Success",
     "message": "Done",
     "uids": {}
@@ -952,7 +964,7 @@ We can achieve the same result using `json` dataset as follows:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
 {
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "query": "{ q(func: eq(email, "user@company1.io")) {v as uid} }",
   "set": {
     "uid": uid(v),
     "name": "first last",
@@ -969,7 +981,9 @@ Now, we want to add the `age` information for the same user having the same emai
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+    }
   }
 
   mutation {
@@ -986,12 +1000,14 @@ Result:
 ```json
 {
   "data": {
+    "q": [
+      {
+        "uid": "0x1"
+      }
+    ],
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }
@@ -999,15 +1015,14 @@ Result:
 
 Here, the query block queries for a user with `email` as `user@company1.io`. It stores
 the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
-of `vars` which has a list of uids that were used in the set mutation.
+user by extracting the uid from the variable `v` using `uid` function.
 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
 {
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "query": "{ q(func: eq(email, "user@company1.io")) {v as uid} }",
   "set":{
     "uid": "uid(v)",
     "age": "28"
@@ -1049,10 +1064,7 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }
@@ -1128,4 +1140,153 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
     "age": null
   }
 }' | jq
+```
+
+
+### Multiple Mutation Block
+
+The upsert block supports multiple mutation blocks within an upsert block. Each mutation
+block can optionally have condition (using `@if`) specified as well. A mutation block
+is executed only when the corresponding condition is evaluated to true. This feature
+along with the support of conditional upsert provides the equivalent support of
+`if..else` in an upsert block.
+
+### Example
+
+Consider an example with the following schema:
+
+```sh
+curl localhost:8180/alter -X POST -d $'
+  name: string @index(term) .
+  email: [string] @index(exact) @upsert .
+' | jq
+```
+
+Let's say, we have many users stored in our database each having one or more than
+one email IDs. Now, we get two email IDs that belong to the same user. If the email IDs
+belong to the different nodes in the database, we want to delete the existing nodes and
+create a new node with both the emails attached to this new node. Otherwise, we
+create/update the new/existing node with both the emails.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8180/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    # filter is needed to ensure that we do not get same UIDs in u1 and u2
+    q1(func: eq(email, "user_email1@company1.io")) @filter(not(eq(email, "user_email2@company1.io"))) {
+      u1 as uid
+    }
+
+    q2(func: eq(email, "user_email2@company1.io")) @filter(not(eq(email, "user_email1@company1.io"))) {
+      u2 as uid
+    }
+
+    q3(func: eq(email, "user_email1@company1.io")) @filter(eq(email, "user_email2@company1.io")) {
+      u3 as uid
+    }
+  }
+
+  # case when both emails do not exist
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 exists but email2 does not
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      uid(u1) <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 does not exist but email2 exists
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      uid(u2) <email> "user_email1@company1.io" .
+    }
+  }
+
+  # case when both emails exist and needs merging
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+
+    delete {
+      uid(u1) <name> * .
+      uid(u1) <email> * .
+      uid(u2) <name> * .
+      uid(u2) <email> * .
+    }
+  }
+}
+' | jq
+```
+
+Result (when database is empty):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x1"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (both emails exist and are attached to different nodes):
+```json
+{
+  "data": {
+    "q1": [
+      {
+        "uid": "0x2"
+      }
+    ],
+    "q2": [
+      {
+        "uid": "0x3"
+      }
+    ],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x4"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (when both emails exist and are already attached to the same node):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [
+      {
+        "uid": "0x4"
+      }
+    ],
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
 ```
