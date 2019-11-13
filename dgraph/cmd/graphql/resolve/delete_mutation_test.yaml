@@ -54,3 +54,22 @@
     query {
       x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author")))
     }
+
+
+-
+  name: "Delete mutation using xid"
+  gqlmutation: |
+    mutation deleteState($filter: StateFilter!) {
+      deleteState(filter: $filter)
+    }
+  gqlvariables: |
+    { "filter": {
+        "xid": { "eq": "nsw" }
+      }
+    }
+  explanation: "The delete mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: uid(x) * * .
+  dgraphquery: |-
+    query {
+      x as deleteState(func: type(State)) @filter(eq(State.xid, "nsw"))
+    }

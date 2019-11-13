@@ -293,7 +293,6 @@
       x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
     }
 
-
 -
   name: "Add mutation using xid"
   gqlmutation: |
@@ -355,4 +354,64 @@
   dgraphquery: |-
     query {
       x as updateState(func: type(State)) @filter(eq(State.xid, "nsw"))
+    }
+
+-
+  name: "Add mutation using xid on type which also has an ID field"
+  gqlmutation: |
+    mutation addEditor($input: EditorInput!) {
+      addEditor(input: $input) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "xid": "editor",
+        "name": "A.N. Editor"
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "dgraph.type": ["Editor"],
+      "Editor.name": "A.N. Editor",
+      "Editor.xid": "editor"
+    }
+  dgraphquery: |-
+    query {
+      x as addEditor(func: eq(Editor.xid, "editor")) @filter(type(Editor))
+    }
+
+-
+  name: "Update mutation using xid on type which also has an ID field"
+  gqlmutation: |
+    mutation updateEditor($patch: UpdateEditorInput!) {
+      updateEditor(input: $patch) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "xid": { "eq": "editor" },
+          "ids": [ "0x1", "0x2" ]
+        },
+        "patch": {
+          "name": "A.N. Editor"
+        }
+      }
+    }
+  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Editor.name": "A.N. Editor"
+    }
+  dgraphquery: |-
+    query {
+      x as updateEditor(func: type(Editor)) @filter((uid(0x1, 0x2) AND eq(Editor.xid, "editor")))
     }
