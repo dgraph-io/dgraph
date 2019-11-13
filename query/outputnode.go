@@ -210,7 +210,9 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
 	return nil
 }
 
-func attachFacets(fj *fastJsonNode, fieldName string, isList bool, fList []*api.Facet, facetIdx int) error {
+func attachFacets(fj *fastJsonNode, fieldName string, isList bool,
+	fList []*api.Facet, facetIdx int) error {
+
 	facetMap := make(map[string][]*api.Facet)
 	for _, f := range fList {
 		fName := facetName(fieldName, f)
