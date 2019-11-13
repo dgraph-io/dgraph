@@ -767,9 +767,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
-			// This will be used for indexing facet response. Will only be increased for
-			// non empty UID nodes.
-			// nonEmptyUID := make([]uint64, 0)
+			// noneEmptyUID will store indexes of non empty UIDs.
+			// This will be used for indexing facet response
 			var nonEmptyUID []int
 			for childIdx, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
@@ -794,18 +793,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
+					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
 
-					nonEmptyUID = append(nonEmptyUID, childIdx)
-					// once we know that us is not empty, we can add facets for it.
-					// if pc.Params.Facet != nil && len(fcsList) > childIdx {
-					// 	fs := fcsList[childIdx]
-					// 	err := attachFacets(dst.(*fastJsonNode),
-					// 		fieldName, pc.List, fs.Facets, facetIdx)
-					// 	if err != nil {
-					// 		return err
-					// 	}
-					// 	facetIdx++
-					// }
 					if pc.Params.Normalize {
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
@@ -856,9 +845,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
+			// Now fill facets for non empty UIDs.
 			facetIdx := 0
 			for _, uidIdx := range nonEmptyUID {
-				// once we know that us is not empty, we can add facets for it.
 				if pc.Params.Facet != nil && len(fcsList) > uidIdx {
 					fs := fcsList[uidIdx]
 					err := attachFacets(dst.(*fastJsonNode),
@@ -884,10 +873,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
-				// in case of Value we have only one Facets
-				err := attachFacets(dst.(*fastJsonNode), fieldName,
-					pc.List, pc.facetsMatrix[idx].FacetsList[0].Facets, idx)
-				if err != nil {
+				// In case of Value we have only one Facets.
+				if err := attachFacets(dst.(*fastJsonNode), fieldName, pc.List,
+					pc.facetsMatrix[idx].FacetsList[0].Facets, idx); err != nil {
 					return err
 				}
 			}

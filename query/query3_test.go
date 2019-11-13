@@ -881,21 +881,52 @@ func TestShortestPath2(t *testing.T) {
 
 func TestShortestPath4(t *testing.T) {
 
-	// query := `
-	// 	{
-	// 		A as shortest(from:1, to:1003) {
-	// 			path
-	// 			follow
-	// 		}
+	query := `
+		{
+			A as shortest(from:1, to:1003) {
+				path
+				follow
+			}
 
-	// 		me(func: uid( A)) {
-	// 			name
-	// 		}
-	// 	}`
-	// js := processQueryNoErr(t, query)
-	// require.JSONEq(t,
-	// 	``,
-	// 	js)
+			me(func: uid(A)) {
+				name
+			}
+		}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"_path_":[
+				{
+					"uid":"0x1",
+					"_weight_":3,
+					"follow":{
+						"uid":"0x1f",
+						"follow":{
+							"uid":"0x3e9",
+							"follow":{
+								"uid":"0x3eb"
+							}
+						}
+					}
+				}
+			],
+			"me":[
+				{
+					"name":"Michonne"
+				},
+				{
+					"name":"Andrea"
+				},
+				{
+					"name":"Bob"
+				},
+				{
+					"name":"John"
+				}
+			]
+		}
+	}`, js)
 }
 
 func TestShortestPath_filter(t *testing.T) {

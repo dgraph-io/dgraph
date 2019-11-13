@@ -435,27 +435,36 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	query := `
 		{
 			friend(func: uid(1000)) {
-				path @facets(L1 as weight)
+				path @facets(L1 as weight) {
+					uid
+				}
 				sumw: sum(val(L1))
 			}
 		}
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
-		{
-			"data": {
-			  "friend": [
+	{
+		"data": {
+		  "friend": [
+			{
+			  "path": [
 				{
-				  "path|weight": {
-					"1": 0.1,
-					"2": 0.7
-				  },
-				  "sumw": 0.8
+				  "uid": "0x3e9"
+				},
+				{
+				  "uid": "0x3ea"
 				}
-			  ]
+			  ],
+			  "path|weight": {
+				"0": 0.1,
+				"1": 0.7
+			  },
+			  "sumw": 0.8
 			}
+		  ]
 		}
-	`, js)
+	}`, js)
 }
 
 func TestLevelBasedFacetVarSum(t *testing.T) {
@@ -483,14 +492,14 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 			  "friend": [
 				{
 				  "path|weight": {
-					"1": 0.1,
-					"2": 0.7
+					"0": 0.1,
+					"1": 0.7
 				  },
 				  "path": [
 					{
 					  "path|weight": {
-						"1": 0.1,
-						"2": 1.5
+						"0": 0.1,
+						"1": 1.5
 					  },
 					  "path": [
 						{
@@ -505,7 +514,7 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 					},
 					{
 					  "path|weight": {
-						"1": 0.6
+						"0": 0.6
 					  },
 					  "path": [
 						{
@@ -757,8 +766,28 @@ func TestQueryConstMathVal(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"AgeOrder":[{"name":"Michonne","val(a)":9.000000},{"name":"Rick Grimes","val(a)":9.000000},{"name":"Andrea","val(a)":9.000000},{"name":"Andrea With no friends","val(a)":9.000000}]}}`,
-		js)
+		`{
+			"data": {
+				"AgeOrder":[
+					{
+						"name":"Michonne",
+						"val(a)":9.000000
+					},
+					{
+						"name":"Rick Grimes",
+						"val(a)":9.000000
+					},
+					{
+						"name":"Andrea",
+						"val(a)":9.000000
+					},
+					{
+						"name":"Andrea With no friends",
+						"val(a)":9.000000
+					}
+				]
+			}
+		}`, js)
 }
 
 func TestQueryVarValAggSince(t *testing.T) {
