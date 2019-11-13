@@ -1646,6 +1646,22 @@ func TestParse_alias1(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"type.object.name.hi"})
 }
 
+func TestParseBadAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x0a)) {
+				name: type.object.name.en: after_colon
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid colon after alias declaration")
+}
+
 func TestParse_block(t *testing.T) {
 	query := `
 		{
