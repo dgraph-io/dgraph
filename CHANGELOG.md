@@ -10,71 +10,136 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Changed
 
 - **Breaking changes for expand() queries**
-  - Remove `expand(_forward_)` and `expand(_reverse_)`. (#4119)
-  - Change `expand(_all_)` functionality to only include the predicates in the type. (#4171)
-- Add support for Go Modules. (#4146)
-- Simplify type definitions: type definitions no longer require the type (string, int, etc.) per field name. (#4017)
-- Adding log lines to help troubleshoot snapshot and rollup. (#3889)
-- Add `--http` flag to configure pprof endpoint for live loader. (#3846)
-- Use snappy compression for internal gRPC communication. (#3368)
-- Periodically run GC in all dgraph commands. (#4032, #4075)
-- Exit early if data files given to bulk loader are empty. (#4253)
-- Add support for first and offset directive in has function. (#3970)
-- Pad encData to 17 bytes before decoding. (#4066)
-- Remove usage of deprecated methods. (#4076)
-- Show line and column numbers for errors in HTTP API responses. (#4012)
-- Handle errors on Close(). (#4068)
-- Fix data race in regular expression processing (#4065)
-- Do not store non-pointer values in sync.Pool. (#4089)
-- Verify that all the fields in a type exist in the schema. (#4114)
+  - Remove `expand(_forward_)` and `expand(_reverse_)`. ([#4119][])
+  - Change `expand(_all_)` functionality to only include the predicates in the type. ([#4171][])
+- Add support for Go Modules. ([#4146][])
+- Simplify type definitions: type definitions no longer require the type (string, int, etc.) per field name. ([#4017][])
+- Adding log lines to help troubleshoot snapshot and rollup. ([#3889][])
+- Add `--http` flag to configure pprof endpoint for live loader. ([#3846][])
+- Use snappy compression for internal gRPC communication. ([#3368][])
+- Periodically run GC in all dgraph commands. ([#4032][], [#4075][])
+- Exit early if data files given to bulk loader are empty. ([#4253][])
+- Add support for first and offset directive in has function. ([#3970][])
+- Pad encData to 17 bytes before decoding. ([#4066][])
+- Remove usage of deprecated methods. ([#4076][])
+- Show line and column numbers for errors in HTTP API responses. ([#4012][])
+- Handle errors on Close(). ([#4068][])
+- Fix data race in regular expression processing ([#4065][])
+- Do not store non-pointer values in sync.Pool. ([#4089][])
+- Verify that all the fields in a type exist in the schema. ([#4114][])
 
 Enterprise features
 
-- ACL: Disallow schema queries when an user has not logged in. (#4107)
+- ACL: Disallow schema queries when an user has not logged in. ([#4107][])
 
 ### Added
 
-- Support `@cascade` directive at subqueries. (#4006)
-- Support `@normalize` directive for subqueries. (#4042)
-- Support `val()` function inside upsert mutations (both RDF and JSON). (#3877, #3947)
-- Return mutated UIDs which are part of an upsert operation in the mutation response. (#4145)
-- Support GraphQL Variables for facet values in `@facets` filters. (#4061)
-- Support filtering by facets on values. (#4217)
-- Add ability to query `expand(TypeName)` only on certain types. (#3920)
-- Expose numUids metrics per query to estimate query cost. (#4033)
+- Support `@cascade` directive at subqueries. ([#4006][])
+- Support `@normalize` directive for subqueries. ([#4042][])
+- Support `val()` function inside upsert mutations (both RDF and JSON). ([#3877][], [#3947][])
+- Return mutated UIDs which are part of an upsert operation in the mutation response. ([#4145][])
+- Support GraphQL Variables for facet values in `@facets` filters. ([#4061][])
+- Support filtering by facets on values. ([#4217][])
+- Add ability to query `expand(TypeName)` only on certain types. ([#3920][])
+- Expose numUids metrics per query to estimate query cost. ([#4033][])
 
 ### Removed
 
-- Remove `@type` directive from query language. (#4016)
+- Remove `@type` directive from query language. ([#4016][])
 
 ### Fixed
 
 - Avoid changing order if multiple versions of the same edge is found.
-- Consider reverse count index keys for conflict detection in transactions. Fixes #3893. (#3932)
-- Clear the unused variable tlsCfg. (#3937)
-- Do not require the last type declaration to have a new line. (#3926)
-- Verify type definitions do not have duplicate fields. Fixes #3924. (#3925)
-- Fix bug in bulk loader when store_xids is true. Fixes #3922. (#3950)
-- Call cancel function only if err is not nil. Fixes #3966. (#3990)
-- Change the mapper output directory from $TMP/shards to $TMP/map_output. Fixes #3959. (#3960)
-- Return error if keywords used as alias in groupby. (#3725)
-- Fix bug where language strings are not filtered when using custom tokenizer. Fixes #3991. (#3992)
-- Support named queries without query variables. Fixes #3994. (#4028)
-- Correctly set up client connection in x package. (#4036)
-- Check for n.Raft() to be nil, Fixes #4053. (#4084)
-- Fix file and directory permissions for bulk loader. (#4088)
-- Ensure that clients can send OpenCensus spans over to the server. (#4144)
-- Change lexer to allow unicode escape sequences. Fixes #4157.(#4175)
-- Handle the count(uid) subgraph correctly. Fixes #4038. (#4122)
-- Don't traverse immutable layer while calling iterate if deleteBelowTs > 0. Fixes #4182. (#4204)
-- Bulk loader allocates reserved predicates in first reduce shard. Fixes #3968. (#4202)
-- Only allow one alias per predicate. (#4236)
-- Change member removal logic to remove members only once. (#4254)
-- Disallow uid as a predicate name. (#4219)
+- Consider reverse count index keys for conflict detection in transactions. Fixes [#3893][]. ([#3932][])
+- Clear the unused variable tlsCfg. ([#3937][])
+- Do not require the last type declaration to have a new line. ([#3926][])
+- Verify type definitions do not have duplicate fields. Fixes [#3924][]. ([#3925][])
+- Fix bug in bulk loader when store_xids is true. Fixes [#3922][]. ([#3950][])
+- Call cancel function only if err is not nil. Fixes [#3966][]. ([#3990][])
+- Change the mapper output directory from $TMP/shards to $TMP/map_output. Fixes [#3959][]. ([#3960][])
+- Return error if keywords used as alias in groupby. ([#3725][])
+- Fix bug where language strings are not filtered when using custom tokenizer. Fixes [#3991][]. ([#3992][])
+- Support named queries without query variables. Fixes [#3994][]. ([#4028][])
+- Correctly set up client connection in x package. ([#4036][])
+- Check for n.Raft() to be nil, Fixes [#4053][]. ([#4084][])
+- Fix file and directory permissions for bulk loader. ([#4088][])
+- Ensure that clients can send OpenCensus spans over to the server. ([#4144][])
+- Change lexer to allow unicode escape sequences. Fixes [#4157][].([#4175][])
+- Handle the count(uid) subgraph correctly. Fixes [#4038][]. ([#4122][])
+- Don't traverse immutable layer while calling iterate if deleteBelowTs > 0. Fixes [#4182][]. ([#4204][])
+- Bulk loader allocates reserved predicates in first reduce shard. Fixes [#3968][]. ([#4202][])
+- Only allow one alias per predicate. ([#4236][])
+- Change member removal logic to remove members only once. ([#4254][])
+- Disallow uid as a predicate name. ([#4219][])
 
 Enterprise features:
 
-- Fix bug when overriding credentials in backup request. Fixes #4044. (#4047)
+- Fix bug when overriding credentials in backup request. Fixes [#4044][]. ([#4047][])
+
+[#4119]: https://github.com/dgraph-io/dgraph/issues/4119
+[#4171]: https://github.com/dgraph-io/dgraph/issues/4171
+[#4146]: https://github.com/dgraph-io/dgraph/issues/4146
+[#4017]: https://github.com/dgraph-io/dgraph/issues/4017
+[#3889]: https://github.com/dgraph-io/dgraph/issues/3889
+[#3846]: https://github.com/dgraph-io/dgraph/issues/3846
+[#3368]: https://github.com/dgraph-io/dgraph/issues/3368
+[#4032]: https://github.com/dgraph-io/dgraph/issues/4032
+[#4075]: https://github.com/dgraph-io/dgraph/issues/4075
+[#4253]: https://github.com/dgraph-io/dgraph/issues/4253
+[#3970]: https://github.com/dgraph-io/dgraph/issues/3970
+[#4066]: https://github.com/dgraph-io/dgraph/issues/4066
+[#4076]: https://github.com/dgraph-io/dgraph/issues/4076
+[#4012]: https://github.com/dgraph-io/dgraph/issues/4012
+[#4068]: https://github.com/dgraph-io/dgraph/issues/4068
+[#4065]: https://github.com/dgraph-io/dgraph/issues/4065
+[#4089]: https://github.com/dgraph-io/dgraph/issues/4089
+[#4114]: https://github.com/dgraph-io/dgraph/issues/4114
+[#4107]: https://github.com/dgraph-io/dgraph/issues/4107
+[#4006]: https://github.com/dgraph-io/dgraph/issues/4006
+[#4042]: https://github.com/dgraph-io/dgraph/issues/4042
+[#3877]: https://github.com/dgraph-io/dgraph/issues/3877
+[#3947]: https://github.com/dgraph-io/dgraph/issues/3947
+[#4145]: https://github.com/dgraph-io/dgraph/issues/4145
+[#4061]: https://github.com/dgraph-io/dgraph/issues/4061
+[#4217]: https://github.com/dgraph-io/dgraph/issues/4217
+[#3920]: https://github.com/dgraph-io/dgraph/issues/3920
+[#4033]: https://github.com/dgraph-io/dgraph/issues/4033
+[#4016]: https://github.com/dgraph-io/dgraph/issues/4016
+[#3893]: https://github.com/dgraph-io/dgraph/issues/3893
+[#3932]: https://github.com/dgraph-io/dgraph/issues/3932
+[#3937]: https://github.com/dgraph-io/dgraph/issues/3937
+[#3926]: https://github.com/dgraph-io/dgraph/issues/3926
+[#3924]: https://github.com/dgraph-io/dgraph/issues/3924
+[#3925]: https://github.com/dgraph-io/dgraph/issues/3925
+[#3922]: https://github.com/dgraph-io/dgraph/issues/3922
+[#3950]: https://github.com/dgraph-io/dgraph/issues/3950
+[#3966]: https://github.com/dgraph-io/dgraph/issues/3966
+[#3990]: https://github.com/dgraph-io/dgraph/issues/3990
+[#3959]: https://github.com/dgraph-io/dgraph/issues/3959
+[#3960]: https://github.com/dgraph-io/dgraph/issues/3960
+[#3725]: https://github.com/dgraph-io/dgraph/issues/3725
+[#3991]: https://github.com/dgraph-io/dgraph/issues/3991
+[#3992]: https://github.com/dgraph-io/dgraph/issues/3992
+[#3994]: https://github.com/dgraph-io/dgraph/issues/3994
+[#4028]: https://github.com/dgraph-io/dgraph/issues/4028
+[#4036]: https://github.com/dgraph-io/dgraph/issues/4036
+[#4053]: https://github.com/dgraph-io/dgraph/issues/4053
+[#4084]: https://github.com/dgraph-io/dgraph/issues/4084
+[#4088]: https://github.com/dgraph-io/dgraph/issues/4088
+[#4144]: https://github.com/dgraph-io/dgraph/issues/4144
+[#4157]: https://github.com/dgraph-io/dgraph/issues/4157
+[#4175]: https://github.com/dgraph-io/dgraph/issues/4175
+[#4038]: https://github.com/dgraph-io/dgraph/issues/4038
+[#4122]: https://github.com/dgraph-io/dgraph/issues/4122
+[#4182]: https://github.com/dgraph-io/dgraph/issues/4182
+[#4204]: https://github.com/dgraph-io/dgraph/issues/4204
+[#3968]: https://github.com/dgraph-io/dgraph/issues/3968
+[#4202]: https://github.com/dgraph-io/dgraph/issues/4202
+[#4236]: https://github.com/dgraph-io/dgraph/issues/4236
+[#4254]: https://github.com/dgraph-io/dgraph/issues/4254
+[#4219]: https://github.com/dgraph-io/dgraph/issues/4219
+[#4044]: https://github.com/dgraph-io/dgraph/issues/4044
+[#4047]: https://github.com/dgraph-io/dgraph/issues/4047
 
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
