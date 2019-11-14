@@ -795,10 +795,12 @@
 			"revisionTime": "2017-10-24T21:10:38Z"
 		},
 		{
-			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
+			"checksumSHA1": "Uy1A2Mv1zW4yURQdwvNpULvD7To=",
 			"path": "github.com/pkg/errors",
-			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
-			"revisionTime": "2016-08-22T09:00:10Z"
+			"revision": "ba968bfe8b2f7e042a574c888954fccecfa385b4",
+			"revisionTime": "2019-01-03T06:52:24Z",
+			"version": "v0.8.1",
+			"versionExact": "v0.8.1"
 		},
 		{
 			"path": "github.com/pkg/errors/releases",
