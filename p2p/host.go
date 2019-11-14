@@ -235,6 +235,10 @@ func (h *host) close() error {
 // fullAddrs returns all the hosts addresses with their ID append as multiaddrs
 func (h *host) fullAddrs() (maddrs []ma.Multiaddr) {
 	addrs := h.h.Addrs()
+
+	// use "p2p" instead of "ipfs" when creating a multiaddress
+	ma.SwapToP2pMultiaddrs()
+
 	for _, a := range addrs {
 		maddr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", a, h.h.ID().Pretty()))
 		if err != nil {
