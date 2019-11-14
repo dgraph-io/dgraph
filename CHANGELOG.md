@@ -700,6 +700,28 @@ Tracing
 [63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
 [18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
 
+## 1.0.18 - [Unreleased]
+[Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...release/v1.0
+
+### Fixed
+
+- Preserve the order of entries in a mutation if multiple versions of the same
+  edge are found. This addresses the mutation re-ordering change ([#2987][]) from v1.0.15.
+- Fixing the zero client in live loader to avoid using TLS. Fixes [#3919][]. ([#3936][])
+- Remove query cache which is causing contention. (#4071).
+- Fix bug when querying with nested levels of `expand(_all_)`. Fixes #3807. (#4143).
+- Vendor in Badger to fix a vlog bug "Unable to find log file". (#4212)
+- Change lexer to allow unicode escape sequences. Fixes #4157. (#4252)
+
+[#3919]: https://github.com/dgraph-io/dgraph/issues/3919
+[#3936]: https://github.com/dgraph-io/dgraph/issues/3936
+[#4071]: https://github.com/dgraph-io/dgraph/issues/4071
+[#3807]: https://github.com/dgraph-io/dgraph/issues/3807
+[#4143]: https://github.com/dgraph-io/dgraph/issues/4143
+[#4212]: https://github.com/dgraph-io/dgraph/issues/4212
+[#4157]: https://github.com/dgraph-io/dgraph/issues/4157
+[#4252]: https://github.com/dgraph-io/dgraph/issues/4252
+
 ## [1.0.17] - 2019-08-30
 [1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
 
