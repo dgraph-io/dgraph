@@ -572,6 +572,9 @@ func buildUpsertQuery(qc *queryContext) string {
 	return upsertQuery
 }
 
+// updateMutations updates the mutation and replaces uid(var) and val(var) with
+// their values or a blank node, in case of an upsert.
+// We use the values stored in qc.uidRes and qc.valRes to update the mutation.
 func updateMutations(qc *queryContext) {
 	for i, condVar := range qc.condVars {
 		gmu := qc.gmuList[i]
@@ -589,8 +592,9 @@ func updateMutations(qc *queryContext) {
 	}
 }
 
-// findVars finds all the variables used in mutation block
-func findVars(qc *queryContext) []string {
+// findMutationVars finds all the variables used in mutation block and stores them
+// qc.uidRes and qc.valRes so that we only look for these variables in query results.
+func findMutationVars(qc *queryContext) []string {
 	updateVars := func(s string) {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
@@ -877,7 +881,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 
 	if qc.req.StartTs == 0 {
 		start := time.Now()
-		if qc.req.BestEffort {
+
+		// For mutations, BestEffort doesn't make sense. We simply ignore the parameter.
+		if qc.req.BestEffort && !isMutation {
 			qc.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
@@ -1028,7 +1034,7 @@ func parseRequest(qc *queryContext) error {
 		qc.uidRes = make(map[string][]string)
 		qc.valRes = make(map[string]map[uint64]types.Val)
 		upsertQuery = buildUpsertQuery(qc)
-		needVars = findVars(qc)
+		needVars = findMutationVars(qc)
 		if len(upsertQuery) == 0 {
 			if len(needVars) > 0 {
 				return errors.Errorf("variables %v not defined", needVars)
