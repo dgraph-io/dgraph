@@ -207,7 +207,7 @@ func (g *groupi) proposeInitialSchema() {
 	}
 }
 
-func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
+func (g *groupi) upsertSchema(sch *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
@@ -215,12 +215,12 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
 	cancel()
 	if err != nil {
-		glog.Errorf("error while requesting timestamp for schema %v: %v", schema, err)
+		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
 		return
 	}
 
 	m.StartTs = ts.StartId
-	m.Schema = append(m.Schema, schema)
+	m.Schema = append(m.Schema, sch)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
