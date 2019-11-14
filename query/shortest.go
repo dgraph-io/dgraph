@@ -462,10 +462,13 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	numHops := 0
 	maxHops := int(sg.Params.ExploreDepth)
+	// TODO - Depth 0 works same as max depth. Fix it so that when depth: 0 is explicitly supplied,
+	// it should return an empty path.
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
-	fmt.Printf("maxHops: %+v\n", maxHops)
+
+	// next is a channel on to which we send a signal so as to perform another level of expansion.
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
@@ -483,18 +486,20 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	var stopExpansion bool
 	var totalWeight float64
-L:
+
+	// We continue to pop from the priority queue either
+	// 1. Till we get the destination node in which case we would have gotten to it through
+	// the shortest path.
+	// 2. We have expanded maxHops number of times.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
-		fmt.Printf("item: %+v\n", item)
-		// if item.uid == sg.Params.To {
-		// 	totalWeight = item.cost
-		// 	// break
-		// }
-		if numHops >= maxHops {
-			break L
+		if item.uid == sg.Params.To {
+			totalWeight = item.cost
+			break
 		}
-		fmt.Printf("numHops: %+v\n", numHops)
+		if numHops >= maxHops {
+			break
+		}
 		if numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
@@ -503,10 +508,10 @@ L:
 				select {
 				case err = <-expandErr:
 					if err != nil {
+						// errStop is returned when ProcessGraph doesn't return any more results
+						// and we can't expand anymore.
 						if err == errStop {
-							fmt.Println("break it break it")
 							stopExpansion = true
-							// break L
 						} else {
 							return nil, err
 						}
@@ -522,55 +527,49 @@ L:
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			fmt.Println("default case ", stopExpansion)
-			// if !stopExpansion {
 			neighbours := adjacencyMap[item.uid]
-			fmt.Printf("neighbours: %+v\n", neighbours)
-			for toUid, info := range neighbours {
-				fmt.Printf("toUid: %+v, info: %+v\n", toUid, info)
-				cost := info.cost
-				d, ok := dist[toUid]
-				if ok && d.cost <= item.cost+cost {
+			for toUID, neighbour := range neighbours {
+				d, ok := dist[toUID]
+				// Cost of reaching this neighbour node from srcNode is item.cost + neighbour.cost
+				nodeCost := item.cost + neighbour.cost
+				if ok && d.cost <= nodeCost {
 					continue
 				}
 				if !ok {
 					// This is the first time we're seeing this node. So
 					// create a new node and add it to the heap and map.
 					node := &queueItem{
-						uid:  toUid,
-						cost: item.cost + cost,
-						hop:  item.hop + 1,
+						uid:  toUID,
+						cost: nodeCost,
 					}
 					heap.Push(&pq, node)
-					dist[toUid] = nodeInfo{
+					dist[toUID] = nodeInfo{
 						parent: item.uid,
 						node:   node,
 						mapItem: mapItem{
-							cost:  item.cost + cost,
-							attr:  info.attr,
-							facet: info.facet,
+							cost:  nodeCost,
+							attr:  neighbour.attr,
+							facet: neighbour.facet,
 						},
 					}
 				} else {
 					// We've already seen this node. So, just update the cost
 					// and fix the priority in the heap and map.
-					node := dist[toUid].node
-					node.cost = item.cost + cost
-					node.hop = item.hop + 1
+					node := dist[toUID].node
+					node.cost = nodeCost
 					heap.Fix(&pq, node.index)
 					// Update the map with new values.
-					dist[toUid] = nodeInfo{
+					dist[toUID] = nodeInfo{
 						parent: item.uid,
 						node:   node,
 						mapItem: mapItem{
-							cost:  item.cost + cost,
-							attr:  info.attr,
-							facet: info.facet,
+							cost:  nodeCost,
+							attr:  neighbour.attr,
+							facet: neighbour.facet,
 						},
 					}
 				}
 			}
-			// }
 
 		}
 	}
@@ -581,11 +580,9 @@ L:
 	cur := sg.Params.To
 	totalWeight = dist[cur].cost
 	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
-		fmt.Printf("cur: %+v, dist[cur]: %+v\n", cur, dist[cur])
 		result = append(result, cur)
 		cur = dist[cur].parent
 	}
-	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
 		sg.DestUIDs = &pb.List{}
 		return nil, nil
@@ -597,6 +594,7 @@ L:
 	for i := 0; i < l/2; i++ {
 		result[i], result[l-i-1] = result[l-i-1], result[i]
 	}
+	// Put the path in DestUIDs of the root.
 	sg.DestUIDs.Uids = result
 
 	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)

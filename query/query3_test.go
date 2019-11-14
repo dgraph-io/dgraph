@@ -817,7 +817,6 @@ func TestShortestPathWithDepth_direct_path_is_shortest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
 			require.NoError(t, err)
-			fmt.Println(string(js))
 			require.JSONEq(t, tc.output, js)
 		})
 	}
@@ -1048,7 +1047,6 @@ func TestShortestPath_filter(t *testing.T) {
 			}
 		}`
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{"data": {"_path_":[{"uid":"0x1","_weight_":3,"follow":{"uid":"0x1f","follow":{"uid":"0x3e9","path":{"uid":"0x3ea"}}}}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"Matt"}]}}`,
 		js)
