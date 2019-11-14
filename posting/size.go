@@ -48,7 +48,7 @@ func (l *List) DeepSize() int {
 	size += 1 * 8
 	// so far basic struct layout has been calculated.
 	// List.key
-	size += cap(l.key)
+	size += int(cap(l.key))
 
 	// List.PostingList
 	size += calculatePostingListSize(l.plist)
@@ -74,7 +74,7 @@ func (l *List) DeepSize() int {
 	}
 	// memory taken in PostingList in Map
 	for _, v := range l.mutationMap {
-		size += int(calculatePostingListSize(v))
+		size += calculatePostingListSize(v)
 	}
 
 	return size
@@ -95,16 +95,16 @@ func calculatePostingListSize(list *pb.PostingList) int {
 	size += calculatePackSize(list.Pack)
 
 	// PostingList.Postings
-	size += cap(list.Postings) * 8
+	size += int(cap(list.Postings)) * 8
 	for _, p := range list.Postings {
 		size += calculatePostingSize(p)
 	}
 
 	// PostingList.Splits
-	size += cap(list.Splits) * 8
+	size += int(cap(list.Splits)) * 8
 
 	// PostingList.XXX_unrecognized
-	size += cap(list.XXX_unrecognized)
+	size += int(cap(list.XXX_unrecognized))
 
 	return size
 }
@@ -121,20 +121,20 @@ func calculatePostingSize(posting *pb.Posting) int {
 	size += 20 * 8
 
 	// Posting.Value
-	size += cap(posting.Value)
+	size += int(cap(posting.Value))
 
 	// Posting.LangTag
-	size += cap(posting.LangTag)
+	size += int(cap(posting.LangTag))
 
 	// Posting.Label, strings are immutable, hence cap = len
-	size += len(posting.Label)
+	size += int(len(posting.Label))
 
 	for _, f := range posting.Facets {
 		size += calcuateFacet(f)
 	}
 
 	// Posting.XXX_unrecognized
-	size += cap(posting.XXX_unrecognized)
+	size += int(cap(posting.XXX_unrecognized))
 
 	return size
 }
@@ -152,12 +152,12 @@ func calculatePackSize(pack *pb.UidPack) int {
 	size += 8 * 8
 
 	// UidPack.Blocks, each pointer takes 1 word
-	size += cap(pack.Blocks) * 8
+	size += int(cap(pack.Blocks)) * 8
 	for _, block := range pack.Blocks {
-		size = calculateUIDBlock(block)
+		size += calculateUIDBlock(block)
 	}
 	// UidPack.XXX_unrecognized
-	size += cap(pack.XXX_unrecognized)
+	size += int(cap(pack.XXX_unrecognized))
 
 	return size
 }
@@ -176,10 +176,10 @@ func calculateUIDBlock(block *pb.UidBlock) int {
 	size += 10 * 8
 
 	// UidBlock.Deltas
-	size += cap(block.Deltas)
+	size += int(cap(block.Deltas))
 
 	// UidBlock.XXX_unrecognized
-	size += cap(block.XXX_unrecognized)
+	size += int(cap(block.XXX_unrecognized))
 
 	return size
 }
@@ -193,12 +193,12 @@ func calcuateFacet(facet *api.Facet) int {
 	// size of struct 1 + 3 + 1 + 3 + 1 + 0 + 3 + 1
 	// rounding to 16
 	size += 16 * 8
-	size += len(facet.Key)
-	size += cap(facet.Value)
+	size += int(len(facet.Key))
+	size += int(cap(facet.Value))
 	for _, token := range facet.Tokens {
-		size += len(token)
+		size += int(len(token))
 	}
-	size += len(facet.Alias)
-	size += len(facet.XXX_unrecognized)
+	size += int(len(facet.Alias))
+	size += int(len(facet.XXX_unrecognized))
 	return size
 }

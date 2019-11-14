@@ -1,8 +1,11 @@
 package posting
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
@@ -96,4 +99,34 @@ func TestFacetCalculation(t *testing.T) {
 	facet = &api.Facet{}
 	// 128 is obtained from BenchmarkFacet
 	require.Equal(t, int(128), calcuateFacet(facet))
+}
+
+func Test21MillionDataSet(t *testing.T) {
+	kvOpt := badger.DefaultOptions("/home/schoolboy/src/github.com/dgraph-io/dgraph/dgraph/out/0/p")
+	ps, err := badger.OpenManaged(kvOpt)
+	require.NoError(t, err)
+	txn := ps.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
+	iopts.PrefetchValues = false
+	itr := txn.NewIterator(iopts)
+	defer itr.Close()
+	l := &List{}
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	var i uint64
+loop:
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		switch item.UserMeta() {
+		case BitCompletePosting:
+			pl, err := ReadPostingList(item.Key(), itr)
+			require.NoError(t, err)
+			l.mutationMap[i] = pl.plist
+			i++
+		default:
+			break loop
+		}
+	}
+	fmt.Println(l.DeepSize())
 }
