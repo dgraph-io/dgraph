@@ -920,7 +920,7 @@ func (n *node) Run() {
 				case entry.Index < applied:
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
-				default:  
+				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
 						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
