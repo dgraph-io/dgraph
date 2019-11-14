@@ -615,6 +615,8 @@ func TestShortestPathWithUidVariableNoMatchForFrom(t *testing.T) {
 
 // TODO - Later also extend this to k-shortest path.
 func TestShortestPathWithDepth(t *testing.T) {
+	// Shortest path between A and B is the path A => C => D => B but if the depth is less than 3
+	// then the direct path between A and B should be returned.
 	query := `
 	query test ($depth: int) {
 		a as var(func: eq(name, "A"))
@@ -731,7 +733,190 @@ func TestShortestPathWithDepth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
 			require.NoError(t, err)
+			require.JSONEq(t, tc.output, js)
+		})
+	}
+
+}
+
+func TestShortestPathWithDepth_direct_path_is_shortest(t *testing.T) {
+	// Direct path from D to B is the shortest path between D and B. As we increase the depth, it
+	// should still be the shortest path returned between the two nodes.
+	query := `
+	query test ($depth: int) {
+		a as var(func: eq(name, "D"))
+		b as var(func: eq(name, "B"))
+
+		path as shortest(from: uid(a), to: uid(b), depth: $depth) {
+			connects @facets(weight)
+		}
+
+		path(func: uid(path)) {
+			uid
+			name
+		}
+	}`
+
+	directPath := `{
+		"data": {
+		  "path": [
+			{
+			  "uid": "0x36",
+			  "name": "D"
+			},
+			{
+			  "uid": "0x34",
+			  "name": "B"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"uid": "0x34",
+				"connects|weight": 1
+			  },
+			  "uid": "0x36",
+			  "_weight_": 1
+			}
+		  ]
+		}
+	  }`
+
+	tests := []struct {
+		name, depth, output string
+	}{
+		// {
+		// 	"depth 0",
+		// 	"0",
+		// 	`{"data": {}}`,
+		// },
+		{
+			"depth 1",
+			"1",
+			directPath,
+		},
+		{
+			"depth 2",
+			"2",
+			directPath,
+		},
+		{
+			"depth 3",
+			"3",
+			directPath,
+		},
+		{
+			"depth 10",
+			"10",
+			directPath,
+		},
+	}
+
+	// t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
+			require.NoError(t, err)
 			fmt.Println(string(js))
+			require.JSONEq(t, tc.output, js)
+		})
+	}
+
+}
+
+func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
+	// There is no direct path between A and E and the shortest path is for depth 3.
+	query := `
+	query test ($depth: int) {
+		a as var(func: eq(name, "A"))
+		b as var(func: eq(name, "E"))
+
+		path as shortest(from: uid(a), to: uid(b), depth: $depth) {
+			connects @facets(weight)
+		}
+
+		path(func: uid(path)) {
+			uid
+			name
+		}
+	}`
+
+	shortestPath := `{
+		"data": {
+		  "path": [
+			{
+			  "uid": "0x33",
+			  "name": "A"
+			},
+			{
+			  "uid": "0x35",
+			  "name": "C"
+			},
+			{
+			  "uid": "0x36",
+			  "name": "D"
+			},
+			{
+			  "uid": "0x37",
+			  "name": "E"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x37",
+					"connects|weight": 1
+				  },
+				  "uid": "0x36",
+				  "connects|weight": 1
+				},
+				"uid": "0x35",
+				"connects|weight": 1
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			}
+		  ]
+		}
+	  }`
+
+	tests := []struct {
+		name, depth, output string
+	}{
+		// {
+		// 	"depth 0",
+		// 	"0",
+		// 	`{"data": {}}`,
+		// },
+		{
+			"depth 1",
+			"1",
+			`{"data":{"path":[]}}`,
+		},
+		{
+			"depth 2",
+			"2",
+			`{"data":{"path":[]}}`,
+		},
+		{
+			"depth 3",
+			"3",
+			shortestPath,
+		},
+		{
+			"depth 10",
+			"10",
+			shortestPath,
+		},
+	}
+
+	// t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
+			require.NoError(t, err)
 			require.JSONEq(t, tc.output, js)
 		})
 	}
@@ -863,6 +1048,7 @@ func TestShortestPath_filter(t *testing.T) {
 			}
 		}`
 	js := processQueryNoErr(t, query)
+	fmt.Println(js)
 	require.JSONEq(t,
 		`{"data": {"_path_":[{"uid":"0x1","_weight_":3,"follow":{"uid":"0x1f","follow":{"uid":"0x3e9","path":{"uid":"0x3ea"}}}}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"Matt"}]}}`,
 		js)

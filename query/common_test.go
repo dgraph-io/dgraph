@@ -615,6 +615,7 @@ func populateCluster() {
 		<52> <name> "B" .
 		<53> <name> "C" .
 		<54> <name> "D" .
+		<55> <name> "E" .
 
 		<51> <connects> <52>  (weight=10) .
 		<51> <connects> <53>  (weight=1) .
@@ -631,6 +632,7 @@ func populateCluster() {
 		<54> <connects> <51>  (weight=10) .
 		<54> <connects> <52>  (weight=1) .
 		<54> <connects> <53>  (weight=10) .
+		<54> <connects> <55>  (weight=1) .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
