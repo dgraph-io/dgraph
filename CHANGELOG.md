@@ -23,8 +23,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Pad encData to 17 bytes before decoding. ([#4066][])
 - Remove usage of deprecated methods. ([#4076][])
 - Show line and column numbers for errors in HTTP API responses. ([#4012][])
-- Handle errors on Close(). ([#4068][])
-- Fix data race in regular expression processing ([#4065][])
 - Do not store non-pointer values in sync.Pool. ([#4089][])
 - Verify that all the fields in a type exist in the schema. ([#4114][])
 
@@ -61,6 +59,7 @@ Enterprise features
 - Fix bug where language strings are not filtered when using custom tokenizer. Fixes [#3991][]. ([#3992][])
 - Support named queries without query variables. Fixes [#3994][]. ([#4028][])
 - Correctly set up client connection in x package. ([#4036][])
+- Fix data race in regular expression processing. Fixes [#4030][]. ([#4065][])
 - Check for n.Raft() to be nil, Fixes [#4053][]. ([#4084][])
 - Fix file and directory permissions for bulk loader. ([#4088][])
 - Ensure that clients can send OpenCensus spans over to the server. ([#4144][])
@@ -90,7 +89,7 @@ Enterprise features:
 [#4066]: https://github.com/dgraph-io/dgraph/issues/4066
 [#4076]: https://github.com/dgraph-io/dgraph/issues/4076
 [#4012]: https://github.com/dgraph-io/dgraph/issues/4012
-[#4068]: https://github.com/dgraph-io/dgraph/issues/4068
+[#4030]: https://github.com/dgraph-io/dgraph/issues/4030
 [#4065]: https://github.com/dgraph-io/dgraph/issues/4065
 [#4089]: https://github.com/dgraph-io/dgraph/issues/4089
 [#4114]: https://github.com/dgraph-io/dgraph/issues/4114
