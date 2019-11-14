@@ -43,7 +43,9 @@ Enterprise features
 
 ### Removed
 
-- Remove `@type` directive from query language. ([#4016][])
+- **Breaking change**: Remove `@type` directive from query language. To filter
+  an edge by a type, use `@filter(type(TypeName))` instead of `@type(TypeName)`.
+  ([#4016][])
 
 ### Fixed
 
