@@ -495,6 +495,12 @@
 			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
+			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
+			"path": "github.com/dgraph-io/dgo/x",
+			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
+			"revisionTime": "2019-03-01T02:09:43Z"
+		},
+		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
 			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
@@ -793,6 +799,12 @@
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
 			"revisionTime": "2016-08-22T09:00:10Z"
+		},
+		{
+			"path": "github.com/pkg/errors/releases",
+			"revision": "0.8.1",
+			"version": "v0.8.1",
+			"versionExact": "v0.8.1"
 		},
 		{
 			"checksumSHA1": "C3yiSMdTQxSY3xqKJzMV9T+KnIc=",
@@ -1505,6 +1517,11 @@
 			"path": "gopkg.in/yaml.v2",
 			"revision": "a5b47d31c556af34a302ce5d659e6fea44d90de0",
 			"revisionTime": "2016-09-28T15:37:09Z"
+		},
+		{
+			"path": "https://github.com/pkg/errors/releases",
+			"revision": "0.8.1",
+			"version": "v0.8.1"
 		}
 	],
 	"rootPath": "github.com/dgraph-io/dgraph"
