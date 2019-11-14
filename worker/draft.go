@@ -908,21 +908,19 @@ func (n *node) Run() {
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
 
-				if entry.Type == raftpb.EntryConfChange {
+				switch {
+				case entry.Type == raftpb.EntryConfChange:
 					n.applyConfChange(entry)
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
-
-				} else if len(entry.Data) == 0 {
+				case len(entry.Data) == 0:
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
 					n.Applied.Done(entry.Index)
-
-				} else if entry.Index < applied {
+				case entry.Index < applied:
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
-
-				} else {
+				default:  
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
 						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
