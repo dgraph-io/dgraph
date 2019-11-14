@@ -29,6 +29,7 @@ const jump = 32 // Jump size in InsersectWithJump.
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	enc := codec.Encoder{}
+	codec.DecodeList(u)
 	for i, uid := range u.Uids {
 		if f(uid, i) {
 			enc.Add(uid)

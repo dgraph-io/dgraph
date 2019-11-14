@@ -19,6 +19,7 @@ package posting
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,7 @@ func TestRollupTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	uidList, err := l.Uids(ListOptions{ReadTs: 7})
+	codec.DecodeList(uidList)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(uidList.Uids))
 
@@ -50,6 +52,7 @@ func TestRollupTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	uidList, err = nl.Uids(ListOptions{ReadTs: 11})
+	codec.DecodeList(uidList)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(uidList.Uids))
 
@@ -67,6 +70,7 @@ func TestPostingListRead(t *testing.T) {
 		nl, err := getNew(key, pstore)
 		require.NoError(t, err)
 		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})
+		codec.DecodeList(uidList)
 		require.NoError(t, err)
 		require.Equal(t, sz, len(uidList.Uids))
 	}

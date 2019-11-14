@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -35,6 +36,7 @@ import (
 func uids(l *List, readTs uint64) []uint64 {
 	r, err := l.Uids(ListOptions{ReadTs: readTs})
 	x.Check(err)
+	codec.DecodeList(r)
 	return r.Uids
 }
 
