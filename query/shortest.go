@@ -19,6 +19,7 @@ package query
 import (
 	"container/heap"
 	"context"
+	"fmt"
 	"math"
 	"sync"
 
@@ -202,6 +203,8 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							rch <- err
 							return
 						}
+
+						fmt.Println("from: ", fromUID, "to: ", toUID, "cost: ", cost)
 						adjacencyMap[fromUID][toUID] = mapItem{
 							cost:  cost,
 							facet: facet,
@@ -457,11 +460,12 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	heap.Push(&pq, srcNode)
 
-	numHops := -1
+	numHops := 0
 	maxHops := int(sg.Params.ExploreDepth)
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
+	fmt.Printf("maxHops: %+v\n", maxHops)
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
@@ -479,82 +483,95 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	var stopExpansion bool
 	var totalWeight float64
+L:
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
-		if item.uid == sg.Params.To {
-			totalWeight = item.cost
-			break
+		fmt.Printf("item: %+v\n", item)
+		// if item.uid == sg.Params.To {
+		// 	totalWeight = item.cost
+		// 	// break
+		// }
+		if numHops >= maxHops {
+			break L
 		}
-		if item.hop > numHops && numHops < maxHops {
+		fmt.Printf("numHops: %+v\n", numHops)
+		if numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
 				next <- true
-			}
-			select {
-			case err = <-expandErr:
-				if err != nil {
-					if err == errStop {
-						stopExpansion = true
-					} else {
-						return nil, err
+				select {
+				case err = <-expandErr:
+					if err != nil {
+						if err == errStop {
+							fmt.Println("break it break it")
+							stopExpansion = true
+							// break L
+						} else {
+							return nil, err
+						}
 					}
+				case <-ctx.Done():
+					return nil, ctx.Err()
 				}
-			case <-ctx.Done():
-				return nil, ctx.Err()
 			}
+
 			numHops++
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			if !stopExpansion {
-				neighbours := adjacencyMap[item.uid]
-				for toUid, info := range neighbours {
-					cost := info.cost
-					d, ok := dist[toUid]
-					if ok && d.cost <= item.cost+cost {
-						continue
+			fmt.Println("default case ", stopExpansion)
+			// if !stopExpansion {
+			neighbours := adjacencyMap[item.uid]
+			fmt.Printf("neighbours: %+v\n", neighbours)
+			for toUid, info := range neighbours {
+				fmt.Printf("toUid: %+v, info: %+v\n", toUid, info)
+				cost := info.cost
+				d, ok := dist[toUid]
+				if ok && d.cost <= item.cost+cost {
+					continue
+				}
+				if !ok {
+					// This is the first time we're seeing this node. So
+					// create a new node and add it to the heap and map.
+					node := &queueItem{
+						uid:  toUid,
+						cost: item.cost + cost,
+						hop:  item.hop + 1,
 					}
-					if !ok {
-						// This is the first time we're seeing this node. So
-						// create a new node and add it to the heap and map.
-						node := &queueItem{
-							uid:  toUid,
-							cost: item.cost + cost,
-							hop:  item.hop + 1,
-						}
-						heap.Push(&pq, node)
-						dist[toUid] = nodeInfo{
-							parent: item.uid,
-							node:   node,
-							mapItem: mapItem{
-								cost:  item.cost + cost,
-								attr:  info.attr,
-								facet: info.facet,
-							},
-						}
-					} else {
-						// We've already seen this node. So, just update the cost
-						// and fix the priority in the heap and map.
-						node := dist[toUid].node
-						node.cost = item.cost + cost
-						node.hop = item.hop + 1
-						heap.Fix(&pq, node.index)
-						// Update the map with new values.
-						dist[toUid] = nodeInfo{
-							parent: item.uid,
-							node:   node,
-							mapItem: mapItem{
-								cost:  item.cost + cost,
-								attr:  info.attr,
-								facet: info.facet,
-							},
-						}
+					heap.Push(&pq, node)
+					dist[toUid] = nodeInfo{
+						parent: item.uid,
+						node:   node,
+						mapItem: mapItem{
+							cost:  item.cost + cost,
+							attr:  info.attr,
+							facet: info.facet,
+						},
+					}
+				} else {
+					// We've already seen this node. So, just update the cost
+					// and fix the priority in the heap and map.
+					node := dist[toUid].node
+					node.cost = item.cost + cost
+					node.hop = item.hop + 1
+					heap.Fix(&pq, node.index)
+					// Update the map with new values.
+					dist[toUid] = nodeInfo{
+						parent: item.uid,
+						node:   node,
+						mapItem: mapItem{
+							cost:  item.cost + cost,
+							attr:  info.attr,
+							facet: info.facet,
+						},
 					}
 				}
 			}
+			// }
+
 		}
 	}
 
@@ -562,7 +579,9 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// Go through the distance map to find the path.
 	var result []uint64
 	cur := sg.Params.To
+	totalWeight = dist[cur].cost
 	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+		fmt.Printf("cur: %+v, dist[cur]: %+v\n", cur, dist[cur])
 		result = append(result, cur)
 		cur = dist[cur].parent
 	}

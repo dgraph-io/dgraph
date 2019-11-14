@@ -610,6 +610,27 @@ func populateCluster() {
 		<502> <boss> <510> .
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
+
+		<51> <name> "A" .
+		<52> <name> "B" .
+		<53> <name> "C" .
+		<54> <name> "D" .
+
+		<51> <connects> <52>  (weight=10) .
+		<51> <connects> <53>  (weight=1) .
+		<51> <connects> <54>  (weight=10) .
+
+		<53> <connects> <51>  (weight=10) .
+		<53> <connects> <52>  (weight=10) .
+		<53> <connects> <54>  (weight=1) .
+
+		<52> <connects> <51>  (weight=10) .
+		<52> <connects> <53>  (weight=10) .
+		<52> <connects> <54>  (weight=10) .
+
+		<54> <connects> <51>  (weight=10) .
+		<54> <connects> <52>  (weight=1) .
+		<54> <connects> <53>  (weight=10) .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

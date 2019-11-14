@@ -613,6 +613,131 @@ func TestShortestPathWithUidVariableNoMatchForFrom(t *testing.T) {
 	require.JSONEq(t, `{"data":{}}`, js)
 }
 
+// TODO - Later also extend this to k-shortest path.
+func TestShortestPathWithDepth(t *testing.T) {
+	query := `
+	query test ($depth: int) {
+		a as var(func: eq(name, "A"))
+		b as var(func: eq(name, "B"))
+
+		path as shortest(from: uid(a), to: uid(b), depth: $depth) {
+			connects @facets(weight)
+		}
+
+		path(func: uid(path)) {
+			uid
+			name
+		}
+	}`
+
+	directPath := `{
+		"data": {
+		  "path": [
+			{
+			  "uid": "0x33",
+			  "name": "A"
+			},
+			{
+			  "uid": "0x34",
+			  "name": "B"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"uid": "0x34",
+				"connects|weight": 10
+			  },
+			  "uid": "0x33",
+			  "_weight_": 10
+			}
+		  ]
+		}
+	  }`
+
+	shortestPath := `{
+		"data": {
+		  "path": [
+			{
+			  "uid": "0x33",
+			  "name": "A"
+			},
+			{
+			  "uid": "0x35",
+			  "name": "C"
+			},
+			{
+			  "uid": "0x36",
+			  "name": "D"
+			},
+			{
+			  "uid": "0x34",
+			  "name": "B"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x34",
+					"connects|weight": 1
+				  },
+				  "uid": "0x36",
+				  "connects|weight": 1
+				},
+				"uid": "0x35",
+				"connects|weight": 1
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			}
+		  ]
+		}
+	}`
+
+	tests := []struct {
+		name, depth, output string
+	}{
+		// {
+		// 	"depth 0",
+		// 	"0",
+		// 	`{"data": {}}`,
+		// },
+		{
+			"depth 1",
+			"1",
+			directPath,
+		},
+		{
+			"depth 2",
+			"2",
+			directPath,
+		},
+		{
+			"depth 3",
+			"3",
+			shortestPath,
+		},
+		{
+			"depth 10",
+			"10",
+			shortestPath,
+		},
+	}
+
+	// t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
+			require.NoError(t, err)
+			fmt.Println(string(js))
+			require.JSONEq(t, tc.output, js)
+		})
+	}
+
+}
+
 func TestFacetVarRetrieval(t *testing.T) {
 
 	query := `
