@@ -1,7 +1,7 @@
 package crypto
 
 type Keypair interface {
-	Sign(msg []byte) []byte
+	Sign(msg []byte) ([]byte, error)
 	Public() PublicKey
 	Private() PrivateKey
 }
@@ -13,8 +13,8 @@ type PublicKey interface {
 }
 
 type PrivateKey interface {
-	Sign(msg []byte) []byte
-	Public() PublicKey
+	Sign(msg []byte) ([]byte, error)
+	Public() (PublicKey, error)
 	Encode() []byte
 	Decode([]byte) error
 }

@@ -512,7 +512,7 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 		return 1
 	}
 
-	if crypto.Verify(pubkey, msg, sig) {
+	if crypto.Ed25519Verify(pubkey, msg, sig) {
 		return 0
 	}
 

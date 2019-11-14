@@ -62,13 +62,13 @@ func NewEd25519PrivateKey(in []byte) (*Ed25519PrivateKey, error) {
 }
 
 // Verify returns true if the signature is valid for the given message and public key, false otherwise
-func Verify(pub *Ed25519PublicKey, msg, sig []byte) bool {
+func Ed25519Verify(pub *Ed25519PublicKey, msg, sig []byte) bool {
 	return ed25519.Verify(ed25519.PublicKey(*pub), msg, sig)
 }
 
 // Sign uses the keypair to sign the message using the ed25519 signature algorithm
-func (kp *Ed25519Keypair) Sign(msg []byte) []byte {
-	return ed25519.Sign(ed25519.PrivateKey(*kp.private), msg)
+func (kp *Ed25519Keypair) Sign(msg []byte) ([]byte, error) {
+	return ed25519.Sign(ed25519.PrivateKey(*kp.private), msg), nil
 }
 
 // Public returns the keypair's public key
@@ -82,14 +82,14 @@ func (kp *Ed25519Keypair) Private() PrivateKey {
 }
 
 // Sign uses the ed25519 signature algorithm to sign the message
-func (k *Ed25519PrivateKey) Sign(msg []byte) []byte {
-	return ed25519.Sign(ed25519.PrivateKey(*k), msg)
+func (k *Ed25519PrivateKey) Sign(msg []byte) ([]byte, error) {
+	return ed25519.Sign(ed25519.PrivateKey(*k), msg), nil
 }
 
 // Public returns the public key corresponding to the ed25519 private key
-func (k *Ed25519PrivateKey) Public() PublicKey {
+func (k *Ed25519PrivateKey) Public() (PublicKey, error) {
 	kp := NewEd25519Keypair(ed25519.PrivateKey(*k))
-	return kp.Public()
+	return kp.Public(), nil
 }
 
 // Encode returns the bytes underlying the Ed25519PrivateKey

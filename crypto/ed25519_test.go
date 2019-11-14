@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	ed25519 "golang.org/x/crypto/ed25519"
+	ed25519 "crypto/ed25519"
 )
 
 func TestEd25519SignAndVerify(t *testing.T) {
@@ -14,9 +14,9 @@ func TestEd25519SignAndVerify(t *testing.T) {
 	}
 
 	msg := []byte("helloworld")
-	sig := kp.Sign(msg)
+	sig, _ := kp.Sign(msg)
 
-	ok := Verify(kp.Public().(*Ed25519PublicKey), msg, sig)
+	ok := Ed25519Verify(kp.Public().(*Ed25519PublicKey), msg, sig)
 	if !ok {
 		t.Fatal("Fail: did not verify ed25519 sig")
 	}
