@@ -1,15 +1,3 @@
-package posting
-
-import (
-	"testing"
-
-	_ "net/http/pprof"
-
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/stretchr/testify/require"
-)
-
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
@@ -26,17 +14,31 @@ import (
  * limitations under the License.
  */
 
-var list *List
+package posting
 
-var plist *pb.PostingList
+import (
+	"testing"
 
-var pack *pb.UidPack
+	_ "net/http/pprof"
 
-var block *pb.UidBlock
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/stretchr/testify/require"
+)
 
-var posting *pb.Posting
+var (
+	list *List
 
-var facet *api.Facet
+	plist *pb.PostingList
+
+	pack *pb.UidPack
+
+	block *pb.UidBlock
+
+	posting *pb.Posting
+
+	facet *api.Facet
+)
 
 func BenchmarkPostingList(b *testing.B) {
 	for i := 0; i < b.N; i++ {

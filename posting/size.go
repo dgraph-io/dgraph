@@ -33,46 +33,47 @@ func (l *List) DeepSize() int {
 	if l == nil {
 		return size
 	}
-	// safe mutex is of 4 words.
+	// safe mutex consist of 4 words.
 	size = 4 * 8
-	// plist pointer is of 1 word.
+	// plist pointer consist of 1 word.
 	size += 1 * 8
-	// mutation map pointer is of 1 word.
+	// mutation map pointer  consist of 1 word.
 	size += 1 * 8
-	// minTs and maxTs takes 1 word each
+	// minTs and maxTs take 1 word each.
 	size += 2 * 8
-	// key array
+	// array take 3 words. so key array is 3 words.
 	size += 3 * 8
 	// So far 11 words, in order to round the slab we're adding one
-	// more word
+	// more word.
 	size += 1 * 8
 	// so far basic struct layout has been calculated.
-	// List.key
+
+	// Add each entry size of key array.
 	size += int(cap(l.key))
 
-	// List.PostingList
+	// add the posting list size.
 	size += calculatePostingListSize(l.plist)
 	if l.mutationMap != nil {
-		// List.mutationMap
+		// add the List.mutationMap size.
 		// map has maptype and hmap
 		// maptype is defined at compile time and is hardcoded in the compiled code.
 		// Hence, it doesn't consume any extra memory.
-		// Ref: https://dave.cheney.net/2018/05/29/how-the-go-runtime-implements-maps-efficiently-without-generics
-		// Now, let's look at hmap strcut.
+		// Ref: https://bit.ly/2NQU8Jq
+		// Now, let's look at hmap struct.
 		// size of hmap struct
 		// Ref: https://golang.org/src/runtime/map.go?#L114
 		size += 6 * 8
-		// we'll calculate number of buckets based on pointer arithmetic in hmap struct.
+		// we'll calculate the number of buckets based on pointer arithmetic in hmap struct.
 		// reflect value give us access to the hmap struct.
 		hmap := reflect.ValueOf(l.mutationMap)
-		nb := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		nob := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += int(nob * sizeOfBucket)
-		if len(l.mutationMap) > 0 || nb > 1 {
-			size += int(nb * sizeOfBucket)
+		nOfbucket := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		noOfOldbucket := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += int(noOfOldbucket * sizeOfBucket)
+		if len(l.mutationMap) > 0 || nOfbucket > 1 {
+			size += int(nOfbucket * sizeOfBucket)
 		}
 	}
-	// memory taken in PostingList in Map
+	// adding the size of all the entries in the map.
 	for _, v := range l.mutationMap {
 		size += calculatePostingListSize(v)
 	}
@@ -87,23 +88,39 @@ func calculatePostingListSize(list *pb.PostingList) int {
 	if list == nil {
 		return size
 	}
+	// Pack consist of 1 word.
+	size += 1 * 8
+	// Postings array consist of 3 words.
+	size += 3 * 8
+	// CommitTs consist of 1 word.
+	size += 1 * 8
+	// Splits array consist of 3 words.
+	size += 3 * 8
+	// XXX_NoUnkeyedLiteral consist of 0 words. because it is empty
+	// struct.
+	size += 0 * 8
+	// XXX_unrecognized array consist of 3 words.
+	size += 3 * 8
+	// XXX_sizecache consist of 1 word.
+	size += 1 * 8
 
-	// 1+3+1+3+0+3+1
-	size += 12 * 8
-
-	// PostingList.Pack
+	// add pack size.
 	size += calculatePackSize(list.Pack)
 
-	// PostingList.Postings
+	// Each entry take one word.
+	// Adding each entry reference allocation.
 	size += int(cap(list.Postings)) * 8
 	for _, p := range list.Postings {
+		// add the size of each posting.
 		size += calculatePostingSize(p)
 	}
 
-	// PostingList.Splits
+	// Each entry take one word.
+	// Adding each entry size.
 	size += int(cap(list.Splits)) * 8
 
-	// PostingList.XXX_unrecognized
+	// XXX_unrecognized take one byte.
+	// Adding size of each entry.
 	size += int(cap(list.XXX_unrecognized))
 
 	return size
@@ -117,23 +134,38 @@ func calculatePostingSize(posting *pb.Posting) int {
 		return size
 	}
 
+	// Uid consist of 1 word.
+	// Value byte array take 3 words.
+	// ValType consist 1 word.
+	// PostingType consist of 1 word.
+	// LangTag array consist of 3 words.
+	// Label consist of 1 word.
+	// Facets array consist of 3 word.
+	// Op consist of 1 word.
+	// StartTs consist of 1 word.
+	// CommitTs consist of 1 word.
+	// XXX_NoUnkeyedLiteral consist of 0 word. Because, it is
+	// empty struct.
+	// XXX_unrecognized array consist of 3 words.
+	// XXX_sizecache consist of 1 word.
 	// 1 + 3 + 1 + 1 + 3 + 1 + 3 + 1 + 1 + 1 + 0 + 3 + 1
 	size += 20 * 8
 
-	// Posting.Value
+	// Adding the size of each entry in Value array.
 	size += int(cap(posting.Value))
 
-	// Posting.LangTag
+	// Adding the size of each entry in LangTag array.
 	size += int(cap(posting.LangTag))
 
-	// Posting.Label, strings are immutable, hence cap = len
+	// Adding the size of each entry in Lables array.
 	size += int(len(posting.Label))
 
 	for _, f := range posting.Facets {
+		// Add the size of each facet.
 		size += calcuateFacet(f)
 	}
 
-	// Posting.XXX_unrecognized
+	// Add the size of each entry in XXX_unrecognized array.
 	size += int(cap(posting.XXX_unrecognized))
 
 	return size
@@ -147,16 +179,24 @@ func calculatePackSize(pack *pb.UidPack) int {
 		return size
 	}
 
-	// size of struct UidPack (1 + 3 + 0 + 3 + 1)
-	// UidPack.BlockSize consumes a full word
+	// BlockSize consist of 1 word.
+	// Blocks array consist of 3 words.
+	// XXX_NoUnkeyedLiteral consist of 0 word. Because, it
+	// is empty struct.
+	// XXX_unrecognized array consist of 3 words.
+	// XXX_sizecache consist of 1 word.
+	// (1 + 3 + 0 + 3 + 1)
 	size += 8 * 8
 
-	// UidPack.Blocks, each pointer takes 1 word
+	// Adding size of each entry in Blocks array.
+	// Each entry consumes 1 word.
 	size += int(cap(pack.Blocks)) * 8
 	for _, block := range pack.Blocks {
+		// Adding the size of UIDBlock.
 		size += calculateUIDBlock(block)
 	}
-	// UidPack.XXX_unrecognized
+	// Adding the size each entry in XXX_unrecognized array.
+	// Each entry consumes 1 word.
 	size += int(cap(pack.XXX_unrecognized))
 
 	return size
@@ -170,40 +210,56 @@ func calculateUIDBlock(block *pb.UidBlock) int {
 		return size
 	}
 
-	// size of struct UidBlock (1 + 3 + 1 + 0 + 3 + 1)
-	// Due to alignment, both NumUids and XXX_sizecache consume 8 bytes instead of 4 bytes
-	// to round the word making it 10
+	// Base consist of 1 word.
+	// Delta array consist of 3 words.
+	// NumUids consist of 1 word.
+	// XXX_NoUnkeyedLiteral consist of 0 word. Because, It is
+	// empty struct.
+	// XXX_unrecognized array consist of 3 words.
+	// XXX_sizecache consist of 1 word.
+	// So, size of struct UidBlock (1 + 3 + 1 + 0 + 3 + 1)
+	// Rounding it to 10 words.
 	size += 10 * 8
 
-	// UidBlock.Deltas
+	// Adding the size of each entry in Deltas array.
 	size += int(cap(block.Deltas))
 
-	// UidBlock.XXX_unrecognized
+	// Adding the size of each entry in XXX_unrecognized array.
 	size += int(cap(block.XXX_unrecognized))
 
 	return size
 }
 
-// calcuateFacet is used to calculate size of facet.
+// calcuateFacet is used to calculate size of a facet.
 func calcuateFacet(facet *api.Facet) int {
 	var size int
 	if facet == nil {
 		return size
 	}
-	// size of struct 1 + 3 + 1 + 3 + 1 + 0 + 3 + 1
+	// Key consist of 1 word.
+	// Value array consist of 3 words.
+	// ValType consist of 1 word.
+	// Tokens array consist of 3 words.
+	// Alias consist of 1 word.
+	// XXX_NoUnkeyedLiteral consist of 0 word. Because it is empty
+	// struct.
+	// XXX_unrecognized array consist of 3 word.
+	// XXX_sizecache consist of 1 word.
+	// size of struct 1 + 3 + 1 + 3 + 1 + 0 + 3 + 1 = 13
 	// rounding to 16
 	size += 16 * 8
-	// Facet.Key
+	// Adding size of each entry in Key array.
 	size += int(len(facet.Key))
-	// Facet.Value
+	// Adding size of each entry in Value array.
 	size += int(cap(facet.Value))
-	// Facet.Tokens
+
 	for _, token := range facet.Tokens {
+		// Adding size of each token.
 		size += int(len(token))
 	}
-	// Facet.Alias
+	// Adding size of each entry in Alias Array.
 	size += int(len(facet.Alias))
-	// Facet.XXX_unrecognized
+	// Adding size of each entry in XXX_unrecognized array.
 	size += int(len(facet.XXX_unrecognized))
 	return size
 }
