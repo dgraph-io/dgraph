@@ -35,7 +35,6 @@ Enterprise features:
 - Support `@cascade` directive at subqueries. ([#4006][])
 - Support `@normalize` directive for subqueries. ([#4042][])
 - Support `val()` function inside upsert mutations (both RDF and JSON). ([#3877][], [#3947][])
-- Return mutated UIDs which are part of an upsert operation in the mutation response. ([#4145][])
 - Support GraphQL Variables for facet values in `@facets` filters. ([#4061][])
 - Support filtering by facets on values. ([#4217][])
 - Add ability to query `expand(TypeName)` only on certain types. ([#3920][])
@@ -100,7 +99,6 @@ Enterprise features:
 [#4042]: https://github.com/dgraph-io/dgraph/issues/4042
 [#3877]: https://github.com/dgraph-io/dgraph/issues/3877
 [#3947]: https://github.com/dgraph-io/dgraph/issues/3947
-[#4145]: https://github.com/dgraph-io/dgraph/issues/4145
 [#4061]: https://github.com/dgraph-io/dgraph/issues/4061
 [#4217]: https://github.com/dgraph-io/dgraph/issues/4217
 [#3920]: https://github.com/dgraph-io/dgraph/issues/3920
