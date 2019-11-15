@@ -26,7 +26,7 @@ PATH="$GOPATH/bin:$PATH"
 GOVERSION="1.12.7"
 
 # Turn off go modules by default. Only enable go modules when needed.
-GO111MODULE=off
+export GO111MODULE=off
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
