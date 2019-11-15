@@ -126,7 +126,7 @@ func calculatePostingListSize(list *pb.PostingList) int {
 	return size
 }
 
-// calculatePostingSize is used to calculate the size of posting
+// calculatePostingSize is used to calculate the size of a posting
 func calculatePostingSize(posting *pb.Posting) int {
 	var size int
 
@@ -171,7 +171,7 @@ func calculatePostingSize(posting *pb.Posting) int {
 	return size
 }
 
-// calculatePackSize is used to calculate the size of uidpack
+// calculatePackSize is used to calculate the size of a uidpack
 func calculatePackSize(pack *pb.UidPack) int {
 	var size int
 
