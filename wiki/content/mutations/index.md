@@ -764,7 +764,7 @@ json.tool` to do JSON formatting.
 {{% /notice %}}
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
     {
       "set": [
         {
@@ -781,7 +781,7 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 To delete:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
     {
       "delete": [
         {
@@ -896,7 +896,7 @@ a new user and update the `email` and `name` information.
 We can do this using the upsert block as follows:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
     v as var(func: eq(email, "user@company1.io"))
@@ -950,11 +950,11 @@ created. Note that the `uids` map is empty in the response when the mutation is 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "query": "{ v as var(func: eq(email, \\"user@company1.io\\")) }",
   "set": {
-    "uid": uid(v),
+    "uid": "uid(v)",
     "name": "first last",
     "email": "user@company1.io"
   }
@@ -966,7 +966,7 @@ Now, we want to add the `age` information for the same user having the same emai
 `user@company1.io`. We can use the upsert block to do the same as follows:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
     v as var(func: eq(email, "user@company1.io"))
@@ -1005,9 +1005,9 @@ of `vars` which has a list of uids that were used in the set mutation.
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
-  "query": "{ v as var(func: eq(email, "user@company1.io")) }",
+  "query": "{ v as var(func: eq(email, \\"user@company1.io\\")) }",
   "set":{
     "uid": "uid(v)",
     "age": "28"
@@ -1025,7 +1025,7 @@ Let's say we want to delete all the users of `company1` from the database. This 
 achieved in just one query using the upsert block:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
     v as var(func: regexp(email, /.*@company1.io$/))
@@ -1061,7 +1061,7 @@ Result:
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'{
   "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
   "delete": {
     "uid": "uid(v)",
@@ -1098,7 +1098,7 @@ For safety, we want the mutation to execute only when the variable `v` stores le
 100 but greater than 50 UIDs in it. This can be achieved as follows:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
     v as var(func: regexp(email, /.*@company1.io$/))
