@@ -1015,7 +1015,6 @@ func TestShortestPath2(t *testing.T) {
 }
 
 func TestShortestPath4(t *testing.T) {
-	// TODO - Result for this seems wrong because 1 connects to 31 through path with a weight of 0.1
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
