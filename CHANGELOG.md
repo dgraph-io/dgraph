@@ -26,7 +26,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Do not store non-pointer values in sync.Pool. ([#4089][])
 - Verify that all the fields in a type exist in the schema. ([#4114][])
 
-Enterprise features
+Enterprise features:
 
 - ACL: Disallow schema queries when an user has not logged in. ([#4107][])
 
