@@ -354,6 +354,12 @@ func populateCluster() {
 		<11003> <name> "No. 5 the film"@en .
 		<11100> <name> "expand" .
 
+		<51> <name> "A" .
+		<52> <name> "B" .
+		<53> <name> "C" .
+		<54> <name> "D" .
+		<55> <name> "E" .
+
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
@@ -610,12 +616,6 @@ func populateCluster() {
 		<502> <boss> <510> .
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
-
-		<51> <name> "A" .
-		<52> <name> "B" .
-		<53> <name> "C" .
-		<54> <name> "D" .
-		<55> <name> "E" .
 
 		<51> <connects> <52>  (weight=10) .
 		<51> <connects> <53>  (weight=1) .

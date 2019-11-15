@@ -414,10 +414,10 @@ func TestHasOrderAsc(t *testing.T) {
 				"name": ""
 			  },
 			  {
-				"name": "Alex"
+				"name": "A"
 			  },
 			  {
-				"name": "Alice"
+				"name": "Alex"
 			  },
 			  {
 				"name": "Alice"
@@ -447,10 +447,10 @@ func TestHasOrderAscOffset(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"name": "Alice\""
+				"name": "Alice"
 			  },
 			  {
-				"name": "Andre"
+				"name": "Alice\""
 			  }
 			]
 		  }
