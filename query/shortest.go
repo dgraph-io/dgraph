@@ -19,7 +19,6 @@ package query
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"math"
 	"sync"
 
@@ -204,7 +203,8 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							return
 						}
 
-						fmt.Println("from: ", fromUID, "to: ", toUID, "cost: ", cost)
+						// TODO - This simplify overrides the adjacency matrix. What happens if the
+						// cost along the second attribute is more than that along the first.
 						adjacencyMap[fromUID][toUID] = mapItem{
 							cost:  cost,
 							facet: facet,
