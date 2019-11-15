@@ -950,9 +950,9 @@ created. Note that the `uids` map is empty in the response when the mutation is 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ v as var(func: eq(email, \\"user@company1.io\\")) }",
+  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
   "set": {
     "uid": "uid(v)",
     "name": "first last",
@@ -1005,9 +1005,9 @@ of `vars` which has a list of uids that were used in the set mutation.
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ v as var(func: eq(email, \\"user@company1.io\\")) }",
+  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
   "set":{
     "uid": "uid(v)",
     "age": "28"
