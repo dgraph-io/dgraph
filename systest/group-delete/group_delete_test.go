@@ -156,8 +156,13 @@ func TestNodes(t *testing.T) {
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
-	if _, ok := state2.Groups["3"]; ok {
-		t.Errorf("node removal failed")
+	group, ok := state2.Groups["3"]
+	if !ok {
+		t.Errorf("group is removed")
+	}
+
+	if len(group.Members) != 0 {
+		t.Errorf("Expected 0 members but got %d", len(group.Members))
 	}
 
 	doTestQuery(t, dg)
