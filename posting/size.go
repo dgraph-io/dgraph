@@ -193,12 +193,17 @@ func calcuateFacet(facet *api.Facet) int {
 	// size of struct 1 + 3 + 1 + 3 + 1 + 0 + 3 + 1
 	// rounding to 16
 	size += 16 * 8
+	// Facet.Key
 	size += int(len(facet.Key))
+	// Facet.Value
 	size += int(cap(facet.Value))
+	// Facet.Tokens
 	for _, token := range facet.Tokens {
 		size += int(len(token))
 	}
+	// Facet.Alias
 	size += int(len(facet.Alias))
+	// Facet.XXX_unrecognized
 	size += int(len(facet.XXX_unrecognized))
 	return size
 }
