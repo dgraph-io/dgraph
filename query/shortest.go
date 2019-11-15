@@ -500,77 +500,69 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		if numHops >= maxHops {
 			break
 		}
-		if numHops < maxHops {
-			// Explore the next level by calling processGraph and add them
-			// to the queue.
-			if !stopExpansion {
-				next <- true
-				select {
-				case err = <-expandErr:
-					if err != nil {
-						// errStop is returned when ProcessGraph doesn't return any more results
-						// and we can't expand anymore.
-						if err == errStop {
-							stopExpansion = true
-						} else {
-							return nil, err
-						}
+		// Explore the next level by calling processGraph and add them
+		// to the queue.
+		if !stopExpansion {
+			next <- true
+			select {
+			case err = <-expandErr:
+				if err != nil {
+					// errStop is returned when ProcessGraph doesn't return any more results
+					// and we can't expand anymore.
+					if err == errStop {
+						stopExpansion = true
+					} else {
+						return nil, err
 					}
-				case <-ctx.Done():
-					return nil, ctx.Err()
 				}
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
-
-			numHops++
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			neighbours := adjacencyMap[item.uid]
-			for toUID, neighbour := range neighbours {
-				d, ok := dist[toUID]
-				// Cost of reaching this neighbour node from srcNode is item.cost + neighbour.cost
-				nodeCost := item.cost + neighbour.cost
-				if ok && d.cost <= nodeCost {
-					continue
+
+		numHops++
+		neighbours := adjacencyMap[item.uid]
+		for toUID, neighbour := range neighbours {
+			d, ok := dist[toUID]
+			// Cost of reaching this neighbour node from srcNode is item.cost + neighbour.cost
+			nodeCost := item.cost + neighbour.cost
+			if ok && d.cost <= nodeCost {
+				continue
+			}
+			if !ok {
+				// This is the first time we're seeing this node. So
+				// create a new node and add it to the heap and map.
+				node := &queueItem{
+					uid:  toUID,
+					cost: nodeCost,
 				}
-				if !ok {
-					// This is the first time we're seeing this node. So
-					// create a new node and add it to the heap and map.
-					node := &queueItem{
-						uid:  toUID,
-						cost: nodeCost,
-					}
-					heap.Push(&pq, node)
-					dist[toUID] = nodeInfo{
-						parent: item.uid,
-						node:   node,
-						mapItem: mapItem{
-							cost:  nodeCost,
-							attr:  neighbour.attr,
-							facet: neighbour.facet,
-						},
-					}
-				} else {
-					// We've already seen this node. So, just update the cost
-					// and fix the priority in the heap and map.
-					node := dist[toUID].node
-					node.cost = nodeCost
-					heap.Fix(&pq, node.index)
-					// Update the map with new values.
-					dist[toUID] = nodeInfo{
-						parent: item.uid,
-						node:   node,
-						mapItem: mapItem{
-							cost:  nodeCost,
-							attr:  neighbour.attr,
-							facet: neighbour.facet,
-						},
-					}
+				heap.Push(&pq, node)
+				dist[toUID] = nodeInfo{
+					parent: item.uid,
+					node:   node,
+					mapItem: mapItem{
+						cost:  nodeCost,
+						attr:  neighbour.attr,
+						facet: neighbour.facet,
+					},
+				}
+			} else {
+				// We've already seen this node. So, just update the cost
+				// and fix the priority in the heap and map.
+				node := dist[toUID].node
+				node.cost = nodeCost
+				heap.Fix(&pq, node.index)
+				// Update the map with new values.
+				dist[toUID] = nodeInfo{
+					parent: item.uid,
+					node:   node,
+					mapItem: mapItem{
+						cost:  nodeCost,
+						attr:  neighbour.attr,
+						facet: neighbour.facet,
+					},
 				}
 			}
-
 		}
 	}
 
