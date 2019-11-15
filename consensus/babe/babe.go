@@ -26,8 +26,9 @@ import (
 	"time"
 
 	tx "github.com/ChainSafe/gossamer/common/transaction"
+	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
-	log "github.com/ChainSafe/log15"
 )
 
 // Session contains the VRF keys for the validator
@@ -46,17 +47,27 @@ type Session struct {
 	epochThreshold *big.Int // validator threshold for this epoch
 	txQueue        *tx.PriorityQueue
 	isProducer     map[uint64]bool // whether we are a block producer at a slot
+
+	// Block announce channel used every time a block is created
+	blockAnnounce chan<- p2p.BlockAnnounceMessage
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
-func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime) *Session {
-	return &Session{
+func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime, blockAnnounceChannel chan<- p2p.BlockAnnounceMessage) (*Session, error) {
+	babeSession := &Session{
 		vrfPublicKey:  pubkey,
 		vrfPrivateKey: privkey,
 		rt:            rt,
 		txQueue:       new(tx.PriorityQueue),
 		isProducer:    make(map[uint64]bool),
+		blockAnnounce: blockAnnounceChannel,
 	}
+	err := babeSession.configurationFromRuntime()
+	if err != nil {
+		return nil, err
+	}
+
+	return babeSession, nil
 }
 
 func (b *Session) Start() error {
@@ -69,19 +80,7 @@ func (b *Session) Start() error {
 		}
 	}
 
-	go func() {
-		// TODO: we might not actually be starting at slot 0, need to run median algorithm here
-		var currentSlot uint64 = 0
-
-		for ; currentSlot < b.config.EpochLength; currentSlot++ {
-			if b.isProducer[currentSlot] {
-				// TODO: build block
-				log.Info("BABE: building block", "slot", currentSlot)
-			}
-
-			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
-		}
-	}()
+	go b.invokeBlockAuthoring()
 
 	return nil
 }
@@ -95,19 +94,27 @@ func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
 	return b.txQueue.Peek()
 }
 
-// sets the slot lottery threshold for the current epoch
-func (b *Session) setEpochThreshold() error {
-	var err error
-	if b.config == nil {
-		return errors.New("cannot set threshold: no babe config")
-	}
+func (b *Session) invokeBlockAuthoring() {
+	// TODO: we might not actually be starting at slot 0, need to run median algorithm here
+	var currentSlot uint64 = 0
 
-	b.epochThreshold, err = calculateThreshold(b.config.C1, b.config.C2, b.authorityIndex, b.authorityWeights)
-	if err != nil {
-		return err
-	}
+	for ; currentSlot < b.config.EpochLength; currentSlot++ {
+		if b.isProducer[currentSlot] {
+			// TODO: implement build block
+			block, err := b.buildBlock(big.NewInt(int64(currentSlot)))
+			if err != nil {
+				return
+			}
 
-	return nil
+			// Broadcast the block
+			blockAnnounceMsg := p2p.BlockAnnounceMessage{
+				Number: block.Header.Number,
+			}
+			b.blockAnnounce <- blockAnnounceMsg
+		}
+
+		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
+	}
 }
 
 // runs the slot lottery for a specific slot
@@ -132,11 +139,19 @@ func (b *Session) runLottery(slot uint64) (bool, error) {
 	return output_int.Cmp(b.epochThreshold) > 0, nil
 }
 
-func (b *Session) vrfSign(input []byte) ([]byte, error) {
-	// TOOD: return VRF output and proof
-	out := make([]byte, 32)
-	_, err := rand.Read(out)
-	return out, err
+// sets the slot lottery threshold for the current epoch
+func (b *Session) setEpochThreshold() error {
+	var err error
+	if b.config == nil {
+		return errors.New("cannot set threshold: no babe config")
+	}
+
+	b.epochThreshold, err = calculateThreshold(b.config.C1, b.config.C2, b.authorityIndex, b.authorityWeights)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // calculates the slot lottery threshold for the authority at authorityIndex.
@@ -176,4 +191,20 @@ func calculateThreshold(C1, C2, authorityIndex uint64, authorityWeights []uint64
 
 	// (1 << 128) * (1 - (1-c)^(w_k/sum(w_i)))
 	return q.Mul(q, p_rat.Num()).Div(q, p_rat.Denom()), nil
+}
+
+func (b *Session) vrfSign(input []byte) ([]byte, error) {
+	// TOOD: return VRF output and proof
+	out := make([]byte, 32)
+	_, err := rand.Read(out)
+	return out, err
+}
+
+// BuildBlock Builds the block
+func (s *Session) buildBlock(number *big.Int) (*types.Block, error) {
+	block := types.Block{
+		Header: types.BlockHeader{Number: number},
+		Body:   []byte{1, 2, 3, 4, 5},
+	}
+	return &block, nil
 }

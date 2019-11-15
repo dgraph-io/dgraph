@@ -38,7 +38,7 @@ func createTestDot(t *testing.T) *Dot {
 		NoMdns:         false,
 		DataDir:        "",
 	}
-	p2pSrvc, err := p2p.NewService(p2pCfg, nil)
+	p2pSrvc, err := p2p.NewService(p2pCfg, nil, nil)
 	services = append(services, p2pSrvc)
 	if err != nil {
 		t.Fatal(err)

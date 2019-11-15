@@ -19,6 +19,7 @@ package p2p
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path"
 	"reflect"
@@ -27,13 +28,14 @@ import (
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/common/optional"
+	net "github.com/libp2p/go-libp2p-core/network"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	ps "github.com/libp2p/go-libp2p-core/peerstore"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func startNewService(t *testing.T, cfg *Config, msgChan chan []byte) *Service {
-	node, err := NewService(cfg, msgChan)
+func startNewService(t *testing.T, cfg *Config, msgSendChan chan []byte, msgRecChan chan BlockAnnounceMessage) *Service {
+	node, err := NewService(cfg, msgSendChan, msgRecChan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +100,7 @@ func TestBootstrapConnect(t *testing.T) {
 		NoMdns:         true,
 	}
 
-	bootnode := startNewService(t, bootnodeCfg, nil)
+	bootnode := startNewService(t, bootnodeCfg, nil, nil)
 	defer bootnode.Stop()
 	bootnodeAddr := bootnode.host.fullAddrs()[0]
 
@@ -110,7 +112,7 @@ func TestBootstrapConnect(t *testing.T) {
 		NoMdns:         true,
 	}
 
-	node := startNewService(t, nodeCfg, nil)
+	node := startNewService(t, nodeCfg, nil, nil)
 	defer node.Stop()
 	// Allow everything to finish connecting
 	time.Sleep(1 * time.Second)
@@ -127,7 +129,7 @@ func TestNoBootstrap(t *testing.T) {
 		RandSeed:    1,
 	}
 
-	sa := startNewService(t, testServiceConfigA, nil)
+	sa := startNewService(t, testServiceConfigA, nil, nil)
 	sa.Stop()
 }
 
@@ -138,7 +140,7 @@ func TestService_PeerCount(t *testing.T) {
 		RandSeed:    1,
 	}
 
-	sa := startNewService(t, testServiceConfigA, nil)
+	sa := startNewService(t, testServiceConfigA, nil, nil)
 	defer sa.Stop()
 
 	testServiceConfigB := &Config{
@@ -147,7 +149,7 @@ func TestService_PeerCount(t *testing.T) {
 		RandSeed:    2,
 	}
 
-	sb := startNewService(t, testServiceConfigB, nil)
+	sb := startNewService(t, testServiceConfigB, nil, nil)
 	defer sb.Stop()
 
 	sb.host.h.Peerstore().AddAddrs(sa.host.h.ID(), sa.host.h.Addrs(), ps.PermanentAddrTTL)
@@ -180,7 +182,7 @@ func TestPing(t *testing.T) {
 		DataDir:     path.Join(os.TempDir(), "gossamer"),
 	}
 
-	sa := startNewService(t, testServiceConfigA, nil)
+	sa := startNewService(t, testServiceConfigA, nil, nil)
 	defer sa.Stop()
 
 	testServiceConfigB := &Config{
@@ -191,7 +193,7 @@ func TestPing(t *testing.T) {
 	}
 
 	msgChan := make(chan []byte)
-	sb := startNewService(t, testServiceConfigB, msgChan)
+	sb := startNewService(t, testServiceConfigB, msgChan, nil)
 	defer sb.Stop()
 
 	sb.host.h.Peerstore().AddAddrs(sa.host.h.ID(), sa.host.h.Addrs(), ps.PermanentAddrTTL)
@@ -224,7 +226,7 @@ func TestSend(t *testing.T) {
 		DataDir:     path.Join(os.TempDir(), "gossamer"),
 	}
 
-	sa := startNewService(t, testServiceConfigA, nil)
+	sa := startNewService(t, testServiceConfigA, nil, nil)
 	defer sa.Stop()
 
 	testServiceConfigB := &Config{
@@ -235,7 +237,7 @@ func TestSend(t *testing.T) {
 	}
 
 	msgChan := make(chan []byte)
-	sb := startNewService(t, testServiceConfigB, msgChan)
+	sb := startNewService(t, testServiceConfigB, msgChan, nil)
 	defer sb.Stop()
 
 	sb.host.h.Peerstore().AddAddrs(sa.host.h.ID(), sa.host.h.Addrs(), ps.PermanentAddrTTL)
@@ -285,7 +287,7 @@ func TestSend(t *testing.T) {
 
 	select {
 	case <-msgChan:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("Did not receive message from %s", sa.host.hostAddr)
 	}
 }
@@ -300,7 +302,7 @@ func TestGossiping(t *testing.T) {
 		RandSeed:       1,
 	}
 
-	nodeA := startNewService(t, nodeConfigA, nil)
+	nodeA := startNewService(t, nodeConfigA, nil, nil)
 	defer nodeA.Stop()
 	nodeAAddr := nodeA.host.fullAddrs()[0]
 
@@ -315,7 +317,7 @@ func TestGossiping(t *testing.T) {
 	}
 
 	msgChanB := make(chan []byte)
-	nodeB := startNewService(t, nodeConfigB, msgChanB)
+	nodeB := startNewService(t, nodeConfigB, msgChanB, nil)
 	defer nodeB.Stop()
 	nodeBAddr := nodeB.host.fullAddrs()[0]
 
@@ -330,7 +332,7 @@ func TestGossiping(t *testing.T) {
 	}
 
 	msgChanC := make(chan []byte)
-	nodeC := startNewService(t, nodeConfigC, msgChanC)
+	nodeC := startNewService(t, nodeConfigC, msgChanC, nil)
 	defer nodeC.Stop()
 
 	// Meaningless hash
@@ -366,7 +368,7 @@ func TestGossiping(t *testing.T) {
 		if !reflect.DeepEqual(bmEnc, res) {
 			t.Fatalf("Didn't receive the correct message")
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("Did not receive message from %s", nodeA.host.hostAddr)
 	}
 	select {
@@ -380,8 +382,73 @@ func TestGossiping(t *testing.T) {
 		if !reflect.DeepEqual(bmEnc, res) {
 			t.Fatalf("Didn't receive the correct message")
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("Did not receive message from %s", nodeB.host.hostAddr)
 	}
 
+}
+
+func TestP2pReceiveChan(t *testing.T) {
+	//Create nodeA
+	testServiceConfigA := &Config{
+		BootstrapNodes: nil,
+		NoBootstrap:    true,
+		NoMdns:         true,
+		Port:           7000,
+		RandSeed:       1,
+	}
+
+	msgRecChan := make(chan BlockAnnounceMessage)
+
+	nodeA := startNewService(t, testServiceConfigA, nil, msgRecChan)
+	defer nodeA.Stop()
+
+	// Create nodeB
+	nodeAAddr := nodeA.host.fullAddrs()[0]
+	testServiceConfigB := &Config{
+		BootstrapNodes: []string{
+			nodeAAddr.String(),
+		},
+		Port:     7001,
+		NoMdns:   true,
+		RandSeed: 2,
+	}
+	msgSendChan := make(chan []byte)
+	nodeB := startNewService(t, testServiceConfigB, msgSendChan, nil)
+	defer nodeB.Stop()
+
+	// node B only handles the stream, and doesn't need to rebroadcast it
+	nodeB.host.registerStreamHandler(func(stream net.Stream) {
+
+		_, rawMsg, err := parseMessage(stream)
+
+		nodeB.msgSendChan <- rawMsg
+
+		if err != nil {
+			return
+		}
+	})
+
+	//Create a blockAnnounceMessage & send to node A for broadcasting
+	blockAnnounceMsg := BlockAnnounceMessage{
+		Number: big.NewInt(10),
+	}
+
+	encodedBlockAnnounceMsg, err := blockAnnounceMsg.Encode()
+	if err != nil {
+		t.Fatalf("Can't encode the block announce message")
+	}
+
+	// Send message down the nodeA receive channel
+	msgRecChan <- blockAnnounceMsg
+
+	// Check that we receive the same message in nodeB
+	select {
+	case receivedBlockAnnounceMsg := <-msgSendChan:
+		if !reflect.DeepEqual(receivedBlockAnnounceMsg, encodedBlockAnnounceMsg) {
+			t.Fatalf("Node B service didn't receive the correct block\ngot: %+v\nexpected: %+v", receivedBlockAnnounceMsg, encodedBlockAnnounceMsg)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatalf("Did not receive message %+v", encodedBlockAnnounceMsg)
+	}
 }

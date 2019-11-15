@@ -36,8 +36,8 @@ func (b *Session) slotTime(slot uint64, bt *blocktree.BlockTree, slotTail uint64
 		return 0, errors.New("Cannot calculate slot time, deepest leaf block number less than or equal to Slot Tail")
 	}
 	s := bt.GetBlockFromBlockNumber(nf)
-	conf, err := b.configurationFromRuntime()
-	sd := conf.SlotDuration
+	err := b.configurationFromRuntime()
+	sd := b.config.SlotDuration
 	if err != nil {
 		return 0, err
 	}

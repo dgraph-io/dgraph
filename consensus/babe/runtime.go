@@ -21,13 +21,22 @@ import (
 )
 
 // gets the configuration data for Babe from the runtime
-func (b *Session) configurationFromRuntime() (*BabeConfiguration, error) {
+func (b *Session) configurationFromRuntime() error {
 	ret, err := b.rt.Exec("BabeApi_configuration", 1, []byte{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	bc := new(BabeConfiguration)
+	bc.GenesisAuthorities = []AuthorityData{}
 	_, err = scale.Decode(ret, bc)
-	return bc, err
+
+	if err != nil {
+		return err
+	}
+
+	// Directly set the babe session's config
+	b.config = bc
+
+	return err
 }
