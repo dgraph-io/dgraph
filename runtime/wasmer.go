@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -93,11 +94,23 @@ func NewRuntime(code []byte, t *trie.Trie) (*Runtime, error) {
 	data := unsafe.Pointer(&index)
 	instance.SetContextData(data)
 
-	return &Runtime{
+	r := &Runtime{
 		vm:    instance,
 		trie:  t,
 		mutex: sync.Mutex{},
-	}, nil
+	}
+
+	// Clean up the registry if r is GC'd
+	runtime.SetFinalizer(r, func(_ *Runtime) {
+		// Launch a goroutine to avoid blocking the GC...
+		go func() {
+			mutex.Lock()
+			delete(registry, index)
+			mutex.Unlock()
+		}()
+	})
+
+	return r, nil
 }
 
 func (r *Runtime) Stop() {

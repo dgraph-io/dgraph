@@ -72,9 +72,12 @@ import (
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
+// registry stores the RuntimeCtx for Runtimes to work around the limitation of
+// CGo which prevents passing Go pointers that point to other Go pointers
+// across the FFI.
 var registry map[int]RuntimeCtx
 var handlers int
-var mutex = sync.Mutex{}
+var mutex = sync.RWMutex{}
 
 //export ext_print_num
 func ext_print_num(context unsafe.Pointer, data C.int64_t) {
@@ -86,9 +89,9 @@ func ext_print_num(context unsafe.Pointer, data C.int64_t) {
 func ext_malloc(context unsafe.Pointer, size int32) int32 {
 	log.Trace("[ext_malloc] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 
 	// Allocate memory
 	res, err := runtimeCtx.allocator.Allocate(uint32(size))
@@ -106,9 +109,9 @@ func ext_free(context unsafe.Pointer, addr int32) {
 	log.Trace("[ext_free]", "addr", addr)
 	instanceContext := wasm.IntoInstanceContext(context)
 
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 
 	// Deallocate memory
 	err := runtimeCtx.allocator.Deallocate(uint32(addr))
@@ -145,9 +148,9 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
@@ -180,9 +183,9 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	memory := instanceContext.Memory().Data()
 
 	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
@@ -215,9 +218,9 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	memory := instanceContext.Memory().Data()
 
 	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	root, err := t.Hash()
@@ -245,9 +248,9 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	memory := instanceContext.Memory().Data()
 
 	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
@@ -290,9 +293,9 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	memory := instanceContext.Memory().Data()
 
 	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	key := memory[keyData : keyData+keyLen]
@@ -310,9 +313,9 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	memory := instanceContext.Memory().Data()
 
 	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
+	mutex.RLock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
-	mutex.Unlock()
+	mutex.RUnlock()
 	t := runtimeCtx.trie
 
 	prefix := memory[prefixData : prefixData+prefixLen]
