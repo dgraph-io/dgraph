@@ -201,7 +201,7 @@ schemas:
       C.dob: dateTime .
 
   -
-    name: "Field with @id directive gets hash index."
+    name: "Field with @id directive but no search directive gets hash index."
     input: |
       interface A {
         id: String! @id
@@ -214,6 +214,46 @@ schemas:
         A.id: string
       }
       A.id: string @index(hash) .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id @search(by: [trigram])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(trigram, hash) .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive and a hash arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [hash, term])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash, term) .
       type B {
         A.id: string
         B.correct: bool

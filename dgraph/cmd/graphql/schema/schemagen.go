@@ -199,19 +199,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					)
 
 					indexStr := ""
-					id := f.Directives.ForName(idDirective)
-					if id != nil {
-						indexStr = " @index(hash)"
-					}
 					search := f.Directives.ForName(searchDirective)
+					id := f.Directives.ForName(idDirective)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
 							indexes := getAllSearchIndexes(arg.Value)
+							indexes = addHashIfRequired(f, indexes)
 							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 						} else {
 							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
 						}
+					} else if id != nil {
+						indexStr = fmt.Sprintf(" @index(hash)")
 					}
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)

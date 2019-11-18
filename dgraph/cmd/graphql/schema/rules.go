@@ -357,13 +357,6 @@ func idValidation(sch *ast.Schema,
 			"Type %s; Field %s: with @id directive must be of type String! Found %s",
 			typ.Name, field.Name, field.Type.String())
 	}
-	search := field.Directives.ForName(searchDirective)
-	if search != nil {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: has the @search directive but fields with @id directive can't have"+
-				" the @search directive.", typ.Name, field.Name)
-	}
 	return nil
 }
 

@@ -648,6 +648,24 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
+func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
+	id := fld.Directives.ForName(idDirective)
+	if id != nil {
+		// If @id directive is applied along with @search, we check if the search has hash as an
+		// arg. If it doesn't, then we add it.
+		containsHash := false
+		for _, index := range indexes {
+			if index == "hash" {
+				containsHash = true
+			}
+		}
+		if !containsHash {
+			indexes = append(indexes, "hash")
+		}
+	}
+	return indexes
+}
+
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
@@ -676,6 +694,7 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		res[i] = child.Value.Raw
 	}
 
+	res = addHashIfRequired(fld, res)
 	sort.Strings(res)
 	return res
 }
