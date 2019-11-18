@@ -114,7 +114,7 @@ type DeletePostPayload {
 }
 
 type UpdatePostPayload {
-	post: [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 #######################

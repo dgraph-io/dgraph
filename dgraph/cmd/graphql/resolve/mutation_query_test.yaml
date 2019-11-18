@@ -158,3 +158,41 @@
         title : Post.title
       }
     }
+
+-
+  name: "filter at single level"
+  gqlquery: |
+    mutation {
+      updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) {
+        post(filter: { title: { anyofterms: "GraphQL" } }) {
+          postID
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
+        postID : uid
+        title : Post.title
+      }
+    }
+
+-
+  name: "order and pagination at single level"
+  gqlquery: |
+    mutation {
+      updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) {
+        post(first: 0, offset: 10, order : {asc: title}) {
+          postID
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
+        postID : uid
+        title : Post.title
+      }
+    }

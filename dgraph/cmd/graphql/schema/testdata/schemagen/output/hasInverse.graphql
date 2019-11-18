@@ -108,11 +108,11 @@ type DeletePostPayload {
 }
 
 type UpdateAuthorPayload {
-	author: [Author]
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
 }
 
 type UpdatePostPayload {
-	post: [Post]
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
 }
 
 #######################
