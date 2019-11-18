@@ -733,7 +733,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	if !hasFilterable(defn) {
 		return
 	}
 
