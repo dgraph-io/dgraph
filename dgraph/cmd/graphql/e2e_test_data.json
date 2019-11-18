@@ -94,4 +94,10 @@
         "State.name": "NSW",
         "State.xid": "nsw"
     }
+    {
+        "uid": "_:nusa",
+        "dgraph.type": "State",
+        "State.name": "Nusa",
+        "State.xid": "nusa"
+    }
 ]

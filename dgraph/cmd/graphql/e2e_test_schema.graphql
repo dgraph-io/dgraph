@@ -5,7 +5,7 @@ type Country {
 
 type State {
         id: ID!
-        xid: String! @id
+        xid: String! @id (by: [trigram])
         name: String
 }
 

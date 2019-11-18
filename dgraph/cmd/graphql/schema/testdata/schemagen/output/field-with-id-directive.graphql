@@ -10,7 +10,7 @@ type Post {
 
 type Author {
 	id: ID
-	name: String! @id
+	name: String! @id @search(by: [regexp])
 	pen_name: String
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
@@ -150,7 +150,7 @@ enum PostOrderable {
 
 input AuthorFilter {
 	ids: [ID!]
-	name: StringHashFilter
+	name: StringHashFilter_StringRegExpFilter
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
@@ -205,6 +205,11 @@ input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input StringHashFilter_StringRegExpFilter {
+	eq: String
+	regexp: String
 }
 
 input UpdateAuthorInput {

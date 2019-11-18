@@ -6,7 +6,7 @@ type Post {
 
 type Author {
     id: ID
-    name: String! @id
+    name: String! @id @search(by: [regexp])
 	pen_name: String
     posts: [Post]
 }

@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -1007,4 +1008,19 @@ func TestQueryStateByXid(t *testing.T) {
 	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
+}
+
+func TestQueryStateByXidRegex(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			queryState(filter: { xid: { regexp: "/NSW|Nusa/"}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	spew.Dump(gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Errors)
+	require.Equal(t, `{"queryState":[{"name":"NSW"},{"name": "Nusa"}]}`, string(gqlResponse.Data))
 }
