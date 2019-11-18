@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 
+	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
 
 	"github.com/libp2p/go-libp2p-core/connmgr"
@@ -31,11 +32,12 @@ import (
 type ConnManager struct{}
 
 // Notifee is used to monitor changes to a connection
-// Currently, we only implemented notifications for OpenedStream and ClosedStream
 func (cm ConnManager) Notifee() net.Notifiee {
 	nb := new(net.NotifyBundle)
+	nb.ConnectedF = Connected
 	nb.OpenedStreamF = OpenedStream
 	nb.ClosedStreamF = ClosedStream
+	nb.DisconnectedF = Disconnected
 	return nb
 }
 
@@ -48,6 +50,20 @@ func (_ ConnManager) Protect(peer.ID, string)                  {}
 func (_ ConnManager) Unprotect(peer.ID, string) bool           { return false }
 func (_ ConnManager) Close() error                             { return nil }
 
+func Connected(n net.Network, c net.Conn) {
+	// TODO: replace dummy status message with current state
+	status := &StatusMessage{
+		ProtocolVersion:     0,
+		MinSupportedVersion: 0,
+		Roles:               0,
+		BestBlockNumber:     0,
+		BestBlockHash:       common.Hash{0x00},
+		GenesisHash:         common.Hash{0x00},
+		ChainStatus:         []byte{0},
+	}
+	log.Info("connected", "status", status)
+}
+
 func OpenedStream(n net.Network, s net.Stream) {
 	if s.Protocol() == DefaultProtocolId {
 		log.Info("opened stream", "peer", s.Conn().RemotePeer(), "protocol", s.Protocol())
@@ -58,4 +74,8 @@ func ClosedStream(n net.Network, s net.Stream) {
 	if s.Protocol() == DefaultProtocolId {
 		log.Info("closed stream", "peer", s.Conn().RemotePeer(), "protocol", s.Protocol())
 	}
+}
+
+func Disconnected(n net.Network, c net.Conn) {
+	log.Info("disconnected")
 }
