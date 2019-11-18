@@ -358,6 +358,110 @@ func TestManyQueries(t *testing.T) {
 	}
 }
 
+func TestQueryOrderAtRoot(t *testing.T) {
+	posts := allPosts(t)
+
+	answers := make([]*post, 2)
+	for _, p := range posts {
+		if p.NumLikes == 77 {
+			answers[0] = p
+		} else if p.NumLikes == 100 {
+			answers[1] = p
+		}
+	}
+
+	filter := map[string]interface{}{
+		"ids": []string{answers[0].PostID, answers[1].PostID},
+	}
+
+	orderLikesDesc := map[string]interface{}{
+		"desc": "numLikes",
+	}
+
+	orderLikesAsc := map[string]interface{}{
+		"asc": "numLikes",
+	}
+
+	var result, expected struct {
+		QueryPost []*post
+	}
+
+	cases := map[string]struct {
+		Order    map[string]interface{}
+		First    int
+		Offset   int
+		Expected []*post
+	}{
+		"orderAsc": {
+			Order:    orderLikesAsc,
+			First:    2,
+			Offset:   0,
+			Expected: []*post{answers[0], answers[1]},
+		},
+		"orderDesc": {
+			Order:    orderLikesDesc,
+			First:    2,
+			Offset:   0,
+			Expected: []*post{answers[1], answers[0]},
+		},
+		"first": {
+			Order:    orderLikesDesc,
+			First:    1,
+			Offset:   0,
+			Expected: []*post{answers[1]},
+		},
+		"offset": {
+			Order:    orderLikesDesc,
+			First:    2,
+			Offset:   1,
+			Expected: []*post{answers[0]},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			getParams := &GraphQLParams{
+				Query: `query queryPost($filter: PostFilter, $order: PostOrder,
+		$first: Int, $offset: Int) {
+			queryPost(
+			  filter: $filter,
+			  order: $order,
+			  first: $first,
+			  offset: $offset) {
+				postID
+				title
+				text
+				tags
+				isPublished
+				postType
+				numLikes
+			}
+		}
+		`,
+				Variables: map[string]interface{}{
+					"filter": filter,
+					"order":  test.Order,
+					"first":  test.First,
+					"offset": test.Offset,
+				},
+			}
+
+			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			expected.QueryPost = test.Expected
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			require.Equal(t, len(result.QueryPost), len(expected.QueryPost))
+			if diff := cmp.Diff(expected, result); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+}
+
 // TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
 // an error.  Internally, the GraphQL server should run those concurrently, and
 // an error in one query should not affect the results of any others.
