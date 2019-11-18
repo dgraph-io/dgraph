@@ -53,6 +53,11 @@ func langBase(lang string) string {
 	langBaseCache.Lock()
 	defer langBaseCache.Unlock()
 
+	// Recheck if the lang is added to the cache.
+	if s, found := langBaseCache.m[lang]; found {
+		return s
+	}
+
 	// Parse will return the best guess for a language tag.
 	// It will return undefined, or 'language.Und', if it gives up. That means the language
 	// tag is either new (to the standard) or simply invalid.
