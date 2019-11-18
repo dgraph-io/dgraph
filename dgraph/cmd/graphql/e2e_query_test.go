@@ -361,16 +361,25 @@ func TestManyQueries(t *testing.T) {
 func TestQueryOrderAtRoot(t *testing.T) {
 	posts := allPosts(t)
 
+	answers := make([]*post, 2)
+	for _, p := range posts {
+		if p.NumLikes == 77 {
+			answers[0] = p
+		} else if p.NumLikes == 100 {
+			answers[1] = p
+		}
+	}
+
 	filter := map[string]interface{}{
-		"ids": []string{posts[0].PostID, posts[1].PostID},
+		"ids": []string{answers[0].PostID, answers[1].PostID},
 	}
 
-	orderNameDesc := map[string]interface{}{
-		"desc": "text",
+	orderLikesDesc := map[string]interface{}{
+		"desc": "numLikes",
 	}
 
-	orderNameAsc := map[string]interface{}{
-		"asc": "text",
+	orderLikesAsc := map[string]interface{}{
+		"asc": "numLikes",
 	}
 
 	var result, expected struct {
@@ -383,29 +392,29 @@ func TestQueryOrderAtRoot(t *testing.T) {
 		Offset   int
 		Expected []*post
 	}{
-		"order": {
-			Order:    orderNameAsc,
-			First:    0,
+		"orderAsc": {
+			Order:    orderLikesAsc,
+			First:    2,
 			Offset:   0,
-			Expected: []*post{posts[0], posts[1]},
+			Expected: []*post{answers[0], answers[1]},
 		},
 		"orderDesc": {
-			Order:    orderNameDesc,
-			First:    0,
+			Order:    orderLikesDesc,
+			First:    2,
 			Offset:   0,
-			Expected: []*post{posts[1], posts[0]},
+			Expected: []*post{answers[1], answers[0]},
 		},
 		"first": {
-			Order:    orderNameDesc,
+			Order:    orderLikesDesc,
 			First:    1,
 			Offset:   0,
-			Expected: []*post{posts[1]},
+			Expected: []*post{answers[1]},
 		},
 		"offset": {
-			Order:    orderNameDesc,
-			First:    0,
+			Order:    orderLikesDesc,
+			First:    2,
 			Offset:   1,
-			Expected: []*post{posts[0]},
+			Expected: []*post{answers[0]},
 		},
 	}
 
