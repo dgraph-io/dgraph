@@ -222,7 +222,6 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
 	// them. We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
-		Description:  src.Description,
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
@@ -347,17 +346,15 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 func completeSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
-		Kind:        ast.Object,
-		Description: "Root Query type",
-		Name:        "Query",
-		Fields:      make([]*ast.FieldDefinition, 0),
+		Kind:   ast.Object,
+		Name:   "Query",
+		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
 	sch.Mutation = &ast.Definition{
-		Kind:        ast.Object,
-		Description: "Root Mutation type",
-		Name:        "Mutation",
-		Fields:      make([]*ast.FieldDefinition, 0),
+		Kind:   ast.Object,
+		Name:   "Mutation",
+		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
 	for _, key := range definitions {
@@ -778,8 +775,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Description: "Get " + defn.Name + " by ID",
-		Name:        "get" + defn.Name,
+		Name: "get" + defn.Name,
 		Type: &ast.Type{
 			NamedType: defn.Name,
 		},
@@ -798,8 +794,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Description: "Query " + defn.Name,
-		Name:        "query" + defn.Name,
+		Name: "query" + defn.Name,
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -820,8 +815,7 @@ func addQueries(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 	add := &ast.FieldDefinition{
-		Description: "Add a " + defn.Name,
-		Name:        "add" + defn.Name,
+		Name: "add" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Add" + defn.Name + "Payload",
 		},
@@ -844,8 +838,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	upd := &ast.FieldDefinition{
-		Description: "Update a " + defn.Name,
-		Name:        "update" + defn.Name,
+		Name: "update" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Update" + defn.Name + "Payload",
 		},
@@ -868,8 +861,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	del := &ast.FieldDefinition{
-		Description: "Delete a " + defn.Name,
-		Name:        "delete" + defn.Name,
+		Name: "delete" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Delete" + defn.Name + "Payload",
 		},
