@@ -325,6 +325,7 @@
     query {
       x as addState(func: eq(State.xid, "nsw")) @filter(type(State))
     }
+  condition: "@if(eq(len(x), 0))"
 
 -
   name: "Update mutation using xid"
@@ -384,6 +385,7 @@
     query {
       x as addEditor(func: eq(Editor.xid, "editor")) @filter(type(Editor))
     }
+  condition: "@if(eq(len(x), 0))"
 
 -
   name: "Update mutation using xid on type which also has an ID field"

@@ -1257,8 +1257,8 @@ func requireState(t *testing.T, uid string, expectedState *state,
 	}
 }
 
-func upsertState(t *testing.T, name string, executeRequest requestExecutor) *state {
-	addCountryParams := &GraphQLParams{
+func addState(t *testing.T, name string, executeRequest requestExecutor) *state {
+	addStateParams := &GraphQLParams{
 		Query: `mutation addState($xid: String!, $name: String) {
 			addState(input: { xid: $xid, name: $name }) {
 				state {
@@ -1270,10 +1270,10 @@ func upsertState(t *testing.T, name string, executeRequest requestExecutor) *sta
 		}`,
 		Variables: map[string]interface{}{"name": name, "xid": "cal"},
 	}
-	addCountryExpected := `
+	addStateExpected := `
 		{ "addState": { "state": { "id": "_UID_", "name": "` + name + `", "xid": "cal" } } }`
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
@@ -1281,7 +1281,7 @@ func upsertState(t *testing.T, name string, executeRequest requestExecutor) *sta
 			State *state
 		}
 	}
-	err := json.Unmarshal([]byte(addCountryExpected), &expected)
+	err := json.Unmarshal([]byte(addStateExpected), &expected)
 	require.NoError(t, err)
 	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -1320,16 +1320,30 @@ func deleteState(
 }
 
 func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
-	newState := upsertState(t, "California", executeRequest)
+	newState := addState(t, "California", executeRequest)
 	requireState(t, newState.ID, newState, executeRequest)
 
-	updatedState := upsertState(t, "Calgary", executeRequest)
-	// The entity with id newState.ID should have been upserted.
-	requireState(t, newState.ID, updatedState, executeRequest)
-	require.Equal(t, newState.ID, updatedState.ID)
+	// Try add again, it should fail this time.
+	name := "Calgary"
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($xid: String!, $name: String) {
+			addState(input: { xid: $xid, name: $name }) {
+				state {
+					id
+					xid
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": name, "xid": "cal"},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Contains(t, gqlResponse.Errors[0].Error(), "node with given xid already exists")
 
 	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
-	filter := map[string]interface{}{"ids": []string{newState.ID}}
+	filter := map[string]interface{}{"xid": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, deleteStateExpected, nil)
 }
 
