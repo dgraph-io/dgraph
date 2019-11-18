@@ -157,6 +157,7 @@ input AuthorFilter {
 }
 
 input AuthorInput {
+	name: String!
 	pen_name: String
 }
 
