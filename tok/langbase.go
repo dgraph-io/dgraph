@@ -44,7 +44,7 @@ func langBase(lang string) string {
 
 	// check if we already have this
 	if s, found := langBaseCache.m[lang]; found {
-		defer langBaseCache.RUnlock()
+		langBaseCache.RUnlock()
 		return s
 	}
 
