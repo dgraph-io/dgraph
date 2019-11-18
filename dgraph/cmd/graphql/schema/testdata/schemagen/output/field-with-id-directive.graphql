@@ -3,9 +3,10 @@
 #######################
 
 type Post {
-	content: String! @id
+	id: ID
+	content: String!
 	author(filter: AuthorFilter): Author!
-	genre: Genre
+	genre(filter: GenreFilter): Genre
 }
 
 type Author {
@@ -16,7 +17,7 @@ type Author {
 }
 
 type Genre {
-	name: String!
+	name: String! @id
 }
 
 #######################
@@ -115,6 +116,10 @@ type DeleteAuthorPayload {
 	msg: String
 }
 
+type DeleteGenrePayload {
+	msg: String
+}
+
 type DeletePostPayload {
 	msg: String
 }
@@ -159,6 +164,7 @@ input AuthorFilter {
 input AuthorInput {
 	name: String!
 	pen_name: String
+	posts: [PostRef]
 }
 
 input AuthorOrder {
@@ -169,6 +175,13 @@ input AuthorOrder {
 
 input AuthorRef {
 	id: ID
+}
+
+input GenreFilter {
+	name: StringHashFilter
+	and: GenreFilter
+	or: GenreFilter
+	not: GenreFilter
 }
 
 input GenreInput {
@@ -183,16 +196,16 @@ input GenreOrder {
 
 input PatchAuthor {
 	pen_name: String
+	posts: [PostRef]
 }
 
 input PatchPost {
+	content: String
 	author: AuthorRef
 }
 
 input PostFilter {
-	content: StringHashFilter
-	and: PostFilter
-	or: PostFilter
+	ids: [ID!]
 	not: PostFilter
 }
 
@@ -205,6 +218,10 @@ input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostRef {
+	id: ID
 }
 
 input StringHashFilter_StringRegExpFilter {
@@ -227,11 +244,12 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(content: String!): Post
+	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID, name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 }
 
 #######################
@@ -246,4 +264,5 @@ type Mutation {
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: GenreInput!): AddGenrePayload
+	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }

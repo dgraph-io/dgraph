@@ -423,6 +423,9 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
 		return
 	}
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+		return
+	}
 
 	updType := &ast.Definition{
 		Kind: ast.InputObject,
@@ -451,10 +454,17 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	nonIDFields := getNonIDFields(schema, defn)
+	if len(nonIDFields) == 0 {
+		// The user might just have an external id field and nothing else. We don't generate patch
+		// type in that case.
+		return
+	}
+
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   "Patch" + defn.Name,
-		Fields: getNonIDFields(schema, defn),
+		Fields: nonIDFields,
 	}
 	schema.Types["Patch"+defn.Name] = patchDefn
 
@@ -772,6 +782,10 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+		return
+	}
+
 	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
@@ -890,6 +904,10 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
+		return
+	}
+
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
 		return
 	}
 

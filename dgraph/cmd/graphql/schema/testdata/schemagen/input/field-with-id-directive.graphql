@@ -1,5 +1,6 @@
 type Post {
-    content: String! @id
+    id: ID
+    content: String!
     author: Author!
     genre: Genre
 }
@@ -12,5 +13,5 @@ type Author {
 }
 
 type Genre {
-    name: String!
+    name: String! @id
 }

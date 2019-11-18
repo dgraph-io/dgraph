@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -1020,5 +1021,5 @@ func TestQueryStateByXidRegex(t *testing.T) {
 
 	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
-	require.JSONEq(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
+	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
 }
