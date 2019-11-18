@@ -390,7 +390,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		if err := types.Sort(vals, ul, desc); err != nil {
+		if err := types.Sort(vals, ul, desc, ""); err != nil {
 			return err
 		}
 		// Paginate
@@ -686,6 +686,14 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	values := make([][]types.Val, 0, lenList)
 	multiSortVals := make([]types.Val, 0, lenList)
 	order := ts.Order[0]
+
+	var lang string
+	if langLen := len(order.Langs); langLen == 1 {
+		lang = order.Langs[0]
+	} else if langLen > 1 {
+		panic("Sorting on multiple language is not supported.")
+	}
+
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
@@ -703,7 +711,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc})
+	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc}, lang)
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {

@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types/collate"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 type sortBase struct {
@@ -31,6 +32,7 @@ type sortBase struct {
 	desc   []bool  // Sort orders for different values.
 	ul     *pb.List
 	o      []*pb.Facets
+	cl     *collate.Collator
 }
 
 // Len returns size of vector.
@@ -71,7 +73,7 @@ func (s byValue) Less(i, j int) bool {
 		}
 
 		// Its either less or greater.
-		less := less(first[vidx], second[vidx])
+		less := less(first[vidx], second[vidx], s.cl)
 		if s.desc[vidx] {
 			return !less
 		}
@@ -82,7 +84,7 @@ func (s byValue) Less(i, j int) bool {
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
 // the proper ordering.
-func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
+func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang string) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
@@ -94,16 +96,22 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 	default:
 		return errors.Errorf("Value of type: %s isn't sortable", typ.Name())
 	}
-	var toBeSorted sort.Interface
-	b := sortBase{v, desc, ul, l}
-	toBeSorted = byValue{b}
+
+	var cl *collate.Collator
+	if lang != "" {
+		langTag, _ := language.Parse(lang)
+		cl = collate.New(langTag)
+	}
+
+	b := sortBase{v, desc, ul, l, cl}
+	toBeSorted := byValue{b}
 	sort.Sort(toBeSorted)
 	return nil
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *pb.List, desc []bool) error {
-	return SortWithFacet(v, ul, nil, desc)
+func Sort(v [][]Val, ul *pb.List, desc []bool, lang string) error {
+	return SortWithFacet(v, ul, nil, desc, lang)
 }
 
 // Less returns true if a is strictly less than b.
@@ -118,10 +126,10 @@ func Less(a, b Val) (bool, error) {
 	default:
 		return false, errors.Errorf("Compare not supported for type: %v", a.Tid)
 	}
-	return less(a, b), nil
+	return less(a, b, nil), nil
 }
 
-func less(a, b Val) bool {
+func less(a, b Val, cl *collate.Collator) bool {
 	if a.Tid != b.Tid {
 		return mismatchedLess(a, b)
 	}
@@ -136,8 +144,7 @@ func less(a, b Val) bool {
 		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
 		// Use language comparator.
-		if a.Lang != "" {
-			cl := collate.Collator(a.Lang)
+		if cl != nil {
 			return cl.CompareString(a.Safe().(string), b.Safe().(string)) < 0
 		}
 		return (a.Safe().(string)) < (b.Safe().(string))

@@ -36,7 +36,7 @@ func toString(t *testing.T, values [][]Val, vID TypeID) []string {
 func getInput(t *testing.T, tid TypeID, in []string) [][]Val {
 	list := make([][]Val, len(in))
 	for i, s := range in {
-		va := Val{StringID, []byte(s), ""}
+		va := Val{StringID, []byte(s)}
 		v, err := Convert(va, tid)
 		require.NoError(t, err)
 		list[i] = []Val{v}
@@ -55,7 +55,7 @@ func getUIDList(n int) *pb.List {
 func TestSortStrings(t *testing.T) {
 	list := getInput(t, StringID, []string{"bb", "aaa", "aa", "bab"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 	require.EqualValues(t, []uint64{300, 200, 400, 100}, ul.Uids)
 	require.EqualValues(t, []string{"aa", "aaa", "bab", "bb"},
 		toString(t, list, StringID))
@@ -64,7 +64,7 @@ func TestSortStrings(t *testing.T) {
 func TestSortInts(t *testing.T) {
 	list := getInput(t, IntID, []string{"22", "111", "11", "212"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 	require.EqualValues(t, []uint64{300, 100, 200, 400}, ul.Uids)
 	require.EqualValues(t, []string{"11", "22", "111", "212"},
 		toString(t, list, IntID))
@@ -73,7 +73,7 @@ func TestSortInts(t *testing.T) {
 func TestSortFloats(t *testing.T) {
 	list := getInput(t, FloatID, []string{"22.2", "11.2", "11.5", "2.12"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2.12", "11.2", "11.5", "22.2"},
@@ -83,7 +83,7 @@ func TestSortFloats(t *testing.T) {
 func TestSortFloatsDesc(t *testing.T) {
 	list := getInput(t, FloatID, []string{"22.2", "11.2", "11.5", "2.12"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, []bool{true}))
+	require.NoError(t, Sort(list, ul, []bool{true}, ""))
 	require.EqualValues(t, []uint64{100, 300, 200, 400}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"22.2", "11.5", "11.2", "2.12"},
@@ -99,7 +99,7 @@ func TestSortDateTimes(t *testing.T) {
 	}
 	list := getInput(t, DateTimeID, in)
 	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2006-01-02T15:04:01Z", "2006-01-02T15:04:05Z",
@@ -114,7 +114,7 @@ func TestSortIntAndFloat(t *testing.T) {
 		{{Tid: IntID, Value: int64(100)}},
 	}
 	ul := getUIDList(3)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 	require.EqualValues(t, []uint64{200, 100, 300}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"21.5", "55", "100"},
@@ -169,7 +169,7 @@ func TestSortMismatchedTypes(t *testing.T) {
 		{{Tid: FloatID, Value: 33.33}},
 	}
 	ul := getUIDList(7)
-	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.NoError(t, Sort(list, ul, []bool{false}, ""))
 
 	// Don't care about relative ordering between types. However, like types
 	// should be sorted with each other.

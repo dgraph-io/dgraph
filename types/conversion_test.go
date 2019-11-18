@@ -190,14 +190,14 @@ func TestConvertToDefault(t *testing.T) {
 		in  Val
 		out string
 	}{
-		{in: Val{StringID, []byte("a"), ""}, out: "a"},
-		{in: Val{StringID, []byte(""), ""}, out: ""},
-		{in: Val{DefaultID, []byte("abc"), ""}, out: "abc"},
-		{in: Val{BinaryID, []byte("2016"), ""}, out: "2016"},
-		{in: Val{IntID, bs(int64(3)), ""}, out: "3"},
-		{in: Val{FloatID, bs(float64(-3.5)), ""}, out: "-3.5"},
-		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC)), ""}, out: "2006-01-02T15:04:05Z"},
-		{in: Val{DateTimeID, bs(time.Time{}), ""}, out: "0001-01-01T00:00:00Z"},
+		{in: Val{StringID, []byte("a")}, out: "a"},
+		{in: Val{StringID, []byte("")}, out: ""},
+		{in: Val{DefaultID, []byte("abc")}, out: "abc"},
+		{in: Val{BinaryID, []byte("2016")}, out: "2016"},
+		{in: Val{IntID, bs(int64(3))}, out: "3"},
+		{in: Val{FloatID, bs(float64(-3.5))}, out: "-3.5"},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
+		{in: Val{DateTimeID, bs(time.Time{})}, out: "0001-01-01T00:00:00Z"},
 	}
 
 	for _, tc := range tests {
@@ -212,18 +212,18 @@ func TestConvertFromDefault(t *testing.T) {
 		in  string
 		out Val
 	}{
-		{in: "1", out: Val{IntID, int64(1), ""}},
-		{in: "1.3", out: Val{FloatID, float64(1.3), ""}},
-		{in: "true", out: Val{BoolID, true, ""}},
-		{in: "2016", out: Val{BinaryID, []byte("2016"), ""}},
-		{in: "", out: Val{BinaryID, []byte(""), ""}},
-		{in: "hello", out: Val{StringID, "hello", ""}},
-		{in: "", out: Val{StringID, "", ""}},
-		{in: "2016", out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC), ""}},
+		{in: "1", out: Val{IntID, int64(1)}},
+		{in: "1.3", out: Val{FloatID, float64(1.3)}},
+		{in: "true", out: Val{BoolID, true}},
+		{in: "2016", out: Val{BinaryID, []byte("2016")}},
+		{in: "", out: Val{BinaryID, []byte("")}},
+		{in: "hello", out: Val{StringID, "hello"}},
+		{in: "", out: Val{StringID, ""}},
+		{in: "2016", out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 	}
 
 	for _, tc := range tests {
-		out, err := Convert(Val{DefaultID, []byte(tc.in), ""}, tc.out.Tid)
+		out, err := Convert(Val{DefaultID, []byte(tc.in)}, tc.out.Tid)
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, out)
 	}
@@ -234,13 +234,13 @@ func TestConvertToBinary(t *testing.T) {
 		in  Val
 		out []byte
 	}{
-		{in: Val{StringID, []byte("a"), ""}, out: []byte("a")},
-		{in: Val{StringID, []byte(""), ""}, out: []byte("")},
-		{in: Val{DefaultID, []byte("abc"), ""}, out: []byte("abc")},
-		{in: Val{BinaryID, []byte("2016"), ""}, out: []byte("2016")},
-		{in: Val{IntID, bs(int64(3)), ""}, out: bs(int64(3))},
-		{in: Val{FloatID, bs(float64(-3.5)), ""}, out: bs(float64(-3.5))},
-		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC)), ""}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+		{in: Val{StringID, []byte("a")}, out: []byte("a")},
+		{in: Val{StringID, []byte("")}, out: []byte("")},
+		{in: Val{DefaultID, []byte("abc")}, out: []byte("abc")},
+		{in: Val{BinaryID, []byte("2016")}, out: []byte("2016")},
+		{in: Val{IntID, bs(int64(3))}, out: bs(int64(3))},
+		{in: Val{FloatID, bs(float64(-3.5))}, out: bs(float64(-3.5))},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
 	}
 
 	for _, tc := range tests {
@@ -255,22 +255,22 @@ func TestConvertFromBinary(t *testing.T) {
 		in  []byte
 		out Val
 	}{
-		{in: bs(true), out: Val{BoolID, true, ""}},
-		{in: bs(false), out: Val{BoolID, false, ""}},
-		{in: []byte(""), out: Val{BoolID, false, ""}},
-		{in: nil, out: Val{BoolID, false, ""}},
-		{in: bs(int64(1)), out: Val{IntID, int64(1), ""}},
-		{in: bs(float64(1.3)), out: Val{FloatID, float64(1.3), ""}},
-		{in: []byte("2016"), out: Val{BinaryID, []byte("2016"), ""}},
-		{in: []byte(""), out: Val{BinaryID, []byte(""), ""}},
-		{in: []byte("hello"), out: Val{StringID, "hello", ""}},
-		{in: []byte(""), out: Val{StringID, "", ""}},
-		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC), ""}},
-		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}, ""}},
+		{in: bs(true), out: Val{BoolID, true}},
+		{in: bs(false), out: Val{BoolID, false}},
+		{in: []byte(""), out: Val{BoolID, false}},
+		{in: nil, out: Val{BoolID, false}},
+		{in: bs(int64(1)), out: Val{IntID, int64(1)}},
+		{in: bs(float64(1.3)), out: Val{FloatID, float64(1.3)}},
+		{in: []byte("2016"), out: Val{BinaryID, []byte("2016")}},
+		{in: []byte(""), out: Val{BinaryID, []byte("")}},
+		{in: []byte("hello"), out: Val{StringID, "hello"}},
+		{in: []byte(""), out: Val{StringID, ""}},
+		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
-		out, err := Convert(Val{BinaryID, tc.in, ""}, tc.out.Tid)
+		out, err := Convert(Val{BinaryID, tc.in}, tc.out.Tid)
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, out)
 	}
@@ -317,24 +317,24 @@ func TestConvertFromPassword(t *testing.T) {
 		out     Val
 		failure string
 	}{
-		{in: "", out: Val{StringID, "", ""}},
-		{in: "password", out: Val{PasswordID, "password", ""}},
-		{in: "password", out: Val{StringID, "password", ""}},
-		{in: "password", out: Val{BinaryID, []byte("password"), ""}},
+		{in: "", out: Val{StringID, ""}},
+		{in: "password", out: Val{PasswordID, "password"}},
+		{in: "password", out: Val{StringID, "password"}},
+		{in: "password", out: Val{BinaryID, []byte("password")}},
 		{
 			in:      "password",
 			failure: `Cannot convert password to type default`,
 		},
 		{
-			in: "password", out: Val{IntID, bs(int64(1)), ""},
+			in: "password", out: Val{IntID, bs(int64(1))},
 			failure: `Cannot convert password to type int`,
 		},
 		{
-			in: "password", out: Val{FloatID, bs(float64(1.0)), ""},
+			in: "password", out: Val{FloatID, bs(float64(1.0))},
 			failure: `Cannot convert password to type float`,
 		},
 		{
-			in: "password", out: Val{BoolID, bs(true), ""},
+			in: "password", out: Val{BoolID, bs(true)},
 			failure: `Cannot convert password to type bool`,
 		},
 	}
@@ -357,23 +357,23 @@ func TestConvertToPassword(t *testing.T) {
 		out     string
 		failure string
 	}{
-		{in: Val{StringID, []byte("testing"), ""}, out: "$2a$10$"},
-		{in: Val{PasswordID, []byte("testing"), ""}, out: "testing"},
-		{in: Val{DefaultID, []byte("testing"), ""}, out: "$2a$10$"},
+		{in: Val{StringID, []byte("testing")}, out: "$2a$10$"},
+		{in: Val{PasswordID, []byte("testing")}, out: "testing"},
+		{in: Val{DefaultID, []byte("testing")}, out: "$2a$10$"},
 		{
-			in:      Val{StringID, []byte(""), ""},
+			in:      Val{StringID, []byte("")},
 			failure: `Password too short, i.e. should have at least 6 chars`,
 		},
 		{
-			in:      Val{IntID, bs(int64(1)), ""},
+			in:      Val{IntID, bs(int64(1))},
 			failure: `Cannot convert int to type password`,
 		},
 		{
-			in:      Val{FloatID, bs(float64(1.0)), ""},
+			in:      Val{FloatID, bs(float64(1.0))},
 			failure: `Cannot convert float to type password`,
 		},
 		{
-			in:      Val{BoolID, bs(true), ""},
+			in:      Val{BoolID, bs(true)},
 			failure: `Cannot convert bool to type password`,
 		},
 	}
