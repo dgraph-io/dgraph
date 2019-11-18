@@ -42,12 +42,25 @@ type Post {
         author: Author! @hasInverse(field: posts)
 }
 
+"""
+GraphQL descriptions can be on enums.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 enum PostType {
         Fact
+
+        """
+        GraphQL descriptions can be on enum values.  They should work in the input 
+        schema and should make their way into the generated schema.
+        """
         Question
         Opinion
 }
 
+"""
+GraphQL descriptions can be on interfaces.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 interface Employee {
         ename: String!
 }
