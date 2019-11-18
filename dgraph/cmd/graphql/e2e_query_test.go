@@ -954,7 +954,7 @@ func TestQueryByMultipleInvalidIds(t *testing.T) {
 }
 
 func TestGetStateByXid(t *testing.T) {
-	getCountryParams := &GraphQLParams{
+	getStateParams := &GraphQLParams{
 		Query: `{
 			getState(xid: "nsw") {
 				name
@@ -962,13 +962,27 @@ func TestGetStateByXid(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 	require.Equal(t, `{"getState":{"name":"NSW"}}`, string(gqlResponse.Data))
 }
 
-func TestQueryCountryByXid(t *testing.T) {
-	getCountryParams := &GraphQLParams{
+func TestGetStateWithoutArgs(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			getState {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
+}
+
+func TestQueryStateByXid(t *testing.T) {
+	getStateParams := &GraphQLParams{
 		Query: `{
 			queryState(filter: { xid: { eq: "nsw"}}) {
 				name
@@ -976,7 +990,7 @@ func TestQueryCountryByXid(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
 }
