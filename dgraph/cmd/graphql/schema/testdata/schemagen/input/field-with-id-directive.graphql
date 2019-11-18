@@ -7,6 +7,7 @@ type Post {
 type Author {
     id: ID
     name: String! @id
+	pen_name: String
     posts: [Post]
 }
 

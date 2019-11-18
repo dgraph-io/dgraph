@@ -403,7 +403,7 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Input",
-		Fields: getNonIDFields(schema, defn),
+		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
 
@@ -459,6 +459,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Patch"+defn.Name] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
+
 		fld.Type.NonNull = false
 	}
 }
@@ -919,7 +920,53 @@ func addMutations(schema *ast.Schema, defn *ast.Definition) {
 	addDeleteMutation(schema, defn)
 }
 
+func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinition {
+	if schema.Types[fld.Type.Name()].Kind == ast.Object ||
+		schema.Types[fld.Type.Name()].Kind == ast.Interface {
+		newDefn := &ast.FieldDefinition{
+			Name: fld.Name,
+		}
+
+		newDefn.Type = &ast.Type{}
+		newDefn.Type.NonNull = fld.Type.NonNull
+		if fld.Type.NamedType != "" {
+			newDefn.Type.NamedType = fld.Type.Name() + "Ref"
+		} else {
+			newDefn.Type.Elem = &ast.Type{
+				NamedType: fld.Type.Name() + "Ref",
+				NonNull:   fld.Type.Elem.NonNull,
+			}
+		}
+
+		return newDefn
+	}
+
+	newFld := *fld
+	newFldType := *fld.Type
+	newFld.Type = &newFldType
+	newFld.Directives = nil
+	return &newFld
+}
+
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if isIDField(defn, fld) || hasIDDirective(fld) {
+			continue
+		}
+
+		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
+			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
+			continue
+		}
+
+		fldList = append(fldList, createField(schema, fld))
+	}
+	return fldList
+}
+
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -932,31 +979,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object ||
-			schema.Types[fld.Type.Name()].Kind == ast.Interface {
-			newDefn := &ast.FieldDefinition{
-				Name: fld.Name,
-			}
-
-			newDefn.Type = &ast.Type{}
-			newDefn.Type.NonNull = fld.Type.NonNull
-			if fld.Type.NamedType != "" {
-				newDefn.Type.NamedType = fld.Type.Name() + "Ref"
-			} else {
-				newDefn.Type.Elem = &ast.Type{
-					NamedType: fld.Type.Name() + "Ref",
-					NonNull:   fld.Type.Elem.NonNull,
-				}
-			}
-
-			fldList = append(fldList, newDefn)
-		} else {
-			newFld := *fld
-			newFldType := *fld.Type
-			newFld.Type = &newFldType
-			newFld.Directives = nil
-			fldList = append(fldList, &newFld)
-		}
+		fldList = append(fldList, createField(schema, fld))
 	}
 	return fldList
 }

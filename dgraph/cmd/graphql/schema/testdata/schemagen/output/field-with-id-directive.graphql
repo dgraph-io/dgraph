@@ -11,6 +11,7 @@ type Post {
 type Author {
 	id: ID
 	name: String! @id
+	pen_name: String
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
@@ -132,6 +133,7 @@ type UpdatePostPayload {
 
 enum AuthorOrderable {
 	name
+	pen_name
 }
 
 enum GenreOrderable {
@@ -155,7 +157,7 @@ input AuthorFilter {
 }
 
 input AuthorInput {
-	name: String!
+	pen_name: String
 }
 
 input AuthorOrder {
@@ -179,11 +181,10 @@ input GenreOrder {
 }
 
 input PatchAuthor {
-	name: String
+	pen_name: String
 }
 
 input PatchPost {
-	content: String
 	author: AuthorRef
 }
 

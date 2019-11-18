@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -80,6 +81,7 @@ func TestSchemaString(t *testing.T) {
 			require.NoError(t, errs)
 
 			newSchemaStr := schHandler.GQLSchema()
+			fmt.Println(newSchemaStr)
 
 			_, err = FromString(newSchemaStr)
 			require.NoError(t, errs)
