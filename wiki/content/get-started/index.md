@@ -47,6 +47,18 @@ title = "Get Started with Dgraph"
           </p>
         </div>
       </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-4/index.md">}}">
+              4 - Multi-Language Strings
+            </a>
+          </div>
+          <p class="section-desc">
+            Learn about multi-language strings and operations on them using the language tags.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </section>

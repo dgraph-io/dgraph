@@ -22,6 +22,8 @@ You can see the accompanying video below.
 
 {{< youtube u73ovhDCPQQ >}}
 
+---
+
 ## Running Dgraph
 Running the `dgraph/standalone` docker image is the quickest way to get started with Dgraph.
 This standalone image is meant for quickstart purposes only.
@@ -213,7 +215,7 @@ This flexibility can be beneficial, but if you prefer to force your
 mutations to follow a given schema there are options available that
 we will explore in an next tutorial.
 
-### Wrapping up
+## Wrapping up
 
 In this tutorial, we learned the basics of Dgraph, including how to
 run the database, add new nodes and predicates, and query them
@@ -226,3 +228,9 @@ They also can be used to create an edge between existing nodes!
 Sounds interesting?
 
 Check out our next tutorial of the getting started series [here](/tutorial-2/).
+
+## Need Help
+
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
+* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
+* You can also join our [Slack channel](http://slack.dgraph.io).

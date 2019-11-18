@@ -190,7 +190,7 @@ Our Graph has:
 You can see that there are 8 unique tags, and some of the blogs share a common tag.
 
 
-#### Data types for predicates
+### Data types for predicates
 Dgraph automatically detects the data type of its predicates.
 You can see the auto-detected data types using the Ratel UI.
 
@@ -222,7 +222,7 @@ Also, notice that there are no entries in the indices column.
 We'll talk about indices in detail shortly.
 
 
-#### Querying for predicate values
+### Querying for predicate values
 First, let's query for all the Authors and their ratings.
 
 ```
@@ -291,7 +291,7 @@ You cannot query for the value of a predicate unless you've added an index for i
 
 Let's learn more about indices in Dgraph and also how to add them.
 
-#### Indexing in Dgraph
+### Indexing in Dgraph
 Indices are used to speed up your queries on predicates.
 They have to be explicitly added to a predicate when they are required.
 That is, only when you need to query for the value of a predicate.
@@ -396,7 +396,7 @@ _Hey, traverse the `published` edge, but only return those blogs with fewer than
 Can we also filter the nodes during traversals?
 Yes, we can! Let's learn how to do that in our next section.
 
-#### Filtering traversals
+### Filtering traversals
 We can filter the result of traversals by using the `@filter` directive.
 
 You can use any of the Dgraph's comparator functions with the `@filter` directive.
@@ -457,7 +457,7 @@ My favorite tag is `devrel`. What's yours?
 
 In our next section, let's find all the blog posts which are tagged `devrel`.
 
-#### Querying string predicates
+### Querying string predicates
 The `tag_name` predicate represents the name of a tag.
 It is of type `string`.
 Here are the steps to fetch all blog posts which are tagged `devrel`.
@@ -623,7 +623,7 @@ Now, let's run the following query.
 With our previous query, we just traversed the entire graph in the reverse order.
 Starting from the tag nodes, we traversed up to the author nodes.
 
-#### Summary
+### Summary
 In this tutorial, we learned about basic types, indices, filtering, and reverse edge traversals.
 
 Before we wrap up, here’s a sneak peek into our next tutorial.
@@ -635,11 +635,10 @@ Sounds interesting?
 
 See you all soon in the next tutorial. Till then, happy Graphing!
 
+Check out our next tutorial of the getting started series [here](/tutorial-4/).
 
-### What's Next?
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
-with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
-  in a cluster.
+### Need Help
+
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
+* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
+* You can also join our [Slack channel](http://slack.dgraph.io).
