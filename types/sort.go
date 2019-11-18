@@ -28,7 +28,7 @@ import (
 type sortBase struct {
 	values [][]Val // Each uid could have multiple values which we need to sort it by.
 	desc   []bool  // Sort orders for different values.
-	ul     *pb.List
+	ul     *[]uint64
 	o      []*pb.Facets
 }
 
@@ -38,8 +38,7 @@ func (s sortBase) Len() int { return len(s.values) }
 // Swap swaps two elements.
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
-	data := s.ul.Uids
-	data[i], data[j] = data[j], data[i]
+	(*s.ul)[i], (*s.ul)[j] = (*s.ul)[j], (*s.ul)[i]
 	if s.o != nil {
 		s.o[i], s.o[j] = s.o[j], s.o[i]
 	}
@@ -81,7 +80,7 @@ func (s byValue) Less(i, j int) bool {
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
 // the proper ordering.
-func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
+func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
@@ -101,7 +100,7 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *pb.List, desc []bool) error {
+func Sort(v [][]Val, ul *[]uint64, desc []bool) error {
 	return SortWithFacet(v, ul, nil, desc)
 }
 

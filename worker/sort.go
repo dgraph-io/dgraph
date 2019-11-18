@@ -390,7 +390,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		if err := types.Sort(vals, ul, desc); err != nil {
+		if err := types.Sort(vals, &ul.Uids, desc); err != nil {
 			return err
 		}
 		// Paginate
@@ -703,7 +703,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc})
+	err := types.Sort(values, &uids, []bool{order.Desc})
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {
