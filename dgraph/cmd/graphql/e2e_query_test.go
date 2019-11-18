@@ -981,6 +981,20 @@ func TestGetStateWithoutArgs(t *testing.T) {
 	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
 }
 
+func TestGetStateByBothXidAndUid(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			getState(xid: "nsw", id: "0x1") {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
+}
+
 func TestQueryStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
