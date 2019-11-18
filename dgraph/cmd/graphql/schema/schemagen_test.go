@@ -18,6 +18,7 @@ package schema
 
 import (
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	dschema "github.com/dgraph-io/dgraph/schema"
@@ -88,7 +89,7 @@ func TestSchemaString(t *testing.T) {
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
 
-			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
+			if diff := cmp.Diff(strings.Split(string(str2), "\n"), strings.Split(newSchemaStr, "\n")); diff != "" {
 				t.Errorf("schema mismatch (-want +got):\n%s", diff)
 			}
 		})
