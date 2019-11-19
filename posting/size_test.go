@@ -19,7 +19,6 @@ package posting
 import (
 	"encoding/binary"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -36,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/require"
@@ -147,6 +147,9 @@ func PopulateList(l *List, t *testing.T) {
 		i++
 	}
 }
+
+// Test21MillionDataSet populate the list and do size calculation and profiling
+// size calculation and write it to file.
 func Test21MillionDataSet(t *testing.T) {
 	if !*manual {
 		t.Skip("Skipping test meant to be run manually.")
@@ -155,21 +158,27 @@ func Test21MillionDataSet(t *testing.T) {
 	l := &List{}
 	l.mutationMap = make(map[uint64]*pb.PostingList)
 	PopulateList(l, t)
+	// GC unwanted memory.
 	runtime.GC()
+	// Write the profile.
 	fp, err := os.Create("mem.out")
 	require.NoError(t, err)
-	pprof.WriteHeapProfile(fp)
-	fp.Sync()
-	fp.Close()
+	require.NoError(t, pprof.WriteHeapProfile(fp))
+	require.NoError(t, fp.Sync())
+	require.NoError(t, fp.Close())
+	// Write the DeepSize Calculations
 	fp, err = os.Create("size.data")
 	require.NoError(t, err)
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(l.DeepSize()))
-	fp.Write(buf)
-	fp.Sync()
-	fp.Close()
+	_, err = fp.Write(buf)
+	require.NoError(t, err)
+	require.NoError(t, fp.Sync())
+	require.NoError(t, fp.Close())
 }
 
+// Test21MillionDataSetSize this test will compare the calculated posting list value with
+// profiled value.
 func Test21MillionDataSetSize(t *testing.T) {
 	if !*manual {
 		t.Skip("Skipping test meant to be run manually.")
@@ -186,29 +195,37 @@ func Test21MillionDataSetSize(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Split the output line by line.
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
+		// Find the ReadPostingList and l.mutationMap[i] line.
 		if strings.Contains(line, "ReadPostingList") || strings.Contains(line, "l.mutationMap[i]") {
+			// Get the unit.
 			unit, err := filterUnit(line)
 			require.NoError(t, err)
-			fmt.Println(unit)
+			// Convert the6 unit into bytes.
 			size, err := convertToBytes(unit)
 			require.NoError(t, err)
 			pprofSize += size
 		}
 	}
+	// Calculate the difference.
 	var difference uint32
 	if calculatedSize > pprofSize {
 		difference = calculatedSize - pprofSize
 	} else {
 		difference = pprofSize - calculatedSize
 	}
+	// Find the percentage difference and check whether it is less than threshold.
 	percent := (float64(difference) / float64(calculatedSize)) * 100.0
-	if percent > 8 {
-		t.Fatalf("Expected size difference is less than 8 but got %f", percent)
+	t.Logf("calculated unit %s profied unit %s percent difference %.2f%%",
+		humanize.Bytes(uint64(calculatedSize)), humanize.Bytes(uint64(pprofSize)), percent)
+	if percent > 5 {
+		require.Fail(t, "Expected size difference is less than 8 but got %f", percent)
 	}
 }
 
+// filterUnit return the unit.
 func filterUnit(line string) (string, error) {
 	words := strings.Split(line, " ")
 	for _, word := range words {
@@ -219,6 +236,7 @@ func filterUnit(line string) (string, error) {
 	return "", errors.New("Invalid line. Line does not contain GB or MB")
 }
 
+// convertToBytes converts the unit into bytes.
 func convertToBytes(unit string) (uint32, error) {
 	if strings.Contains(unit, "MB") {
 		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
