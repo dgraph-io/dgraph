@@ -1662,3 +1662,31 @@ func TestFacetValueListPredicate(t *testing.T) {
 		}
 	`, js)
 }
+
+func TestFacetValueListPredicateSingleFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) {
+			alt_name @facets(origin)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data":{
+				"q":[
+					{
+						"alt_name|origin":{
+							"0":"french",
+							"1":"spanish"
+						},
+						"alt_name":[
+							"Michelle",
+							"Michelin"
+						]
+					}
+				]
+			}
+		}
+	`, js)
+}
