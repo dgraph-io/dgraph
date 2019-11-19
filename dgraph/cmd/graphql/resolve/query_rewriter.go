@@ -79,23 +79,13 @@ func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
 		return
 	}
-	hasUID := false
-	aliasUID := false
 	for _, c := range dgQuery.Children {
 		addUID(c)
-		hasUID = hasUID || c.Attr == "uid"
-		aliasUID = aliasUID || c.Alias == "uid"
-	}
-
-	if hasUID {
-		return
 	}
 
 	uidChild := &gql.GraphQuery{
-		Attr: "uid",
-	}
-	if aliasUID {
-		uidChild.Alias = "uid.uid"
+		Attr:  "uid",
+		Alias: "dgraph.uid",
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
 }

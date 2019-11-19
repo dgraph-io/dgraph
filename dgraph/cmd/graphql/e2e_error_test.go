@@ -62,10 +62,6 @@ func TestGraphQLCompletionOn(t *testing.T) {
 	_, err = client.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err)
 
-	type countryUID struct {
-		UID string
-	}
-
 	tests := [2]string{"name", "id name"}
 	for _, test := range tests {
 		t.Run(test, func(t *testing.T) {
@@ -80,14 +76,14 @@ func TestGraphQLCompletionOn(t *testing.T) {
 			// Check that the error is valid
 			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
 			require.NotNil(t, gqlResponse.Errors)
-			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.Contains(t, gqlResponse.Errors[0].Error(),
 				"Non-nullable field 'name' (type String!) was not present"+
 					" in result from Dgraph.")
 
 			// Check that the result is valid
 			var result struct {
-				QueryCountry []*countryUID
+				QueryCountry []*country
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
