@@ -70,11 +70,12 @@ func populateClusterWithFacets() {
 	triples += fmt.Sprintf("<31> <friend> <25> %s .\n", friendFacets6)
 
 	nameFacets := "(origin = \"french\", dummy = true)"
+	nameFacets1 := "(origin = \"spanish\", dummy = false, isNick = true)"
 	triples += fmt.Sprintf("<1> <name> \"Michonne\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<23> <name> \"Rick Grimes\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<1> <alt_name> \"Michelle\" %s .\n", nameFacets)
-	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets)
+	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets1)
 
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
@@ -1141,7 +1142,7 @@ func TestFacetsFilterAtValueListType(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"alt_name": ["Michelle", "Michelin"]}]}}`, js)
+		`{"data": {"me":[{"alt_name": ["Michelle"]}]}}`, js)
 }
 
 func TestFacetsFilterAtValueComplex1(t *testing.T) {
@@ -1628,7 +1629,7 @@ func TestFacetValueListPredicate(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{
 		q(func: uid(0x1)) {
-			name@en
+			name@en @facets
 			alt_name @facets
 		}
 	}`
@@ -1638,6 +1639,7 @@ func TestFacetValueListPredicate(t *testing.T) {
 			"data":{
 				"q":[
 					{
+						"name@en|origin": "french",
 						"name@en":"Michelle",
 						"alt_name":[
 							"Michelle",
@@ -1645,11 +1647,11 @@ func TestFacetValueListPredicate(t *testing.T) {
 						],
 						"alt_name|origin":{
 							"0":"french",
-							"1":"french"
+							"1":"spanish"
 						},
 						"alt_name|dummy":{
 							"0":true,
-							"1":true
+							"1":false
 						}
 					}
 				]

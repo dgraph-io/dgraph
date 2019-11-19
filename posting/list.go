@@ -964,9 +964,6 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 
 // AllUntaggedFacets returns all facets of all untagged values.
 func (l *List) AllUntaggedFacets(readTs uint64) ([]*api.Facet, error) {
-	l.RLock()
-	defer l.RUnlock()
-
 	var facets []*api.Facet
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if len(p.LangTag) == 0 {
