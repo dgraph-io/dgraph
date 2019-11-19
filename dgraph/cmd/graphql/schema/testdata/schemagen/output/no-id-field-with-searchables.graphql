@@ -93,6 +93,10 @@ type DeletePostPayload {
 	msg: String
 }
 
+type UpdatePostPayload {
+	post: [Post]
+}
+
 #######################
 # Generated Enums
 #######################
