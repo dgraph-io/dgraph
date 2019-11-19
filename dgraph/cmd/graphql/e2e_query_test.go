@@ -929,6 +929,78 @@ func TestQueryByMultipleIds(t *testing.T) {
 	}
 }
 
+func TestEnumFilter(t *testing.T) {
+	posts := allPosts(t)
+
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+	}
+
+	t.Run("Hash Filter test", func(t *testing.T) {
+		queryParams.Variables = map[string]interface{}{"filter": map[string]interface{}{
+			"postType": map[string]interface{}{
+				"eq": "Fact",
+			},
+		}}
+
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		facts := make([]*post, 0, len(posts))
+		for _, post := range posts {
+			if post.PostType == "Fact" {
+				facts = append(facts, post)
+			}
+		}
+
+		var result struct {
+			QueryPost []*post
+		}
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+		if diff := cmp.Diff(facts, result.QueryPost); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("Regexp Filter test", func(t *testing.T) {
+		queryParams.Variables = map[string]interface{}{"filter": map[string]interface{}{
+			"postType": map[string]interface{}{
+				"regexp": "/(Fact)|(Question)/",
+			},
+		}}
+
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		facts := make([]*post, 0, len(posts))
+		for _, post := range posts {
+			if post.PostType == "Fact" || post.PostType == "Question" {
+				facts = append(facts, post)
+			}
+		}
+
+		var result struct {
+			QueryPost []*post
+		}
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+		if diff := cmp.Diff(facts, result.QueryPost); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
 func TestQueryByMultipleInvalidIds(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `query queryPost($filter: PostFilter) {
