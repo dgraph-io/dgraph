@@ -61,11 +61,6 @@ func BenchmarkPostingList(b *testing.B) {
 		list = &List{}
 		list.mutationMap = make(map[uint64]*pb.PostingList)
 	}
-
-	fp, _ := os.Create("mem.out")
-	pprof.WriteHeapProfile(fp)
-	fp.Sync()
-	fp.Close()
 }
 
 func BenchmarkUidPack(b *testing.B) {
