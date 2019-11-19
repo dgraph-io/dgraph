@@ -1646,6 +1646,22 @@ func TestParse_alias1(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"type.object.name.hi"})
 }
 
+func TestParseBadAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x0a)) {
+				name: type.object.name.en: after_colon
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid colon after alias declaration")
+}
+
 func TestParse_block(t *testing.T) {
 	query := `
 		{
@@ -4870,4 +4886,27 @@ func TestParseExpandType(t *testing.T) {
 	require.Equal(t, "Person,Animal", gq.Query[0].Children[0].Expand)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
+}
+
+func TestParseVarAfterCountQry(t *testing.T) {
+	query := `
+		{
+			q(func: allofterms(name@en, "steven spielberg")) {
+				director.film {
+					u1 as count(uid)
+					genre {
+						u2 as math(1)
+					}
+			  	}
+			}
+
+			sum() {
+				totalMovies: sum(val(u1))
+				totalGenres: sum(val(u2))
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
 }
