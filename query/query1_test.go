@@ -1348,7 +1348,7 @@ func TestMathCeil2(t *testing.T) {
 		}
 
 		me(func: uid(me)) {
-			ceilAge: math(ceil(x2/c))
+			ceilAge: math(ceil((1.0*x2)/c))
 		}
 	}
 	`

@@ -693,7 +693,7 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 					x as age
 				}
 				n as min(val(x))
-				condLog as math(cond(a==38, n/2, 1))
+				condLog as math(cond(a==38, n/2.0, 1))
 				condExp as math(cond(a!=38, 1, sqrt(2*n)))
 			}
 

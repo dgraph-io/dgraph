@@ -494,8 +494,8 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - ln(c))
-				q as math(c*-1+-b+(-b*c))
+				d as math(exp(a + b + 1.0) - ln(c))
+				q as math(c*-1.0+-b+(-b*c))
 			}
 		}
 	}
@@ -520,7 +520,7 @@ func TestParseQueryWithVarValAggNested4(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - max(c,ln(c)) + sqrt(a%b))
+				d as math(exp(a + b + 1.0) - max(c,ln(c)) + sqrt(a%b))
 			}
 		}
 	}
@@ -569,16 +569,16 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(cond(a <= 10, exp(a + b + 1), ln(c)) + 10*a)
-				e as math(cond(a!=10, exp(a + b + 1), ln(d)))
-				f as math(cond(a==10, exp(a + b + 1), ln(e)))
+				d as math(cond(a <= 10.0, exp(a + b + 1.0), ln(c)) + 10*a)
+				e as math(cond(a!=10.0, exp(a + b + 1.0), ln(d)))
+				f as math(cond(a==10.0, exp(a + b + 1.0), ln(e)))
 			}
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 1E+01 a))",
+	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 10 a))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.EqualValues(t, "(cond (!= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln d))",
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
@@ -598,7 +598,7 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(a + b * c / a + exp(a + b + 1) - ln(c))
+				d as math(a + b * c / a + exp(a + b + 1.0) - ln(c))
 			}
 		}
 	}
