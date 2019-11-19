@@ -62,7 +62,7 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 	initCommand = cli.Command{
-		Action:    MigrateFlags(initNode),
+		Action:    initNode,
 		Name:      "init",
 		Usage:     "Initialize node genesis state",
 		ArgsUsage: "",
@@ -136,21 +136,6 @@ func initNode(ctx *cli.Context) error {
 
 	log.Info("🕸\t Finished initializing node!")
 	return nil
-}
-
-// MigrateFlags sets the global flag from a local flag when it's set.
-func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error {
-	return func(ctx *cli.Context) error {
-		for _, name := range ctx.FlagNames() {
-			if ctx.IsSet(name) {
-				err := ctx.GlobalSet(name, ctx.String(name))
-				if err != nil {
-					return nil
-				}
-			}
-		}
-		return action(ctx)
-	}
 }
 
 // gossamer is the main entrypoint into the gossamer system
