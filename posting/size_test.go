@@ -17,15 +17,31 @@
 package posting
 
 import (
+	"encoding/binary"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"math"
+	"os"
+	"os/exec"
+	"runtime"
+	"runtime/pprof"
+	"strconv"
+	"strings"
 	"testing"
 
 	_ "net/http/pprof"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/require"
 )
 
+var manual = flag.Bool("manual", false, "Set when manually running some tests.")
 var (
 	list *List
 
@@ -45,6 +61,11 @@ func BenchmarkPostingList(b *testing.B) {
 		list = &List{}
 		list.mutationMap = make(map[uint64]*pb.PostingList)
 	}
+
+	fp, _ := os.Create("mem.out")
+	pprof.WriteHeapProfile(fp)
+	fp.Sync()
+	fp.Close()
 }
 
 func BenchmarkUidPack(b *testing.B) {
@@ -103,38 +124,115 @@ func TestFacetCalculation(t *testing.T) {
 }
 
 // run this test manually for the verfication.
-// func PopulateList(l *List, t *testing.T) {
-// 	kvOpt := badger.DefaultOptions("/home/schoolboy/src/github.com/dgraph-io/dgraph/dgraph/out/0/p")
-// 	ps, err := badger.OpenManaged(kvOpt)
-// 	require.NoError(t, err)
-// 	txn := ps.NewTransactionAt(math.MaxUint64, false)
-// 	defer txn.Discard()
-// 	iopts := badger.DefaultIteratorOptions
-// 	iopts.AllVersions = true
-// 	iopts.PrefetchValues = false
-// 	itr := txn.NewIterator(iopts)
-// 	defer itr.Close()
-// 	var i uint64
-// 	for itr.Rewind(); itr.Valid(); itr.Next() {
-// 		item := itr.Item()
-// 		if item.ValueSize() < 512 || item.UserMeta() == BitSchemaPosting {
-// 			continue
-// 		}
-// 		pl, err := ReadPostingList(item.Key(), itr)
-// 		require.NoError(t, err)
-// 		l.mutationMap[i] = pl.plist
-// 		i++
-// 	}
-// }
-// func Test21MillionDataSet(t *testing.T) {
-// 	l := &List{}
-// 	l.mutationMap = make(map[uint64]*pb.PostingList)
-// 	PopulateList(l, t)
-// 	runtime.GC()
+func PopulateList(l *List, t *testing.T) {
+	kvOpt := badger.DefaultOptions("/home/schoolboy/src/github.com/dgraph-io/dgraph/dgraph/out/0/p")
+	ps, err := badger.OpenManaged(kvOpt)
+	require.NoError(t, err)
+	txn := ps.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
+	iopts.PrefetchValues = false
+	itr := txn.NewIterator(iopts)
+	defer itr.Close()
+	var i uint64
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if item.ValueSize() < 512 || item.UserMeta() == BitSchemaPosting {
+			continue
+		}
+		pl, err := ReadPostingList(item.Key(), itr)
+		require.NoError(t, err)
+		l.mutationMap[i] = pl.plist
+		i++
+	}
+}
+func Test21MillionDataSet(t *testing.T) {
+	if !*manual {
+		t.Skip("Skipping test meant to be run manually.")
+		return
+	}
+	l := &List{}
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	PopulateList(l, t)
+	runtime.GC()
+	fp, err := os.Create("mem.out")
+	require.NoError(t, err)
+	pprof.WriteHeapProfile(fp)
+	fp.Sync()
+	fp.Close()
+	fp, err = os.Create("size.data")
+	require.NoError(t, err)
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(l.DeepSize()))
+	fp.Write(buf)
+	fp.Sync()
+	fp.Close()
+}
 
-// 	fp, _ := os.Create("mem.out")
-// 	pprof.WriteHeapProfile(fp)
-// 	fp.Sync()
-// 	fp.Close()
-// 	fmt.Println(l.DeepSize())
-// }
+func Test21MillionDataSetSize(t *testing.T) {
+	if !*manual {
+		t.Skip("Skipping test meant to be run manually.")
+		return
+	}
+	fp, err := os.Open("size.data")
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(fp)
+	require.NoError(t, err)
+	calculatedSize := binary.BigEndian.Uint32(buf)
+	var pprofSize uint32
+	cmd := exec.Command("pprof", "-list", "PopulateList", "mem.out")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "ReadPostingList") || strings.Contains(line, "l.mutationMap[i]") {
+			unit, err := filterUnit(line)
+			require.NoError(t, err)
+			fmt.Println(unit)
+			size, err := convertToBytes(unit)
+			require.NoError(t, err)
+			pprofSize += size
+		}
+	}
+	var difference uint32
+	if calculatedSize > pprofSize {
+		difference = calculatedSize - pprofSize
+	} else {
+		difference = pprofSize - calculatedSize
+	}
+	percent := (float64(difference) / float64(calculatedSize)) * 100.0
+	if percent > 8 {
+		t.Fatalf("Expected size difference is less than 8 but got %f", percent)
+	}
+}
+
+func filterUnit(line string) (string, error) {
+	words := strings.Split(line, " ")
+	for _, word := range words {
+		if strings.Contains(word, "MB") || strings.Contains(word, "GB") {
+			return strings.TrimSpace(word), nil
+		}
+	}
+	return "", errors.New("Invalid line. Line does not contain GB or MB")
+}
+
+func convertToBytes(unit string) (uint32, error) {
+	if strings.Contains(unit, "MB") {
+		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
+		if err != nil {
+			return 0, err
+		}
+		return uint32(mb * 1024.0 * 1024.0), nil
+	}
+	if strings.Contains(unit, "GB") {
+		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
+		if err != nil {
+			return 0, err
+		}
+		return uint32(mb * 1024.0 * 1024.0 * 1024.0), nil
+	}
+	return 0, errors.New("Invalid unit")
+}
