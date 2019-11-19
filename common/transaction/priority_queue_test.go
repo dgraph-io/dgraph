@@ -97,6 +97,39 @@ func TestPeek_Empty(t *testing.T) {
 	}
 }
 
+func TestPriorityQueue_Pop(t *testing.T) {
+	pq := NewPriorityQueue()
+
+	val := pq.Pop()
+
+	if val != nil {
+		t.Errorf("pop on empty list should return nil")
+	}
+	val = pq.Peek()
+	if val != nil {
+		t.Errorf("pop on empty list should return nil")
+	}
+
+	pq.Insert(&ValidTransaction{
+		Extrinsic: nil,
+		Validity:  nil,
+	})
+
+	peek := pq.Peek()
+	if peek == nil {
+		t.Errorf("expected item, got nil Peek()")
+	}
+
+	pop := pq.Pop()
+	if pop == nil {
+		t.Errorf("expected item, got nil for Pop()")
+	}
+
+	if !reflect.DeepEqual(peek, pop) {
+		t.Error("Peek() did not return the same value as Pop()")
+	}
+}
+
 func TestPeek(t *testing.T) {
 	tests := []*ValidTransaction{
 		{
@@ -138,23 +171,13 @@ func TestPriorityQueueConcurrentCalls(t *testing.T) {
 
 	go func() {
 		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
+		pq.Peek()
+		pq.Pop()
 	}()
 	go func() {
 		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
-	}()
-
-	go func() {
+		pq.Peek()
 		pq.Pop()
 	}()
 
-	go func() {
-		pq.Pop()
-	}()
-
-	go func() {
-		pq.Peek()
-	}()
-	go func() {
-		pq.Peek()
-	}()
 }

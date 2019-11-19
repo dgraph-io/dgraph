@@ -31,7 +31,6 @@ type node struct {
 }
 
 func NewPriorityQueue() *PriorityQueue {
-	// Reads the WebAssembly module as bytes.
 	pq := PriorityQueue{
 		head:  nil,
 		mutex: sync.Mutex{},
@@ -44,11 +43,15 @@ func NewPriorityQueue() *PriorityQueue {
 func (q *PriorityQueue) Pop() *ValidTransaction {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
+	if q.head == nil {
+		return nil
+	}
 	head := q.head
 	q.head = head.child
 	return head.data
 }
 
+// Peek returns the next item without removing it from the queue
 func (q *PriorityQueue) Peek() *ValidTransaction {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
