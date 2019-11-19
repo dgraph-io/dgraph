@@ -535,15 +535,15 @@ func (n *Node) DeletePeer(pid uint64) {
 
 var errInternalRetry = errors.New("Retry proposal again")
 
-func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) error {
+func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	ch := make(chan error, 1)
 	id := n.storeConfChange(ch)
 	// TODO: Delete id from the map.
-	pb.ID = id
-	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
+	conf.ID = id
+	if err := n.Raft().ProposeConfChange(cctx, conf); err != nil {
 		if cctx.Err() != nil {
 			return errInternalRetry
 		}
@@ -661,7 +661,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx, rs.RequestCtx) {
-				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
+				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx)
 				goto again
 			}
 			return rs.Index, nil
