@@ -31,7 +31,26 @@ func TestBigMathValue(t *testing.T) {
 	`
 	addTriplesToCluster(triples)
 
-	q1 := `
+	t.Run("div", func(t *testing.T) {
+		q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(f/2)
+		}
+	}
+	`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":24019198012642645}
+	]}}`, js)
+
+	})
+
+	t.Run("add", func(t *testing.T) {
+		q1 := `
 	{
 		q(func: has(money)) {
 			f as money
@@ -40,11 +59,76 @@ func TestBigMathValue(t *testing.T) {
 	}
 	`
 
-	js := processQueryNoErr(t, q1)
-	require.JSONEq(t, `{"data":{"q":[
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
 		{"money":48038396025285290,
 		"g":48038396025285292}
 	]}}`, js)
+
+	})
+
+	t.Run("sub", func(t *testing.T) {
+		q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(f-2)
+		}
+	}
+	`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":48038396025285288}
+	]}}`, js)
+
+	})
+}
+
+func TestFloatConverstion(t *testing.T) {
+	t.Run("Convert up to float", func(t *testing.T) {
+		query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil((1.0*x2)/c))
+		}
+	}
+	`
+		js := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+	})
+
+	t.Run("Int aggregation only", func(t *testing.T) {
+		query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+		js := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
+	})
+
 }
 
 func TestDeleteAndReaddIndex(t *testing.T) {
