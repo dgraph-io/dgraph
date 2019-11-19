@@ -199,8 +199,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					)
 
 					indexStr := ""
+					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
+					if id != nil {
+						upsertStr = "@upsert "
+					}
+
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
@@ -216,7 +221,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
+						fmt.Fprintf(&preds, "%s.%s: %s%s %s.\n", typName, f.Name, typStr, indexStr,
+							upsertStr)
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(

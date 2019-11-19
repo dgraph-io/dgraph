@@ -213,7 +213,7 @@ schemas:
       type A {
         A.id: string
       }
-      A.id: string @index(hash) .
+      A.id: string @index(hash) @upsert .
       type B {
         A.id: string
         B.correct: bool
@@ -233,7 +233,7 @@ schemas:
       type A {
         A.id: string
       }
-      A.id: string @index(trigram, hash) .
+      A.id: string @index(trigram, hash) @upsert .
       type B {
         A.id: string
         B.correct: bool
@@ -253,7 +253,7 @@ schemas:
       type A {
         A.id: string
       }
-      A.id: string @index(hash, term) .
+      A.id: string @index(hash, term) @upsert .
       type B {
         A.id: string
         B.correct: bool
