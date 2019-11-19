@@ -61,6 +61,25 @@ func TestSortStrings(t *testing.T) {
 		toString(t, list, StringID))
 }
 
+func TestSortLanguage(t *testing.T) {
+	// Sorting strings of german language.
+	list := getInput(t, StringID, []string{"öffnen", "zumachen"})
+	ul := getUIDList(2)
+
+	require.NoError(t, Sort(list, ul, []bool{false}, "de"))
+	require.EqualValues(t, []uint64{100, 200}, ul.Uids)
+	require.EqualValues(t, []string{"öffnen", "zumachen"},
+		toString(t, list, StringID))
+
+	// Sorting strings of swedish language.
+	list = getInput(t, StringID, []string{"öppna", "zon"})
+
+	require.NoError(t, Sort(list, ul, []bool{false}, "sv"))
+	require.EqualValues(t, []uint64{200, 100}, ul.Uids)
+	require.EqualValues(t, []string{"zon", "öppna"},
+		toString(t, list, StringID))
+}
+
 func TestSortInts(t *testing.T) {
 	list := getInput(t, IntID, []string{"22", "111", "11", "212"})
 	ul := getUIDList(4)

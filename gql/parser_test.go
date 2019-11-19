@@ -4476,6 +4476,19 @@ func TestInvalidValUsage(t *testing.T) {
 	require.Contains(t, err.Error(), "Query syntax invalid.")
 }
 
+func TestOrderWithMultipleLangFail(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x1), orderasc: name@en:fr, orderdesc: lastname@ci, orderasc: salary) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting by an attribute: [name@en:fr] can only be done on one language")
+}
+
 func TestOrderWithLang(t *testing.T) {
 	query := `
 	{
