@@ -27,7 +27,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -963,11 +962,11 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 }
 
 // AllUntaggedFacets returns all facets of all untagged values.
-func (l *List) AllUntaggedFacets(readTs uint64) ([]*api.Facet, error) {
-	var facets []*api.Facet
+func (l *List) AllUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+	var facets []*pb.Facets
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if len(p.LangTag) == 0 {
-			facets = append(facets, p.Facets...)
+			facets = append(facets, &pb.Facets{Facets: p.Facets})
 		}
 		return nil
 	})
@@ -1152,23 +1151,29 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 
 // Facets gives facets for the posting representing value.
 func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
-	listType bool) ([]*api.Facet, error) {
+	listType bool) ([]*pb.Facets, error) {
 
 	l.RLock()
 	defer l.RUnlock()
 
+	var fcs []*pb.Facets
 	if listType {
 		fs, err := l.AllUntaggedFacets(readTs)
 		if err != nil {
 			return nil, err
 		}
-		return facets.CopyFacets(fs, param), nil
+
+		for _, fcts := range fs {
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fcts.Facets, param)})
+		}
+		return fcs, nil
 	}
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})
+	return fcs, nil
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {

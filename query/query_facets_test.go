@@ -1652,6 +1652,9 @@ func TestFacetValueListPredicate(t *testing.T) {
 						"alt_name|dummy":{
 							"0":true,
 							"1":false
+						},
+						"alt_name|isNick": {
+							"1": true
 						}
 					}
 				]

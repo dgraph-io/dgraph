@@ -426,8 +426,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			out.ValueMatrix = append(out.ValueMatrix, &vl)
 
 			// Add facets to result.
-			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fcs}}})
+			out.FacetMatrix = append(out.FacetMatrix, fcs)
 
 			switch {
 			case q.DoCount:
@@ -494,11 +493,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 }
 
 func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
-	[]types.Val, []*api.Facet, error) {
+	[]types.Val, *pb.FacetsList, error) {
 	q := args.q
 	var err error
 	var vals []types.Val
-	var fcs []*api.Facet
+	var fcs []*pb.Facets
 
 	// Retrieve values when facet filtering is not being requested.
 	if q.FacetsFilter == nil {
@@ -524,7 +523,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 			return nil, nil, err
 		}
 
-		return vals, fcs, nil
+		return vals, &pb.FacetsList{FacetsList: fcs}, nil
 	}
 
 	// Retrieve values when facet filtering is being requested.
@@ -561,7 +560,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 				Value: p.Value,
 			})
 			if q.FacetParam != nil {
-				fcs = append(fcs, facets.CopyFacets(p.Facets, q.FacetParam)...)
+				fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
 		}
 		return nil // continue iteration.
@@ -570,7 +569,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 		return nil, nil, err
 	}
 
-	return vals, fcs, nil
+	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data

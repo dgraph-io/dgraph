@@ -213,32 +213,20 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
 func attachFacets(fj *fastJsonNode, fieldName string, isList bool,
 	fList []*api.Facet, facetIdx int) error {
 
-	facetMap := make(map[string][]*api.Facet)
 	for _, f := range fList {
 		fName := facetName(fieldName, f)
-		facetMap[fName] = append(facetMap[fName], f)
-	}
-
-	for fName, facetList := range facetMap {
-		if len(facetList) == 1 && !isList {
-			fVal, err := facets.ValFor(facetList[0])
-			if err != nil {
-				return err
-			}
-			fj.AddValue(facetName(fieldName, facetList[0]), fVal)
-			continue
+		fVal, err := facets.ValFor(f)
+		if err != nil {
+			return err
 		}
 
-		facetNode := &fastJsonNode{attr: fName}
-		for idx, f := range facetList {
-			fVal, err := facets.ValFor(f)
-			if err != nil {
-				return err
-			}
-
-			facetNode.AddValue(strconv.Itoa(facetIdx+idx), fVal)
+		if !isList {
+			fj.AddValue(fName, fVal)
+		} else {
+			facetNode := &fastJsonNode{attr: fName}
+			facetNode.AddValue(strconv.Itoa(facetIdx), fVal)
+			fj.AddMapChild(fName, facetNode, false)
 		}
-		fj.AddMapChild(fName, facetNode, false)
 	}
 
 	return nil
@@ -876,9 +864,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// In case of Value we have only one Facets.
-				if err := attachFacets(dst.(*fastJsonNode), fieldName, pc.List,
-					pc.facetsMatrix[idx].FacetsList[0].Facets, idx); err != nil {
-					return err
+				for i, fcts := range pc.facetsMatrix[idx].FacetsList {
+					if err := attachFacets(dst.(*fastJsonNode), fieldName, pc.List,
+						fcts.Facets, idx+i); err != nil {
+						return err
+					}
 				}
 			}
 
