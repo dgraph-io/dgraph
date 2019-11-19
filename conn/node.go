@@ -233,7 +233,7 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 }
 
 // Send sends the given RAFT message from this node.
-func (n *Node) Send(msg raftpb.Message) {
+func (n *Node) Send(msg *raftpb.Message) {
 	x.AssertTruef(n.Id != msg.To, "Sending message to itself")
 	data, err := msg.Marshal()
 	x.Check(err)

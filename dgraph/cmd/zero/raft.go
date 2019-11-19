@@ -374,11 +374,12 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		state.License.Enabled = time.Now().UTC().Before(expiry)
 	}
 
-	if p.MaxLeaseId > state.MaxLeaseId {
+	switch {
+	case p.MaxLeaseId > state.MaxLeaseId:
 		state.MaxLeaseId = p.MaxLeaseId
-	} else if p.MaxTxnTs > state.MaxTxnTs {
+	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	} else if p.MaxLeaseId != 0 || p.MaxTxnTs != 0 {
+	case p.MaxLeaseId != 0 || p.MaxTxnTs != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
 		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
@@ -446,7 +447,8 @@ func (n *node) initAndStartNode() error {
 	_, restart, err := n.PastLife()
 	x.Check(err)
 
-	if restart {
+	switch {
+	case restart:
 		glog.Infoln("Restarting node for dgraphzero")
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
@@ -464,7 +466,7 @@ func (n *node) initAndStartNode() error {
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
-	} else if len(opts.peer) > 0 {
+	case len(opts.peer) > 0:
 		p := conn.GetPools().Connect(opts.peer)
 		if p == nil {
 			return errors.Errorf("Unhealthy connection to %v", opts.peer)
@@ -475,14 +477,15 @@ func (n *node) initAndStartNode() error {
 		timeout := 8 * time.Second
 		for {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
-			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err := c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
+				cancel()
 				break
 			}
 			if x.ShouldCrash(err) {
+				cancel()
 				log.Fatalf("Error while joining cluster: %v", err)
 			}
 			glog.Errorf("Error while joining cluster: %v\n", err)
@@ -491,11 +494,12 @@ func (n *node) initAndStartNode() error {
 				timeout = 32 * time.Second
 			}
 			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
+			cancel()
 		}
 		glog.Infof("[%#x] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
-	} else {
+	default:
 		data, err := n.RaftContext.Marshal()
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
@@ -671,7 +675,8 @@ func (n *node) Run() {
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
+					msg := &rd.Messages[i]
 					n.Send(msg)
 				}
 			}
@@ -693,18 +698,19 @@ func (n *node) Run() {
 
 			for _, entry := range rd.CommittedEntries {
 				n.Applied.Begin(entry.Index)
-				if entry.Type == raftpb.EntryConfChange {
+				switch {
+				case entry.Type == raftpb.EntryConfChange:
 					n.applyConfChange(entry)
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
-				} else if entry.Type == raftpb.EntryNormal {
+				case entry.Type == raftpb.EntryNormal:
 					key, err := n.applyProposal(entry)
 					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
 
-				} else {
+				default:
 					glog.Infof("Unhandled entry: %+v\n", entry)
 				}
 				n.Applied.Done(entry.Index)
@@ -713,7 +719,8 @@ func (n *node) Run() {
 
 			if !leader {
 				// Followers should send messages later.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
+					msg := &rd.Messages[i]
 					n.Send(msg)
 				}
 			}
