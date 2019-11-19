@@ -33,7 +33,6 @@ type host struct {
 	h           libp2phost.Host
 	hostAddr    ma.Multiaddr
 	dht         *kaddht.IpfsDHT
-	dhtConfig   kaddht.BootstrapConfig
 	bootnodes   []peer.AddrInfo
 	noBootstrap bool
 	noMdns      bool
@@ -69,11 +68,6 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 		return nil, err
 	}
 
-	dhtConfig := kaddht.BootstrapConfig{
-		Queries: 1,
-		Period:  time.Second,
-	}
-
 	bootstrapNodes, err := stringsToPeerInfos(cfg.BootstrapNodes)
 	if err != nil {
 		return nil, err
@@ -84,7 +78,6 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 		h:           h,
 		hostAddr:    hostAddr,
 		dht:         dht,
-		dhtConfig:   dhtConfig,
 		bootnodes:   bootstrapNodes,
 		protocolId:  protocolId,
 		noBootstrap: cfg.NoBootstrap,
