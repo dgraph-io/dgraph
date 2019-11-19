@@ -82,14 +82,21 @@ func TestGraphQLCompletionOn(t *testing.T) {
 					" in result from Dgraph.")
 
 			// Check that the result is valid
-			var result struct {
+			var result, expected struct {
 				QueryCountry []*country
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
 			require.Equal(t, len(result.QueryCountry), 4)
+			expected.QueryCountry = []*country{
+				&country{Name: "Angola"},
+				&country{Name: "Bangladesh"},
+				&country{Name: "Mozambique"},
+				nil,
+			}
 			for i := 0; i < 3; i++ {
 				require.NotNil(t, result.QueryCountry[i])
+				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
 			}
 			require.Nil(t, result.QueryCountry[3])
 		})
