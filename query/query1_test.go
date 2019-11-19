@@ -1348,12 +1348,12 @@ func TestMathCeil2(t *testing.T) {
 		}
 
 		me(func: uid(me)) {
-			ceilAge: math(ceil(x2/c))
+			ceilAge: math(ceil((1.0*x2)/c))
 		}
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
 
 func TestUidAttr(t *testing.T) {

@@ -246,8 +246,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				}
 				continue
 			}
-			// We will try to parse it as an Int first, if that fails we move to float
-			// Try to parse it as a constant.
+			// We will try to parse the constant as an Int first, if that fails we move to float
 			child := &MathTree{}
 			i, err := strconv.ParseInt(item.Val, 10, 64)
 			if err != nil {
@@ -361,11 +360,14 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	}
 	if t.Const.Value != nil {
 		// Leaf node.
+		var leafStr int
+		var err error
 		if t.Const.Tid == types.FloatID {
-			x.Check2(buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64)))
+			leafStr, err = buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
 		} else if t.Const.Tid == types.IntID {
-			x.Check2(buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10)))
+			leafStr, err = buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10))
 		}
+		x.Check2(leafStr, err)
 		return
 	}
 	// Non-leaf node.
