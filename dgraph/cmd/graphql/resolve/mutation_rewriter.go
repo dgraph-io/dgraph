@@ -115,7 +115,7 @@ func (mrw *mutationRewriter) Rewrite(
 		var srcUID, condition string
 		if m.MutationType() == schema.AddMutation {
 			xidField := mutatedType.XIDField()
-			if xidField == nil || xidField.Name() == "" {
+			if xidField == nil {
 				srcUID = "_:" + createdNode
 			} else {
 				srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
@@ -197,7 +197,7 @@ func (mrw *mutationRewriter) FromMutationResult(
 		// If a type has an xid field, then the AddMutation should always return the uid
 		// corresponding to an xid field. If no uid is return that means the node already exists
 		// which is an error.
-		if xidField != nil && xidField.Name() != "" && len(assigned) == 0 {
+		if xidField != nil && len(assigned) == 0 {
 			return nil, schema.GQLWrapf(errors.New("add operation failed"),
 				"node with given %s already exists", xidField.Name())
 		}
@@ -206,7 +206,7 @@ func (mrw *mutationRewriter) FromMutationResult(
 			// This would be true for upsert operations when a new node is created and also for
 			// normal add operations.
 			node := createdNode
-			if xidField != nil && xidField.Name() != "" {
+			if xidField != nil {
 				node = createdUpsertNode
 			}
 			uid, err = strconv.ParseUint(assigned[node], 0, 64)

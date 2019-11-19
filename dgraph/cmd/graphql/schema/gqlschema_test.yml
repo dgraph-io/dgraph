@@ -413,7 +413,7 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String! Found [String]",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, not [String]",
       "locations":[{"line":2, "column":17}]}
       ]
 
@@ -424,7 +424,7 @@ invalid_schemas:
         f1: String @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String! Found String",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, not String",
       "locations":[{"line":2, "column":15}]}
       ]
 

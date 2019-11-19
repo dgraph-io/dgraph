@@ -354,7 +354,7 @@ func idValidation(sch *ast.Schema,
 	if field.Type.String() != "String!" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: with @id directive must be of type String! Found %s",
+			"Type %s; Field %s: with @id directive must be of type String!, not %s",
 			typ.Name, field.Name, field.Type.String())
 	}
 	return nil
