@@ -1139,7 +1139,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		if err != nil {
 			return err
 		}
-		if len(sg.MathExp.Val) != 0 {
+
+		switch {
+		case len(sg.MathExp.Val) != 0:
 			it := doneVars[sg.Params.Var]
 			var isInt, isFloat bool
 			for _, v := range sg.MathExp.Val {
@@ -1165,7 +1167,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			it.path = path
 			doneVars[sg.Params.Var] = it
 			sg.Params.UidToVal = sg.MathExp.Val
-		} else if sg.MathExp.Const.Value != nil {
+		case sg.MathExp.Const.Value != nil:
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
 			rangeOver := sg.SrcUIDs
@@ -1185,7 +1187,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			it.Vals = mp
 			doneVars[sg.Params.Var] = it
 			sg.Params.UidToVal = mp
-		} else {
+		default:
 			glog.V(3).Info("Warning: Math expression is using unassigned values or constants")
 		}
 		// Put it in this node.
