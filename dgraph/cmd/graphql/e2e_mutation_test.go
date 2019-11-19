@@ -1237,7 +1237,7 @@ func requireState(t *testing.T, uid string, expectedState *state,
 		Query: `query getState($id: ID!) {
 			getState(id: $id) {
 				id
-				xid
+				code
 				name
 			}
 		}`,
@@ -1259,19 +1259,19 @@ func requireState(t *testing.T, uid string, expectedState *state,
 
 func addState(t *testing.T, name string, executeRequest requestExecutor) *state {
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xid: String!, $name: String) {
-			addState(input: { xid: $xid, name: $name }) {
+		Query: `mutation addState($code: String!, $name: String) {
+			addState(input: { code: $code, name: $name }) {
 				state {
 					id
-					xid
+					code
 					name
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"name": name, "xid": "cal"},
+		Variables: map[string]interface{}{"name": name, "code": "cal"},
 	}
 	addStateExpected := `
-		{ "addState": { "state": { "id": "_UID_", "name": "` + name + `", "xid": "cal" } } }`
+		{ "addState": { "state": { "id": "_UID_", "name": "` + name + `", "code": "cal" } } }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
 	require.Nil(t, gqlResponse.Errors)
@@ -1326,24 +1326,24 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	// Try add again, it should fail this time.
 	name := "Calgary"
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xid: String!, $name: String) {
-			addState(input: { xid: $xid, name: $name }) {
+		Query: `mutation addState($code: String!, $name: String) {
+			addState(input: { code: $code, name: $name }) {
 				state {
 					id
-					xid
+					code
 					name
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"name": name, "xid": "cal"},
+		Variables: map[string]interface{}{"name": name, "code": "cal"},
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Contains(t, gqlResponse.Errors[0].Error(), "node with given xid already exists")
+	require.Contains(t, gqlResponse.Errors[0].Error(), "node with given code already exists")
 
 	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
-	filter := map[string]interface{}{"xid": map[string]interface{}{"eq": "cal"}}
+	filter := map[string]interface{}{"code": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, deleteStateExpected, nil)
 }
 

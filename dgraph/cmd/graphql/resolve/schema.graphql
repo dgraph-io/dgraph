@@ -7,7 +7,7 @@ type Country {
 }
 
 type State {
-        xid: String! @id
+        code: String! @id
         country: Country
         name: String
 }
@@ -23,7 +23,7 @@ type Author {
 
 type Editor {
         id: ID!
-        xid: String! @id
+        code: String! @id
         name: String! @search(by: [hash])
 }
 

@@ -92,7 +92,7 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 		if isIDField(typ, field) {
 			idFields = append(idFields, field)
 		}
-		if d := field.Directives.ForName("id"); d != nil {
+		if d := field.Directives.ForName(idDirective); d != nil {
 			idDirectiveFields = append(idDirectiveFields, field)
 		}
 	}

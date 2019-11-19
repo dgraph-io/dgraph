@@ -294,7 +294,7 @@
     }
 
 -
-  name: "Add mutation using xid"
+  name: "Add mutation using code"
   gqlmutation: |
     mutation addState($input: StateInput!) {
       addState(input: $input) {
@@ -306,7 +306,7 @@
   gqlvariables: |
     { "input":
       {
-        "xid": "nsw",
+        "code": "nsw",
         "name": "NSW",
         "country": { "id": "0x12" }
       }
@@ -316,19 +316,19 @@
     { "uid" : "uid(x)",
       "dgraph.type": ["State"],
       "State.name": "NSW",
-      "State.xid": "nsw",
+      "State.code": "nsw",
       "State.country": {
         "uid": "0x12"
       }
     }
   dgraphquery: |-
     query {
-      x as addState(func: eq(State.xid, "nsw")) @filter(type(State))
+      x as addState(func: eq(State.code, "nsw")) @filter(type(State))
     }
   condition: "@if(eq(len(x), 0))"
 
 -
-  name: "Update mutation using xid"
+  name: "Update mutation using code"
   gqlmutation: |
     mutation updateState($patch: UpdateStateInput!) {
       updateState(input: $patch) {
@@ -340,7 +340,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "xid": { "eq": "nsw" }
+          "code": { "eq": "nsw" }
         },
         "patch": {
           "name": "nsw"
@@ -354,11 +354,11 @@
     }
   dgraphquery: |-
     query {
-      x as updateState(func: type(State)) @filter(eq(State.xid, "nsw"))
+      x as updateState(func: type(State)) @filter(eq(State.code, "nsw"))
     }
 
 -
-  name: "Add mutation using xid on type which also has an ID field"
+  name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation addEditor($input: EditorInput!) {
       addEditor(input: $input) {
@@ -370,7 +370,7 @@
   gqlvariables: |
     { "input":
       {
-        "xid": "editor",
+        "code": "editor",
         "name": "A.N. Editor"
       }
     }
@@ -379,16 +379,16 @@
     { "uid" : "uid(x)",
       "dgraph.type": ["Editor"],
       "Editor.name": "A.N. Editor",
-      "Editor.xid": "editor"
+      "Editor.code": "editor"
     }
   dgraphquery: |-
     query {
-      x as addEditor(func: eq(Editor.xid, "editor")) @filter(type(Editor))
+      x as addEditor(func: eq(Editor.code, "editor")) @filter(type(Editor))
     }
   condition: "@if(eq(len(x), 0))"
 
 -
-  name: "Update mutation using xid on type which also has an ID field"
+  name: "Update mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation updateEditor($patch: UpdateEditorInput!) {
       updateEditor(input: $patch) {
@@ -400,7 +400,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "xid": { "eq": "editor" },
+          "code": { "eq": "editor" },
           "ids": [ "0x1", "0x2" ]
         },
         "patch": {
@@ -415,5 +415,5 @@
     }
   dgraphquery: |-
     query {
-      x as updateEditor(func: type(Editor)) @filter((uid(0x1, 0x2) AND eq(Editor.xid, "editor")))
+      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2)))
     }

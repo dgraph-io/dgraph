@@ -873,61 +873,61 @@
     }
 
 -
-  name: "Get editor using xid"
+  name: "Get editor using code"
   gqlquery: |
     query {
-      getEditor(xid: "tolstoy") {
+      getEditor(code: "tolstoy") {
         name
       }
     }
   dgquery: |-
     query {
-      getEditor(func: eq(Editor.xid, "tolstoy")) @filter(type(Editor)) {
+      getEditor(func: eq(Editor.code, "tolstoy")) @filter(type(Editor)) {
         name : Editor.name
       }
     }
 
 -
-  name: "Get editor using both xid and id"
+  name: "Get editor using both code and id"
   gqlquery: |
     query {
-      getEditor(xid: "tolstoy", id: "0x1") {
+      getEditor(code: "tolstoy", id: "0x1") {
         name
       }
     }
   dgquery: |-
     query {
-      getEditor(func: uid(0x1)) @filter((eq(Editor.xid, "tolstoy") AND type(Editor))) {
+      getEditor(func: uid(0x1)) @filter((eq(Editor.code, "tolstoy") AND type(Editor))) {
         name : Editor.name
       }
     }
 
 -
-  name: "Query editor using xid"
+  name: "Query editor using code"
   gqlquery: |
     query {
-      queryEditor(filter: { xid: { eq: "editor" }, and: { name: { eq: "A. N. Editor" }}}) {
+      queryEditor(filter: { code: { eq: "editor" }, and: { name: { eq: "A. N. Editor" }}}) {
         name
       }
     }
   dgquery: |-
     query {
-      queryEditor(func: type(Editor)) @filter((eq(Editor.name, "A. N. Editor") AND eq(Editor.xid, "editor"))) {
+      queryEditor(func: type(Editor)) @filter((eq(Editor.name, "A. N. Editor") AND eq(Editor.code, "editor"))) {
         name : Editor.name
       }
     }
 
 -
-  name: "Query editor using xid and uid"
+  name: "Query editor using code and uid"
   gqlquery: |
     query {
-      queryEditor(filter: { ids: ["0x1"], and: { xid: { eq: "editor"}}}) {
+      queryEditor(filter: { ids: ["0x1"], and: { code: { eq: "editor"}}}) {
         name
       }
     }
   dgquery: |-
     query {
-      queryEditor(func: uid(0x1)) @filter((eq(Editor.xid, "editor") AND type(Editor))) {
+      queryEditor(func: uid(0x1)) @filter((eq(Editor.code, "editor") AND type(Editor))) {
         name : Editor.name
       }
     }

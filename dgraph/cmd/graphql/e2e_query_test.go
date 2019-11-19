@@ -957,7 +957,7 @@ func TestQueryByMultipleInvalidIds(t *testing.T) {
 func TestGetStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(xid: "nsw") {
+			getState(code: "nsw") {
 				name
 			}
 		}`,
@@ -985,7 +985,7 @@ func TestGetStateWithoutArgs(t *testing.T) {
 func TestGetStateByBothXidAndUid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(xid: "nsw", id: "0x1") {
+			getState(code: "nsw", id: "0x1") {
 				name
 			}
 		}`,
@@ -999,7 +999,7 @@ func TestGetStateByBothXidAndUid(t *testing.T) {
 func TestQueryStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { xid: { eq: "nsw"}}) {
+			queryState(filter: { code: { eq: "nsw"}}) {
 				name
 			}
 		}`,
@@ -1013,7 +1013,7 @@ func TestQueryStateByXid(t *testing.T) {
 func TestQueryStateByXidRegex(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { xid: { regexp: "/n/"}}) {
+			queryState(filter: { code: { regexp: "/n/"}}) {
 				name
 			}
 		}`,

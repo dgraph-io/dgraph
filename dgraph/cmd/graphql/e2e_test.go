@@ -126,7 +126,7 @@ type post struct {
 type state struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	Xid  string `json:"xid"`
+	Code string `json:"code"`
 }
 
 func TestMain(m *testing.M) {
