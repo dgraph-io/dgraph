@@ -950,7 +950,7 @@ func addHuman(t *testing.T, starshipID string) string {
 	return result.AddHuman.Human.ID
 }
 
-func addDroid(t *testing.T) string {
+func addDroidVariables(t *testing.T, values map[string]interface{}) string {
 	addDroidParams := &GraphQLParams{
 		Query: `mutation addDroid($droid: DroidInput!) {
 			addDroid(input: $droid) {
@@ -959,11 +959,7 @@ func addDroid(t *testing.T) string {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"droid": map[string]interface{}{
-			"name":            "R2-D2",
-			"primaryFunction": "Robot",
-			"appearsIn":       []string{"EMPIRE"},
-		}},
+		Variables: map[string]interface{}{"droid": values},
 	}
 
 	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
@@ -981,6 +977,14 @@ func addDroid(t *testing.T) string {
 
 	requireUID(t, result.AddDroid.Droid.ID)
 	return result.AddDroid.Droid.ID
+}
+
+func addDroid(t *testing.T) string {
+	return addDroidVariables(t, map[string]interface{}{
+		"name":            "R2-D2",
+		"primaryFunction": "Robot",
+		"appearsIn":       []string{"EMPIRE"},
+	})
 }
 
 func updateCharacter(t *testing.T, id string) {
@@ -1010,6 +1014,11 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
+	bb8ID := addDroidVariables(t, map[string]interface{}{
+		"name":            "BB-8",
+		"primaryFunction": "Robot",
+		"appearsIn":       []string{"JEDI"},
+	})
 	updateCharacter(t, humanID)
 
 	t.Run("test query all characters", func(t *testing.T) {
@@ -1100,10 +1109,70 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
+	t.Run("test query enum regexp index on appearsIn", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+		queryCharacter (filter: {
+			appearsIn: {
+				regexp: "/.*/"
+			}
+		}) {
+			name
+		}
+	  }`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"Han Solo"
+		  },
+		  {
+			"name":"R2-D2"
+		  },
+		  {
+			"name":"BB-8"
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	t.Run("test query enum exact index on appearsIn", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+		queryCharacter (filter: {
+			appearsIn: {
+				eq: JEDI
+			}
+		}) {
+			name
+			appearsIn
+		}
+	  }`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"BB-8",
+			"appearsIn": ["JEDI"]
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
 	t.Run("test query all humans", func(t *testing.T) {
 		queryHumanParams := &GraphQLParams{
 			Query: `query {
-		queryHuman(filter: {appearsIn: {eq: EMPIRE}}){
+		queryHuman {
 		  name
 		  appearsIn
 		  starships {
@@ -1173,10 +1242,10 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
-	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+	cleanupStarwars(t, newStarship.ID, humanID, droidID, bb8ID)
 }
 
-func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
+func cleanupStarwars(t *testing.T, starshipID, humanID, droidID, bb8ID string) {
 	// Delete everything
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation cleanup($starshipFilter: StarshipFilter!, $humanFilter: HumanFilter!,
@@ -1195,7 +1264,7 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 				"ids": []string{humanID},
 			},
 			"droidFilter": map[string]interface{}{
-				"ids": []string{droidID},
+				"ids": []string{droidID, bb8ID},
 			},
 		},
 	}

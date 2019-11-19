@@ -6,14 +6,14 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 }
 
 type Human implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 }
@@ -22,7 +22,7 @@ type Droid implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search(by: [exact,trigram])
+	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
 }
 
@@ -191,27 +191,14 @@ enum StarshipOrderable {
 input CharacterFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: CharacterFilter_appearsIn_exact_StringRegExpFilter
+	appearsIn: CharacterFilter_appearsIn_hash
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
 }
 
-input CharacterFilter_appearsIn_exact {
+input CharacterFilter_appearsIn_hash {
 	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-}
-
-input CharacterFilter_appearsIn_exact_StringRegExpFilter {
-	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-	regexp: String
 }
 
 input CharacterOrder {
@@ -227,27 +214,14 @@ input CharacterRef {
 input DroidFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: DroidFilter_appearsIn_exact_StringRegExpFilter
+	appearsIn: DroidFilter_appearsIn_hash
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
 }
 
-input DroidFilter_appearsIn_exact {
+input DroidFilter_appearsIn_hash {
 	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-}
-
-input DroidFilter_appearsIn_exact_StringRegExpFilter {
-	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-	regexp: String
 }
 
 input DroidInput {
@@ -270,27 +244,14 @@ input DroidRef {
 input HumanFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: HumanFilter_appearsIn_exact_StringRegExpFilter
+	appearsIn: HumanFilter_appearsIn_hash
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
 }
 
-input HumanFilter_appearsIn_exact {
+input HumanFilter_appearsIn_hash {
 	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-}
-
-input HumanFilter_appearsIn_exact_StringRegExpFilter {
-	eq: [Episode!]!
-	le: [Episode!]!
-	lt: [Episode!]!
-	ge: [Episode!]!
-	gt: [Episode!]!
-	regexp: String
 }
 
 input HumanInput {

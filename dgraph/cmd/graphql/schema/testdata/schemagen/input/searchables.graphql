@@ -21,7 +21,9 @@ type Post {
         postTypeTrigram: PostType @search(by: [trigram])
         postTypeRegexp: PostType @search(by: [regexp])
         postTypeExact: PostType @search(by: [exact])
+        postTypeHash: PostType @search(by: [hash])
         postTypeRegexpExact: PostType @search(by: [exact, regexp])
+        postTypeHashExact: PostType @search(by: [hash, regexp])
         postTypeNone: PostType @search(by: [])
 }
 

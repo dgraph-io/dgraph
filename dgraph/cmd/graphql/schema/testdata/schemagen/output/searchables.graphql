@@ -21,7 +21,9 @@ type Post {
 	postTypeTrigram: PostType @search(by: [trigram])
 	postTypeRegexp: PostType @search(by: [regexp])
 	postTypeExact: PostType @search(by: [exact])
+	postTypeHash: PostType @search(by: [hash])
 	postTypeRegexpExact: PostType @search(by: [exact,regexp])
+	postTypeHashExact: PostType @search(by: [hash,regexp])
 	postTypeNone: PostType @search(by: [])
 }
 
@@ -163,7 +165,9 @@ input PatchPost {
 	postTypeTrigram: PostType
 	postTypeRegexp: PostType
 	postTypeExact: PostType
+	postTypeHash: PostType
 	postTypeRegexpExact: PostType
+	postTypeHashExact: PostType
 	postTypeNone: PostType
 }
 
@@ -182,12 +186,14 @@ input PostFilter {
 	numLikes: IntFilter
 	score: FloatFilter
 	isPublished: Boolean
-	postType: PostType
+	postType: PostFilter_postType_hash
 	postTypeTrigram: StringRegExpFilter
 	postTypeRegexp: StringRegExpFilter
 	postTypeExact: PostFilter_postTypeExact_exact
+	postTypeHash: PostFilter_postTypeHash_hash
 	postTypeRegexpExact: PostFilter_postTypeRegexpExact_exact_StringRegExpFilter
-	postTypeNone: PostType
+	postTypeHashExact: PostFilter_postTypeHashExact_hash_StringRegExpFilter
+	postTypeNone: PostFilter_postTypeNone_hash
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -199,6 +205,23 @@ input PostFilter_postTypeExact_exact {
 	lt: PostType
 	ge: PostType
 	gt: PostType
+}
+
+input PostFilter_postTypeHashExact_hash {
+	eq: PostType
+}
+
+input PostFilter_postTypeHashExact_hash_StringRegExpFilter {
+	eq: PostType
+	regexp: String
+}
+
+input PostFilter_postTypeHash_hash {
+	eq: PostType
+}
+
+input PostFilter_postTypeNone_hash {
+	eq: PostType
 }
 
 input PostFilter_postTypeRegexpExact_exact {
@@ -216,6 +239,10 @@ input PostFilter_postTypeRegexpExact_exact_StringRegExpFilter {
 	ge: PostType
 	gt: PostType
 	regexp: String
+}
+
+input PostFilter_postType_hash {
+	eq: PostType
 }
 
 input PostInput {
@@ -236,7 +263,9 @@ input PostInput {
 	postTypeTrigram: PostType
 	postTypeRegexp: PostType
 	postTypeExact: PostType
+	postTypeHash: PostType
 	postTypeRegexpExact: PostType
+	postTypeHashExact: PostType
 	postTypeNone: PostType
 }
 

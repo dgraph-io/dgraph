@@ -311,7 +311,7 @@ func searchValidation(
 		// don't clash with each other.
 		searchIndex := builtInFilters[searchArg]
 		if val, ok := searchIndexes[searchIndex]; ok {
-			if field.Type.Name() == "String" {
+			if field.Type.Name() == "String" || sch.Types[field.Type.Name()].Kind == ast.Enum {
 				return gqlerror.ErrorPosf(
 					dir.Position,
 					"Type %s; Field %s: the argument to @search '%s' is the same "+
