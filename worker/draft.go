@@ -803,9 +803,9 @@ func (n *node) Run() {
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {
@@ -957,9 +957,9 @@ func (n *node) Run() {
 
 			if !leader {
 				// Followers should send messages later.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {

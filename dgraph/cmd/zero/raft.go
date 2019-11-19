@@ -676,8 +676,7 @@ func (n *node) Run() {
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
 				for i := range rd.Messages {
-					msg := &rd.Messages[i]
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
@@ -720,8 +719,7 @@ func (n *node) Run() {
 			if !leader {
 				// Followers should send messages later.
 				for i := range rd.Messages {
-					msg := &rd.Messages[i]
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			span.Annotate(nil, "Sent messages")
