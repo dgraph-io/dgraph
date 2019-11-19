@@ -450,6 +450,7 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				return err
 			}
 
+			// We need to parse the regexp after substituting it from a GraphQL Variable.
 			_, ok := vmap[v.Value]
 			if f.Func.Name == "regexp" && ok {
 				if err := regExpVariableFilter(f.Func, idx); err != nil {
