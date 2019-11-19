@@ -2372,7 +2372,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &pb.List{Uids: uids}, []bool{sg.Params.Order[0].Desc}, ""); err != nil {
+		if err := types.Sort(values, &pb.List{Uids: uids},
+			[]bool{sg.Params.Order[0].Desc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids

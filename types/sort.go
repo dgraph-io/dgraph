@@ -32,7 +32,7 @@ type sortBase struct {
 	desc   []bool  // Sort orders for different values.
 	ul     *pb.List
 	o      []*pb.Facets
-	cl     *collate.Collator
+	cl     *collate.Collator // Compares Unicode strings according to the given collation order.
 }
 
 // Len returns size of vector.

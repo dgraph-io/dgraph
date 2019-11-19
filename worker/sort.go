@@ -688,9 +688,9 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	order := ts.Order[0]
 
 	var lang string
-	if langLen := len(order.Langs); langLen == 1 {
+	if langCount := len(order.Langs); langCount == 1 {
 		lang = order.Langs[0]
-	} else if langLen > 1 {
+	} else if langCount > 1 {
 		panic("Sorting on multiple language is not supported.")
 	}
 
