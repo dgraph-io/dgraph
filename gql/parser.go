@@ -382,17 +382,9 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 				return err
 			}
 			if gq.Func.Name == "regexp" {
-				// Value should have been populated from the map that the user gave us in the
-				// GraphQL variable map. Let's parse the expression and flags from the variable
-				// string.
-				ra, err := parseRegexArgs(gq.Func.Args[idx].Value)
-				if err != nil {
+				if err := regExpVariableFilter(gq.Func, idx); err != nil {
 					return err
 				}
-				// We modify the value of this arg and add a new arg for the flags. Regex functions
-				// should have two args.
-				gq.Func.Args[idx].Value = ra.expr
-				gq.Func.Args = append(gq.Func.Args, Arg{Value: ra.flags})
 			}
 		}
 	}
@@ -412,6 +404,21 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func regExpVariableFilter(f *Function, idx int) error {
+	// Value should have been populated from the map that the user gave us in the
+	// GraphQL variable map. Let's parse the expression and flags from the variable
+	// string.
+	ra, err := parseRegexArgs(f.Args[idx].Value)
+	if err != nil {
+		return err
+	}
+	// We modify the value of this arg and add a new arg for the flags. Regex functions
+	// should have two args.
+	f.Args[idx].Value = ra.expr
+	f.Args = append(f.Args, Arg{Value: ra.flags})
 	return nil
 }
 
@@ -441,6 +448,14 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 
 			if err := substituteVar(v.Value, &f.Func.Args[idx].Value, vmap); err != nil {
 				return err
+			}
+
+			// We need to parse the regexp after substituting it from a GraphQL Variable.
+			_, ok := vmap[v.Value]
+			if f.Func.Name == "regexp" && ok {
+				if err := regExpVariableFilter(f.Func, idx); err != nil {
+					return err
+				}
 			}
 		}
 	}
