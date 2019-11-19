@@ -1840,8 +1840,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				// We already have the predicates populated from the var.
 				preds = getPredsFromVals(child.ExpandPreds)
 			} else {
-				typs := strings.Split(child.Params.Expand, ",")
-				preds = getPredicatesFromTypes(typs)
+				typeNames := strings.Split(child.Params.Expand, ",")
+				preds = getPredicatesFromTypes(typeNames)
 			}
 		}
 		preds = uniquePreds(preds)
