@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -66,11 +67,7 @@ func TestGraphQLCompletionOn(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test, func(t *testing.T) {
 			queryCountry := &GraphQLParams{
-				Query: fmt.Sprintf(`query {
-						    queryCountry {
-						       %s
-						    }
-					            }`, test),
+				Query: fmt.Sprintf(`query {queryCountry {%s}}`, test),
 			}
 
 			// Check that the error is valid
@@ -94,6 +91,14 @@ func TestGraphQLCompletionOn(t *testing.T) {
 				&country{Name: "Mozambique"},
 				nil,
 			}
+
+			sort.Slice(result.QueryCountry, func(i, j int) bool {
+				if result.QueryCountry[i] == nil {
+					return false
+				}
+				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
+			})
+
 			for i := 0; i < 3; i++ {
 				require.NotNil(t, result.QueryCountry[i])
 				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
