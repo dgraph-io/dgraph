@@ -86,31 +86,31 @@ func TestPostingListCalculation(t *testing.T) {
 	list = &List{}
 	list.mutationMap = make(map[uint64]*pb.PostingList)
 	// 144 is obtained from BenchmarkPostingList
-	require.Equal(t, int(144), list.DeepSize())
+	require.Equal(t, uint64(144), list.DeepSize())
 }
 
 func TestUidPackCalculation(t *testing.T) {
 	pack = &pb.UidPack{}
 	// 64 is obtained from BenchmarkUidPack
-	require.Equal(t, int(64), calculatePackSize(pack))
+	require.Equal(t, uint64(64), calculatePackSize(pack))
 }
 
 func TestUidBlockCalculation(t *testing.T) {
 	block = &pb.UidBlock{}
 	// 80 is obtained from BenchmarkUidBlock
-	require.Equal(t, int(80), calculateUIDBlock(block))
+	require.Equal(t, uint64(80), calculateUIDBlock(block))
 }
 
 func TestPostingCalculation(t *testing.T) {
 	posting = &pb.Posting{}
 	// 160 is obtained from BenchmarkPosting
-	require.Equal(t, int(160), calculatePostingSize(posting))
+	require.Equal(t, uint64(160), calculatePostingSize(posting))
 }
 
 func TestFacetCalculation(t *testing.T) {
 	facet = &api.Facet{}
 	// 128 is obtained from BenchmarkFacet
-	require.Equal(t, int(128), calcuateFacet(facet))
+	require.Equal(t, uint64(128), calcuateFacet(facet))
 }
 
 // run this test manually for the verfication.
