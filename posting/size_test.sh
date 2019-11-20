@@ -12,9 +12,6 @@ go test -run Test21MillionDataSet$ -v -manual=true
 go test -run Test21MillionDataSetSize$ -v -manual=true
 
 rm mem.out
-
 rm size.data
-
 rm -rf p 
-
 rm  p.tar.gz
