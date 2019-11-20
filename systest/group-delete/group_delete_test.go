@@ -157,13 +157,10 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	group, ok := state2.Groups["3"]
-	if !ok {
-		t.Errorf("group 3 is removed")
-	}
+	require.True(t, ok, "group 3 is removed")
 
-	if len(group.Members) != 0 {
-		t.Errorf("Expected 0 members in group 3 but got %d", len(group.Members))
-	}
+	require.Equal(t, len(group.Members), int(0),
+		fmt.Sprintf("Expected 0 members in group 3 but got %d", len(group.Members)))
 
 	doTestQuery(t, dg)
 
@@ -193,10 +190,8 @@ func TestNodes(t *testing.T) {
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
-	if group, ok = state2.Groups["2"]; !ok {
-		t.Errorf("group 2 is removed")
-	}
-
+	group, ok = state2.Groups["2"]
+	require.True(t, ok, "group 2 is removed")
 	if len(group.Members) != 0 {
 		t.Errorf("Expected 0 members in group 2 but got %d", len(group.Members))
 	}
