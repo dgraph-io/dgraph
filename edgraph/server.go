@@ -882,7 +882,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 
 	if qc.req.StartTs == 0 {
 		start := time.Now()
-
 		// For mutations, BestEffort doesn't make sense. We simply ignore the parameter.
 		if qc.req.BestEffort && !isMutation {
 			qc.req.StartTs = posting.Oracle().MaxAssigned()
@@ -1013,9 +1012,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 // parseRequest parses the incoming request
 func parseRequest(qc *queryContext) error {
-	parsingStartTime := time.Now()
+	start := time.Now()
 	defer func() {
-		qc.latency.Parsing = time.Since(parsingStartTime)
+		qc.latency.Parsing = time.Since(start)
 	}()
 
 	var needVars []string
@@ -1066,8 +1065,8 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 		return err
 	}
 
-	if len(qc.gmuList) > 0 {
-		if err := authorizeMutation(ctx, qc.gmuList[0]); err != nil {
+	for _, gmu := range qc.gmuList {
+		if err := authorizeMutation(ctx, gmu); err != nil {
 			return err
 		}
 	}
