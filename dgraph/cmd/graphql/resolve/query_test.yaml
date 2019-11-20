@@ -929,6 +929,7 @@
     query {
       queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name, first: 0, offset: 1) @filter(type(Author)) {
         name : Author.name
+        dgraph.uid : uid
       }
     }
 
@@ -944,6 +945,7 @@
     query {
       queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name) @filter(type(Author)) {
         name : Author.name
+        dgraph.uid : uid
       }
     }
 
@@ -959,6 +961,7 @@
     query {
       queryAuthor(func: type(Author), orderasc: Author.name) {
         name : Author.name
+        dgraph.uid : uid
       }
     }
 
@@ -974,6 +977,7 @@
     query {
       queryAuthor(func: type(Author), orderasc: Author.name, first: 2, offset: 3) {
         name : Author.name
+        dgraph.uid : uid
       }
     }
 
