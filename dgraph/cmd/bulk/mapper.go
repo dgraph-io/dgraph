@@ -241,7 +241,14 @@ func (m *mapper) uid(xid string) uint64 {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew := m.xids.AssignUid(xid)
+	// We create a copy of xid string here because it is stored in
+	// the map in AssignUid and going to be around througout the process.
+	// We don't want to keep the whole line that we read from file alive.
+	// xid is a substring of the line that we read from the file and if
+	// xid is alive, the whole line is going to be alive and won't be GC'd.
+	sb := strings.Builder{}
+	sb.WriteString(xid)
+	uid, isNew := m.xids.AssignUid(sb.String())
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
