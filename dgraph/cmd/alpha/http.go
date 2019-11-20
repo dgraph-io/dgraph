@@ -254,17 +254,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var out bytes.Buffer
-	writeEntry := func(key string, js []byte) {
-		out.WriteRune('"')
-		out.WriteString(key)
-		out.WriteRune('"')
-		out.WriteRune(':')
-		out.Write(js)
+	writeEntry := func(key string, js []byte) error {
+		if _, err := out.WriteRune('"'); err != nil {
+			return err
+		}
+		if _, err := out.WriteString(key); err != nil {
+			return err
+		}
+		if _, err := out.WriteRune('"'); err != nil {
+			return err
+		}
+		if _, err := out.WriteRune(':'); err != nil {
+			return err
+		}
+		if _, err := out.Write(js); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
+		Metrics: resp.Metrics,
 	}
 	js, err := json.Marshal(e)
 	if err != nil {
@@ -272,11 +284,26 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out.WriteRune('{')
-	writeEntry("data", resp.Json)
-	out.WriteRune(',')
-	writeEntry("extensions", js)
-	out.WriteRune('}')
+	if _, err := out.WriteRune('{'); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if err := writeEntry("data", resp.Json); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if _, err := out.WriteRune(','); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if err := writeEntry("extensions", js); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	if _, err := out.WriteRune('}'); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
 
 	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,

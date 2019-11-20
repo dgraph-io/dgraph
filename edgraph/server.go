@@ -19,9 +19,11 @@ package edgraph
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,6 +62,7 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
+	groupFile    = "group_id"
 )
 
 // ServerState holds the state of the Dgraph server.
@@ -96,8 +99,21 @@ func InitServerState() {
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
-
 	go State.fillTimestampRequests()
+
+	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
+	if err != nil {
+		return
+	}
+
+	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
+		Config.PostingDir)
+	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
+	if err != nil {
+		glog.Warningf("Could not read %s file inside posting directory %s.",
+			groupFile, Config.PostingDir)
+	}
+	x.WorkerConfig.ProposedGroupId = uint32(groupId)
 }
 
 func (s *ServerState) runVlogGC(store *badger.DB) {
@@ -1049,6 +1065,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	resp.Latency = gl
+	resp.Metrics = &api.Metrics{
+		NumUids: er.Metrics,
+	}
 	return resp, err
 }
 

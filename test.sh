@@ -25,7 +25,7 @@
 
 set -e
 readonly ME=${0##*/}
-readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+readonly DGRAPH_ROOT=$(dirname $0)
 
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
@@ -201,6 +201,10 @@ if [[ $# -eq 0 ]]; then
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
     fi
+    Info "Running posting size calculation"
+    cd posting
+    RunCmd ./size_test.sh || TestFailed
+    cd ..
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
     go list ./... | grep $REGEX > $MATCHING_TESTS

@@ -359,25 +359,25 @@ func history(lookup []byte, itr *badger.Iterator) {
 		}
 
 		fmt.Fprintf(&buf, "ts: %d", item.Version())
-		buf.WriteString(" {item}")
+		x.Check2(buf.WriteString(" {item}"))
 		if item.IsDeletedOrExpired() {
-			buf.WriteString("{deleted}")
+			x.Check2(buf.WriteString("{deleted}"))
 		}
 		if item.DiscardEarlierVersions() {
-			buf.WriteString("{discard}")
+			x.Check2(buf.WriteString("{discard}"))
 		}
 		val, err := item.ValueCopy(nil)
 		x.Check(err)
 
 		meta := item.UserMeta()
 		if meta&posting.BitCompletePosting > 0 {
-			buf.WriteString("{complete}")
+			x.Check2(buf.WriteString("{complete}"))
 		}
 		if meta&posting.BitDeltaPosting > 0 {
-			buf.WriteString("{delta}")
+			x.Check2(buf.WriteString("{delta}"))
 		}
 		if meta&posting.BitEmptyPosting > 0 {
-			buf.WriteString("{empty}")
+			x.Check2(buf.WriteString("{empty}"))
 		}
 		fmt.Fprintln(&buf)
 		if meta&posting.BitDeltaPosting > 0 {
@@ -404,7 +404,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 				}
 			}
 		}
-		buf.WriteString("\n")
+		x.Check2(buf.WriteString("\n"))
 	}
 	fmt.Println(buf.String())
 }
@@ -503,29 +503,29 @@ func printKeys(db *badger.DB) {
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
 		if pk.IsData() {
-			buf.WriteString("{d}")
+			x.Check2(buf.WriteString("{d}"))
 		}
 		if pk.IsIndex() {
-			buf.WriteString("{i}")
+			x.Check2(buf.WriteString("{i}"))
 		}
 		if pk.IsCountOrCountRev() {
-			buf.WriteString("{c}")
+			x.Check2(buf.WriteString("{c}"))
 		}
 		if pk.IsSchema() {
-			buf.WriteString("{s}")
+			x.Check2(buf.WriteString("{s}"))
 		}
 		if pk.IsReverse() {
-			buf.WriteString("{r}")
+			x.Check2(buf.WriteString("{r}"))
 		}
 		if item.DiscardEarlierVersions() {
-			buf.WriteString(" {v.las}")
+			x.Check2(buf.WriteString(" {v.las}"))
 		} else if item.IsDeletedOrExpired() {
-			buf.WriteString(" {v.not}")
+			x.Check2(buf.WriteString(" {v.not}"))
 		} else {
-			buf.WriteString(" {v.ok}")
+			x.Check2(buf.WriteString(" {v.ok}"))
 		}
 
-		buf.WriteString(" attr: " + pk.Attr)
+		x.Check2(buf.WriteString(" attr: " + pk.Attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}

@@ -17,7 +17,6 @@
 package query
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -35,8 +34,11 @@ func populateClusterWithFacets() {
 	}
 
 	triples := `
+		<1> <name> "Michelle"@en (origin = "french") .
 		<25> <name> "Daryl Dixon" .
+		<25> <alt_name> "Daryl Dick" .
 		<31> <name> "Andrea" .
+		<31> <alt_name> "Andy" .
 		<33> <name> "Michale" .
 		<320> <name> "Test facet"@en (type = "Test facet with lang") .
 
@@ -66,10 +68,12 @@ func populateClusterWithFacets() {
 	triples += fmt.Sprintf("<31> <friend> <1> %s .\n", friendFacets5)
 	triples += fmt.Sprintf("<31> <friend> <25> %s .\n", friendFacets6)
 
-	nameFacets := "(origin = \"french\")"
+	nameFacets := "(origin = \"french\", dummy = true)"
 	triples += fmt.Sprintf("<1> <name> \"Michonne\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<23> <name> \"Rick Grimes\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
+	triples += fmt.Sprintf("<1> <alt_name> \"Michelle\" %s .\n", nameFacets)
+	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets)
 
 	addTriplesToCluster(triples)
 
@@ -173,8 +177,8 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"me":[{"name|origin":"french","name":"Michonne","gender":"female"}]}}`,
-		js)
+		`{"data":{"me":[{"name|origin":"french","name|dummy":true,"name":"Michonne",
+			"gender":"female"}]}}`, js)
 }
 
 func TestOrderFacets(t *testing.T) {
@@ -275,7 +279,12 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"me":[{"friend":[{"name|origin":"french","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`,
+		`{"data":{"me":[{"friend":[
+			{"name|origin":"french","name|dummy":true,"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},
+			{"name|origin":"french","name|dummy":true,"name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},
+			{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},
+			{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},
+			{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`,
 		js)
 }
 
@@ -296,7 +305,14 @@ func TestRetrieveFacetsAll(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"me":[{"name|origin":"french","name":"Michonne","friend":[{"name|origin":"french","name":"Rick Grimes","gender":"male","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}],"gender":"female"}]}}`,
+		`{"data":{"me":[
+			{"name|origin":"french","name|dummy":true,"name":"Michonne","friend":[
+				{"name|origin":"french","name|dummy":true,"name":"Rick Grimes","gender":"male","friend|since":"2006-01-02T15:04:05Z"},
+				{"name|origin":"french","name|dummy":true,"name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},
+				{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},
+				{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},
+				{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}],
+			"gender":"female"}]}}`,
 		js)
 }
 
@@ -846,21 +862,134 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAtValueFail(t *testing.T) {
+func TestFacetsFilterAtValueBasic(t *testing.T) {
 	populateClusterWithFacets()
-	// facet filtering is not supported at value level.
 	query := `
 	{
-		me(func: uid(1)) {
-			friend {
-				name @facets(eq(origin, "french"))
-			}
+		me(func: has(name)) {
+			name @facets(eq(origin, "french"))
 		}
-	}
-`
+	}`
 
-	_, err := processQuery(context.Background(), t, query)
-	require.Error(t, err)
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne"}, {"name":"Rick Grimes"}, {"name": "Glenn Rhee"}]}}`,
+		js)
+}
+
+func TestFacetsFilterAtValueListType(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			alt_name @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"alt_name": ["Michelle", "Michelin"]}]}}`, js)
+}
+
+func TestFacetsFilterAtValueComplex1(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french") AND eq(dummy, true))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne"}, {"name":"Rick Grimes"}, {"name": "Glenn Rhee"}]}}`,
+		js)
+}
+
+func TestFacetsFilterAtValueComplex2(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french") AND eq(dummy, false))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithLangs(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name@en @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name@en": "Michelle"}]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithBadLang(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name@hi @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(origin, "french")) @facets(origin)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne", "name|origin": "french"},
+			{"name": "Rick Grimes", "name|origin": "french"},
+			{"name": "Glenn Rhee", "name|origin": "french"}]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithFacetAndLangs(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name@en @facets(eq(origin, "french")) @facets(origin)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name@en": "Michelle", "name@en|origin": "french"}]}}`, js)
+}
+
+func TestFacetsFilterAtValueWithDifferentFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+	{
+		me(func: has(name)) {
+			name @facets(eq(dummy, "true")) @facets(origin)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name": "Michonne", "name|origin": "french"},
+			{"name": "Rick Grimes", "name|origin": "french"},
+			{"name": "Glenn Rhee", "name|origin": "french"}]}}`, js)
 }
 
 func TestFacetsFilterAndRetrieval(t *testing.T) {

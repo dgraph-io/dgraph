@@ -190,7 +190,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID) {
+func createSchema(attr string, typ types.TypeID) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -204,9 +204,10 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	if err := updateSchema(&s); err != nil {
-		glog.Errorf("Error while updating schema: %+v", err)
+	if err := checkSchema(&s); err != nil {
+		return err
 	}
+	return updateSchema(&s)
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
@@ -261,6 +262,11 @@ func hasEdges(attr string, startTs uint64) bool {
 func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return errors.Errorf("No predicate specified in schema mutation")
+	}
+
+	if x.IsInternalPredicate(s.Predicate) {
+		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
+			s.Predicate)
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {

@@ -512,6 +512,12 @@ func (s *Server) Connect(ctx context.Context,
 				// We need more servers here, so let's add it.
 				proposal.Member = m
 				return proposal
+			} else if m.ForceGroupId {
+				// If the group ID was taken from the group_id file, force the member
+				// to be in this group even if the group is at capacity. This should
+				// not happen if users properly initialize a cluster after a bulk load.
+				proposal.Member = m
+				return proposal
 			}
 			// Already have plenty of servers serving this group.
 		}

@@ -251,11 +251,11 @@ func run() {
 		// Close doesn't close already opened connections.
 
 		// Stop all HTTP requests.
-		httpListener.Close()
+		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
 		// Stop all internal requests.
-		grpcListener.Close()
+		_ = grpcListener.Close()
 		st.node.trySnapshot(0)
 	}()
 

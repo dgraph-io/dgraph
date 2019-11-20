@@ -4,8 +4,7 @@ set -e
 readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
-QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="$GOPATH/src/github.com/dgraph-io/benchmarks"
+BENCHMARKS_REPO="${BENCHMARKS_REPO:-$(go env GOPATH)/src/github.com/dgraph-io/benchmarks}"
 SCHEMA_FILE="$BENCHMARKS_REPO/data/21million.schema"
 DATA_FILE="$BENCHMARKS_REPO/data/21million.rdf.gz"
 
@@ -99,16 +98,22 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load --rm alpha1 \
+    DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
         bash -s <<EOF
+            mkdir -p /data/alpha1
+            mkdir -p /data/alpha2
+            mkdir -p /data/alpha3
             /gobin/dgraph bulk --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                               --format=rdf --zero=zero1:5180 --out=/data/alpha1/bulk
-            mv /data/alpha1/bulk/0/p /data/alpha1
+                               --format=rdf --zero=zero1:5180 --out=/data/zero1/bulk \
+                               --reduce_shards 3 --map_shards 9
+            mv /data/zero1/bulk/0/p /data/alpha1
+            mv /data/zero1/bulk/1/p /data/alpha2
+            mv /data/zero1/bulk/2/p /data/alpha3
 EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1
+DockerCompose up -d --force-recreate alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"

@@ -494,8 +494,8 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - ln(c))
-				q as math(c*-1+-b+(-b*c))
+				d as math(exp(a + b + 1.0) - ln(c))
+				q as math(c*-1.0+-b+(-b*c))
 			}
 		}
 	}
@@ -520,7 +520,7 @@ func TestParseQueryWithVarValAggNested4(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - max(c,ln(c)) + sqrt(a%b))
+				d as math(exp(a + b + 1.0) - max(c,ln(c)) + sqrt(a%b))
 			}
 		}
 	}
@@ -569,16 +569,16 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(cond(a <= 10, exp(a + b + 1), ln(c)) + 10*a)
-				e as math(cond(a!=10, exp(a + b + 1), ln(d)))
-				f as math(cond(a==10, exp(a + b + 1), ln(e)))
+				d as math(cond(a <= 10.0, exp(a + b + 1.0), ln(c)) + 10*a)
+				e as math(cond(a!=10.0, exp(a + b + 1.0), ln(d)))
+				f as math(cond(a==10.0, exp(a + b + 1.0), ln(e)))
 			}
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 1E+01 a))",
+	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 10 a))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.EqualValues(t, "(cond (!= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln d))",
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
@@ -598,7 +598,7 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(a + b * c / a + exp(a + b + 1) - ln(c))
+				d as math(a + b * c / a + exp(a + b + 1.0) - ln(c))
 			}
 		}
 	}
@@ -1644,6 +1644,22 @@ func TestParse_alias1(t *testing.T) {
 	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
 	require.Equal(t, res.Query[0].Children[1].Children[0].Alias, "name")
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"type.object.name.hi"})
+}
+
+func TestParseBadAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x0a)) {
+				name: type.object.name.en: after_colon
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid colon after alias declaration")
 }
 
 func TestParse_block(t *testing.T) {
@@ -4870,4 +4886,27 @@ func TestParseExpandType(t *testing.T) {
 	require.Equal(t, "Person,Animal", gq.Query[0].Children[0].Expand)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
+}
+
+func TestParseVarAfterCountQry(t *testing.T) {
+	query := `
+		{
+			q(func: allofterms(name@en, "steven spielberg")) {
+				director.film {
+					u1 as count(uid)
+					genre {
+						u2 as math(1)
+					}
+			  	}
+			}
+
+			sum() {
+				totalMovies: sum(val(u1))
+				totalGenres: sum(val(u2))
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
 }

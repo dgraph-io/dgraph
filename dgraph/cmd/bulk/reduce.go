@@ -46,7 +46,7 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	dirs := shardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
+	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
