@@ -1148,7 +1148,7 @@ along with the support of conditional upsert provides the equivalent support of
 Consider an example with the following schema:
 
 ```sh
-curl localhost:8180/alter -X POST -d $'
+curl localhost:8080/alter -X POST -d $'
   name: string @index(term) .
   email: [string] @index(exact) @upsert .' | jq
 ```
@@ -1160,7 +1160,7 @@ create a new node with both the emails attached to this new node. Otherwise, we
 create/update the new/existing node with both the emails.
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8180/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
     # filter is needed to ensure that we do not get same UIDs in u1 and u2
