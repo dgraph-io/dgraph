@@ -29,7 +29,7 @@ var (
 	app       = cli.NewApp()
 	nodeFlags = []cli.Flag{
 		utils.DataDirFlag,
-		configFileFlag,
+		utils.ConfigFileFlag,
 	}
 	p2pFlags = []cli.Flag{
 		utils.BootnodesFlag,
@@ -48,6 +48,14 @@ var (
 	}
 	cliFlags = []cli.Flag{
 		utils.VerbosityFlag,
+	}
+	accountFlags = []cli.Flag{
+		utils.GenerateFlag,
+		utils.Sr25519Flag,
+		utils.Ed25519Flag,
+		utils.ImportFlag,
+		utils.ListFlag,
+		utils.PasswordFlag,
 	}
 )
 
@@ -70,14 +78,22 @@ var (
 			utils.DataDirFlag,
 			utils.GenesisFlag,
 			utils.VerbosityFlag,
-			configFileFlag,
+			utils.ConfigFileFlag,
 		},
 		Category:    "INITIALIZATION",
 		Description: `The init command initializes the node with a genesis state. Usage: gossamer init --genesis genesis.json`,
 	}
-	configFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
+	accountCommand = cli.Command{
+		Action:   handleAccounts,
+		Name:     "account",
+		Usage:    "manage gossamer keystore",
+		Flags:    append(append(accountFlags, utils.DataDirFlag), utils.VerbosityFlag),
+		Category: "KEYSTORE",
+		Description: "The account command is used to manage the gossamer keystore.\n" +
+			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
+			"\tTo generate a new ed25519 account: gossamer account --generate --ed25519\n" +
+			"\tTo import a keystore file: gossamer account --import=path/to/file\n" +
+			"\tTo list keys: gossamer account --list",
 	}
 )
 
@@ -92,6 +108,7 @@ func init() {
 	app.Commands = []cli.Command{
 		dumpConfigCommand,
 		initCommand,
+		accountCommand,
 	}
 	app.Flags = append(app.Flags, nodeFlags...)
 	app.Flags = append(app.Flags, p2pFlags...)

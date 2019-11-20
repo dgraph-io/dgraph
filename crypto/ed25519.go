@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	ed25519 "crypto/ed25519"
@@ -127,4 +128,11 @@ func (k *Ed25519PublicKey) Decode(in []byte) error {
 	}
 	*k = *pub
 	return nil
+}
+
+// Hex returns the public key as a '0x' prefixed hex string
+func (k *Ed25519PublicKey) Hex() string {
+	enc := k.Encode()
+	h := hex.EncodeToString(enc)
+	return "0x" + h
 }

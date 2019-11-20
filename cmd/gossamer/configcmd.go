@@ -123,7 +123,7 @@ func loadStateAndRuntime(t *trie.Trie) (*runtime.Runtime, error) {
 func getConfig(ctx *cli.Context) (*cfg.Config, error) {
 	fig := cfg.DefaultConfig()
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.GlobalString(utils.ConfigFileFlag.Name); file != "" {
 		err := loadConfig(file, fig)
 		if err != nil {
 			log.Warn("err loading toml file", "err", err.Error())
