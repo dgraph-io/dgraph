@@ -33,7 +33,10 @@ func init() {
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
+
 	validator.AddRule("ValidIDValidationGetQuery", validIDValidationGetQuery)
+	validator.AddRule("ValidOrderValue", validOrderValue)
+	validator.AddRule("ValidFilterValue", validFilterValue)
 }
 
 func validIDValidationGetQuery(observers *validator.Events, addError validator.AddErrFunc) {
@@ -48,6 +51,100 @@ func validIDValidationGetQuery(observers *validator.Events, addError validator.A
 					validator.Message("Failed to parse ID (%s)", value.Raw),
 					validator.At(value.Position),
 				)
+			}
+		}
+	})
+}
+func validFilterValue(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnField(func(walker *validator.Walker, f *ast.Field) {
+		for _, argument := range f.Arguments {
+			if argument.Name != "filter" {
+				return
+			}
+
+			var values []*ast.Value
+			values = append(values, argument.Value)
+			ind := 0
+
+			for ind != len(values) {
+				hasFields := 0
+				value := values[ind]
+
+				if values[ind].Kind == ast.Variable {
+					ind++
+					continue
+				}
+
+				if len(value.Children) == 0 {
+					addError(
+						validator.Message("No arguments passed to type %s", value.Definition.Name),
+						validator.At(value.Position))
+
+					ind++
+					continue
+				}
+
+				for _, child := range value.Children {
+					switch child.Name {
+					case "or":
+					case "and":
+						values = append(values, child.Value)
+						values = append(values, child.Value)
+					case "not":
+						hasFields += 1
+						values = append(values, child.Value)
+					default:
+						hasFields += 1
+					}
+				}
+
+				if hasFields == 0 {
+					addError(
+						validator.Message("Only OR/AND passed to type %s", value.Definition.Name),
+						validator.At(value.Position))
+				}
+
+				ind++
+			}
+		}
+	})
+}
+
+func validOrderValue(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnField(func(walker *validator.Walker, f *ast.Field) {
+		for _, argument := range f.Arguments {
+			if argument.Name != "order" {
+				return
+			}
+
+			val := argument.Value
+			for val != nil {
+				hasAsc := 0
+				hasDesc := 0
+				var nextChild *ast.Value
+
+				for _, child := range val.Children {
+					switch child.Name {
+					case "then":
+						nextChild = child.Value
+
+					case "asc":
+						hasAsc = 1
+
+					case "desc":
+						hasDesc = 1
+					}
+				}
+
+				if hasAsc^hasDesc == 0 {
+					errMsg := "Argument to order field cannot contain both Asc and Desc"
+					if hasAsc == 0 {
+						errMsg = "Argument to order field doesn't contain either Asc or Desc"
+					}
+					addError(validator.Message(errMsg), validator.At(val.Position))
+				}
+
+				val = nextChild
 			}
 		}
 	})
