@@ -23,7 +23,7 @@ import (
 	"net/url"
 	"sync"
 
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"

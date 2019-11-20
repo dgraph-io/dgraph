@@ -30,7 +30,7 @@ import (
 
 	ostats "go.opencensus.io/stats"
 
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/golang/glog"

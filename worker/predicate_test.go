@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

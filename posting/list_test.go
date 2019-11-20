@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"testing"
 
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/stretchr/testify/require"
 

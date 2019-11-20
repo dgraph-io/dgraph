@@ -17,7 +17,7 @@
 package worker
 
 import (
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 
 	"bytes"
 
