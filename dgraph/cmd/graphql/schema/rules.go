@@ -33,12 +33,16 @@ func init() {
 	typeValidations = append(typeValidations, idCountCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
-	validator.AddRule("ValidIDValidationGetQuery", ValidIDValidationGetQuery)
+	validator.AddRule("ValidIDValidationGetQuery", validIDValidationGetQuery)
 }
 
-func ValidIDValidationGetQuery(observers *validator.Events, addError validator.AddErrFunc) {
+func validIDValidationGetQuery(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition.Name == "ID" {
+		if value.Definition == nil || value.ExpectedType == nil {
+			return
+		}
+
+		if value.Definition.Name == "ID" && value.Kind == ast.StringValue {
 			if _, err := strconv.ParseUint(value.Raw, 0, 64); err != nil {
 				addError(
 					validator.Message("Failed to parse ID (%s)", value.Raw),
