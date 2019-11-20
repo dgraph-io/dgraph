@@ -59,7 +59,8 @@ func (l *List) DeepSize() uint64 {
 		// we'll calculate the number of buckets based on pointer arithmetic in hmap struct.
 		// reflect value give us access to the hmap struct.
 		hmap := reflect.ValueOf(l.mutationMap)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numBuckets := int(math.Pow(
+			2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += uint64(numOldBuckets * sizeOfBucket)
 		if len(l.mutationMap) > 0 || numBuckets > 1 {
