@@ -99,8 +99,11 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang str
 
 	var cl *collate.Collator
 	if lang != "" {
-		langTag, _ := language.Parse(lang)
-		cl = collate.New(langTag)
+		// Collator is nil if we are unable to parse the language.
+		// We default to bytewise comparison in that case.
+		if langTag, err := language.Parse(lang); err == nil {
+			cl = collate.New(langTag)
+		}
 	}
 
 	b := sortBase{v, desc, ul, l, cl}

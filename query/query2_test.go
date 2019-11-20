@@ -867,7 +867,17 @@ func TestLanguageOrderNonIndexed1(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{ "data": { "q": [ { "name_lang@de": "öffnen", "name_lang@sv": "zon" }, { "name_lang@de": "zumachen", "name_lang@sv": "öppna0" } ] } }`,
+		`{
+			"data": {
+				"q": [{
+					"name_lang@de": "öffnen",
+					"name_lang@sv": "zon"
+				}, {
+					"name_lang@de": "zumachen",
+					"name_lang@sv": "öppna"
+				}]
+			}
+		}`,
 		js)
 }
 
@@ -883,7 +893,17 @@ func TestLanguageOrderNonIndexed2(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{ "data": { "q": [ { "name_lang@de": "öffnen", "name_lang@sv": "zon" }, { "name_lang@de": "zumachen", "name_lang@sv": "öppna0" } ] } }`,
+		`{
+			"data": {
+				"q": [{
+					"name_lang@de": "öffnen",
+					"name_lang@sv": "zon"
+				}, {
+					"name_lang@de": "zumachen",
+					"name_lang@sv": "öppna"
+				}]
+			}
+		}`,
 		js)
 }
 

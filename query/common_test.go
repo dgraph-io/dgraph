@@ -353,7 +353,7 @@ func populateCluster() {
 		<10101> <name_lang> "zon"@sv .
 		<10101> <name_lang> "öffnen"@de .
 		<10101> <lang_type> "Test" .
-		<10102> <name_lang> "öppna0"@sv .
+		<10102> <name_lang> "öppna"@sv .
 		<10102> <name_lang> "zumachen"@de .
 		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
