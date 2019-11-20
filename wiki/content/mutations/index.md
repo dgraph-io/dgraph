@@ -870,7 +870,7 @@ The Mutation block currently only allows the `uid` function, which allows extrac
 from variables defined in the query block. There are two possible outcomes based on the
 results of executing the query block:
 
-* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored. A blank node gets the same UID across all the mutation blocks.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
 Execution of an upsert block also returns the response of the query executed on the state
