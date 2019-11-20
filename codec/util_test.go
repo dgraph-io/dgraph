@@ -20,9 +20,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 const testSize = 100
+
+func newUidPack(data []uint64) *pb.UidPack {
+	encoder := Encoder{BlockSize: 10}
+	for _, uid := range data {
+		encoder.Add(uid)
+	}
+	return encoder.Done()
+}
 
 func TestUidPackIterator(t *testing.T) {
 	uids := make([]uint64, 0)
@@ -42,4 +51,10 @@ func TestUidPackIterator(t *testing.T) {
 	}
 	require.Equal(t, testSize, len(unpackedUids))
 	require.Equal(t, uids, unpackedUids)
+}
+
+func TestCopyUidPack(t *testing.T) {
+	pack := newUidPack([]uint64{1, 2, 3, 4, 5})
+	copy := CopyUidPack(pack)
+	require.Equal(t, Decode(pack, 0), Decode(copy, 0))
 }
