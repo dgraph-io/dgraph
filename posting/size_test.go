@@ -43,17 +43,12 @@ import (
 
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")
 var (
-	list *List
-
-	plist *pb.PostingList
-
-	pack *pb.UidPack
-
-	block *pb.UidBlock
-
+	list    *List
+	plist   *pb.PostingList
+	pack    *pb.UidPack
+	block   *pb.UidBlock
 	posting *pb.Posting
-
-	facet *api.Facet
+	facet   *api.Facet
 )
 
 func BenchmarkPostingList(b *testing.B) {
@@ -120,7 +115,7 @@ func TestFacetCalculation(t *testing.T) {
 
 // run this test manually for the verfication.
 func PopulateList(l *List, t *testing.T) {
-	kvOpt := badger.DefaultOptions("/home/schoolboy/src/github.com/dgraph-io/dgraph/dgraph/out/0/p")
+	kvOpt := badger.DefaultOptions("p")
 	ps, err := badger.OpenManaged(kvOpt)
 	require.NoError(t, err)
 	txn := ps.NewTransactionAt(math.MaxUint64, false)
