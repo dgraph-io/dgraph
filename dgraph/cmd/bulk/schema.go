@@ -143,8 +143,9 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 }
 
 func (s *schemaStore) write(db *badger.DB, preds []string) {
-	txn := db.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
+	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
+	// if bulk loader was restarted or other similar scenarios.
+	w := posting.NewTxnWriter(db)
 	for _, pred := range preds {
 		sch, ok := s.schemaMap[pred]
 		if !ok {
@@ -153,10 +154,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.SetEntry(&badger.Entry{
-			Key:      k,
-			Value:    v,
-			UserMeta: posting.BitSchemaPosting}))
+		x.Check(w.SetAt(k, v, posting.BitSchemaPosting, 1))
 	}
 
 	// Write all the types as all groups should have access to all the types.
@@ -164,14 +162,8 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		k := x.TypeKey(typ.TypeName)
 		v, err := typ.Marshal()
 		x.Check(err)
-		x.Check(txn.SetEntry(&badger.Entry{
-			Key:      k,
-			Value:    v,
-			UserMeta: posting.BitSchemaPosting,
-		}))
+		x.Check(w.SetAt(k, v, posting.BitSchemaPosting, 1))
 	}
 
-	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
-	// if bulk loader was restarted or other similar scenarios.
-	x.Check(txn.CommitAt(1, nil))
+	x.Check(w.Flush())
 }
