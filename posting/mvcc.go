@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"math"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -33,6 +34,17 @@ import (
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
+	// IncrRollupCh is populated with keys that needs to be rolled up during reads 
+	IncrRollupCh chan *bytes.Buffer = make(chan *bytes.Buffer, 16)
+	// RollUpPool is the sync.Pool. Used mainly for performance.
+	RollUpPool = sync.Pool{
+		New: func() interface{} {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		return new(bytes.Buffer)
+	},
+}
 )
 
 // ShouldAbort returns whether the transaction should be aborted.
@@ -145,6 +157,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
+	start := it
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -185,6 +198,22 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			})
 			if err != nil {
 				return nil, err
+			}
+			if (it == start) {
+				// if while reading a posting list, the first item is a Delta Posting, then
+				// this key needs to go through rollbacks. Add this key to the rollbackChan.
+				// This channel is drained by the go routine which performs the rollbacks
+				k := RollUpPool.Get().(*bytes.Buffer)
+				k.Write(key)
+
+				// The send to the channel is Best-effort (lossy) so we dont block here.
+				// Hence, if channel is blocked or full, drop key and move on.
+				select {
+				case IncrRollupCh <- k:
+				default:
+					// return buffer back to Sync.pool
+					RollUpPool.Put(k)
+				}
 			}
 		case BitSchemaPosting:
 			return nil, errors.Errorf(

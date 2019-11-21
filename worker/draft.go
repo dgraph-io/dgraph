@@ -397,6 +397,35 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	return nil
 }
 
+func (n* node) handleIncrementalRollups() {
+	var batch [16] *bytes.Buffer
+	i := 0;
+	for k := range posting.IncrRollupCh {
+
+		batch[i] = k
+		i++
+
+		// Check if batch if full
+		if (i == 16) {
+			// process the batch
+			for j:=0 ; j<=15; j++ {
+				var key []byte
+				batch[j].Read(key)
+				// put the buffer back in the pool.
+				posting.RollUpPool.Put(batch[j])
+
+				// roll up key here
+			}
+
+			// reset the batch
+			i=0	
+		}
+
+	}
+
+	// IncrRollupCh is closed. This should never happen.
+}
+
 func (n *node) processRollups() {
 	defer n.closer.Done()                   // CLOSER:1
 	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
@@ -419,7 +448,7 @@ func (n *node) processRollups() {
 				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
 			} else {
 				last = readTs // Update last only if we succeeded.
-				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
+				glog.Infof("Last rollup at Ts %d: OK.\n", readTs)
 			}
 		}
 	}
@@ -1419,6 +1448,7 @@ func (n *node) InitAndStartNode() {
 	go n.processRollups()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	go n.handleIncrementalRollups()
 	go n.Run()
 }
 
