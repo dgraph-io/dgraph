@@ -30,8 +30,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -179,6 +179,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
 		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
@@ -197,7 +198,7 @@ func (s *ServerState) initStorage() {
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32)
+			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
 		opt = setBadgerOptions(opt)
 
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)

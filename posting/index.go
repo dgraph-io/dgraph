@@ -28,8 +28,8 @@ import (
 	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
