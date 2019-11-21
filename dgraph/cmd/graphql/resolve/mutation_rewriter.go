@@ -193,6 +193,10 @@ func (mrw *mutationRewriter) FromMutationResult(
 		return rewriteAsGet(mutation.QueryField(), uid), nil
 
 	case schema.UpdateMutation:
+		if len(assigned) > 0 {
+			return nil, schema.GQLWrapf(errors.New("received assigned uids from Dgraph for update"+
+				"mutation"), "assigned: %s should have been empty", assigned)
+		}
 		var uids []uint64
 		if len(mutated) > 0 {
 			// This is the case of a conditional upsert where we should get uids from mutated.

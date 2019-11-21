@@ -316,7 +316,6 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		"Update Mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
-			mutResponse: map[string]string{"newnode": "0x1"},
 			queryResponse: `{ "post" : [
 				{ "title": "A Post",
 				"text": "Some text",
@@ -330,7 +329,6 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
-			mutResponse: map[string]string{"newnode": "0x1"},
 			queryResponse: `{ "post" : [ {
 				"title": "A Post",
 				"text": "Some text",
