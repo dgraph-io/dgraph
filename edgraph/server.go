@@ -455,6 +455,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return ctx.Err()
 	}
 
+	start := time.Now()
+	defer func() {
+		qc.latency.Processing += time.Since(start)
+	}()
+
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("no mutations allowed")
 	}
@@ -880,29 +885,22 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		}
 	}
 
-	if qc.req.StartTs == 0 {
+	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		// For mutations, BestEffort doesn't make sense. We simply ignore the parameter.
-		if qc.req.BestEffort && !isMutation {
-			qc.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
-		}
+		req.StartTs = State.getTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
-	annotateStartTs(span, req.StartTs)
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
 		return
 	}
-
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
 	}
+	annotateStartTs(qc.span, qc.req.StartTs)
 
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
 	// this separately since it involves modifying the API protos.
-	l.Processing = time.Since(l.Start) - l.Parsing - l.AssignTimestamp - l.Json
 	resp.Latency = &api.Latency{
 		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
 		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
@@ -939,15 +937,22 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if qc.req.BestEffort {
 		// Sanity: check that request is read-only too.
 		if !qc.req.ReadOnly {
-			return resp, errors.Errorf("best effort query must be read-only")
+			return resp, errors.Errorf("A best effort query must be read-only.")
 		}
-
+		if qc.req.StartTs == 0 {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		qr.Cache = worker.NoCache
+	}
+
+	if qc.req.StartTs == 0 {
+		assignTimestampStart := time.Now()
+		qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
 	qr.ReadTs = qc.req.StartTs
 	resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
-	annotateStartTs(qc.span, qc.req.StartTs)
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)

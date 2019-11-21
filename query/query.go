@@ -2589,6 +2589,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	}
 	req.Latency.Parsing += time.Since(loopStart)
 
+	execStart := time.Now()
 	hasExecuted := make([]bool, len(req.Subgraphs))
 	numQueriesDone := 0
 
@@ -2695,6 +2696,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			return errors.Errorf("Query couldn't be executed")
 		}
 	}
+	req.Latency.Processing += time.Since(execStart)
 
 	// If we had a shortestPath SG, append it to the result.
 	if len(shortestSg) != 0 {
@@ -2725,6 +2727,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	}
 	er.Metrics = metrics
 
+	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
@@ -2733,6 +2736,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
 }
