@@ -139,6 +139,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 		}
 	}
 	addSelectionSetFrom(dgQuery, field)
+	addUID(dgQuery)
 	return dgQuery
 }
 

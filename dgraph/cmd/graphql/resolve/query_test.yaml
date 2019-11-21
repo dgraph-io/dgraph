@@ -1026,6 +1026,7 @@
     query {
       getEditor(func: uid(0x0)) @filter(type(Editor)) {
         name : Editor.name
+        dgraph.uid : uid
       }
     }
 
@@ -1041,6 +1042,7 @@
     query {
       getEditor(func: eq(Editor.code, "tolstoy")) @filter(type(Editor)) {
         name : Editor.name
+        dgraph.uid : uid
       }
     }
 
@@ -1056,6 +1058,7 @@
     query {
       getEditor(func: uid(0x1)) @filter((eq(Editor.code, "tolstoy") AND type(Editor))) {
         name : Editor.name
+        dgraph.uid : uid
       }
     }
 
@@ -1071,6 +1074,7 @@
     query {
       queryEditor(func: type(Editor)) @filter((eq(Editor.name, "A. N. Editor") AND eq(Editor.code, "editor"))) {
         name : Editor.name
+        dgraph.uid : uid
       }
     }
 
@@ -1086,6 +1090,7 @@
     query {
       queryEditor(func: uid(0x1)) @filter((eq(Editor.code, "editor") AND type(Editor))) {
         name : Editor.name
+        dgraph.uid : uid
       }
     }
 
