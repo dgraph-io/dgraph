@@ -828,6 +828,67 @@
     }
 
 -
+  name: "Pagination and Order at root node with UID."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}, first: 0, offset: 1 ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name, first: 0, offset: 1) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Order at root node with UID."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Order at root node without UID."
+  gqlquery: |
+    query {
+      queryAuthor(order: {asc: name}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderasc: Author.name) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "Order and Pagination at root node without UID."
+  gqlquery: |
+    query {
+      queryAuthor(order: {asc: name}, first: 2, offset: 3) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderasc: Author.name, first: 2, offset: 3) {
+        name : Author.name
+      }
+    }
+
+
+-
   name: "Filter with no valid ids construct the right query with type func at root."
   gqlquery: |
     query {

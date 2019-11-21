@@ -1047,6 +1047,11 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 		expected := `{
 			"queryCharacter": [
 			  {
+				"name": "BB-8",
+				"appearsIn": ["JEDI"],
+				"primaryFunction": "Robot"
+			  },
+			  {
 				"name": "Han Solo",
 				"appearsIn": ["EMPIRE"],
 				"starships": [
