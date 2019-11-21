@@ -133,3 +133,59 @@ func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	}
 	return out
 }
+
+func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
+	if u == nil || v == nil {
+		// If v == nil, then it's empty so the value of u - v is just u.
+		// Return a copy of u.
+		if v == nil {
+			return codec.CopyUidPack(u)
+		}
+
+		return nil
+	}
+
+	n := codec.ExactLen(u)
+	m := codec.ExactLen(v)
+	encoder := codec.Encoder{BlockSize: int(u.BlockSize)}
+	uIt := codec.NewUidPackIterator(u)
+	vIt := codec.NewUidPackIterator(v)
+	i, k := 0, 0
+
+	for i < n && k < m {
+		uid := uIt.Get()
+		vid := vIt.Get()
+
+		switch {
+		case uid < vid:
+			for i < n && uIt.Get() < vid {
+				encoder.Add(uIt.Get())
+				i++
+				uIt.Next()
+			}
+		case uid == vid:
+			i++
+			uIt.Next()
+			k++
+			vIt.Next()
+		default:
+			k++
+			vIt.Next()
+			for {
+				if !(k < m && vIt.Get() < uid) {
+					break
+				}
+				k++
+				vIt.Next()
+			}
+		}
+	}
+
+	for i < n && k >= m {
+		encoder.Add(uIt.Get())
+		i++
+		uIt.Next()
+	}
+
+	return encoder.Done()
+}

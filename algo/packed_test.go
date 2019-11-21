@@ -133,10 +133,65 @@ func TestIntersectSorted6Packed(t *testing.T) {
 	require.Empty(t, codec.Decode(IntersectSortedPacked(input), 0))
 }
 
-func TestIntersectSorted7Packed(t *testing.T) {
+func TestDiffSorted1Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3}),
+		newUidPack([]uint64{1}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{2, 3}, codec.Decode(output, 0))
+}
+
+func TestDiffSorted2Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3}),
+		newUidPack([]uint64{2}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{1, 3}, codec.Decode(output, 0))
+}
+
+func TestDiffSorted3Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3}),
+		newUidPack([]uint64{3}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{1, 2}, codec.Decode(output, 0))
+}
+
+func TestDiffSorted4Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3}),
+		newUidPack([]uint64{}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{1, 2, 3}, codec.Decode(output, 0))
+}
+
+func TestDiffSorted5Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{}),
+		newUidPack([]uint64{1, 2}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{}, codec.Decode(output, 0))
+}
+
+func TestSubSorted1Packed(t *testing.T) {
 	input := []*pb.UidPack{
 		newUidPack([]uint64{1, 2, 3}),
 		newUidPack([]uint64{2, 3, 4, 5}),
 	}
-	require.Equal(t, []uint64{2, 3}, codec.Decode(IntersectSortedPacked(input), 0))
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{1}, codec.Decode(output, 0))
+}
+
+func TestSubSorted6Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{10, 12, 13}),
+		newUidPack([]uint64{2, 3, 4, 13}),
+	}
+	output := DifferencePacked(input[0], input[1])
+	require.Equal(t, []uint64{10, 12}, codec.Decode(output, 0))
 }

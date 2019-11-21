@@ -19,8 +19,8 @@ package codec
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/stretchr/testify/require"
 )
 
 const testSize = 100
