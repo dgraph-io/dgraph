@@ -28,9 +28,10 @@ import (
 )
 
 const (
-	createdNode          = "newnode"
-	mutationQueryVar     = "x"
-	deleteUidVarMutation = `uid(x) * * .`
+	createdNode             = "newnode"
+	mutationQueryVar        = "x"
+	deleteUidVarMutation    = `uid(x) * * .`
+	updateMutationCondition = `@if(gt(len(x), 0))`
 )
 
 type mutationRewriter struct{}
@@ -111,6 +112,7 @@ func (mrw *mutationRewriter) Rewrite(
 	switch val := val.(type) {
 	case map[string]interface{}:
 		var srcUID string
+		var cond string
 		if m.MutationType() == schema.AddMutation {
 			srcUID = "_:" + createdNode
 		} else {
@@ -131,6 +133,7 @@ func (mrw *mutationRewriter) Rewrite(
 			// added as filters to the query.
 			gqlQuery = rewriteUpsertQueryFromMutation(m)
 			srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
+			cond = updateMutationCondition
 		}
 
 		obj, err := rewriteObject(mutatedType, nil, srcUID, val)
@@ -148,6 +151,7 @@ func (mrw *mutationRewriter) Rewrite(
 		return gqlQuery,
 			[]*dgoapi.Mutation{{
 				SetJson: mutationJSON,
+				Cond:    cond,
 			}},
 			schema.GQLWrapf(err, "failed to rewrite mutation payload")
 	case []interface{}:

@@ -45,6 +45,7 @@ type TestCase struct {
 	Explanation    string
 	DgraphMutation string
 	DgraphQuery    string
+	Condition      string
 	Error          *x.GqlError
 }
 
@@ -82,6 +83,7 @@ func TestMutationRewriting(t *testing.T) {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				require.Len(t, muts, 1)
+				require.Equal(t, tcase.Condition, muts[0].Cond)
 				jsonMut := string(muts[0].SetJson)
 				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
