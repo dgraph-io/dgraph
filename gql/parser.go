@@ -2614,6 +2614,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, it.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
+				if len(langs) > 1 {
+					return nil, it.Errorf("Sorting by an attribute: [%s] "+
+						"can only be done on one language", val)
+				}
 				gq.Order = append(gq.Order,
 					&pb.Order{Attr: attr, Desc: key == "orderdesc", Langs: langs})
 				order[val] = true
@@ -3029,6 +3033,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 							"can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
+					if len(langs) > 1 {
+						return it.Errorf("Sorting by an attribute: [%s] "+
+							"can only be done on one language", p.Val)
+					}
 					curp.Order = append(curp.Order,
 						&pb.Order{Attr: attr, Desc: p.Key == "orderdesc", Langs: langs})
 					order[p.Val] = true
