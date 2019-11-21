@@ -388,17 +388,16 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
 
-	// add query response if any
+	// add query response if any, usual op if resp.Json == '{}' (i.e. l <= 2)
 	l := len(resp.Json)
-	if l > 0 && resp.Json[l-1] == '}' {
+	if l > 2 && resp.Json[l-1] == '}' {
 		data, err := json.Marshal(mp)
 		if err != nil {
 			x.SetStatusWithData(w, x.Error, err.Error())
 			return
 		}
 
-		var out bytes.Buffer
-		out = *bytes.NewBuffer(resp.Json[:(l - 1)])
+		out := bytes.NewBuffer(resp.Json[:(l - 1)])
 		out.WriteRune(',')
 
 		// data[0] must be '{'
