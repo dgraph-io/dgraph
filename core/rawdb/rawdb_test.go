@@ -10,8 +10,8 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 )
 
-func setup() (polkadb.Database, *types.BlockHeader) {
-	h := &types.BlockHeader{
+func setup() (polkadb.Database, *types.BlockHeaderWithHash) {
+	h := &types.BlockHeaderWithHash{
 		ParentHash:     common.BytesToHash([]byte("parent_test")),
 		Number:         big.NewInt(2),
 		StateRoot:      common.BytesToHash([]byte("state_root_test")),

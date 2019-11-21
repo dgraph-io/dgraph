@@ -16,7 +16,7 @@ func check(e error) {
 }
 
 // SetHeader stores a block header into the KV-store; key is headerPrefix + hash
-func SetHeader(db polkadb.Writer, header *types.BlockHeader) {
+func SetHeader(db polkadb.Writer, header *types.BlockHeaderWithHash) {
 	hash := header.Hash
 
 	// Write the encoded header
@@ -28,8 +28,8 @@ func SetHeader(db polkadb.Writer, header *types.BlockHeader) {
 }
 
 // GetHeader retrieves block header from KV-store using headerKey
-func GetHeader(db polkadb.Reader, hash common.Hash) types.BlockHeader {
-	var result types.BlockHeader
+func GetHeader(db polkadb.Reader, hash common.Hash) types.BlockHeaderWithHash {
+	var result types.BlockHeaderWithHash
 	get(db, headerKey(hash), &result)
 	return result
 }

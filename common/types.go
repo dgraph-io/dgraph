@@ -18,8 +18,6 @@ package common
 
 import (
 	"fmt"
-
-	"math/big"
 )
 
 // Hash used to store a blake2b hash
@@ -41,13 +39,4 @@ func NewHash(in []byte) (res Hash) {
 func (h Hash) ToBytes() []byte {
 	b := [32]byte(h)
 	return b[:]
-}
-
-// BlockHeader is a state block header
-type BlockHeader struct {
-	ParentHash     Hash
-	Number         *big.Int
-	StateRoot      Hash
-	ExtrinsicsRoot Hash
-	Digest         []byte // any additional block info eg. logs, seal
 }

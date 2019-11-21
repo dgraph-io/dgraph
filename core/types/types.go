@@ -27,7 +27,7 @@ type Extrinsic []byte
 
 // Block defines a state block
 type Block struct {
-	Header      BlockHeader
+	Header      BlockHeaderWithHash
 	Body        BlockBody
 	arrivalTime uint64 // arrival time of this block
 }
@@ -42,8 +42,8 @@ func (b *Block) SetBlockArrivalTime(t uint64) {
 	b.arrivalTime = t
 }
 
-// BlockHeader is a state block header
-type BlockHeader struct {
+// BlockHeaderWithHash is a state block header
+type BlockHeaderWithHash struct {
 	ParentHash     common.Hash `json:"parentHash"`
 	Number         *big.Int    `json:"number"`
 	StateRoot      common.Hash `json:"stateRoot"`
@@ -59,7 +59,7 @@ type BlockBody []byte
 /// BlockData is stored within the BlockDB
 type BlockData struct {
 	Hash   common.Hash
-	Header *BlockHeader
+	Header *BlockHeaderWithHash
 	Body   *BlockBody
 	// Receipt
 	// MessageQueue

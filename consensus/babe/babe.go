@@ -49,11 +49,11 @@ type Session struct {
 	isProducer     map[uint64]bool // whether we are a block producer at a slot
 
 	// Block announce channel used every time a block is created
-	blockAnnounce chan<- p2p.BlockAnnounceMessage
+	blockAnnounce chan<- p2p.Message
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
-func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime, blockAnnounceChannel chan<- p2p.BlockAnnounceMessage) (*Session, error) {
+func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime, blockAnnounceChannel chan<- p2p.Message) (*Session, error) {
 	babeSession := &Session{
 		vrfPublicKey:  pubkey,
 		vrfPrivateKey: privkey,
@@ -107,8 +107,12 @@ func (b *Session) invokeBlockAuthoring() {
 			}
 
 			// Broadcast the block
-			blockAnnounceMsg := p2p.BlockAnnounceMessage{
-				Number: block.Header.Number,
+			blockAnnounceMsg := &p2p.BlockAnnounceMessage{
+				ParentHash:     block.Header.ParentHash,
+				Number:         block.Header.Number,
+				StateRoot:      block.Header.StateRoot,
+				ExtrinsicsRoot: block.Header.ExtrinsicsRoot,
+				Digest:         block.Header.Digest,
 			}
 			b.blockAnnounce <- blockAnnounceMsg
 		}
@@ -203,7 +207,7 @@ func (b *Session) vrfSign(input []byte) ([]byte, error) {
 // BuildBlock Builds the block
 func (s *Session) buildBlock(number *big.Int) (*types.Block, error) {
 	block := types.Block{
-		Header: types.BlockHeader{Number: number},
+		Header: types.BlockHeaderWithHash{Number: number},
 		Body:   []byte{1, 2, 3, 4, 5},
 	}
 	return &block, nil

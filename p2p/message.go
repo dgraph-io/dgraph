@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 
@@ -285,7 +286,13 @@ func (bm *BlockRequestMessage) Id() string {
 }
 
 // BlockAnnounceMessage is a state block header
-type BlockAnnounceMessage common.BlockHeader
+type BlockAnnounceMessage struct {
+	ParentHash     common.Hash
+	Number         *big.Int
+	StateRoot      common.Hash
+	ExtrinsicsRoot common.Hash
+	Digest         []byte // any additional block info eg. logs, seal
+}
 
 func (bm *BlockAnnounceMessage) GetType() int {
 	return BlockAnnounceMsgType

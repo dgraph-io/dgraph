@@ -38,17 +38,22 @@ type Service struct {
 	b  *babe.Session
 
 	recChan  <-chan []byte
-	sendChan chan<- []byte
+	sendChan chan<- p2p.Message
 }
 
 // NewService returns a Service that connects the runtime, BABE, and the p2p messages.
-func NewService(rt *runtime.Runtime, b *babe.Session, recChan <-chan []byte, sendChan chan<- []byte) *Service {
+func NewService(rt *runtime.Runtime, recChan <-chan []byte, sendChan chan<- p2p.Message) (*Service, error) {
+	b, err := babe.NewSession([32]byte{}, [64]byte{}, rt, sendChan)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Service{
 		rt:       rt,
 		b:        b,
 		recChan:  recChan,
 		sendChan: sendChan,
-	}
+	}, nil
 }
 
 // Start begins the service. This begins watching the message channel for new block or transaction messages.
