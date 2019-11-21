@@ -32,6 +32,87 @@ func newUidPack(data []uint64) *pb.UidPack {
 	return encoder.Done()
 }
 
+func TestMergeSorted1Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{55}),
+	}
+	require.Equal(t, []uint64{55}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted2Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 3, 6, 8, 10}),
+		newUidPack([]uint64{2, 4, 5, 7, 15}),
+	}
+	require.Equal(t, []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15},
+		codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted3Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 3, 6, 8, 10}),
+		newUidPack([]uint64{}),
+	}
+	require.Equal(t, []uint64{1, 3, 6, 8, 10}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted4Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{}),
+		newUidPack([]uint64{1, 3, 6, 8, 10}),
+	}
+	require.Equal(t, []uint64{1, 3, 6, 8, 10}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted5Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{}),
+		newUidPack([]uint64{}),
+	}
+	require.Empty(t, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted6Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{11, 13, 16, 18, 20}),
+		newUidPack([]uint64{12, 14, 15, 15, 16, 16, 17, 25}),
+		newUidPack([]uint64{1, 2}),
+	}
+	require.Equal(t,
+		[]uint64{1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25},
+		codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted7Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{5, 6, 7}),
+		newUidPack([]uint64{3, 4}),
+		newUidPack([]uint64{1, 2}),
+		newUidPack([]uint64{}),
+	}
+	require.Equal(t, []uint64{1, 2, 3, 4, 5, 6, 7}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted8Packed(t *testing.T) {
+	input := []*pb.UidPack{}
+	require.Empty(t, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted9Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 1, 1}),
+	}
+	require.Equal(t, []uint64{1}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
+func TestMergeSorted10Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3, 3, 6}),
+		newUidPack([]uint64{4, 8, 9}),
+	}
+	require.Equal(t, []uint64{1, 2, 3, 4, 6, 8, 9}, codec.Decode(MergeSortedPacked(input), 0))
+}
+
 func TestUIDListIntersect1Packed(t *testing.T) {
 	u := newUidPack([]uint64{1, 2, 3})
 	v := newUidPack([]uint64{})

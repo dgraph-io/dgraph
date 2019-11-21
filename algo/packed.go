@@ -17,6 +17,7 @@
 package algo
 
 import (
+	"container/heap"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -188,4 +189,71 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 	}
 
 	return encoder.Done()
+}
+
+// MergeSorted merges sorted compressed lists of uids.
+func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
+	if len(lists) == 0 {
+		return nil
+	}
+
+	h := &uint64Heap{}
+	heap.Init(h)
+	maxSz := 0
+	// iters stores the iterator for each corresponding, list.
+	iters := make([]*codec.UidPackIterator, len(lists))
+	// lenghts stores the length of each list so they are only computed once.
+	lenghts := make([]int, len(lists))
+	blockSize := 0
+
+	for i, l := range lists {
+		if l == nil {
+			continue
+		}
+
+		if blockSize == 0 {
+			blockSize = int(l.BlockSize)
+		}
+
+		iters[i] = codec.NewUidPackIterator(lists[i])
+
+		lenList := codec.ExactLen(lists[i])
+		lenghts[i] = lenList
+		if lenList > 0 {
+			heap.Push(h, elem{
+				val:     iters[i].Get(),
+				listIdx: i,
+			})
+			if lenList > maxSz {
+				maxSz = lenList
+			}
+		}
+	}
+
+	// Our final output.
+	output := codec.Encoder{BlockSize: blockSize}
+	// empty is used to keep track of whether the encoder contains data since the
+	// encoder does not have an equivalent of len.
+	empty := true
+	// idx[i] is the element we are looking at for lists[i].
+	idx := make([]int, len(lists))
+	var last uint64   // Last element added to sorted / final output.
+	for h.Len() > 0 { // While heap is not empty.
+		me := (*h)[0] // Peek at the top element in heap.
+		if empty || me.val != last {
+			output.Add(me.val) // Add if unique.
+			last = me.val
+			empty = false
+		}
+		if idx[me.listIdx] >= lenghts[me.listIdx]-1 {
+			heap.Pop(h)
+		} else {
+			idx[me.listIdx]++
+			iters[me.listIdx].Next()
+			val := iters[me.listIdx].Get()
+			(*h)[0].val = val
+			heap.Fix(h, 0) // Faster than Pop() followed by Push().
+		}
+	}
+	return output.Done()
 }
