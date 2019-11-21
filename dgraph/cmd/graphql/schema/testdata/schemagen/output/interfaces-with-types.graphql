@@ -191,14 +191,10 @@ enum StarshipOrderable {
 input CharacterFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: CharacterFilter_appearsIn_hash
+	appearsIn: Episode_hash
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
-}
-
-input CharacterFilter_appearsIn_hash {
-	eq: [Episode!]!
 }
 
 input CharacterOrder {
@@ -214,14 +210,10 @@ input CharacterRef {
 input DroidFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: DroidFilter_appearsIn_hash
+	appearsIn: Episode_hash
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
-}
-
-input DroidFilter_appearsIn_hash {
-	eq: [Episode!]!
 }
 
 input DroidInput {
@@ -241,17 +233,17 @@ input DroidRef {
 	id: ID!
 }
 
+input Episode_hash {
+	eq: [Episode!]!
+}
+
 input HumanFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: HumanFilter_appearsIn_hash
+	appearsIn: Episode_hash
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
-}
-
-input HumanFilter_appearsIn_hash {
-	eq: [Episode!]!
 }
 
 input HumanInput {

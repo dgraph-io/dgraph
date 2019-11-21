@@ -1024,7 +1024,7 @@ func TestQueryInterfaceAfterAddMutation(t *testing.T) {
 	t.Run("test query all characters", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
-			queryCharacter (filter: {appearsIn : {regexp: "/EMPIRE/"}}) {
+			queryCharacter {
 			  name
 			  appearsIn
 			  ... on Human {

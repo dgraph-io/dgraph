@@ -186,63 +186,17 @@ input PostFilter {
 	numLikes: IntFilter
 	score: FloatFilter
 	isPublished: Boolean
-	postType: PostFilter_postType_hash
+	postType: PostType_hash
 	postTypeTrigram: StringRegExpFilter
 	postTypeRegexp: StringRegExpFilter
-	postTypeExact: PostFilter_postTypeExact_exact
-	postTypeHash: PostFilter_postTypeHash_hash
-	postTypeRegexpExact: PostFilter_postTypeRegexpExact_exact_StringRegExpFilter
-	postTypeHashExact: PostFilter_postTypeHashExact_hash_StringRegExpFilter
-	postTypeNone: PostFilter_postTypeNone_hash
+	postTypeExact: PostType_exact
+	postTypeHash: PostType_hash
+	postTypeRegexpExact: PostType_exact_StringRegExpFilter
+	postTypeHashExact: PostType_hash_StringRegExpFilter
+	postTypeNone: PostType_hash
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
-}
-
-input PostFilter_postTypeExact_exact {
-	eq: PostType
-	le: PostType
-	lt: PostType
-	ge: PostType
-	gt: PostType
-}
-
-input PostFilter_postTypeHashExact_hash {
-	eq: PostType
-}
-
-input PostFilter_postTypeHashExact_hash_StringRegExpFilter {
-	eq: PostType
-	regexp: String
-}
-
-input PostFilter_postTypeHash_hash {
-	eq: PostType
-}
-
-input PostFilter_postTypeNone_hash {
-	eq: PostType
-}
-
-input PostFilter_postTypeRegexpExact_exact {
-	eq: PostType
-	le: PostType
-	lt: PostType
-	ge: PostType
-	gt: PostType
-}
-
-input PostFilter_postTypeRegexpExact_exact_StringRegExpFilter {
-	eq: PostType
-	le: PostType
-	lt: PostType
-	ge: PostType
-	gt: PostType
-	regexp: String
-}
-
-input PostFilter_postType_hash {
-	eq: PostType
 }
 
 input PostInput {
@@ -277,6 +231,32 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input PostType_exact {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+}
+
+input PostType_exact_StringRegExpFilter {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+	regexp: String
+}
+
+input PostType_hash {
+	eq: PostType
+}
+
+input PostType_hash_StringRegExpFilter {
+	eq: PostType
+	regexp: String
 }
 
 input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {

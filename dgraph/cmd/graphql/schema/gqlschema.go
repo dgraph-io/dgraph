@@ -548,7 +548,7 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 				})
 			}
 
-			filterNames[i] = filterName + "_" + fld.Name + "_" + search
+			filterNames[i] = fld.Type.Name() + "_" + search
 			schema.Types[filterNames[i]] = &ast.Definition{
 				Kind:   ast.InputObject,
 				Name:   filterNames[i],
