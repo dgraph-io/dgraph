@@ -14,6 +14,7 @@
       post(func: uid(0x4)) {
         postID : uid
         title : Post.title
+        dgraph.uid : uid
       }
     }
 
@@ -33,6 +34,7 @@
       result(func: uid(0x4)) {
         postID : uid
         title : Post.title
+        dgraph.uid : uid
       }
     }
 
@@ -52,6 +54,7 @@
       post(func: uid(0x4)) {
         id : uid
         postTitle : Post.title
+        dgraph.uid : uid
       }
     }
 
@@ -76,7 +79,9 @@
         title : Post.title
         author : Post.author {
           name : Author.name
+          dgraph.uid : uid
         }
+        dgraph.uid : uid
       }
     }
 
@@ -103,7 +108,9 @@
         postAuthor : Post.author {
           authorID : uid
           authorName : Author.name
+          dgraph.uid : uid
         }
+        dgraph.uid : uid
       }
     }
 
@@ -130,7 +137,9 @@
         author : Post.author {
           name : Author.name
           posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+          dgraph.uid : uid
         }
+        dgraph.uid : uid
       }
     }
 
@@ -156,5 +165,6 @@
     query {
       post(func: uid(0x4)) {
         title : Post.title
+        dgraph.uid : uid
       }
     }
