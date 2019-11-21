@@ -272,6 +272,11 @@ func (d *Decoder) Next() []uint64 {
 	return d.unpackBlock()
 }
 
+// BlockIdx returns the index of the block that is currently being decoded.
+func (d *Decoder) BlockIdx() int {
+	return d.blockIdx
+}
+
 // Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
 // given size, with the last block having fewer uids. Within each block, it stores the first uid as
 // base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,

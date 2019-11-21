@@ -17,11 +17,12 @@
 package algo
 
 import (
-	"github.com/stretchr/testify/require"
+	"math"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/stretchr/testify/require"
 )
 
 func newUidPack(data []uint64) *pb.UidPack {
@@ -275,4 +276,35 @@ func TestSubSorted6Packed(t *testing.T) {
 	}
 	output := DifferencePacked(input[0], input[1])
 	require.Equal(t, []uint64{10, 12}, codec.Decode(output, 0))
+}
+
+func TestIndexOfPacked1(t *testing.T) {
+	encoder := codec.Encoder{BlockSize: 10}
+	for i := 0; i < 1000; i++ {
+		encoder.Add(uint64(i))
+	}
+	pack := encoder.Done()
+
+	for i := 0; i < 1000; i++ {
+		require.Equal(t, i, IndexOfPacked(pack, uint64(i)))
+	}
+	require.Equal(t, -1, IndexOfPacked(pack, 1000))
+}
+
+func TestIndexOfPacked2(t *testing.T) {
+	encoder := codec.Encoder{BlockSize: 10}
+	for i := 0; i < 100; i++ {
+		encoder.Add(uint64(i))
+	}
+	pack := encoder.Done()
+
+	require.Equal(t, -1, IndexOfPacked(pack, 100))
+	require.Equal(t, -1, IndexOfPacked(pack, 101))
+	require.Equal(t, -1, IndexOfPacked(pack, 1000))
+	require.Equal(t, -1, IndexOfPacked(pack, math.MaxUint64))
+}
+
+func TestIndexOfPacked3(t *testing.T) {
+	require.Equal(t, -1, IndexOfPacked(nil, 0))
+	require.Equal(t, -1, IndexOfPacked(nil, math.MaxUint64))
 }

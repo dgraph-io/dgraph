@@ -191,7 +191,7 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 	return encoder.Done()
 }
 
-// MergeSorted merges sorted compressed lists of uids.
+// MergeSortedPacked merges sorted compressed lists of uids.
 func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	if len(lists) == 0 {
 		return nil
@@ -256,4 +256,39 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		}
 	}
 	return output.Done()
+}
+
+// IndexOfPacked finds the index of the given uid in the UidPack. If it doesn't find it,
+// it returns -1.
+func IndexOfPacked(u *pb.UidPack, uid uint64) int {
+	if u == nil {
+		return -1
+	}
+	decoder := codec.Decoder{Pack: u}
+	decoder.Seek(0, codec.SeekStart)
+
+	for {
+		if !decoder.Valid() {
+			return -1
+		}
+
+		if decoder.PeekNextBase() < uid {
+			decoder.Next()
+			continue
+		}
+
+		uids := decoder.Uids()
+		if len(uids) == 0 {
+			return -1
+		}
+
+		i := sort.Search(len(uids), func(i int) bool { return uids[i] >= uid })
+		if i < len(uids) && uids[i] == uid {
+			return i + int(u.BlockSize)*decoder.BlockIdx()
+		}
+
+		decoder.Next()
+	}
+
+	return -1
 }
