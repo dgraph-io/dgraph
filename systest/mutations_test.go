@@ -86,6 +86,7 @@ func TestSystem(t *testing.T) {
 	t.Run("reverse count index", wrap(ReverseCountIndex))
 	t.Run("type predicate check", wrap(TypePredicateCheck))
 	t.Run("internal predicate check", wrap(InternalPredicateCheck))
+	t.Run("infer schema as list", wrap(InferSchemaAsList))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1733,4 +1734,25 @@ func InternalPredicateCheck(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
+}
+
+func InferSchemaAsList(t *testing.T, c *dgo.Dgraph) {
+	txn := c.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:bob <name> "Bob" .
+		_:bob <name> "Bob Marley" .
+		_:alice <nickname> "Alice" .
+		_:carol <nickname> "Carol" .`),
+	})
+
+	require.NoError(t, err)
+	query := `schema(preds: [name, nickname]) {
+		list
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"schema": [{"predicate":"name", "list":true},
+		{"predicate":"nickname"}]}`, string(resp.Json))
 }

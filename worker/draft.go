@@ -219,8 +219,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Since raft committed logs are serialized, we can derive
 	// schema here without any locking
 
-	// stores a map of predicate and type of first mutation for each predicate
+	// Type to store the count for each <subject, pred> in the  mutations.
+	type subjectPred struct {
+		subject uint64
+		pred    string
+	}
+
+	// Stores a map of predicate and type of first mutation for each predicate.
 	schemaMap := make(map[string]types.TypeID)
+	// Stores the count of <subject, pred> pairs to help figure out whether
+	// schemas should be created as scalars or lists of scalars.
+	schemaCountMap := make(map[subjectPred]int)
+	// map to store whether a schema should be created as a list.
+	schemaAsList := make(map[string]bool)
 	for _, edge := range proposal.Mutations.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
@@ -232,12 +243,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
-		// Dont derive schema when doing deletion.
+		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
 			continue
 		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
+		}
+
+		subPredPair := subjectPred{subject: edge.Entity, pred: edge.Attr}
+		schemaCountMap[subPredPair]++
+		if count := schemaCountMap[subPredPair]; count > 1 {
+			schemaAsList[edge.Attr] = true
 		}
 	}
 
@@ -253,7 +270,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			if err := createSchema(attr, storageType); err != nil {
+			glog.Infof("schemaAsList %v", schemaAsList)
+			glog.Infof("schemaCountMap %v", schemaCountMap)
+			if err := createSchema(attr, storageType, schemaAsList[attr]); err != nil {
 				return err
 			}
 		}
