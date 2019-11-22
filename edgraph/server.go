@@ -909,6 +909,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
 		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
+		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
 
 	return resp, nil
