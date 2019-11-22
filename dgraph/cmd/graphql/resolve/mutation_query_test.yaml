@@ -160,7 +160,7 @@
     }
 
 -
-  name: "filter at single level"
+  name: "filter update result"
   gqlquery: |
     mutation {
       updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) {
@@ -178,7 +178,7 @@
       }
     }
 -
-  name: "order at single level"
+  name: "order update result"
   gqlquery: |
     mutation {
       updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) {
@@ -197,7 +197,7 @@
     }
 
 -
-  name: "order and pagination at single level"
+  name: "order and pagination update result"
   gqlquery: |
     mutation {
       updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) {

@@ -67,6 +67,23 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 	}
 }
 
+func intersection(a, b []uint64) []uint64 {
+	m := make(map[uint64]bool)
+	var c []uint64
+
+	for _, item := range a {
+		m[item] = true
+	}
+
+	for _, item := range b {
+		if _, ok := m[item]; ok {
+			c = append(c, item)
+		}
+	}
+
+	return c
+}
+
 func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
@@ -77,16 +94,21 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	}
 
 	if ids := idFilter(field); ids != nil {
-		addUIDFunc(dgQuery, ids)
+		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
 
+	addArgumentsToField(dgQuery, field)
+	return dgQuery
+}
+
+// addArgumentsToField adds various different arguments to a field, such as
+// filter, order, pagination and selection set.
+func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
 	addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
-
-	return dgQuery
 }
 
 func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
@@ -103,12 +125,8 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	} else {
 		addTypeFunc(dgQuery, field.Type().Name())
 	}
-	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	addFilter(dgQuery, field.Type(), filter)
-	addOrder(dgQuery, field)
-	addPagination(dgQuery, field)
-	addSelectionSetFrom(dgQuery, field)
 
+	addArgumentsToField(dgQuery, field)
 	return dgQuery
 }
 
