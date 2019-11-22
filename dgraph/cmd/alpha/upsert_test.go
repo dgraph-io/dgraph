@@ -2426,8 +2426,34 @@ upsert {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 
-	// second time
-	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	// second time, using Json mutation
+	m1Json := `
+{
+  "query": "{q(func: eq(email, \"email@company.io\")) {v as uid\n c as count\n nc as math(c+1)}}",
+  "mutations": [
+    {
+      "set": [
+        {
+          "uid": "uid(v)",
+          "name": "name",
+          "email": "email@company.io",
+          "count": "1"
+        }
+      ],
+      "cond": "@if(eq(len(v), 0))"
+    },
+    {
+      "set": [
+        {
+          "uid": "uid(v)",
+          "count": "val(nc)"
+        }
+      ],
+      "cond": "@if(not(eq(len(v), 0)))"
+    }
+  ]
+}`
+	mr, err = mutationWithTs(m1Json, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"1-count"}, mr.preds)
@@ -2554,4 +2580,235 @@ upsert {
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, 0, len(mr.preds))
+}
+
+func TestJsonOldAndNewAPI(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+{
+  "query": "{q(func: eq(works_for, \"company1\")) {u as uid}}",
+  "set": [
+    {
+      "uid": "uid(u)",
+      "color": "red"
+    }
+  ],
+  "cond": "@if(gt(len(u), 0))",
+  "mutations": [
+    {
+      "set": [
+        {
+          "uid": "uid(u)",
+          "works_with": {
+            "uid": "0x01"
+          }
+        }
+      ],
+      "cond": "@if(gt(len(u), 0))"
+    }
+  ]
+}`
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"1-color", "1-works_with"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 2, len(result.Q))
+	q2 := `
+  {
+    q(func: eq(works_for, "%s")) {
+      name
+      works_for
+      color
+      works_with {
+        uid
+      }
+    }
+  }`
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+  {
+    "data": {
+      "q": [
+        {
+          "name": "user1",
+          "works_for": "company1",
+          "color": "red",
+          "works_with": [
+            {
+              "uid": "0x1"
+            }
+          ]
+        },
+        {
+          "name": "user2",
+          "works_for": "company1",
+          "color": "red",
+          "works_with": [
+            {
+              "uid": "0x1"
+            }
+          ]
+        }
+      ]
+    }
+  }`, res)
+}
+
+func TestJsonNewAPI(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+{
+  "query": "{q(func: eq(works_for, \"company1\")) {u as uid}}",
+  "mutations": [
+    {
+      "set": [
+        {
+          "uid": "uid(u)",
+          "works_with": {
+            "uid": "0x01"
+          }
+        }
+      ],
+      "cond": "@if(gt(len(u), 0))"
+    },
+    {
+      "set": [
+        {
+          "uid": "uid(u)",
+          "color": "red"
+        }
+      ],
+      "cond": "@if(gt(len(u), 0))"
+    }
+  ]
+}`
+	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"1-color", "1-works_with"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 2, len(result.Q))
+	q2 := `
+  {
+    q(func: eq(works_for, "%s")) {
+      name
+      works_for
+      color
+      works_with {
+        uid
+      }
+    }
+  }`
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+  {
+    "data": {
+      "q": [
+        {
+          "name": "user1",
+          "works_for": "company1",
+          "color": "red",
+          "works_with": [
+            {
+              "uid": "0x1"
+            }
+          ]
+        },
+        {
+          "name": "user2",
+          "works_for": "company1",
+          "color": "red",
+          "works_with": [
+            {
+              "uid": "0x1"
+            }
+          ]
+        }
+      ]
+    }
+  }`, res)
+}
+
+func TestUpsertMultiValueJson(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	// add color to all employees of company1
+	m2 := `
+{
+  "query": "{q(func: eq(works_for, \"company1\")) {u as uid}}",
+  "mutations": [
+    {
+      "set": [
+        {
+          "uid": "uid(u)",
+          "color": "red"
+        }
+      ],
+      "cond": "@if(gt(len(u), 0))"
+    }
+  ]
+}`
+
+	mr, err := mutationWithTs(m2, "application/json", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"1-color"}, mr.preds)
+	result := QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 2, len(result.Q))
+	q2 := `
+{
+  q(func: eq(works_for, "%s")) {
+    name
+    works_for
+    color
+    works_with
+  }
+}`
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1","color":"red"},`+
+		`{"name":"user2","works_for":"company1","color":"red"}]}}`, res)
+
+	// delete color for employess of company1 and set color for employees of company2
+	m3 := `
+{
+  "query": "{user1(func: eq(works_for, \"company1\")) {c1 as uid} user2(func: eq(works_for, \"company2\")) {c2 as uid}}",
+  "mutations": [
+    {
+      "delete": [
+        {
+          "uid": "uid(c1)",
+          "color": null
+        }
+      ],
+      "cond": "@if(le(len(c1), 100) AND lt(len(c2), 100))"
+    },
+    {
+      "set": [
+        {
+          "uid": "uid(c2)",
+          "color": "blue"
+        }
+      ],
+      "cond": "@if(le(len(c1), 100) AND lt(len(c2), 100))"
+    }
+  ]
+}`
+	mr, err = mutationWithTs(m3, "application/json", false, true, 0)
+	require.NoError(t, err)
+	result = QueryResult{}
+	require.NoError(t, json.Unmarshal(mr.data, &result))
+	require.Equal(t, 2, len(result.User1))
+	require.Equal(t, 2, len(result.User2))
 }

@@ -318,14 +318,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		mu := &api.Mutation{}
-		req = &api.Request{Mutations: []*api.Mutation{mu}}
-		if setJSON, ok := ms["set"]; ok && setJSON != nil {
-			mu.SetJson = setJSON.bs
-		}
-		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
-			mu.DeleteJson = delJSON.bs
-		}
+		req = &api.Request{}
 		if queryText, ok := ms["query"]; ok && queryText != nil {
 			req.Query, err = strconv.Unquote(string(queryText.bs))
 			if err != nil {
@@ -333,11 +326,52 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if condText, ok := ms["cond"]; ok && condText != nil {
-			mu.Cond, err = strconv.Unquote(string(condText.bs))
-			if err != nil {
-				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+
+		extractMutation := func(jsMap map[string]*skipJSONUnmarshal) (*api.Mutation, error) {
+			mu := &api.Mutation{}
+			empty := true
+			if setJSON, ok := jsMap["set"]; ok && setJSON != nil {
+				empty = false
+				mu.SetJson = setJSON.bs
+			}
+			if delJSON, ok := jsMap["delete"]; ok && delJSON != nil {
+				empty = false
+				mu.DeleteJson = delJSON.bs
+			}
+			if condText, ok := jsMap["cond"]; ok && condText != nil {
+				mu.Cond, err = strconv.Unquote(string(condText.bs))
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if empty {
+				return nil, nil
+			}
+
+			return mu, nil
+		}
+		if mu, err := extractMutation(ms); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		} else if mu != nil {
+			req.Mutations = append(req.Mutations, mu)
+		}
+		if mus, ok := ms["mutations"]; ok && mus != nil {
+			var mm []map[string]*skipJSONUnmarshal
+			if err := json.Unmarshal(mus.bs, &mm); err != nil {
+				jsonErr := convertJSONError(string(mus.bs), err)
+				x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 				return
+			}
+
+			for _, m := range mm {
+				if mu, err := extractMutation(m); err != nil {
+					x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+					return
+				} else if mu != nil {
+					req.Mutations = append(req.Mutations, mu)
+				}
 			}
 		}
 
