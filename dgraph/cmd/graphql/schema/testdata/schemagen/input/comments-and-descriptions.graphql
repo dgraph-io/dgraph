@@ -1,0 +1,38 @@
+# comment - see also e2e schema
+
+"""
+Desc
+"""
+interface I {
+    """
+    Desc
+    """
+    s: String!
+}
+
+"""
+Desc
+"""
+type T implements I {
+    # # comment
+    id: ID! # comment
+
+    """
+    Desc
+    """
+    i: Int
+}
+
+# comment
+
+"""
+Desc
+"""
+enum AnEnum {
+    AVal
+
+    """
+    Desc
+    """
+    AnotherVal
+}
