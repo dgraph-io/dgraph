@@ -159,17 +159,20 @@ func (r *reducer) encodeAndWrite(
 			streamId = atomic.AddUint32(&r.streamId, 1)
 			preds[pk.Attr] = streamId
 		}
-		// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
-		// should build a way in StreamWriter to indicate that the stream is over, so the
-		// table for that stream can be flushed and memory released.
+
 		kv.StreamId = streamId
 	}
 
-	addDone := func(l *bpb.KVList, doneSteams []uint32) *bpb.KVList {
+	// Once we have processed all records from single stream, we can mark that stream as done.
+	// This will close underlying table builder in Badger for stream. Since we preallocate 1 MB
+	// of memory for each table builder, this can result in memory save in case we have large
+	// number of streams.
+	// This change limits maximum number of open streams to number of streams created in a single
+	// write call. This can also be optimised if required.
+	addDone := func(doneSteams []uint32, l *bpb.KVList) {
 		for _, SID := range doneSteams {
 			l.Kv = append(l.Kv, &bpb.KV{StreamId: SID, StreamDone: true})
 		}
-		return l
 	}
 
 	var doneStreams []uint32
@@ -188,7 +191,7 @@ func (r *reducer) encodeAndWrite(
 				updateDoneStreams(kv.StreamId)
 				prevSID = kv.StreamId
 			}
-			list = addDone(list, doneStreams)
+			addDone(doneStreams, list)
 			x.Check(writer.Write(list))
 			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
