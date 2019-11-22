@@ -23,7 +23,7 @@ type Post {
 	postTypeExact: PostType @search(by: [exact])
 	postTypeHash: PostType @search(by: [hash])
 	postTypeRegexpExact: PostType @search(by: [exact,regexp])
-	postTypeHashExact: PostType @search(by: [hash,regexp])
+	postTypeHashRegexp: PostType @search(by: [hash,regexp])
 	postTypeNone: PostType @search(by: [])
 }
 
@@ -167,7 +167,7 @@ input PatchPost {
 	postTypeExact: PostType
 	postTypeHash: PostType
 	postTypeRegexpExact: PostType
-	postTypeHashExact: PostType
+	postTypeHashRegexp: PostType
 	postTypeNone: PostType
 }
 
@@ -192,7 +192,7 @@ input PostFilter {
 	postTypeExact: PostType_exact
 	postTypeHash: PostType_hash
 	postTypeRegexpExact: PostType_exact_StringRegExpFilter
-	postTypeHashExact: PostType_hash_StringRegExpFilter
+	postTypeHashRegexp: PostType_hash_StringRegExpFilter
 	postTypeNone: PostType_hash
 	and: PostFilter
 	or: PostFilter
@@ -219,7 +219,7 @@ input PostInput {
 	postTypeExact: PostType
 	postTypeHash: PostType
 	postTypeRegexpExact: PostType
-	postTypeHashExact: PostType
+	postTypeHashRegexp: PostType
 	postTypeNone: PostType
 }
 

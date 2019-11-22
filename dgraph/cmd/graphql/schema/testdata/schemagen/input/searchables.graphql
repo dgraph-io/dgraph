@@ -23,7 +23,7 @@ type Post {
         postTypeExact: PostType @search(by: [exact])
         postTypeHash: PostType @search(by: [hash])
         postTypeRegexpExact: PostType @search(by: [exact, regexp])
-        postTypeHashExact: PostType @search(by: [hash, regexp])
+        postTypeHashRegexp: PostType @search(by: [hash, regexp])
         postTypeNone: PostType @search(by: [])
 }
 
