@@ -55,10 +55,6 @@ type s3Handler struct {
 	uri                      *url.URL
 }
 
-func (h *s3Handler) hasCredentials() bool {
-	return h.creds.accessKey != "" && h.creds.secretKey != ""
-}
-
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
@@ -70,9 +66,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	var creds credentials.Value
-	if h.creds.anonymous {
+	if h.creds.isAnonymous() {
 		// No need to setup credentials.
-	} else if !h.hasCredentials() {
+	} else if !h.creds.hasCredentials() {
 		var provider credentials.Provider
 		switch uri.Scheme {
 		case "s3":
