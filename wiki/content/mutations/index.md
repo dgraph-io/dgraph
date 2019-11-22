@@ -1280,3 +1280,77 @@ Result (when both emails exist and are already attached to the same node):
   "extensions": {...}
 }
 ```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8180/mutate?commitNow=true -d '{
+  "query": "{q1(func: eq(email, \"user_email1@company1.io\")) @filter(not(eq(email, \"user_email2@company1.io\"))) {u1 as uid} \n q2(func: eq(email, \"user_email2@company1.io\")) @filter(not(eq(email, \"user_email1@company1.io\"))) {u2 as uid} \n q3(func: eq(email, \"user_email1@company1.io\")) @filter(eq(email, \"user_email2@company1.io\")) {u3 as uid}}",
+  "mutations": [
+    {
+      "cond": "@if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u1)",
+          "email": "user_email2@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u2)",
+          "email": "user_email1@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io"
+        }
+      ],
+      "delete": [
+        {
+          "uid": "uid(u1)",
+          "name": null,
+          "email": null
+        },
+        {
+          "uid": "uid(u2)",
+          "name": null,
+          "email": null
+        }
+      ]
+    }
+  ]
+}' | jq
+```
