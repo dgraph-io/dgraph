@@ -118,7 +118,7 @@ schemas:
         s5: String @search(by: [fulltext])
         s6: String @search(by: [trigram])
         s7: String @search(by: [regexp])
-        s8: String @search(by: [trigram, fulltext, term, exact]) 
+        s8: String @search(by: [trigram, fulltext, term, exact])
         dt1: DateTime @search
         dt2: DateTime @search(by: [year])
         dt3: DateTime @search(by: [month])
@@ -199,3 +199,91 @@ schemas:
         C.dob: dateTime
       }
       C.dob: dateTime .
+
+  -
+    name: "Schema with @dgraph directive."
+    input: |
+      type A @dgraph(name: "dgraph.type.A") {
+        id: ID!
+        p: Int
+        pList: [Int] @dgraph(name: "dgraph.pList")
+        q: Boolean
+        r: String @dgraph(name: "dgraph.r")
+        rList: [String]
+        s: DateTime @dgraph(name: "dgraph.s")
+        t: Float
+        tList: [Float] @dgraph(name: "dgraph.tList")
+      }
+
+      interface B @dgraph(name: "dgraph.interface.B") {
+        id: ID!
+        name: String! @search(by: [exact]) @dgraph(name: "dgraph.abc.name")
+        age: Int
+      }
+
+      type C implements B @dgraph(name: "dgraph.type.C") {
+        correct: Boolean @search @dgraph(name: "dgraph.correct")
+        incorrect: Boolean
+      }
+
+      type X @dgraph(name: "dgraph.type.X") {
+        e: E @dgraph(name: "dgraph.x.e")
+        f: [E] @dgraph(name: "dgraph.x.eList")
+      }
+      enum E { A }
+
+      type Y {
+        p: Int
+        q: String
+        pList: [Int] @dgraph(name: "dgraph.pList")
+        f: Float @dgraph(name: "dgraph.f")
+      }
+    output: |
+      type dgraph.type.A {
+        dgraph.type.A.p: int
+        dgraph.pList: [int]
+        dgraph.type.A.q: bool
+        dgraph.r: string
+        dgraph.type.A.rList: [string]
+        dgraph.s: dateTime
+        dgraph.type.A.t: float
+        dgraph.tList: [float]
+      }
+      dgraph.type.A.p: int .
+      dgraph.pList: [int] .
+      dgraph.type.A.q: bool .
+      dgraph.r: string .
+      dgraph.type.A.rList: [string] .
+      dgraph.s: dateTime .
+      dgraph.type.A.t: float .
+      dgraph.tList: [float] .
+      type dgraph.interface.B {
+        dgraph.abc.name: string
+        dgraph.interface.B.age: int
+      }
+      dgraph.abc.name: string @index(exact) .
+      dgraph.interface.B.age: int .
+      type dgraph.type.C {
+        dgraph.abc.name: string
+        dgraph.interface.B.age: int
+        dgraph.correct: bool
+        dgraph.type.C.incorrect: bool
+      }
+      dgraph.correct: bool @index(bool) .
+      dgraph.type.C.incorrect: bool .
+      type dgraph.type.X {
+        dgraph.x.e: string
+        dgraph.x.eList: [string]
+      }
+      dgraph.x.e: string @index(exact) .
+      dgraph.x.eList: [string] @index(exact) .
+      type Y {
+        Y.p: int
+        Y.q: string
+        dgraph.pList: [int]
+        dgraph.f: float
+      }
+      Y.p: int .
+      Y.q: string .
+      dgraph.pList: [int] .
+      dgraph.f: float .

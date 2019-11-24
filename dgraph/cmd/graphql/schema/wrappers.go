@@ -263,7 +263,7 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 		interfaceDef := sch.Types[iface]
 		for _, interfaceField := range interfaceDef.Fields {
 			if fieldName == interfaceField.Name {
-				return iface
+				return typeName(interfaceDef)
 			}
 		}
 	}

@@ -18,6 +18,7 @@ package schema
 
 import (
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	dschema "github.com/dgraph-io/dgraph/schema"
@@ -53,7 +54,8 @@ func TestDGSchemaGen(t *testing.T) {
 				require.NoError(t, errs)
 
 				dgSchema := schHandler.DGSchema()
-				if diff := cmp.Diff(sch.Output, dgSchema); diff != "" {
+				if diff := cmp.Diff(strings.Split(sch.Output, "\n"),
+					strings.Split(dgSchema, "\n")); diff != "" {
 					t.Errorf("schema mismatch (-want +got):\n%s", diff)
 				}
 				_, err := dschema.Parse(dgSchema)

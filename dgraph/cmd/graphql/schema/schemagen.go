@@ -153,6 +153,32 @@ func getAllSearchIndexes(val *ast.Value) []string {
 	return res
 }
 
+func typeName(def *ast.Definition) string {
+	name := def.Name
+	dir := def.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return name
+	}
+	nameArg := dir.Arguments.ForName("name")
+	if nameArg == nil {
+		return name
+	}
+	return nameArg.Value.Raw
+}
+
+func fieldName(def *ast.FieldDefinition, typName string) string {
+	name := typName + "." + def.Name
+	dir := def.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return name
+	}
+	nameArg := dir.Arguments.ForName("name")
+	if nameArg == nil {
+		return name
+	}
+	return nameArg.Value.Raw
+}
+
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
@@ -161,14 +187,15 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
+			typName := typeName(def)
 			var typeDef, preds strings.Builder
-			fmt.Fprintf(&typeDef, "type %s {\n", def.Name)
+			fmt.Fprintf(&typeDef, "type %s {\n", typName)
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
 				}
 
-				typName := def.Name
+				typName = typeName(def)
 				// This field could have originally been defined in an interface that this type
 				// implements. If we get a parent interface, then we should prefix the field name
 				// with it instead of def.Name.
@@ -176,6 +203,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				if parentInt != "" {
 					typName = parentInt
 				}
+				fname := fieldName(f, typName)
 
 				var prefix, suffix string
 				if f.Type.Elem != nil {
@@ -188,9 +216,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s .\n", typName, f.Name, typStr)
+						fmt.Fprintf(&preds, "%s: %s .\n", fname, typStr)
 					}
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
@@ -210,18 +238,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
+						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
 					}
 				case ast.Enum:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
 						prefix, "string", suffix,
 					)
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
+					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s @index(exact) .\n", typName, f.Name, typStr)
+						fmt.Fprintf(&preds, "%s: %s @index(exact) .\n", fname, typStr)
 					}
 				}
 			}
