@@ -84,6 +84,33 @@ func intersection(a, b []uint64) []uint64 {
 	return c
 }
 
+// addUID adds UID for every node that we query. Otherwise we can't tell the
+// difference in a query result between a node that's missing and a node that's
+// missing a single value.  E.g. if we are asking for an Author and only the
+// 'text' of all their posts e.g. getAuthor(id: 0x123) { posts { text } }
+// If the author has 10 posts but three of them have a title, but no text,
+// then Dgraph would just return 7 posts.  And we'd have no way of knowing if
+// there's only 7 posts, or if there's more that are missing 'text'.
+// But, for GraphQL, we want to know about those missing values.
+func addUID(dgQuery *gql.GraphQuery) {
+	if len(dgQuery.Children) == 0 {
+		return
+	}
+	for _, c := range dgQuery.Children {
+		addUID(c)
+	}
+
+	uidChild := &gql.GraphQuery{
+		Attr:  "uid",
+		Alias: "dgraph.uid",
+	}
+	dgQuery.Children = append(dgQuery.Children, uidChild)
+}
+
+func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
+	return rewriteAsQueryByIds(field, []uint64{uid})
+}
+
 func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
@@ -96,6 +123,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	if ids := idFilter(field); ids != nil {
 		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
+	addUID(dgQuery)
 
 	addArgumentsToField(dgQuery, field)
 	return dgQuery
@@ -111,10 +139,6 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addSelectionSetFrom(dgQuery, field)
 }
 
-func rewriteAsGet(field schema.Field, uid uint64) *gql.GraphQuery {
-	return rewriteAsQueryByIds(field, []uint64{uid})
-}
-
 func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
@@ -126,6 +150,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		addTypeFunc(dgQuery, field.Type().Name())
 	}
 
+	addUID(dgQuery)
 	addArgumentsToField(dgQuery, field)
 	return dgQuery
 }

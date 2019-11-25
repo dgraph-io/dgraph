@@ -66,6 +66,32 @@ invalid_schemas:
       {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
     ]
 
+  -
+    name: "Enum indexes clash trigram and regexp"
+    input: |
+      type T {
+        f: E @search(by: [trigram, regexp])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the argument to @search 'trigram' is the same as the index 'regexp' provided before and shouldn't be used together",
+      "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "Enum indexes clash hash and exact"
+    input: |
+      type T {
+        f: E @search(by: [hash, exact])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the arguments 'hash' and 'exact' can't be used together as arguments to @search.", "locations": [{"line": 2, "column": 9}]}
+    ]
 
   -
     name: "Reference type that is not in input schema"

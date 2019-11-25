@@ -231,7 +231,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				b4: DateTime @search(by: [bool])
 			}`,
 			expectedErrors: 4},
-		"Enums can only have no arg search": {schema: `
+		"Enums can only have hash, exact, regexp and trigram": {schema: `
 			type X {
 				e1: E @search(by: [int])
 				e2: E @search(by: [float])
@@ -240,17 +240,13 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				e5: E @search(by: [month])
 				e6: E @search(by: [day])
 				e7: E @search(by: [hour])
-				e8: E @search(by: [hash])
-				e9: E @search(by: [exact])
-				e10: E @search(by: [term])
-				e11: E @search(by: [fulltext])
-				e12: E @search(by: [trigram])
-				e13: E @search(by: [regexp])
+				e9: E @search(by: [term])
+				e10: E @search(by: [fulltext])
 			}
 			enum E {
 				A
 			}`,
-			expectedErrors: 13},
+			expectedErrors: 9},
 	}
 
 	for name, test := range tests {

@@ -1,11 +1,29 @@
+# **Don't delete** Comments at top of schemas should work
+# See: https://github.com/dgraph-io/dgraph/issues/4227
+
 type Country {
-        id: ID!
+        # **Don't delete** Comments in types should work
+        id: ID! # **Don't delete** Comments in in lines should work
         name: String! @search(by: [trigram, hash])
 }
 
+# **Don't delete** Comments in the middle of schemas should work
+# Comments in input schemas should _not_ make it through to the
+# generated schema.
+
+"""
+GraphQL descriptions look like this.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 type Author {
         id: ID!
+
+        """
+        GraphQL descriptions can be on fields.  They should work in the input 
+        schema and should make their way into the generated schema.
+        """
         name: String! @search(by: [hash, trigram])
+
         dob: DateTime @search
         reputation: Float @search
         country: Country
@@ -20,16 +38,29 @@ type Post {
         topic: String @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
-        postType: PostType @search
+        postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts)
 }
 
+"""
+GraphQL descriptions can be on enums.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 enum PostType {
         Fact
+
+        """
+        GraphQL descriptions can be on enum values.  They should work in the input 
+        schema and should make their way into the generated schema.
+        """
         Question
         Opinion
 }
 
+"""
+GraphQL descriptions can be on interfaces.  They should work in the input 
+schema and should make their way into the generated schema.
+"""
 interface Employee {
         ename: String!
 }

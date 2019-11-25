@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -44,19 +43,7 @@ func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]by
 		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
 	}
 
-	// Always use debug mode so that UID is inserted for every node that we touch
-	// Otherwise we can't tell the difference in a query result between a node that's
-	// missing and a node that's missing a single value.  E.g. if we are asking
-	// for an Author and only the 'text' of all their posts
-	// e.g. getAuthor(id: 0x123) { posts { text } }
-	// If the author has 10 posts but three of them have a title, but no text,
-	// then Dgraph would just return 7 posts.  And we'd have no way of knowing if
-	// there's only 7 posts, or if there's more that are missing 'text'.
-	// But, for GraphQL, we want to know about those missing values.
-	md := metadata.Pairs("debug", "true")
-	resp, err := client.NewTxn().
-		Query(metadata.NewOutgoingContext(ctx, md), queryStr)
-
+	resp, err := client.NewTxn().Query(ctx, queryStr)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
