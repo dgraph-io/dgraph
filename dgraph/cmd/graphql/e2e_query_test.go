@@ -979,14 +979,11 @@ func TestEnumFilter(t *testing.T) {
 	}
 
 	facts := make([]*post, 0, len(posts))
+	questions := make([]*post, 0, len(posts))
 	for _, post := range posts {
 		if post.PostType == "Fact" {
 			facts = append(facts, post)
 		}
-	}
-
-	questions := make([]*post, 0, len(posts))
-	for _, post := range posts {
 		if post.PostType == "Question" {
 			questions = append(questions, post)
 		}
@@ -1033,10 +1030,10 @@ func TestEnumFilter(t *testing.T) {
 				return test.Expected[i].Title < test.Expected[j].Title
 			}
 
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			sort.Slice(result.QueryPost, postSort)
 			sort.Slice(test.Expected, testSort)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
 			if diff := cmp.Diff(test.Expected, result.QueryPost); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
