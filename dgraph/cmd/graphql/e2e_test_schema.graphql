@@ -12,14 +12,14 @@ type Country {
 # generated schema.
 
 """
-GraphQL descriptions look like this.  They should work in the input 
+GraphQL descriptions look like this.  They should work in the input
 schema and should make their way into the generated schema.
 """
-type Author {
+type Author @dgraph(name: "dgraph.author") {
         id: ID!
 
         """
-        GraphQL descriptions can be on fields.  They should work in the input 
+        GraphQL descriptions can be on fields.  They should work in the input
         schema and should make their way into the generated schema.
         """
         name: String! @search(by: [hash, trigram])
@@ -30,27 +30,27 @@ type Author {
         posts: [Post!] @hasInverse(field: author)
 }
 
-type Post {
+type Post @dgraph(name: "dgraph.Post") {
         postID: ID!
         title: String! @search(by: [term, fulltext])
-        text: String @search(by: [fulltext])
+        text: String @search(by: [fulltext]) @dgraph(name: "dgraph.text")
         tags: [String] @search(by: [exact])
-        topic: String @search(by: [exact])
+        topic: String @search(by: [exact]) @dgraph(name: "dgraph.topic")
         numLikes: Int @search
-        isPublished: Boolean @search
+        isPublished: Boolean @search @dgraph(name: "dgraph.is_published")
         postType: PostType @search
-        author: Author! @hasInverse(field: posts)
+        author: Author! @hasInverse(field: posts) @dgraph(name: "dgraph.post.author")
 }
 
 """
-GraphQL descriptions can be on enums.  They should work in the input 
+GraphQL descriptions can be on enums.  They should work in the input
 schema and should make their way into the generated schema.
 """
 enum PostType {
         Fact
 
         """
-        GraphQL descriptions can be on enum values.  They should work in the input 
+        GraphQL descriptions can be on enum values.  They should work in the input
         schema and should make their way into the generated schema.
         """
         Question
@@ -58,7 +58,7 @@ enum PostType {
 }
 
 """
-GraphQL descriptions can be on interfaces.  They should work in the input 
+GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
 interface Employee {

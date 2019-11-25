@@ -166,6 +166,9 @@ func typeName(def *ast.Definition) string {
 	return nameArg.Value.Raw
 }
 
+// fieldName returns the dgraph predicate corresponding to a field.
+// If the field had a dgraph directive, then it returns the value of the name field otherwise
+// it returns typeName + "." + fieldName.
 func fieldName(def *ast.FieldDefinition, typName string) string {
 	name := typName + "." + def.Name
 	dir := def.Directives.ForName(dgraphDirective)

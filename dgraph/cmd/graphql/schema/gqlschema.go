@@ -1004,8 +1004,7 @@ func genFieldsString(flds ast.FieldList) string {
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
 		"\t%s%s: %s%s\n", fld.Name, genArgumentsDefnString(fld.Arguments),
-		fld.Type.String(), genDirectivesString(fld.Directives),
-	)
+		fld.Type.String(), genDirectivesString(fld.Directives))
 }
 
 func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
@@ -1053,11 +1052,13 @@ func generateInterfaceString(typ *ast.Definition) string {
 func generateObjectString(typ *ast.Definition) string {
 	if len(typ.Interfaces) > 0 {
 		interfaces := strings.Join(typ.Interfaces, " & ")
-		return fmt.Sprintf("%stype %s implements %s {\n%s}\n",
-			generateDescription(typ.Description), typ.Name, interfaces, genFieldsString(typ.Fields))
+		return fmt.Sprintf("%stype %s implements %s%s {\n%s}\n",
+			generateDescription(typ.Description), typ.Name, interfaces,
+			genDirectivesString(typ.Directives), genFieldsString(typ.Fields))
 	}
-	return fmt.Sprintf("%stype %s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%stype %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateScalarString(typ *ast.Definition) string {

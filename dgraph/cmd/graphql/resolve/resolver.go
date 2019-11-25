@@ -843,7 +843,7 @@ func completeList(
 
 	if field.Type().ListType() == nil {
 		// This means a bug on our part - in rewriting, schema generation,
-		// or Dgraph returned somthing unexpected.
+		// or Dgraph returned something unexpected.
 		//
 		// Let's crush it to null so we still get something from the rest of the
 		// query and log the error.
@@ -889,7 +889,7 @@ func mismatched(
 	field schema.Field,
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
-	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), "+
+	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
 		"but its type is %s.\n"+
 		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())

@@ -169,8 +169,9 @@ type field struct {
 }
 
 type fieldDefinition struct {
-	fieldDef *ast.FieldDefinition
-	inSchema *ast.Schema
+	fieldDef        *ast.FieldDefinition
+	inSchema        *ast.Schema
+	dgraphPredicate map[string]map[string]string
 }
 
 type mutation field
@@ -281,7 +282,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
-		if inputTyp.BuiltIn || inputTyp.Name == "query" || inputTyp.Name == "mutation" ||
+		if inputTyp.BuiltIn || inputTyp.Name == "Query" || inputTyp.Name == "Mutation" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
 		}
@@ -303,7 +304,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, fld := range inputTyp.Fields {
-			typName := inputTypeName
+			typName := typeName(inputTyp)
 			parentInt := parentInterface(sch, inputTyp, fld.Name)
 			if parentInt != "" {
 				typName = parentInt
@@ -314,7 +315,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			//    typName,fldName => interfaceName.fldName
 			// 3. For DeleteTypePayload type
 			//    DeleteTypePayload,fldName => typName.fldName
-			dgraphPredicate[originalTyp.Name][fld.Name] = typName + "." + fld.Name
+
+			fname := fieldName(fld, typName)
+			dgraphPredicate[originalTyp.Name][fld.Name] = fname
 		}
 	}
 	return dgraphPredicate
@@ -686,8 +689,9 @@ func (t *astType) Field(name string) FieldDefinition {
 
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef: t.inSchema.Types[typName].Fields.ForName(name),
-		inSchema: t.inSchema,
+		fieldDef:        t.inSchema.Types[typName].Fields.ForName(name),
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate,
 	}
 }
 
@@ -706,8 +710,9 @@ func isID(fd *ast.FieldDefinition) bool {
 
 func (fd *fieldDefinition) Type() Type {
 	return &astType{
-		typ:      fd.fieldDef.Type,
-		inSchema: fd.inSchema,
+		typ:             fd.fieldDef.Type,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate,
 	}
 }
 

@@ -385,7 +385,7 @@ func rewriteObject(
 				if srcField != nil {
 					invType, invField := srcField.Inverse()
 					if invType != nil && invField != nil {
-						result[fmt.Sprintf("%s.%s", invType.Name(), invField.Name())] =
+						result[invType.DgraphPredicate(invField.Name())] =
 							map[string]interface{}{"uid": srcUID}
 					}
 				}
