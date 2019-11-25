@@ -172,6 +172,7 @@
     query {
       x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
     }
+  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Add mutation for a type that implements an interface"
@@ -241,6 +242,7 @@
     query {
       x as updateHuman(func: type(Human)) @filter(uid(0x123))
     }
+  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation for an interface"
@@ -262,6 +264,7 @@
     query {
       x as updateCharacter(func: type(Character)) @filter(uid(0x123))
     }
+  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation using filters"
@@ -292,6 +295,7 @@
     query {
       x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
     }
+  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Add mutation using code"
@@ -356,6 +360,7 @@
     query {
       x as updateState(func: type(State)) @filter(eq(State.code, "nsw"))
     }
+  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Add mutation using code on type which also has an ID field"
@@ -417,3 +422,5 @@
     query {
       x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2)))
     }
+  condition: "@if(gt(len(x), 0))"
+

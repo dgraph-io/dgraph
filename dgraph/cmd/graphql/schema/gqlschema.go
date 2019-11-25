@@ -179,6 +179,13 @@ var orderable = map[string]bool{
 	"DateTime": true,
 }
 
+var enumDirectives = map[string]bool{
+	"trigram": true,
+	"hash":    true,
+	"exact":   true,
+	"regexp":  true,
+}
+
 // index name -> GraphQL input filter for that index
 var builtInFilters = map[string]string{
 	"bool":     "Boolean",
@@ -226,7 +233,6 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
 	// them. We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
-		Description:  src.Description,
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
@@ -351,17 +357,15 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 func completeSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
-		Kind:        ast.Object,
-		Description: "Root Query type",
-		Name:        "Query",
-		Fields:      make([]*ast.FieldDefinition, 0),
+		Kind:   ast.Object,
+		Name:   "Query",
+		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
 	sch.Mutation = &ast.Definition{
-		Kind:        ast.Object,
-		Description: "Root Mutation type",
-		Name:        "Mutation",
-		Fields:      make([]*ast.FieldDefinition, 0),
+		Kind:   ast.Object,
+		Name:   "Mutation",
+		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
 	for _, key := range definitions {
@@ -535,6 +539,58 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 	)
 }
 
+// getFilterTypes converts search arguments of a field to graphql filter types.
+func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName string) []string {
+	searchArgs := getSearchArgs(fld)
+	filterNames := make([]string, len(searchArgs))
+
+	for i, search := range searchArgs {
+		filterNames[i] = builtInFilters[search]
+
+		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
+			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
+			var l ast.FieldList
+
+			for _, i := range schema.Types[stringFilterName].Fields {
+				l = append(l, &ast.FieldDefinition{
+					Name:         i.Name,
+					Type:         fld.Type,
+					Description:  i.Description,
+					DefaultValue: i.DefaultValue,
+				})
+			}
+
+			filterNames[i] = fld.Type.Name() + "_" + search
+			schema.Types[filterNames[i]] = &ast.Definition{
+				Kind:   ast.InputObject,
+				Name:   filterNames[i],
+				Fields: l,
+			}
+		}
+	}
+
+	return filterNames
+}
+
+// mergeAndAddFilters merges multiple filterTypes into one and adds it to the schema.
+func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName string) {
+	if len(filterTypes) <= 1 {
+		// Filters only require to be merged if there are alteast 2
+		return
+	}
+
+	var fieldList ast.FieldList
+	for _, typeName := range filterTypes {
+		fieldList = append(fieldList, schema.Types[typeName].Fields...)
+	}
+
+	schema.Types[filterName] = &ast.Definition{
+		Kind:   ast.InputObject,
+		Name:   filterName,
+		Fields: fieldList,
+	}
+}
+
 // addFilterType add a `input TFilter { ... }` type to the schema, if defn
 // is a type that has fields that can be filtered on.  This type filter is used
 // in constructing the corresponding query
@@ -568,47 +624,18 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		var filterTypeNameUnion []string
-		for _, search := range getSearchArgs(fld) {
-			filterTypeName := builtInFilters[search]
-			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
-				// If the field is an enum type, we don't generate a filter type.
-				// Instead we allow to write `typeName: enumValue` in the filter.
-				// So, for example : `filter: { postType: Answer }`
-				// rather than : `filter: { postType: { eq: Answer } }`
-				//
-				// Booleans are the same, allowing:
-				// `filter: { isPublished: true }
-				// but that case is already handled by builtInFilters
-				filterTypeName = fld.Type.Name()
-			}
-
-			filterTypeNameUnion = append(filterTypeNameUnion, filterTypeName)
-		}
-
-		if len(filterTypeNameUnion) > 0 {
-			filterTypeName := strings.Join(filterTypeNameUnion, "_")
+		filterTypes := getFilterTypes(schema, fld, filterName)
+		if len(filterTypes) > 0 {
+			filterName := strings.Join(filterTypes, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
-						NamedType: filterTypeName,
+						NamedType: filterName,
 					},
 				})
 
-			//create a schema type
-			if len(filterTypeNameUnion) > 1 {
-				var fieldList ast.FieldList
-				for _, typeName := range filterTypeNameUnion {
-					fieldList = append(fieldList, schema.Types[typeName].Fields...)
-				}
-
-				schema.Types[filterTypeName] = &ast.Definition{
-					Kind:   ast.InputObject,
-					Name:   filterTypeName,
-					Fields: fieldList,
-				}
-			}
+			mergeAndAddFilters(filterTypes, schema, filterName)
 		}
 	}
 
@@ -676,6 +703,15 @@ func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	return indexes
 }
 
+func getDefaultSearchIndex(fldName string) string {
+	if search, ok := defaultSearches[fldName]; ok {
+		return search
+	}
+	// it's an enum - always has hash index
+	return "hash"
+
+}
+
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
@@ -689,14 +725,10 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		// that we apply.
 		return []string{"hash"}
 	}
-	if len(search.Arguments) == 0 {
-		if search, ok := defaultSearches[fld.Type.Name()]; ok {
-			return []string{search}
-		}
-		// it's an enum - always has exact index
-		return []string{"exact"}
+	if len(search.Arguments) == 0 ||
+		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
+		return []string{getDefaultSearchIndex(fld.Type.Name())}
 	}
-
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
 
@@ -832,8 +864,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Description: "Get " + defn.Name + " by ID",
-		Name:        "get" + defn.Name,
+		Name: "get" + defn.Name,
 		Type: &ast.Type{
 			NamedType: defn.Name,
 		},
@@ -865,8 +896,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Description: "Query " + defn.Name,
-		Name:        "query" + defn.Name,
+		Name: "query" + defn.Name,
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -887,8 +917,7 @@ func addQueries(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 	add := &ast.FieldDefinition{
-		Description: "Add a " + defn.Name,
-		Name:        "add" + defn.Name,
+		Name: "add" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Add" + defn.Name + "Payload",
 		},
@@ -915,8 +944,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	upd := &ast.FieldDefinition{
-		Description: "Update a " + defn.Name,
-		Name:        "update" + defn.Name,
+		Name: "update" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Update" + defn.Name + "Payload",
 		},
@@ -939,8 +967,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	del := &ast.FieldDefinition{
-		Description: "Delete a " + defn.Name,
-		Name:        "delete" + defn.Name,
+		Name: "delete" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Delete" + defn.Name + "Payload",
 		},
@@ -1087,6 +1114,9 @@ func genFieldsString(flds ast.FieldList) string {
 	for _, fld := range flds {
 		// Some extra types are generated by gqlparser for internal purpose.
 		if !strings.HasPrefix(fld.Name, "__") {
+			if d := generateDescription(fld.Description); d != "" {
+				sch.WriteString(fmt.Sprintf("\t%s", d))
+			}
 			sch.WriteString(genFieldString(fld))
 		}
 	}
@@ -1116,9 +1146,12 @@ func generateInputString(typ *ast.Definition) string {
 func generateEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	sch.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
+	sch.WriteString(fmt.Sprintf("%senum %s {\n", generateDescription(typ.Description), typ.Name))
 	for _, val := range typ.EnumValues {
 		if !strings.HasPrefix(val.Name, "__") {
+			if d := generateDescription(val.Description); d != "" {
+				sch.WriteString(fmt.Sprintf("\t%s", d))
+			}
 			sch.WriteString(fmt.Sprintf("\t%s\n", val.Name))
 		}
 	}
@@ -1127,17 +1160,27 @@ func generateEnumString(typ *ast.Definition) string {
 	return sch.String()
 }
 
+func generateDescription(description string) string {
+	if description == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("\"\"\"%s\"\"\"\n", description)
+}
+
 func generateInterfaceString(typ *ast.Definition) string {
-	return fmt.Sprintf("interface %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinterface %s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
 }
 
 func generateObjectString(typ *ast.Definition) string {
 	if len(typ.Interfaces) > 0 {
 		interfaces := strings.Join(typ.Interfaces, " & ")
-		return fmt.Sprintf("type %s implements %s {\n%s}\n", typ.Name, interfaces,
-			genFieldsString(typ.Fields))
+		return fmt.Sprintf("%stype %s implements %s {\n%s}\n",
+			generateDescription(typ.Description), typ.Name, interfaces, genFieldsString(typ.Fields))
 	}
-	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%stype %s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
 }
 
 func generateScalarString(typ *ast.Definition) string {

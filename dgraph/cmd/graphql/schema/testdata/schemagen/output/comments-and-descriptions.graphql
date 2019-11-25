@@ -1,0 +1,191 @@
+#######################
+# Input Schema
+#######################
+
+"""Desc"""
+interface I {
+	"""Desc"""
+	s: String!
+}
+
+"""Desc"""
+type T implements I {
+	s: String!
+	id: ID!
+	"""Desc"""
+	i: Int
+}
+
+"""Desc"""
+enum AnEnum {
+	AVal
+	"""Desc"""
+	AnotherVal
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddTPayload {
+	t: T
+}
+
+type DeleteTPayload {
+	msg: String
+}
+
+type UpdateTPayload {
+	t: [T]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum IOrderable {
+	s
+}
+
+enum TOrderable {
+	s
+	i
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input IOrder {
+	asc: IOrderable
+	desc: IOrderable
+	then: IOrder
+}
+
+input PatchT {
+	s: String
+	"""Desc"""
+	i: Int
+}
+
+input TFilter {
+	ids: [ID!]
+	not: TFilter
+}
+
+input TInput {
+	s: String!
+	"""Desc"""
+	i: Int
+}
+
+input TOrder {
+	asc: TOrderable
+	desc: TOrderable
+	then: TOrder
+}
+
+input TRef {
+	id: ID!
+}
+
+input UpdateTInput {
+	filter: TFilter!
+	patch: PatchT!
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	queryI(order: IOrder, first: Int, offset: Int): [I]
+	getT(id: ID!): T
+	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addT(input: TInput!): AddTPayload
+	updateT(input: UpdateTInput!): UpdateTPayload
+	deleteT(filter: TFilter!): DeleteTPayload
+}

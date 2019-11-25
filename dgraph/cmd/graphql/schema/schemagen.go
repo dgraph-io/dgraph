@@ -229,9 +229,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						"%s%s%s",
 						prefix, "string", suffix,
 					)
+					indexStr := " @index(hash)"
+					search := f.Directives.ForName(searchDirective)
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
+						if arg != nil {
+							indexes := getAllSearchIndexes(arg.Value)
+							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+						}
+					}
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", typName, f.Name, typStr)
 					if parentInt == "" {
-						fmt.Fprintf(&preds, "%s.%s: %s @index(exact) .\n", typName, f.Name, typStr)
+						fmt.Fprintf(&preds, "%s.%s: %s%s .\n", typName, f.Name, typStr, indexStr)
 					}
 				}
 			}
