@@ -123,7 +123,6 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	if ids := idFilter(field); ids != nil {
 		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
-	addUID(dgQuery)
 
 	addArgumentsToField(dgQuery, field)
 	return dgQuery
@@ -137,6 +136,7 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 	addSelectionSetFrom(dgQuery, field)
+	addUID(dgQuery)
 }
 
 func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
@@ -150,7 +150,6 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		addTypeFunc(dgQuery, field.Type().Name())
 	}
 
-	addUID(dgQuery)
 	addArgumentsToField(dgQuery, field)
 	return dgQuery
 }
