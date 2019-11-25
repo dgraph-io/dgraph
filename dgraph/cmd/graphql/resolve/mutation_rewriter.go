@@ -24,6 +24,7 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -194,8 +195,10 @@ func (mrw *mutationRewriter) FromMutationResult(
 
 	case schema.UpdateMutation:
 		if len(assigned) > 0 {
-			return nil, schema.GQLWrapf(errors.New("received assigned uids from Dgraph for update"+
-				"mutation"), "assigned: %s should have been empty", assigned)
+			glog.Errorf("Received unexpected assigned uids: %v for update mutation from Dgraph.",
+				assigned)
+			return nil, schema.GQLWrapf(errors.New("(internal error) received unexpected result "+
+				"from Dgraph for update mutation"), "internal error, unexpected result from Dgraph")
 		}
 		var uids []uint64
 		if len(mutated) > 0 {
