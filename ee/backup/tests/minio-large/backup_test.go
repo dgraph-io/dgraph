@@ -46,7 +46,7 @@ var (
 	bucketName        = "dgraph-backup"
 	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
 	uidCounter        = 0
-	tripleBatchSize   = 100
+	batchSize         = 100
 	totalTriples      = 20000
 )
 
@@ -121,9 +121,8 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
-	t.Logf("addTriples")
-	// For simplicity, assume numTriples is divisible by 100.
-	for i := 0; i < numTriples/100; i++ {
+	// For simplicity, assume numTriples is divisible by batchSize.
+	for i := 0; i < numTriples/batchSize; i++ {
 		triples := strings.Builder{}
 		for j := 0; j < 100; j++ {
 			// Send triplets to different predicates so that they are stored uniformly
@@ -165,7 +164,9 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, err)
 
 	restored1, err := testutil.GetPValues("./data/restore/p1", "name1", commitTs)
+	require.NoError(t, err)
 	restored2, err := testutil.GetPValues("./data/restore/p2", "name2", commitTs)
+	require.NoError(t, err)
 	restored3, err := testutil.GetPValues("./data/restore/p3", "name3", commitTs)
 	require.NoError(t, err)
 
