@@ -176,6 +176,13 @@ var orderable = map[string]bool{
 	"DateTime": true,
 }
 
+var enumDirectives = map[string]bool{
+	"trigram": true,
+	"hash":    true,
+	"exact":   true,
+	"regexp":  true,
+}
+
 // index name -> GraphQL input filter for that index
 var builtInFilters = map[string]string{
 	"bool":     "Boolean",
@@ -517,6 +524,58 @@ func addPaginationArguments(fld *ast.FieldDefinition) {
 	)
 }
 
+// getFilterTypes converts search arguments of a field to graphql filter types.
+func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName string) []string {
+	searchArgs := getSearchArgs(fld)
+	filterNames := make([]string, len(searchArgs))
+
+	for i, search := range searchArgs {
+		filterNames[i] = builtInFilters[search]
+
+		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
+			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
+			var l ast.FieldList
+
+			for _, i := range schema.Types[stringFilterName].Fields {
+				l = append(l, &ast.FieldDefinition{
+					Name:         i.Name,
+					Type:         fld.Type,
+					Description:  i.Description,
+					DefaultValue: i.DefaultValue,
+				})
+			}
+
+			filterNames[i] = fld.Type.Name() + "_" + search
+			schema.Types[filterNames[i]] = &ast.Definition{
+				Kind:   ast.InputObject,
+				Name:   filterNames[i],
+				Fields: l,
+			}
+		}
+	}
+
+	return filterNames
+}
+
+// mergeAndAddFilters merges multiple filterTypes into one and adds it to the schema.
+func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName string) {
+	if len(filterTypes) <= 1 {
+		// Filters only require to be merged if there are alteast 2
+		return
+	}
+
+	var fieldList ast.FieldList
+	for _, typeName := range filterTypes {
+		fieldList = append(fieldList, schema.Types[typeName].Fields...)
+	}
+
+	schema.Types[filterName] = &ast.Definition{
+		Kind:   ast.InputObject,
+		Name:   filterName,
+		Fields: fieldList,
+	}
+}
+
 // addFilterType add a `input TFilter { ... }` type to the schema, if defn
 // is a type that has fields that can be filtered on.  This type filter is used
 // in constructing the corresponding query
@@ -550,47 +609,18 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		var filterTypeNameUnion []string
-		for _, search := range getSearchArgs(fld) {
-			filterTypeName := builtInFilters[search]
-			if schema.Types[fld.Type.Name()].Kind == ast.Enum {
-				// If the field is an enum type, we don't generate a filter type.
-				// Instead we allow to write `typeName: enumValue` in the filter.
-				// So, for example : `filter: { postType: Answer }`
-				// rather than : `filter: { postType: { eq: Answer } }`
-				//
-				// Booleans are the same, allowing:
-				// `filter: { isPublished: true }
-				// but that case is already handled by builtInFilters
-				filterTypeName = fld.Type.Name()
-			}
-
-			filterTypeNameUnion = append(filterTypeNameUnion, filterTypeName)
-		}
-
-		if len(filterTypeNameUnion) > 0 {
-			filterTypeName := strings.Join(filterTypeNameUnion, "_")
+		filterTypes := getFilterTypes(schema, fld, filterName)
+		if len(filterTypes) > 0 {
+			filterName := strings.Join(filterTypes, "_")
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
 					Name: fld.Name,
 					Type: &ast.Type{
-						NamedType: filterTypeName,
+						NamedType: filterName,
 					},
 				})
 
-			//create a schema type
-			if len(filterTypeNameUnion) > 1 {
-				var fieldList ast.FieldList
-				for _, typeName := range filterTypeNameUnion {
-					fieldList = append(fieldList, schema.Types[typeName].Fields...)
-				}
-
-				schema.Types[filterTypeName] = &ast.Definition{
-					Kind:   ast.InputObject,
-					Name:   filterTypeName,
-					Fields: fieldList,
-				}
-			}
+			mergeAndAddFilters(filterTypes, schema, filterName)
 		}
 	}
 
@@ -635,6 +665,15 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
+func getDefaultSearchIndex(fldName string) string {
+	if search, ok := defaultSearches[fldName]; ok {
+		return search
+	}
+	// it's an enum - always has hash index
+	return "hash"
+
+}
+
 // getSearchArgs returns the name of the search applied to fld, or ""
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
@@ -642,14 +681,10 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 	if search == nil {
 		return nil
 	}
-	if len(search.Arguments) == 0 {
-		if search, ok := defaultSearches[fld.Type.Name()]; ok {
-			return []string{search}
-		}
-		// it's an enum - always has exact index
-		return []string{"exact"}
+	if len(search.Arguments) == 0 ||
+		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
+		return []string{getDefaultSearchIndex(fld.Type.Name())}
 	}
-
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
 

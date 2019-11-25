@@ -38,7 +38,7 @@ type Post {
         topic: String @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
-        postType: PostType @search
+        postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts)
 }
 

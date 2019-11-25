@@ -230,6 +230,44 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 	return true
 }
 
+// validateSearchArg checks that the argument for search is valid and compatible
+// with the type it is applied to.
+func validateSearchArg(searchArg string,
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	isEnum := sch.Types[field.Type.Name()].Kind == ast.Enum
+	if search, ok := supportedSearches[searchArg]; !ok {
+		// This check can be removed once gqlparser bug
+		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: the argument to @search %s isn't valid."+
+				"Fields of type %s %s.",
+			typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
+
+	} else if search.gqlType != field.Type.Name() && !isEnum {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: has the @search directive but the argument %s "+
+				"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
+				"Fields of type %[4]s %[6]s.",
+			typ.Name, field.Name, searchArg, field.Type.Name(),
+			supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+	} else if isEnum && !enumDirectives[searchArg] {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: has the @search directive but the argument %s "+
+				"doesn't apply to field type %s which is an Enum. Enum only supports "+
+				"hash, exact, regexp and trigram",
+			typ.Name, field.Name, searchArg, field.Type.Name())
+	}
+
+	return nil
+}
+
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -265,32 +303,15 @@ func searchValidation(
 	searchArgs := getSearchArgs(field)
 	searchIndexes := make(map[string]string)
 	for _, searchArg := range searchArgs {
-		// Checks that the argument for search is valid and compatible
-		// with the type it is applied to.
-		if search, ok := supportedSearches[searchArg]; !ok {
-			// This check can be removed once gqlparser bug
-			// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: the argument to @search %s isn't valid."+
-					"Fields of type %s %s.",
-				typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
-
-		} else if search.gqlType != field.Type.Name() {
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: has the @search directive but the argument %s "+
-					"doesn't apply to field type %s.  Search by %[3]s applies to fields of type %[5]s. "+
-					"Fields of type %[4]s %[6]s.",
-				typ.Name, field.Name, searchArg, field.Type.Name(),
-				supportedSearches[searchArg].gqlType, searchMessage(sch, field))
+		if err := validateSearchArg(searchArg, sch, typ, field, dir); err != nil {
+			return err
 		}
 
 		// Checks that the filter indexes aren't repeated and they
 		// don't clash with each other.
 		searchIndex := builtInFilters[searchArg]
 		if val, ok := searchIndexes[searchIndex]; ok {
-			if field.Type.Name() == "String" {
+			if field.Type.Name() == "String" || sch.Types[field.Type.Name()].Kind == ast.Enum {
 				return gqlerror.ErrorPosf(
 					dir.Position,
 					"Type %s; Field %s: the argument to @search '%s' is the same "+

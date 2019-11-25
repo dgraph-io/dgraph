@@ -18,6 +18,13 @@ type Post {
 	score: Float @search
 	isPublished: Boolean @search
 	postType: PostType @search
+	postTypeTrigram: PostType @search(by: [trigram])
+	postTypeRegexp: PostType @search(by: [regexp])
+	postTypeExact: PostType @search(by: [exact])
+	postTypeHash: PostType @search(by: [hash])
+	postTypeRegexpExact: PostType @search(by: [exact,regexp])
+	postTypeHashRegexp: PostType @search(by: [hash,regexp])
+	postTypeNone: PostType @search(by: [])
 }
 
 enum PostType {
@@ -155,6 +162,13 @@ input PatchPost {
 	score: Float
 	isPublished: Boolean
 	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
 }
 
 input PostFilter {
@@ -172,7 +186,14 @@ input PostFilter {
 	numLikes: IntFilter
 	score: FloatFilter
 	isPublished: Boolean
-	postType: PostType
+	postType: PostType_hash
+	postTypeTrigram: StringRegExpFilter
+	postTypeRegexp: StringRegExpFilter
+	postTypeExact: PostType_exact
+	postTypeHash: PostType_hash
+	postTypeRegexpExact: PostType_exact_StringRegExpFilter
+	postTypeHashRegexp: PostType_hash_StringRegExpFilter
+	postTypeNone: PostType_hash
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -193,6 +214,13 @@ input PostInput {
 	score: Float
 	isPublished: Boolean
 	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
 }
 
 input PostOrder {
@@ -203,6 +231,32 @@ input PostOrder {
 
 input PostRef {
 	postID: ID!
+}
+
+input PostType_exact {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+}
+
+input PostType_exact_StringRegExpFilter {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+	regexp: String
+}
+
+input PostType_hash {
+	eq: PostType
+}
+
+input PostType_hash_StringRegExpFilter {
+	eq: PostType
+	regexp: String
 }
 
 input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
