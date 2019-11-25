@@ -782,6 +782,9 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	// This covers the case where the Type only had one field (which had @id directive).
+	// Since we don't allow updating the field with @id directive we don't need to generate any
+	// update payload.
 	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
 		return
 	}
@@ -1238,7 +1241,6 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 }
 
 func idTypeFor(defn *ast.Definition) string {
-	// Placeholder till more ID types are introduced.
 	return "ID"
 }
 

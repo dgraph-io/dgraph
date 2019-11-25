@@ -750,7 +750,6 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 }
 
 func isID(fd *ast.FieldDefinition) bool {
-	// this will change once we have more types of ID fields
 	return fd.Type.Name() == "ID"
 }
 
