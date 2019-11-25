@@ -1045,8 +1045,9 @@ func generateDescription(description string) string {
 }
 
 func generateInterfaceString(typ *ast.Definition) string {
-	return fmt.Sprintf("%sinterface %s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinterface %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateObjectString(typ *ast.Definition) string {

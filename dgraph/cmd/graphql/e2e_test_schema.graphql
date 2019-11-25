@@ -61,22 +61,22 @@ enum PostType {
 GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
-interface Employee {
+interface Employee @dgraph(name: "dgraph.employee.en") {
         ename: String!
 }
 
-interface Character {
+interface Character @dgraph(name: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
+        appearsIn: [Episode!] @search @dgraph(name: "appears_in")
 }
 
 type Human implements Character & Employee {
         starships: [Starship]
-        totalCredits: Float
+        totalCredits: Float @dgraph(name: "credits")
 }
 
-type Droid implements Character {
+type Droid implements Character @dgraph(name: "roboDroid") {
         primaryFunction: String
 }
 
@@ -86,8 +86,8 @@ enum Episode {
         JEDI
 }
 
-type Starship {
+type Starship @dgraph(name: "star.ship") {
         id: ID!
-        name: String! @search(by: [term])
+        name: String! @search(by: [term]) @dgraph(name: "star.ship.name")
         length: Float
 }

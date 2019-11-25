@@ -90,7 +90,7 @@ type Field interface {
 	Operation() Operation
 	// InterfaceType tells us whether this field represents a GraphQL Interface.
 	InterfaceType() bool
-	ConcreteType(types []interface{}) string
+	IncludeInterfaceField(types []interface{}) bool
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -255,20 +255,20 @@ func (o *operation) Mutations() (ms []Mutation) {
 // }
 //
 // calling parentInterface on the fieldName name with type definition for B, would return A.
-func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) string {
+func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) *ast.Definition {
 	if len(typDef.Interfaces) == 0 {
-		return ""
+		return nil
 	}
 
 	for _, iface := range typDef.Interfaces {
 		interfaceDef := sch.Types[iface]
 		for _, interfaceField := range interfaceDef.Fields {
 			if fieldName == interfaceField.Name {
-				return typeName(interfaceDef)
+				return interfaceDef
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
@@ -306,8 +306,8 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		for _, fld := range inputTyp.Fields {
 			typName := typeName(inputTyp)
 			parentInt := parentInterface(sch, inputTyp, fld.Name)
-			if parentInt != "" {
-				typName = parentInt
+			if parentInt != nil {
+				typName = typeName(parentInt)
 			}
 			// 1. For types which don't inherit from an interface the keys, value would be.
 			//    typName,fldName => typName.fldName
@@ -494,7 +494,7 @@ func (f *field) DgraphPredicate() string {
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
-func (f *field) ConcreteType(dgraphTypes []interface{}) string {
+func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
@@ -503,10 +503,13 @@ func (f *field) ConcreteType(dgraphTypes []interface{}) string {
 			continue
 		}
 		if f.op.inSchema.schema.Types[styp].Kind == ast.Object {
-			return styp
+			// If the field doesn't exist in the map corresponding to the object type, then we
+			// don't need to include it.
+			_, ok := f.op.inSchema.dgraphPredicate[styp][f.Name()]
+			return ok
 		}
 	}
-	return ""
+	return false
 }
 
 func (q *query) Name() string {
@@ -582,8 +585,8 @@ func (q *query) InterfaceType() bool {
 	return (*field)(q).InterfaceType()
 }
 
-func (q *query) ConcreteType(dgraphTypes []interface{}) string {
-	return (*field)(q).ConcreteType(dgraphTypes)
+func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
 func (m *mutation) Name() string {
@@ -675,16 +678,15 @@ func (m *mutation) DgraphPredicate() string {
 	return (*field)(m).DgraphPredicate()
 }
 
-func (m *mutation) ConcreteType(dgraphTypes []interface{}) string {
-	return (*field)(m).ConcreteType(dgraphTypes)
+func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+	return (*field)(m).IncludeInterfaceField(dgraphTypes)
 }
 
 func (t *astType) Field(name string) FieldDefinition {
-
 	typName := t.Name()
 	parentInt := parentInterface(t.inSchema, t.inSchema.Types[typName], name)
-	if parentInt != "" {
-		typName = parentInt
+	if parentInt != nil {
+		typName = parentInt.Name
 	}
 
 	return &fieldDefinition{

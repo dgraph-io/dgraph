@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -716,15 +715,17 @@ func completeObject(
 			continue
 		}
 
-		inputType := f.ConcreteType(dgraphTypes)
+		includeField := true
 		// If typ is an interface, and dgraphTypes contains another type, then we ignore
 		// fields which don't start with that type. This would happen when multiple
 		// fragments (belonging to different types) are requested within a query for an interface.
 
 		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
 		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
-		if inputType != "" && !strings.HasPrefix(f.DgraphPredicate(), typ.Name()) &&
-			!strings.HasPrefix(f.DgraphPredicate(), inputType) {
+		if len(dgraphTypes) > 0 {
+			includeField = f.IncludeInterfaceField(dgraphTypes)
+		}
+		if !includeField {
 			continue
 		}
 

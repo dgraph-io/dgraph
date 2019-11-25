@@ -203,8 +203,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				// implements. If we get a parent interface, then we should prefix the field name
 				// with it instead of def.Name.
 				parentInt := parentInterface(gqlSch, def, f.Name)
-				if parentInt != "" {
-					typName = parentInt
+				if parentInt != nil {
+					typName = typeName(parentInt)
 				}
 				fname := fieldName(f, typName)
 
@@ -220,7 +220,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
-					if parentInt == "" {
+					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s .\n", fname, typStr)
 					}
 				case ast.Scalar:
@@ -242,7 +242,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 
 					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
-					if parentInt == "" {
+					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
 					}
 				case ast.Enum:
@@ -251,7 +251,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, "string", suffix,
 					)
 					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
-					if parentInt == "" {
+					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s @index(exact) .\n", fname, typStr)
 					}
 				}
