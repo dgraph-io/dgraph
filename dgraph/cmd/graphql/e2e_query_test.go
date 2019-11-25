@@ -1052,15 +1052,15 @@ func TestDefaultEnumFilter(t *testing.T) {
 	t.Run("test query enum default index on appearsIn", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
-		queryCharacter (filter: {
-			appearsIn: {
-				eq: EMPIRE
-			}
-		}) {
-			name
-			appearsIn
-		}
-	  }`,
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: EMPIRE
+					}
+				}) {
+					name
+					appearsIn
+				}
+			}`,
 		}
 
 		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
