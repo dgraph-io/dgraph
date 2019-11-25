@@ -24,13 +24,15 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
 const (
-	createdNode          = "newnode"
-	mutationQueryVar     = "x"
-	deleteUidVarMutation = `uid(x) * * .`
+	createdNode             = "newnode"
+	mutationQueryVar        = "x"
+	deleteUidVarMutation    = `uid(x) * * .`
+	updateMutationCondition = `@if(gt(len(x), 0))`
 )
 
 type mutationRewriter struct{}
@@ -111,6 +113,7 @@ func (mrw *mutationRewriter) Rewrite(
 	switch val := val.(type) {
 	case map[string]interface{}:
 		var srcUID string
+		var cond string
 		if m.MutationType() == schema.AddMutation {
 			srcUID = "_:" + createdNode
 		} else {
@@ -131,6 +134,7 @@ func (mrw *mutationRewriter) Rewrite(
 			// added as filters to the query.
 			gqlQuery = rewriteUpsertQueryFromMutation(m)
 			srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
+			cond = updateMutationCondition
 		}
 
 		obj, err := rewriteObject(mutatedType, nil, srcUID, val)
@@ -148,6 +152,7 @@ func (mrw *mutationRewriter) Rewrite(
 		return gqlQuery,
 			[]*dgoapi.Mutation{{
 				SetJson: mutationJSON,
+				Cond:    cond,
 			}},
 			schema.GQLWrapf(err, "failed to rewrite mutation payload")
 	case []interface{}:
@@ -189,6 +194,12 @@ func (mrw *mutationRewriter) FromMutationResult(
 		return rewriteAsGet(mutation.QueryField(), uid), nil
 
 	case schema.UpdateMutation:
+		if len(assigned) > 0 {
+			glog.Errorf("Received unexpected assigned uids: %v for update mutation from Dgraph.",
+				assigned)
+			return nil, schema.GQLWrapf(errors.New("(internal error) received unexpected result "+
+				"from Dgraph for update mutation"), "internal error, unexpected result from Dgraph")
+		}
 		var uids []uint64
 		if len(mutated) > 0 {
 			// This is the case of a conditional upsert where we should get uids from mutated.
