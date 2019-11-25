@@ -1,11 +1,12 @@
 package crypto
 
 import (
+	ed25519 "crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 
-	ed25519 "crypto/ed25519"
+	"github.com/ChainSafe/gossamer/common"
 )
 
 // Ed25519Keypair is a ed25519 public-private keypair
@@ -25,6 +26,14 @@ func NewEd25519Keypair(priv ed25519.PrivateKey) *Ed25519Keypair {
 		public:  &pubkey,
 		private: &privkey,
 	}
+}
+
+func NewEd25519KeypairFromSeed(seed []byte) (*Ed25519Keypair, error) {
+	if len(seed) != 32 {
+		return nil, fmt.Errorf("cannot generate key from seed: seed is not 32 bytes long")
+	}
+	edpriv := ed25519.NewKeyFromSeed(seed)
+	return NewEd25519Keypair(edpriv), nil
 }
 
 // GenerateEd25519Keypair returns a new ed25519 keypair
@@ -128,6 +137,11 @@ func (k *Ed25519PublicKey) Decode(in []byte) error {
 	}
 	*k = *pub
 	return nil
+}
+
+// Address returns the ss58 address for this public key
+func (k *Ed25519PublicKey) Address() common.Address {
+	return PublicKeyToAddress(k)
 }
 
 // Hex returns the public key as a '0x' prefixed hex string

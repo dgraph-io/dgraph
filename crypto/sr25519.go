@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	sr25519 "github.com/ChainSafe/go-schnorrkel"
+	"github.com/ChainSafe/gossamer/common"
 )
 
 // SigningContext is the context for signatures used or created with substrate
@@ -37,6 +38,23 @@ func NewSr25519Keypair(priv *sr25519.SecretKey) (*Sr25519Keypair, error) {
 	}, nil
 }
 
+// NewSr25519KeypairFromSeed returns a new Sr25519Keypair given a seed
+func NewSr25519KeypairFromSeed(seed []byte) (*Sr25519Keypair, error) {
+	buf := [32]byte{}
+	msc, err := sr25519.NewMiniSecretKeyFromRaw(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	priv := msc.ExpandEd25519()
+	pub := msc.Public()
+
+	return &Sr25519Keypair{
+		public:  &Sr25519PublicKey{key: pub},
+		private: &Sr25519PrivateKey{key: priv},
+	}, nil
+}
+
 // NewSr25519PrivateKey creates a new private key using the input bytes
 func NewSr25519PrivateKey(in []byte) (*Sr25519PrivateKey, error) {
 	if len(in) != 32 {
@@ -58,6 +76,16 @@ func GenerateSr25519Keypair() (*Sr25519Keypair, error) {
 		public:  &Sr25519PublicKey{key: pub},
 		private: &Sr25519PrivateKey{key: priv},
 	}, nil
+}
+
+func NewSr25519PublicKey(in []byte) (*Sr25519PublicKey, error) {
+	if len(in) != 32 {
+		return nil, errors.New("cannot create public key: input is not 32 bytes")
+	}
+
+	buf := [32]byte{}
+	copy(buf[:], in)
+	return &Sr25519PublicKey{key: sr25519.NewPublicKey(buf)}, nil
 }
 
 // Sign uses the keypair to sign the message using the sr25519 signature algorithm
@@ -163,6 +191,11 @@ func (k *Sr25519PublicKey) Decode(in []byte) error {
 	copy(b[:], in)
 	k.key = &sr25519.PublicKey{}
 	return k.key.Decode(b)
+}
+
+// Address returns the ss58 address for this public key
+func (k *Sr25519PublicKey) Address() common.Address {
+	return PublicKeyToAddress(k)
 }
 
 // Hex returns the public key as a '0x' prefixed hex string

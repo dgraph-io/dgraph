@@ -26,6 +26,7 @@ import (
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/keystore"
 	allocator "github.com/ChainSafe/gossamer/runtime/allocator"
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
@@ -35,27 +36,29 @@ import (
 type RuntimeCtx struct {
 	trie      *trie.Trie
 	allocator *allocator.FreeingBumpHeapAllocator
+	keystore  *keystore.Keystore
 }
 
 type Runtime struct {
-	vm    wasm.Instance
-	trie  *trie.Trie
-	mutex sync.Mutex
+	vm       wasm.Instance
+	trie     *trie.Trie
+	keystore *keystore.Keystore
+	mutex    sync.Mutex
 }
 
 // NewRuntimeFromFile instantiates a runtime from a .wasm file
-func NewRuntimeFromFile(fp string, t *trie.Trie) (*Runtime, error) {
+func NewRuntimeFromFile(fp string, t *trie.Trie, ks *keystore.Keystore) (*Runtime, error) {
 	// Reads the WebAssembly module as bytes.
 	bytes, err := wasm.ReadBytes(fp)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewRuntime(bytes, t)
+	return NewRuntime(bytes, t, ks)
 }
 
 // NewRuntime instantiates a runtime from raw wasm bytecode
-func NewRuntime(code []byte, t *trie.Trie) (*Runtime, error) {
+func NewRuntime(code []byte, t *trie.Trie, ks *keystore.Keystore) (*Runtime, error) {
 	if t == nil {
 		return nil, errors.New("runtime does not have storage trie")
 	}
@@ -76,6 +79,7 @@ func NewRuntime(code []byte, t *trie.Trie) (*Runtime, error) {
 	runtimeCtx := &RuntimeCtx{
 		trie:      t,
 		allocator: memAllocator,
+		keystore:  ks,
 	}
 	// add runtimeCtx to registry
 	// lock access to registry to avoid possible concurrent access
@@ -95,9 +99,10 @@ func NewRuntime(code []byte, t *trie.Trie) (*Runtime, error) {
 	instance.SetContextData(data)
 
 	r := &Runtime{
-		vm:    instance,
-		trie:  t,
-		mutex: sync.Mutex{},
+		vm:       instance,
+		trie:     t,
+		mutex:    sync.Mutex{},
+		keystore: ks,
 	}
 
 	// Clean up the registry if r is GC'd

@@ -1,9 +1,27 @@
 package crypto
 
 import (
+	"crypto/rand"
 	"reflect"
 	"testing"
 )
+
+func TestNewSr25519KeypairFromSeed(t *testing.T) {
+	seed := make([]byte, 32)
+	_, err := rand.Read(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kp, err := NewSr25519KeypairFromSeed(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if kp.public == nil || kp.private == nil {
+		t.Fatal("key is nil")
+	}
+}
 
 func TestSr25519SignAndVerify(t *testing.T) {
 	kp, err := GenerateSr25519Keypair()

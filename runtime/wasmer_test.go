@@ -29,6 +29,8 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/trie"
 	"golang.org/x/crypto/ed25519"
 )
@@ -81,7 +83,7 @@ func newRuntime(t *testing.T) (*Runtime, error) {
 
 	tt := &trie.Trie{}
 
-	r, err := NewRuntimeFromFile(fp, tt)
+	r, err := NewRuntimeFromFile(fp, tt, keystore.NewKeystore())
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
@@ -166,7 +168,7 @@ func newTestRuntime() (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := NewRuntimeFromFile(fp, t)
+	r, err := NewRuntimeFromFile(fp, t, keystore.NewKeystore())
 	if err != nil {
 		return nil, err
 	}
@@ -576,6 +578,61 @@ func TestExt_ed25519_verify(t *testing.T) {
 	}
 }
 
+// test that ext_sr25519_verify verifies a valid signature
+func TestExt_sr25519_verify(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	// copy message into memory
+	msg := []byte("helloworld")
+	msgData := 170
+	copy(mem[msgData:msgData+len(msg)], msg)
+
+	// create key
+	kp, err := crypto.GenerateSr25519Keypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// copy public key into memory
+	pubkeyData := 180
+	pub := kp.Public().Encode()
+	copy(mem[pubkeyData:pubkeyData+len(pub)], pub)
+
+	// sign message, copy signature into memory
+	sig, err := kp.Private().Sign(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigData := pubkeyData + len(pub)
+	copy(mem[sigData:sigData+len(sig)], sig)
+
+	testFunc, ok := runtime.vm.Exports["test_ext_sr25519_verify"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	verified, err := testFunc(msgData, len(msg), sigData, pubkeyData)
+	if err != nil {
+		t.Fatal(err)
+	} else if verified.ToI32() != 0 {
+		t.Error("did not verify sr25519 signature")
+	}
+
+	// verification should fail on wrong signature
+	sigData = 1
+	verified, err = testFunc(msgData, len(msg), sigData, pubkeyData)
+	if err != nil {
+		t.Fatal(err)
+	} else if verified.ToI32() != 1 {
+		t.Error("verified incorrect sr25519 signature")
+	}
+}
+
 // test that ext_blake2_256_enumerated_trie_root places values in an array into a trie
 // with the key being the index of the value and returns the hash
 func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
@@ -890,6 +947,100 @@ func TestExt_secp256k1_ecdsa_recover(t *testing.T) {
 
 	if !bytes.Equal(expected[:], mem[pubkeyData:pubkeyData+65]) {
 		t.Fatalf("fail: got %x expected %x", mem[pubkeyData:pubkeyData+65], expected)
+	}
+}
+
+// test that TestExt_sr25519_generate generates and saves a keypair in the keystore
+func TestExt_sr25519_generate(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	idData := []byte{1, 0, 0, 0}
+	seedLen := 32
+
+	seedData := make([]byte, seedLen)
+	_, err = rand.Read(seedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idLoc := 1000
+	seedLoc := idLoc + len(idData)
+	out := seedLoc + seedLen
+	copy(mem[seedLoc:seedLoc+seedLen], seedData)
+	copy(mem[idLoc:idLoc+len(idData)], idData)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_sr25519_generate"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(idLoc, seedLoc, seedLen, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubkeyData := mem[out : out+32]
+	pubkey, err := crypto.NewSr25519PublicKey(pubkeyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kp := runtime.keystore.Get(pubkey.Address())
+	if kp == nil {
+		t.Fatal("Fail: keypair was not saved in keystore")
+	}
+}
+
+// test that TestExt_ed25519_generate generates and saves a keypair in the keystore
+func TestExt_ed25519_generate(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	idData := []byte{1, 0, 0, 0}
+	seedLen := 32
+
+	seedData := make([]byte, seedLen)
+	_, err = rand.Read(seedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idLoc := 1000
+	seedLoc := idLoc + len(idData)
+	out := seedLoc + seedLen
+	copy(mem[seedLoc:seedLoc+seedLen], seedData)
+	copy(mem[idLoc:idLoc+len(idData)], idData)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_ed25519_generate"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(idLoc, seedLoc, seedLen, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubkeyData := mem[out : out+32]
+	pubkey, err := crypto.NewEd25519PublicKey(pubkeyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kp := runtime.keystore.Get(pubkey.Address())
+	if kp == nil {
+		t.Fatal("Fail: keypair was not saved in keystore")
 	}
 }
 

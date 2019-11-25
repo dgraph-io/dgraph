@@ -31,6 +31,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
+	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/rpc"
@@ -63,10 +64,13 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, fmt.Errorf("cannot start db service: %s", err)
 	}
 
+	// TODO: load all static keys from keystore directory
+	ks := keystore.NewKeystore()
+
 	// Trie, runtime: load most recent state from DB, load runtime code from trie and create runtime executor
 	db := trie.NewDatabase(dbSrv.StateDB.Db)
 	state := trie.NewEmptyTrie(db)
-	r, err := loadStateAndRuntime(state)
+	r, err := loadStateAndRuntime(state, ks)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error loading state and runtime: %s", err)
 	}
@@ -103,7 +107,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	return dot.NewDot(string(gendata.Name), srvcs, rpcSrvr), fig, nil
 }
 
-func loadStateAndRuntime(t *trie.Trie) (*runtime.Runtime, error) {
+func loadStateAndRuntime(t *trie.Trie, ks *keystore.Keystore) (*runtime.Runtime, error) {
 	latestState, err := t.LoadHash()
 	if err != nil {
 		return nil, fmt.Errorf("cannot load latest state root hash: %s", err)
@@ -119,7 +123,7 @@ func loadStateAndRuntime(t *trie.Trie) (*runtime.Runtime, error) {
 		return nil, fmt.Errorf("error retrieving :code from trie: %s", err)
 	}
 
-	return runtime.NewRuntime(code, t)
+	return runtime.NewRuntime(code, t, ks)
 }
 
 // getConfig checks for config.toml if --config flag is specified and sets CLI flags

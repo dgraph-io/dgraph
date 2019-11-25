@@ -449,7 +449,7 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 	hash1 := make([]byte, 8)
 	binary.LittleEndian.PutUint64(hash1, uint64(res1))
 
-	//concatenaded result
+	//concatenated result
 	both := append(hash0, hash1...)
 
 	copy(memory[out:out+16], both)
@@ -458,7 +458,28 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 //export ext_sr25519_generate
 func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int32) {
 	log.Trace("[ext_sr25519_generate] executing...")
-	log.Warn("[ext_sr25519_generate] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	// TODO: key types not yet implemented
+	// id := memory[idData:idData+4]
+
+	seedBytes := memory[seed : seed+seedLen]
+
+	kp, err := crypto.NewSr25519KeypairFromSeed(seedBytes)
+	if err != nil {
+		log.Debug("ext_sr25519_generate cannot generate key", "error", err)
+	}
+
+	log.Debug("ext_sr25519_generate", "address", kp.Public().Address())
+
+	runtimeCtx.keystore.Insert(kp)
+
+	copy(memory[out:out+32], kp.Public().Encode())
 }
 
 //export ext_ed25519_public_keys
@@ -492,14 +513,49 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 //export ext_sr25519_verify
 func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkeyData int32) int32 {
 	log.Debug("[ext_sr25519_verify] executing...")
-	log.Warn("[ext_sr25519_verify] Not yet implemented.")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	msg := memory[msgData : msgData+msgLen]
+	sig := memory[sigData : sigData+64]
+
+	pub, err := crypto.NewSr25519PublicKey(memory[pubkeyData : pubkeyData+32])
+	if err != nil {
+		return 1
+	}
+
+	if pub.Verify(msg, sig) {
+		return 0
+	}
+
+	return 1
 }
 
 //export ext_ed25519_generate
 func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int32) {
 	log.Debug("[ext_ed25519_generate] executing...")
-	log.Warn("[ext_ed25519_generate] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	// TODO: key types not yet implemented
+	// id := memory[idData:idData+4]
+
+	seedBytes := memory[seed : seed+seedLen]
+
+	kp, err := crypto.NewEd25519KeypairFromSeed(seedBytes)
+	if err != nil {
+		log.Debug("ext_ed25519_generate cannot generate key", "error", err)
+	}
+
+	log.Debug("ext_ed25519_generate", "address", kp.Public().Address())
+
+	runtimeCtx.keystore.Insert(kp)
+
+	copy(memory[out:out+32], kp.Public().Encode())
 }
 
 //export ext_ed25519_verify
