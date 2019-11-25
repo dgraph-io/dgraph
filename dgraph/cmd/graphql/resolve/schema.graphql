@@ -23,7 +23,7 @@ type Post {
         numLikes: Int @search
         isPublished: Boolean @search
         postType: PostType @search
-        author: Author! @hasInverse(field: posts)
+        author: Author!
 }
 
 enum PostType {
