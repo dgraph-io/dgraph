@@ -394,7 +394,10 @@ func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
-	x.Checkf(err, "Error while interpreting appropriate type from binary")
+	if err != nil {
+		// This can happen when a mutation ingests corrupt data into the database.
+		return v, errors.Wrap(err, "Error while interpreting appropriate type from binary")
+	}
 	return sv, nil
 }
 
