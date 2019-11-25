@@ -18,11 +18,15 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
@@ -31,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
 )
 
@@ -39,6 +44,74 @@ type ErrorCase struct {
 	GQLRequest string
 	variables  map[string]interface{}
 	Errors     x.GqlErrorList
+}
+
+func TestGraphQLCompletionOn(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+
+	// delete the country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", newCountry.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	tests := [2]string{"name", "id name"}
+	for _, test := range tests {
+		t.Run(test, func(t *testing.T) {
+			queryCountry := &GraphQLParams{
+				Query: fmt.Sprintf(`query {queryCountry {%s}}`, test),
+			}
+
+			// Check that the error is valid
+			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+			require.NotNil(t, gqlResponse.Errors)
+			require.Equal(t, 1, len(gqlResponse.Errors))
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"Non-nullable field 'name' (type String!) was not present"+
+					" in result from Dgraph.")
+
+			// Check that the result is valid
+			var result, expected struct {
+				QueryCountry []*country
+			}
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+			require.Equal(t, len(result.QueryCountry), 4)
+			expected.QueryCountry = []*country{
+				&country{Name: "Angola"},
+				&country{Name: "Bangladesh"},
+				&country{Name: "Mozambique"},
+				nil,
+			}
+
+			sort.Slice(result.QueryCountry, func(i, j int) bool {
+				if result.QueryCountry[i] == nil {
+					return false
+				}
+				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
+			})
+
+			for i := 0; i < 3; i++ {
+				require.NotNil(t, result.QueryCountry[i])
+				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
+			}
+			require.Nil(t, result.QueryCountry[3])
+		})
+	}
+
+	cleanUp(t,
+		[]*country{newCountry},
+		[]*author{},
+		[]*post{},
+	)
 }
 
 // TestRequestValidationErrors just makes sure we are catching validation failures.

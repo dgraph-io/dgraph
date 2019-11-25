@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	expectedSchema = `
+	expectedDgraphSchema = `
 	{
 		"schema": [
 		  {
@@ -347,6 +347,78 @@ const (
 		  }
 		]
 	  }`
+
+	expectedForInterface = `
+	{ "__type": {
+        "name": "Employee",
+		"description": "GraphQL descriptions can be on interfaces.  They should work in the ` +
+		`input \nschema and should make their way into the generated schema.",
+        "fields": [
+            {
+                "name": "ename",
+				"description": ""
+            }
+		],
+		"enumValues":[]
+	} }`
+
+	expectedForType = `
+	{ "__type": {
+        "name": "Author",
+		"description": "GraphQL descriptions look like this.  They should work in the input \n` +
+		`schema and should make their way into the generated schema.",
+        "fields": [
+            {
+				"name": "id",
+				"description": ""
+            },
+            {
+                "name": "name",
+		"description": "GraphQL descriptions can be on fields.  They should work in the input \n` +
+		`schema and should make their way into the generated schema."
+            },
+            {
+                "name": "dob",
+				"description": ""
+            },
+            {
+                "name": "reputation",
+				"description": ""
+            },
+            {
+                "name": "country",
+				"description": ""
+            },
+            {
+                "name": "posts",
+				"description": ""
+            }
+		],
+		"enumValues":[]
+	} }`
+
+	expectedForEnum = `
+	{ "__type": {
+        "name": "PostType",
+		"description": "GraphQL descriptions can be on enums.  They should work in the input \n` +
+		`schema and should make their way into the generated schema.",
+        "enumValues": [
+            {
+                "name": "Fact",
+				"description": ""
+            },
+            {
+            	"name": "Question",
+				"description": "GraphQL descriptions can be on enum values.  They should work in ` +
+		`the input \nschema and should make their way into the generated schema."
+            },
+            {
+                "name": "Opinion",
+				"description": ""
+            }
+		],
+		"fields":[]
+    } }`
 )
 
 func TestDgraphSchema(t *testing.T) {
@@ -361,5 +433,49 @@ func TestDgraphSchema(t *testing.T) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
 
-	require.JSONEq(t, expectedSchema, string(resp.GetJson()))
+	require.JSONEq(t, expectedDgraphSchema, string(resp.GetJson()))
+}
+
+func TestGraphQLDescriptions(t *testing.T) {
+
+	testCases := map[string]struct {
+		typeName string
+		expected string
+	}{
+		"interface": {typeName: "Employee", expected: expectedForInterface},
+		"type":      {typeName: "Author", expected: expectedForType},
+		"enum":      {typeName: "PostType", expected: expectedForEnum},
+	}
+
+	query := `
+	query TestDescriptions($name: String!) {
+		__type(name: $name) {
+			name
+			description
+			fields {
+				name
+			  	description
+			}
+			enumValues {
+				name
+				description
+			}
+		}
+	}`
+
+	for testName, tCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			introspect := &GraphQLParams{
+				Query: query,
+				Variables: map[string]interface{}{
+					"name": tCase.typeName,
+				},
+			}
+
+			introspectionResult := introspect.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, introspectionResult.Errors)
+
+			require.JSONEq(t, tCase.expected, string(introspectionResult.Data))
+		})
+	}
 }
