@@ -1048,12 +1048,12 @@ func TestDefaultEnumFilter(t *testing.T) {
 	droidID := addDroid(t)
 	updateCharacter(t, humanID)
 
-	t.Run("test query enum exact index on appearsIn", func(t *testing.T) {
+	t.Run("test query enum default index on appearsIn", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
 		queryCharacter (filter: {
 			appearsIn: {
-				eq: JEDI
+				eq: EMPIRE
 			}
 		}) {
 			name
@@ -1068,8 +1068,12 @@ func TestDefaultEnumFilter(t *testing.T) {
 		expected := `{
 		"queryCharacter": [
 		  {
-			"name":"BB-8",
-			"appearsIn": ["JEDI"]
+			"name":"Han Solo",
+			"appearsIn": ["EMPIRE"]
+		  },
+		  {
+			"name": "R2-D2",
+			"appearsIn": ["EMPIRE"]
 		  }
 		]
 	  }`
