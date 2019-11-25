@@ -396,7 +396,7 @@ func (tm *TransactionMessage) GetType() int {
 }
 
 func (tm *TransactionMessage) String() string {
-	return fmt.Sprintf("TransactionMessage extrinsics=0x%x", tm.Extrinsics)
+	return fmt.Sprintf("TransactionMessage extrinsics=%x", tm.Extrinsics)
 }
 
 func (tm *TransactionMessage) Encode() ([]byte, error) {

@@ -17,15 +17,13 @@
 package core
 
 import (
-	"github.com/ChainSafe/gossamer/internal/services"
-	log "github.com/ChainSafe/log15"
-
 	"github.com/ChainSafe/gossamer/common"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
-	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
+	log "github.com/ChainSafe/log15"
 )
 
 var _ services.Service = &Service{}
@@ -37,22 +35,22 @@ type Service struct {
 	rt *runtime.Runtime
 	b  *babe.Session
 
-	recChan  <-chan []byte
-	sendChan chan<- p2p.Message
+	msgRec  <-chan p2p.Message
+	msgSend chan<- p2p.Message
 }
 
 // NewService returns a Service that connects the runtime, BABE, and the p2p messages.
-func NewService(rt *runtime.Runtime, recChan <-chan []byte, sendChan chan<- p2p.Message) (*Service, error) {
-	b, err := babe.NewSession([32]byte{}, [64]byte{}, rt, sendChan)
+func NewService(rt *runtime.Runtime, msgRec <-chan p2p.Message, msgSend chan<- p2p.Message) (*Service, error) {
+	b, err := babe.NewSession([32]byte{}, [64]byte{}, rt, msgSend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Service{
-		rt:       rt,
-		b:        b,
-		recChan:  recChan,
-		sendChan: sendChan,
+		rt:      rt,
+		b:       b,
+		msgRec:  msgRec,
+		msgSend: msgSend,
 	}, nil
 }
 
@@ -67,17 +65,17 @@ func (s *Service) start(e chan error) {
 	e <- nil
 
 	for {
-		msg, ok := <-s.recChan
+		msg, ok := <-s.msgRec
 		if !ok {
 			log.Warn("core service message watcher", "error", "channel closed")
 			break
 		}
 
-		msgType := msg[0]
+		msgType := msg.GetType()
+
 		switch msgType {
 		case p2p.TransactionMsgType:
-			// process tx
-			err := s.ProcessTransaction(msg[1:])
+			err := s.ProcessTransactionMessage(msg)
 			if err != nil {
 				log.Error("core service", "error", err)
 				e <- err
@@ -85,10 +83,9 @@ func (s *Service) start(e chan error) {
 			e <- nil
 		case p2p.BlockAnnounceMsgType:
 			// get extrinsics by sending BlockRequest message
-			// process block
+			// process block announce message
 		case p2p.BlockResponseMsgType:
-			// process response
-			err := s.ProcessBlock(msg[1:])
+			err := s.ProcessBlockResponseMessage(msg)
 			if err != nil {
 				log.Error("core service", "error", err)
 				e <- err
@@ -104,8 +101,8 @@ func (s *Service) Stop() error {
 	if s.rt != nil {
 		s.rt.Stop()
 	}
-	if s.sendChan != nil {
-		close(s.sendChan)
+	if s.msgSend != nil {
+		close(s.msgSend)
 	}
 	return nil
 }
@@ -114,24 +111,34 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	return s.rt.StorageRoot()
 }
 
-// ProcessTransaction attempts to validates the transaction
+// ProcessTransactionMessage attempts to validates the transaction
 // if it is validated, it is added to the transaction pool of the BABE session
-func (s *Service) ProcessTransaction(e types.Extrinsic) error {
-	validity, err := s.validateTransaction(e)
-	if err != nil {
-		log.Error("ProcessTransaction", "error", err)
-		return err
-	}
+func (s *Service) ProcessTransactionMessage(msg p2p.Message) error {
+	extrinsics := msg.(*p2p.TransactionMessage).Extrinsics
 
-	vtx := tx.NewValidTransaction(&e, validity)
-	s.b.PushToTxQueue(vtx)
+	for _, extrinsic := range extrinsics {
+		extrinsic := extrinsic // pin
+
+		validity, err := s.validateTransaction(extrinsic)
+		if err != nil {
+			log.Error("ProcessTransaction", "error", err)
+			return err
+		}
+
+		vtx := tx.NewValidTransaction(&extrinsic, validity)
+
+		s.b.PushToTxQueue(vtx)
+	}
 
 	return nil
 }
 
-// ProcessBlock attempts to add a block to the chain by calling `core_execute_block`
+// ProcessBlockResponseMessage attempts to add a block to the chain by calling `core_execute_block`
 // if the block is validated, it is stored in the block DB and becomes part of the canonical chain
-func (s *Service) ProcessBlock(b []byte) error {
-	err := s.validateBlock(b)
+func (s *Service) ProcessBlockResponseMessage(msg p2p.Message) error {
+	block := msg.(*p2p.BlockResponseMessage).Data
+
+	err := s.validateBlock(block)
+
 	return err
 }

@@ -32,11 +32,10 @@ var _ services.Service = &Service{}
 
 // Service describes a p2p service, including host and dht
 type Service struct {
-	ctx  context.Context
-	host *host
-
-	msgSendChan      chan<- []byte
-	msgRecChan       <-chan BlockAnnounceMessage
+	ctx              context.Context
+	host             *host
+	msgSend          chan<- Message
+	msgRec           <-chan Message
 	blockReqRec      map[string]bool
 	blockRespRec     map[string]bool
 	blockAnnounceRec map[string]bool
@@ -44,21 +43,22 @@ type Service struct {
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
-func NewService(conf *Config, msgSendChan chan<- []byte, msgRecChan <-chan BlockAnnounceMessage) (*Service, error) {
+func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*Service, error) {
 	ctx := context.Background()
-	h, err := newHost(ctx, conf)
+
+	host, err := newHost(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
 
 	s := &Service{
-		ctx:         ctx,
-		host:        h,
-		msgSendChan: msgSendChan,
-		msgRecChan:  msgRecChan,
+		ctx:     ctx,
+		host:    host,
+		msgSend: msgSend,
+		msgRec:  msgRec,
 	}
 
-	h.registerStreamHandler(s.handleStream)
+	host.registerStreamHandler(s.handleStream)
 
 	s.blockReqRec = make(map[string]bool)
 	s.blockRespRec = make(map[string]bool)
@@ -92,23 +92,22 @@ func (s *Service) Stop() error {
 		log.Error("error closing host", "err", err)
 	}
 
-	if s.msgSendChan != nil {
-		close(s.msgSendChan)
+	if s.msgSend != nil {
+		close(s.msgSend)
 	}
 
 	return nil
 }
 
-// MsgRecPoll starts polling the msgRecChan channel for any blocks
+// MsgRecPoll starts polling the msgRec channel for any blocks
 func (s *Service) MsgRecPoll(e chan error) {
 	for {
-		// Receives block from babe
-		blockAnnounceMsg := <-s.msgRecChan
-		msg := s.host.hostAddr.String() + " received block"
-		log.Info(msg, "block", blockAnnounceMsg)
+		msg := <-s.msgRec
 
-		// Broadcast the received message
-		err := s.Broadcast(&blockAnnounceMsg)
+		host := s.host.hostAddr
+		log.Info("received message", "host", host, "message", msg)
+
+		err := s.Broadcast(msg)
 		if err != nil {
 			e <- err
 			break
@@ -118,8 +117,9 @@ func (s *Service) MsgRecPoll(e chan error) {
 
 // Broadcast sends a message to all peers
 func (s *Service) Broadcast(msg Message) (err error) {
-	//If the node hasn't received the message yet, add it to a list of received messages & rebroadcast it
+	// If the node hasn't received the message yet, add it to a list of received messages & rebroadcast it
 	msgType := msg.GetType()
+
 	switch msgType {
 	case BlockRequestMsgType:
 		if s.blockReqRec[msg.Id()] {
@@ -158,14 +158,13 @@ func (s *Service) Broadcast(msg Message) (err error) {
 
 // handleStream handles the stream, and rebroadcasts the message based on it's type
 func (s *Service) handleStream(stream net.Stream) {
-	msg, rawMsg, err := parseMessage(stream)
-
+	msg, _, err := parseMessage(stream)
 	if err != nil {
 		return
 	}
 
 	// Write the message back to channel
-	s.msgSendChan <- rawMsg
+	s.msgSend <- msg
 
 	// Rebroadcast all messages except for status messages
 	if msg.GetType() != StatusMsgType {
