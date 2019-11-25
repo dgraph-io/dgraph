@@ -66,9 +66,10 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	var creds credentials.Value
-	if h.creds.isAnonymous() {
+	switch {
+	case h.creds.isAnonymous():
 		// No need to setup credentials.
-	} else if !h.creds.hasCredentials() {
+	case !h.creds.hasCredentials():
 		var provider credentials.Provider
 		switch uri.Scheme {
 		case "s3":
@@ -96,7 +97,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		// If no credentials can be retrieved, an attempt to access the destination
 		// with no credentials will be made.
 		creds, _ = provider.Retrieve() // error is always nil
-	} else {
+	default:
 		creds.AccessKeyID = h.creds.accessKey
 		creds.SecretAccessKey = h.creds.secretKey
 		creds.SessionToken = h.creds.sessionToken
