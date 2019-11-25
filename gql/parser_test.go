@@ -3769,7 +3769,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	{
 		me(func: uid(0x1)) {
 			name
-			friend(first:5, orderasc: name@en:fr) {
+			friend(first:5, orderasc: name@en) {
 				name@en
 			}
 		}
@@ -3780,7 +3780,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "name", res.Query[0].Children[1].Order[0].Attr)
-	require.Equal(t, []string{"en", "fr"}, res.Query[0].Children[1].Order[0].Langs)
+	require.Equal(t, []string{"en"}, res.Query[0].Children[1].Order[0].Langs)
 }
 
 func TestParseQueryWithAttrLang2(t *testing.T) {
@@ -4492,10 +4492,23 @@ func TestInvalidValUsage(t *testing.T) {
 	require.Contains(t, err.Error(), "Query syntax invalid.")
 }
 
+func TestOrderWithMultipleLangFail(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x1), orderasc: name@en:fr, orderdesc: lastname@ci, orderasc: salary) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting by an attribute: [name@en:fr] can only be done on one language")
+}
+
 func TestOrderWithLang(t *testing.T) {
 	query := `
 	{
-		me(func: uid(0x1), orderasc: name@en:fr:., orderdesc: lastname@ci, orderasc: salary) {
+		me(func: uid(0x1), orderasc: name@en, orderdesc: lastname@ci, orderasc: salary) {
 			name
 		}
 	}
@@ -4506,7 +4519,7 @@ func TestOrderWithLang(t *testing.T) {
 	require.Equal(t, 1, len(res.Query))
 	orders := res.Query[0].Order
 	require.Equal(t, "name", orders[0].Attr)
-	require.Equal(t, []string{"en", "fr", "."}, orders[0].Langs)
+	require.Equal(t, []string{"en"}, orders[0].Langs)
 	require.Equal(t, "lastname", orders[1].Attr)
 	require.Equal(t, []string{"ci"}, orders[1].Langs)
 	require.Equal(t, "salary", orders[2].Attr)
