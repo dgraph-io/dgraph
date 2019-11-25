@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func TestRunAll(t *testing.T) {
+func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
 }
 

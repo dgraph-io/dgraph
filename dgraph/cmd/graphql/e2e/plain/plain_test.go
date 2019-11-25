@@ -14,35 +14,35 @@
  * limitations under the License.
  */
 
- package complex
+package complex
 
- import (
-	 "io/ioutil"
-	 "os"
-	 "testing"
+import (
+	"io/ioutil"
+	"os"
+	"testing"
 
-	 "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/e2e/common"
-	 "github.com/pkg/errors"
- )
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/e2e/common"
+	"github.com/pkg/errors"
+)
 
- func TestRunAll(t *testing.T) {
-	 common.RunAll(t)
- }
+func TestRunAll_WithoutDgraphDirectives(t *testing.T) {
+	common.RunAll(t)
+}
 
- func TestMain(m *testing.M) {
-	 schemaFile := "e2e_test_schema.graphql"
-	 schema, err := ioutil.ReadFile(schemaFile)
-	 if err != nil {
-		 panic(err)
-	 }
+func TestMain(m *testing.M) {
+	schemaFile := "e2e_test_schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
 
-	 jsonFile := "e2e_test_data.json"
-	 data, err := ioutil.ReadFile(jsonFile)
-	 if err != nil {
-		 panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	 }
+	jsonFile := "e2e_test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
 
-	 common.BootstrapServer(schema, data)
+	common.BootstrapServer(schema, data)
 
-	 os.Exit(m.Run())
- }
+	os.Exit(m.Run())
+}
