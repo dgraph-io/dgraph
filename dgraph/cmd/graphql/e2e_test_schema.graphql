@@ -37,7 +37,7 @@ interface Employee {
 interface Character {
         id: ID!
         name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search(by: [exact, regexp])
+        appearsIn: [Episode!] @search
 }
 
 type Human implements Character & Employee {

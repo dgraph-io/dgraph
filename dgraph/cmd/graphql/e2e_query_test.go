@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -946,59 +947,105 @@ func TestEnumFilter(t *testing.T) {
 		}`,
 	}
 
-	t.Run("Hash Filter test", func(t *testing.T) {
-		queryParams.Variables = map[string]interface{}{"filter": map[string]interface{}{
-			"postType": map[string]interface{}{
-				"eq": "Fact",
-			},
-		}}
+	facts := make([]*post, 0, len(posts))
+	for _, post := range posts {
+		if post.PostType == "Fact" {
+			facts = append(facts, post)
+		}
+	}
 
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	questions := make([]*post, 0, len(posts))
+	for _, post := range posts {
+		if post.PostType == "Question" {
+			questions = append(questions, post)
+		}
+	}
+
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"Hash Filter test": {
+			Filter: map[string]interface{}{
+				"postType": map[string]interface{}{
+					"eq": "Fact",
+				},
+			},
+			Expected: facts,
+		},
+
+		"Regexp Filter test": {
+			Filter: map[string]interface{}{
+				"postType": map[string]interface{}{
+					"regexp": "/(Fact)|(Question)/",
+				},
+			},
+			Expected: append(facts, questions...),
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			queryParams.Variables = map[string]interface{}{"filter": test.Filter}
+
+			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+			requireNoGQLErrors(t, gqlResponse)
+
+			var result struct {
+				QueryPost []*post
+			}
+
+			postSort := func(i, j int) bool {
+				return result.QueryPost[i].Title < result.QueryPost[j].Title
+			}
+			sort.Slice(result.QueryPost, postSort)
+			sort.Slice(test.Expected, postSort)
+
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+			if diff := cmp.Diff(test.Expected, result.QueryPost); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+
+	}
+}
+
+func TestDefaultEnumFilter(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test query enum exact index on appearsIn", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+		queryCharacter (filter: {
+			appearsIn: {
+				eq: JEDI
+			}
+		}) {
+			name
+			appearsIn
+		}
+	  }`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
 
-		facts := make([]*post, 0, len(posts))
-		for _, post := range posts {
-			if post.PostType == "Fact" {
-				facts = append(facts, post)
-			}
-		}
-
-		var result struct {
-			QueryPost []*post
-		}
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
-		if diff := cmp.Diff(facts, result.QueryPost); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"BB-8",
+			"appearsIn": ["JEDI"]
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
-	t.Run("Regexp Filter test", func(t *testing.T) {
-		queryParams.Variables = map[string]interface{}{"filter": map[string]interface{}{
-			"postType": map[string]interface{}{
-				"regexp": "/(Fact)|(Question)/",
-			},
-		}}
-
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
-		requireNoGQLErrors(t, gqlResponse)
-
-		facts := make([]*post, 0, len(posts))
-		for _, post := range posts {
-			if post.PostType == "Fact" || post.PostType == "Question" {
-				facts = append(facts, post)
-			}
-		}
-
-		var result struct {
-			QueryPost []*post
-		}
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
-		if diff := cmp.Diff(facts, result.QueryPost); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	})
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
 
 func TestQueryByMultipleInvalidIds(t *testing.T) {
