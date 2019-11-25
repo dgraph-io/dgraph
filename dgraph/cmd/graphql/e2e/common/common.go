@@ -161,7 +161,7 @@ func RunAll(t *testing.T) {
 	t.Run("delete mutation by name", deleteMutationByName)
 	t.Run("delete wrong id", deleteWrongID)
 	t.Run("many mutations", manyMutations)
-	t.Run("muattions with deep filter", mutationWithDeepFilter)
+	t.Run("mutations with deep filter", mutationWithDeepFilter)
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
 	t.Run("query inetrface after add mutation", queryInterfaceAfterAddMutation)
 }
