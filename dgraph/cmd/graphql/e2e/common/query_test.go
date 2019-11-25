@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package common
 
 import (
 	"encoding/json"
