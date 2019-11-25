@@ -165,7 +165,7 @@ func (r *reducer) encodeAndWrite(
 
 	// Once we have processed all records from single stream, we can mark that stream as done.
 	// This will close underlying table builder in Badger for stream. Since we preallocate 1 MB
-	// of memory for each table builder, this can result in memory save in case we have large
+	// of memory for each table builder, this can result in memory saving in case we have large
 	// number of streams.
 	// This change limits maximum number of open streams to number of streams created in a single
 	// write call. This can also be optimised if required.
