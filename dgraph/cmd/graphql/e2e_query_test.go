@@ -1029,8 +1029,12 @@ func TestEnumFilter(t *testing.T) {
 			postSort := func(i, j int) bool {
 				return result.QueryPost[i].Title < result.QueryPost[j].Title
 			}
+			testSort := func(i, j int) bool {
+				return test.Expected[i].Title < test.Expected[j].Title
+			}
+
 			sort.Slice(result.QueryPost, postSort)
-			sort.Slice(test.Expected, postSort)
+			sort.Slice(test.Expected, testSort)
 
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
