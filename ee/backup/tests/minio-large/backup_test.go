@@ -68,7 +68,6 @@ func TestBackupMinioLarge(t *testing.T) {
 	dirSetup(t)
 
 	// Add half the total triples to create the first full backup.
-
 	addTriples(t, dg, totalTriples/2)
 
 	// Send backup request.
