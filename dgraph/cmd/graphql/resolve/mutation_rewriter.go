@@ -108,8 +108,7 @@ func (mrw *addRewriter) Rewrite(
 	// from a json list or object (not a single value).
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 
-	var srcUID string
-	srcUID = "_:" + createdNode
+	srcUID := "_:" + createdNode
 
 	obj, err := rewriteObject(mutatedType, nil, srcUID, val)
 	if err != nil {
