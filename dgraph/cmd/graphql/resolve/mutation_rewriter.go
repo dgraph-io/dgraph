@@ -33,12 +33,18 @@ const (
 	deleteUidVarMutation = `uid(x) * * .`
 )
 
-type mutationRewriter struct{}
+type addRewriter struct{}
+type updateRewriter struct{}
 type deleteRewriter struct{}
 
-// NewMutationRewriter returns new MutationRewriter for add & update mutations.
-func NewMutationRewriter() MutationRewriter {
-	return &mutationRewriter{}
+// NewAddRewriter returns new MutationRewriter for add & update mutations.
+func NewAddRewriter() MutationRewriter {
+	return &addRewriter{}
+}
+
+// NewUpdateRewriter returns new MutationRewriter for add & update mutations.
+func NewUpdateRewriter() MutationRewriter {
+	return &updateRewriter{}
 }
 
 // NewDeleteRewriter returns new MutationRewriter for delete mutations..
@@ -76,16 +82,9 @@ func NewDeleteRewriter() MutationRewriter {
 //   "Author.country": { "uid": "0x123" },
 //   "Author.posts":[]
 // }
-func (mrw *mutationRewriter) Rewrite(
+func (mrw *addRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
-	if m.MutationType() != schema.AddMutation &&
-		m.MutationType() != schema.UpdateMutation {
-		return nil, nil,
-			errors.Errorf(
-				"(internal error) call to build add/update Dgraph mutation for %s mutation type",
-				m.MutationType())
-	}
 	var gqlQuery *gql.GraphQuery
 
 	// ATM mutations aren't very deep.  At worst, a mutation can be one object with
@@ -106,110 +105,117 @@ func (mrw *mutationRewriter) Rewrite(
 	// as an argument or in a GraphQL variable.  All Input arguments are non-nullable
 	// so GraphQL validation will ensure that val isn't nil here.  It's also either
 	// from a json list or object (not a single value).
-	val := m.ArgValue(schema.InputArgName)
+	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 
-	switch val := val.(type) {
-	case map[string]interface{}:
-		var srcUID string
-		if m.MutationType() == schema.AddMutation {
-			srcUID = "_:" + createdNode
-		} else {
-			// must be schema.UpdateMutation, so the mutation payload came in like
-			// { id: 0x123, patch { ... the actual changes ... } }
-			// it's that "patch" object that needs to be built into the mutation.
-			//
-			// Patch can't be nil, schema gen builds updates with inputs like
-			// input UpdateAuthorInput {
-			// 	filter: AuthorFilter!
-			// 	patch: PatchAuthor!
-			// }
-			// If patch were nil, validation would have failed.
-			val = val["patch"].(map[string]interface{})
+	var srcUID string
+	srcUID = "_:" + createdNode
 
-			// All mutations have an upsert query as part of them. The root function verifies
-			// that the type of the node is correct. The filters from the update operation are
-			// added as filters to the query.
-			gqlQuery = rewriteUpsertQueryFromMutation(m)
-			srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
-		}
-
-		obj, err := rewriteObject(mutatedType, nil, srcUID, val)
-		if err != nil {
-			return nil, nil, err
-		}
-		obj["uid"] = srcUID
-		if m.MutationType() == schema.AddMutation {
-			dgraphTypes := []string{mutatedType.Name()}
-			dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
-			obj["dgraph.type"] = dgraphTypes
-		}
-
-		mutationJSON, err := json.Marshal(obj)
-		return gqlQuery,
-			[]*dgoapi.Mutation{{
-				SetJson: mutationJSON,
-			}},
-			schema.GQLWrapf(err, "failed to rewrite mutation payload")
-	case []interface{}:
-		// TODO: we don't yet have a bulk mutation that takes a list of mutations
-		// like
-		// addManyPost(input: [{...post1...}, {...post2...}, ...])
-		// That'll need to rewrite all of those mutations and keep track of
-		// adding blank nodes for every new object, so we can look them up in the
-		// later query
-		//
-		// GraphQL validation means we shouldn't get here till those bulk mutations
-		// are added to the schema.
-		return nil, nil,
-			errors.New("(internal error) call to build a list of mutations, but that " +
-				"isn't supported yet")
+	obj, err := rewriteObject(mutatedType, nil, srcUID, val)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj["uid"] = srcUID
+	if m.MutationType() == schema.AddMutation {
+		dgraphTypes := []string{mutatedType.Name()}
+		dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
+		obj["dgraph.type"] = dgraphTypes
 	}
 
-	return nil, nil,
-		errors.New(
-			"(internal error) tried to build Dgraph mutation with input of unrecognized type, " +
-				"this indicates a GraphQL validation error")
+	mutationJSON, err := json.Marshal(obj)
+	return gqlQuery,
+		[]*dgoapi.Mutation{{
+			SetJson: mutationJSON,
+		}},
+		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+
+	// TODO: we don't yet have a bulk mutation that takes a list of mutations
+	// like
+	// addManyPost(input: [{...post1...}, {...post2...}, ...])
+	// That'll need to rewrite all of those mutations and keep track of
+	// adding blank nodes for every new object, so we can look them up in the
+	// later query
+	//
+	// When that happens the arg type will change
+	// from map[string]interface{}
+	// to []map[string]interface{}
 }
 
 // FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
-func (mrw *mutationRewriter) FromMutationResult(
+func (mrw *addRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	mutated map[string][]string) (*gql.GraphQuery, error) {
 
-	switch mutation.MutationType() {
-	case schema.AddMutation:
-		uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
-		if err != nil {
-			return nil, schema.GQLWrapf(err,
-				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-				assigned[createdNode])
-		}
-
-		return rewriteAsGet(mutation.QueryField(), uid), nil
-
-	case schema.UpdateMutation:
-		var uids []uint64
-		if len(mutated) > 0 {
-			// This is the case of a conditional upsert where we should get uids from mutated.
-			stringUids := mutated[mutationQueryVar]
-			for _, id := range stringUids {
-				uid, err := strconv.ParseUint(id, 0, 64)
-				if err != nil {
-					return nil, schema.GQLWrapf(err,
-						"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-							"uint64", id)
-				}
-				uids = append(uids, uid)
-			}
-		}
-
-		return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
-
-	default:
-		return nil, errors.Errorf("can't rewrite %s mutations to Dgraph query",
-			mutation.MutationType())
+	uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
+	if err != nil {
+		return nil, schema.GQLWrapf(err,
+			"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+			assigned[createdNode])
 	}
+
+	return rewriteAsGet(mutation.QueryField(), uid), nil
+}
+
+func (urw *updateRewriter) Rewrite(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	mutatedType := m.MutatedType()
+
+	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
+
+	// must be schema.UpdateMutation, so the mutation payload came in like
+	// { id: 0x123, patch { ... the actual changes ... } }
+	// it's that "patch" object that needs to be built into the mutation.
+	//
+	// Patch can't be nil, schema gen builds updates with inputs like
+	// input UpdateAuthorInput {
+	// 	filter: AuthorFilter!
+	// 	patch: PatchAuthor!
+	// }
+	// If patch were nil, validation would have failed.
+	val = val["patch"].(map[string]interface{})
+
+	// All mutations have an upsert query as part of them. The root function verifies
+	// that the type of the node is correct. The filters from the update operation are
+	// added as filters to the query.
+	gqlQuery := rewriteUpsertQueryFromMutation(m)
+	srcUID := fmt.Sprintf("uid(%s)", mutationQueryVar)
+
+	obj, err := rewriteObject(mutatedType, nil, srcUID, val)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj["uid"] = srcUID
+
+	mutationJSON, err := json.Marshal(obj)
+	return gqlQuery,
+		[]*dgoapi.Mutation{{
+			SetJson: mutationJSON,
+		}},
+		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+}
+
+// FromMutationResult rewrites the query part of a GraphQL mutation into a Dgraph query.
+func (urw *updateRewriter) FromMutationResult(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	mutated map[string][]string) (*gql.GraphQuery, error) {
+
+	var uids []uint64
+	if len(mutated) > 0 {
+		// This is the case of a conditional upsert where we should get uids from mutated.
+		stringUids := mutated[mutationQueryVar]
+		for _, id := range stringUids {
+			uid, err := strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				return nil, schema.GQLWrapf(err,
+					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
+						"uint64", id)
+			}
+			uids = append(uids, uid)
+		}
+	}
+
+	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
 }
 
 func extractFilter(m schema.Mutation) map[string]interface{} {
