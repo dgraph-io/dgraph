@@ -309,8 +309,8 @@ func (t ExactTokenizer) IsLossy() bool    { return false }
 
 // LangTokenizer returns the exact string along with language prefix as a token.
 type LangTokenizer struct {
-	lang string
-	cl   *collate.Collator
+	lang   string
+	cl     *collate.Collator
 	buffer *collate.Buffer
 }
 
@@ -321,11 +321,11 @@ func (t LangTokenizer) Tokens(v interface{}) ([]string, error) {
 		lang := LangBase(t.lang)
 		encodedTerm := t.cl.KeyFromString(t.buffer, term)
 
-		term := make([]byte, 0, len(lang) + 2 + len(encodedTerm))
+		term := make([]byte, 0, len(lang)+2+len(encodedTerm))
 		term = append(term, []byte(lang)...)
 		term = append(term, IdentDelimiter)
 		term = append(term, encodedTerm...)
-		
+
 		t.buffer.Reset()
 		return []string{string(term)}, nil
 	}
