@@ -244,7 +244,7 @@ func isInverse(expectedInvType, expectedInvField, typeName string,
 		return fmt.Sprintf(
 			"Type %s; Field %s: @hasInverse is required to be consistant in both the"+
 				" directions. %[1]s:%[2]s points to %[3]s:%[4]s whereas"+
-				" %[3]s:%[4]s points to %[1]s:%[5]s",
+				" %[3]s:%[4]s points to %[1]s:%[5]s.",
 			expectedInvType, expectedInvField, typeName, field.Name,
 			invFieldArg.Value.Raw,
 		)
