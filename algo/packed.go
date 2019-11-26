@@ -291,6 +291,4 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 
 		decoder.Next()
 	}
-
-	return -1
 }
