@@ -1,3 +1,19 @@
+/*
+ *    Copyright 2019 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common
 
 import (
@@ -150,7 +166,11 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 
+	// schema tests
+	t.Run("graphql descriptions", graphQLDescriptions)
+
 	// encoding
+	t.Run("gzip compression", gzipCompression)
 	t.Run("gzip compression header", gzipCompressionHeader)
 	t.Run("gzip compression no header", gzipCompressionNoHeader)
 
@@ -195,7 +215,7 @@ func RunAll(t *testing.T) {
 	t.Run("many mutations", manyMutations)
 	t.Run("mutations with deep filter", mutationWithDeepFilter)
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
-	t.Run("query inetrface after add mutation", queryInterfaceAfterAddMutation)
+	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

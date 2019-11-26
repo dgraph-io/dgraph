@@ -436,7 +436,7 @@ func TestDgraphSchema(t *testing.T) {
 	require.JSONEq(t, expectedDgraphSchema, string(resp.GetJson()))
 }
 
-func TestGraphQLDescriptions(t *testing.T) {
+func graphQLDescriptions(t *testing.T) {
 
 	testCases := map[string]struct {
 		typeName string
