@@ -961,8 +961,10 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	return vals, err
 }
 
-// AllUntaggedFacets returns all facets of all untagged values.
-func (l *List) AllUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+// allUntaggedFacets returns facets for all untagged values. Since works well only for
+// fetching facets for list predicates as lang tag in not allowed for list predicates.
+func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+	l.AssertRLock()
 	var facets []*pb.Facets
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if len(p.LangTag) == 0 {
@@ -1158,7 +1160,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 
 	var fcs []*pb.Facets
 	if listType {
-		fs, err := l.AllUntaggedFacets(readTs)
+		fs, err := l.allUntaggedFacets(readTs)
 		if err != nil {
 			return nil, err
 		}
