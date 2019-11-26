@@ -49,17 +49,27 @@ dgraph
 #### Building from Source
 
 {{% notice "note" %}}
-Ratel UI is closed source right now, so you cannot build it from source. But you can connect to your Dgraph instance
-through Ratel UI installed using any of the methods listed above.
+You can build the Ratel UI from source seperately following its build
+[instructions](https://github.com/dgraph-io/ratel/blob/master/INSTRUCTIONS.md).
+Ratel UI is distributed via Dgraph releases using any of the download methods
+listed above.
 {{% /notice %}}
 
-Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
+Make sure you have [Go](https://golang.org/dl/) v1.11+ installed.
+
+You'll need the following dependencies to install Dgraph using `make`:
+```bash
+sudo apt-get update
+sudo apt-get install gcc make
+```
 
 After installing Go, run
 ```sh
 # This should install dgraph binary in your $GOPATH/bin.
 
-go get -v github.com/dgraph-io/dgraph/dgraph
+git clone https://github.com/dgraph-io/dgraph.git
+cd ./dgraph
+make install
 ```
 
 If you get errors related to `grpc` while building them, your
