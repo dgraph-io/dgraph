@@ -147,10 +147,35 @@ func BootstrapServer(schema, data []byte) {
 
 func RunAll(t *testing.T) {
 	// TODO - Make all these functions internal.
-	t.Run("gzip compression header", GzipCompressionHeader)
-	t.Run("gzip compression no header", GzipCompressionNoHeader)
-	t.Run("get request", GetRequest)
-	t.Run("get query empty variable", GetQueryEmptyVariable)
+	t.Run("gzip compression header", gzipCompressionHeader)
+	t.Run("gzip compression no header", gzipCompressionNoHeader)
+	t.Run("get request", getRequest)
+	t.Run("get query empty variable", getQueryEmptyVariable)
+	t.Run("query by type", queryByType)
+	t.Run("uid alias", uidAlias)
+	t.Run("order at root", orderAtRoot)
+	t.Run("page at root", pageAtRoot)
+	t.Run("regexp", regExp)
+	t.Run("multiple search indexes", multipleSearchIndexes)
+	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
+	t.Run("hash search", hashSearch)
+	t.Run("deep filter", deepFilter)
+	t.Run("many queries", manyQueries)
+	t.Run("query order at root", queryOrderAtRoot)
+	t.Run("queries with error", queriesWithError)
+	t.Run("date filters", dateFilters)
+	t.Run("float filters", floatFilters)
+	t.Run("int filters", intFilters)
+	t.Run("boolean filters", booleanFilters)
+	t.Run("term filters", termFilters)
+	t.Run("full text filters", fullTextFilters)
+	t.Run("string exact filters", stringExactFilters)
+	t.Run("scalar list filters", scalarListFilters)
+	t.Run("skip directive", skipDirective)
+	t.Run("include directive", includeDirective)
+	t.Run("include and skip directive", includeAndSkipDirective)
+	t.Run("query by mutliple ids", queryByMultipleIds)
+	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
 
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -197,7 +222,7 @@ func gzipData(data []byte) ([]byte, error) {
 
 // This tests that if a request has gzip header but the body is
 // not compressed, then it should return an error
-func GzipCompressionHeader(t *testing.T) {
+func gzipCompressionHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -221,7 +246,7 @@ func GzipCompressionHeader(t *testing.T) {
 
 // This tests that if a req's body is compressed but the
 // header is not present, then it should return an error
-func GzipCompressionNoHeader(t *testing.T) {
+func gzipCompressionNoHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -243,11 +268,11 @@ func GzipCompressionNoHeader(t *testing.T) {
 	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
 
-func GetRequest(t *testing.T) {
+func getRequest(t *testing.T) {
 	AddMutation(t, getExecutor)
 }
 
-func GetQueryEmptyVariable(t *testing.T) {
+func getQueryEmptyVariable(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {

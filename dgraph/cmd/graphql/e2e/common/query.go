@@ -62,24 +62,24 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 // This test checks that all the different combinations of
 // request sending compressed / uncompressed query and receiving
 // compressed / uncompressed result.
-func TestGzipCompression(t *testing.T) {
+func gzipCompression(t *testing.T) {
 	r := []bool{false, true}
 	for _, acceptGzip := range r {
 		for _, gzipEncoding := range r {
 			t.Run(fmt.Sprintf("TestQueryByType acceptGzip=%t gzipEncoding=%t",
 				acceptGzip, gzipEncoding), func(t *testing.T) {
 
-				queryByType(t, acceptGzip, gzipEncoding)
+				queryByTypeWithEncoding(t, acceptGzip, gzipEncoding)
 			})
 		}
 	}
 }
 
-func TestQueryByType(t *testing.T) {
-	queryByType(t, true, true)
+func queryByType(t *testing.T) {
+	queryByTypeWithEncoding(t, true, true)
 }
 
-func queryByType(t *testing.T, acceptGzip, gzipEncoding bool) {
+func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -113,7 +113,7 @@ func queryByType(t *testing.T, acceptGzip, gzipEncoding bool) {
 	}
 }
 
-func TestUIDAlias(t *testing.T) {
+func uidAlias(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry(order: { asc: name }) {
@@ -144,7 +144,7 @@ func TestUIDAlias(t *testing.T) {
 	}
 }
 
-func TestOrderAtRoot(t *testing.T) {
+func orderAtRoot(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry(order: { asc: name }) {
@@ -172,7 +172,7 @@ func TestOrderAtRoot(t *testing.T) {
 	}
 }
 
-func TestPageAtRoot(t *testing.T) {
+func pageAtRoot(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry(order: { desc: name }, first: 2, offset: 1) {
@@ -199,7 +199,7 @@ func TestPageAtRoot(t *testing.T) {
 	}
 }
 
-func TestRegExp(t *testing.T) {
+func regExp(t *testing.T) {
 	queryCountryByRegExp(t, "/[Aa]ng/",
 		[]*country{
 			&country{Name: "Angola"},
@@ -207,7 +207,7 @@ func TestRegExp(t *testing.T) {
 		})
 }
 
-func TestMultipleSearchIndexes(t *testing.T) {
+func multipleSearchIndexes(t *testing.T) {
 	query := `query queryPost($filter: PostFilter){
 		  queryPost (filter: $filter) {
 		      title
@@ -243,7 +243,7 @@ func TestMultipleSearchIndexes(t *testing.T) {
 	}
 }
 
-func TestMultipleSearchIndexesWrongField(t *testing.T) {
+func multipleSearchIndexesWrongField(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
 			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {
@@ -259,7 +259,7 @@ func TestMultipleSearchIndexesWrongField(t *testing.T) {
 	require.Contains(t, gqlResponse.Errors[0].Error(), expected)
 }
 
-func TestHashSearch(t *testing.T) {
+func hashSearch(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
 			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
@@ -313,7 +313,7 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
-func TestDeepFilter(t *testing.T) {
+func deepFilter(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query {
 			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
@@ -345,10 +345,10 @@ func TestDeepFilter(t *testing.T) {
 	}
 }
 
-// TestManyQueries runs multiple queries in the one block.  Internally, the GraphQL
+// manyQueries runs multiple queries in the one block.  Internally, the GraphQL
 // server should run those concurrently, but the results should be returned in the
 // requested order.  This makes sure those many test runs are reassembled correctly.
-func TestManyQueries(t *testing.T) {
+func manyQueries(t *testing.T) {
 	posts := allPosts(t)
 
 	getPattern := `getPost(id: "%s") {
@@ -389,7 +389,7 @@ func TestManyQueries(t *testing.T) {
 	}
 }
 
-func TestQueryOrderAtRoot(t *testing.T) {
+func queryOrderAtRoot(t *testing.T) {
 	posts := allPosts(t)
 
 	answers := make([]*post, 2)
@@ -493,10 +493,10 @@ func TestQueryOrderAtRoot(t *testing.T) {
 
 }
 
-// TestManyTestQueriesWithErrorQueries runs multiple queries in the one block with
+// queriesWithError runs multiple queries in the one block with
 // an error.  Internally, the GraphQL server should run those concurrently, and
 // an error in one query should not affect the results of any others.
-func TestQueriesWithError(t *testing.T) {
+func queriesWithError(t *testing.T) {
 	posts := allPosts(t)
 
 	getPattern := `getPost(id: "%s") {
@@ -548,7 +548,7 @@ func TestQueriesWithError(t *testing.T) {
 	}
 }
 
-func TestDateFilters(t *testing.T) {
+func dateFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*author
@@ -577,7 +577,7 @@ func TestDateFilters(t *testing.T) {
 	}
 }
 
-func TestFloatFilters(t *testing.T) {
+func floatFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*author
@@ -630,7 +630,7 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 	}
 }
 
-func TestIntFilters(t *testing.T) {
+func intFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -666,7 +666,7 @@ func TestIntFilters(t *testing.T) {
 	}
 }
 
-func TestBooleanFilters(t *testing.T) {
+func booleanFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -689,7 +689,7 @@ func TestBooleanFilters(t *testing.T) {
 	}
 }
 
-func TestTermFilters(t *testing.T) {
+func termFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -716,7 +716,7 @@ func TestTermFilters(t *testing.T) {
 	}
 }
 
-func TestFullTextFilters(t *testing.T) {
+func fullTextFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -743,7 +743,7 @@ func TestFullTextFilters(t *testing.T) {
 	}
 }
 
-func TestStringExactFilters(t *testing.T) {
+func stringExactFilters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -779,7 +779,7 @@ func TestStringExactFilters(t *testing.T) {
 	}
 }
 
-func TestScalarListFilters(t *testing.T) {
+func scalarListFilters(t *testing.T) {
 
 	// tags is a list of strings with @search(by: exact).  So all the filters
 	// lt, le, ... mean "is there something in the list that's lt 'Dgraph'", etc.
@@ -843,7 +843,7 @@ func postTest(t *testing.T, filter interface{}, expected []*post) {
 	}
 }
 
-func TestSkipDirective(t *testing.T) {
+func skipDirective(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query ($skipPost: Boolean!, $skipName: Boolean!) {
 			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
@@ -869,7 +869,7 @@ func TestSkipDirective(t *testing.T) {
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
-func TestIncludeDirective(t *testing.T) {
+func includeDirective(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query ($includeName: Boolean!, $includePost: Boolean!) {
 			queryAuthor(filter: { name: { eq: "Ann Other Author" } }) {
@@ -893,7 +893,7 @@ func TestIncludeDirective(t *testing.T) {
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
-func TestIncludeAndSkipDirective(t *testing.T) {
+func includeAndSkipDirective(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
 			$skipFalse: Boolean!) {
@@ -923,7 +923,7 @@ func TestIncludeAndSkipDirective(t *testing.T) {
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
-func TestQueryByMultipleIds(t *testing.T) {
+func queryByMultipleIds(t *testing.T) {
 	posts := allPosts(t)
 	ids := make([]string, 0, len(posts))
 	for _, post := range posts {
@@ -960,7 +960,7 @@ func TestQueryByMultipleIds(t *testing.T) {
 	}
 }
 
-func TestQueryByMultipleInvalidIds(t *testing.T) {
+func queryByMultipleInvalidIds(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `query queryPost($filter: PostFilter) {
 			queryPost(filter: $filter) {
