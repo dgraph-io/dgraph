@@ -45,10 +45,10 @@ import (
 // These really need to run as one test because the created uid from the Country
 // needs to flow to the author, etc.
 func addMutation(t *testing.T) {
-	AddMutation(t, postExecutor)
+	add(t, postExecutor)
 }
 
-func AddMutation(t *testing.T, executeRequest requestExecutor) {
+func add(t *testing.T, executeRequest requestExecutor) {
 	var newCountry *country
 	var newAuthor *author
 	var newPost *post
@@ -412,7 +412,6 @@ func updateMutationByName(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
-// TODO - Separate internal and function which accept testing.T as argument.
 func updateMutationByNameNoMatch(t *testing.T) {
 	// The countries shouldn't get updated as the query shouldn't match any nodes.
 	newCountry := addCountry(t, postExecutor)
