@@ -574,6 +574,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 type Extensions struct {
 	Latency *api.Latency    `json:"server_latency,omitempty"`
 	Txn     *api.TxnContext `json:"txn,omitempty"`
+	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {

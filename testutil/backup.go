@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
-	bpb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
