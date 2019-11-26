@@ -215,6 +215,23 @@ func TestIntersectSorted6Packed(t *testing.T) {
 	require.Empty(t, codec.Decode(IntersectSortedPacked(input), 0))
 }
 
+func TestIntersectSorted7Packed(t *testing.T) {
+	input := []*pb.UidPack{
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}),
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 8, 9}),
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 8}),
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7}),
+		newUidPack([]uint64{1, 2, 3, 4, 5, 6}),
+		newUidPack([]uint64{1, 2, 3, 4, 5}),
+		newUidPack([]uint64{1, 2, 3, 4}),
+		newUidPack([]uint64{1, 2, 3}),
+		newUidPack([]uint64{1, 2}),
+		newUidPack([]uint64{1}),
+	}
+	require.Equal(t, []uint64{1}, codec.Decode(IntersectSortedPacked(input), 0))
+}
+
 func TestDiffSorted1Packed(t *testing.T) {
 	input := []*pb.UidPack{
 		newUidPack([]uint64{1, 2, 3}),

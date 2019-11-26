@@ -41,6 +41,7 @@ func ApplyFilterPacked(u *pb.UidPack, f func(uint64, int) bool) *pb.UidPack {
 	return encoder.Done()
 }
 
+// IntersectWithLinPacked performs the intersection of two UidPack objects.
 func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 	if u == nil || v == nil {
 		return nil
@@ -93,7 +94,7 @@ func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 	return encoder.Done()
 }
 
-type packedListInfo struct {
+type listInfoPacked struct {
 	l      *pb.UidPack
 	length int
 }
@@ -105,9 +106,9 @@ func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		encoder := codec.Encoder{BlockSize: 10}
 		return encoder.Done()
 	}
-	ls := make([]packedListInfo, 0, len(lists))
+	ls := make([]listInfoPacked, 0, len(lists))
 	for _, list := range lists {
-		ls = append(ls, packedListInfo{
+		ls = append(ls, listInfoPacked{
 			l:      list,
 			length: codec.ExactLen(list),
 		})
@@ -135,6 +136,7 @@ func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	return out
 }
 
+// DifferencePacked performs the difference operation between two UidPack objects.
 func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 	if u == nil || v == nil {
 		// If v == nil, then it's empty so the value of u - v is just u.
@@ -191,7 +193,7 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 	return encoder.Done()
 }
 
-// MergeSortedPacked merges sorted compressed lists of uids.
+// MergeSortedPacked merges already sorted UidPack objects into a single UidPack.
 func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	if len(lists) == 0 {
 		return nil
