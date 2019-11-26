@@ -469,7 +469,8 @@ func resolveWithClient(
 		gqlSchema,
 		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{
 			Qrw: NewQueryRewriter(),
-			Mrw: NewMutationRewriter(),
+			Arw: NewAddRewriter(),
+			Urw: NewUpdateRewriter(),
 			Qe:  ex,
 			Me:  ex,
 		}))

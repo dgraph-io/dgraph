@@ -48,8 +48,8 @@ type TestCase struct {
 	Error          *x.GqlError
 }
 
-func TestMutationRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("mutation_test.yaml")
+func TestAddMutationRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("add_mutation_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []TestCase
@@ -57,7 +57,49 @@ func TestMutationRewriting(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewMutationRewriter()
+	rewriterToTest := NewAddRewriter()
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query:     tcase.GQLMutation,
+					Variables: vars,
+				})
+			require.NoError(t, err)
+
+			mut := test.GetMutation(t, op)
+
+			q, muts, err := rewriterToTest.Rewrite(mut)
+
+			if tcase.Error != nil || err != nil {
+				require.Equal(t, tcase.Error.Error(), err.Error())
+			} else {
+				require.Len(t, muts, 1)
+				jsonMut := string(muts[0].SetJson)
+				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
+				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
+			}
+		})
+	}
+}
+
+func TestUpdateMutationRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("update_mutation_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []TestCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+	rewriterToTest := NewUpdateRewriter()
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -105,9 +147,15 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	testRewriter := NewMutationRewriter()
-
 	for name, mut := range testTypes {
+		var testRewriter MutationRewriter
+
+		if strings.HasPrefix(name, "Add") {
+			testRewriter = NewAddRewriter()
+		} else {
+			testRewriter = NewUpdateRewriter()
+		}
+
 		for _, tcase := range tests {
 			t.Run(name+tcase.Name, func(t *testing.T) {
 

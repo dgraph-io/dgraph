@@ -1,0 +1,118 @@
+-
+  name: "Update mutation with variables"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "patch": {
+          "text": "updated text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Post.text": "updated text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+    }
+
+-
+  name: "Update mutation for a type that implements an interface"
+  gqlmutation: |
+    mutation updateHuman($patch: UpdateHumanInput!) {
+      updateHuman(input: $patch) {
+        human {
+          name
+          dob
+          female
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      {
+        "filter": {
+          "ids": ["0x123"]
+        },
+        "patch": { "name": "Bob",
+          "dob": "2000-01-01",
+          "female": true,
+          "ename": "employee no. 1"
+        }
+      }
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Character.name": "Bob",
+      "Employee.ename": "employee no. 1",
+      "Human.dob": "2000-01-01",
+      "Human.female": true
+    }
+  dgraphquery: |-
+    query {
+      x as updateHuman(func: type(Human)) @filter(uid(0x123))
+    }
+
+-
+  name: "Update mutation for an interface"
+  gqlmutation: |-
+    mutation {
+      updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
+        character {
+          id
+          name
+        }
+      }
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Character.name": "Bob"
+    }
+  dgraphquery: |-
+    query {
+      x as updateCharacter(func: type(Character)) @filter(uid(0x123))
+    }
+
+-
+  name: "Update mutation using filters"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "tags": { "eq": "foo"}
+        },
+        "patch": {
+          "text": "updated text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Post.text": "updated text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
+    }
