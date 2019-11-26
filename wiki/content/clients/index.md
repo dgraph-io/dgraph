@@ -556,6 +556,10 @@ To drop all data and schema:
 ```sh
 $ curl -X POST localhost:8080/alter -d '{"drop_all": true}'
 ```
+To drop all data only (keep schema):
+```sh
+$ curl -X POST localhost:8080/alter -d '{"drop_op": "DATA"}'
+```
 
 ### Start a transaction
 
