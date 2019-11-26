@@ -8,7 +8,7 @@ title = "Get Started with Dgraph - Introduction"
 
 In this tutorial, we'll learn how to build the following graph on Dgraph,
 
-![The simple graph](/images/tutorials/1/gs-1.JPG)
+![The simple graph](../images/tutorials/1/gs-1.JPG)
 
 In the process, we'll learn about:
 
@@ -40,7 +40,7 @@ docker run --rm -it -p 8000:8000 -p 8080:8080 -p 9080:9080 dgraph/standalone:lat
 ### Nodes and Edges
 In this section, we'll build a simple graph with two nodes and an edge connecting them.
 
-![The simple graph](/images/tutorials/1/gs-1.JPG)
+![The simple graph](../images/tutorials/1/gs-1.JPG)
 
 In a Graph Database, concepts or entities are represented as nodes.
 May it be a sale, a transaction, a place, or a person, all these entities are
@@ -59,11 +59,11 @@ The `dgraph/standalone` image setup comes with the useful Dgraph UI called Ratel
 Just visit [http://localhost:8000](http://localhost:8000) from your browser, and you will be able to access it.
 
 
-![ratel-1](/images/tutorials/1/gs-2.png)
+![ratel-1](../images/tutorials/1/gs-2.png)
 
 We'll be using the latest stable release of Ratel.
 
-![ratel-2](/images/tutorials/1/gs-3.png)
+![ratel-2](../images/tutorials/1/gs-3.png)
 
 ### Mutations using Ratel
 
@@ -110,11 +110,11 @@ A small modification to the mutation will fix it, so it creates an edge in betwe
 }
 ```
 
-![explain mutation](/images/tutorials/1/explain-query.JPG)
+![explain mutation](../images/tutorials/1/explain-query.JPG)
 
 Let's execute this mutation. Click Run and boom!
 
-![Query-gif](/images/tutorials/1/mutate-example.gif)
+![Query-gif](../images/tutorials/1/mutate-example.gif)
 
 You can see in the response that two UIDs (Universal IDentifiers) have been created.
 The two values in the `"uids"` field of the response correspond
@@ -138,7 +138,7 @@ The expression `has(name)` returns all the nodes with a predicate `name` associa
 Go to the `Query` tab this time and type in the query above.
 Then, click `Run` on the top right of the screen.
 
-![query-1](/images/tutorials/1/query-1.png)
+![query-1](../images/tutorials/1/query-1.png)
 
 Ratel renders a graph visualization of the result.
 
@@ -147,11 +147,11 @@ matching the ones, we saw in the mutation's response.
 
 You can also view the JSON results in the JSON tab on the right.
 
-![query-2](/images/tutorials/1/query-2.png)
+![query-2](../images/tutorials/1/query-2.png)
 
 #### Understanding the query
 
-![Illustration with explanation](/images/tutorials/1/explain-query-2.JPG)
+![Illustration with explanation](../images/tutorials/1/explain-query-2.JPG)
 
 The first part of the query is the user-defined function name.
 In our query, we have named it as `people`. However, you could use any other name.

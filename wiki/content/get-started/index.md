@@ -2,7 +2,7 @@
 title = "Get Started with Dgraph"
 +++
 
-{{% notice "note" %}}You can see an older version of the Getting Started page [here](/get-started-old).{{% /notice %}}
+{{% notice "note" %}}You can see an older version of the Getting Started page [here](../get-started-old).{{% /notice %}}
 
 ## Tutorials
 

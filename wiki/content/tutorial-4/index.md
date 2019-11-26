@@ -20,7 +20,7 @@ Let's learn more about them!
 Let's start with building a simple food review Graph.
 Here's the Graph model.
 
-![model](/images/tutorials/4/a-graph-model.jpg)
+![model](../images/tutorials/4/a-graph-model.jpg)
 
 The above Graph has three entities: Food, Comment, and Country.
 
@@ -117,7 +117,7 @@ _Note: If this mutation syntax is new to you, refer to the [first tutorial](/tut
 
 Here's our Graph!
 
-![full graph](/images/tutorials/4/a-full-graph.png)
+![full graph](../images/tutorials/4/a-full-graph.png)
 
 Our Graph has:
 
@@ -128,7 +128,7 @@ Our Graph has:
 You can also see that Dgraph has auto-detected the data types of the predicates.
 You can check that out from the schema tab.
 
-![full graph](/images/tutorials/4/c-schema.png)
+![full graph](../images/tutorials/4/c-schema.png)
 
 _Note: Check out the [previous tutorial](/tutorial-3/) to know more about data types in Dgraph._
 
@@ -167,7 +167,7 @@ Now, Let's fetch only the food items and their reviews,
 
 As expected, these comments are in different languages.
 
-![full graph](/images/tutorials/4/b-comments.png)
+![full graph](../images/tutorials/4/b-comments.png)
 
 But can we fetch the reviews based on their language?
 Can we write a query which says: _Hey Dgraph, can you give me only the reviews written in Chinese?_
@@ -225,7 +225,7 @@ Let's run the above mutation.
 
 Go to the mutate tab, paste the mutation, and click Run.
 
-![lang error](/images/tutorials/4/d-lang-error.png)
+![lang error](../images/tutorials/4/d-lang-error.png)
 
 We got an error! Using the language tag requires you to add the `@lang` directive to the schema.
 
@@ -236,11 +236,11 @@ Follow the instructions below to add the `@lang` directive to the `comment` pred
 - Tick mark the `lang` directive.
 - Click on the `Update` button.
 
-![lang error](/images/tutorials/4/e-update-lang.png)
+![lang error](../images/tutorials/4/e-update-lang.png)
 
 Let's re-run the mutation.
 
-![lang error](/images/tutorials/4/f-mutation-success.png)
+![lang error](../images/tutorials/4/f-mutation-success.png)
 
 Success!
 
@@ -280,7 +280,7 @@ In the [previous article](/tutorial-3/), we learned about using the `eq` operato
 
 Using that knowledge, let's first add the `hash` index for the `food_name` predicate.
 
-![hash index](/images/tutorials/4/g-hash.png)
+![hash index](../images/tutorials/4/g-hash.png)
 
 Now, go to the query tab, paste the query in the text area, and click Run.
 
@@ -295,7 +295,7 @@ Now, go to the query tab, paste the query in the text area, and click Run.
 }
 ```
 
-![hash index](/images/tutorials/4/h-comment.png)
+![hash index](../images/tutorials/4/h-comment.png)
 
 By default, the query only returns the untagged comment.
 
@@ -313,7 +313,7 @@ Let's query for a review for `Sushi` in Japanese.
 }
 ```
 
-![Japanese](/images/tutorials/4/i-japanese.png)
+![Japanese](../images/tutorials/4/i-japanese.png)
 
 Now, let's query for a review for `Sushi` in Russian.
 
@@ -328,7 +328,7 @@ Now, let's query for a review for `Sushi` in Russian.
 }
 ```
 
-![Russian](/images/tutorials/4/j-russian.png)
+![Russian](../images/tutorials/4/j-russian.png)
 
 You can also fetch all the comments for `Sushi` written in any language.
 
@@ -343,7 +343,7 @@ You can also fetch all the comments for `Sushi` written in any language.
 }
 ```
 
-![Russian](/images/tutorials/4/k-star.png)
+![Russian](../images/tutorials/4/k-star.png)
 
 Here is the table with the syntax for various ways of making use of language tags while querying.
 
@@ -360,7 +360,7 @@ Here is the table with the syntax for various ways of making use of language tag
 
 If you remember, we had initially added a Russian dish `Borscht` with its review in `Russian`.
 
-![Russian](/images/tutorials/4/l-russian.png)
+![Russian](../images/tutorials/4/l-russian.png)
 
 If you notice, we haven't used the language tag `@ru` for the review written in Russian.
 
@@ -368,7 +368,7 @@ Hence, if we query for all the reviews written in `Russian`, the review for `Bor
 
 Only the review for `Sushi,` written in `Russian`, makes it to the list.
 
-![Russian](/images/tutorials/4/m-sushi.png)
+![Russian](../images/tutorials/4/m-sushi.png)
 
 So, here's the lesson of the day!
 

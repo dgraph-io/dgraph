@@ -8,7 +8,7 @@ In the [previous tutorial](/tutorial-1/) of getting started,
 we learned some of the basics of Dgraph. 
 Including how to run the database, add new nodes and predicates, and query them back.
 
-![Graph](/images/tutorials/2/graph-1.jpg)
+![Graph](../images/tutorials/2/graph-1.jpg)
 
 In this tutorial, we'll build the above Graph and learn more about operations using the UID (Universal Identifier) of the nodes.
 Specifically, we'll learn about:
@@ -48,7 +48,7 @@ Go to Ratel's mutate tab, paste the mutation below in the text area, and click R
 }
 ```
 
-![mutation-1](/images/tutorials/2/a-add-data.gif)
+![mutation-1](../images/tutorials/2/a-add-data.gif)
 
 ## Query using UIDs
 The UID of the nodes can be used to query them back.
@@ -74,7 +74,7 @@ Go to the query tab, type in the query below, and click Run.
 
 Now, from the result, copy the UID of Michael's node. 
 
-![get-uid](/images/tutorials/2/b-get-uid-1.png)
+![get-uid](../images/tutorials/2/b-get-uid-1.png)
 
 In the query below, replace the placeholder `MICHAELS_UID` with the UID you just copied, and run the query.
 
@@ -88,7 +88,7 @@ In the query below, replace the placeholder `MICHAELS_UID` with the UID you just
 }
 ```
 
-![get_node_from_uid](/images/tutorials/2/c-query-uid.png)
+![get_node_from_uid](../images/tutorials/2/c-query-uid.png)
 *Note: `MICHAELS_UID` appears as `0x8` in the images. The UID you get on your machine might have a different value.*
 
 You can see that the `uid` function returns the node matching the UID for Michael's node.
@@ -128,7 +128,7 @@ You can see that Michael's age is updated to 41.
 }
 ```
 
-![update check](/images/tutorials/2/d-update-check.png)
+![update check](../images/tutorials/2/d-update-check.png)
 
 Similarly, you can also add new predicates to an existing node.
 Since the predicate `country` doesn't exist for the node for `Michael`, it creates a new one.
@@ -151,7 +151,7 @@ Let's say, `Leyla` starts to follow `Michael`.
 
 We know that this relationship between them has to represented by creating the `follows` edge between them.
 
-![Graph](/images/tutorials/2/graph-2.jpg)
+![Graph](../images/tutorials/2/graph-2.jpg)
 
 First, let's copy the UIDs of nodes for `Leyla` and `Michael` from Ratel.
 
@@ -195,7 +195,7 @@ Let's run a traversal query and then understand it in detail.
 
 Here's the result. 
 
-![traversal-result](/images/tutorials/2/e-traversal.png)
+![traversal-result](../images/tutorials/2/e-traversal.png)
 
 
 The query has three parts:
@@ -222,7 +222,7 @@ Since Michael follows only one person, the traversal returns just one node.
 These are `level-2` nodes. The root nodes constitute the nodes for `level-1`.
 Again, we need to specify which predicates you want to get back from `level-2` nodes.
 
-![get_node_from_uid](/images/tutorials/2/j-explain.JPG)
+![get_node_from_uid](../images/tutorials/2/j-explain.JPG)
 
 You can extend the query to make use of `level-2` nodes and traverse the Graph further and deeper.
 Let's explore that in the next section.
@@ -253,7 +253,7 @@ That's when we say that the query is deep!
 }
 ```
 
-![level-3-query](/images/tutorials/2/f-level-3-traverse.png)
+![level-3-query](../images/tutorials/2/f-level-3-traverse.png)
 
 Here is one more example from the extention of the last query.
 
@@ -278,7 +278,7 @@ Here is one more example from the extention of the last query.
 }
 ```
 
-![level 3](/images/tutorials/2/g-level-4-traversal.png)
+![level 3](../images/tutorials/2/g-level-4-traversal.png)
 
 This query is really long! The query is four levels deep.
 In other words, the depth of the query is four.
@@ -312,7 +312,7 @@ The depth parameter specifies the maximum depth the traversal query should consi
 
 Let's run the recursive traversal query after replacing the placeholder with the UID of node for Michael.
 
-![recurse](/images/tutorials/2/h-recursive-traversal.png)
+![recurse](../images/tutorials/2/h-recursive-traversal.png)
 
 
 [Check out the docs](https://docs.dgraph.io/query-language/#recurse-query) for detailed instructions on using the `recurse` directive.
@@ -349,7 +349,7 @@ Let's delete the `age` predicate of the node for `Michael`.
 }
 ```
 
-![recurse](/images/tutorials/2/i-delete.png)
+![recurse](../images/tutorials/2/i-delete.png)
 
 ## Wrapping up
 In this tutorial, we learned about the CRUD operations using UIDs.
