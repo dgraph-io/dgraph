@@ -170,25 +170,21 @@ func (r *reducer) encodeAndWrite(
 	// This change limits maximum number of open streams to number of streams created in a single
 	// write call. This can also be optimised if required.
 	addDone := func(doneSteams []uint32, l *bpb.KVList) {
-		for _, SID := range doneSteams {
-			l.Kv = append(l.Kv, &bpb.KV{StreamId: SID, StreamDone: true})
+		for _, streamId := range doneSteams {
+			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
 		}
 	}
 
 	var doneStreams []uint32
 	var prevSID uint32
-	updateDoneStreams := func(curSID uint32) {
-		if prevSID != 0 && (prevSID != curSID) {
-			doneStreams = append(doneStreams, prevSID)
-		}
-	}
-
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
-				updateDoneStreams(kv.StreamId)
+				if prevSID != 0 && (prevSID != kv.StreamId) {
+					doneStreams = append(doneStreams, prevSID)
+				}
 				prevSID = kv.StreamId
 			}
 			addDone(doneStreams, list)
