@@ -159,7 +159,7 @@ func typeName(def *ast.Definition) string {
 	if dir == nil {
 		return name
 	}
-	nameArg := dir.Arguments.ForName("name")
+	nameArg := dir.Arguments.ForName(dgraphArgs)
 	if nameArg == nil {
 		return name
 	}
@@ -175,7 +175,7 @@ func fieldName(def *ast.FieldDefinition, typName string) string {
 	if dir == nil {
 		return name
 	}
-	nameArg := dir.Arguments.ForName("name")
+	nameArg := dir.Arguments.ForName(dgraphArgs)
 	if nameArg == nil {
 		return name
 	}
