@@ -993,7 +993,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		// We support maximum 1 million UIDs per variable to ensure that we
 		// don't do bad things to alpha and mutation doesn't become too big.
 		if len(v.Uids.Uids) > 1e6 {
-			return resp, errors.Errorf("variable [%v] has too many UIDs (>1m)", name)
+			return resp, errors.Errorf("var [%v] has over million UIDs", name)
 		}
 
 		uids := make([]string, len(v.Uids.Uids))
