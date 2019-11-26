@@ -145,10 +145,16 @@ func BootstrapServer(schema, data []byte) {
 	d.Close()
 }
 
+// RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
-	// TODO - Make all these functions internal.
+	// admin tests
+	t.Run("admin", admin)
+
+	// encoding
 	t.Run("gzip compression header", gzipCompressionHeader)
 	t.Run("gzip compression no header", gzipCompressionNoHeader)
+
+	// query tests
 	t.Run("get request", getRequest)
 	t.Run("get query empty variable", getQueryEmptyVariable)
 	t.Run("query by type", queryByType)
@@ -177,6 +183,7 @@ func RunAll(t *testing.T) {
 	t.Run("query by mutliple ids", queryByMultipleIds)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
 
+	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
 	t.Run("update mutation by name", updateMutationByName)
@@ -189,6 +196,11 @@ func RunAll(t *testing.T) {
 	t.Run("mutations with deep filter", mutationWithDeepFilter)
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
 	t.Run("query inetrface after add mutation", queryInterfaceAfterAddMutation)
+
+	// error tests
+	t.Run("graphql completion on", graphQLCompletionOn)
+	t.Run("request validation errors", requestValidationErrors)
+	t.Run("panic catcher", panicCatcher)
 }
 
 func gunzipData(data []byte) ([]byte, error) {

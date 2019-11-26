@@ -210,7 +210,7 @@ const (
 }`
 )
 
-func TestAdmin(t *testing.T) {
+func admin(t *testing.T) {
 	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
