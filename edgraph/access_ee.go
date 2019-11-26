@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -395,7 +395,7 @@ func ResetAcl() {
 			},
 		}
 
-		_, err = (&Server{}).doMutate(context.Background(), req, NoAuthorize)
+		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
 		if err != nil {
 			return err
 		}

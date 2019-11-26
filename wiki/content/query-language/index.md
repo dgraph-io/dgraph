@@ -52,7 +52,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x2066e)) {
+  bladerunner(func: uid(0x394c)) {
     uid
     name@en
     initial_release_date
@@ -81,7 +81,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x25280, 0x707f9)) {
+  movies(func: uid(0xb5849, 0x394c)) {
     uid
     name@en
     initial_release_date
@@ -628,7 +628,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x1daf5)) {
+  films(func: uid(0x2c964)) {
     name@hi
     actor.film {
       performance.film {

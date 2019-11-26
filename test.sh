@@ -240,6 +240,11 @@ if [[ :${TEST_SET}: == *:cluster:* ]]; then
 fi
 
 if [[ :${TEST_SET}: == *:systest:* ]]; then
+    Info "Running posting size calculation"
+    cd posting
+    RunCmd ./size_test.sh || TestFailed
+    cd ..
+
     Info "Running small load test"
     RunCmd ./contrib/scripts/load-test.sh || TestFailed
 
