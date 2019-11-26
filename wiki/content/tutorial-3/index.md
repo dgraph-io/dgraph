@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Basic Types and Operations on them"
 
 **Welcome to the third tutorial of getting started with Dgraph.**
 
-In the [previous tutorial](/tutorial-2/) of getting started,
+In the [previous tutorial](../tutorial-2/) of getting started,
 we learned about the CRUD operations using UIDs.
 We also learned about traversals and recursive traversals.
 
@@ -635,7 +635,7 @@ Sounds interesting?
 
 See you all soon in the next tutorial. Till then, happy Graphing!
 
-Check out our next tutorial of the getting started series [here](/tutorial-4/).
+Check out our next tutorial of the getting started series [here](../tutorial-4/).
 
 ### Need Help
 

@@ -227,7 +227,7 @@ They also can be used to create an edge between existing nodes!
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series [here](/tutorial-2/).
+Check out our next tutorial of the getting started series [here](../tutorial-2/).
 
 ## Need Help
 

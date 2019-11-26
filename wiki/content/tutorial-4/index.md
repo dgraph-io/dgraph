@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Multi-language strings"
 
 **Welcome to the fourth tutorial of getting started with Dgraph.**
 
-In the [previous tutorial](/tutorial-3/), we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
+In the [previous tutorial](../tutorial-3/), we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
 
 In this tutorial, we'll learn about using multi-language strings and operations on them using the language tags.
 
@@ -113,7 +113,7 @@ Let's go, amigos!
   ]
 }
 ```
-_Note: If this mutation syntax is new to you, refer to the [first tutorial](/tutorial-1/) to learn basics of mutation in Dgraph._
+_Note: If this mutation syntax is new to you, refer to the [first tutorial](../tutorial-1/) to learn basics of mutation in Dgraph._
 
 Here's our Graph!
 
@@ -130,7 +130,7 @@ You can check that out from the schema tab.
 
 ![full graph](../images/tutorials/4/c-schema.png)
 
-_Note: Check out the [previous tutorial](/tutorial-3/) to know more about data types in Dgraph._
+_Note: Check out the [previous tutorial](../tutorial-3/) to know more about data types in Dgraph._
 
 Let's write a query to fetch all the food items, their reviews, and their country of origin.
 
@@ -150,7 +150,7 @@ Go to the query tab, paste the query, and click Run.
 }
 ```
 
-_Note: Check the [second tutorial](/tutorial-2/) if you want to learn more about traversal queries like the above one_
+_Note: Check the [second tutorial](../tutorial-2/) if you want to learn more about traversal queries like the above one_
 
 Now, Let's fetch only the food items and their reviews,
 
@@ -219,7 +219,7 @@ In the above mutation:
 
 In the mutation above, Dgraph creates a new node for the reviews, and stores `comment`, `comment@ru`, and `comment@jp` in different predicates inside the same node.
 
-_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial](/tutorial-1/)._
+_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial](../tutorial-1/)._
 
 Let's run the above mutation.
 
@@ -276,7 +276,7 @@ In our next section, let's make use of the language tags in our queries.
 #### Querying using language tags.
 Let's obtain the review comments only for `Sushi`.
 
-In the [previous article](/tutorial-3/), we learned about using the `eq` operator and the `hash` index to query for string predicate values.
+In the [previous article](../tutorial-3/), we learned about using the `eq` operator and the `hash` index to query for string predicate values.
 
 Using that knowledge, let's first add the `hash` index for the `food_name` predicate.
 
@@ -388,11 +388,12 @@ Sounds interesting?
 See you all soon in the next tutorial. Till then, happy Graphing!
 
 ## What's Next?
+
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help
