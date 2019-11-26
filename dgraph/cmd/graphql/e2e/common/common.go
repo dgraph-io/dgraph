@@ -301,7 +301,7 @@ func gzipCompressionNoHeader(t *testing.T) {
 }
 
 func getRequest(t *testing.T) {
-	AddMutation(t, getExecutor)
+	add(t, getExecutor)
 }
 
 func getQueryEmptyVariable(t *testing.T) {

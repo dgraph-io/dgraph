@@ -324,6 +324,24 @@ func searchValidation(
 
 func dgraphNameValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
+
+	if isID(field) {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: has the @dgraph directive but fields of type ID "+
+				"can't have the @dgraph directive.", typ.Name, field.Name)
+	}
+
+	dgraphArg := dir.Arguments.ForName(dgraphArgs)
+	if dgraphArg == nil {
+		// This check can be removed once gqlparser bug
+		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: @dgraph directive doesn't have name argument.",
+			typ.Name, field.Name,
+		)
+	}
 	return nil
 }
 
