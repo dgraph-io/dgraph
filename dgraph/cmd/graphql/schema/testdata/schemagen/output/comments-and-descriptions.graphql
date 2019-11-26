@@ -111,7 +111,7 @@ type DeleteTPayload {
 }
 
 type UpdateTPayload {
-	t: [T]
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 }
 
 #######################

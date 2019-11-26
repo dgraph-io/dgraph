@@ -185,6 +185,7 @@
       post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
         postID : uid
         title : Post.title
+        dgraph.uid : uid
       }
     }
 -
@@ -203,6 +204,7 @@
       post(func: uid(0x4), orderasc: Post.title) {
         postID : uid
         title : Post.title
+        dgraph.uid : uid
       }
     }
 
@@ -222,5 +224,6 @@
       post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
         postID : uid
         title : Post.title
+        dgraph.uid : uid
       }
     }
