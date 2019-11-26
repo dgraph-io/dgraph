@@ -297,3 +297,130 @@
     }
   condition: "@if(gt(len(x), 0))"
 
+-
+  name: "Add mutation using code"
+  gqlmutation: |
+    mutation addState($input: StateInput!) {
+      addState(input: $input) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "nsw",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "dgraph.type": ["State"],
+      "State.name": "NSW",
+      "State.code": "nsw",
+      "State.country": {
+        "uid": "0x12"
+      }
+    }
+  dgraphquery: |-
+    query {
+      x as addState(func: eq(State.code, "nsw")) @filter(type(State))
+    }
+  condition: "@if(eq(len(x), 0))"
+
+-
+  name: "Update mutation using code"
+  gqlmutation: |
+    mutation updateState($patch: UpdateStateInput!) {
+      updateState(input: $patch) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "code": { "eq": "nsw" }
+        },
+        "patch": {
+          "name": "nsw"
+        }
+      }
+    }
+  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "State.name": "nsw"
+    }
+  dgraphquery: |-
+    query {
+      x as updateState(func: type(State)) @filter(eq(State.code, "nsw"))
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Add mutation using code on type which also has an ID field"
+  gqlmutation: |
+    mutation addEditor($input: EditorInput!) {
+      addEditor(input: $input) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "editor",
+        "name": "A.N. Editor"
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "dgraph.type": ["Editor"],
+      "Editor.name": "A.N. Editor",
+      "Editor.code": "editor"
+    }
+  dgraphquery: |-
+    query {
+      x as addEditor(func: eq(Editor.code, "editor")) @filter(type(Editor))
+    }
+  condition: "@if(eq(len(x), 0))"
+
+-
+  name: "Update mutation using code on type which also has an ID field"
+  gqlmutation: |
+    mutation updateEditor($patch: UpdateEditorInput!) {
+      updateEditor(input: $patch) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "code": { "eq": "editor" },
+          "ids": [ "0x1", "0x2" ]
+        },
+        "patch": {
+          "name": "A.N. Editor"
+        }
+      }
+    }
+  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphmutation: |
+    { "uid" : "uid(x)",
+      "Editor.name": "A.N. Editor"
+    }
+  dgraphquery: |-
+    query {
+      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2)))
+    }
+  condition: "@if(gt(len(x), 0))"
+
