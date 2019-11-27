@@ -1,5 +1,5 @@
 -
-  name: "Update mutation with variables"
+  name: "Update set mutation with variables"
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -13,15 +13,77 @@
       { "filter": {
           "ids": ["0x123", "0x124"]
         },
-        "patch": {
+        "set": {
           "text": "updated text"
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph mutation"
-  dgraphmutation: |
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgraphset: |
     { "uid" : "uid(x)",
       "Post.text": "updated text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update delete mutation with variables and value"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "delete": {
+          "text": "delete this text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  dgraphdelete: |
+    { "uid" : "uid(x)",
+      "Post.text": "delete this text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update delete mutation with variables and null"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "delete": {
+          "text": null
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphdelete: |
+    { "uid" : "uid(x)",
+      "Post.text": null
     }
   dgraphquery: |-
     query {
@@ -47,7 +109,7 @@
         "filter": {
           "ids": ["0x123"]
         },
-        "patch": { "name": "Bob",
+        "set": { "name": "Bob",
           "dob": "2000-01-01",
           "female": true,
           "ename": "employee no. 1"
@@ -55,7 +117,7 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
@@ -72,7 +134,7 @@
   name: "Update mutation for an interface"
   gqlmutation: |-
     mutation {
-      updateCharacter(input: {filter: { ids: ["0x123"] }, patch: {name:"Bob"}}) {
+      updateCharacter(input: {filter: { ids: ["0x123"] }, set: {name:"Bob"}}) {
         character {
           id
           name
@@ -80,7 +142,7 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "Character.name": "Bob"
     }
@@ -105,13 +167,13 @@
       { "filter": {
           "tags": { "eq": "foo"}
         },
-        "patch": {
+        "set": {
           "text": "updated text"
         }
       }
     }
   explanation: "The update patch should get rewritten into the Dgraph mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "Post.text": "updated text"
     }
@@ -136,13 +198,13 @@
       { "filter": {
           "code": { "eq": "nsw" }
         },
-        "patch": {
+        "set": {
           "name": "nsw"
         }
       }
     }
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "State.name": "nsw"
     }
@@ -168,13 +230,13 @@
           "code": { "eq": "editor" },
           "ids": [ "0x1", "0x2" ]
         },
-        "patch": {
+        "set": {
           "name": "A.N. Editor"
         }
       }
     }
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "Editor.name": "A.N. Editor"
     }

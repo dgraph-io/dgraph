@@ -39,14 +39,15 @@ import (
 // ensure that those errors get caught before they reach rewriting.
 
 type TestCase struct {
-	Name           string
-	GQLMutation    string
-	GQLVariables   string
-	Explanation    string
-	DgraphMutation string
-	DgraphQuery    string
-	Condition      string
-	Error          *x.GqlError
+	Name         string
+	GQLMutation  string
+	GQLVariables string
+	Explanation  string
+	DgraphSet    string
+	DgraphDelete string
+	DgraphQuery  string
+	Condition    string
+	Error        *x.GqlError
 }
 
 func TestMutationRewriting(t *testing.T) {
@@ -91,10 +92,18 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				require.Len(t, muts, 1)
-				jsonMut := string(muts[0].SetJson)
-				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
 				require.Equal(t, tcase.Condition, muts[0].Cond)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
+
+				setMut := string(muts[0].SetJson)
+				if setMut != "" || tcase.DgraphSet != "" {
+					require.JSONEq(t, tcase.DgraphSet, setMut)
+				}
+
+				delMut := string(muts[0].DeleteJson)
+				if delMut != "" || tcase.DgraphDelete != "" {
+					require.JSONEq(t, tcase.DgraphDelete, delMut)
+				}
 			}
 		})
 	}
@@ -110,7 +119,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 			NewAddRewriter(),
 		},
 		"Update Post ": {
-			`updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) `,
+			`updatePost(input: { filter: { ids:  ["0x4"] }, set: { text: "Updated text" } }) `,
 			NewUpdateRewriter(),
 		},
 	}
@@ -187,7 +196,7 @@ func TestDeleteMutationRewriting(t *testing.T) {
 
 			test.RequireJSONEq(t, tcase.Error, err)
 			if tcase.Error == nil {
-				require.Equal(t, tcase.DgraphMutation, m)
+				require.Equal(t, tcase.DgraphDelete, m)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
 			}
 		})
