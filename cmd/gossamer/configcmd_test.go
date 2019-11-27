@@ -84,8 +84,8 @@ func createCliContext(description string, flags []string, values []interface{}) 
 	return context, nil
 }
 
-const TESTS_FP string = "../../runtime/test_wasm.wasm"
-const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/c0ff6e519676affd727a45fe605bc7c84a0a536d/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
+const TESTS_FP string = "../../substrate_test_runtime.compact.wasm"
+const TEST_WASM_URL string = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
 
 // Exists reports whether the named file or directory exists.
 func Exists(name string) bool {
