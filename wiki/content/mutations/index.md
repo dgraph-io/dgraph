@@ -875,7 +875,7 @@ results of executing the query block:
 
 Execution of an upsert block also returns the response of the query executed on the state
 of the database *before mutation was executed*. To get the latest result, we should commit
-the mutation before executing the query.
+the mutation and execute another query.
 
 ### Example
 
