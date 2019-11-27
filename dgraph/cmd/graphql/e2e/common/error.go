@@ -166,7 +166,7 @@ func panicCatcher(t *testing.T) {
 		},
 	}
 
-	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
