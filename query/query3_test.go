@@ -2225,6 +2225,9 @@ func TestGeoDataInvalidString(t *testing.T) {
 	require.Contains(t, err.Error(), "geom: unsupported layout NoLayout")
 }
 
+// This test shows that GeoVal API doesn't accept string data. Though, mutation
+// succeeds querying the data returns an error. Ideally, we should not accept
+// invalid data in a mutation though that is left as future work.
 func TestGeoCorruptData(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
@@ -2259,6 +2262,9 @@ func TestGeoCorruptData(t *testing.T) {
 	require.Contains(t, err.Error(), "wkb: unknown byte order: 1111011")
 }
 
+// This test shows how we could use the GeoVal API to store geo data.
+// As far as I (Aman) know, this is something that should not be used
+// by a common user unless user knows what she is doing.
 func TestGeoValidWkbData(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)

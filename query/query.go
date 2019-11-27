@@ -396,7 +396,7 @@ func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	sv, err := types.Convert(v, v.Tid)
 	if err != nil {
 		// This can happen when a mutation ingests corrupt data into the database.
-		return v, errors.Wrap(err, "Error while interpreting appropriate type from binary")
+		return v, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
 	}
 	return sv, nil
 }
