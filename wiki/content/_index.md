@@ -34,7 +34,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
             </a>
           </div>
           <p class="section-desc">
-            Install Dgraph and run a query in 7 minutes.
+            Get Started with Dgraph alongside a series of tutorials.
           </p>
         </div>
       </div>

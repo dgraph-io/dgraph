@@ -110,7 +110,7 @@ func TestPostingCalculation(t *testing.T) {
 func TestFacetCalculation(t *testing.T) {
 	facet = &api.Facet{}
 	// 128 is obtained from BenchmarkFacet
-	require.Equal(t, uint64(128), calcuateFacet(facet))
+	require.Equal(t, uint64(128), calculateFacet(facet))
 }
 
 // run this test manually for the verfication.

@@ -43,10 +43,21 @@ docker pull dgraph/dgraph:latest
 
 ## Install from Source
 
-If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
+If you want to install from source, install Go 1.11+ or later and the following dependencies:
+
+Ubuntu:
+```bash
+sudo apt-get update
+sudo apt-get install gcc make
+```
+
+Then clone the Dgraph repository and use `make install` to install the Dgraph binary to `$GOPATH/bin`.
+
 
 ```bash
-go get -v github.com/dgraph-io/dgraph/dgraph
+git clone https://github.com/dgraph-io/dgraph.git
+cd ./dgraph
+make install
 ```
 
 ## Get Started

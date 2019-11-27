@@ -88,10 +88,6 @@ func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, erro
 		return counter, errors.Wrapf(err, "while doing query")
 	}
 
-	// Total query latency is sum of encoding, parsing and processing latencies.
-	queryLatency := resp.Latency.GetEncodingNs() +
-		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
-
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		return counter, err
@@ -105,7 +101,7 @@ func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, erro
 	}
 	span.Annotatef(nil, "Found counter: %+v", counter)
 	counter.startTs = resp.GetTxn().GetStartTs()
-	counter.qLatency = time.Duration(queryLatency).Round(time.Millisecond)
+	counter.qLatency = time.Duration(resp.Latency.GetTotalNs()).Round(time.Millisecond)
 	return counter, nil
 }
 
@@ -154,9 +150,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		return Counter{}, err
 	}
 
-	mutationLatency := resp.Latency.GetProcessingNs() +
-		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
-	counter.mLatency = time.Duration(mutationLatency).Round(time.Millisecond)
+	counter.mLatency = time.Duration(resp.Latency.GetTotalNs()).Round(time.Millisecond)
 	return counter, nil
 }
 
