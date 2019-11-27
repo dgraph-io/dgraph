@@ -190,7 +190,8 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID) error {
+func createSchema(attr string, typ types.TypeID, list bool) error {
+	glog.Infof("creating attr %s as list %v", attr, list)
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -200,7 +201,7 @@ func createSchema(attr string, typ types.TypeID) error {
 		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 		// For type UidID, set List to true. This is done because previously
 		// all predicates of type UidID were implicitly considered lists.
-		if typ == types.UidID {
+		if typ == types.UidID || list {
 			s.List = true
 		}
 	}
@@ -349,10 +350,10 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
