@@ -189,7 +189,7 @@ func writeToTestFile(tests []trieTest) error {
 	return nil
 }
 
-func buildSmallTrie() *Trie {
+func buildSmallTrie(t *testing.T) *Trie {
 	trie := newEmpty()
 
 	tests := []trieTest{
@@ -204,7 +204,7 @@ func buildSmallTrie() *Trie {
 	for _, test := range tests {
 		err := trie.Put(test.key, test.value)
 		if err != nil {
-			return nil
+			t.Fatal(err)
 		}
 	}
 
@@ -453,7 +453,7 @@ func TestGetPartialKey(t *testing.T) {
 }
 
 func TestDeleteSmall(t *testing.T) {
-	trie := buildSmallTrie()
+	trie := buildSmallTrie(t)
 
 	tests := []trieTest{
 		{key: []byte{}, value: []byte("floof"), op: DEL},
@@ -497,7 +497,7 @@ func TestDeleteSmall(t *testing.T) {
 }
 
 func TestDeleteCombineBranch(t *testing.T) {
-	trie := buildSmallTrie()
+	trie := buildSmallTrie(t)
 
 	tests := []trieTest{
 		{key: []byte{0x01, 0x35, 0x46}, value: []byte("raccoon"), op: PUT},

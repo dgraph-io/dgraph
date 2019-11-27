@@ -27,23 +27,26 @@ import (
 // The zero value is an empty trie with no database.
 // Use NewTrie to create a trie that sits on top of a database.
 type Trie struct {
-	db   *Database
-	root node
+	db       *Database
+	root     node
+	children map[common.Hash]*Trie
 }
 
 // NewEmptyTrie creates a trie with a nil root and merkleRoot
 func NewEmptyTrie(db *Database) *Trie {
 	return &Trie{
-		db:   db,
-		root: nil,
+		db:       db,
+		root:     nil,
+		children: make(map[common.Hash]*Trie),
 	}
 }
 
 // NewTrie creates a trie with an existing root node from db
 func NewTrie(db *Database, root node) *Trie {
 	return &Trie{
-		db:   db,
-		root: root,
+		db:       db,
+		root:     root,
+		children: make(map[common.Hash]*Trie),
 	}
 }
 
@@ -138,13 +141,15 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 			ok = true
 		}
 	case *leaf:
+		// if a value already exists in the trie at this key, overwrite it with the new value
+		if p.value != nil && bytes.Equal(p.key, key) {
+			p.value = value.(*leaf).value
+			return true, p, nil
+		}
+
 		// need to convert this leaf into a branch
 		br := &branch{dirty: true}
 		length := lenCommonPrefix(key, p.key)
-
-		if bytes.Equal(p.key, key) && len(key) == length {
-			return true, value, nil
-		}
 
 		br.key = key[:length]
 		parentKey := p.key
