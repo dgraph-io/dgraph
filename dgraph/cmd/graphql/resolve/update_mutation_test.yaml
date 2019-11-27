@@ -152,7 +152,7 @@
     }
   condition: "@if(gt(len(x), 0))"
 
-  -
+-
   name: "Update mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation updateEditor($patch: UpdateEditorInput!) {
