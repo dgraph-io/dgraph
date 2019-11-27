@@ -230,29 +230,45 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					)
 
 					indexStr := ""
+					upsertStr := ""
+					search := f.Directives.ForName(searchDirective)
+					id := f.Directives.ForName(idDirective)
+					if id != nil {
+						upsertStr = "@upsert "
+					}
+
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
+						if arg != nil {
+							indexes := getAllSearchIndexes(arg.Value)
+							indexes = addHashIfRequired(f, indexes)
+							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+						} else {
+							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
+						}
+					} else if id != nil {
+						indexStr = fmt.Sprintf(" @index(hash)")
+					}
+
+					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
+					if parentInt == nil {
+						fmt.Fprintf(&preds, "%s: %s%s %s.\n", fname, typStr, indexStr, upsertStr)
+					}
+				case ast.Enum:
+					typStr = fmt.Sprintf("%s%s%s", prefix, "string", suffix)
+
+					indexStr := " @index(hash)"
 					search := f.Directives.ForName(searchDirective)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
 							indexes := getAllSearchIndexes(arg.Value)
 							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
-						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
 						}
 					}
-
 					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
-					}
-				case ast.Enum:
-					typStr = fmt.Sprintf(
-						"%s%s%s",
-						prefix, "string", suffix,
-					)
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
-					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s @index(exact) .\n", fname, typStr)
+						fmt.Fprintf(&preds, "%s: %s %s .\n", fname, typStr, indexStr)
 					}
 				}
 			}

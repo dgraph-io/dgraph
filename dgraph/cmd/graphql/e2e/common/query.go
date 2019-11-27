@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -960,7 +961,134 @@ func queryByMultipleIds(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD:dgraph/cmd/graphql/e2e/common/query.go
 func queryByMultipleInvalidIds(t *testing.T) {
+=======
+func TestEnumFilter(t *testing.T) {
+	posts := allPosts(t)
+
+	queryParams := &GraphQLParams{
+		Query: `query queryPost($filter: PostFilter) {
+			queryPost(filter: $filter) {
+				postID
+				title
+				text
+				tags
+				numLikes
+				isPublished
+				postType
+			}
+		}`,
+	}
+
+	facts := make([]*post, 0, len(posts))
+	questions := make([]*post, 0, len(posts))
+	for _, post := range posts {
+		if post.PostType == "Fact" {
+			facts = append(facts, post)
+		}
+		if post.PostType == "Question" {
+			questions = append(questions, post)
+		}
+	}
+
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"Hash Filter test": {
+			Filter: map[string]interface{}{
+				"postType": map[string]interface{}{
+					"eq": "Fact",
+				},
+			},
+			Expected: facts,
+		},
+
+		"Regexp Filter test": {
+			Filter: map[string]interface{}{
+				"postType": map[string]interface{}{
+					"regexp": "/(Fact)|(Question)/",
+				},
+			},
+			Expected: append(facts, questions...),
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			queryParams.Variables = map[string]interface{}{"filter": test.Filter}
+
+			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+			requireNoGQLErrors(t, gqlResponse)
+
+			var result struct {
+				QueryPost []*post
+			}
+
+			postSort := func(i, j int) bool {
+				return result.QueryPost[i].Title < result.QueryPost[j].Title
+			}
+			testSort := func(i, j int) bool {
+				return test.Expected[i].Title < test.Expected[j].Title
+			}
+
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			sort.Slice(result.QueryPost, postSort)
+			sort.Slice(test.Expected, testSort)
+
+			require.NoError(t, err)
+			if diff := cmp.Diff(test.Expected, result.QueryPost); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+
+	}
+}
+
+func TestDefaultEnumFilter(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test query enum default index on appearsIn", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: EMPIRE
+					}
+				}) {
+					name
+					appearsIn
+				}
+			}`,
+		}
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"Han Solo",
+			"appearsIn": ["EMPIRE"]
+		  },
+		  {
+			"name": "R2-D2",
+			"appearsIn": ["EMPIRE"]
+		  }
+		]
+	  }`
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
+func TestQueryByMultipleInvalidIds(t *testing.T) {
+>>>>>>> mjc/graphql:dgraph/cmd/graphql/e2e_query_test.go
 	queryParams := &GraphQLParams{
 		Query: `query queryPost($filter: PostFilter) {
 			queryPost(filter: $filter) {
@@ -990,4 +1118,74 @@ func queryByMultipleInvalidIds(t *testing.T) {
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(result.QueryPost))
+}
+
+func TestGetStateByXid(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			getState(code: "nsw") {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.Equal(t, `{"getState":{"name":"NSW"}}`, string(gqlResponse.Data))
+}
+
+func TestGetStateWithoutArgs(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			getState {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
+}
+
+func TestGetStateByBothXidAndUid(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			getState(code: "nsw", id: "0x1") {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
+}
+
+func TestQueryStateByXid(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			queryState(filter: { code: { eq: "nsw"}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
+}
+
+func TestQueryStateByXidRegex(t *testing.T) {
+	getStateParams := &GraphQLParams{
+		Query: `{
+			queryState(filter: { code: { regexp: "/n/"}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
 }

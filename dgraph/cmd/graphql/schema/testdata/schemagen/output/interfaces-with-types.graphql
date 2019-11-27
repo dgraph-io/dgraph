@@ -63,6 +63,7 @@ enum DgraphIndex {
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -192,7 +193,7 @@ enum StarshipOrderable {
 input CharacterFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: Episode_hash
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
@@ -211,7 +212,7 @@ input CharacterRef {
 input DroidFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: Episode_hash
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
@@ -234,10 +235,14 @@ input DroidRef {
 	id: ID!
 }
 
+input Episode_hash {
+	eq: [Episode!]!
+}
+
 input HumanFilter {
 	ids: [ID!]
 	name: StringExactFilter
-	appearsIn: Episode
+	appearsIn: Episode_hash
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter

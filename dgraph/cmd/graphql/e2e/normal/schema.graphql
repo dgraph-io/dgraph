@@ -7,6 +7,12 @@ type Country {
         name: String! @search(by: [trigram, hash])
 }
 
+type State {
+        id: ID!
+        code: String! @id @search(by: [regexp])
+        name: String
+}
+
 # **Don't delete** Comments in the middle of schemas should work
 # Comments in input schemas should _not_ make it through to the
 # generated schema.
@@ -38,7 +44,7 @@ type Post {
         topic: String @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
-        postType: PostType @search
+        postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts)
 }
 

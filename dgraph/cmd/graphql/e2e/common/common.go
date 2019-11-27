@@ -122,6 +122,12 @@ type post struct {
 	Author      author
 }
 
+type state struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Code string `json:"code"`
+}
+
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
@@ -616,6 +622,9 @@ func addSchema(url string, schema string) error {
 		Variables: map[string]interface{}{"sch": schema},
 	}
 	req, err := add.createGQLPost(url)
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
 
 	resp, err := runGQLRequest(req)
 	if err != nil {

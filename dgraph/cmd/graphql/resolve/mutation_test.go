@@ -45,6 +45,7 @@ type TestCase struct {
 	Explanation    string
 	DgraphMutation string
 	DgraphQuery    string
+	Condition      string
 	Error          *x.GqlError
 }
 
@@ -82,8 +83,10 @@ func TestMutationRewriting(t *testing.T) {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				require.Len(t, muts, 1)
+				require.Equal(t, tcase.Condition, muts[0].Cond)
 				jsonMut := string(muts[0].SetJson)
 				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
+				require.Equal(t, tcase.Condition, muts[0].Cond)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
 			}
 		})
@@ -120,9 +123,15 @@ func TestMutationQueryRewriting(t *testing.T) {
 				require.NoError(t, err)
 				gqlMutation := test.GetMutation(t, op)
 
+				assigned := map[string]string{}
+				mutated := map[string][]string{}
+				if name == "Add Post " {
+					assigned["newnode"] = "0x4"
+				} else {
+					mutated[mutationQueryVar] = []string{"0x4"}
+				}
 				dgQuery, err := testRewriter.FromMutationResult(
-					gqlMutation, map[string]string{"newnode": "0x4"},
-					map[string][]string{mutationQueryVar: []string{"0x4"}})
+					gqlMutation, assigned, mutated)
 
 				require.Nil(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))

@@ -97,8 +97,8 @@ schemas:
         X.e: string
         X.f: [string]
       }
-      X.e: string @index(exact) .
-      X.f: [string] @index(exact) .
+      X.e: string @index(hash) .
+      X.f: [string] @index(hash) .
 
 
   -
@@ -118,13 +118,20 @@ schemas:
         s5: String @search(by: [fulltext])
         s6: String @search(by: [trigram])
         s7: String @search(by: [regexp])
-        s8: String @search(by: [trigram, fulltext, term, exact])
+        s8: String @search(by: [exact, fulltext, term, trigram])
         dt1: DateTime @search
         dt2: DateTime @search(by: [year])
         dt3: DateTime @search(by: [month])
         dt4: DateTime @search(by: [day])
         dt5: DateTime @search(by: [hour])
         e: E @search
+        e1: E @search(by: [hash])
+        e2: E @search(by: [exact])
+        e3: E @search(by: [trigram])
+        e4: E @search(by: [regexp])
+        e5: E @search(by: [hash, regexp])
+        e6: E @search(by: [hash, trigram])
+        e7: E @search(by: [exact, regexp])
       }
       enum E { A }
     output: |
@@ -149,6 +156,13 @@ schemas:
         X.dt4: dateTime
         X.dt5: dateTime
         X.e: string
+        X.e1: string
+        X.e2: string
+        X.e3: string
+        X.e4: string
+        X.e5: string
+        X.e6: string
+        X.e7: string
       }
       X.i1: int @index(int) .
       X.i2: int @index(int) .
@@ -163,13 +177,20 @@ schemas:
       X.s5: string @index(fulltext) .
       X.s6: string @index(trigram) .
       X.s7: string @index(trigram) .
-      X.s8: string @index(trigram, fulltext, term, exact) .
+      X.s8: string @index(exact, fulltext, term, trigram) .
       X.dt1: dateTime @index(year) .
       X.dt2: dateTime @index(year) .
       X.dt3: dateTime @index(month) .
       X.dt4: dateTime @index(day) .
       X.dt5: dateTime @index(hour) .
-      X.e: string @index(exact) .
+      X.e: string @index(hash) .
+      X.e1: string @index(hash) .
+      X.e2: string @index(exact) .
+      X.e3: string @index(trigram) .
+      X.e4: string @index(trigram) .
+      X.e5: string @index(hash, trigram) .
+      X.e6: string @index(hash, trigram) .
+      X.e7: string @index(exact, trigram) .
 
   -
     name: "interface and types interact properly"
@@ -287,3 +308,63 @@ schemas:
       Y.q: string .
       dgraph.pList: [int] .
       dgraph.f: float .
+
+  -
+    name: "Field with @id directive but no search directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id @search(by: [trigram])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(trigram, hash) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive and a hash arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [hash, term])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash, term) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .

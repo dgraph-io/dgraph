@@ -3,13 +3,21 @@
 #######################
 
 type Post {
-	id: ID!
-	author(filter: AuthorFilter): Author! @hasInverse(field: "posts")
+	id: ID
+	content: String!
+	author(filter: AuthorFilter): Author!
+	genre(filter: GenreFilter): Genre
 }
 
 type Author {
-	id: ID!
-	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
+	id: ID
+	name: String! @id @search(by: [regexp])
+	pen_name: String
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type Genre {
+	name: String! @id
 }
 
 #######################
@@ -36,7 +44,6 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
-directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 
 input IntFilter {
@@ -97,11 +104,19 @@ type AddAuthorPayload {
 	author: Author
 }
 
+type AddGenrePayload {
+	genre: Genre
+}
+
 type AddPostPayload {
 	post: Post
 }
 
 type DeleteAuthorPayload {
+	msg: String
+}
+
+type DeleteGenrePayload {
 	msg: String
 }
 
@@ -121,28 +136,71 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum AuthorOrderable {
+	name
+	pen_name
+}
+
+enum GenreOrderable {
+	name
+}
+
+enum PostOrderable {
+	content
+}
+
 #######################
 # Generated Inputs
 #######################
 
 input AuthorFilter {
 	ids: [ID!]
+	name: StringHashFilter_StringRegExpFilter
+	and: AuthorFilter
+	or: AuthorFilter
 	not: AuthorFilter
 }
 
 input AuthorInput {
-	posts: [PostRef!]!
+	name: String!
+	pen_name: String
+	posts: [PostRef]
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
 }
 
 input AuthorRef {
-	id: ID!
+	id: ID
+}
+
+input GenreFilter {
+	name: StringHashFilter
+	and: GenreFilter
+	or: GenreFilter
+	not: GenreFilter
+}
+
+input GenreInput {
+	name: String!
+}
+
+input GenreOrder {
+	asc: GenreOrderable
+	desc: GenreOrderable
+	then: GenreOrder
 }
 
 input PatchAuthor {
-	posts: [PostRef!]
+	pen_name: String
+	posts: [PostRef]
 }
 
 input PatchPost {
+	content: String
 	author: AuthorRef
 }
 
@@ -152,11 +210,23 @@ input PostFilter {
 }
 
 input PostInput {
+	content: String!
 	author: AuthorRef!
 }
 
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
 input PostRef {
-	id: ID!
+	id: ID
+}
+
+input StringHashFilter_StringRegExpFilter {
+	eq: String
+	regexp: String
 }
 
 input UpdateAuthorInput {
@@ -175,9 +245,11 @@ input UpdatePostInput {
 
 type Query {
 	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, first: Int, offset: Int): [Post]
-	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID, name: String): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 }
 
 #######################
@@ -191,4 +263,6 @@ type Mutation {
 	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addGenre(input: GenreInput!): AddGenrePayload
+	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
