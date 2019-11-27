@@ -460,20 +460,41 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 func TestFilterInUpdate(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
+	newCountry.Name = "updatedValue"
+	anotherCountry.Name = "updatedValue"
 
-	t.Run("Update Country", func(t *testing.T) {
-		filter := map[string]interface{}{
-			"name": map[string]interface{}{
-				"eq": "Testland",
+	cases := map[string]struct {
+		Filter          map[string]interface{}
+		FilterCountries map[string]interface{}
+		Expected        int
+	}{
+		"Eq filter": {
+			Filter: map[string]interface{}{
+				"name": map[string]interface{}{
+					"eq": "Testland",
+				},
 			},
-		}
+			FilterCountries: map[string]interface{}{
+				"ids": []string{anotherCountry.ID},
+			},
+			Expected: 1,
+		},
 
-		filterCountries := map[string]interface{}{
-			"ids": []string{anotherCountry.ID},
-		}
+		"ID Filter": {
+			Filter: map[string]interface{}{
+				"ids": []string{newCountry.ID},
+			},
+			FilterCountries: map[string]interface{}{
+				"ids": []string{anotherCountry.ID, newCountry.ID},
+			},
+			Expected: 1,
+		},
+	}
 
-		updateParams := &GraphQLParams{
-			Query: `mutation newName($filter: CountryFilter!, $newName: String!, 
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			updateParams := &GraphQLParams{
+				Query: `mutation newName($filter: CountryFilter!, $newName: String!,
 					 $filterCountries: CountryFilter!) {
 			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
 				country(filter: $filterCountries) {
@@ -482,76 +503,34 @@ func TestFilterInUpdate(t *testing.T) {
 				}
 			}
 		}`,
-			Variables: map[string]interface{}{
-				"filter":          filter,
-				"newName":         "updatedValue",
-				"filterCountries": filterCountries,
-			},
-		}
-
-		gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		var result struct {
-			UpdateCountry struct {
-				Country []*country
+				Variables: map[string]interface{}{
+					"filter":          test.Filter,
+					"newName":         "updatedValue",
+					"filterCountries": test.FilterCountries,
+				},
 			}
-		}
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
+			gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		require.Equal(t, len(result.UpdateCountry.Country), 1)
-		require.Equal(t, result.UpdateCountry.Country[0].Name, "updatedValue")
-	})
-
-	cleanUp(t, []*country{newCountry, anotherCountry}, nil, nil)
-}
-
-func TestIntersectionInUIDFilters(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-	anotherCountry := addCountry(t, postExecutor)
-
-	t.Run("Update Country", func(t *testing.T) {
-		filter := map[string]interface{}{
-			"ids": []string{newCountry.ID},
-		}
-
-		filterCountries := map[string]interface{}{
-			"ids": []string{anotherCountry.ID},
-		}
-
-		updateParams := &GraphQLParams{
-			Query: `mutation newName($filter: CountryFilter!, $newName: String!, 
-					 $filterCountries: CountryFilter!) {
-			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
-				country(filter: $filterCountries) {
-					id
-					name
+			var result struct {
+				UpdateCountry struct {
+					Country []*country
 				}
 			}
-		}`,
-			Variables: map[string]interface{}{
-				"filter":          filter,
-				"newName":         "updatedValue",
-				"filterCountries": filterCountries,
-			},
-		}
 
-		gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
 
-		var result struct {
-			UpdateCountry struct {
-				Country []*country
+			require.Equal(t, len(result.UpdateCountry.Country), test.Expected)
+			for i := 0; i < test.Expected; i++ {
+				require.Equal(t, result.UpdateCountry.Country[i].Name, "updatedValue")
 			}
-		}
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.NoError(t, err)
-
-		require.Equal(t, len(result.UpdateCountry.Country), 0)
-	})
+			requireCountry(t, newCountry.ID, newCountry, postExecutor)
+			requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		})
+	}
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, nil, nil)
 }
