@@ -268,7 +268,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s %s .\n", fname, typStr, indexStr)
+						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
 					}
 				}
 			}

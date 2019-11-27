@@ -207,6 +207,8 @@ func RunAll(t *testing.T) {
 	t.Run("include directive", includeDirective)
 	t.Run("include and skip directive", includeAndSkipDirective)
 	t.Run("query by mutliple ids", queryByMultipleIds)
+	t.Run("enum filter", enumFilter)
+	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
 
 	// mutation tests

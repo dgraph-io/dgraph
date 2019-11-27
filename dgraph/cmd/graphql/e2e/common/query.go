@@ -961,10 +961,7 @@ func queryByMultipleIds(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD:dgraph/cmd/graphql/e2e/common/query.go
-func queryByMultipleInvalidIds(t *testing.T) {
-=======
-func TestEnumFilter(t *testing.T) {
+func enumFilter(t *testing.T) {
 	posts := allPosts(t)
 
 	queryParams := &GraphQLParams{
@@ -1046,7 +1043,7 @@ func TestEnumFilter(t *testing.T) {
 	}
 }
 
-func TestDefaultEnumFilter(t *testing.T) {
+func defaultEnumFilter(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
@@ -1087,8 +1084,7 @@ func TestDefaultEnumFilter(t *testing.T) {
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
 
-func TestQueryByMultipleInvalidIds(t *testing.T) {
->>>>>>> mjc/graphql:dgraph/cmd/graphql/e2e_query_test.go
+func queryByMultipleInvalidIds(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `query queryPost($filter: PostFilter) {
 			queryPost(filter: $filter) {

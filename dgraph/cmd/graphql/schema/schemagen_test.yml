@@ -296,8 +296,8 @@ schemas:
         dgraph.x.e: string
         dgraph.x.eList: [string]
       }
-      dgraph.x.e: string @index(exact) .
-      dgraph.x.eList: [string] @index(exact) .
+      dgraph.x.e: string @index(hash) .
+      dgraph.x.eList: [string] @index(hash) .
       type Y {
         Y.p: int
         Y.q: string
