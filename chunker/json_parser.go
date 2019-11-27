@@ -230,11 +230,10 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 // NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
 // negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
-	batchSize  int
-	nquads     []*api.NQuad
-	nqCh       chan []*api.NQuad
-	metadata   ParseMetadata
-	metadataCh chan ParseMetadata
+	batchSize int
+	nquads    []*api.NQuad
+	nqCh      chan []*api.NQuad
+	metadata  ParseMetadata
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -265,9 +264,9 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	}
 }
 
-// MetadataCh returns a channel containing the parse metadata derived during parsing.
-func (buf *NQuadBuffer) MetadataCh() <-chan ParseMetadata {
-	return buf.metadataCh
+// Metadata returns the parse metadata that has been aggregated so far..
+func (buf *NQuadBuffer) Metadata() ParseMetadata {
+	return buf.metadata
 }
 
 // PushMetadata pushes and aggregates metadata derived during the parsing. This
@@ -293,9 +292,6 @@ func (buf *NQuadBuffer) Flush() {
 		buf.nquads = nil
 	}
 	close(buf.nqCh)
-
-	buf.metadataCh <- buf.metadata
-	close(buf.metadataCh)
 }
 
 // nextIdx is the index that is used to generate blank node ids for a json map object
@@ -544,6 +540,6 @@ func ParseJSON(b []byte, op int) ([]*api.NQuad, ParseMetadata, error) {
 
 	buf.Flush()
 	nqs := <-buf.Ch()
-	metadata := <-buf.MetadataCh()
+	metadata := buf.Metadata()
 	return nqs, metadata, nil
 }

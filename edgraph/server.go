@@ -480,7 +480,19 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	m := &pb.Mutations{Edges: edges, StartTs: qc.req.StartTs}
+	forcedSinglePreds := make([]string, 0)
+	forcedListPreds := make([]string, 0)
+	for _, gmu := range qc.gmuList {
+		forcedSinglePreds = append(forcedSinglePreds, gmu.ForcedSinglePreds...)
+		forcedListPreds = append(forcedListPreds, gmu.ForcedListPreds...)
+	}
+	m := &pb.Mutations{
+		Edges:             edges,
+		StartTs:           qc.req.StartTs,
+		ForcedSinglePreds: forcedSinglePreds,
+		ForcedListPreds:   forcedListPreds,
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)

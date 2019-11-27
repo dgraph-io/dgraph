@@ -232,6 +232,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	schemaCountMap := make(map[subjectPred]int)
 	// map to store whether a schema should be created as a list.
 	schemaAsList := make(map[string]bool)
+	// maps to store the hints sent in the Mutations object about the type of
+	// the predicate that should be created if the schema does not contain the
+	// predicate already.
+	forcedSinglePreds := make(map[string]bool)
+	forcedListPreds := make(map[string]bool)
+	for _, pred := range proposal.Mutations.ForcedSinglePreds {
+		forcedSinglePreds[pred] = true
+	}
+	for _, pred := range proposal.Mutations.ForcedListPreds {
+		forcedListPreds[pred] = true
+	}
+
 	for _, edge := range proposal.Mutations.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
@@ -272,7 +284,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			glog.Infof("schemaAsList %v", schemaAsList)
 			glog.Infof("schemaCountMap %v", schemaCountMap)
-			if err := createSchema(attr, storageType, schemaAsList[attr]); err != nil {
+
+			createAsList := schemaAsList[attr]
+			if _, ok := forcedSinglePreds[attr]; ok {
+				createAsList = false
+			} else if _, ok := forcedListPreds[attr]; ok {
+				createAsList = true
+			}
+
+			if err := createSchema(attr, storageType, createAsList); err != nil {
 				return err
 			}
 		}
