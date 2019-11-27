@@ -220,6 +220,8 @@ message Mutations {
 	}
 	DropOp drop_op = 7;
 	string drop_value = 8;
+	repeated string forced_single_preds = 9;
+	repeated string forced_list_preds = 10;
 }
 
 message Snapshot {

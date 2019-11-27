@@ -34,6 +34,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ParseMetadata stores additional metadata derived during parsing.
+type ParseMetadata struct {
+	ForcedSinglePreds []string
+	ForcedListPreds   []string
+}
+
 // Chunker describes the interface to parse and process the input to the live and bulk loaders.
 type Chunker interface {
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
@@ -300,8 +306,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return nil
 	}
 
-	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	return err
+	return jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
 }
 
 func slurpSpace(r *bufio.Reader) error {

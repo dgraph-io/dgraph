@@ -230,9 +230,11 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 // NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
 // negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
-	batchSize int
-	nquads    []*api.NQuad
-	nqCh      chan []*api.NQuad
+	batchSize  int
+	nquads     []*api.NQuad
+	nqCh       chan []*api.NQuad
+	metadata   ParseMetadata
+	metadataCh chan ParseMetadata
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -263,6 +265,26 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	}
 }
 
+// MetadataCh returns a channel containing the parse metadata derived during parsing.
+func (buf *NQuadBuffer) MetadataCh() <-chan ParseMetadata {
+	return buf.metadataCh
+}
+
+// PushMetadata pushes and aggregates metadata derived during the parsing. This
+// metadata is expected to be a lot smaller than the set of NQuads so it's not
+// necessary to send them in batches. Instead, the metadata is sent to the channel
+// when Flush is called.
+func (buf *NQuadBuffer) PushMetadata(metadata *ParseMetadata) {
+	if metadata == nil {
+		return
+	}
+
+	buf.metadata.ForcedSinglePreds = append(buf.metadata.ForcedSinglePreds,
+		metadata.ForcedSinglePreds...)
+	buf.metadata.ForcedListPreds = append(buf.metadata.ForcedListPreds,
+		metadata.ForcedListPreds...)
+}
+
 // Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
 // called, this instance of NQuadBuffer should no longer be used.
 func (buf *NQuadBuffer) Flush() {
@@ -271,6 +293,9 @@ func (buf *NQuadBuffer) Flush() {
 		buf.nquads = nil
 	}
 	close(buf.nqCh)
+
+	buf.metadataCh <- buf.metadata
+	close(buf.metadataCh)
 }
 
 // nextIdx is the index that is used to generate blank node ids for a json map object
@@ -387,6 +412,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
+			buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -398,6 +424,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
+				buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
 				continue
 			}
 
@@ -410,7 +437,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
+			buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
 		case []interface{}:
+			buf.PushMetadata(&ParseMetadata{ForcedListPreds: []string{pred}})
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
@@ -506,12 +535,15 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
-func ParseJSON(b []byte, op int) ([]*api.NQuad, error) {
+func ParseJSON(b []byte, op int) ([]*api.NQuad, ParseMetadata, error) {
 	buf := NewNQuadBuffer(-1)
-	if err := buf.ParseJSON(b, op); err != nil {
-		return nil, err
+	err := buf.ParseJSON(b, op)
+	if err != nil {
+		return nil, ParseMetadata{}, err
 	}
+
 	buf.Flush()
 	nqs := <-buf.Ch()
-	return nqs, nil
+	metadata := <-buf.MetadataCh()
+	return nqs, metadata, nil
 }
