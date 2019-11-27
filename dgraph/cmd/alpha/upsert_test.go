@@ -2812,3 +2812,51 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	require.Equal(t, 2, len(result.User1))
 	require.Equal(t, 2, len(result.User2))
 }
+
+// This test may fail sometimes because ACL token
+// can get expired while the mutations is running.
+func upsertTooBigTest(t *testing.T) {
+	require.NoError(t, dropAll())
+
+	for i := 0; i < 1e6+1; {
+		fmt.Printf("ingesting entries starting i=%v\n", i)
+
+		sb := strings.Builder{}
+		for j := 0; j < 1e4; j++ {
+			_, err := sb.WriteString(fmt.Sprintf("_:%v <number> \"%v\" .\n", i, i))
+			require.NoError(t, err)
+			i++
+		}
+
+		m1 := fmt.Sprintf(`{set{%s}}`, sb.String())
+		_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+		require.NoError(t, err)
+	}
+
+	// Upsert should fail
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(number))
+  }
+
+  mutation {
+    set {
+      uid(u) <test> "test" .
+    }
+  }
+}`
+	_, err := mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.Contains(t, err.Error(), "variable [u] has too many UIDs (>1m)")
+
+	// query should work
+	q2 := `
+{
+  q(func: has(number)) {
+    uid
+    number
+  }
+}`
+	_, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+}

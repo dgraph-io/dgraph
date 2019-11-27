@@ -991,6 +991,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			continue
 		}
 
+		// We support maximum 1 million UIDs per variable to ensure that we
+		// don't do bad things to alpha and mutation doesn't become too big.
+		if len(v.Uids.Uids) > 1e6 {
+			return resp, errors.Errorf("var [%v] has over million UIDs", name)
+		}
+
 		uids := make([]string, len(v.Uids.Uids))
 		for i, u := range v.Uids.Uids {
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
