@@ -144,7 +144,8 @@ input PatchMessage {
 
 input UpdateMessageInput {
 	filter: MessageFilter!
-	patch: PatchMessage!
+	set: PatchMessage
+	delete: PatchMessage
 }
 
 #######################

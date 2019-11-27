@@ -184,7 +184,8 @@ input PostOrder {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	patch: PatchAuthor!
+	set: PatchAuthor
+	delete: PatchAuthor
 }
 
 #######################

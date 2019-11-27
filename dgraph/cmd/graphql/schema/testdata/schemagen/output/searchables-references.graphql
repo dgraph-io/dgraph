@@ -209,12 +209,14 @@ input StringFullTextFilter_StringTermFilter {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	patch: PatchAuthor!
+	set: PatchAuthor
+	delete: PatchAuthor
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	patch: PatchPost!
+	set: PatchPost
+	delete: PatchPost
 }
 
 #######################
