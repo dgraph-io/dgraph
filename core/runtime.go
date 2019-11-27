@@ -19,6 +19,8 @@ package core
 import (
 	"errors"
 
+	"github.com/ChainSafe/gossamer/runtime"
+
 	scale "github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
@@ -29,7 +31,7 @@ import (
 func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 	var loc int32 = 1000
 
-	ret, err := s.rt.Exec("TaggedTransactionQueue_validate_transaction", loc, e)
+	ret, err := s.rt.Exec(runtime.TaggedTransactionQueueValidateTransaction, loc, e)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +51,7 @@ func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 func (s *Service) validateBlock(b []byte) error {
 	var loc int32 = 1000
 
-	_, err := s.rt.Exec("Core_execute_block", loc, b)
+	_, err := s.rt.Exec(runtime.CoreExecuteBlock, loc, b)
 	if err != nil {
 		return err
 	}

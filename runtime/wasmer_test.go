@@ -108,7 +108,7 @@ func TestExecVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, err := r.Exec("Core_version", 1, []byte{})
+	ret, err := r.Exec(CoreVersion, 1, []byte{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1053,9 +1053,9 @@ func TestConcurrentRuntimeCalls(t *testing.T) {
 
 	// Execute 2 concurrent calls to the runtime
 	go func() {
-		_, _ = r.Exec("Core_version", 1, []byte{})
+		_, _ = r.Exec(CoreVersion, 1, []byte{})
 	}()
 	go func() {
-		_, _ = r.Exec("Core_version", 1, []byte{})
+		_, _ = r.Exec(CoreVersion, 1, []byte{})
 	}()
 }
