@@ -88,6 +88,7 @@ func TestSystem(t *testing.T) {
 	t.Run("internal predicate check", wrap(InternalPredicateCheck))
 	t.Run("infer schema as list", wrap(InferSchemaAsList))
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
+	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1781,7 +1782,7 @@ func ForceSchemaAsListJSON(t *testing.T, c *dgo.Dgraph) {
 	_, err := txn.Mutate(context.Background(), &api.Mutation{
 		CommitNow: true,
 		SetJson: []byte(`
-			[{"name": ["Bob","Bob Marley"]}, {"nickname": "Alice"}, {"nickname": "Carol"}]`),
+			[{"name": ["Bob"]}, {"nickname": "Alice"}, {"nickname": "Carol"}]`),
 	})
 
 	require.NoError(t, err)
