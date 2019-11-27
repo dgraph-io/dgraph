@@ -242,9 +242,9 @@ func isInverse(expectedInvType, expectedInvField, typeName string,
 	invFieldArg := invDirective.Arguments.ForName("field")
 	if invFieldArg == nil || invFieldArg.Value.Raw != expectedInvField {
 		return fmt.Sprintf(
-			"Type %s; Field %s: @hasInverse is required to be consistant in both the"+
-				" directions. %[1]s:%[2]s points to %[3]s:%[4]s whereas"+
-				" %[3]s:%[4]s points to %[1]s:%[5]s.",
+			"Type %s; Field %s: @hasInverse should be consistant."+
+				" %[1]s.%[2]s is the inverse of %[3]s.%[4]s, but"+
+				" %[3]s.%[4]s is the inverse of %[1]s.%[5]s.",
 			expectedInvType, expectedInvField, typeName, field.Name,
 			invFieldArg.Value.Raw,
 		)

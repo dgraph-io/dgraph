@@ -164,7 +164,7 @@ invalid_schemas:
         posts: [Post!]! @hasInverse(field: likedBy)
       }
     errlist: [
-      {"message": "Type Post; Field author: @hasInverse is required to be consistant in both the directions. Post:author points to Author:posts whereas Author:posts points to Post:likedBy.", "locations": [{"line": 2, "column": 20}]}
+      {"message": "Type Post; Field author: @hasInverse should be consistant. Post.author is the inverse of Author.posts, but Author.posts is the inverse of Post.likedBy.", "locations": [{"line": 2, "column": 20}]}
     ]
 
   -
@@ -179,7 +179,7 @@ invalid_schemas:
         posts: [Post!]!
       }
     errlist: [
-      {"message": "Type Post; Field likedBy: @hasInverse is required to be consistant in both the directions. Post:likedBy points to Author:posts whereas Author:posts points to Post:author.", "locations": [{"line": 3, "column": 20}]}
+      {"message": "Type Post; Field likedBy: @hasInverse should be consistant. Post.likedBy is the inverse of Author.posts, but Author.posts is the inverse of Post.author.", "locations": [{"line": 3, "column": 20}]}
     ]
 
   -
@@ -193,7 +193,7 @@ invalid_schemas:
         f1: X @hasInverse(field: "f2")
       }
     errlist: [
-      {"message":"Type X; Field f1: @hasInverse is required to be consistant in both the directions. X:f1 points to P:f1 whereas P:f1 points to X:f2.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type X; Field f1: @hasInverse should be consistant. X.f1 is the inverse of P.f1, but P.f1 is the inverse of X.f2.", "locations":[{"line":2, "column":10}]},
       {"message":"Type P; Field f1: @hasInverse is required to link the fields of same type, but the field f2 is of the type String instead of P. To link these make sure the fields are of the same type.", "locations":[{"line":6, "column":10}]},
     ]
 
