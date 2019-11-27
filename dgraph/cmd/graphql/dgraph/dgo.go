@@ -58,6 +58,10 @@ func Mutate(
 	stop := x.SpanTimer(span, "dgraph.Mutate")
 	defer stop()
 
+	if query == nil && len(mutations) == 0 {
+		return nil, nil, nil
+	}
+
 	queryStr := AsString(query)
 
 	if glog.V(3) {
