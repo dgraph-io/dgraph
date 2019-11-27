@@ -270,9 +270,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			glog.Infof("schemaAsList %v", schemaAsList)
-			glog.Infof("schemaCountMap %v", schemaCountMap)
-			if err := createSchema(attr, storageType, schemaAsList[attr]); err != nil {
+			var hint typeHint
+			hint = defaultHint
+			if _, ok := schemaAsList[attr]; ok {
+				hint = listHint
+			}
+			if err := createSchema(attr, storageType, hint); err != nil {
 				return err
 			}
 		}
