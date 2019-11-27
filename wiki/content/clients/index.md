@@ -548,13 +548,24 @@ If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 Other operations can be performed via the `/alter` endpoint as well. A specific
 predicate or the entire database can be dropped.
 
-E.g. to drop the predicate `name`:
+To drop the predicate `name`:
 ```sh
 $ curl -X POST localhost:8080/alter -d '{"drop_attr": "name"}'
 ```
+
+To drop the type `Film`:
+```sh
+$ curl -X POST localhost:8080/alter -d '{"drop_op": "TYPE", "drop_value": "Film"}'
+```
+
 To drop all data and schema:
 ```sh
 $ curl -X POST localhost:8080/alter -d '{"drop_all": true}'
+```
+
+To drop all data only (keep schema):
+```sh
+$ curl -X POST localhost:8080/alter -d '{"drop_op": "DATA"}'
 ```
 
 ### Start a transaction
