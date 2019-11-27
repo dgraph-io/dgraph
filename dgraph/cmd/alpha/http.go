@@ -327,6 +327,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// JSON API support both keys 1. mutations  2. set,delete,cond
+		// We want to maintain the backward compatibility of the API here.
 		extractMutation := func(jsMap map[string]*skipJSONUnmarshal) (*api.Mutation, error) {
 			mu := &api.Mutation{}
 			empty := true
