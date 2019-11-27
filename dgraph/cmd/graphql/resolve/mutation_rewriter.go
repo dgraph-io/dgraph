@@ -139,7 +139,7 @@ func (mrw *mutationRewriter) Rewrite(
 		}
 		obj["uid"] = srcUID
 		if m.MutationType() == schema.AddMutation {
-			dgraphTypes := []string{mutatedType.Name()}
+			dgraphTypes := []string{mutatedType.DgraphName()}
 			dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
 			obj["dgraph.type"] = dgraphTypes
 		}
@@ -236,11 +236,11 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedType().Name())
+		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
 	filter := extractFilter(m)
-	addFilter(dgQuery, m.Type(), filter)
+	addFilter(dgQuery, m.MutatedType(), filter)
 	return dgQuery
 }
 

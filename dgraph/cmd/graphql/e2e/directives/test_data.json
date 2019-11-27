@@ -16,7 +16,7 @@
     },
     {
         "uid": "_:author1",
-        "dgraph.type": "Author",
+        "dgraph.type": "dgraph.author",
         "dgraph.author.name": "Ann Author",
         "dgraph.author.dob": "2000-01-01",
         "dgraph.author.reputation": 6.6,
@@ -25,7 +25,7 @@
     },
     {
         "uid": "_:author2",
-        "dgraph.type": "Author",
+        "dgraph.type": "dgraph.author",
         "dgraph.author.name": "Ann Other Author",
         "dgraph.author.dob": "1988-01-01",
         "dgraph.author.reputation": 8.9,
@@ -34,7 +34,7 @@
     },
     {
         "uid": "_:author3",
-        "dgraph.type": "Author",
+        "dgraph.type": "dgraph.author",
         "dgraph.author.name": "Three Author",
         "dgraph.author.dob": "2001-01-01",
         "dgraph.author.reputation": 9.1,
@@ -42,7 +42,7 @@
     },
     {
         "uid": "_:post1",
-        "dgraph.type": "Post",
+        "dgraph.type": "dgraph.Post",
         "dgraph.Post.title": "Introducing GraphQL in Dgraph",
         "dgraph.text": "The worlds best graph database, now with the best GraphQL support",
         "dgraph.Post.tags": ["GraphQL", "Dgraph", "Database"],
@@ -54,7 +54,7 @@
     },
     {
         "uid": "_:post2",
-        "dgraph.type": "Post",
+        "dgraph.type": "dgraph.Post",
         "dgraph.Post.title": "Learning GraphQL in Dgraph",
         "dgraph.text": "Where do I learn more about GraphQL support in Dgraph?",
         "dgraph.Post.tags": ["GraphQL", "Dgraph"],
@@ -66,7 +66,7 @@
     },
     {
         "uid": "_:post3",
-        "dgraph.type": "Post",
+        "dgraph.type": "dgraph.Post",
         "dgraph.Post.title": "GraphQL doco",
         "dgraph.text": "I think the best place to learn GraphQL support in Dgraph is the excellent docs!",
         "dgraph.Post.tags": ["GraphQL", "Dgraph"],
@@ -78,7 +78,7 @@
     },
     {
         "uid": "_:post4",
-        "dgraph.type": "Post",
+        "dgraph.type": "dgraph.Post",
         "dgraph.Post.title": "Random post",
         "dgraph.text": "this post is not worth publishing",
         "dgraph.Post.tags": ["Random"],

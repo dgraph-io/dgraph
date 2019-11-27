@@ -114,6 +114,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	IDField() FieldDefinition
 	Name() string
+	DgraphName() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
 	ListType() Type
@@ -519,12 +520,18 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		if !ok {
 			continue
 		}
-		if f.op.inSchema.schema.Types[styp].Kind == ast.Object {
-			// If the field doesn't exist in the map corresponding to the object type, then we
-			// don't need to include it.
-			_, ok := f.op.inSchema.dgraphPredicate[styp][f.Name()]
-			return ok
+		for _, origTyp := range f.op.inSchema.schema.Types {
+			if typeName(origTyp) != styp {
+				continue
+			}
+			if origTyp.Kind == ast.Object {
+				// If the field doesn't exist in the map corresponding to the object type, then we
+				// don't need to include it.
+				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
+				return ok
+			}
 		}
+
 	}
 	return false
 }
@@ -763,6 +770,15 @@ func (t *astType) Name() string {
 	return t.typ.NamedType
 }
 
+func (t *astType) DgraphName() string {
+	typeDef := t.inSchema.Types[t.typ.Name()]
+	name := typeName(typeDef)
+	if name != "" {
+		return name
+	}
+	return t.Name()
+}
+
 func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
 }
@@ -827,5 +843,21 @@ func (t *astType) IDField() FieldDefinition {
 }
 
 func (t *astType) Interfaces() []string {
-	return t.inSchema.Types[t.typ.Name()].Interfaces
+	interfaces := t.inSchema.Types[t.typ.Name()].Interfaces
+	if len(interfaces) == 0 {
+		return nil
+	}
+
+	// Look up the interface types in the schema and find their typeName which could have been
+	// overwritten using @dgraph(name: ...)
+	names := make([]string, 0, len(interfaces))
+	for _, intr := range interfaces {
+		i := t.inSchema.Types[intr]
+		name := intr
+		if n := typeName(i); n != "" {
+			name = n
+		}
+		names = append(names, name)
+	}
+	return names
 }
