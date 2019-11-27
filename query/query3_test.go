@@ -24,14 +24,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -2202,9 +2200,9 @@ func TestMultiRegexInFilter2(t *testing.T) {
 }
 
 func TestGeoDataInvalidString(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
@@ -2229,9 +2227,9 @@ func TestGeoDataInvalidString(t *testing.T) {
 // succeeds querying the data returns an error. Ideally, we should not accept
 // invalid data in a mutation though that is left as future work.
 func TestGeoCorruptData(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
@@ -2266,9 +2264,9 @@ func TestGeoCorruptData(t *testing.T) {
 // As far as I (Aman) know, this is something that should not be used
 // by a common user unless user knows what she is doing.
 func TestGeoValidWkbData(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
