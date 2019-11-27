@@ -30,13 +30,13 @@ func TestRunAll_WithDgraphDirectives(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := "e2e_test_schema.graphql"
+	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	if err != nil {
 		panic(err)
 	}
 
-	jsonFile := "e2e_test_data.json"
+	jsonFile := "test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))

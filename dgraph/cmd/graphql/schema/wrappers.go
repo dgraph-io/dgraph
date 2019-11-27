@@ -273,6 +273,7 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
+		add     = "Add"
 		update  = "Update"
 		del     = "Delete"
 		payload = "Payload"
@@ -288,8 +289,12 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		originalTyp := inputTyp
-		dgraphPredicate[originalTyp.Name] = make(map[string]string)
 		inputTypeName := inputTyp.Name
+		if strings.HasPrefix(inputTypeName, add) && strings.HasSuffix(inputTypeName, payload) {
+			continue
+		}
+
+		dgraphPredicate[originalTyp.Name] = make(map[string]string)
 
 		if (strings.HasPrefix(inputTypeName, update) || strings.HasPrefix(inputTypeName, del)) &&
 			strings.HasSuffix(inputTypeName, payload) {
@@ -304,16 +309,28 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, fld := range inputTyp.Fields {
+			if isID(fld) {
+				// We don't need a mapping for the field, as we the dgraph predicate for them is
+				// fixed i.e. uid.
+				continue
+			}
 			typName := typeName(inputTyp)
 			parentInt := parentInterface(sch, inputTyp, fld.Name)
 			if parentInt != nil {
 				typName = typeName(parentInt)
 			}
-			// 1. For types which don't inherit from an interface the keys, value would be.
+			// 1. For fields that have @dgraph(name: xxxName) directive, field name would be
+			//    xxxName.
+			// 2. For fields where the type (or underlying interface) has a @dgraph(name: xxxName)
+			//    directive, field name would be xxxName.fldName.
+			//
+			// The cases below cover the cases where neither the type or field have @dgraph
+			// directive.
+			// 3. For types which don't inherit from an interface the keys, value would be.
 			//    typName,fldName => typName.fldName
-			// 2. For types which inherit fields from an interface
+			// 4. For types which inherit fields from an interface
 			//    typName,fldName => interfaceName.fldName
-			// 3. For DeleteTypePayload type
+			// 5. For DeleteTypePayload type
 			//    DeleteTypePayload,fldName => typName.fldName
 
 			fname := fieldName(fld, typName)
