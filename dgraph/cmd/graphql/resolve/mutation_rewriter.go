@@ -30,7 +30,9 @@ import (
 const (
 	createdNode             = "newnode"
 	mutationQueryVar        = "x"
-	deleteUidVarMutation    = `uid(x) * * .`
+	createdUpsertNode       = "uid(x)"
+	deleteUIDVarMutation    = "uid(x) * * ."
+	addXIDCondition         = "@if(eq(len(x), 0))"
 	updateMutationCondition = `@if(gt(len(x), 0))`
 )
 
@@ -108,12 +110,23 @@ func (mrw *addRewriter) Rewrite(
 	// from a json list or object (not a single value).
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 
-	srcUID := "_:" + createdNode
+	var srcUID string
+	var cond string
+	xidField := mutatedType.XIDField()
+	if xidField == nil {
+		srcUID = "_:" + createdNode
+	} else {
+		srcUID = fmt.Sprintf("uid(%s)", mutationQueryVar)
+		xidVal := val[xidField.Name()].(string)
+		gqlQuery = rewriteUpsertQueryFromAddMutation(m, xidField.Name(), xidVal)
+		cond = addXIDCondition
+	}
 
 	obj, err := rewriteObject(mutatedType, nil, srcUID, val)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	obj["uid"] = srcUID
 	dgraphTypes := []string{mutatedType.Name()}
 	dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
@@ -123,6 +136,7 @@ func (mrw *addRewriter) Rewrite(
 	return gqlQuery,
 		[]*dgoapi.Mutation{{
 			SetJson: mutationJSON,
+			Cond:    cond,
 		}},
 		schema.GQLWrapf(err, "failed to rewrite mutation payload")
 
@@ -144,14 +158,35 @@ func (mrw *addRewriter) FromMutationResult(
 	assigned map[string]string,
 	mutated map[string][]string) (*gql.GraphQuery, error) {
 
-	uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
-	if err != nil {
-		return nil, schema.GQLWrapf(err,
-			"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-			assigned[createdNode])
+	var uid uint64
+	var err error
+
+	xidField := mutation.MutatedType().XIDField()
+	// If a type has an xid field, then the AddMutation should always return the uid
+	// corresponding to an xid field. If no uid is return that means the node already exists
+	// which is an error.
+	if xidField != nil && len(assigned) == 0 {
+		return nil, schema.GQLWrapf(errors.New("add operation failed"),
+			"node with given %s already exists", xidField.Name())
 	}
 
-	return rewriteAsGet(mutation.QueryField(), uid), nil
+	if len(assigned) > 0 {
+		// This would be true for upsert operations when a new node is created and also for
+		// normal add operations.
+		node := createdNode
+		if xidField != nil {
+			node = createdUpsertNode
+		}
+		uid, err = strconv.ParseUint(assigned[node], 0, 64)
+		if err != nil {
+			return nil, schema.GQLWrapf(err,
+				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+				assigned[node])
+
+		}
+	}
+
+	return rewriteAsGet(mutation.QueryField(), uid, nil), nil
 }
 
 func (urw *updateRewriter) Rewrite(
@@ -232,6 +267,24 @@ func extractFilter(m schema.Mutation) map[string]interface{} {
 	return filter
 }
 
+// For a mutation on a type with a field which has @id directive, this function rewrites it as an
+// upsert query.
+func rewriteUpsertQueryFromAddMutation(m schema.Mutation, xidField, xidVal string) *gql.GraphQuery {
+	gqlQuery := &gql.GraphQuery{
+		Var:  mutationQueryVar,
+		Attr: m.ResponseName(),
+	}
+	gqlQuery.Func = &gql.Function{
+		Name: "eq",
+		Args: []gql.Arg{
+			{Value: m.MutatedType().DgraphPredicate(xidField)},
+			{Value: maybeQuoteArg("eq", xidVal)},
+		},
+	}
+	addTypeFilter(gqlQuery, m.MutatedType())
+	return gqlQuery
+}
+
 func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
@@ -261,7 +314,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 
 	return rewriteUpsertQueryFromMutation(m),
 		[]*dgoapi.Mutation{{
-			DelNquads: []byte(deleteUidVarMutation),
+			DelNquads: []byte(deleteUIDVarMutation),
 		}},
 		nil
 }

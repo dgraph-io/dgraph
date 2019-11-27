@@ -93,6 +93,7 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 				require.Len(t, muts, 1)
 				jsonMut := string(muts[0].SetJson)
 				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
+				require.Equal(t, tcase.Condition, muts[0].Cond)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
 			}
 		})

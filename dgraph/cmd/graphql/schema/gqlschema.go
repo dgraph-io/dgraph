@@ -33,6 +33,8 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
+	idDirective = "id"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
@@ -57,6 +59,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -213,6 +216,7 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
+	idDirective:      idValidation,
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -403,7 +407,7 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Input",
-		Fields: getNonIDFields(schema, defn),
+		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
 
@@ -421,6 +425,9 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 
 func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
+		return
+	}
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
 		return
 	}
 
@@ -451,14 +458,22 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	nonIDFields := getNonIDFields(schema, defn)
+	if len(nonIDFields) == 0 {
+		// The user might just have an external id field and nothing else. We don't generate patch
+		// type in that case.
+		return
+	}
+
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   "Patch" + defn.Name,
-		Fields: getNonIDFields(schema, defn),
+		Fields: nonIDFields,
 	}
 	schema.Types["Patch"+defn.Name] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
+
 		fld.Type.NonNull = false
 	}
 }
@@ -655,6 +670,11 @@ func hasID(defn *ast.Definition) bool {
 		func(fld *ast.FieldDefinition) bool { return isID(fld) })
 }
 
+func hasXID(defn *ast.Definition) bool {
+	return fieldAny(defn.Fields,
+		func(fld *ast.FieldDefinition) bool { return hasIDDirective(fld) })
+}
+
 // fieldAny returns true if any field in fields satisfies pred
 func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	for _, fld := range fields {
@@ -663,6 +683,24 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 		}
 	}
 	return false
+}
+
+func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
+	id := fld.Directives.ForName(idDirective)
+	if id != nil {
+		// If @id directive is applied along with @search, we check if the search has hash as an
+		// arg. If it doesn't, then we add it.
+		containsHash := false
+		for _, index := range indexes {
+			if index == "hash" {
+				containsHash = true
+			}
+		}
+		if !containsHash {
+			indexes = append(indexes, "hash")
+		}
+	}
+	return indexes
 }
 
 func getDefaultSearchIndex(fldName string) string {
@@ -678,8 +716,14 @@ func getDefaultSearchIndex(fldName string) string {
 // if fld doesn't have a search directive.
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
+	id := fld.Directives.ForName(idDirective)
 	if search == nil {
-		return nil
+		if id == nil {
+			return nil
+		}
+		// If search directive wasn't supplied but id was, then hash is the only index
+		// that we apply.
+		return []string{"hash"}
 	}
 	if len(search.Arguments) == 0 ||
 		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
@@ -692,6 +736,7 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		res[i] = child.Value.Raw
 	}
 
+	res = addHashIfRequired(fld, res)
 	sort.Strings(res)
 	return res
 }
@@ -769,6 +814,13 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	// This covers the case where the Type only had one field (which had @id directive).
+	// Since we don't allow updating the field with @id directive we don't need to generate any
+	// update payload.
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+		return
+	}
+
 	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
@@ -805,7 +857,9 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
+	hasIDField := hasID(defn)
+	hasXIDField := hasXID(defn)
+	if !hasIDField && !hasXIDField {
 		return
 	}
 
@@ -814,15 +868,28 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		Type: &ast.Type{
 			NamedType: defn.Name,
 		},
-		Arguments: []*ast.ArgumentDefinition{
-			{
-				Name: "id",
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   true,
-				},
+	}
+
+	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
+	// both, then they are optional.
+	if hasIDField {
+		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+			Name: "id",
+			Type: &ast.Type{
+				NamedType: idTypeFor(defn),
+				NonNull:   !hasXIDField,
 			},
-		},
+		})
+	}
+	if hasXIDField {
+		name := xidTypeFor(defn)
+		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+			Name: name,
+			Type: &ast.Type{
+				NamedType: "String",
+				NonNull:   !hasIDField,
+			},
+		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
@@ -872,6 +939,10 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+		return
+	}
+
 	upd := &ast.FieldDefinition{
 		Name: "update" + defn.Name,
 		Type: &ast.Type{
@@ -916,7 +987,53 @@ func addMutations(schema *ast.Schema, defn *ast.Definition) {
 	addDeleteMutation(schema, defn)
 }
 
+func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinition {
+	if schema.Types[fld.Type.Name()].Kind == ast.Object ||
+		schema.Types[fld.Type.Name()].Kind == ast.Interface {
+		newDefn := &ast.FieldDefinition{
+			Name: fld.Name,
+		}
+
+		newDefn.Type = &ast.Type{}
+		newDefn.Type.NonNull = fld.Type.NonNull
+		if fld.Type.NamedType != "" {
+			newDefn.Type.NamedType = fld.Type.Name() + "Ref"
+		} else {
+			newDefn.Type.Elem = &ast.Type{
+				NamedType: fld.Type.Name() + "Ref",
+				NonNull:   fld.Type.Elem.NonNull,
+			}
+		}
+
+		return newDefn
+	}
+
+	newFld := *fld
+	newFldType := *fld.Type
+	newFld.Type = &newFldType
+	newFld.Directives = nil
+	return &newFld
+}
+
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if isIDField(defn, fld) || hasIDDirective(fld) {
+			continue
+		}
+
+		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
+			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
+			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
+			continue
+		}
+
+		fldList = append(fldList, createField(schema, fld))
+	}
+	return fldList
+}
+
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -929,31 +1046,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if schema.Types[fld.Type.Name()].Kind == ast.Object ||
-			schema.Types[fld.Type.Name()].Kind == ast.Interface {
-			newDefn := &ast.FieldDefinition{
-				Name: fld.Name,
-			}
-
-			newDefn.Type = &ast.Type{}
-			newDefn.Type.NonNull = fld.Type.NonNull
-			if fld.Type.NamedType != "" {
-				newDefn.Type.NamedType = fld.Type.Name() + "Ref"
-			} else {
-				newDefn.Type.Elem = &ast.Type{
-					NamedType: fld.Type.Name() + "Ref",
-					NonNull:   fld.Type.Elem.NonNull,
-				}
-			}
-
-			fldList = append(fldList, newDefn)
-		} else {
-			newFld := *fld
-			newFldType := *fld.Type
-			newFld.Type = &newFldType
-			newFld.Directives = nil
-			fldList = append(fldList, &newFld)
-		}
+		fldList = append(fldList, createField(schema, fld))
 	}
 	return fldList
 }
@@ -1191,8 +1284,16 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 }
 
 func idTypeFor(defn *ast.Definition) string {
-	// Placeholder till more ID types are introduced.
 	return "ID"
+}
+
+func xidTypeFor(defn *ast.Definition) string {
+	for _, fld := range defn.Fields {
+		if hasIDDirective(fld) {
+			return fld.Name
+		}
+	}
+	return ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
