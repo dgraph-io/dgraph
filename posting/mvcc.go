@@ -21,18 +21,17 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
-	"math"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"	
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-
+	"math"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // IncRollup is used to batch keys for rollup incrementally.

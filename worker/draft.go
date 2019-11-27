@@ -397,7 +397,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	return nil
 }
 
-
 func (n *node) processRollups() {
 	defer n.closer.Done()                   // CLOSER:1
 	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
@@ -1026,8 +1025,8 @@ func (n *node) rollupLists(readTs uint64) error {
 	}
 	var numKeys uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		return nil, nil  // no-op
-	 }
+		return nil, nil // no-op
+	}
 	stream.Send = func(list *bpb.KVList) error {
 		return nil
 	}
@@ -1069,7 +1068,7 @@ func (n *node) rollupLists(readTs uint64) error {
 				humanize.Bytes(uint64(total)))
 		}
 	}()
-	
+
 	return nil
 }
 
