@@ -352,7 +352,7 @@ const (
 	{ "__type": {
         "name": "Employee",
 		"description": "GraphQL descriptions can be on interfaces.  They should work in the ` +
-		`input \nschema and should make their way into the generated schema.",
+		`input\nschema and should make their way into the generated schema.",
         "fields": [
             {
                 "name": "ename",
@@ -365,7 +365,7 @@ const (
 	expectedForType = `
 	{ "__type": {
         "name": "Author",
-		"description": "GraphQL descriptions look like this.  They should work in the input \n` +
+		"description": "GraphQL descriptions look like this.  They should work in the input\n` +
 		`schema and should make their way into the generated schema.",
         "fields": [
             {
@@ -374,7 +374,7 @@ const (
             },
             {
                 "name": "name",
-		"description": "GraphQL descriptions can be on fields.  They should work in the input \n` +
+		"description": "GraphQL descriptions can be on fields.  They should work in the input\n` +
 		`schema and should make their way into the generated schema."
             },
             {
@@ -400,7 +400,7 @@ const (
 	expectedForEnum = `
 	{ "__type": {
         "name": "PostType",
-		"description": "GraphQL descriptions can be on enums.  They should work in the input \n` +
+		"description": "GraphQL descriptions can be on enums.  They should work in the input\n` +
 		`schema and should make their way into the generated schema.",
         "enumValues": [
             {
@@ -410,7 +410,7 @@ const (
             {
             	"name": "Question",
 				"description": "GraphQL descriptions can be on enum values.  They should work in ` +
-		`the input \nschema and should make their way into the generated schema."
+		`the input\nschema and should make their way into the generated schema."
             },
             {
                 "name": "Opinion",

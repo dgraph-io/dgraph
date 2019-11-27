@@ -79,7 +79,8 @@ type Field interface {
 	Alias() string
 	ResponseName() string
 	ArgValue(name string) interface{}
-	IDArgValue() (uint64, error)
+	IDArgValue() (*string, uint64, error)
+	XIDArg() string
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
@@ -113,6 +114,7 @@ type Query interface {
 type Type interface {
 	Field(name string) FieldDefinition
 	IDField() FieldDefinition
+	XIDField() FieldDefinition
 	Name() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
@@ -418,25 +420,60 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
-func (f *field) IDArgValue() (uint64, error) {
+func (f *field) XIDArg() string {
+	xidArgName := ""
+	for _, arg := range f.field.Arguments {
+		if arg.Name != IDArgName {
+			xidArgName = arg.Name
+		}
+	}
+	return f.Type().DgraphPredicate(xidArgName)
+}
+
+func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+	xidArgName := ""
+	// This method is only called for Get queries. These queries can accept one of the
+	// combinations as input.
+	// 1. ID only
+	// 2. XID only
+	// 3. ID and XID fields
+	// Therefore, the non ID field is an XID field.
+	for _, arg := range f.field.Arguments {
+		if arg.Name != IDArgName {
+			xidArgName = arg.Name
+		}
+	}
+	if xidArgName != "" {
+		xidArgVal, ok := f.ArgValue(xidArgName).(string)
+		pos := f.field.GetPosition()
+		if !ok {
+			err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
+				xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+			return
+		}
+		xid = &xidArgVal
+	}
+
 	idArg := f.ArgValue(IDArgName)
-	if idArg == nil {
-		pos := f.field.GetPosition()
-		return 0,
-			x.GqlErrorf("ID argument not available on field %s", f.Name()).
+	if idArg == nil && xid == nil {
+		// This means that both were optional and were not supplied, lets return here.
+		return
+	}
+
+	if idArg != nil {
+		id, ok := idArg.(string)
+		var ierr error
+		uid, ierr = strconv.ParseUint(id, 0, 64)
+
+		if !ok || ierr != nil {
+			pos := f.field.GetPosition()
+			err = x.GqlErrorf("ID argument (%s) of %s was not able to be parsed", id, f.Name()).
 				WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+			return
+		}
 	}
 
-	id, ok := idArg.(string)
-	uid, err := strconv.ParseUint(id, 0, 64)
-
-	if !ok || err != nil {
-		pos := f.field.GetPosition()
-		err = x.GqlErrorf("ID argument (%s) of %s was not able to be parsed", id, f.Name()).
-			WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
-	}
-
-	return uid, err
+	return
 }
 
 func (f *field) Type() Type {
@@ -530,8 +567,12 @@ func (q *query) Include() bool {
 	return true
 }
 
-func (q *query) IDArgValue() (uint64, error) {
+func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
+}
+
+func (q *query) XIDArg() string {
+	return (*field)(q).XIDArg()
 }
 
 func (q *query) Type() Type {
@@ -615,7 +656,11 @@ func (m *mutation) InterfaceType() bool {
 	return (*field)(m).InterfaceType()
 }
 
-func (m *mutation) IDArgValue() (uint64, error) {
+func (m *mutation) XIDArg() string {
+	return (*field)(m).XIDArg()
+}
+
+func (m *mutation) IDArgValue() (*string, uint64, error) {
 	return (*field)(m).IDArgValue()
 }
 
@@ -699,8 +744,12 @@ func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
 }
 
+func hasIDDirective(fd *ast.FieldDefinition) bool {
+	id := fd.Directives.ForName("id")
+	return id != nil
+}
+
 func isID(fd *ast.FieldDefinition) bool {
-	// this will change once we have more types of ID fields
 	return fd.Type.Name() == "ID"
 }
 
@@ -792,6 +841,24 @@ func (t *astType) IDField() FieldDefinition {
 
 	for _, fd := range def.Fields {
 		if isID(fd) {
+			return &fieldDefinition{
+				fieldDef: fd,
+				inSchema: t.inSchema,
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *astType) XIDField() FieldDefinition {
+	def := t.inSchema.Types[t.Name()]
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
+		return nil
+	}
+
+	for _, fd := range def.Fields {
+		if hasIDDirective(fd) {
 			return &fieldDefinition{
 				fieldDef: fd,
 				inSchema: t.inSchema,

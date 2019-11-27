@@ -3,15 +3,21 @@
 #######################
 
 type Post {
-	id: ID!
-	title: String!
-	text: String
+	id: ID
+	content: String!
 	author(filter: AuthorFilter): Author!
+	genre(filter: GenreFilter): Genre
 }
 
 type Author {
-	id: ID!
-	name: String!
+	id: ID
+	name: String! @id @search(by: [regexp])
+	pen_name: String
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type Genre {
+	name: String! @id
 }
 
 #######################
@@ -98,6 +104,10 @@ type AddAuthorPayload {
 	author: Author
 }
 
+type AddGenrePayload {
+	genre: Genre
+}
+
 type AddPostPayload {
 	post: Post
 }
@@ -106,16 +116,20 @@ type DeleteAuthorPayload {
 	msg: String
 }
 
+type DeleteGenrePayload {
+	msg: String
+}
+
 type DeletePostPayload {
 	msg: String
 }
 
 type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	author: [Author]
 }
 
 type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	post: [Post]
 }
 
 #######################
@@ -124,11 +138,15 @@ type UpdatePostPayload {
 
 enum AuthorOrderable {
 	name
+	pen_name
+}
+
+enum GenreOrderable {
+	name
 }
 
 enum PostOrderable {
-	title
-	text
+	content
 }
 
 #######################
@@ -137,11 +155,16 @@ enum PostOrderable {
 
 input AuthorFilter {
 	ids: [ID!]
+	name: StringHashFilter_StringRegExpFilter
+	and: AuthorFilter
+	or: AuthorFilter
 	not: AuthorFilter
 }
 
 input AuthorInput {
 	name: String!
+	pen_name: String
+	posts: [PostRef]
 }
 
 input AuthorOrder {
@@ -151,16 +174,33 @@ input AuthorOrder {
 }
 
 input AuthorRef {
-	id: ID!
+	id: ID
+}
+
+input GenreFilter {
+	name: StringHashFilter
+	and: GenreFilter
+	or: GenreFilter
+	not: GenreFilter
+}
+
+input GenreInput {
+	name: String!
+}
+
+input GenreOrder {
+	asc: GenreOrderable
+	desc: GenreOrderable
+	then: GenreOrder
 }
 
 input PatchAuthor {
-	name: String
+	pen_name: String
+	posts: [PostRef]
 }
 
 input PatchPost {
-	title: String
-	text: String
+	content: String
 	author: AuthorRef
 }
 
@@ -170,8 +210,7 @@ input PostFilter {
 }
 
 input PostInput {
-	title: String!
-	text: String
+	content: String!
 	author: AuthorRef!
 }
 
@@ -182,7 +221,12 @@ input PostOrder {
 }
 
 input PostRef {
-	id: ID!
+	id: ID
+}
+
+input StringHashFilter_StringRegExpFilter {
+	eq: String
+	regexp: String
 }
 
 input UpdateAuthorInput {
@@ -202,8 +246,10 @@ input UpdatePostInput {
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID!): Author
+	getAuthor(id: ID, name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 }
 
 #######################
@@ -217,4 +263,6 @@ type Mutation {
 	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addGenre(input: GenreInput!): AddGenrePayload
+	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }

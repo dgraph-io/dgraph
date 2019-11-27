@@ -1307,3 +1307,124 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func requireState(t *testing.T, uid string, expectedState *state,
+	executeRequest requestExecutor) {
+
+	params := &GraphQLParams{
+		Query: `query getState($id: ID!) {
+			getState(id: $id) {
+				id
+				code
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"id": uid},
+	}
+	gqlResponse := executeRequest(t, graphqlURL, params)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		GetState *state
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expectedState, result.GetState); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func addState(t *testing.T, name string, executeRequest requestExecutor) *state {
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($code: String!, $name: String) {
+			addState(input: { code: $code, name: $name }) {
+				state {
+					id
+					code
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": name, "code": "cal"},
+	}
+	addStateExpected := `
+		{ "addState": { "state": { "id": "_UID_", "name": "` + name + `", "code": "cal" } } }`
+
+	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		AddState struct {
+			State *state
+		}
+	}
+	err := json.Unmarshal([]byte(addStateExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddState.State.ID)
+
+	// Always ignore the ID of the object that was just created.  That ID is
+	// minted by Dgraph.
+	opt := cmpopts.IgnoreFields(state{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddState.State
+}
+
+func deleteState(
+	t *testing.T,
+	filter map[string]interface{},
+	deleteStateExpected string,
+	expectedErrors x.GqlErrorList) {
+
+	deleteStateParams := &GraphQLParams{
+		Query: `mutation deleteState($filter: StateFilter!) {
+			deleteState(filter: $filter) { msg }
+		}`,
+		Variables: map[string]interface{}{"filter": filter},
+	}
+
+	gqlResponse := deleteStateParams.ExecuteAsPost(t, graphqlURL)
+	require.JSONEq(t, deleteStateExpected, string(gqlResponse.Data))
+
+	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
+	newState := addState(t, "California", executeRequest)
+	requireState(t, newState.ID, newState, executeRequest)
+
+	// Try add again, it should fail this time.
+	name := "Calgary"
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($code: String!, $name: String) {
+			addState(input: { code: $code, name: $name }) {
+				state {
+					id
+					code
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": name, "code": "cal"},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Contains(t, gqlResponse.Errors[0].Error(), "node with given code already exists")
+
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{"code": map[string]interface{}{"eq": "cal"}}
+	deleteState(t, filter, deleteStateExpected, nil)
+}
+
+func TestAddMutationWithXid(t *testing.T) {
+	addMutationWithXid(t, postExecutor)
+}

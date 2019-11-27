@@ -66,35 +66,59 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
+func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Location) {
+	var fieldNames []string
+	var errLocations []gqlerror.Location
+
+	for _, f := range idFields {
+		fieldNames = append(fieldNames, f.Name)
+		errLocations = append(errLocations, gqlerror.Location{
+			Line:   f.Position.Line,
+			Column: f.Position.Column,
+		})
+	}
+
+	fieldNamesString := fmt.Sprintf(
+		"%s and %s",
+		strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
+	)
+	return fieldNamesString, errLocations
+}
+
 func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 	var idFields []*ast.FieldDefinition
+	var idDirectiveFields []*ast.FieldDefinition
 	for _, field := range typ.Fields {
 		if isIDField(typ, field) {
 			idFields = append(idFields, field)
 		}
+		if d := field.Directives.ForName(idDirective); d != nil {
+			idDirectiveFields = append(idDirectiveFields, field)
+		}
 	}
 
 	if len(idFields) > 1 {
-		var fieldNames []string
-		var errLocations []gqlerror.Location
-
-		for _, f := range idFields {
-			fieldNames = append(fieldNames, f.Name)
-			errLocations = append(errLocations, gqlerror.Location{
-				Line:   f.Position.Line,
-				Column: f.Position.Column,
-			})
-		}
-
-		fieldNamesString := fmt.Sprintf(
-			"%s and %s",
-			strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
-		)
+		fieldNamesString, errLocations := collectFieldNames(idFields)
 		errMessage := fmt.Sprintf(
 			"Fields %s are listed as IDs for type %s, "+
 				"but a type can have only one ID field. "+
 				"Pick a single field as the ID for type %s.",
 			fieldNamesString, typ.Name, typ.Name,
+		)
+
+		return &gqlerror.Error{
+			Message:   errMessage,
+			Locations: errLocations,
+		}
+	}
+
+	if len(idDirectiveFields) > 1 {
+		fieldNamesString, errLocations := collectFieldNames(idDirectiveFields)
+		errMessage := fmt.Sprintf(
+			"Type %s: fields %s have the @id directive, "+
+				"but a type can have only one field with @id. "+
+				"Pick a single field with @id for type %s.",
+			typ.Name, fieldNamesString, typ.Name,
 		)
 
 		return &gqlerror.Error{
@@ -340,6 +364,20 @@ func searchValidation(
 		searchIndexes[searchIndex] = searchArg
 	}
 
+	return nil
+}
+
+func idValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	if field.Type.String() != "String!" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: with @id directive must be of type String!, not %s",
+			typ.Name, field.Name, field.Type.String())
+	}
 	return nil
 }
 
