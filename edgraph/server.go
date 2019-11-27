@@ -144,7 +144,7 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
+	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).WithEncryptionKey(Config.BadgerKey)
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {

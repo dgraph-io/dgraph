@@ -65,6 +65,7 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
+	flag.String("badger.encryption-key", "", "Specifies badger encryption key. Must be 16,24 or 32 bytes")			
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
 	flag.Int64("mapoutput_mb", 64,
@@ -106,6 +107,7 @@ func run() {
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
+		BadgerKey:		  []byte(Bulk.Conf.GetString("badger.encryption-key")),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
 		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
@@ -121,6 +123,10 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 	}
+
+	klen := len(opt.BadgerKey)
+	x.AssertTruef(klen == 16 || klen == 24 || klen == 32, "Badger encryption key must be 16,24 or 32 bytes. (%v)", string(opt.BadgerKey))
+
 
 	x.PrintVersion()
 	if opt.Version {

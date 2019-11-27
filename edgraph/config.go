@@ -44,6 +44,8 @@ type Options struct {
 	BadgerTables string
 	// BadgerVlog is the name of the mode used to load the badger value log.
 	BadgerVlog string
+	// BadgerKey is the encryption key used to encrypt data with AES.
+	BadgerKey []byte
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
@@ -94,6 +96,10 @@ const MinAllottedMemory = 1024.0
 var availableMemory int64
 
 func (opt *Options) validate() {
+	klen := len(opt.BadgerKey)
+	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
+		"Badger Encryption key must be 16,24 or 32 bytes (%v).", string(opt.BadgerKey))
+
 	pd, err := filepath.Abs(opt.PostingDir)
 	x.Check(err)
 	wd, err := filepath.Abs(opt.WALDir)

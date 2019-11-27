@@ -103,6 +103,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
+	flag.String("badger.encryption-key", "",
+		"Specifies badger encryption key. Must be 16,24 or 32 bytes")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -427,6 +429,7 @@ func run() {
 	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+		BadgerKey:    []byte(Alpha.Conf.GetString("badger.encryption-key")),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),

@@ -52,6 +52,7 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
+	badgerKey         []byte
 }
 
 var opts options
@@ -87,6 +88,7 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
+	flag.String("badger.encryption-key", "", "Specifies badger encryption key. Must be 16,24 or 32 bytes")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -168,7 +170,11 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		badgerKey:         []byte(Zero.Conf.GetString("badger.encryption-key")),
 	}
+
+	klen := len(opts.badgerKey)
+	x.AssertTruef(klen == 16 || klen == 24 || klen == 32, "Badger encryption key must be 16,24 or 32 bytes. (%v)", string(opts.badgerKey))
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
@@ -204,7 +210,7 @@ func run() {
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
+		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithEncryptionKey(opts.badgerKey)
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
