@@ -49,50 +49,17 @@ type TestCase struct {
 	Error          *x.GqlError
 }
 
-func TestAddMutationRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("add_mutation_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
-	var tests []TestCase
-	err = yaml.Unmarshal(b, &tests)
-	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
-
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewAddRewriter()
-
-	for _, tcase := range tests {
-		t.Run(tcase.Name, func(t *testing.T) {
-			var vars map[string]interface{}
-			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
-			}
-
-			op, err := gqlSchema.Operation(
-				&schema.Request{
-					Query:     tcase.GQLMutation,
-					Variables: vars,
-				})
-			require.NoError(t, err)
-
-			mut := test.GetMutation(t, op)
-
-			q, muts, err := rewriterToTest.Rewrite(mut)
-
-			if tcase.Error != nil || err != nil {
-				require.Equal(t, tcase.Error.Error(), err.Error())
-			} else {
-				require.Len(t, muts, 1)
-				jsonMut := string(muts[0].SetJson)
-				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
-				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
-			}
-		})
-	}
+func TestMutationRewriting(t *testing.T) {
+	t.Run("Add Mutation Rewriting", func(t *testing.T) {
+		mutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter())
+	})
+	t.Run("Update Mutation Rewriting", func(t *testing.T) {
+		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter())
+	})
 }
 
-func TestUpdateMutationRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("update_mutation_test.yaml")
+func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewriter) {
+	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []TestCase
@@ -100,7 +67,6 @@ func TestUpdateMutationRewriting(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewUpdateRewriter()
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -125,7 +91,6 @@ func TestUpdateMutationRewriting(t *testing.T) {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				require.Len(t, muts, 1)
-				require.Equal(t, tcase.Condition, muts[0].Cond)
 				jsonMut := string(muts[0].SetJson)
 				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
@@ -135,9 +100,18 @@ func TestUpdateMutationRewriting(t *testing.T) {
 }
 
 func TestMutationQueryRewriting(t *testing.T) {
-	testTypes := map[string]string{
-		"Add Post ":    `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-		"Update Post ": `updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) `,
+	testTypes := map[string]struct {
+		mut      string
+		rewriter MutationRewriter
+	}{
+		"Add Post ": {
+			`addPost(input: {title: "A Post", author: {id: "0x1"}})`,
+			NewAddRewriter(),
+		},
+		"Update Post ": {
+			`updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) `,
+			NewUpdateRewriter(),
+		},
 	}
 
 	b, err := ioutil.ReadFile("mutation_query_test.yaml")
@@ -149,19 +123,11 @@ func TestMutationQueryRewriting(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	for name, mut := range testTypes {
-		var testRewriter MutationRewriter
-
-		if strings.HasPrefix(name, "Add") {
-			testRewriter = NewAddRewriter()
-		} else {
-			testRewriter = NewUpdateRewriter()
-		}
-
+	for name, tt := range testTypes {
 		for _, tcase := range tests {
 			t.Run(name+tcase.Name, func(t *testing.T) {
 
-				gqlMutationStr := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", mut, 1)
+				gqlMutationStr := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", tt.mut, 1)
 				op, err := gqlSchema.Operation(
 					&schema.Request{
 						Query:     gqlMutationStr,
@@ -177,7 +143,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 				} else {
 					mutated[mutationQueryVar] = []string{"0x4"}
 				}
-				dgQuery, err := testRewriter.FromMutationResult(
+				dgQuery, err := tt.rewriter.FromMutationResult(
 					gqlMutation, assigned, mutated)
 
 				require.Nil(t, err)
