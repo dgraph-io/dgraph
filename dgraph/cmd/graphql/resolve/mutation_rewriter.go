@@ -31,7 +31,7 @@ const (
 	createdNode             = "newnode"
 	mutationQueryVar        = "x"
 	createdUpsertNode       = "uid(x)"
-	deleteUIDVarMutation    = "uid(x) * * ."
+	deleteUIDVarMutation    = `{ "uid": "uid(x)" }`
 	addXIDCondition         = "@if(eq(len(x), 0))"
 	updateMutationCondition = `@if(gt(len(x), 0))`
 )
@@ -189,42 +189,75 @@ func (mrw *addRewriter) FromMutationResult(
 	return rewriteAsGet(mutation.QueryField(), uid, nil), nil
 }
 
+// Rewrite rewrites set and delete update patches into a GraphQL+- mutation.
+// The GraphQL updates look like:
+//
+// input UpdateAuthorInput {
+// 	filter: AuthorFilter!
+// 	set: PatchAuthor
+// 	delete: PatchAuthor
+// }
+//
+// which gets rewritten in to a Dgraph upsert mutation
+// - filter becomes the query
+// - set becomes the Dgraph set mutation
+// - delete becomes the Dgraph delete mutation
+//
+// The semantics is the same the Dgraph mutation semantics.
+// - Any values in set become the new values for those predicates (or add to the existing
+//   values for lists)
+// - Any nulls in set are ignored.
+// - Explicit values in delete mean delete this if it is the actual value
+// - Nulls in delete become like delete * for the corresponding predicate.
 func (urw *updateRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+
+	var setObj, delObj map[string]interface{}
+	var setJSON, delJSON []byte
+	var err error
+
 	mutatedType := m.MutatedType()
 
-	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	setArg := inp["set"]
+	delArg := inp["delete"]
 
-	// must be schema.UpdateMutation, so the mutation payload came in like
-	// { id: 0x123, patch { ... the actual changes ... } }
-	// it's that "patch" object that needs to be built into the mutation.
-	//
-	// Patch can't be nil, schema gen builds updates with inputs like
-	// input UpdateAuthorInput {
-	// 	filter: AuthorFilter!
-	// 	patch: PatchAuthor!
-	// }
-	// If patch were nil, validation would have failed.
-	val = val["patch"].(map[string]interface{})
+	if setArg == nil && delArg == nil {
+		return nil, nil, nil
+	}
 
-	// All mutations have an upsert query as part of them. The root function verifies
-	// that the type of the node is correct. The filters from the update operation are
-	// added as filters to the query.
 	gqlQuery := rewriteUpsertQueryFromMutation(m)
 	srcUID := fmt.Sprintf("uid(%s)", mutationQueryVar)
-	cond := updateMutationCondition
 
-	obj, err := rewriteObject(mutatedType, nil, srcUID, val)
-	if err != nil {
-		return nil, nil, err
+	if setArg != nil {
+		setObj, err = rewriteObject(mutatedType, nil, srcUID, setArg.(map[string]interface{}))
+		if err != nil {
+			return nil, nil, err
+		}
+		setObj["uid"] = srcUID
+		setJSON, err = json.Marshal(setObj)
+		if err != nil {
+			return nil, nil, schema.GQLWrapf(err, "failed to rewrite mutation payload")
+		}
 	}
-	obj["uid"] = srcUID
 
-	mutationJSON, err := json.Marshal(obj)
+	if delArg != nil {
+		delObj, err = rewriteObject(mutatedType, nil, srcUID, delArg.(map[string]interface{}))
+		if err != nil {
+			return nil, nil, err
+		}
+		delObj["uid"] = srcUID
+		delJSON, err = json.Marshal(delObj)
+		if err != nil {
+			return nil, nil, schema.GQLWrapf(err, "failed to rewrite mutation payload")
+		}
+	}
+
 	return gqlQuery,
 		[]*dgoapi.Mutation{{
-			SetJson: mutationJSON,
-			Cond:    cond,
+			SetJson:    setJSON,
+			DeleteJson: delJSON,
+			Cond:       updateMutationCondition,
 		}},
 		schema.GQLWrapf(err, "failed to rewrite mutation payload")
 }
