@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package complex
+package directives
 
 import (
 	"io/ioutil"
