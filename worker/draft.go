@@ -397,34 +397,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	return nil
 }
 
-func (n* node) handleIncrementalRollups() {
-	var batch [16] *bytes.Buffer
-	i := 0;
-	for k := range posting.IncrRollupCh {
-
-		batch[i] = k
-		i++
-
-		// Check if batch if full
-		if (i == 16) {
-			// process the batch
-			for j:=0 ; j<=15; j++ {
-				var key []byte
-				batch[j].Read(key)
-				// put the buffer back in the pool.
-				posting.RollUpPool.Put(batch[j])
-
-				// roll up key here
-			}
-
-			// reset the batch
-			i=0	
-		}
-
-	}
-
-	// IncrRollupCh is closed. This should never happen.
-}
 
 func (n *node) processRollups() {
 	defer n.closer.Done()                   // CLOSER:1
@@ -1010,17 +982,21 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := posting.NewTxnWriter(pstore)
+	//writer := posting.NewTxnWriter(pstore)
+
+	// We can now discard all invalid versions of keys below this ts.
+	pstore.SetDiscardTs(readTs)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
+	if !amLeader {
+		// Only leader needs to calculate the tablet sizes.
+		return nil
+	}
+
 	m := new(sync.Map)
 
 	addTo := func(key []byte, delta int64) {
-		if !amLeader {
-			// Only leader needs to calculate the tablet sizes.
-			return
-		}
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
@@ -1045,75 +1021,55 @@ func (n *node) rollupLists(readTs uint64) error {
 		case x.ByteUnused:
 			return false
 		default:
-			return true
+			return false
 		}
 	}
 	var numKeys uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		atomic.AddUint64(&numKeys, 1)
-		kvs, err := l.Rollup()
-
-		// If there are multiple keys, the posting list was split into multiple
-		// parts. The key of the first part is the right key to use for tablet
-		// size calculations.
-		for _, kv := range kvs {
-			addTo(kvs[0].Key, int64(kv.Size()))
-		}
-
-		return &bpb.KVList{Kv: kvs}, err
-	}
+		return nil, nil  // no-op
+	 }
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Write(list)
+		return nil
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
+
 	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
 	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
 
-	// We can now discard all invalid versions of keys below this ts.
-	pstore.SetDiscardTs(readTs)
-
-	if amLeader {
-		// Only leader sends the tablet size updates to Zero. No one else does.
-		// doSendMembership is also being concurrently called from another goroutine.
-		go func() {
-			tablets := make(map[string]*pb.Tablet)
-			var total int64
-			m.Range(func(key, val interface{}) bool {
-				pred := key.(string)
-				size := atomic.LoadInt64(val.(*int64))
-				tablets[pred] = &pb.Tablet{
-					GroupId:   n.gid,
-					Predicate: pred,
-					Space:     size,
-				}
-				total += size
-				return true
-			})
-			// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
-			// this group, it would send instruction to delete that tablet. There's an edge case
-			// here if the followers are still running Rollup, and happen to read a key before and
-			// write after the tablet deletion, causing that tablet key to resurface. Then, only the
-			// follower would have that key, not the leader.
-			// However, if the follower then becomes the leader, we'd be able to get rid of that
-			// key then. Alternatively, we could look into cancelling the Rollup if we see a
-			// predicate deletion.
-			if err := groups().doSendMembership(tablets); err != nil {
-				glog.Warningf("While sending membership to Zero. Error: %v", err)
-			} else {
-				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
-					humanize.Bytes(uint64(total)))
+	// Only leader sends the tablet size updates to Zero. No one else does.
+	// doSendMembership is also being concurrently called from another goroutine.
+	go func() {
+		tablets := make(map[string]*pb.Tablet)
+		var total int64
+		m.Range(func(key, val interface{}) bool {
+			pred := key.(string)
+			size := atomic.LoadInt64(val.(*int64))
+			tablets[pred] = &pb.Tablet{
+				GroupId:   n.gid,
+				Predicate: pred,
+				Space:     size,
 			}
-		}()
-	}
+			total += size
+			return true
+		})
+		// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
+		// this group, it would send instruction to delete that tablet. There's an edge case
+		// here if the followers are still running Rollup, and happen to read a key before and
+		// write after the tablet deletion, causing that tablet key to resurface. Then, only the
+		// follower would have that key, not the leader.
+		// However, if the follower then becomes the leader, we'd be able to get rid of that
+		// key then. Alternatively, we could look into cancelling the Rollup if we see a
+		// predicate deletion.
+		if err := groups().doSendMembership(tablets); err != nil {
+			glog.Warningf("While sending membership to Zero. Error: %v", err)
+		} else {
+			glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
+				humanize.Bytes(uint64(total)))
+		}
+	}()
+	
 	return nil
 }
 
@@ -1448,7 +1404,7 @@ func (n *node) InitAndStartNode() {
 	go n.processRollups()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	go n.handleIncrementalRollups()
+	go posting.IncrRollup.HandleIncrementalRollups()
 	go n.Run()
 }
 

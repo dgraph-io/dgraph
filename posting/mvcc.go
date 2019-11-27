@@ -18,34 +18,112 @@ package posting
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
-
+	"time"	
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+
 )
+
+// IncRollup is used to batch keys for rollup incrementally.
+type IncRollup struct {
+	// IncrRollupCh is populated with batch of 64 keys that needs to be rolled up during reads
+	Ch chan *[][]byte
+	// Pool is sync.Pool to share the batched keys to rollup.
+	Pool sync.Pool
+}
 
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
-	// IncrRollupCh is populated with keys that needs to be rolled up during reads 
-	IncrRollupCh chan *bytes.Buffer = make(chan *bytes.Buffer, 16)
-	// RollUpPool is the sync.Pool. Used mainly for performance.
-	RollUpPool = sync.Pool{
-		New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return new(bytes.Buffer)
-	},
-}
+
+	// IncrRollup is used to batch keys for rollup incrementally.
+	IncrRollup = IncRollup{make(chan *[][]byte),
+		sync.Pool{
+			New: func() interface{} {
+				return new([][]byte)
+			},
+		},
+	}
 )
+
+// RollUpKey takes the given key's posting lists, rolls it up and writes back to badger
+func (ir *IncRollup) RollUpKey(writer *TxnWriter, key []byte) error {
+
+	l, err := GetNoStore(key)
+	if err != nil {
+		return err
+	}
+
+	kvs, err := l.Rollup()
+	if err != nil {
+		return err
+	}
+
+	err = writer.Write(&bpb.KVList{Kv: kvs})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ir *IncRollup) addKeyToBatch(key []byte) {
+	batch := ir.Pool.Get().(*[][]byte)
+	*batch = append(*batch, key)
+	if len(*batch) < 64 {
+		ir.Pool.Put(batch)
+		return
+	}
+
+	select {
+	case ir.Ch <- batch:
+	default:
+		// XXX/pshah: Instead of dropping keys and starting to build the batch again,
+		// maybe we should try again later  -- check with mrjn
+		*batch = (*batch)[:0]
+		ir.Pool.Put(batch)
+	}
+
+}
+
+// HandleIncrementalRollups will rollup batches of 64 keys in a go routine.
+func (ir *IncRollup) HandleIncrementalRollups() {
+
+	m := make(map[uint64]int64) // map from hash(key) to timestamp
+	limiter := time.Tick(10 * time.Millisecond)
+	writer := NewTxnWriter(pstore)
+
+	for batch := range ir.Ch {
+		currTs := time.Now().Unix()
+		for _, key := range *batch {
+			hashBytes := sha1.Sum(key)
+			hash := binary.BigEndian.Uint64(hashBytes[0:]) // take 1st 8 bytes of the SHA1 hash
+			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
+				// Key not present or Key present but last roll up was more than 10 sec ago. Add/Update map and rollup.
+				m[hash] = currTs
+				ir.RollUpKey(writer, key)
+			}
+		}
+		// clear the batch and put it back in Sync pool
+		*batch = (*batch)[:0]
+		ir.Pool.Put(batch)
+
+		// throttle to 1 batch = 64 rollups per 10 ms.
+		<-limiter
+	}
+	// Ch is closed. This should never happen.
+}
 
 // ShouldAbort returns whether the transaction should be aborted.
 func (txn *Txn) ShouldAbort() bool {
@@ -157,7 +235,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
-	start := it
+	deltaCount := 0
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -199,22 +277,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if err != nil {
 				return nil, err
 			}
-			if (it == start) {
-				// if while reading a posting list, the first item is a Delta Posting, then
-				// this key needs to go through rollbacks. Add this key to the rollbackChan.
-				// This channel is drained by the go routine which performs the rollbacks
-				k := RollUpPool.Get().(*bytes.Buffer)
-				k.Write(key)
-
-				// The send to the channel is Best-effort (lossy) so we dont block here.
-				// Hence, if channel is blocked or full, drop key and move on.
-				select {
-				case IncrRollupCh <- k:
-				default:
-					// return buffer back to Sync.pool
-					RollUpPool.Put(k)
-				}
-			}
+			deltaCount++
 		case BitSchemaPosting:
 			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
@@ -227,6 +290,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+
+	if deltaCount >= 2 {
+		IncrRollup.addKeyToBatch(key)
+	}
+
 	return l, nil
 }
 
