@@ -48,6 +48,7 @@ type options struct {
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
+	BadgerKey 		 []byte
 	NumGoroutines    int
 	MapBufSize       uint64
 	SkipMapPhase     bool
