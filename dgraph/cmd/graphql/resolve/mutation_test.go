@@ -115,41 +115,49 @@ func TestMutationQueryRewriting(t *testing.T) {
 		},
 	}
 
+	allowedTestTypes := map[string][]string{
+		"UPDATE_MUTATION":     []string{"Update Post "},
+		"ADD_UPDATE_MUTATION": []string{"Add Post ", "Update Post "},
+	}
+
 	b, err := ioutil.ReadFile("mutation_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
-	var tests []QueryRewritingCase
+	var tests map[string][]QueryRewritingCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	for name, tt := range testTypes {
-		for _, tcase := range tests {
-			t.Run(name+tcase.Name, func(t *testing.T) {
+	for testType := range tests {
+		for _, name := range allowedTestTypes[testType] {
+			tt := testTypes[name]
+			for _, tcase := range tests[testType] {
+				t.Run(name+testType+tcase.Name, func(t *testing.T) {
 
-				gqlMutationStr := strings.Replace(tcase.GQLQuery, "ADD_UPDATE_MUTATION", tt.mut, 1)
-				op, err := gqlSchema.Operation(
-					&schema.Request{
-						Query:     gqlMutationStr,
-						Variables: tcase.Variables,
-					})
-				require.NoError(t, err)
-				gqlMutation := test.GetMutation(t, op)
+					gqlMutationStr := strings.Replace(tcase.GQLQuery, testType, tt.mut, 1)
+					op, err := gqlSchema.Operation(
+						&schema.Request{
+							Query:     gqlMutationStr,
+							Variables: tcase.Variables,
+						})
+					require.NoError(t, err)
+					gqlMutation := test.GetMutation(t, op)
 
-				assigned := map[string]string{}
-				mutated := map[string][]string{}
-				if name == "Add Post " {
-					assigned["newnode"] = "0x4"
-				} else {
-					mutated[mutationQueryVar] = []string{"0x4"}
-				}
-				dgQuery, err := tt.rewriter.FromMutationResult(
-					gqlMutation, assigned, mutated)
+					assigned := map[string]string{}
+					mutated := map[string][]string{}
+					if name == "Add Post " {
+						assigned["newnode"] = "0x4"
+					} else {
+						mutated[mutationQueryVar] = []string{"0x4"}
+					}
+					dgQuery, err := tt.rewriter.FromMutationResult(
+						gqlMutation, assigned, mutated)
 
-				require.Nil(t, err)
-				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
-			})
+					require.Nil(t, err)
+					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+				})
+			}
 		}
 	}
 }

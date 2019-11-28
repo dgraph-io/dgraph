@@ -457,6 +457,94 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 	}
 }
 
+func TestFilterInUpdate(t *testing.T) {
+	countries := make([]country, 0, 4)
+	for i := 0; i < 4; i++ {
+		country := addCountry(t, postExecutor)
+		country.Name = "updatedValue"
+		countries = append(countries, *country)
+	}
+	countries[3].Name = "Testland"
+
+	cases := map[string]struct {
+		Filter          map[string]interface{}
+		FilterCountries map[string]interface{}
+		Expected        int
+		Countries       []*country
+	}{
+		"Eq filter": {
+			Filter: map[string]interface{}{
+				"name": map[string]interface{}{
+					"eq": "Testland",
+				},
+				"and": map[string]interface{}{
+					"ids": []string{countries[0].ID, countries[1].ID},
+				},
+			},
+			FilterCountries: map[string]interface{}{
+				"ids": []string{countries[1].ID},
+			},
+			Expected:  1,
+			Countries: []*country{&countries[0], &countries[1]},
+		},
+
+		"ID Filter": {
+			Filter: map[string]interface{}{
+				"ids": []string{countries[2].ID},
+			},
+			FilterCountries: map[string]interface{}{
+				"ids": []string{countries[2].ID, countries[3].ID},
+			},
+			Expected:  1,
+			Countries: []*country{&countries[2], &countries[3]},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			updateParams := &GraphQLParams{
+				Query: `mutation newName($filter: CountryFilter!, $newName: String!,
+					 $filterCountries: CountryFilter!) {
+			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
+				country(filter: $filterCountries) {
+					id
+					name
+				}
+			}
+		}`,
+				Variables: map[string]interface{}{
+					"filter":          test.Filter,
+					"newName":         "updatedValue",
+					"filterCountries": test.FilterCountries,
+				},
+			}
+
+			gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			var result struct {
+				UpdateCountry struct {
+					Country []*country
+				}
+			}
+
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			require.Equal(t, len(result.UpdateCountry.Country), test.Expected)
+			for i := 0; i < test.Expected; i++ {
+				require.Equal(t, result.UpdateCountry.Country[i].Name, "updatedValue")
+			}
+
+			for _, country := range test.Countries {
+				requireCountry(t, country.ID, country, postExecutor)
+			}
+			cleanUp(t, test.Countries, nil, nil)
+		})
+	}
+
+}
+
 func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	country := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)

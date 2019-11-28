@@ -115,7 +115,7 @@ type DeleteAuthorPayload {
 }
 
 type UpdateAuthorPayload {
-	author: [Author]
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 }
 
 #######################

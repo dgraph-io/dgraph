@@ -98,7 +98,7 @@ type DeleteMessagePayload {
 }
 
 type UpdateMessagePayload {
-	message: [Message]
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 }
 
 #######################

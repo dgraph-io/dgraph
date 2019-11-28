@@ -821,18 +821,24 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	qry := &ast.FieldDefinition{
+		Name: strings.ToLower(defn.Name),
+		Type: &ast.Type{
+			Elem: &ast.Type{
+				NamedType: defn.Name,
+			},
+		},
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
 	schema.Types["Update"+defn.Name+"Payload"] = &ast.Definition{
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			{
-				Name: strings.ToLower(defn.Name),
-				Type: &ast.Type{
-					Elem: &ast.Type{
-						NamedType: defn.Name,
-					},
-				},
-			},
+			qry,
 		},
 	}
 }
