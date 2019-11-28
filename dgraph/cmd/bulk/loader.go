@@ -48,7 +48,7 @@ type options struct {
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
-	BadgerKey 		 []byte
+	BadgerKey        []byte // used only in enterprise build. nil otherwise.
 	NumGoroutines    int
 	MapBufSize       uint64
 	SkipMapPhase     bool
