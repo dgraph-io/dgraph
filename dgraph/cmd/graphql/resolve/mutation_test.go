@@ -39,14 +39,15 @@ import (
 // ensure that those errors get caught before they reach rewriting.
 
 type TestCase struct {
-	Name           string
-	GQLMutation    string
-	GQLVariables   string
-	Explanation    string
-	DgraphMutation string
-	DgraphQuery    string
-	Condition      string
-	Error          *x.GqlError
+	Name         string
+	GQLMutation  string
+	GQLVariables string
+	Explanation  string
+	DgraphSet    string
+	DgraphDelete string
+	DgraphQuery  string
+	Condition    string
+	Error        *x.GqlError
 }
 
 func TestMutationRewriting(t *testing.T) {
@@ -55,6 +56,9 @@ func TestMutationRewriting(t *testing.T) {
 	})
 	t.Run("Update Mutation Rewriting", func(t *testing.T) {
 		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter())
+	})
+	t.Run("Delete Mutation Rewriting", func(t *testing.T) {
+		mutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter())
 	})
 }
 
@@ -91,10 +95,18 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
 				require.Len(t, muts, 1)
-				jsonMut := string(muts[0].SetJson)
-				require.JSONEq(t, tcase.DgraphMutation, jsonMut)
 				require.Equal(t, tcase.Condition, muts[0].Cond)
 				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
+
+				setMut := string(muts[0].SetJson)
+				if setMut != "" || tcase.DgraphSet != "" {
+					require.JSONEq(t, tcase.DgraphSet, setMut)
+				}
+
+				delMut := string(muts[0].DeleteJson)
+				if delMut != "" || tcase.DgraphDelete != "" {
+					require.JSONEq(t, tcase.DgraphDelete, delMut)
+				}
 			}
 		})
 	}
@@ -110,7 +122,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 			NewAddRewriter(),
 		},
 		"Update Post ": {
-			`updatePost(input: { filter: { ids:  ["0x4"] }, patch: { text: "Updated text" } }) `,
+			`updatePost(input: { filter: { ids:  ["0x4"] }, set: { text: "Updated text" } }) `,
 			NewUpdateRewriter(),
 		},
 	}
@@ -159,45 +171,5 @@ func TestMutationQueryRewriting(t *testing.T) {
 				})
 			}
 		}
-	}
-}
-
-func TestDeleteMutationRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("delete_mutation_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
-	var tests []TestCase
-	err = yaml.Unmarshal(b, &tests)
-	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
-
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewDeleteRewriter()
-
-	for _, tcase := range tests {
-		t.Run(tcase.Name, func(t *testing.T) {
-			var vars map[string]interface{}
-			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
-			}
-
-			op, err := gqlSchema.Operation(
-				&schema.Request{
-					Query:     tcase.GQLMutation,
-					Variables: vars,
-				})
-			require.NoError(t, err)
-
-			mut := test.GetMutation(t, op)
-			q, muts, err := rewriterToTest.Rewrite(mut)
-			require.Len(t, muts, 1)
-			m := string(muts[0].DelNquads)
-
-			test.RequireJSONEq(t, tcase.Error, err)
-			if tcase.Error == nil {
-				require.Equal(t, tcase.DgraphMutation, m)
-				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
-			}
-		})
 	}
 }

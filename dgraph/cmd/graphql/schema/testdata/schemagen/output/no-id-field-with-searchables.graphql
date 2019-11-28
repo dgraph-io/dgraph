@@ -133,7 +133,8 @@ input PostOrder {
 
 input UpdatePostInput {
 	filter: PostFilter!
-	patch: PatchPost!
+	set: PatchPost
+	remove: PatchPost
 }
 
 #######################

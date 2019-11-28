@@ -17,7 +17,7 @@
     }
   explanation: "A uid and type should get injected and all data transformed to
     underlying Dgraph edge names"
-  dgraphmutation: |
+  dgraphset: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
@@ -37,7 +37,7 @@
     }
   explanation: "The input should be used for the mutation, with a uid and type getting
     injected and all data transformed to underlying Dgraph edge names"
-  dgraphmutation: |
+  dgraphset: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
@@ -58,7 +58,7 @@
     { "name":  "A.N. Author" }
   explanation: "The input and variables should be used for the mutation, with a uid and type
     getting injected and all data transformed to underlying Dgraph edge names"
-  dgraphmutation: |
+  dgraphset: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
@@ -84,7 +84,7 @@
     }
   explanation: "The reference to country should get transformed to 'uid' for the
     Dgraph JSON mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid":"_:newnode",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
@@ -132,7 +132,7 @@
     }
   explanation: "The reference to the author node should be transformed to include
     a new 'posts' edge."
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "_:newnode",
       "dgraph.type" : ["Post"],
       "Post.title" : "Exciting post",
@@ -164,7 +164,7 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "_:newnode",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
@@ -192,7 +192,7 @@
       }
     }
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "dgraph.type": ["State"],
       "State.name": "NSW",
@@ -225,7 +225,7 @@
       }
     }
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphmutation: |
+  dgraphset: |
     { "uid" : "uid(x)",
       "dgraph.type": ["Editor"],
       "Editor.name": "A.N. Editor",

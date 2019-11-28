@@ -316,22 +316,26 @@ input StarshipRef {
 
 input UpdateCharacterInput {
 	filter: CharacterFilter!
-	patch: PatchCharacter!
+	set: PatchCharacter
+	remove: PatchCharacter
 }
 
 input UpdateDroidInput {
 	filter: DroidFilter!
-	patch: PatchDroid!
+	set: PatchDroid
+	remove: PatchDroid
 }
 
 input UpdateHumanInput {
 	filter: HumanFilter!
-	patch: PatchHuman!
+	set: PatchHuman
+	remove: PatchHuman
 }
 
 input UpdateStarshipInput {
 	filter: StarshipFilter!
-	patch: PatchStarship!
+	set: PatchStarship
+	remove: PatchStarship
 }
 
 #######################

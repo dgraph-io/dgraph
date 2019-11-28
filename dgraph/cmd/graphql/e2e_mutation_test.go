@@ -427,10 +427,65 @@ func TestUpdateMutationByNameNoMatch(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
+func TestUpdateDelete(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+
+	filter := map[string]interface{}{
+		"ids": []string{newPost.PostID},
+	}
+	delPatch := map[string]interface{}{
+		"text":        "This post is just a test.",
+		"isPublished": nil,
+		"tags":        []string{"test", "notatag"},
+		"numLikes":    999,
+	}
+
+	updateParams := &GraphQLParams{
+		Query: `mutation updPost($filter: PostFilter!, $del: PatchPost!) {
+			updatePost(input: { filter: $filter, remove: $del }) {
+				post {
+					text
+					isPublished
+					tags
+					numLikes
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": filter, "del": delPatch},
+	}
+
+	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	require.JSONEq(t, `{
+			"updatePost": {
+				"post": [
+					{
+						"text": null,
+						"isPublished": null,
+						"tags": ["example"],
+						"numLikes": 1000
+					}
+				]
+			}
+		}`,
+		string([]byte(gqlResponse.Data)))
+
+	newPost.Text = ""                  // was deleted because the given val was correct
+	newPost.Tags = []string{"example"} // the intersection of the tags was deleted
+	newPost.IsPublished = false        // must have been deleted because was set to nil in the patch
+	// newPost.NumLikes stays the same because the value in the patch was wrong
+	requirePost(t, newPost.PostID, newPost, postExecutor)
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
+}
+
 func updateCountry(t *testing.T, filter map[string]interface{}, newName string) {
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
-			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
+			updateCountry(input: { filter: $filter, set: { name: $newName } }) {
 				country {
 					id
 					name
@@ -1084,7 +1139,7 @@ func updateCharacter(t *testing.T, id string) {
 			"filter": map[string]interface{}{
 				"ids": []string{id},
 			},
-			"patch": map[string]interface{}{
+			"set": map[string]interface{}{
 				"name": "Han Solo",
 			},
 		}},

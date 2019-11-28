@@ -149,7 +149,8 @@ input PostRef {
 
 input UpdatePostInput {
 	filter: PostFilter!
-	patch: PatchPost!
+	set: PatchPost
+	remove: PatchPost
 }
 
 #######################

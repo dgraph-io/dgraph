@@ -160,12 +160,14 @@ input PostRef {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	patch: PatchAuthor!
+	set: PatchAuthor
+	remove: PatchAuthor
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	patch: PatchPost!
+	set: PatchPost
+	remove: PatchPost
 }
 
 #######################
