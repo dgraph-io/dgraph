@@ -19,6 +19,7 @@ package alpha
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -40,6 +41,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
 )
@@ -1569,6 +1573,113 @@ func TestJSONQueryWithVariables(t *testing.T) {
 	exp := `{"data":{"q":[{"user_id":"user2","user_name":"second user",` +
 		`"follows":[{"uid":"0x1403","user_id":"user4"}]}]}}`
 	require.JSONEq(t, exp, res)
+}
+
+func TestGeoDataInvalidString(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{
+				StrVal: `{"type": "Point", "coordintaes": [1.0, 2.0]}`,
+			},
+		},
+	}
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.Contains(t, err.Error(), "geom: unsupported layout NoLayout")
+}
+
+// This test shows that GeoVal API doesn't accept string data. Though, mutation
+// succeeds querying the data returns an error. Ideally, we should not accept
+// invalid data in a mutation though that is left as future work.
+func TestGeoCorruptData(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_GeoVal{
+				GeoVal: []byte(`{"type": "Point", "coordinates": [1.0, 2.0]}`),
+			},
+		},
+	}
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.NoError(t, err)
+
+	query := `
+{
+  all(func: has(loc)) {
+      uid
+      loc
+  }
+}`
+	_, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.Contains(t, err.Error(), "wkb: unknown byte order: 1111011")
+}
+
+// This test shows how we could use the GeoVal API to store geo data.
+// As far as I (Aman) know, this is something that should not be used
+// by a common user unless user knows what she is doing.
+func TestGeoValidWkbData(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+	s := `{"type": "Point", "coordinates": [1.0, 2.0]}`
+	var gt geom.T
+	if err := geojson.Unmarshal([]byte(s), &gt); err != nil {
+		panic(err)
+	}
+	data, err := wkb.Marshal(gt, binary.LittleEndian)
+	if err != nil {
+		panic(err)
+	}
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_GeoVal{
+				GeoVal: data,
+			},
+		},
+	}
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.NoError(t, err)
+	query := `
+{
+  all(func: has(loc)) {
+      uid
+      loc
+  }
+}`
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
 
 var addr = "http://localhost:8180"
