@@ -1073,6 +1073,8 @@ kops delete cluster ${NAME} --yes
 
 ### Using Helm Chart
 
+Once your Kubernetes cluster is up, you can use the Helm chart present [in our official repository here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/helm/) to bring up a Dgraph cluster.
+
 #### Installing the Chart
 
 Install the chart with the release name `dgraph-cluster` using the command below:
@@ -1081,13 +1083,13 @@ Install the chart with the release name `dgraph-cluster` using the command below
 helm install dgraph-cluster ./
 ```
 
-The above command will  install the latest available dgraph docker image. To install the older versions, you can make use of the `image.tag` parameter like showed in the command below:
+The above command will install the latest available dgraph docker image. You can install the older versions by setting the `image.tag` parameter like showed in the command below:
 
 ```bash
 helm install dgraph-cluster ./ --set image.tag=XXX
 ```
 
-By default, zero, alpha, and ratel services are exposed only within the Kubernetes cluster as Kubernetes service type "ClusterIP". To expose the alpha service to the internet, you can use the Kubernetes service type "LoadBalancer" as follows:
+By default, zero, alpha, and ratel services are exposed only within the Kubernetes cluster as Kubernetes service type "ClusterIP". You can expose the alpha service to the internet by using the Kubernetes service type "LoadBalancer" as shown follows:
 
 ```bash
 helm install dgraph-cluster ./ --set alpha.service.type="LoadBalancer"
@@ -1107,7 +1109,7 @@ Delete the Helm deployment as normal using the command below:
 helm delete dgraph-cluster
 ```
 
-Deletion of the StatefulSet doesn't cascade to deleting associated PVCs. To delete them, use the command below:
+Deletion of the StatefulSet doesn't cascade to deleting associated PVCs. You can delete them using the command below:
 
 ```
 kubectl delete pvc -l release=dgraph-cluster,chart=dgraph
