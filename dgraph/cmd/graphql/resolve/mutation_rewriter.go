@@ -347,7 +347,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 
 	return rewriteUpsertQueryFromMutation(m),
 		[]*dgoapi.Mutation{{
-			DelNquads: []byte(deleteUIDVarMutation),
+			DeleteJson: []byte(deleteUIDVarMutation),
 		}},
 		nil
 }

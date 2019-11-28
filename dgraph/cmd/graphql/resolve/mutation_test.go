@@ -57,6 +57,9 @@ func TestMutationRewriting(t *testing.T) {
 	t.Run("Update Mutation Rewriting", func(t *testing.T) {
 		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter())
 	})
+	t.Run("Delete Mutation Rewriting", func(t *testing.T) {
+		mutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter())
+	})
 }
 
 func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewriter) {
@@ -160,45 +163,5 @@ func TestMutationQueryRewriting(t *testing.T) {
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 			})
 		}
-	}
-}
-
-func TestDeleteMutationRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("delete_mutation_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
-	var tests []TestCase
-	err = yaml.Unmarshal(b, &tests)
-	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
-
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-	rewriterToTest := NewDeleteRewriter()
-
-	for _, tcase := range tests {
-		t.Run(tcase.Name, func(t *testing.T) {
-			var vars map[string]interface{}
-			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
-			}
-
-			op, err := gqlSchema.Operation(
-				&schema.Request{
-					Query:     tcase.GQLMutation,
-					Variables: vars,
-				})
-			require.NoError(t, err)
-
-			mut := test.GetMutation(t, op)
-			q, muts, err := rewriterToTest.Rewrite(mut)
-			require.Len(t, muts, 1)
-			m := string(muts[0].DelNquads)
-
-			test.RequireJSONEq(t, tcase.Error, err)
-			if tcase.Error == nil {
-				require.Equal(t, tcase.DgraphDelete, m)
-				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
-			}
-		})
 	}
 }
