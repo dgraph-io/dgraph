@@ -113,7 +113,7 @@ type DeleteTPayload {
 }
 
 type UpdateTPayload {
-	t: [T]
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 }
 
 #######################
@@ -168,7 +168,8 @@ input TRef {
 
 input UpdateTInput {
 	filter: TFilter!
-	patch: PatchT!
+	set: PatchT
+	remove: PatchT
 }
 
 #######################

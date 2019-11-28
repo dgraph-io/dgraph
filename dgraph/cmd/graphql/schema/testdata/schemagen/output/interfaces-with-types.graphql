@@ -148,19 +148,19 @@ type DeleteStarshipPayload {
 }
 
 type UpdateCharacterPayload {
-	character: [Character]
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 }
 
 type UpdateDroidPayload {
-	droid: [Droid]
+	droid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
 }
 
 type UpdateHumanPayload {
-	human: [Human]
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 }
 
 type UpdateStarshipPayload {
-	starship: [Starship]
+	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 }
 
 #######################
@@ -317,22 +317,26 @@ input StarshipRef {
 
 input UpdateCharacterInput {
 	filter: CharacterFilter!
-	patch: PatchCharacter!
+	set: PatchCharacter
+	remove: PatchCharacter
 }
 
 input UpdateDroidInput {
 	filter: DroidFilter!
-	patch: PatchDroid!
+	set: PatchDroid
+	remove: PatchDroid
 }
 
 input UpdateHumanInput {
 	filter: HumanFilter!
-	patch: PatchHuman!
+	set: PatchHuman
+	remove: PatchHuman
 }
 
 input UpdateStarshipInput {
 	filter: StarshipFilter!
-	patch: PatchStarship!
+	set: PatchStarship
+	remove: PatchStarship
 }
 
 #######################

@@ -1008,7 +1008,7 @@ func enumFilter(t *testing.T) {
 					"regexp": "/(Fact)|(Question)/",
 				},
 			},
-			Expected: append(facts, questions...),
+			Expected: append(questions, facts...),
 		},
 	}
 
