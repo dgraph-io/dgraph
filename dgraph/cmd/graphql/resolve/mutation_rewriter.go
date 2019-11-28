@@ -203,7 +203,7 @@ func (mrw *addRewriter) FromMutationResult(
 // - set becomes the Dgraph set mutation
 // - delete becomes the Dgraph delete mutation
 //
-// The semantics is the same the Dgraph mutation semantics.
+// The semantics is the same as the Dgraph mutation semantics.
 // - Any values in set become the new values for those predicates (or add to the existing
 //   values for lists)
 // - Any nulls in set are ignored.

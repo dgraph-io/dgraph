@@ -459,8 +459,6 @@ func TestUpdateDelete(t *testing.T) {
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
-	fmt.Println(string([]byte(gqlResponse.Data)))
-
 	require.JSONEq(t, `{
 			"updatePost": {
 				"post": [
@@ -475,7 +473,7 @@ func TestUpdateDelete(t *testing.T) {
 		}`,
 		string([]byte(gqlResponse.Data)))
 
-	newPost.Text = ""                  // was delete because the given val was correct
+	newPost.Text = ""                  // was deleted because the given val was correct
 	newPost.Tags = []string{"example"} // the intersection of the tags was deleted
 	newPost.IsPublished = false        // must have been deleted because was set to nil in the patch
 	// newPost.NumLikes stays the same because the value in the patch was wrong
