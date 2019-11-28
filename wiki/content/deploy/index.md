@@ -1073,7 +1073,7 @@ kops delete cluster ${NAME} --yes
 
 ### Using Helm Chart
 
-Once your Kubernetes cluster is up, you can use the Helm chart present [in our official repository here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/helm/) to bring up a Dgraph cluster.
+Once your Kubernetes cluster is up, you can make use of the Helm chart present [in our official repository here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/helm/) to bring up a Dgraph cluster.
 
 #### Installing the Chart
 
