@@ -38,7 +38,7 @@ type Post @dgraph(name: "dgraph.Post") {
         topic: String @search(by: [exact]) @dgraph(name: "dgraph.topic")
         numLikes: Int @search
         isPublished: Boolean @search @dgraph(name: "dgraph.is_published")
-        postType: PostType @search
+        postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts) @dgraph(name: "dgraph.post.author")
 }
 
