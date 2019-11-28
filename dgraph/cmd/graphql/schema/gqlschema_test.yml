@@ -154,6 +154,35 @@ invalid_schemas:
     ]
 
   -
+    name: "Non linking inverse directive with correct field type"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author
+      }
+      type Author {
+        posts: [Post!]! @hasInverse(field: likedBy)
+      }
+    errlist: [
+      {"message": "Type Post; Field author: @hasInverse should be consistant. Post.author is the inverse of Author.posts, but Author.posts is the inverse of Post.likedBy.", "locations": [{"line": 2, "column": 20}]}
+    ]
+
+  -
+    name: "Multiple hasInverse to one field"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
+      }
+    errlist: [
+      {"message": "Type Post; Field likedBy: @hasInverse should be consistant. Post.likedBy is the inverse of Author.posts, but Author.posts is the inverse of Post.author.", "locations": [{"line": 3, "column": 20}]}
+    ]
+
+  -
     name: "Non linking inverse directives"
     input: |
       type X {
@@ -164,8 +193,8 @@ invalid_schemas:
         f1: X @hasInverse(field: "f2")
       }
     errlist: [
-      {"message":"Type X; Field f1: @hasInverse is required in both the directions to link the fields, but field f1 of type P doesn't have @hasInverse directive pointing to field f1 of type X. To link these add @hasInverse in both directions.", "locations":[{"line":2, "column":10}]},
-      {"message":"Type P; Field f1: @hasInverse is required in both the directions to link the fields, but field f2 of type X doesn't have @hasInverse directive pointing to field f1 of type P. To link these add @hasInverse in both directions.", "locations":[{"line":6, "column":10}]},
+      {"message":"Type X; Field f1: @hasInverse should be consistant. X.f1 is the inverse of P.f1, but P.f1 is the inverse of X.f2.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f1: @hasInverse is required to link the fields of same type, but the field f2 is of the type String instead of P. To link these make sure the fields are of the same type.", "locations":[{"line":6, "column":10}]},
     ]
 
   -
@@ -486,6 +515,29 @@ valid_schemas:
       }
       type Y {
         f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive from list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author!
+      }
+
+      type Author {
+        posts: [Post!]! @hasInverse(field: "author")
+      }
+  -
+    name: "hasInverse directive to list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author! @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
       }
 
   -
