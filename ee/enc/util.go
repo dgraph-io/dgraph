@@ -23,12 +23,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-// BadgerEncryptionKeyFlag is not exposed for OSS
+// BadgerEncryptionKeyFlag is not exposed for OSS build
 func BadgerEncryptionKeyFlag(flag *pflag.FlagSet) {
 	return
 }
 
-// GetEncryptionKeyString returns the configured key
+// GetEncryptionKeyString return empty string for OSS build
 func GetEncryptionKeyString(c *viper.Viper) string {
 	return ""
 }
