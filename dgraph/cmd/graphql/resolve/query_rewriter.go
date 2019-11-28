@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
@@ -181,32 +180,18 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	if ids := idFilter(field); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, field.Type().Name())
+		addTypeFunc(dgQuery, field.Type().DgraphName())
 	}
 
 	addArgumentsToField(dgQuery, field)
 	return dgQuery
 }
 
-// trimTypeName trims Delete from the beginning and Payload from the end of a type name.
-// It gets us the correct type to add to a filter in case of a deleteMutation.
-func trimTypeName(typ schema.Type) string {
-	const (
-		del     = "Delete"
-		payload = "Payload"
-	)
-	typName := typ.Name()
-	if strings.HasPrefix(typName, del) && strings.HasSuffix(typName, payload) {
-		typName = strings.TrimSuffix(strings.TrimPrefix(typName, del), payload)
-	}
-	return typName
-}
-
 func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 	thisFilter := &gql.FilterTree{
 		Func: &gql.Function{
 			Name: "type",
-			Args: []gql.Arg{{Value: trimTypeName(typ)}},
+			Args: []gql.Arg{{Value: typ.DgraphName()}},
 		},
 	}
 

@@ -97,4 +97,3 @@ type Starship {
         name: String! @search(by: [term])
         length: Float
 }
-

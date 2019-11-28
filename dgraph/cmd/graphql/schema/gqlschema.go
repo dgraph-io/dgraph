@@ -33,7 +33,9 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	idDirective = "id"
+	dgraphDirective = "dgraph"
+	dgraphArgs      = "name"
+	idDirective     = "id"
 
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
@@ -59,6 +61,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 
 input IntFilter {
@@ -216,6 +219,7 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
+	dgraphDirective:  dgraphNameValidation,
 	idDirective:      idValidation,
 }
 
@@ -1138,8 +1142,7 @@ func genFieldsString(flds ast.FieldList) string {
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
 		"\t%s%s: %s%s\n", fld.Name, genArgumentsDefnString(fld.Arguments),
-		fld.Type.String(), genDirectivesString(fld.Directives),
-	)
+		fld.Type.String(), genDirectivesString(fld.Directives))
 }
 
 func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
@@ -1180,18 +1183,21 @@ func generateDescription(description string) string {
 }
 
 func generateInterfaceString(typ *ast.Definition) string {
-	return fmt.Sprintf("%sinterface %s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinterface %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateObjectString(typ *ast.Definition) string {
 	if len(typ.Interfaces) > 0 {
 		interfaces := strings.Join(typ.Interfaces, " & ")
-		return fmt.Sprintf("%stype %s implements %s {\n%s}\n",
-			generateDescription(typ.Description), typ.Name, interfaces, genFieldsString(typ.Fields))
+		return fmt.Sprintf("%stype %s implements %s%s {\n%s}\n",
+			generateDescription(typ.Description), typ.Name, interfaces,
+			genDirectivesString(typ.Directives), genFieldsString(typ.Fields))
 	}
-	return fmt.Sprintf("%stype %s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%stype %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateScalarString(typ *ast.Definition) string {

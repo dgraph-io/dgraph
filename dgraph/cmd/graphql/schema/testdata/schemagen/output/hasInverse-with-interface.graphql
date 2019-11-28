@@ -56,6 +56,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 
 input IntFilter {
@@ -306,22 +307,26 @@ input QuestionRef {
 
 input UpdateAnswerInput {
 	filter: AnswerFilter!
-	patch: PatchAnswer!
+	set: PatchAnswer
+	remove: PatchAnswer
 }
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	patch: PatchAuthor!
+	set: PatchAuthor
+	remove: PatchAuthor
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	patch: PatchPost!
+	set: PatchPost
+	remove: PatchPost
 }
 
 input UpdateQuestionInput {
 	filter: QuestionFilter!
-	patch: PatchQuestion!
+	set: PatchQuestion
+	remove: PatchQuestion
 }
 
 #######################

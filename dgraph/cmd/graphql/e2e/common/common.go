@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package common
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -129,7 +128,7 @@ type state struct {
 	Code string `json:"code"`
 }
 
-func TestMain(m *testing.M) {
+func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
@@ -150,18 +149,12 @@ func TestMain(m *testing.M) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	schemaFile := "e2e_test_schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
 		panic(err)
 	}
 
-	err = populateGraphQLData(client)
+	err = populateGraphQLData(client, data)
 	if err != nil {
 		panic(err)
 	}
@@ -172,8 +165,70 @@ func TestMain(m *testing.M) {
 	}
 
 	d.Close()
+}
 
-	os.Exit(m.Run())
+// RunAll runs all the test functions in this package as sub tests.
+func RunAll(t *testing.T) {
+	// admin tests
+	t.Run("admin", admin)
+
+	// schema tests
+	t.Run("graphql descriptions", graphQLDescriptions)
+
+	// encoding
+	t.Run("gzip compression", gzipCompression)
+	t.Run("gzip compression header", gzipCompressionHeader)
+	t.Run("gzip compression no header", gzipCompressionNoHeader)
+
+	// query tests
+	t.Run("get request", getRequest)
+	t.Run("get query empty variable", getQueryEmptyVariable)
+	t.Run("query by type", queryByType)
+	t.Run("uid alias", uidAlias)
+	t.Run("order at root", orderAtRoot)
+	t.Run("page at root", pageAtRoot)
+	t.Run("regexp", regExp)
+	t.Run("multiple search indexes", multipleSearchIndexes)
+	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
+	t.Run("hash search", hashSearch)
+	t.Run("deep filter", deepFilter)
+	t.Run("many queries", manyQueries)
+	t.Run("query order at root", queryOrderAtRoot)
+	t.Run("queries with error", queriesWithError)
+	t.Run("date filters", dateFilters)
+	t.Run("float filters", floatFilters)
+	t.Run("int filters", intFilters)
+	t.Run("boolean filters", booleanFilters)
+	t.Run("term filters", termFilters)
+	t.Run("full text filters", fullTextFilters)
+	t.Run("string exact filters", stringExactFilters)
+	t.Run("scalar list filters", scalarListFilters)
+	t.Run("skip directive", skipDirective)
+	t.Run("include directive", includeDirective)
+	t.Run("include and skip directive", includeAndSkipDirective)
+	t.Run("query by mutliple ids", queryByMultipleIds)
+	t.Run("enum filter", enumFilter)
+	t.Run("default enum filter", defaultEnumFilter)
+	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
+
+	// mutation tests
+	t.Run("add mutation", addMutation)
+	t.Run("update mutation by ids", updateMutationByIds)
+	t.Run("update mutation by name", updateMutationByName)
+	t.Run("update mutation by name no match", updateMutationByNameNoMatch)
+	t.Run("delete mutation with multiple ids", deleteMutationWithMultipleIds)
+	t.Run("delete mutation with single id", deleteMutationWithSingleID)
+	t.Run("delete mutation by name", deleteMutationByName)
+	t.Run("delete wrong id", deleteWrongID)
+	t.Run("many mutations", manyMutations)
+	t.Run("mutations with deep filter", mutationWithDeepFilter)
+	t.Run("many mutations with query error", manyMutationsWithQueryError)
+	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
+
+	// error tests
+	t.Run("graphql completion on", graphQLCompletionOn)
+	t.Run("request validation errors", requestValidationErrors)
+	t.Run("panic catcher", panicCatcher)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -207,7 +262,7 @@ func gzipData(data []byte) ([]byte, error) {
 
 // This tests that if a request has gzip header but the body is
 // not compressed, then it should return an error
-func TestGzipCompressionHeader(t *testing.T) {
+func gzipCompressionHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -231,7 +286,7 @@ func TestGzipCompressionHeader(t *testing.T) {
 
 // This tests that if a req's body is compressed but the
 // header is not present, then it should return an error
-func TestGzipCompressionNoHeader(t *testing.T) {
+func gzipCompressionNoHeader(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -253,11 +308,11 @@ func TestGzipCompressionNoHeader(t *testing.T) {
 	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
 
-func TestGetRequest(t *testing.T) {
-	AddMutation(t, getExecutor)
+func getRequest(t *testing.T) {
+	add(t, getExecutor)
 }
 
-func TestGetQueryEmptyVariable(t *testing.T) {
+func getQueryEmptyVariable(t *testing.T) {
 	queryCountry := &GraphQLParams{
 		Query: `query {
 			queryCountry {
@@ -438,8 +493,7 @@ func serializeOrError(toSerialize interface{}) string {
 	return string(byts)
 }
 
-func populateGraphQLData(client *dgo.Dgraph) error {
-
+func populateGraphQLData(client *dgo.Dgraph, data []byte) error {
 	// Helps in local dev to not re-add data multiple times.
 	countries, err := allCountriesAdded()
 	if err != nil {
@@ -449,15 +503,9 @@ func populateGraphQLData(client *dgo.Dgraph) error {
 		return nil
 	}
 
-	jsonFile := "e2e_test_data.json"
-	byts, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		return errors.Wrapf(err, "Unable to read file %s.", jsonFile)
-	}
-
 	mu := &api.Mutation{
 		CommitNow: true,
-		SetJson:   byts,
+		SetJson:   data,
 	}
 	_, err = client.NewTxn().Mutate(context.Background(), mu)
 	if err != nil {

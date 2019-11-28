@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package common
 
 import (
 	"context"
@@ -69,8 +69,8 @@ const (
 }`
 
 	firstTypes = `
-	type A { 
-		b: String 
+	type A {
+		b: String
 	}`
 	firstSchema = `{
     "schema": [
@@ -134,8 +134,8 @@ const (
 }`
 
 	updatedTypes = `
-	type A { 
-		b: String 
+	type A {
+		b: String
 		c: Int
 	}`
 	updatedSchema = `{
@@ -210,7 +210,7 @@ const (
 }`
 )
 
-func TestAdmin(t *testing.T) {
+func admin(t *testing.T) {
 	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 

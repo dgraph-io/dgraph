@@ -128,7 +128,7 @@ func (mrw *addRewriter) Rewrite(
 	}
 
 	obj["uid"] = srcUID
-	dgraphTypes := []string{mutatedType.Name()}
+	dgraphTypes := []string{mutatedType.DgraphName()}
 	dgraphTypes = append(dgraphTypes, mutatedType.Interfaces()...)
 	obj["dgraph.type"] = dgraphTypes
 
@@ -328,11 +328,11 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedType().Name())
+		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
 	filter := extractFilter(m)
-	addFilter(dgQuery, m.Type(), filter)
+	addFilter(dgQuery, m.MutatedType(), filter)
 	return dgQuery
 }
 
@@ -477,7 +477,7 @@ func rewriteObject(
 				if srcField != nil {
 					invType, invField := srcField.Inverse()
 					if invType != nil && invField != nil {
-						result[fmt.Sprintf("%s.%s", invType.Name(), invField.Name())] =
+						result[invType.DgraphPredicate(invField.Name())] =
 							map[string]interface{}{"uid": srcUID}
 					}
 				}

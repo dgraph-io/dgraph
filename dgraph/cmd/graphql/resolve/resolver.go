@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -723,15 +722,17 @@ func completeObject(
 			continue
 		}
 
-		inputType := f.ConcreteType(dgraphTypes)
+		includeField := true
 		// If typ is an interface, and dgraphTypes contains another type, then we ignore
 		// fields which don't start with that type. This would happen when multiple
 		// fragments (belonging to different types) are requested within a query for an interface.
 
 		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
 		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
-		if inputType != "" && !strings.HasPrefix(f.DgraphPredicate(), typ.Name()) &&
-			!strings.HasPrefix(f.DgraphPredicate(), inputType) {
+		if len(dgraphTypes) > 0 {
+			includeField = f.IncludeInterfaceField(dgraphTypes)
+		}
+		if !includeField {
 			continue
 		}
 
@@ -850,7 +851,7 @@ func completeList(
 
 	if field.Type().ListType() == nil {
 		// This means a bug on our part - in rewriting, schema generation,
-		// or Dgraph returned somthing unexpected.
+		// or Dgraph returned something unexpected.
 		//
 		// Let's crush it to null so we still get something from the rest of the
 		// query and log the error.
@@ -896,7 +897,7 @@ func mismatched(
 	field schema.Field,
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
-	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), "+
+	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
 		"but its type is %s.\n"+
 		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())

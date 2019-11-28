@@ -1,5 +1,0 @@
-enum PostType {
-  Statement
-  Question
-  Answer
-}

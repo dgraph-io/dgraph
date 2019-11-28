@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package common
 
 import (
 	"context"
@@ -46,7 +46,7 @@ type ErrorCase struct {
 	Errors     x.GqlErrorList
 }
 
-func TestGraphQLCompletionOn(t *testing.T) {
+func graphQLCompletionOn(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 
 	// delete the country's name.
@@ -114,10 +114,10 @@ func TestGraphQLCompletionOn(t *testing.T) {
 	)
 }
 
-// TestRequestValidationErrors just makes sure we are catching validation failures.
+// requestValidationErrors just makes sure we are catching validation failures.
 // Mostly this is provided by an external lib, so just checking we hit common cases.
-func TestRequestValidationErrors(t *testing.T) {
-	b, err := ioutil.ReadFile("e2e_error_test.yaml")
+func requestValidationErrors(t *testing.T) {
+	b, err := ioutil.ReadFile("../common/error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []ErrorCase
@@ -140,13 +140,13 @@ func TestRequestValidationErrors(t *testing.T) {
 	}
 }
 
-// TestPanicCatcher tests that the GraphQL server behaves properly when an internal
+// panicCatcher tests that the GraphQL server behaves properly when an internal
 // bug triggers a panic.  Here, this is mocked up with httptest and a dgraph package
 // that just panics.
 //
 // Not really an e2e test cause it uses httptest and mocks up a panicing Dgraph, but
 // uses all the e2e infrastructure.
-func TestPanicCatcher(t *testing.T) {
+func panicCatcher(t *testing.T) {
 
 	// queries and mutations have different panic paths.
 	//
@@ -166,7 +166,7 @@ func TestPanicCatcher(t *testing.T) {
 		},
 	}
 
-	gqlSchema := test.LoadSchemaFromFile(t, "e2e_test_schema.graphql")
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),

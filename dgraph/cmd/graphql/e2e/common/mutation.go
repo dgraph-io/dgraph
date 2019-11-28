@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package graphql
+package common
 
 // Tests that mutate the GraphQL database should return the database state to what it
 // was at the begining of the test.  The GraphQL query tests rely on a fixed input
@@ -44,11 +44,11 @@ import (
 //
 // These really need to run as one test because the created uid from the Country
 // needs to flow to the author, etc.
-func TestAddMutation(t *testing.T) {
-	AddMutation(t, postExecutor)
+func addMutation(t *testing.T) {
+	add(t, postExecutor)
 }
 
-func AddMutation(t *testing.T, executeRequest requestExecutor) {
+func add(t *testing.T, executeRequest requestExecutor) {
 	var newCountry *country
 	var newAuthor *author
 	var newPost *post
@@ -355,7 +355,7 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 	}
 }
 
-func TestUpdateMutationByIds(t *testing.T) {
+func updateMutationByIds(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 
@@ -383,7 +383,7 @@ func nameRegexFilter(name string) map[string]interface{} {
 	}
 }
 
-func TestUpdateMutationByName(t *testing.T) {
+func updateMutationByName(t *testing.T) {
 	// Create two countries, update name of the first. Then do a conditional mutation which
 	// should only update the name of the second country.
 	newCountry := addCountry(t, postExecutor)
@@ -412,7 +412,7 @@ func TestUpdateMutationByName(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
-func TestUpdateMutationByNameNoMatch(t *testing.T) {
+func updateMutationByNameNoMatch(t *testing.T) {
 	// The countries shouldn't get updated as the query shouldn't match any nodes.
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
@@ -600,7 +600,7 @@ func TestFilterInUpdate(t *testing.T) {
 
 }
 
-func TestDeleteMutationWithMultipleIds(t *testing.T) {
+func deleteMutationWithMultipleIds(t *testing.T) {
 	country := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
@@ -615,7 +615,7 @@ func TestDeleteMutationWithMultipleIds(t *testing.T) {
 	})
 }
 
-func TestDeleteMutationWithSingleId(t *testing.T) {
+func deleteMutationWithSingleID(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
@@ -632,7 +632,7 @@ func TestDeleteMutationWithSingleId(t *testing.T) {
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
 
-func TestDeleteMutationByName(t *testing.T) {
+func deleteMutationByName(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	anotherCountry.Name = "New country"
@@ -730,7 +730,7 @@ func deletePost(
 	}
 }
 
-func TestDeleteWrongID(t *testing.T) {
+func deleteWrongID(t *testing.T) {
 	t.Skip()
 	// Skipping the test for now because wrong type of node while deleting is not an error.
 	// After Dgraph returns the number of nodes modified from upsert, modify this test to check
@@ -752,7 +752,7 @@ func TestDeleteWrongID(t *testing.T) {
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
 }
 
-func TestManyMutations(t *testing.T) {
+func manyMutations(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation addCountries($name1: String!, $filter: CountryFilter!, $name2: String!) {
@@ -819,7 +819,7 @@ func TestManyMutations(t *testing.T) {
 // I this case, we set up an author with existing posts, then add another post.
 // The filter is down inside post->author->posts and finds just one of the
 // author's posts.
-func TestMutationWithDeepFilter(t *testing.T) {
+func mutationWithDeepFilter(t *testing.T) {
 
 	newCountry := addCountry(t, postExecutor)
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
@@ -887,7 +887,7 @@ func TestMutationWithDeepFilter(t *testing.T) {
 // However, there can also be an error in the query following a mutation, but
 // that shouldn't stop the following mutations because the actual mutation
 // went through without error.
-func TestManyMutationsWithQueryError(t *testing.T) {
+func manyMutationsWithQueryError(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 
 	// delete the country's name.
@@ -1149,7 +1149,7 @@ func updateCharacter(t *testing.T, id string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
-func TestQueryInterfaceAfterAddMutation(t *testing.T) {
+func queryInterfaceAfterAddMutation(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
