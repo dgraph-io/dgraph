@@ -170,7 +170,8 @@ func panicCatcher(t *testing.T) {
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
-		Mrw: resolve.NewMutationRewriter(),
+		Arw: resolve.NewAddRewriter(),
+		Urw: resolve.NewUpdateRewriter(),
 		Drw: resolve.NewDeleteRewriter(),
 		Qe:  &panicClient{},
 		Me:  &panicClient{}}
