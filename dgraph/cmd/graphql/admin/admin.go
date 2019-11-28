@@ -199,7 +199,8 @@ func NewServers(
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
-		Mrw: resolve.NewMutationRewriter(),
+		Arw: resolve.NewAddRewriter(),
+		Urw: resolve.NewUpdateRewriter(),
 		Drw: resolve.NewDeleteRewriter(),
 	}
 	adminResolvers := newAdminResolver(config, mainServer, fns, withIntrospection)
@@ -352,7 +353,7 @@ func checkAdminSchemaExists(dg *dgo.Dgraph) error {
 func (as *adminServer) addConnectedAdminResolvers(dg *dgo.Dgraph) {
 
 	qryRw := resolve.NewQueryRewriter()
-	mutRw := resolve.NewMutationRewriter()
+	mutRw := resolve.NewAddRewriter()
 	qryExec := resolve.DgoAsQueryExecutor(dg)
 	mutExec := resolve.DgoAsMutationExecutor(dg)
 

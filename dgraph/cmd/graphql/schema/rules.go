@@ -220,38 +220,61 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 		)
 	}
 
-	if !isInverse(typ.Name, field.Name, invField) {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			// @TODO: Error message should be more informative.
-			"Type %s; Field %s: @hasInverse is required in both the directions to link the fields"+
-				", but field %s of type %s doesn't have @hasInverse directive pointing to field"+
-				" %[2]s of type %[1]s. To link these add @hasInverse in both directions.",
-			typ.Name, field.Name, invFieldName, invTypeName,
-		)
+	if errMsg := isInverse(typ.Name, field.Name, invTypeName, invField); errMsg != "" {
+		return gqlerror.ErrorPosf(dir.Position, errMsg)
+	}
+
+	invDirective := invField.Directives.ForName(inverseDirective)
+	if invDirective == nil {
+		invField.Directives = append(invField.Directives, &ast.Directive{
+			Name: inverseDirective,
+			Arguments: []*ast.Argument{
+				{
+					Name: inverseArg,
+					Value: &ast.Value{
+						Raw:      field.Name,
+						Position: dir.Position,
+						Kind:     ast.EnumValue,
+					},
+				},
+			},
+			Position: dir.Position,
+		})
 	}
 
 	return nil
 }
 
-func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinition) bool {
+func isInverse(expectedInvType, expectedInvField, typeName string,
+	field *ast.FieldDefinition) string {
 
 	invType := field.Type.Name()
 	if invType != expectedInvType {
-		return false
+		return fmt.Sprintf(
+			"Type %s; Field %s: @hasInverse is required to link the fields"+
+				" of same type, but the field %s is of the type %s instead of"+
+				" %[1]s. To link these make sure the fields are of the same type.",
+			expectedInvType, expectedInvField, field.Name, field.Type,
+		)
 	}
 
 	invDirective := field.Directives.ForName(inverseDirective)
 	if invDirective == nil {
-		return false
+		return ""
 	}
 
 	invFieldArg := invDirective.Arguments.ForName("field")
 	if invFieldArg == nil || invFieldArg.Value.Raw != expectedInvField {
-		return false
+		return fmt.Sprintf(
+			"Type %s; Field %s: @hasInverse should be consistant."+
+				" %[1]s.%[2]s is the inverse of %[3]s.%[4]s, but"+
+				" %[3]s.%[4]s is the inverse of %[1]s.%[5]s.",
+			expectedInvType, expectedInvField, typeName, field.Name,
+			invFieldArg.Value.Raw,
+		)
 	}
 
-	return true
+	return ""
 }
 
 // validateSearchArg checks that the argument for search is valid and compatible
