@@ -30,16 +30,16 @@ type Author @dgraph(name: "dgraph.author") {
         posts: [Post!] @hasInverse(field: author)
 }
 
-type Post @dgraph(name: "dgraph.Post") {
+type Post @dgraph(name: "myPost") {
         postID: ID!
         title: String! @search(by: [term, fulltext])
-        text: String @search(by: [fulltext]) @dgraph(name: "dgraph.text")
+        text: String @search(by: [fulltext]) @dgraph(name: "text")
         tags: [String] @search(by: [exact])
         topic: String @search(by: [exact]) @dgraph(name: "dgraph.topic")
         numLikes: Int @search
-        isPublished: Boolean @search @dgraph(name: "dgraph.is_published")
+        isPublished: Boolean @search @dgraph(name: "is_published")
         postType: PostType @search(by: [hash, trigram])
-        author: Author! @hasInverse(field: posts) @dgraph(name: "dgraph.post.author")
+        author: Author! @hasInverse(field: posts) @dgraph(name: "post.author")
 }
 
 """

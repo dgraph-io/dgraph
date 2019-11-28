@@ -227,11 +227,11 @@ schemas:
       type A @dgraph(name: "dgraph.type.A") {
         id: ID!
         p: Int
-        pList: [Int] @dgraph(name: "dgraph.pList")
+        pList: [Int] @dgraph(name: "pList")
         q: Boolean
         r: String @dgraph(name: "dgraph.r")
         rList: [String]
-        s: DateTime @dgraph(name: "dgraph.s")
+        s: DateTime @dgraph(name: "s")
         t: Float
         tList: [Float] @dgraph(name: "dgraph.tList")
       }
@@ -242,7 +242,7 @@ schemas:
         age: Int
       }
 
-      type C implements B @dgraph(name: "dgraph.type.C") {
+      type C implements B @dgraph(name: "type.C") {
         correct: Boolean @search @dgraph(name: "dgraph.correct")
         incorrect: Boolean
       }
@@ -257,25 +257,25 @@ schemas:
         p: Int
         q: String
         pList: [Int] @dgraph(name: "dgraph.pList")
-        f: Float @dgraph(name: "dgraph.f")
+        f: Float @dgraph(name: "f")
       }
     output: |
       type dgraph.type.A {
         dgraph.type.A.p: int
-        dgraph.pList: [int]
+        pList: [int]
         dgraph.type.A.q: bool
         dgraph.r: string
         dgraph.type.A.rList: [string]
-        dgraph.s: dateTime
+        s: dateTime
         dgraph.type.A.t: float
         dgraph.tList: [float]
       }
       dgraph.type.A.p: int .
-      dgraph.pList: [int] .
+      pList: [int] .
       dgraph.type.A.q: bool .
       dgraph.r: string .
       dgraph.type.A.rList: [string] .
-      dgraph.s: dateTime .
+      s: dateTime .
       dgraph.type.A.t: float .
       dgraph.tList: [float] .
       type dgraph.interface.B {
@@ -284,14 +284,14 @@ schemas:
       }
       dgraph.abc.name: string @index(exact) .
       dgraph.interface.B.age: int .
-      type dgraph.type.C {
+      type type.C {
         dgraph.abc.name: string
         dgraph.interface.B.age: int
         dgraph.correct: bool
-        dgraph.type.C.incorrect: bool
+        type.C.incorrect: bool
       }
       dgraph.correct: bool @index(bool) .
-      dgraph.type.C.incorrect: bool .
+      type.C.incorrect: bool .
       type dgraph.type.X {
         dgraph.x.e: string
         dgraph.x.eList: [string]
@@ -302,12 +302,12 @@ schemas:
         Y.p: int
         Y.q: string
         dgraph.pList: [int]
-        dgraph.f: float
+        f: float
       }
       Y.p: int .
       Y.q: string .
       dgraph.pList: [int] .
-      dgraph.f: float .
+      f: float .
 
   -
     name: "Field with @id directive but no search directive gets hash index."
