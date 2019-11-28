@@ -464,6 +464,7 @@ func TestFilterInUpdate(t *testing.T) {
 		country.Name = "updatedValue"
 		countries = append(countries, *country)
 	}
+	countries[3].Name = "Testland"
 
 	cases := map[string]struct {
 		Filter          map[string]interface{}
@@ -475,6 +476,9 @@ func TestFilterInUpdate(t *testing.T) {
 			Filter: map[string]interface{}{
 				"name": map[string]interface{}{
 					"eq": "Testland",
+				},
+				"and": map[string]interface{}{
+					"ids": []string{countries[0].ID, countries[1].ID},
 				},
 			},
 			FilterCountries: map[string]interface{}{
