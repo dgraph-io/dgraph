@@ -1625,14 +1625,14 @@ func TestGeoCorruptData(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	query := `
+	q := `
 {
   all(func: has(loc)) {
       uid
       loc
   }
 }`
-	_, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	_, err = dg.NewReadOnlyTxn().Query(ctx, q)
 	require.Contains(t, err.Error(), "wkb: unknown byte order: 1111011")
 }
 
@@ -1670,14 +1670,14 @@ func TestGeoValidWkbData(t *testing.T) {
 		Set:       []*api.NQuad{n},
 	})
 	require.NoError(t, err)
-	query := `
+	q := `
 {
   all(func: has(loc)) {
       uid
       loc
   }
 }`
-	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
