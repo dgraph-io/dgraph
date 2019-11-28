@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -103,8 +104,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.encryption-key", "",
-		"Specifies badger encryption key. Must be 16,24 or 32 bytes")
+	// expose flag for enterprise only.
+	enc.BadgerEncryptionKeyFlag(flag)
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -429,10 +430,9 @@ func run() {
 	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
-		BadgerKey:    []byte(Alpha.Conf.GetString("badger.encryption-key")),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		BadgerKey:    []byte(enc.GetEncryptionKeyString(Alpha.Conf)),
+		PostingDir:   Alpha.Conf.GetString("postings"),
+		WALDir:       Alpha.Conf.GetString("wal"),
 
 		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),

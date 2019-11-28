@@ -145,6 +145,8 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).WithEncryptionKey(Config.BadgerKey)
+	// zero out from memory
+	Config.BadgerKey = nil
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -203,6 +205,8 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
+
+		opt.EncryptionKey = nil
 	}
 
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
