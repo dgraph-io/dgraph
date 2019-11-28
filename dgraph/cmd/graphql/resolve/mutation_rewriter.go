@@ -220,7 +220,7 @@ func (urw *updateRewriter) Rewrite(
 
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	setArg := inp["set"]
-	delArg := inp["delete"]
+	delArg := inp["remove"]
 
 	if setArg == nil && delArg == nil {
 		return nil, nil, nil

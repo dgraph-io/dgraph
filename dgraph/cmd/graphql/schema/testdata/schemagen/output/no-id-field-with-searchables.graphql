@@ -134,7 +134,7 @@ input PostOrder {
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PatchPost
-	delete: PatchPost
+	remove: PatchPost
 }
 
 #######################

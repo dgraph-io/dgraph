@@ -444,7 +444,7 @@ func TestUpdateDelete(t *testing.T) {
 
 	updateParams := &GraphQLParams{
 		Query: `mutation updPost($filter: PostFilter!, $del: PatchPost!) {
-			updatePost(input: { filter: $filter, delete: $del }) {
+			updatePost(input: { filter: $filter, remove: $del }) {
 				post {
 					text
 					isPublished

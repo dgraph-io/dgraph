@@ -212,13 +212,13 @@ input PatchHuman {
 input UpdateCharacterInput {
 	filter: CharacterFilter!
 	set: PatchCharacter
-	delete: PatchCharacter
+	remove: PatchCharacter
 }
 
 input UpdateHumanInput {
 	filter: HumanFilter!
 	set: PatchHuman
-	delete: PatchHuman
+	remove: PatchHuman
 }
 
 #######################

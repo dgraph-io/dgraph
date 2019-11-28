@@ -44,7 +44,7 @@
       { "filter": {
           "ids": ["0x123", "0x124"]
         },
-        "delete": {
+        "remove": {
           "text": "delete this text"
         }
       }
@@ -75,7 +75,7 @@
       { "filter": {
           "ids": ["0x123", "0x124"]
         },
-        "delete": {
+        "remove": {
           "text": null
         }
       }

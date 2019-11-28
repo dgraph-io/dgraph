@@ -168,7 +168,7 @@ input TRef {
 input UpdateTInput {
 	filter: TFilter!
 	set: PatchT
-	delete: PatchT
+	remove: PatchT
 }
 
 #######################

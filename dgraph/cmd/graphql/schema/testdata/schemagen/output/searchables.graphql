@@ -272,7 +272,7 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PatchPost
-	delete: PatchPost
+	remove: PatchPost
 }
 
 #######################
