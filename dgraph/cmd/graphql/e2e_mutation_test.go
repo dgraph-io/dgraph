@@ -458,15 +458,18 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 }
 
 func TestFilterInUpdate(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-	anotherCountry := addCountry(t, postExecutor)
-	newCountry.Name = "updatedValue"
-	anotherCountry.Name = "updatedValue"
+	countries := make([]country, 0, 4)
+	for i := 0; i < 4; i++ {
+		country := addCountry(t, postExecutor)
+		country.Name = "updatedValue"
+		countries = append(countries, *country)
+	}
 
 	cases := map[string]struct {
 		Filter          map[string]interface{}
 		FilterCountries map[string]interface{}
 		Expected        int
+		Countries       []*country
 	}{
 		"Eq filter": {
 			Filter: map[string]interface{}{
@@ -475,19 +478,21 @@ func TestFilterInUpdate(t *testing.T) {
 				},
 			},
 			FilterCountries: map[string]interface{}{
-				"ids": []string{anotherCountry.ID},
+				"ids": []string{countries[1].ID},
 			},
-			Expected: 1,
+			Expected:  1,
+			Countries: []*country{&countries[0], &countries[1]},
 		},
 
 		"ID Filter": {
 			Filter: map[string]interface{}{
-				"ids": []string{newCountry.ID},
+				"ids": []string{countries[2].ID},
 			},
 			FilterCountries: map[string]interface{}{
-				"ids": []string{anotherCountry.ID, newCountry.ID},
+				"ids": []string{countries[2].ID, countries[3].ID},
 			},
-			Expected: 1,
+			Expected:  1,
+			Countries: []*country{&countries[2], &countries[3]},
 		},
 	}
 
@@ -527,12 +532,13 @@ func TestFilterInUpdate(t *testing.T) {
 				require.Equal(t, result.UpdateCountry.Country[i].Name, "updatedValue")
 			}
 
-			requireCountry(t, newCountry.ID, newCountry, postExecutor)
-			requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+			for _, country := range test.Countries {
+				requireCountry(t, country.ID, country, postExecutor)
+			}
+			cleanUp(t, test.Countries, nil, nil)
 		})
 	}
 
-	cleanUp(t, []*country{newCountry, anotherCountry}, nil, nil)
 }
 
 func TestDeleteMutationWithMultipleIds(t *testing.T) {
