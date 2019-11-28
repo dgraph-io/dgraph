@@ -449,7 +449,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 				},
 			},
 			&ast.FieldDefinition{
-				Name: "delete",
+				Name: "remove",
 				Type: &ast.Type{
 					NamedType: "Patch" + defn.Name,
 				},
