@@ -1071,6 +1071,74 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
+### Using Helm Chart
+
+#### Installing the Chart
+
+Install the chart with the release name `dgraph-cluster` using the command below:
+
+```bash
+helm install dgraph-cluster ./
+```
+
+The above command will  install the latest available dgraph docker image. To install the older versions, you can make use of the `image.tag` parameter like showed in the command below:
+
+```bash
+helm install dgraph-cluster ./ --set image.tag=XXX
+```
+
+By default, zero, alpha, and ratel services are exposed only within the Kubernetes cluster as Kubernetes service type "ClusterIP". To expose the alpha service to the internet, you can use the Kubernetes service type "LoadBalancer" as follows:
+
+```bash
+helm install dgraph-cluster ./ --set alpha.service.type="LoadBalancer"
+```
+
+Similarly, you can expose alpha and ratel service to the internet as follows:
+
+```bash
+helm install dgraph-cluster ./ --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
+```
+
+#### Deleting the Chart
+
+Delete the Helm deployment as normal using the command below:
+
+```
+helm delete dgraph-cluster
+```
+
+Deletion of the StatefulSet doesn't cascade to deleting associated PVCs. To delete them, use the command below:
+
+```
+kubectl delete pvc -l release=dgraph-cluster,chart=dgraph
+```
+
+#### Configuration
+
+The following table lists some of the configurable parameters of the Dgraph chart and their default values.
+
+|              Parameter               |                             Description                             |                       Default                       |
+| ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `image.registry`                     | Container registry name                                             | `docker.io`                                         |
+| `image.repository`                   | Container image name                                                | `dgraph/dgraph`                                     |
+| `image.tag`                          | Container image tag                                                 | `v1.1.0`                                           |
+| `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
+| `zero.name`                          | Zero component name                                                 | `zero`                                              |
+| `zero.updateStrategy`                | Stratergy for upgrading zero nodes                                  | `RollingUpdate`                                     |
+| `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
+| `zero.terminationGracePeriodSeconds` | Zero server pod termination grace period                            | `60`                                                |
+| `zero.service.type`                  | Zero node service type                                              | `ClusterIP`                                         |
+| `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
+| `alpha.updateStrategy`               | Stratergy for upgrading alpha nodes                                 | `RollingUpdate`                                     |
+| `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |
+| `alpha.terminationGracePeriodSeconds`| Alpha server pod termination grace period                           | `60`                                                |
+| `alpha.service.type`                 | Alpha node service type                                             | `ClusterIP`                                         |
+| `ratel.name`                         | Ratel component name                                                | `ratel`                                             |
+| `ratel.replicaCount`                 | Number of ratel nodes                                               | `1`                                                 |
+| `ratel.service.type`                 | Ratel service type                                                  | `ClusterIP`                                         |
+
+{{% notice "note" %}} See the complete list of the configuration parameters [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/helm/README.md#configuration).{{% /notice %}}
+
 ### Kubernetes Storage
 
 The Kubernetes configurations in the previous sections were configured to run
