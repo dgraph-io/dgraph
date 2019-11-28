@@ -385,15 +385,7 @@ We'll explore the string type indices in detail.
 
 Sounds interesting?
 
-See you all soon in the next tutorial. Till then, happy Graphing!
-
-## What's Next?
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
-with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
-  in a cluster.
+Check out our next tutorial of the getting started series [here](/tutorial-5/).
 
 ## Need Help
 

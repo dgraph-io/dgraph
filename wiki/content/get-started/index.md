@@ -59,6 +59,18 @@ title = "Get Started with Dgraph"
           </p>
         </div>
       </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-5/index.md">}}">
+              5 - String Indices and Modeling Tweet Graph
+            </a>
+          </div>
+          <p class="section-desc">
+            Learn about string indices, modeling tweet graph, and keyword-based searching.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
