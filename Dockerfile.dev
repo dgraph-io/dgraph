@@ -1,22 +1,47 @@
-ARG GO_VERSION=1.12
-FROM golang:1.12-alpine3.9 as builder
+FROM ubuntu:16.04 as builder
 
-RUN apk --no-cache add git linux-headers ca-certificates
-COPY . /go/src/github.com/ChainSafe/gossamer
-COPY config.toml /go/src/github.com/ChainSafe/gossamer
-WORKDIR /go/src/github.com/ChainSafe/gossamer/cmd
+# Install GCC
+RUN apt-get update && \
+    apt-get install -y \
+    gcc \
+    cmake \
+    wget
+
+# Install Go
+RUN wget https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz
+RUN tar -C /usr/local -xzf go1.13.4.linux-amd64.tar.gz
+
+# Configure go env vars
 ENV GO111MODULE=on
+ENV GOPATH=/gocode
+ENV GOROOT=/usr/local/go
+ENV PATH=$PATH:$GOPATH/bin:$GOROOT/bin
+
+# Prepare structure and change dir
+RUN mkdir -p $GOPATH/src/github.com/ChainSafe/gossamer
+WORKDIR $GOPATH/src/github.com/ChainSafe/gossamer
+
+# Add go mod lock files and gossamer default config
 COPY go.mod .
 COPY go.sum .
+COPY config.toml .
 
-# Get dependancies - will also be cached if we won't change mod/sum
+# Get go mods
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gossamer .
 
-FROM scratch
+# Copy gossamer sources
+COPY . $GOPATH/src/github.com/ChainSafe/gossamer
 
-WORKDIR /
-COPY --from=builder ./go/src/github.com/ChainSafe/gossamer/cmd/gossamer/gossamer .
-COPY --from=builder ./go/src/github.com/ChainSafe/gossamer/config.toml .
-CMD ["./gossamer"]
+# Build
+RUN GOBIN=$GOPATH/src/github.com/ChainSafe/gossamer/build/bin go run scripts/ci.go install
+
+# Create symlink
+RUN ln -s $GOPATH/src/github.com/ChainSafe/gossamer/build/bin/gossamer /usr/local/gossamer
+
+# Give permissions
+RUN chmod +x $GOPATH/src/github.com/ChainSafe/gossamer/scripts/docker-entrypoint.sh
+
+# Expose cmd and port
+ENTRYPOINT ["/gocode/src/github.com/ChainSafe/gossamer/scripts/docker-entrypoint.sh"]
+CMD ["/usr/local/gossamer"]
 EXPOSE 7001

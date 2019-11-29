@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
-	"github.com/libp2p/go-libp2p"
+	libp2p "github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"

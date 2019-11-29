@@ -46,4 +46,5 @@ matrix:
       before_script:
         - go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.18.0
       script: golangci-lint run ./... -c .golangci.yml
-
+    - name: "Build docker image"
+      script: make docker-build

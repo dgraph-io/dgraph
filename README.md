@@ -44,10 +44,14 @@ go get -u github.com/ChainSafe/gossamer
 
 ```
 make gossamer
-gossamer init
-gossamer
+build/bin/gossamer init
+build/bin/gossamer
 ```
 
+## Docker
+```
+make docker
+```
 
 ## Contributing
 - Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
