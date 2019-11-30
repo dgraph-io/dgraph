@@ -216,6 +216,8 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation by ids", updateMutationByIds)
 	t.Run("update mutation by name", updateMutationByName)
 	t.Run("update mutation by name no match", updateMutationByNameNoMatch)
+	t.Run("update delete", updateDelete)
+	t.Run("filter in update", filterInUpdate)
 	t.Run("delete mutation with multiple ids", deleteMutationWithMultipleIds)
 	t.Run("delete mutation with single id", deleteMutationWithSingleID)
 	t.Run("delete mutation by name", deleteMutationByName)
@@ -224,6 +226,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutations with deep filter", mutationWithDeepFilter)
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
 	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
+	t.Run("add mutation with xid", addMutationWithXID)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

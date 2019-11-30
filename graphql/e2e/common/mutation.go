@@ -426,7 +426,7 @@ func updateMutationByNameNoMatch(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
-func TestUpdateDelete(t *testing.T) {
+func updateDelete(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
@@ -514,7 +514,7 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string, 
 	}
 }
 
-func TestFilterInUpdate(t *testing.T) {
+func filterInUpdate(t *testing.T) {
 	countries := make([]country, 0, 4)
 	for i := 0; i < 4; i++ {
 		country := addCountry(t, postExecutor)
@@ -562,7 +562,7 @@ func TestFilterInUpdate(t *testing.T) {
 			updateParams := &GraphQLParams{
 				Query: `mutation newName($filter: CountryFilter!, $newName: String!,
 					 $filterCountries: CountryFilter!) {
-			updateCountry(input: { filter: $filter, patch: { name: $newName } }) {
+			updateCountry(input: { filter: $filter, set: { name: $newName } }) {
 				country(filter: $filterCountries) {
 					id
 					name
@@ -599,7 +599,6 @@ func TestFilterInUpdate(t *testing.T) {
 			cleanUp(t, test.Countries, nil, nil)
 		})
 	}
-
 }
 
 func deleteMutationWithMultipleIds(t *testing.T) {
@@ -1492,6 +1491,6 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	deleteState(t, filter, deleteStateExpected, nil)
 }
 
-func TestAddMutationWithXid(t *testing.T) {
+func addMutationWithXID(t *testing.T) {
 	addMutationWithXid(t, postExecutor)
 }
