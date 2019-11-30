@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -56,6 +57,8 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
+
+	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 )
 
 const (
@@ -179,6 +182,9 @@ they form a Raft group and provide synchronous replication.
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
+
+	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+
 }
 
 func setupCustomTokenizers() {
@@ -393,6 +399,18 @@ func setupServer() {
 	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
+
+	config := &admin.ConnectionConfig{
+		TlScfg:         tlsCfg,
+		UseCompression: false,
+	}
+	introspection := Alpha.Conf.GetBool("graphql_introspection")
+	mainServer, adminServer := admin.NewServers(config, introspection)
+	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.Handle("/admin", adminServer.HTTPHandler())
+	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
+	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
+	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
 
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")

@@ -28,9 +28,9 @@ import (
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/api"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )

@@ -69,7 +69,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/admin"
 
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/trace"

@@ -23,16 +23,16 @@ import (
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // Query is the underlying dgo implementation of QueryExecutor.
-func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]byte, error) {
+func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Query")
 	defer stop()
@@ -43,14 +43,16 @@ func Query(ctx context.Context, client *dgo.Dgraph, query *gql.GraphQuery) ([]by
 		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
 	}
 
-	resp, err := client.NewTxn().Query(ctx, queryStr)
+	req := &dgoapi.Request{
+		Query: queryStr,
+	}
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
 // Mutate is the underlying dgo implementation of MutationExecutor.
 func Mutate(
 	ctx context.Context,
-	client *dgo.Dgraph,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
 
@@ -79,11 +81,11 @@ func Mutate(
 		CommitNow: true,
 		Mutations: mutations,
 	}
-	resp, err := client.NewTxn().Do(ctx, req)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 
-	vars := make(map[string][]string, len(resp.GetVars()))
-	for k, v := range resp.GetVars() {
-		vars[k] = v.GetUids()
-	}
-	return resp.GetUids(), vars, schema.GQLWrapf(err, "Dgraph mutation failed")
+	// vars := make(map[string][]string, len(resp.GetVars()))
+	// for k, v := range resp.GetVars() {
+	// 	vars[k] = v.GetUids()
+	// }
+	return resp.GetUids(), nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 }

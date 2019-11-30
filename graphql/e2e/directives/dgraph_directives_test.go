@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-package normal
+package directives
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/pkg/errors"
 )
 
-func TestRunAll_Normal(t *testing.T) {
+func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
 }
 

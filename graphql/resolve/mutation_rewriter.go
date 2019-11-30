@@ -22,7 +22,7 @@ import (
 	"strconv"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/pkg/errors"
 )

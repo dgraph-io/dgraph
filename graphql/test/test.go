@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"

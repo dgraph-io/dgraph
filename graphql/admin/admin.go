@@ -30,9 +30,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/web"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -73,33 +73,33 @@ const (
 	graphqlAdminSchema = `
  type Schema {
 	schema: String!  # the input schema, not the expanded schema
-	date: DateTime! 
+	date: DateTime!
  }
- 
+
  type Health {
 	message: String!
 	status: HealthStatus!
  }
- 
+
  enum HealthStatus {
 	ErrNoConnection
 	NoGraphQLSchema
 	Healthy
  }
- 
+
  scalar DateTime
- 
+
  type SchemaDiff {
 	types: [TypeDiff!]
  }
- 
+
  type TypeDiff {
 	name: String!
 	new: Boolean
 	newFields: [String!]
 	missingFields: [String!]
  }
- 
+
  type AddSchemaPayload {
 	schema: Schema
 	diff: SchemaDiff
@@ -108,7 +108,7 @@ const (
  type UpdateSchemaPayload {
 	schema: Schema
  }
- 
+
  input DateTimeFilter {
 	eq: DateTime
 	le: DateTime
@@ -116,34 +116,34 @@ const (
 	ge: DateTime
 	gt: DateTime
  }
- 
+
  input SchemaFilter {
 	date: DateTimeFilter
 	and: SchemaFilter
 	or: SchemaFilter
 	not: SchemaFilter
  }
- 
- input SchemaInput { 
+
+ input SchemaInput {
 	schema: String!
 	dateAdded: DateTime
  }
- 
+
  input SchemaOrder {
 	asc: SchemaOrderable
 	desc: SchemaOrderable
 	then: SchemaOrder
  }
- 
+
  enum SchemaOrderable {
 	date
  }
- 
+
  type Query {
 	querySchema(filter: SchemaFilter, order: SchemaOrder, first: Int, offset: Int): [Schema]
 	health: Health
  }
- 
+
  type Mutation {
 	addSchema(input: SchemaInput!) : AddSchemaPayload
  }
@@ -354,8 +354,8 @@ func (as *adminServer) addConnectedAdminResolvers(dg *dgo.Dgraph) {
 
 	qryRw := resolve.NewQueryRewriter()
 	mutRw := resolve.NewAddRewriter()
-	qryExec := resolve.DgoAsQueryExecutor(dg)
-	mutExec := resolve.DgoAsMutationExecutor(dg)
+	qryExec := resolve.DgoAsQueryExecutor()
+	mutExec := resolve.DgoAsMutationExecutor()
 
 	as.fns.Qe = qryExec
 	as.fns.Me = mutExec

@@ -20,9 +20,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/test"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )

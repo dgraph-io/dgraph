@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/counter"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql"
+	"github.com/dgraph-io/dgraph/graphql"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"

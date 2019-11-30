@@ -22,12 +22,11 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -35,7 +34,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 const (
@@ -110,7 +109,6 @@ type ResolverFns struct {
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query/mutation resolution through dgo.
 type dgoExecutor struct {
-	client *dgo.Dgraph
 }
 
 // A Resolved is the result of resolving a single query or mutation.
@@ -138,24 +136,24 @@ func (cf CompletionFunc) Complete(
 }
 
 // DgoAsQueryExecutor builds a QueryExecutor for dgo.
-func DgoAsQueryExecutor(client *dgo.Dgraph) QueryExecutor {
-	return &dgoExecutor{client: client}
+func DgoAsQueryExecutor() QueryExecutor {
+	return &dgoExecutor{}
 }
 
 // DgoAsMutationExecutor builds a MutationExecutor for dog.
-func DgoAsMutationExecutor(client *dgo.Dgraph) MutationExecutor {
-	return &dgoExecutor{client: client}
+func DgoAsMutationExecutor() MutationExecutor {
+	return &dgoExecutor{}
 }
 
 func (de *dgoExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return dgraph.Query(ctx, de.client, query)
+	return dgraph.Query(ctx, query)
 }
 
 func (de *dgoExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
-	return dgraph.Mutate(ctx, de.client, query, mutations)
+	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
