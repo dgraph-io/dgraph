@@ -29,10 +29,10 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger"
-	bo "github.com/dgraph-io/badger/options"
-	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -46,7 +46,7 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	dirs := shardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
+	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
@@ -90,7 +90,7 @@ func (r *reducer) run() error {
 func (r *reducer) createBadger(i int) *badger.DB {
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil)
+		WithLogger(nil).WithMaxCacheSize(1 << 20)
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 	r.dbs = append(r.dbs, db)
@@ -159,19 +159,37 @@ func (r *reducer) encodeAndWrite(
 			streamId = atomic.AddUint32(&r.streamId, 1)
 			preds[pk.Attr] = streamId
 		}
-		// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
-		// should build a way in StreamWriter to indicate that the stream is over, so the
-		// table for that stream can be flushed and memory released.
+
 		kv.StreamId = streamId
 	}
 
+	// Once we have processed all records from single stream, we can mark that stream as done.
+	// This will close underlying table builder in Badger for stream. Since we preallocate 1 MB
+	// of memory for each table builder, this can result in memory saving in case we have large
+	// number of streams.
+	// This change limits maximum number of open streams to number of streams created in a single
+	// write call. This can also be optimised if required.
+	addDone := func(doneSteams []uint32, l *bpb.KVList) {
+		for _, streamId := range doneSteams {
+			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
+		}
+	}
+
+	var doneStreams []uint32
+	var prevSID uint32
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
+				if prevSID != 0 && (prevSID != kv.StreamId) {
+					doneStreams = append(doneStreams, prevSID)
+				}
+				prevSID = kv.StreamId
 			}
+			addDone(doneStreams, list)
 			x.Check(writer.Write(list))
+			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
 			listSize = 0
 		}

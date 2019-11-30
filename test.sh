@@ -25,7 +25,7 @@
 
 set -e
 readonly ME=${0##*/}
-readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+readonly DGRAPH_ROOT=$(dirname $0)
 
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
@@ -240,6 +240,11 @@ if [[ :${TEST_SET}: == *:cluster:* ]]; then
 fi
 
 if [[ :${TEST_SET}: == *:systest:* ]]; then
+    Info "Running posting size calculation"
+    cd posting
+    RunCmd ./size_test.sh || TestFailed
+    cd ..
+
     Info "Running small load test"
     RunCmd ./contrib/scripts/load-test.sh || TestFailed
 

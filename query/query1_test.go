@@ -204,7 +204,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				friend(first:2, orderdesc: alias@en:de:.) {
+				friend(first:2, orderdesc: alias@en) {
 					alias
 				}
 			}
@@ -1348,7 +1348,7 @@ func TestMathCeil2(t *testing.T) {
 		}
 
 		me(func: uid(me)) {
-			ceilAge: math(ceil(x2/c))
+			ceilAge: math(ceil((1.0*x2)/c))
 		}
 	}
 	`

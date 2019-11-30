@@ -191,12 +191,17 @@ func TestCheckSchema(t *testing.T) {
 	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 
+	// Schema with internal predicate.
+	s1 = &pb.SchemaUpdate{Predicate: "uid", ValueType: pb.Posting_STRING}
+	require.Error(t, checkSchema(s1))
+
 	s := `jobs: string @upsert .`
 	result, err := schema.Parse(s)
 	require.NoError(t, err)
 	err = checkSchema(result.Preds[0])
 	require.Error(t, err)
-	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive", err.Error())
+	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive",
+		err.Error())
 
 	s = `
 		jobs : string @index(exact) @upsert .

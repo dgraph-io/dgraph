@@ -77,21 +77,34 @@ func isTernary(f string) bool {
 }
 
 func isZero(f string, rval types.Val) bool {
-	if rval.Tid != types.FloatID {
+	if rval.Tid == types.FloatID {
+		g, ok := rval.Value.(float64)
+		if !ok {
+			return false
+		}
+		switch f {
+		case "floor":
+			return g >= 0 && g < 1.0
+		case "/", "%", "ceil", "sqrt", "u-":
+			return g == 0
+		case "ln":
+			return g == 1
+		}
+		return false
+	} else if rval.Tid == types.IntID {
+		g, ok := rval.Value.(int64)
+		if !ok {
+			return false
+		}
+		switch f {
+		case "floor", "/", "%", "ceil", "sqrt", "u-":
+			return g == 0
+		case "ln":
+			return g == 1
+		}
 		return false
 	}
-	g, ok := rval.Value.(float64)
-	if !ok {
-		return false
-	}
-	switch f {
-	case "floor":
-		return g >= 0 && g < 1.0
-	case "/", "%", "ceil", "sqrt", "u-":
-		return g == 0
-	case "ln":
-		return g == 1
-	}
+
 	return false
 }
 
@@ -233,15 +246,23 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				}
 				continue
 			}
-			// Try to parse it as a constant.
+			// We will try to parse the constant as an Int first, if that fails we move to float
 			child := &MathTree{}
-			v, err := strconv.ParseFloat(item.Val, 64)
+			i, err := strconv.ParseInt(item.Val, 10, 64)
 			if err != nil {
-				child.Var = item.Val
+				v, err := strconv.ParseFloat(item.Val, 64)
+				if err != nil {
+					child.Var = item.Val
+				} else {
+					child.Const = types.Val{
+						Tid:   types.FloatID,
+						Value: v,
+					}
+				}
 			} else {
 				child.Const = types.Val{
-					Tid:   types.FloatID,
-					Value: v,
+					Tid:   types.IntID,
+					Value: i,
 				}
 			}
 			valueStack.push(child)
@@ -334,28 +355,35 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTruef(t != nil, "Nil Math tree")
 	if t.Var != "" {
 		// Leaf node.
-		buf.WriteString(t.Var)
+		x.Check2(buf.WriteString(t.Var))
 		return
 	}
 	if t.Const.Value != nil {
 		// Leaf node.
-		buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
+		var leafStr int
+		var err error
+		if t.Const.Tid == types.FloatID {
+			leafStr, err = buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
+		} else if t.Const.Tid == types.IntID {
+			leafStr, err = buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10))
+		}
+		x.Check2(leafStr, err)
 		return
 	}
 	// Non-leaf node.
-	buf.WriteRune('(')
+	x.Check2(buf.WriteRune('('))
 	switch t.Fn {
 	case "+", "-", "/", "*", "%", "exp", "ln", "cond", "min",
 		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
 		"logbase", "pow":
-		buf.WriteString(t.Fn)
+		x.Check2(buf.WriteString(t.Fn))
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
 	}
 
 	for _, c := range t.Child {
-		buf.WriteRune(' ')
+		x.Check2(buf.WriteRune(' '))
 		c.stringHelper(buf)
 	}
-	buf.WriteRune(')')
+	x.Check2(buf.WriteRune(')'))
 }

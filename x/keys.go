@@ -559,6 +559,13 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.group.acl":  {},
 }
 
+// internalPredicateMap stores a set of Dgraph's internal predicate. An internal
+// predicate is a predicate that has a special meaning in Dgraph and its query
+// language and should not be allowed as a user-defined  predicate.
+var internalPredicateMap = map[string]struct{}{
+	"uid": {},
+}
+
 // IsReservedPredicate returns true if the predicate is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
 	_, ok := reservedPredicateMap[strings.ToLower(pred)]
@@ -582,4 +589,10 @@ func ReservedPredicates() []string {
 		preds = append(preds, pred)
 	}
 	return preds
+}
+
+// IsInternalPredicate returns true if the predicate is in the internal predicate list.
+func IsInternalPredicate(pred string) bool {
+	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	return ok
 }

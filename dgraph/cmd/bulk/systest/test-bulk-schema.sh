@@ -1,10 +1,9 @@
 #!/bin/bash
 # verify fix of https://github.com/dgraph-io/dgraph/issues/2616
-# uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
 readonly SRCROOT=$(git rev-parse --show-toplevel)
-readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
+readonly DOCKER_CONF=$SRCROOT/dgraph/cmd/bulk/systest/docker-compose.yml
 
 declare -ri ZERO_PORT=5180 HTTP_PORT=8180
 

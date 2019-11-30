@@ -17,9 +17,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/stretchr/testify/require"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -443,6 +447,38 @@ func TestBulkSingleUid(t *testing.T) {
 		"has_6_rev_friends": []
 	}
 	`))
+}
+
+func TestDeleteEdgeWithStar(t *testing.T) {
+	s := newBulkOnlySuite(t, `
+		friend: [uid] .
+	`, `
+		<0x1> <friend> <0x2>   .
+		<0x1> <friend> <0x3>   .
+
+		<0x2> <name> "Alice" .
+		<0x3> <name> "Bob" .
+	`)
+	defer s.cleanup()
+
+	_, err := s.bulkCluster.client.NewTxn().Mutate(context.Background(), &api.Mutation{
+		DelNquads: []byte(`<0x1> <friend> * .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	t.Run("Get list of friends", s.testCase(`
+	{
+		me(func: uid(0x1)) {
+			friend {
+				name
+			}
+		}
+	}`, `
+		{
+			"me": []
+		}`))
+
 }
 
 // TODO: Fix this later.

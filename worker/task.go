@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
@@ -38,6 +38,7 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
@@ -342,7 +343,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		return nil
 	}
 
-	// This function has small boiletplate as handleUidPostings, around how the code gets
+	// This function has small boilerplate as handleUidPostings, around how the code gets
 	// concurrently executed. I didn't see much value in trying to separate it out, because the core
 	// logic constitutes most of the code volume here.
 	numGo, width := x.DivideAndRule(srcFn.n)
@@ -371,24 +372,16 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			if err != nil {
 				return err
 			}
-			var vals []types.Val
-			if q.ExpandAll {
-				vals, err = pl.AllValues(args.q.ReadTs)
-			} else if listType && len(q.Langs) == 0 {
-				vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-			} else {
-				var val types.Val
-				val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
-				vals = append(vals, val)
-			}
 
+			vals, fcs, err := retrieveValuesAndFacets(args, pl, listType)
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
-					out.ValueMatrix = append(out.ValueMatrix, &pb.ValueList{Values: []*pb.TaskValue{}})
+					out.ValueMatrix = append(out.ValueMatrix,
+						&pb.ValueList{Values: []*pb.TaskValue{}})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -432,22 +425,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 			out.ValueMatrix = append(out.ValueMatrix, &vl)
 
-			if q.FacetsFilter != nil { // else part means isValueEdge
-				// This is Value edge and we are asked to do facet filtering. Not supported.
-				return errors.Errorf("Facet filtering is not supported on values.")
-			}
-
-			// add facets to result.
-			if q.FacetParam != nil {
-				fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
-				if err != nil {
-					fs = []*api.Facet{}
-				}
-				out.FacetMatrix = append(out.FacetMatrix,
-					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
-			} else {
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-			}
+			// Add facets to result.
+			out.FacetMatrix = append(out.FacetMatrix,
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fcs}}})
 
 			switch {
 			case q.DoCount:
@@ -511,6 +491,86 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
 	}
 	return nil
+}
+
+func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
+	[]types.Val, []*api.Facet, error) {
+	q := args.q
+	var err error
+	var vals []types.Val
+	var fcs []*api.Facet
+
+	// Retrieve values when facet filtering is not being requested.
+	if q.FacetsFilter == nil {
+		// Retrieve values.
+		if q.ExpandAll {
+			vals, err = pl.AllValues(args.q.ReadTs)
+		} else if listType && len(q.Langs) == 0 {
+			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
+		} else {
+			var val types.Val
+			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
+			vals = append(vals, val)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Retrieve facets.
+		if q.FacetParam != nil {
+			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return vals, fcs, nil
+	}
+
+	// Retrieve values when facet filtering is being requested.
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Retrieve the posting that matches the language preferences.
+	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
+	if err != nil && err != posting.ErrNoValue {
+		return nil, nil, err
+	}
+	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+		if listType && len(q.Langs) == 0 {
+			// Don't retrieve tagged values unless explicitly asked.
+			if len(p.LangTag) > 0 {
+				return nil
+			}
+		} else {
+			// Only consider the posting that matches our language preferences.
+			if !proto.Equal(p, langMatch) {
+				return nil
+			}
+		}
+
+		picked, err := applyFacetsTree(p.Facets, facetsTree)
+		if err != nil {
+			return err
+		}
+		if picked {
+			vals = append(vals, types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			})
+			if q.FacetParam != nil {
+				fcs = append(fcs, facets.CopyFacets(p.Facets, q.FacetParam)...)
+			}
+		}
+		return nil // continue iteration.
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return vals, fcs, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
