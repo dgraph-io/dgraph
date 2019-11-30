@@ -407,7 +407,20 @@ func setupServer() {
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 	mainServer, adminServer := admin.NewServers(config, introspection)
 	http.Handle("/graphql", mainServer.HTTPHandler())
-	http.Handle("/admin", adminServer.HTTPHandler())
+
+	whitelist := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !handlerInit(w, r, map[string]bool{
+				http.MethodPost: true,
+				http.MethodGet:  true,
+			}) {
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
+	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
