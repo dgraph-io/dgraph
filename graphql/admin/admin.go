@@ -150,7 +150,6 @@ const (
 // ConnectionConfig is the settings used in setting up the dgo connection from
 // GraphQL Layer -> Dgraph.
 type ConnectionConfig struct {
-	Alphas         string
 	TlScfg         *tls.Config
 	UseCompression bool
 }
