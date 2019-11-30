@@ -152,7 +152,7 @@ func (de *dgoExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte
 func (de *dgoExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
 	return dgraph.Mutate(ctx, query, mutations)
 }
 

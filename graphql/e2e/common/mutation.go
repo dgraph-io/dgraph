@@ -364,7 +364,7 @@ func updateMutationByIds(t *testing.T) {
 			"ids": []string{newCountry.ID, anotherCountry.ID},
 		}
 		newName := "updated name"
-		updateCountry(t, filter, newName)
+		updateCountry(t, filter, newName, true)
 		newCountry.Name = newName
 		anotherCountry.Name = newName
 
@@ -390,7 +390,7 @@ func updateMutationByName(t *testing.T) {
 	t.Run("update Country", func(t *testing.T) {
 		filter := nameRegexFilter(newCountry.Name)
 		newName := "updated name"
-		updateCountry(t, filter, newName)
+		updateCountry(t, filter, newName, true)
 		newCountry.Name = newName
 		requireCountry(t, newCountry.ID, newCountry, postExecutor)
 	})
@@ -400,7 +400,7 @@ func updateMutationByName(t *testing.T) {
 	t.Run("update country by name", func(t *testing.T) {
 		filter := nameRegexFilter(anotherCountry.Name)
 		anotherCountry.Name = "updated another country name"
-		updateCountry(t, filter, anotherCountry.Name)
+		updateCountry(t, filter, anotherCountry.Name, true)
 	})
 
 	t.Run("check updated Country", func(t *testing.T) {
@@ -418,10 +418,9 @@ func updateMutationByNameNoMatch(t *testing.T) {
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("update Country", func(t *testing.T) {
 		filter := nameRegexFilter("no match")
-		updateCountry(t, filter, "new name")
+		updateCountry(t, filter, "new name", false)
 		requireCountry(t, newCountry.ID, newCountry, postExecutor)
 		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
-
 	})
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
@@ -482,7 +481,7 @@ func TestUpdateDelete(t *testing.T) {
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
-func updateCountry(t *testing.T, filter map[string]interface{}, newName string) {
+func updateCountry(t *testing.T, filter map[string]interface{}, newName string, shouldUpdate bool) {
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
 			updateCountry(input: { filter: $filter, set: { name: $newName } }) {
@@ -506,6 +505,9 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string) 
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
+	if shouldUpdate {
+		require.NotEqual(t, 0, len(result.UpdateCountry.Country))
+	}
 	for _, c := range result.UpdateCountry.Country {
 		require.NotNil(t, c.ID)
 		require.Equal(t, newName, c.Name)
@@ -639,7 +641,7 @@ func deleteMutationByName(t *testing.T) {
 	filter := map[string]interface{}{
 		"ids": []string{anotherCountry.ID},
 	}
-	updateCountry(t, filter, anotherCountry.Name)
+	updateCountry(t, filter, anotherCountry.Name, true)
 
 	deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 	t.Run("delete Country", func(t *testing.T) {

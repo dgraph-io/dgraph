@@ -73,14 +73,14 @@ func (asr *addSchemaResolver) Rewrite(
 func (asr *addSchemaResolver) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
-	mutated map[string][]string) (*gql.GraphQuery, error) {
+	mutated []string) (*gql.GraphQuery, error) {
 	return asr.baseMutationRewriter.FromMutationResult(mutation, assigned, mutated)
 }
 
 func (asr *addSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
 
 	asr.admin.mux.Lock()
 	defer asr.admin.mux.Unlock()

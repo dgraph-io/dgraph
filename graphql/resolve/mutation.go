@@ -20,8 +20,8 @@ import (
 	"context"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	otrace "go.opencensus.io/trace"
 )
@@ -89,7 +89,7 @@ type MutationRewriter interface {
 	FromMutationResult(
 		m schema.Mutation,
 		assigned map[string]string,
-		mutated map[string][]string) (*gql.GraphQuery, error)
+		mutated []string) (*gql.GraphQuery, error)
 }
 
 // A MutationExecutor can execute a mutation and returns the assigned map, the
@@ -102,7 +102,7 @@ type MutationExecutor interface {
 	Mutate(
 		ctx context.Context,
 		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
+		mutations []*dgoapi.Mutation) (map[string]string, []string, error)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from

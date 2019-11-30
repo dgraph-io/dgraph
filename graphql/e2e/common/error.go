@@ -28,10 +28,10 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -210,6 +210,6 @@ func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
 	panic("bugz!!!")
 }

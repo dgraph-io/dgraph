@@ -22,8 +22,8 @@ import (
 	"strconv"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/pkg/errors"
 )
 
@@ -156,7 +156,7 @@ func (mrw *addRewriter) Rewrite(
 func (mrw *addRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
-	mutated map[string][]string) (*gql.GraphQuery, error) {
+	mutated []string) (*gql.GraphQuery, error) {
 
 	var uid uint64
 	var err error
@@ -266,13 +266,12 @@ func (urw *updateRewriter) Rewrite(
 func (urw *updateRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
-	mutated map[string][]string) (*gql.GraphQuery, error) {
+	mutated []string) (*gql.GraphQuery, error) {
 
 	var uids []uint64
 	if len(mutated) > 0 {
 		// This is the case of a conditional upsert where we should get uids from mutated.
-		stringUids := mutated[mutationQueryVar]
-		for _, id := range stringUids {
+		for _, id := range mutated {
 			uid, err := strconv.ParseUint(id, 0, 64)
 			if err != nil {
 				return nil, schema.GQLWrapf(err,
@@ -324,6 +323,10 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 		Var:  mutationQueryVar,
 		Attr: m.ResponseName(),
 	}
+	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
+	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
+		Attr: "uid",
+	})
 
 	if ids := idFilter(m); ids != nil {
 		addUIDFunc(dgQuery, ids)
@@ -355,7 +358,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 func (drw *deleteRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
-	mutated map[string][]string) (*gql.GraphQuery, error) {
+	mutated []string) (*gql.GraphQuery, error) {
 
 	// There's no query that follows a delete
 	return nil, nil

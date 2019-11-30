@@ -54,7 +54,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 func Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
 
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Mutate")
@@ -82,10 +82,28 @@ func Mutate(
 		Mutations: mutations,
 	}
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
+	if err != nil {
+		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
+	}
 
-	// vars := make(map[string][]string, len(resp.GetVars()))
-	// for k, v := range resp.GetVars() {
-	// 	vars[k] = v.GetUids()
-	// }
-	return resp.GetUids(), nil, schema.GQLWrapf(err, "Dgraph mutation failed")
+	var mutated []string
+	// Lets parse the mutated uids for upsert operation from the response.
+	if query != nil && len(resp.GetJson()) != 0 {
+		r := make(map[string]interface{})
+		if err := json.Unmarshal(resp.GetJson(), &r); err != nil {
+			return nil, nil,
+				schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
+		}
+
+		if val, ok := r[query.Attr].([]interface{}); ok {
+			for _, v := range val {
+				if obj, vok := v.(map[string]interface{}); vok {
+					if uid, uok := obj["uid"].(string); uok {
+						mutated = append(mutated, uid)
+					}
+				}
+			}
+		}
+	}
+	return resp.GetUids(), mutated, schema.GQLWrapf(err, "Dgraph mutation failed")
 }
