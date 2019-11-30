@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 const (
