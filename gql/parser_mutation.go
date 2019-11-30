@@ -64,7 +64,7 @@ func ParseMutation(mutation string) (req *api.Request, err error) {
 func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 	var req *api.Request
 	var queryText, condText string
-	var queryFound, condFound bool
+	var queryFound bool
 
 	// ===>upsert<=== {...}
 	if !it.Next() {
@@ -115,10 +115,6 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 			// upsert { mutation ===>@if(...)<=== {....} query{...}}
 			item = it.Item()
 			if item.Typ == itemUpsertBlockOpContent {
-				if condFound {
-					return nil, it.Errorf("Multiple @if directive inside upsert block")
-				}
-				condFound = true
 				condText = item.Val
 				if !it.Next() {
 					return nil, it.Errorf("Unexpected end of upsert block")
@@ -131,7 +127,11 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 				return nil, err
 			}
 			mu.Cond = condText
-			req = &api.Request{Mutations: []*api.Mutation{mu}}
+			if req == nil {
+				req = &api.Request{Mutations: []*api.Mutation{mu}}
+			} else {
+				req.Mutations = append(req.Mutations, mu)
+			}
 
 		// upsert { mutation{...} ===>fragment<==={...}}
 		case item.Typ == itemUpsertBlockOp && item.Val == "fragment":

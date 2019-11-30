@@ -33,9 +33,9 @@ import (
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -253,7 +253,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			createSchema(attr, storageType)
+			if err := createSchema(attr, storageType); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -733,6 +735,21 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	}
 }
 
+func (n *node) drainApplyChan() {
+	for {
+		select {
+		case proposals := <-n.applyCh:
+			glog.Infof("Draining %d proposals\n", len(proposals))
+			for _, proposal := range proposals {
+				n.Proposals.Done(proposal.Key, nil)
+				n.Applied.Done(proposal.Index)
+			}
+		default:
+			return
+		}
+	}
+}
+
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -786,9 +803,9 @@ func (n *node) Run() {
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {
@@ -812,12 +829,19 @@ func (n *node) Run() {
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
+					// Set node to unhealthy state here while it applies the snapshot.
+					x.UpdateHealthStatus(false)
+
 					// We are getting a new snapshot from leader. We need to wait for the applyCh to
 					// finish applying the updates, otherwise, we'll end up overwriting the data
 					// from the new snapshot that we retrieved.
+
+					// Drain the apply channel. Snapshot will be retrieved next.
 					maxIndex := n.Applied.LastIndex()
-					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
+					glog.Infof("Drain applyCh by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
+					n.drainApplyChan()
+
 					if err := n.Applied.WaitForMark(context.Background(), maxIndex); err != nil {
 						glog.Errorf("Error waiting for mark for index %d: %+v", maxIndex, err)
 					}
@@ -845,6 +869,9 @@ func (n *node) Run() {
 						time.Sleep(100 * time.Millisecond) // Wait for a bit.
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
+
+					// Set node to healthy state here.
+					x.UpdateHealthStatus(true)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
@@ -881,21 +908,19 @@ func (n *node) Run() {
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
 
-				if entry.Type == raftpb.EntryConfChange {
+				switch {
+				case entry.Type == raftpb.EntryConfChange:
 					n.applyConfChange(entry)
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
-
-				} else if len(entry.Data) == 0 {
+				case len(entry.Data) == 0:
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
 					n.Applied.Done(entry.Index)
-
-				} else if entry.Index < applied {
+				case entry.Index < applied:
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
-
-				} else {
+				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
 						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
@@ -932,9 +957,9 @@ func (n *node) Run() {
 
 			if !leader {
 				// Followers should send messages later.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {

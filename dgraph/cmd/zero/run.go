@@ -33,8 +33,8 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -204,7 +204,7 @@ func run() {
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20)
+		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
@@ -251,11 +251,11 @@ func run() {
 		// Close doesn't close already opened connections.
 
 		// Stop all HTTP requests.
-		httpListener.Close()
+		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
 		// Stop all internal requests.
-		grpcListener.Close()
+		_ = grpcListener.Close()
 		st.node.trySnapshot(0)
 	}()
 

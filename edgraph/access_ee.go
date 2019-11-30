@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -395,7 +395,7 @@ func ResetAcl() {
 			},
 		}
 
-		_, err = (&Server{}).doMutate(context.Background(), req, NoAuthorize)
+		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
 		if err != nil {
 			return err
 		}
@@ -675,11 +675,18 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
+	isSchemaQuery := parsedReq != nil && parsedReq.Schema != nil
+
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
+			// Do not allow schema queries unless the user has logged in.
+			if isSchemaQuery {
+				return status.Error(codes.Unauthenticated, err.Error())
+			}
+
+			// Treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined.
 		} else if err != nil {
 			return status.Error(codes.Unauthenticated, err.Error())
 		} else {

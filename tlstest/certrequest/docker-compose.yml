@@ -15,7 +15,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: $GOPATH/src/github.com/dgraph-io/dgraph/tlstest/tls
+      source: ../tls
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth REQUEST

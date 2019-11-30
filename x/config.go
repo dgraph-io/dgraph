@@ -71,6 +71,9 @@ type WorkerOptions struct {
 	// SnapshotAfter indicates the number of entries in the RAFT logs that are needed
 	// to allow a snapshot to be created.
 	SnapshotAfter int
+	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
+	// proposed group ID for this server.
+	ProposedGroupId uint32
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

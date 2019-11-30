@@ -34,7 +34,31 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 4.0},
+			out: types.Val{Tid: types.IntID, Value: int64(4)},
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(4)},
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(4)},
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(48038396025285290)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+			}},
+			out: types.Val{Tid: types.IntID, Value: int64(48038396025285292)},
 		},
 		{in: &mathTree{
 			Fn: "-",
@@ -42,7 +66,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(1)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 99.0},
+			out: types.Val{Tid: types.IntID, Value: int64(99)},
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(100)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(1)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(99)},
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(100)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(99)},
 		},
 		{in: &mathTree{
 			Fn: "*",
@@ -50,7 +90,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(3)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(3)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 9.0},
+			out: types.Val{Tid: types.IntID, Value: int64(9)},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(3)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(3)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(9)},
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(3)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(3)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(9)},
 		},
 		{in: &mathTree{
 			Fn: "/",
@@ -58,7 +114,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(12)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(4)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 3.0},
+			out: types.Val{Tid: types.IntID, Value: int64(3)},
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(12)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(4)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(3)},
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(12)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(4)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(3)},
 		},
 		{in: &mathTree{
 			Fn: "%",
@@ -66,7 +138,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(10)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 0.0},
+			out: types.Val{Tid: types.IntID, Value: int64(0)},
+		},
+		{in: &mathTree{
+			Fn: "%",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(10)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(0)},
+		},
+		{in: &mathTree{
+			Fn: "%",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(10)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(0)},
 		},
 		{in: &mathTree{
 			Fn: "max",
@@ -74,7 +162,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(1)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 100.0},
+			out: types.Val{Tid: types.IntID, Value: int64(100.0)},
+		},
+		{in: &mathTree{
+			Fn: "max",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(100.0)},
+		},
+		{in: &mathTree{
+			Fn: "max",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(100)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(100.0)},
 		},
 		{in: &mathTree{
 			Fn: "min",
@@ -82,7 +186,23 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(1)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: 1.0},
+			out: types.Val{Tid: types.IntID, Value: int64(1.0)},
+		},
+		{in: &mathTree{
+			Fn: "min",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(100)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(1.0)},
+		},
+		{in: &mathTree{
+			Fn: "min",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(100)}},
+			}},
+			out: types.Val{Tid: types.FloatID, Value: float64(1.0)},
 		},
 		{in: &mathTree{
 			Fn: "logbase",
@@ -119,7 +239,7 @@ func TestProcessUnary(t *testing.T) {
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
-			out: types.Val{Tid: types.FloatID, Value: -2.0},
+			out: types.Val{Tid: types.IntID, Value: int64(-2.0)},
 		},
 		{in: &mathTree{
 			Fn: "ln",

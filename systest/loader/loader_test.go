@@ -36,7 +36,8 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/first.rdf.gz")
+	data, err := filepath.Abs("testdata/first.rdf.gz")
+	require.NoError(t, err)
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
@@ -47,7 +48,8 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, liveCmd.Run())
 
 	// Load another file, live should reuse the xidmap.
-	data = os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/second.rdf.gz")
+	data, err = filepath.Abs("testdata/second.rdf.gz")
+	require.NoError(t, err)
 	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,

@@ -79,6 +79,17 @@ $ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amaz
 $ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
 ```
 
+#### Disabling HTTPS for S3 and Minio backups
+
+By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
+the case, the backup will fail. To send a backup to a bucket using HTTP
+(insecure), set the query parameter `secure=false` with the destination
+endpoint:
+
+```sh
+$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>?secure=false"
+```
+
 #### Overriding Credentials
 
 The `access_key`, `secret_key`, and `session_token` parameters can be used to

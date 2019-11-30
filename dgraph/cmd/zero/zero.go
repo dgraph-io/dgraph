@@ -26,7 +26,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -510,6 +510,12 @@ func (s *Server) Connect(ctx context.Context,
 			// We don't have this server in the list.
 			if len(group.Members) < s.NumReplicas {
 				// We need more servers here, so let's add it.
+				proposal.Member = m
+				return proposal
+			} else if m.ForceGroupId {
+				// If the group ID was taken from the group_id file, force the member
+				// to be in this group even if the group is at capacity. This should
+				// not happen if users properly initialize a cluster after a bulk load.
 				proposal.Member = m
 				return proposal
 			}
