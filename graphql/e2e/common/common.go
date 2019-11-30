@@ -39,12 +39,12 @@ import (
 )
 
 const (
-	graphqlURL      = "http://localhost:9100/graphql"
-	graphqlAdminURL = "http://localhost:9100/admin"
+	graphqlURL      = "http://localhost:8180/graphql"
+	graphqlAdminURL = "http://localhost:8180/admin"
 	alphagRPC       = "localhost:9180"
 
-	graphqlAdminTestURL      = "http://localhost:9200/graphql"
-	graphqlAdminTestAdminURL = "http://localhost:9200/admin"
+	graphqlAdminTestURL      = "http://localhost:8280/graphql"
+	graphqlAdminTestAdminURL = "http://localhost:8280/admin"
 	alphaAdminTestgRPC       = "localhost:9280"
 )
 

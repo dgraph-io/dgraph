@@ -20,20 +20,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/v2"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -172,9 +169,6 @@ type adminServer struct {
 	// The mutex that locks schema update operations
 	mux sync.Mutex
 
-	// the Dgraph that gets its schema changed
-	dgraph *dgo.Dgraph
-
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
 
@@ -274,24 +268,12 @@ func (as *adminServer) initServer() {
 		<-time.After(waitFor)
 		waitFor = 10 * time.Second
 
-		glog.Infof("Trying to connect to Dgraph at %s", as.config.Alphas)
-		dgraphClient, disconnect, err := connect(as.config)
-		if err != nil {
-			if glog.V(3) {
-				glog.Infof("Failed to connect to Dgraph: %s.  Trying again in %f seconds",
-					err, waitFor.Seconds())
-			}
-			continue
-		}
-		glog.Infof("Established Dgraph connection")
-
-		err = checkAdminSchemaExists(dgraphClient)
+		err := checkAdminSchemaExists()
 		if err != nil {
 			if glog.V(3) {
 				glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
 					err, waitFor.Seconds())
 			}
-			disconnect()
 			continue
 		}
 
@@ -302,9 +284,7 @@ func (as *adminServer) initServer() {
 		as.mux.Lock()
 		defer as.mux.Unlock()
 
-		as.dgraph = dgraphClient
-
-		as.addConnectedAdminResolvers(dgraphClient)
+		as.addConnectedAdminResolvers()
 
 		as.status = noGraphQLSchema
 
@@ -341,16 +321,18 @@ func (as *adminServer) initServer() {
 	}
 }
 
-func checkAdminSchemaExists(dg *dgo.Dgraph) error {
+func checkAdminSchemaExists() error {
 	// We could query for existing schema and only alter if it's not there, but
 	// this has same effect.  We might eventually have to migrate old versions of the
 	// metadata here.
-	return dg.Alter(context.Background(), &dgoapi.Operation{Schema: dgraphAdminSchema})
+	_, err := (&edgraph.Server{}).Alter(context.Background(),
+		&dgoapi.Operation{Schema: dgraphAdminSchema})
+	return err
 }
 
 // addConnectedAdminResolvers sets up the real resolvers now that there's a connection
 // to Dgraph (before there's a connection, addSchema etc just return errors).
-func (as *adminServer) addConnectedAdminResolvers(dg *dgo.Dgraph) {
+func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
 	mutRw := resolve.NewAddRewriter()
@@ -444,25 +426,4 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 
 	as.status = healthy
-}
-
-func connect(cc *ConnectionConfig) (*dgo.Dgraph, func(), error) {
-	var clients []dgoapi.DgraphClient
-	disconnect := func() {}
-
-	ds := strings.Split(cc.Alphas, ",")
-	for _, d := range ds {
-		conn, err := x.SetupConnection(d, cc.TlScfg, cc.UseCompression)
-		if err != nil {
-			disconnect()
-			return nil, nil, fmt.Errorf("couldn't connect to %s, %s", d, err)
-		}
-		disconnect = func(dis func()) func() {
-			return func() { dis(); conn.Close() }
-		}(disconnect)
-
-		clients = append(clients, dgoapi.NewDgraphClient(conn))
-	}
-
-	return dgo.NewDgraphClient(clients...), disconnect, nil
 }

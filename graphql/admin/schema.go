@@ -24,10 +24,11 @@ import (
 	"github.com/pkg/errors"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/gql"
 )
 
 // A addSchemaResolver serves as the mutation rewriter and executor in handling
@@ -94,7 +95,7 @@ func (asr *addSchemaResolver) Mutate(
 		glog.Infof("[%s] New schema Dgraph:\n\n%s\n", api.RequestID(ctx), asr.newDgraphSchema)
 	}
 
-	err = asr.admin.dgraph.Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
+	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema "+
