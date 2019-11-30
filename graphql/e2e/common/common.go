@@ -125,7 +125,7 @@ type post struct {
 type state struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	Code string `json:"code"`
+	Code string `json:"xcode"`
 }
 
 func BootstrapServer(schema, data []byte) {

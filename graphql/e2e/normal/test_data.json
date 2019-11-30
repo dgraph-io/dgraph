@@ -92,12 +92,12 @@
         "uid": "_:nsw",
         "dgraph.type": "State",
         "State.name": "NSW",
-        "State.code": "nsw"
+        "State.xcode": "nsw"
     },
     {
         "uid": "_:nusa",
         "dgraph.type": "State",
         "State.name": "Nusa",
-        "State.code": "nusa"
+        "State.xcode": "nusa"
     }
 ]

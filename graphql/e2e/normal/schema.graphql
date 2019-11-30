@@ -9,7 +9,7 @@ type Country {
 
 type State {
         id: ID!
-        code: String! @id @search(by: [regexp])
+        xcode: String! @id @search(by: [regexp])
         name: String
 }
 
