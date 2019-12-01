@@ -133,7 +133,7 @@ func TestExecVersion(t *testing.T) {
 }
 
 const TESTS_FP string = "./test_wasm.wasm"
-const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/blob/c0ff6e519676affd727a45fe605bc7c84a0a536d/target/wasm32-unknown-unknown/release/test_wasm.wasm?raw=true"
+const TEST_WASM_URL string = "https://github.com/ChainSafe/gossamer-test-wasm/raw/noot/target/wasm32-unknown-unknown/release/test_wasm.wasm"
 
 // getTestBlob checks if the test wasm file exists and if not, it fetches it from github
 func getTestBlob() (n int64, err error) {
@@ -163,7 +163,7 @@ func newTestRuntime() (*Runtime, error) {
 		return nil, err
 	}
 
-	t := &trie.Trie{}
+	t := trie.NewEmptyTrie(nil)
 	fp, err := filepath.Abs(TESTS_FP)
 	if err != nil {
 		return nil, err
@@ -1041,6 +1041,106 @@ func TestExt_ed25519_generate(t *testing.T) {
 	kp := runtime.keystore.Get(pubkey.Address())
 	if kp == nil {
 		t.Fatal("Fail: keypair was not saved in keystore")
+	}
+}
+
+// test that ext_get_child_storage_into retrieves a value stored in a child trie
+func TestExt_get_child_storage_into(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	storageKey := []byte("default")
+	key := []byte("mykey")
+	value := []byte("myvalue")
+
+	err = runtime.trie.PutChild(storageKey, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = runtime.trie.PutIntoChild(storageKey, key, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	storageKeyData := 0
+	storageKeyLen := len(storageKey)
+	keyData := storageKeyData + storageKeyLen
+	keyLen := len(key)
+	valueData := keyData + keyLen
+	valueLen := len(value)
+	valueOffset := 0
+
+	copy(mem[storageKeyData:storageKeyData+storageKeyLen], storageKey)
+	copy(mem[keyData:keyData+keyLen], key)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_get_child_storage_into"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen, valueOffset)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := mem[valueData : valueData+valueLen]
+	if !bytes.Equal(res, value[valueOffset:]) {
+		t.Fatalf("Fail: got %x expected %x", res, value[valueOffset:])
+	}
+}
+
+// test that ext_set_child_storage sets a value stored in a child trie
+func TestExt_set_child_storage(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	storageKey := []byte("default")
+	key := []byte("mykey")
+	value := []byte("myvalue")
+
+	err = runtime.trie.PutChild(storageKey, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	storageKeyData := 0
+	storageKeyLen := len(storageKey)
+	keyData := storageKeyData + storageKeyLen
+	keyLen := len(key)
+	valueData := keyData + keyLen
+	valueLen := len(value)
+
+	copy(mem[storageKeyData:storageKeyData+storageKeyLen], storageKey)
+	copy(mem[keyData:keyData+keyLen], key)
+	copy(mem[valueData:valueData+valueLen], value)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_set_child_storage"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := runtime.trie.GetFromChild(storageKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(res, value) {
+		t.Fatalf("Fail: got %x expected %x", res, value)
 	}
 }
 

@@ -199,15 +199,47 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 
 //export ext_set_child_storage
 func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen int32) {
-	log.Debug("[ext_ed25519_sign] executing...")
-	log.Warn("[ext_ed25519_sign] Not yet implemented.")
+	log.Trace("[ext_set_child_storage] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+	t := runtimeCtx.trie
+
+	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
+	key := memory[keyData : keyData+keyLen]
+	value := memory[valueData : valueData+valueLen]
+
+	err := t.PutIntoChild(keyToChild, key, value)
+	if err != nil {
+		log.Error("[ext_set_child_storage]", "error", err)
+	}
 }
 
 //export ext_get_child_storage_into
 func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen, valueOffset int32) int32 {
-	log.Debug("[ext_ed25519_sign] executing...")
-	log.Warn("[ext_ed25519_sign] Not yet implemented.")
-	return 0
+	log.Trace("[ext_get_child_storage_into] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+	t := runtimeCtx.trie
+
+	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
+	key := memory[keyData : keyData+keyLen]
+
+	value, err := t.GetFromChild(keyToChild, key)
+	if err != nil {
+		log.Error("[ext_get_child_storage_into]", "error", err)
+		return -(1 << 31)
+	}
+
+	copy(memory[valueData:valueData+valueLen], value[valueOffset:])
+	return int32(len(value[valueOffset:]))
 }
 
 // returns the trie root in the memory location `resultPtr`
