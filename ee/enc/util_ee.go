@@ -18,12 +18,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-const badgerEncFlag string = "badger.encryption-key"
+const badgerEncFlag string = "badger.encryption_key"
 
-// BadgerEncryptionKeyFlag exposes the badger.encryption-key flag to sub-cmds.
+// BadgerEncryptionKeyFlag exposes the badger.encryption_key flag to sub-cmds.
 func BadgerEncryptionKeyFlag(flag *pflag.FlagSet) {
 	flag.String(badgerEncFlag, "",
-		"Specifies badger encryption key. Must be 16,24 or 32 bytes")
+		"Specifies badger encryption key. Must be 16/24/32 bytes that determines "+
+			"AES-128/192/256 encryption algorithm respectively.")
 }
 
 // GetEncryptionKeyString returns the configured key
@@ -34,7 +35,7 @@ func GetEncryptionKeyString(c *viper.Viper) string {
 
 	// len must be 16,24,32 bytes if given. 0 otherwise. All other lengths are invalid.
 	klen := len(k)
-	x.AssertTruef(klen == 0 || klen == 16 || klen == 24 || klen == 32, "")
-
+	x.AssertTruef(klen == 0 || klen == 16 || klen == 24 || klen == 32,
+		"Invalid Badger encryption key length = %v", klen)
 	return k
 }
