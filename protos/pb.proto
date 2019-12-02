@@ -220,8 +220,18 @@ message Mutations {
 	}
 	DropOp drop_op = 7;
 	string drop_value = 8;
-	repeated string forced_single_preds = 9;
-	repeated string forced_list_preds = 10;
+
+	ParseMetadata parse_metadata = 9;
+}
+
+message ParseMetadata {
+	// The name of the predicates that should be created as single (non-list)
+	// predicates if they don't exist in the schema.
+	repeated string forced_single_preds = 1;
+
+	// The name of the predicates that should be created as list predicates
+	// if they don't exist in the schema.
+	repeated string forced_list_preds = 2;
 }
 
 message Snapshot {

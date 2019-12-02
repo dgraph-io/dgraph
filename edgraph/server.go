@@ -483,14 +483,16 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	forcedSinglePreds := make([]string, 0)
 	forcedListPreds := make([]string, 0)
 	for _, gmu := range qc.gmuList {
-		forcedSinglePreds = append(forcedSinglePreds, gmu.ForcedSinglePreds...)
-		forcedListPreds = append(forcedListPreds, gmu.ForcedListPreds...)
+		forcedSinglePreds = append(forcedSinglePreds, gmu.ParseMetadata.GetForcedSinglePreds()...)
+		forcedListPreds = append(forcedListPreds, gmu.ParseMetadata.GetForcedListPreds()...)
 	}
 	m := &pb.Mutations{
-		Edges:             edges,
-		StartTs:           qc.req.StartTs,
-		ForcedSinglePreds: forcedSinglePreds,
-		ForcedListPreds:   forcedListPreds,
+		Edges:   edges,
+		StartTs: qc.req.StartTs,
+		ParseMetadata: &pb.ParseMetadata{
+			ForcedSinglePreds: forcedSinglePreds,
+			ForcedListPreds:   forcedListPreds,
+		},
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
@@ -1185,8 +1187,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
-		res.ForcedSinglePreds = metadata.ForcedSinglePreds
-		res.ForcedListPreds = metadata.ForcedListPreds
+		res.ParseMetadata = metadata
 	}
 	if len(mu.DeleteJson) > 0 {
 		// The metadata is not currently needed for delete operations so it can be safely ignored.

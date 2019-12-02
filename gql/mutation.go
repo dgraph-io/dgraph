@@ -36,13 +36,7 @@ type Mutation struct {
 	Set  []*api.NQuad
 	Del  []*api.NQuad
 
-	// The name of the predicates that should be created as single (non-list)
-	// predicates if they don't exist in the schema.
-	ForcedSinglePreds []string
-
-	// The name of the predicates that should be created as list predicates
-	// if they don't exist in the schema.
-	ForcedListPreds []string
+	ParseMetadata *pb.ParseMetadata
 }
 
 // ParseUid parses the given string into an UID. This method returns with an error

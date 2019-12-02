@@ -237,10 +237,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// predicate already.
 	forcedSinglePreds := make(map[string]bool)
 	forcedListPreds := make(map[string]bool)
-	for _, pred := range proposal.Mutations.ForcedSinglePreds {
+	for _, pred := range proposal.Mutations.ParseMetadata.GetForcedSinglePreds() {
 		forcedSinglePreds[pred] = true
 	}
-	for _, pred := range proposal.Mutations.ForcedListPreds {
+	for _, pred := range proposal.Mutations.ParseMetadata.GetForcedListPreds() {
 		forcedListPreds[pred] = true
 	}
 

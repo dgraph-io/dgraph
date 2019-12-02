@@ -488,8 +488,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
-		mu.ForcedSinglePreds = src.ForcedSinglePreds
-		mu.ForcedListPreds = src.ForcedListPreds
+		mu.ParseMetadata = src.ParseMetadata
 	}
 
 	for _, schema := range src.Schema {

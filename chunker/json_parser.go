@@ -27,6 +27,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -233,7 +234,7 @@ type NQuadBuffer struct {
 	batchSize int
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
-	metadata  ParseMetadata
+	metadata  *pb.ParseMetadata
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -245,6 +246,7 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
 	}
+	buf.metadata = &pb.ParseMetadata{}
 	return buf
 }
 
@@ -265,7 +267,7 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 }
 
 // Metadata returns the parse metadata that has been aggregated so far..
-func (buf *NQuadBuffer) Metadata() ParseMetadata {
+func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
 	return buf.metadata
 }
 
@@ -531,11 +533,11 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
-func ParseJSON(b []byte, op int) ([]*api.NQuad, ParseMetadata, error) {
+func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.ParseMetadata, error) {
 	buf := NewNQuadBuffer(-1)
 	err := buf.ParseJSON(b, op)
 	if err != nil {
-		return nil, ParseMetadata{}, err
+		return nil, nil, err
 	}
 
 	buf.Flush()
