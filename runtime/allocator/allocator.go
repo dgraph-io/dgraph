@@ -112,7 +112,7 @@ func (fbha *FreeingBumpHeapAllocator) Allocate(size uint32) (uint32, error) {
 	}
 	fbha.setHeap(ptr-8, uint8(listIndex))
 	fbha.TotalSize = fbha.TotalSize + itemSize + 8
-	log.Debug("[Allocate]", "heap_size after allocation", fbha.TotalSize)
+	log.Trace("[Allocate]", "heap_size after allocation", fbha.TotalSize)
 	return fbha.ptrOffset + ptr, nil
 }
 
@@ -122,7 +122,7 @@ func (fbha *FreeingBumpHeapAllocator) Deallocate(pointer uint32) error {
 	if ptr < 8 {
 		return errors.New("invalid pointer for deallocation")
 	}
-	log.Debug("[Deallocate]", "ptr", ptr)
+	log.Trace("[Deallocate]", "ptr", ptr)
 	listIndex := fbha.getHeapByte(ptr - 8)
 
 	// update heads array, and heap "header"
@@ -136,7 +136,7 @@ func (fbha *FreeingBumpHeapAllocator) Deallocate(pointer uint32) error {
 	// update heap total size
 	itemSize := getItemSizeFromIndex(uint(listIndex))
 	fbha.TotalSize = fbha.TotalSize - uint32(itemSize+8)
-	log.Debug("[Deallocate]", "heap total_size after Deallocate", fbha.TotalSize)
+	log.Trace("[Deallocate]", "heap total_size after Deallocate", fbha.TotalSize)
 
 	return nil
 }

@@ -322,7 +322,6 @@ func TestAllocator(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Log("mem", "mem", mem)
 		allocator := NewAllocator(mem, test.offset)
 
 		for _, theTest := range test.tests {
@@ -337,15 +336,11 @@ func TestAllocator(t *testing.T) {
 				compareState(*allocator, theTest.state, result, theTest.output, t)
 
 			case *freeTest:
-				t.Log("got free", v.ptr)
 				err := allocator.Deallocate(v.ptr)
 				if err != nil {
 					t.Fatal(err)
 				}
-				t.Log("heads", allocator.heads[:])
 				compareState(*allocator, theTest.state, nil, theTest.output, t)
-			default:
-				t.Log("default type")
 			}
 		}
 	}
@@ -353,10 +348,6 @@ func TestAllocator(t *testing.T) {
 
 // compare test results to expected results and fail test if differences are found
 func compareState(allocator FreeingBumpHeapAllocator, state allocatorState, result interface{}, output interface{}, t *testing.T) {
-	t.Log("allocatorState", allocator)
-	t.Log("allocatorExpected", state)
-	t.Log("result:", result)
-	t.Log("output", output)
 	if !reflect.DeepEqual(allocator.bumper, state.bumper) {
 		t.Errorf("Fail: got %v expected %v", allocator.bumper, state.bumper)
 	}
