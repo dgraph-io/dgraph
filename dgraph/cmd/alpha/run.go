@@ -400,12 +400,8 @@ func setupServer() {
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
-	config := &admin.ConnectionConfig{
-		TlScfg:         tlsCfg,
-		UseCompression: false,
-	}
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
-	mainServer, adminServer := admin.NewServers(config, introspection)
+	mainServer, adminServer := admin.NewServers(introspection)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 
 	whitelist := func(h http.Handler) http.Handler {

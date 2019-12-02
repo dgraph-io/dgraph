@@ -107,8 +107,8 @@ type ResolverFns struct {
 }
 
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
-// that proxies query/mutation resolution through dgo.
-type dgoExecutor struct {
+// that proxies query/mutation resolution through Query method in dgraph server.
+type dgraphExecutor struct {
 }
 
 // A Resolved is the result of resolving a single query or mutation.
@@ -135,21 +135,21 @@ func (cf CompletionFunc) Complete(
 	return cf(ctx, field, result, err)
 }
 
-// DgoAsQueryExecutor builds a QueryExecutor for dgo.
-func DgoAsQueryExecutor() QueryExecutor {
-	return &dgoExecutor{}
+// DgraphAsQueryExecutor builds a QueryExecutor for proxying requests through dgraph.
+func DgraphAsQueryExecutor() QueryExecutor {
+	return &dgraphExecutor{}
 }
 
-// DgoAsMutationExecutor builds a MutationExecutor for dog.
-func DgoAsMutationExecutor() MutationExecutor {
-	return &dgoExecutor{}
+// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+func DgraphAsMutationExecutor() MutationExecutor {
+	return &dgraphExecutor{}
 }
 
-func (de *dgoExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return dgraph.Query(ctx, query)
 }
 
-func (de *dgoExecutor) Mutate(
+func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {

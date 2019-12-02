@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"sync"
 	"time"
@@ -147,20 +146,12 @@ const (
  `
 )
 
-// ConnectionConfig is the settings used in setting up the dgo connection from
-// GraphQL Layer -> Dgraph.
-type ConnectionConfig struct {
-	TlScfg         *tls.Config
-	UseCompression bool
-}
-
 type schemaDef struct {
 	Schema string    `json:"schema,omitempty"`
 	Date   time.Time `json:"date,omitempty"`
 }
 
 type adminServer struct {
-	config   *ConnectionConfig
 	rf       resolve.ResolverFactory
 	resolver *resolve.RequestResolver
 	status   healthStatus
@@ -179,8 +170,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(
-	config *ConnectionConfig, withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
+func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -196,7 +186,7 @@ func NewServers(
 		Urw: resolve.NewUpdateRewriter(),
 		Drw: resolve.NewDeleteRewriter(),
 	}
-	adminResolvers := newAdminResolver(config, mainServer, fns, withIntrospection)
+	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection)
 	adminServer := web.NewServer(adminResolvers)
 
 	return mainServer, adminServer
@@ -204,7 +194,6 @@ func NewServers(
 
 // newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
 func newAdminResolver(
-	config *ConnectionConfig,
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
 	withIntrospection bool) *resolve.RequestResolver {
@@ -217,7 +206,6 @@ func newAdminResolver(
 	rf := newAdminResolverFactory()
 
 	server := &adminServer{
-		config:            config,
 		rf:                rf,
 		resolver:          resolve.New(adminSchema, rf),
 		status:            errNoConnection,
@@ -329,14 +317,13 @@ func checkAdminSchemaExists() error {
 	return err
 }
 
-// addConnectedAdminResolvers sets up the real resolvers now that there's a connection
-// to Dgraph (before there's a connection, addSchema etc just return errors).
+// addConnectedAdminResolvers sets up the real resolvers
 func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
 	mutRw := resolve.NewAddRewriter()
-	qryExec := resolve.DgoAsQueryExecutor()
-	mutExec := resolve.DgoAsMutationExecutor()
+	qryExec := resolve.DgraphAsQueryExecutor()
+	mutExec := resolve.DgraphAsMutationExecutor()
 
 	as.fns.Qe = qryExec
 	as.fns.Me = mutExec

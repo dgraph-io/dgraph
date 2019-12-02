@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Query is the underlying dgo implementation of QueryExecutor.
+// Query is the underlying dgraph implementation of QueryExecutor.
 func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Query")
@@ -50,7 +50,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
-// Mutate is the underlying dgo implementation of MutationExecutor.
+// Mutate is the underlying dgraph implementation of MutationExecutor.
 func Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
