@@ -1,0 +1,263 @@
+-
+  name: "Update set mutation with variables"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "set": {
+          "text": "updated text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "Post.text": "updated text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update delete mutation with variables and value"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "remove": {
+          "text": "delete this text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  dgraphdelete: |
+    { "uid" : "uid(x)",
+      "Post.text": "delete this text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update delete mutation with variables and null"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123", "0x124"]
+        },
+        "remove": {
+          "text": null
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphdelete: |
+    { "uid" : "uid(x)",
+      "Post.text": null
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update mutation for a type that implements an interface"
+  gqlmutation: |
+    mutation updateHuman($patch: UpdateHumanInput!) {
+      updateHuman(input: $patch) {
+        human {
+          name
+          dob
+          female
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      {
+        "filter": {
+          "ids": ["0x123"]
+        },
+        "set": { "name": "Bob",
+          "dob": "2000-01-01",
+          "female": true,
+          "ename": "employee no. 1"
+        }
+      }
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "Character.name": "Bob",
+      "Employee.ename": "employee no. 1",
+      "Human.dob": "2000-01-01",
+      "Human.female": true
+    }
+  dgraphquery: |-
+    query {
+      x as updateHuman(func: type(Human)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update mutation for an interface"
+  gqlmutation: |-
+    mutation {
+      updateCharacter(input: {filter: { ids: ["0x123"] }, set: {name:"Bob"}}) {
+        character {
+          id
+          name
+        }
+      }
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "Character.name": "Bob"
+    }
+  dgraphquery: |-
+    query {
+      x as updateCharacter(func: type(Character)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update mutation using filters"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postId
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "tags": { "eq": "foo"}
+        },
+        "set": {
+          "text": "updated text"
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "Post.text": "updated text"
+    }
+  dgraphquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo")) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update mutation using code"
+  gqlmutation: |
+    mutation updateState($patch: UpdateStateInput!) {
+      updateState(input: $patch) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "code": { "eq": "nsw" }
+        },
+        "set": {
+          "name": "nsw"
+        }
+      }
+    }
+  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "State.name": "nsw"
+    }
+  dgraphquery: |-
+    query {
+      x as updateState(func: type(State)) @filter(eq(State.code, "nsw")) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update mutation using code on type which also has an ID field"
+  gqlmutation: |
+    mutation updateEditor($patch: UpdateEditorInput!) {
+      updateEditor(input: $patch) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "code": { "eq": "editor" },
+          "ids": [ "0x1", "0x2" ]
+        },
+        "set": {
+          "name": "A.N. Editor"
+        }
+      }
+    }
+  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  dgraphset: |
+    { "uid" : "uid(x)",
+      "Editor.name": "A.N. Editor"
+    }
+  dgraphquery: |-
+    query {
+      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2))) {
+        uid
+      }
+    }
+  condition: "@if(gt(len(x), 0))"

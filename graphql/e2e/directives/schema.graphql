@@ -1,0 +1,99 @@
+# **Don't delete** Comments at top of schemas should work
+# See: https://github.com/dgraph-io/dgraph/issues/4227
+
+type Country {
+        # **Don't delete** Comments in types should work
+        id: ID! # **Don't delete** Comments in in lines should work
+        name: String! @search(by: [trigram, hash])
+}
+
+type State {
+        id: ID!
+        xcode: String! @id @search(by: [regexp])
+        name: String
+}
+
+# **Don't delete** Comments in the middle of schemas should work
+# Comments in input schemas should _not_ make it through to the
+# generated schema.
+
+"""
+GraphQL descriptions look like this.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+type Author @dgraph(name: "dgraph.author") {
+        id: ID!
+
+        """
+        GraphQL descriptions can be on fields.  They should work in the input
+        schema and should make their way into the generated schema.
+        """
+        name: String! @search(by: [hash, trigram])
+
+        dob: DateTime @search
+        reputation: Float @search
+        country: Country
+        posts: [Post!] @hasInverse(field: author)
+}
+
+type Post @dgraph(name: "myPost") {
+        postID: ID!
+        title: String! @search(by: [term, fulltext])
+        text: String @search(by: [fulltext]) @dgraph(name: "text")
+        tags: [String] @search(by: [exact])
+        topic: String @search(by: [exact]) @dgraph(name: "dgraph.topic")
+        numLikes: Int @search
+        isPublished: Boolean @search @dgraph(name: "is_published")
+        postType: PostType @search(by: [hash, trigram])
+        author: Author! @hasInverse(field: posts) @dgraph(name: "post.author")
+}
+
+"""
+GraphQL descriptions can be on enums.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+enum PostType {
+        Fact
+
+        """
+        GraphQL descriptions can be on enum values.  They should work in the input
+        schema and should make their way into the generated schema.
+        """
+        Question
+        Opinion
+}
+
+"""
+GraphQL descriptions can be on interfaces.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+interface Employee @dgraph(name: "dgraph.employee.en") {
+        ename: String!
+}
+
+interface Character @dgraph(name: "performance.character") {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search @dgraph(name: "appears_in")
+}
+
+type Human implements Character & Employee {
+        starships: [Starship]
+        totalCredits: Float @dgraph(name: "credits")
+}
+
+type Droid implements Character @dgraph(name: "roboDroid") {
+        primaryFunction: String
+}
+
+enum Episode {
+        NEWHOPE
+        EMPIRE
+        JEDI
+}
+
+type Starship @dgraph(name: "star.ship") {
+        id: ID!
+        name: String! @search(by: [term]) @dgraph(name: "star.ship.name")
+        length: Float
+}
