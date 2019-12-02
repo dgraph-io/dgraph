@@ -22,9 +22,9 @@ import (
 	"testing"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -128,7 +128,7 @@ func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, e
 
 func (ex *executor) Mutate(ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
 	ex.failMutation--
 	if ex.failMutation == 0 {
 		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")

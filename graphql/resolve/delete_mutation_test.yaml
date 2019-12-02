@@ -13,7 +13,9 @@
     { "uid": "uid(x)" }
   dgraphquery: |-
     query {
-      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author))
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
+        uid
+      }
     }
 
 -
@@ -34,7 +36,9 @@
     { "uid": "uid(x)" }
   dgraphquery: |-
     query {
-      x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author)))
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
+        uid
+      }
     }
 
 -
@@ -55,5 +59,7 @@
     { "uid": "uid(x)" }
   dgraphquery: |-
     query {
-      x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author")))
+      x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
+        uid
+      }
     }

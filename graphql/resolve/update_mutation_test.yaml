@@ -25,7 +25,9 @@
     }
   dgraphquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -56,7 +58,9 @@
     }
   dgraphquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -87,7 +91,9 @@
     }
   dgraphquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124))
+      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -126,7 +132,9 @@
     }
   dgraphquery: |-
     query {
-      x as updateHuman(func: type(Human)) @filter(uid(0x123))
+      x as updateHuman(func: type(Human)) @filter(uid(0x123)) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -148,7 +156,9 @@
     }
   dgraphquery: |-
     query {
-      x as updateCharacter(func: type(Character)) @filter(uid(0x123))
+      x as updateCharacter(func: type(Character)) @filter(uid(0x123)) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -179,7 +189,9 @@
     }
   dgraphquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo"))
+      x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo")) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -210,7 +222,9 @@
     }
   dgraphquery: |-
     query {
-      x as updateState(func: type(State)) @filter(eq(State.code, "nsw"))
+      x as updateState(func: type(State)) @filter(eq(State.code, "nsw")) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"
 
@@ -242,6 +256,8 @@
     }
   dgraphquery: |-
     query {
-      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2)))
+      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2))) {
+        uid
+      }
     }
   condition: "@if(gt(len(x), 0))"

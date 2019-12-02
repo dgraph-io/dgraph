@@ -157,11 +157,11 @@ func TestMutationQueryRewriting(t *testing.T) {
 					gqlMutation := test.GetMutation(t, op)
 
 					assigned := map[string]string{}
-					mutated := map[string][]string{}
+					mutated := []string{}
 					if name == "Add Post " {
 						assigned["newnode"] = "0x4"
 					} else {
-						mutated[mutationQueryVar] = []string{"0x4"}
+						mutated = []string{"0x4"}
 					}
 					dgQuery, err := tt.rewriter.FromMutationResult(
 						gqlMutation, assigned, mutated)
