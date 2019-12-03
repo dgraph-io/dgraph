@@ -15,7 +15,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
+    command: /gobin/dgraph zero --badger.encryption_key "1234567890123456" -o 100 --my=zero1:5180 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
   zero2:
     image: dgraph/dgraph:latest
@@ -34,7 +34,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 102 --my=zero2:5182 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5180
+    command: /gobin/dgraph zero --badger.encryption_key "1234567890123456" -o 102 --my=zero2:5182 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5180
 
   zero3:
     image: dgraph/dgraph:latest
@@ -53,7 +53,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 103 --my=zero3:5183 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5180
+    command: /gobin/dgraph zero --badger.encryption_key "1234567890123456" -o 103 --my=zero3:5183 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5180
 
   alpha1:
     image: dgraph/dgraph:latest
@@ -74,7 +74,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha2:
     image: dgraph/dgraph:latest
@@ -97,7 +97,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha3:
     image: dgraph/dgraph:latest
@@ -120,7 +120,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha4:
     image: dgraph/dgraph:latest
@@ -143,7 +143,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha5:
     image: dgraph/dgraph:latest
@@ -166,7 +166,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha6:
     image: dgraph/dgraph:latest
@@ -189,7 +189,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --badger.encryption_key "1234567890123456" --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   minio1:
     image: minio/minio:latest

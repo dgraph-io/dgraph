@@ -146,8 +146,6 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(Config.BadgerKey)
-	// zero out from memory
-	Config.BadgerKey = nil
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -190,7 +188,13 @@ func (s *ServerState) initStorage() {
 		// storage provided by the Raft library.
 		opt.TableLoadingMode = options.LoadToRAM
 
+		// Print the options w/o exposing key. TODO: Find a better way.
+		key := opt.EncryptionKey
+		opt.EncryptionKey = nil
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
+		opt.EncryptionKey = key
+		key = nil
+
 		s.WALstore, err = badger.Open(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
 	}
@@ -203,10 +207,18 @@ func (s *ServerState) initStorage() {
 			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
 		opt = setBadgerOptions(opt)
 
+		// Print the options w/o exposing the key. TODO: Find a better way.
+		key := opt.EncryptionKey
+		opt.EncryptionKey = nil
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
+		opt.EncryptionKey = key
+		key = nil
+
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
 
+		// zero out from memory
+		Config.BadgerKey = nil
 		opt.EncryptionKey = nil
 	}
 
