@@ -225,6 +225,22 @@ func mergePostingLists(base *List, deltas *List) *List {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
+	cachedVal, ok := plCache.Get(key)
+	if ok {
+		l := cachedVal.(*List)
+
+		// No need to clone the immutable layer or the key since mutations will not modify it.
+		lCopy := new(List)
+		lCopy.minTs = l.minTs
+		lCopy.maxTs = l.maxTs
+		lCopy.key = key
+		lCopy.plist = l.plist
+		lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+		for ts, pl := range l.mutationMap {
+			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+		}
+		return lCopy, nil
+	}
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
@@ -236,5 +252,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+	l, err := ReadPostingList(key, itr)
+	if err != nil {
+		return l, err
+	}
+	plCache.Set(key, l, int64(l.DeepSize()))
+	return l, nil
 }

@@ -174,13 +174,13 @@ func Init(ps *badger.DB) {
 		Metrics:     true,
 	})
 	x.Check(err)
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		for range ticker.C {
-			m := plCache.Metrics()
-			glog.Infof(m.String())
-		}
-	}()
+	// go func() {
+	// 	ticker := time.NewTicker(5 * time.Second)
+	// 	for range ticker.C {
+	// 		m := plCache.Metrics()
+	// 		glog.Infof(m.String())
+	// 	}
+	// }()
 }
 
 // Cleanup waits until the closer has finished processing.
