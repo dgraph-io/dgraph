@@ -18,18 +18,13 @@ package edgraph
 
 import (
 	"encoding/json"
-	//"io/ioutil"
 	"math"
-	//"os"
-	//"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
-	//"github.com/dgraph-io/badger/v2"
-	//"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
