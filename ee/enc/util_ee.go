@@ -31,8 +31,9 @@ func BadgerEncryptionKeyFile(flag *pflag.FlagSet) {
 // GetEncryptionKeyString returns the configured key
 func GetEncryptionKeyString(c *viper.Viper) string {
 	f := c.GetString(badgerEncFile)
-	x.AssertTruef(f != "", "Empty Encryption file")
-
+	if f == "" {
+		return ""
+	}
 	k, err := ioutil.ReadFile(f)
 	x.Checkf(err, "Error reading Badger Encryption key file (%v)", f)
 
