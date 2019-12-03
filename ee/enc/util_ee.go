@@ -21,8 +21,8 @@ import (
 
 const encFile string = "encryption_key_file"
 
-// BadgerEncryptionKeyFile exposes the badger.encryption_key_file flag to sub-cmds.
-func BadgerEncryptionKeyFile(flag *pflag.FlagSet) {
+// EncryptionKeyFile exposes the encryption_key_file flag to sub-cmds.
+func EncryptionKeyFile(flag *pflag.FlagSet) {
 	flag.String(encFile, "",
 		"The file that stores the data encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+

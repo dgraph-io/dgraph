@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -66,7 +67,9 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	enc.BadgerEncryptionKeyFile(flag)
+	if worker.EnterpriseEnabled() {
+		enc.EncryptionKeyFile(flag)
+	}
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
 	flag.Int64("mapoutput_mb", 64,
