@@ -34,8 +34,6 @@ import (
 )
 
 const (
-	methodMutate = "Server.Mutate"
-	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
 
