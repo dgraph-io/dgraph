@@ -23,8 +23,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// BadgerEncryptionKeyFile is not exposed for OSS build
-func BadgerEncryptionKeyFile(flag *pflag.FlagSet) {
+// EncryptionKeyFile is not exposed for OSS build
+func EncryptionKeyFile(flag *pflag.FlagSet) {
 	return
 }
 
