@@ -284,17 +284,27 @@ func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
 // metadata is expected to be a lot smaller than the set of NQuads so it's not
 // necessary to send them in batches. Instead, the metadata is sent to the channel
 // when Flush is called.
-func (buf *NQuadBuffer) PushMetadata(metadata *pb.ParseMetadata) {
+func (buf *NQuadBuffer) PushMetadata(metadata *pb.ParseMetadata) error {
 	if metadata == nil {
-		return
+		return nil
 	}
 
 	for _, pred := range metadata.GetForcedSinglePreds() {
+		if _, ok := buf.forcedListPreds[pred]; ok {
+			return errors.Errorf("Predicate %s is being used as a single scalar/object but it's "+
+				"been previously used as a list", pred)
+		}
 		buf.forcedSinglePreds[pred] = true
 	}
+
 	for _, pred := range metadata.GetForcedListPreds() {
+		if _, ok := buf.forcedSinglePreds[pred]; ok {
+			return errors.Errorf("")
+		}
 		buf.forcedListPreds[pred] = true
 	}
+
+	return nil
 }
 
 // Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
@@ -421,7 +431,10 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
-			buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+			err := buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+			if err != nil {
+				return mr, err
+			}
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -433,7 +446,10 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
-				buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+				err := buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+				if err != nil {
+					return mr, err
+				}
 				continue
 			}
 
@@ -446,9 +462,15 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
-			buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+			err = buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
+			if err != nil {
+				return mr, err
+			}
 		case []interface{}:
-			buf.PushMetadata(&pb.ParseMetadata{ForcedListPreds: []string{pred}})
+			err := buf.PushMetadata(&pb.ParseMetadata{ForcedListPreds: []string{pred}})
+			if err != nil {
+				return mr, err
+			}
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,

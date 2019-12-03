@@ -69,7 +69,6 @@ func TestTxnRead1(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	log.Printf("asfasdfadsfadsfasdfasd")
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
