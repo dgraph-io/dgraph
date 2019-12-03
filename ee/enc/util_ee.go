@@ -19,18 +19,19 @@ import (
 	"io/ioutil"
 )
 
-const badgerEncFile string = "badger.encryption_key_file"
+const encFile string = "encryption_key_file"
 
 // BadgerEncryptionKeyFile exposes the badger.encryption_key_file flag to sub-cmds.
 func BadgerEncryptionKeyFile(flag *pflag.FlagSet) {
-	flag.String(badgerEncFile, "",
-		"Specifies badger encryption key file. File must contain 16/24/32 bytes key that determines "+
-			"AES-128/192/256 encryption algorithm respectively.")
+	flag.String(encFile, "",
+		"The file that stores the data encryption key. The key size must be 16, 24, or 32 bytes long. " + 
+		"The key size determines the corresponding block size for AES encryption " +
+		"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 }
 
 // GetEncryptionKeyString returns the configured key
 func GetEncryptionKeyString(c *viper.Viper) string {
-	f := c.GetString(badgerEncFile)
+	f := c.GetString(encFile)
 	if f == "" {
 		return ""
 	}
