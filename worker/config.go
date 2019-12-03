@@ -21,9 +21,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 const (
