@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	groupFile    = "group_id"
+	groupFile = "group_id"
 )
 
 // ServerState holds the state of the Dgraph server.
