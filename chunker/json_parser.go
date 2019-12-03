@@ -231,11 +231,10 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 // NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
 // negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
-	batchSize         int
-	nquads            []*api.NQuad
-	nqCh              chan []*api.NQuad
-	forcedSinglePreds map[string]bool
-	forcedListPreds   map[string]bool
+	batchSize int
+	nquads    []*api.NQuad
+	nqCh      chan []*api.NQuad
+	predHints map[string]pb.ParseMetadata_HintType
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -247,8 +246,7 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
 	}
-	buf.forcedSinglePreds = make(map[string]bool)
-	buf.forcedListPreds = make(map[string]bool)
+	buf.predHints = make(map[string]pb.ParseMetadata_HintType)
 	return buf
 }
 
@@ -270,40 +268,25 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 
 // Metadata returns the parse metadata that has been aggregated so far..
 func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
-	metadata := &pb.ParseMetadata{}
-	for pred := range buf.forcedSinglePreds {
-		metadata.ForcedSinglePreds = append(metadata.ForcedSinglePreds, pred)
+	return &pb.ParseMetadata{
+		PredHints: buf.predHints,
 	}
-	for pred := range buf.forcedListPreds {
-		metadata.ForcedListPreds = append(metadata.ForcedListPreds, pred)
-	}
-	return metadata
 }
 
-// PushMetadata pushes and aggregates metadata derived during the parsing. This
-// metadata is expected to be a lot smaller than the set of NQuads so it's not
-// necessary to send them in batches. Instead, the metadata is sent to the channel
-// when Flush is called.
-func (buf *NQuadBuffer) PushMetadata(metadata *pb.ParseMetadata) error {
-	if metadata == nil {
-		return nil
-	}
-
-	for _, pred := range metadata.GetForcedSinglePreds() {
-		if _, ok := buf.forcedListPreds[pred]; ok {
-			return errors.Errorf("Predicate %s is being used as a single scalar/object but it's "+
-				"been previously used as a list", pred)
+// PushPredHint pushes and aggregates hints about the type of the predicate derived
+// during the parsing. This  metadata is expected to be a lot smaller than the set of
+// NQuads so it's not  necessary to send them in batches.
+func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.ParseMetadata_HintType) error {
+	if oldHint, ok := buf.predHints[pred]; ok && hint != oldHint {
+		if hint == pb.ParseMetadata_SINGLE {
+			return errors.Errorf("Predicate %s is being used as a single scalar/object but "+
+				"it's been previously used as a list", pred)
 		}
-		buf.forcedSinglePreds[pred] = true
-	}
 
-	for _, pred := range metadata.GetForcedListPreds() {
-		if _, ok := buf.forcedSinglePreds[pred]; ok {
-			return errors.Errorf("")
-		}
-		buf.forcedListPreds[pred] = true
+		return errors.Errorf("Predicate %s is being used as a list but it's "+
+			"been previously used as a single scalar/object", pred)
 	}
-
+	buf.predHints[pred] = hint
 	return nil
 }
 
@@ -431,8 +414,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
-			err := buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
-			if err != nil {
+			if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
 				return mr, err
 			}
 		case map[string]interface{}:
@@ -446,8 +428,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
-				err := buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
-				if err != nil {
+				if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
 					return mr, err
 				}
 				continue
@@ -462,13 +443,11 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
-			err = buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
-			if err != nil {
+			if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
 				return mr, err
 			}
 		case []interface{}:
-			err := buf.PushMetadata(&pb.ParseMetadata{ForcedListPreds: []string{pred}})
-			if err != nil {
+			if err := buf.PushPredHint(pred, pb.ParseMetadata_LIST); err != nil {
 				return mr, err
 			}
 			for _, item := range v {

@@ -219,31 +219,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Since raft committed logs are serialized, we can derive
 	// schema here without any locking
 
-	// Type to store the count for each <subject, pred> in the  mutations.
-	type subjectPred struct {
-		subject uint64
-		pred    string
-	}
-
 	// Stores a map of predicate and type of first mutation for each predicate.
 	schemaMap := make(map[string]types.TypeID)
-	// Stores the count of <subject, pred> pairs to help figure out whether
-	// schemas should be created as scalars or lists of scalars.
-	schemaCountMap := make(map[subjectPred]int)
-	// map to store whether a schema should be created as a list.
-	schemaAsList := make(map[string]bool)
-	// maps to store the hints sent in the Mutations object about the type of
-	// the predicate that should be created if the schema does not contain the
-	// predicate already.
-	forcedSinglePreds := make(map[string]bool)
-	forcedListPreds := make(map[string]bool)
-	for _, pred := range proposal.Mutations.ParseMetadata.GetForcedSinglePreds() {
-		forcedSinglePreds[pred] = true
-	}
-	for _, pred := range proposal.Mutations.ParseMetadata.GetForcedListPreds() {
-		forcedListPreds[pred] = true
-	}
-
 	for _, edge := range proposal.Mutations.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
@@ -262,12 +239,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
-
-		subPredPair := subjectPred{subject: edge.Entity, pred: edge.Attr}
-		schemaCountMap[subPredPair]++
-		if count := schemaCountMap[subPredPair]; count > 1 {
-			schemaAsList[edge.Attr] = true
-		}
 	}
 
 	total := len(proposal.Mutations.Edges)
@@ -285,17 +256,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			var hint typeHint
-			hint = defaultHint
-			if _, ok := schemaAsList[attr]; ok {
-				hint = listHint
+			hint := pb.ParseMetadata_DEFAULT
+			if mutHint, ok := proposal.Mutations.ParseMetadata.PredHints[attr]; ok {
+				hint = mutHint
 			}
-			if _, ok := forcedSinglePreds[attr]; ok {
-				hint = singleHint
-			} else if _, ok := forcedListPreds[attr]; ok {
-				hint = listHint
-			}
-
 			if err := createSchema(attr, storageType, hint); err != nil {
 				return err
 			}

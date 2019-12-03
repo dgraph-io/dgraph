@@ -190,15 +190,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-type typeHint int
-
-const (
-	defaultHint = iota
-	singleHint
-	listHint
-)
-
-func createSchema(attr string, typ types.TypeID, hint typeHint) error {
+func createSchema(attr string, typ types.TypeID, hint pb.ParseMetadata_HintType) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -213,9 +205,9 @@ func createSchema(attr string, typ types.TypeID, hint typeHint) error {
 		}
 
 		switch hint {
-		case singleHint:
+		case pb.ParseMetadata_SINGLE:
 			s.List = false
-		case listHint:
+		case pb.ParseMetadata_LIST:
 			s.List = true
 		default:
 		}

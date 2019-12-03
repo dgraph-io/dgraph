@@ -1823,6 +1823,7 @@ func JSONConsistencyCheck(t *testing.T, c *dgo.Dgraph) {
 			[{"person": {"name": "Bob"}}, {"person": ["Alice"]}, {"nickname": "Carol"}]`),
 	})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "is being used as")
 
 	txn = c.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
@@ -1831,4 +1832,5 @@ func JSONConsistencyCheck(t *testing.T, c *dgo.Dgraph) {
 			[{"name": ["Bob","Bob Marley"]}, {"name": "Alice"}, {"nickname": "Carol"}]`),
 	})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "is being used as")
 }
