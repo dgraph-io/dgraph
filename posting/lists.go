@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -153,8 +154,9 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore *badger.DB
-	closer *y.Closer
+	pstore  *badger.DB
+	closer  *y.Closer
+	plCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -162,6 +164,23 @@ func Init(ps *badger.DB) {
 	pstore = ps
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
+
+	// Initialize cache.
+	var err error
+	plCache, err = ristretto.NewCache(&ristretto.Config{
+		NumCounters: 200e6,
+		MaxCost:     1e9,
+		BufferItems: 64,
+		Metrics:     true,
+	})
+	x.Check(err)
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			m := plCache.Metrics()
+			glog.Infof(m.String())
+		}
+	}()
 }
 
 // Cleanup waits until the closer has finished processing.
