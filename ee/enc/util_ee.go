@@ -16,26 +16,30 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"io/ioutil"
 )
 
-const badgerEncFlag string = "badger.encryption_key"
+const badgerEncFile string = "badger.encryption_key_file"
 
-// BadgerEncryptionKeyFlag exposes the badger.encryption_key flag to sub-cmds.
-func BadgerEncryptionKeyFlag(flag *pflag.FlagSet) {
-	flag.String(badgerEncFlag, "",
-		"Specifies badger encryption key. Must be 16/24/32 bytes that determines "+
+// BadgerEncryptionKeyFile exposes the badger.encryption_key_file flag to sub-cmds.
+func BadgerEncryptionKeyFile(flag *pflag.FlagSet) {
+	flag.String(badgerEncFile, "",
+		"Specifies badger encryption key file. File must contain 16/24/32 bytes key that determines "+
 			"AES-128/192/256 encryption algorithm respectively.")
 }
 
 // GetEncryptionKeyString returns the configured key
 func GetEncryptionKeyString(c *viper.Viper) string {
-	k := c.GetString(badgerEncFlag)
-	// zero out the key from memory now.
-	c.Set(badgerEncFlag, "")
+	f := c.GetString(badgerEncFile)
+	x.AssertTruef(f != "", "Empty Encryption file")
+
+	k, err := ioutil.ReadFile(f)
+	x.Checkf(err, "Error reading Badger Encryption key file (%v)", f)
 
 	// len must be 16,24,32 bytes if given. 0 otherwise. All other lengths are invalid.
 	klen := len(k)
-	x.AssertTruef(klen == 0 || klen == 16 || klen == 24 || klen == 32,
+	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
 		"Invalid Badger encryption key length = %v", klen)
-	return k
+
+	return string(k)
 }
