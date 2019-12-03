@@ -30,8 +30,8 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )

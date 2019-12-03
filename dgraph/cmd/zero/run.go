@@ -89,8 +89,8 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-	
-	// TODO: Add zero encryption support when license check is enabled. 
+
+	// TODO: Add zero encryption support when license check is enabled.
 	//enc.EncryptionKeyFile(flag)
 
 	// OpenCensus flags.
