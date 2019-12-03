@@ -633,8 +633,6 @@ How about the geo-location querying capabilities?
 
 Sounds interesting?
 
-See you all soon in the next tutorial. Till then, happy Graphing!
-
 Check out our next tutorial of the getting started series [here](../tutorial-4/).
 
 ### Need Help
