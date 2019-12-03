@@ -3003,9 +3003,7 @@ Which returns the following results. (Note, without considering the `weight` fac
 }
 ```
 
-The shortest two paths are returned with:
-
-{{% notice "note" %}}>This time we are querying both people using two variable blocks and using the `uid( )` function. Useful for not typing UID literals all the time. You can also combine it with GraphQl variables.{{% /notice %}}
+We can return more paths by specifying `numpaths`. Setting `numpaths: 2` returns the shortest two paths:
 
 ```sh
 curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
@@ -3022,9 +3020,11 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
+{{% notice "note" %}}In the query above, instead of using UID literals, we query both people using var blocks and the `uid()` function. You can also combine it with [GraphQL Variables]({{< relref "#graphql-variables" >}}).{{% /notice %}}
+
 Edges weights are included by using facets on the edges as follows.
 
-{{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
+{{% notice "note" %}}Only one facet per predicate is allowed in the shortest query block.{{% /notice %}}
 
 ```sh
 curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
