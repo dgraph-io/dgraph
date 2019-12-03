@@ -251,6 +251,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		ostats.Record(ctx, x.ActiveMutations.M(int64(-total)))
 	}()
 
+	// Go through all the predicates and their first observed schema type. If we are unable to find
+	// these predicates in the current schema state, add them to the schema state. Note that the
+	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			if err := createSchema(attr, storageType); err != nil {
