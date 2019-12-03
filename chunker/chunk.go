@@ -34,12 +34,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ParseMetadata stores additional metadata derived during parsing.
-type ParseMetadata struct {
-	ForcedSinglePreds []string
-	ForcedListPreds   []string
-}
-
 // Chunker describes the interface to parse and process the input to the live and bulk loaders.
 type Chunker interface {
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)

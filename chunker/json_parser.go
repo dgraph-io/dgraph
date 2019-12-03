@@ -231,10 +231,11 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 // NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
 // negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
-	batchSize int
-	nquads    []*api.NQuad
-	nqCh      chan []*api.NQuad
-	metadata  *pb.ParseMetadata
+	batchSize         int
+	nquads            []*api.NQuad
+	nqCh              chan []*api.NQuad
+	forcedSinglePreds map[string]bool
+	forcedListPreds   map[string]bool
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -246,7 +247,8 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
 	}
-	buf.metadata = &pb.ParseMetadata{}
+	buf.forcedSinglePreds = make(map[string]bool)
+	buf.forcedListPreds = make(map[string]bool)
 	return buf
 }
 
@@ -268,22 +270,31 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 
 // Metadata returns the parse metadata that has been aggregated so far..
 func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
-	return buf.metadata
+	metadata := &pb.ParseMetadata{}
+	for pred := range buf.forcedSinglePreds {
+		metadata.ForcedSinglePreds = append(metadata.ForcedSinglePreds, pred)
+	}
+	for pred := range buf.forcedListPreds {
+		metadata.ForcedListPreds = append(metadata.ForcedListPreds, pred)
+	}
+	return metadata
 }
 
 // PushMetadata pushes and aggregates metadata derived during the parsing. This
 // metadata is expected to be a lot smaller than the set of NQuads so it's not
 // necessary to send them in batches. Instead, the metadata is sent to the channel
 // when Flush is called.
-func (buf *NQuadBuffer) PushMetadata(metadata *ParseMetadata) {
+func (buf *NQuadBuffer) PushMetadata(metadata *pb.ParseMetadata) {
 	if metadata == nil {
 		return
 	}
 
-	buf.metadata.ForcedSinglePreds = append(buf.metadata.ForcedSinglePreds,
-		metadata.ForcedSinglePreds...)
-	buf.metadata.ForcedListPreds = append(buf.metadata.ForcedListPreds,
-		metadata.ForcedListPreds...)
+	for _, pred := range metadata.GetForcedSinglePreds() {
+		buf.forcedSinglePreds[pred] = true
+	}
+	for _, pred := range metadata.GetForcedListPreds() {
+		buf.forcedListPreds[pred] = true
+	}
 }
 
 // Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
@@ -410,7 +421,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
-			buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
+			buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -422,7 +433,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
-				buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
+				buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
 				continue
 			}
 
@@ -435,9 +446,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
-			buf.PushMetadata(&ParseMetadata{ForcedSinglePreds: []string{pred}})
+			buf.PushMetadata(&pb.ParseMetadata{ForcedSinglePreds: []string{pred}})
 		case []interface{}:
-			buf.PushMetadata(&ParseMetadata{ForcedListPreds: []string{pred}})
+			buf.PushMetadata(&pb.ParseMetadata{ForcedListPreds: []string{pred}})
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
