@@ -149,8 +149,8 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 {"direct":[
   {
     "uid":"%s",
-    "access.to":[
-    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}]}]}
+    "access.to":
+    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}}]}
 `, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
