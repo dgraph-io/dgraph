@@ -531,8 +531,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				case <-ctx.Done():
 					return nil, ctx.Err()
 				}
+				numHops++
 			}
-			numHops++
 		}
 
 		neighbours := adjacencyMap[item.uid]
