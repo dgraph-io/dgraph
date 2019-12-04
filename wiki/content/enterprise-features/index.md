@@ -125,15 +125,16 @@ how to restore a backup series.
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
-created backup. Restore is intended to restore a backup to a new Dgraph cluster.
-During a restore, a new Dgraph Zero may be running to fully restore the backup
-state.
+created backup to a directory in the local filesystem. Restore is intended to
+restore a backup to a new Dgraph cluster not a currently live one. During a
+restore, a new Dgraph Zero may be running to fully restore the backup state.
 
 The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects.
 This URI supports all the schemes used for backup.
 
-The `--posting` (`-p`) flag sets the posting list parent directory to store the
-loaded backup files.
+The `--postings` (`-p`) flag sets the directory to which the restored posting
+directories will be saved. This directory will contain a posting directory for
+each group in the restored backup.
 
 The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
 start timestamp using the restored version. Otherwise, the timestamp must be
@@ -146,10 +147,16 @@ series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
 
 The restore feature will create a cluster with as many groups as the original
-cluster had at the time of the last backup. Restoring create a posting directory
-`p<N>` corresponding to the backup group ID. For example, a backup for Alpha
-group 2 would have the name ".../r32-g**2**.backup" and would be loaded to
-posting directory "p**2**".
+cluster had at the time of the last backup. For each group, `dgraph restore`
+creates a posting directory `p<N>` corresponding to the backup group ID. For
+example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
+and would be loaded to posting directory `p2`.
+
+After running the restore command, the directories inside the `postings`
+directory are copied over to the machines/containers running the alphas and
+`dgraph alpha` is started to load the copied data. For example, In a machine
+with two groups and a replica, `p1` is moved to the location of the first alpha
+and `p2` is moved to the location of the second alpha.
 
 #### Restore from Amazon S3
 ```sh
