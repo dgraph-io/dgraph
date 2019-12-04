@@ -67,7 +67,8 @@ type options struct {
 var (
 	opt options
 	// Live is the sub-command invoked when running "dgraph live".
-	Live x.SubCommand
+	Live         x.SubCommand
+	reversePreds map[string]bool
 )
 
 func init() {
@@ -136,6 +137,16 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 		x.Checkf(err, "Error while reading file")
 	}
 
+	reversePreds = make(map[string]bool)
+
+	for _, schemaLine := range strings.Split(string(b), "\n") {
+		if !strings.Contains(schemaLine, "@reverse") {
+			continue
+		}
+		predicate := strings.Fields(schemaLine)[0]
+		reversePreds[predicate] = true
+	}
+
 	op := &api.Operation{}
 	op.Schema = string(b)
 	return dgraphClient.Alter(ctx, op)
@@ -190,15 +201,24 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			if len(nqs) == 0 {
 				continue
 			}
+			remainingNqs := make([]*api.NQuad, 0, 0)
+			i := 0
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
 					nq.ObjectId = l.uid(nq.ObjectId)
 				}
+				if reversePreds[nq.Predicate] {
+					remainingNqs = append(remainingNqs, nq)
+				} else {
+					nqs[i] = nq
+					i++
+				}
 			}
 
-			mu := api.Mutation{Set: nqs}
+			mu := api.Mutation{Set: nqs[:i]}
 			l.reqs <- mu
+			l.reverseRes <- api.Mutation{Set: remainingNqs}
 		}
 	}()
 
@@ -246,19 +266,21 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	alloc := xidmap.New(connzero, db)
 	l := &loader{
-		opts:     opts,
-		dc:       dc,
-		start:    time.Now(),
-		reqs:     make(chan api.Mutation, opts.Pending*2),
-		alloc:    alloc,
-		db:       db,
-		zeroconn: connzero,
+		opts:       opts,
+		dc:         dc,
+		start:      time.Now(),
+		reqs:       make(chan api.Mutation, opts.Pending*2),
+		reverseRes: make(chan api.Mutation, 2),
+		alloc:      alloc,
+		db:         db,
+		zeroconn:   connzero,
 	}
 
-	l.requestsWg.Add(opts.Pending)
+	l.requestsWg.Add(opts.Pending + 1)
 	for i := 0; i < opts.Pending; i++ {
-		go l.makeRequests()
+		go l.makeRequests(l.reqs)
 	}
+	go l.makeRequests(l.reverseRes)
 
 	rand.Seed(time.Now().Unix())
 	return l
@@ -345,6 +367,7 @@ func run() error {
 	}
 
 	close(l.reqs)
+	close(l.reverseRes)
 	// First we wait for requestsWg, when it is done we know all retry requests have been added
 	// to retryRequestsWg. We can't have the same waitgroup as by the time we call Wait, we can't
 	// be sure that all retry requests have been added to the waitgroup.

@@ -73,9 +73,10 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	reqNum   uint64
-	reqs     chan api.Mutation
-	zeroconn *grpc.ClientConn
+	reqNum     uint64
+	reqs       chan api.Mutation
+	reverseRes chan api.Mutation
+	zeroconn   *grpc.ClientConn
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -162,9 +163,9 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
-func (l *loader) makeRequests() {
+func (l *loader) makeRequests(c chan api.Mutation) {
 	defer l.requestsWg.Done()
-	for req := range l.reqs {
+	for req := range c {
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
 		l.request(req, reqNum)
 	}
