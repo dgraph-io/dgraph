@@ -948,6 +948,105 @@ func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
 
 }
 
+func TestShortestPathWithDepth_test_for_hoppy_behavior(t *testing.T) {
+	// This test checks that we only increase numHops when item.hop > numHops -1
+
+	query := `
+	query test ($depth: int) {
+		a as var(func: eq(name, "F"))
+		b as var(func: eq(name, "J"))
+
+		path as shortest(from: uid(a), to: uid(b), depth: $depth) {
+			connects @facets(weight)
+		}
+
+		path(func: uid(path)) {
+			uid
+			name
+		}
+	}`
+
+	shortestPath := `{
+		"data": {
+		  "path": [
+			{
+			  "uid": "0x38",
+			  "name": "F"
+			},
+			{
+			  "uid": "0x3a",
+			  "name": "H"
+			},
+			{
+			  "uid": "0x3b",
+			  "name": "I"
+			},
+			{
+			  "uid": "0x3c",
+			  "name": "J"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x3c",
+					"connects|weight": 1
+				  },
+				  "uid": "0x3b",
+				  "connects|weight": 1
+				},
+				"uid": "0x3a",
+				"connects|weight": 1
+			  },
+			  "uid": "0x38",
+			  "_weight_": 3
+			}
+		  ]
+		}
+	  }`
+
+	tests := []struct {
+		name, depth, output string
+	}{
+		{
+			"depth 0",
+			"0",
+			`{"data":{"path":[]}}`,
+		},
+		{
+			"depth 1",
+			"1",
+			`{"data":{"path":[]}}`,
+		},
+		{
+			"depth 2",
+			"2",
+			`{"data":{"path":[]}}`,
+		},
+		{
+			"depth 3",
+			"3",
+			shortestPath,
+		},
+		{
+			"depth 10",
+			"10",
+			shortestPath,
+		},
+	}
+
+	t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
+			require.NoError(t, err)
+			require.JSONEq(t, tc.output, js)
+		})
+	}
+}
+
 func TestFacetVarRetrieval(t *testing.T) {
 
 	query := `

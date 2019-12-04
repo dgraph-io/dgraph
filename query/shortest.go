@@ -512,26 +512,29 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		if numHops >= maxHops {
 			break
 		}
-		// Explore the next level by calling processGraph and add them to the queue.
-		if !stopExpansion {
-			next <- true
-			select {
-			case err = <-expandErr:
-				if err != nil {
-					// errStop is returned when ProcessGraph doesn't return any more results
-					// and we can't expand anymore.
-					if err == errStop {
-						stopExpansion = true
-					} else {
-						return nil, err
+
+		if item.hop > numHops-1 {
+			// Explore the next level by calling processGraph and add them to the queue.
+			if !stopExpansion {
+				next <- true
+				select {
+				case err = <-expandErr:
+					if err != nil {
+						// errStop is returned when ProcessGraph doesn't return any more results
+						// and we can't expand anymore.
+						if err == errStop {
+							stopExpansion = true
+						} else {
+							return nil, err
+						}
 					}
+				case <-ctx.Done():
+					return nil, ctx.Err()
 				}
-			case <-ctx.Done():
-				return nil, ctx.Err()
 			}
+			numHops++
 		}
 
-		numHops++
 		neighbours := adjacencyMap[item.uid]
 		for toUID, neighbour := range neighbours {
 			d, ok := dist[toUID]
@@ -546,6 +549,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				node := &queueItem{
 					uid:  toUID,
 					cost: nodeCost,
+					hop:  item.hop + 1,
 				}
 				heap.Push(&pq, node)
 				dist[toUID] = nodeInfo{
@@ -562,6 +566,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				// and fix the priority in the heap and map.
 				node := dist[toUID].node
 				node.cost = nodeCost
+				node.hop = item.hop + 1
 				heap.Fix(&pq, node.index)
 				// Update the map with new values.
 				dist[toUID] = nodeInfo{
