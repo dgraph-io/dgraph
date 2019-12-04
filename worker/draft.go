@@ -33,9 +33,9 @@ import (
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -251,6 +251,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		ostats.Record(ctx, x.ActiveMutations.M(int64(-total)))
 	}()
 
+	// Go through all the predicates and their first observed schema type. If we are unable to find
+	// these predicates in the current schema state, add them to the schema state. Note that the
+	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			if err := createSchema(attr, storageType); err != nil {
@@ -803,9 +806,9 @@ func (n *node) Run() {
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {
@@ -957,9 +960,9 @@ func (n *node) Run() {
 
 			if !leader {
 				// Followers should send messages later.
-				for _, msg := range rd.Messages {
+				for i := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
+					n.Send(&rd.Messages[i])
 				}
 			}
 			if span != nil {

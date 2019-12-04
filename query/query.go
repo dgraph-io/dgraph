@@ -394,7 +394,10 @@ func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
-	x.Checkf(err, "Error while interpreting appropriate type from binary")
+	if err != nil {
+		// This can happen when a mutation ingests corrupt data into the database.
+		return v, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
+	}
 	return sv, nil
 }
 
@@ -2335,7 +2338,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			continue
 		}
 		if err := types.SortWithFacet(values, &uids, facetList,
-			[]bool{sg.Params.FacetOrderDesc}); err != nil {
+			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2382,7 +2385,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &uids, []bool{sg.Params.Order[0].Desc}); err != nil {
+		if err := types.Sort(values, &uids, []bool{sg.Params.Order[0].Desc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids

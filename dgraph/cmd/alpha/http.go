@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -253,26 +252,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var out bytes.Buffer
-	writeEntry := func(key string, js []byte) error {
-		if _, err := out.WriteRune('"'); err != nil {
-			return err
-		}
-		if _, err := out.WriteString(key); err != nil {
-			return err
-		}
-		if _, err := out.WriteRune('"'); err != nil {
-			return err
-		}
-		if _, err := out.WriteRune(':'); err != nil {
-			return err
-		}
-		if _, err := out.Write(js); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
@@ -284,26 +263,19 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := out.WriteRune('{'); err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
+	var out bytes.Buffer
+	writeEntry := func(key string, js []byte) {
+		out.WriteRune('"')
+		out.WriteString(key)
+		out.WriteRune('"')
+		out.WriteRune(':')
+		out.Write(js)
 	}
-	if err := writeEntry("data", resp.Json); err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-	if _, err := out.WriteRune(','); err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-	if err := writeEntry("extensions", js); err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-	if _, err := out.WriteRune('}'); err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
+	out.WriteRune('{')
+	writeEntry("data", resp.Json)
+	out.WriteRune(',')
+	writeEntry("extensions", js)
+	out.WriteRune('}')
 
 	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,
@@ -346,14 +318,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		mu := &api.Mutation{}
-		req = &api.Request{Mutations: []*api.Mutation{mu}}
-		if setJSON, ok := ms["set"]; ok && setJSON != nil {
-			mu.SetJson = setJSON.bs
-		}
-		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
-			mu.DeleteJson = delJSON.bs
-		}
+		req = &api.Request{}
 		if queryText, ok := ms["query"]; ok && queryText != nil {
 			req.Query, err = strconv.Unquote(string(queryText.bs))
 			if err != nil {
@@ -361,11 +326,54 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if condText, ok := ms["cond"]; ok && condText != nil {
-			mu.Cond, err = strconv.Unquote(string(condText.bs))
-			if err != nil {
-				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+
+		// JSON API support both keys 1. mutations  2. set,delete,cond
+		// We want to maintain the backward compatibility of the API here.
+		extractMutation := func(jsMap map[string]*skipJSONUnmarshal) (*api.Mutation, error) {
+			mu := &api.Mutation{}
+			empty := true
+			if setJSON, ok := jsMap["set"]; ok && setJSON != nil {
+				empty = false
+				mu.SetJson = setJSON.bs
+			}
+			if delJSON, ok := jsMap["delete"]; ok && delJSON != nil {
+				empty = false
+				mu.DeleteJson = delJSON.bs
+			}
+			if condText, ok := jsMap["cond"]; ok && condText != nil {
+				mu.Cond, err = strconv.Unquote(string(condText.bs))
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if empty {
+				return nil, nil
+			}
+
+			return mu, nil
+		}
+		if mu, err := extractMutation(ms); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		} else if mu != nil {
+			req.Mutations = append(req.Mutations, mu)
+		}
+		if mus, ok := ms["mutations"]; ok && mus != nil {
+			var mm []map[string]*skipJSONUnmarshal
+			if err := json.Unmarshal(mus.bs, &mm); err != nil {
+				jsonErr := convertJSONError(string(mus.bs), err)
+				x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 				return
+			}
+
+			for _, m := range mm {
+				if mu, err := extractMutation(m); err != nil {
+					x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+					return
+				} else if mu != nil {
+					req.Mutations = append(req.Mutations, mu)
+				}
 			}
 		}
 
@@ -415,15 +423,25 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
-	if len(resp.Vars) > 0 {
-		vars := make(map[string][]string)
-		// Flatten the mutated map so that it is easier to parse for the client.
-		for v, uids := range resp.Vars {
-			vars[fmt.Sprintf("uid(%s)", v)] = uids.GetUids()
+
+	// add query response if any, usual op if resp.Json == '{}' (i.e. l <= 2)
+	l := len(resp.Json)
+	if l > 2 && resp.Json[l-1] == '}' {
+		data, err := json.Marshal(mp)
+		if err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
 		}
-		mp["vars"] = vars
+
+		out := bytes.NewBuffer(resp.Json[:(l - 1)])
+		out.WriteRune(',')
+
+		// data[0] must be '{'
+		out.Write(data[1:])
+		response["data"] = json.RawMessage(out.Bytes())
+	} else {
+		response["data"] = mp
 	}
-	response["data"] = mp
 
 	js, err := json.Marshal(response)
 	if err != nil {

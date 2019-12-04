@@ -134,9 +134,9 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		url := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
+		moveUrl := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
 			url.QueryEscape(pred))
-		resp, err := http.Get(url)
+		resp, err := http.Get(moveUrl)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
 		time.Sleep(time.Second)
@@ -156,9 +156,11 @@ func TestNodes(t *testing.T) {
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
-	if _, ok := state2.Groups["3"]; ok {
-		t.Errorf("node removal failed")
-	}
+	group, ok := state2.Groups["3"]
+	require.True(t, ok, "group 3 is removed")
+
+	require.Equal(t, len(group.Members), int(0),
+		fmt.Sprintf("Expected 0 members in group 3 but got %d", len(group.Members)))
 
 	doTestQuery(t, dg)
 
@@ -166,9 +168,9 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
-		url := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=1",
+		moveUrl := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=1",
 			url.QueryEscape(pred))
-		resp, err := http.Get(url)
+		resp, err := http.Get(moveUrl)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
 		time.Sleep(time.Second)
@@ -188,8 +190,10 @@ func TestNodes(t *testing.T) {
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
-	if _, ok := state2.Groups["2"]; ok {
-		t.Errorf("node removal failed")
+	group, ok = state2.Groups["2"]
+	require.True(t, ok, "group 2 is removed")
+	if len(group.Members) != 0 {
+		t.Errorf("Expected 0 members in group 2 but got %d", len(group.Members))
 	}
 
 	doTestQuery(t, dg)

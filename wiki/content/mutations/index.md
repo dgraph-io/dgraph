@@ -852,9 +852,8 @@ cat data.json | jq '{set: .}'
 ## Upsert Block
 
 The upsert block allows performing queries and mutations in a single request. The upsert
-block contains one query block and one mutation block. Variables defined in the query
-block can be used in the mutation block using the `uid` function.
-Support for `val` function is coming soon.
+block contains one query block and one or more than one mutation blocks. Variables defined
+in the query block can be used in the mutation blocks using the `uid` and `val` function.
 
 In general, the structure of the upsert block is as follows:
 
@@ -862,19 +861,34 @@ In general, the structure of the upsert block is as follows:
 upsert {
   query <query block>
   [fragment <fragment block>]
-  mutation <mutation block>
+  mutation <mutation block 1>
+  [mutation <mutation block 2>]
+  ...
 }
 ```
 
-The Mutation block currently only allows the `uid` function, which allows extracting UIDs
-from variables defined in the query block. There are two possible outcomes based on the
-results of executing the query block:
+Execution of an upsert block also returns the response of the query executed on the state
+of the database *before mutation was executed*. To get the latest result, we should commit
+the mutation and execute another query.
 
-* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+### `uid` Function
+
+The `uid` function allows extracting UIDs from variables defined in the query block.
+There are two possible outcomes based on the results of executing the query block:
+
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored. A blank node gets the same UID across all the mutation blocks.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
+### `val` Function
 
-### Example
+The `val` function allows extracting values from value variables. Value variables store
+a mapping from UIDs to their corresponding values. Hence, `val(v)` is replaced by the value
+stored in the mapping for the UID (Subject) in the N-Quad. If the variable `v` has no value
+for a given UID, the mutation is silently ignored. The `val` function can be used with the
+result of aggregate variables as well, in which case, all the UIDs in the mutation would
+be updated with the aggregate value.
+
+### Example of `uid` Function
 
 Consider an example with the following schema:
 
@@ -882,8 +896,7 @@ Consider an example with the following schema:
 curl localhost:8080/alter -X POST -d $'
   name: string @index(term) .
   email: string @index(exact, trigram) @upsert .
-  age: int @index(int) .
-' | jq
+  age: int @index(int) .' | jq
 ```
 
 Now, let's say we want to create a new user with `email` and `name` information.
@@ -899,7 +912,10 @@ We can do this using the upsert block as follows:
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+      name
+    }
   }
 
   mutation {
@@ -908,8 +924,7 @@ upsert {
       uid(v) <email> "user@company1.io" .
     }
   }
-}
-' | jq
+}' | jq
 ```
 
 Result:
@@ -917,10 +932,11 @@ Result:
 ```json
 {
   "data": {
+    "q": [],
     "code": "Success",
     "message": "Done",
     "uids": {
-      "uid(v)": "0x2"
+      "uid(v)": "0x1"
     }
   },
   "extensions": {...}
@@ -934,11 +950,18 @@ the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
 If we run the same mutation again, the data would just be overwritten, and no new uid is
-created. Note that the `uids` map is empty in the response when the mutation is executed again:
+created. Note that the `uids` map is empty in the result when the mutation is executed
+again and the `data` map (key `q`) contains the uid that was created in the previous upsert.
 
 ```json
 {
   "data": {
+    "q": [
+      {
+        "uid": "0x1",
+        "name": "first last"
+      }
+    ],
     "code": "Success",
     "message": "Done",
     "uids": {}
@@ -952,14 +975,13 @@ We can achieve the same result using `json` dataset as follows:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
+  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid\\n name} }",
   "set": {
     "uid": "uid(v)",
     "name": "first last",
     "email": "user@company1.io"
   }
-}
-' | jq
+}' | jq
 ```
 
 Now, we want to add the `age` information for the same user having the same email
@@ -969,7 +991,9 @@ Now, we want to add the `age` information for the same user having the same emai
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+    }
   }
 
   mutation {
@@ -977,8 +1001,73 @@ upsert {
       uid(v) <age> "28" .
     }
   }
+}' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "q": [
+      {
+        "uid": "0x1"
+      }
+    ],
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
 }
-' | jq
+```
+
+Here, the query block queries for a user with `email` as `user@company1.io`. It stores
+the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user by extracting the uid from the variable `v` using `uid` function.
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
+{
+  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid} }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}' | jq
+```
+
+If we want to execute the mutation only when the user exists, we could use
+[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+
+### Example of `val` Function
+
+Let's say we want to migrate the predicate `age` to `other`. We can do this using the
+following mutation:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    v as var(func: has(age)) {
+      a as age
+    }
+  }
+
+  mutation {
+    # we copy the values from the old predicate
+    set {
+      uid(v) <other> val(a) .
+    }
+
+    # and we delete the old predicate
+    delete {
+      uid(v) <age> * .
+    }
+  }
+}' | jq
 ```
 
 Result:
@@ -988,41 +1077,36 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }
 ```
 
-Here, the query block queries for a user with `email` as `user@company1.io`. It stores
-the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
-of `vars` which has a list of uids that were used in the set mutation.
+Here, variable `a` will store a mapping from all the UIDs to their `age`. The mutation
+block then stores the corresponding value of `age` for each UID in the `other` predicate
+and deletes the `age` predicate.
 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
-{
-  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
-  "set":{
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "delete": {
     "uid": "uid(v)",
-    "age": "28"
+    "age": null
+  },
+  "set": {
+    "uid": "uid(v)",
+    "other": "val(a)"
   }
-}
-' | jq
+}' | jq
 ```
-
-If we want to execute the mutation only when the user exists, we could use
-[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
 
 ### Bulk Delete Example
 
 Let's say we want to delete all the users of `company1` from the database. This can be
-achieved in just one query using the upsert block:
+achieved in just one query using the upsert block as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
@@ -1038,30 +1122,13 @@ upsert {
       uid(v) <age> * .
     }
   }
-}
-' | jq
-```
-
-Result:
-
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
-  },
-  "extensions": {...}
-}
+}' | jq
 ```
 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'{
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
   "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
   "delete": {
     "uid": "uid(v)",
@@ -1069,13 +1136,12 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
     "email": null,
     "age": null
   }
-}
-' | jq
+}' | jq
 ```
 
 ## Conditional Upsert
 
-The upsert block also allows specifying a conditional mutation block using an `@if`
+The upsert block also allows specifying conditional mutation blocks using an `@if`
 directive. The mutation is executed only when the specified condition is true. If the
 condition is false, the mutation is silently ignored. The general structure of
 Conditional Upsert looks like as follows:
@@ -1084,21 +1150,23 @@ Conditional Upsert looks like as follows:
 upsert {
   query <query block>
   [fragment <fragment block>]
-  mutation @if(<condition>) <mutation block>
+  mutation [@if(<condition>)] <mutation block 1>
+  [mutation [@if(<condition>)] <mutation block 2>]
+  ...
 }
 ```
 
 The `@if` directive accepts a condition on variables defined in the query block and can be
 connected using `AND`, `OR` and `NOT`.
 
-### Example
+### Example of Conditional Upsert
 
 Let's say in our previous example, we know the `company1` has less than 100 employees.
 For safety, we want the mutation to execute only when the variable `v` stores less than
 100 but greater than 50 UIDs in it. This can be achieved as follows:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
     v as var(func: regexp(email, /.*@company1.io$/))
@@ -1111,8 +1179,7 @@ upsert {
       uid(v) <age> * .
     }
   }
-}
-' | jq
+}' | jq
 ```
 
 We can achieve the same result using `json` dataset as follows:
@@ -1127,5 +1194,217 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
     "email": null,
     "age": null
   }
+}' | jq
+```
+
+### Example of Multiple Mutation Blocks
+
+Consider an example with the following schema:
+
+```sh
+curl localhost:8080/alter -X POST -d $'
+  name: string @index(term) .
+  email: [string] @index(exact) @upsert .' | jq
+```
+
+Let's say, we have many users stored in our database each having one or more than
+one email Addresses. Now, we get two email Addresses that belong to the same user.
+If the email Addresses belong to the different nodes in the database, we want to delete
+the existing nodes and create a new node with both the emails attached to this new node.
+Otherwise, we create/update the new/existing node with both the emails.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    # filter is needed to ensure that we do not get same UIDs in u1 and u2
+    q1(func: eq(email, "user_email1@company1.io")) @filter(not(eq(email, "user_email2@company1.io"))) {
+      u1 as uid
+    }
+
+    q2(func: eq(email, "user_email2@company1.io")) @filter(not(eq(email, "user_email1@company1.io"))) {
+      u2 as uid
+    }
+
+    q3(func: eq(email, "user_email1@company1.io")) @filter(eq(email, "user_email2@company1.io")) {
+      u3 as uid
+    }
+  }
+
+  # case when both emails do not exist
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 exists but email2 does not
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      uid(u1) <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 does not exist but email2 exists
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      uid(u2) <email> "user_email1@company1.io" .
+    }
+  }
+
+  # case when both emails exist and needs merging
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+
+    delete {
+      uid(u1) <name> * .
+      uid(u1) <email> * .
+      uid(u2) <name> * .
+      uid(u2) <email> * .
+    }
+  }
+}' | jq
+```
+
+Result (when database is empty):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x1"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (both emails exist and are attached to different nodes):
+```json
+{
+  "data": {
+    "q1": [
+      {
+        "uid": "0x2"
+      }
+    ],
+    "q2": [
+      {
+        "uid": "0x3"
+      }
+    ],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x4"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (when both emails exist and are already attached to the same node):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [
+      {
+        "uid": "0x4"
+      }
+    ],
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{q1(func: eq(email, \"user_email1@company1.io\")) @filter(not(eq(email, \"user_email2@company1.io\"))) {u1 as uid} \n q2(func: eq(email, \"user_email2@company1.io\")) @filter(not(eq(email, \"user_email1@company1.io\"))) {u2 as uid} \n q3(func: eq(email, \"user_email1@company1.io\")) @filter(eq(email, \"user_email2@company1.io\")) {u3 as uid}}",
+  "mutations": [
+    {
+      "cond": "@if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u1)",
+          "email": "user_email2@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u2)",
+          "email": "user_email1@company1.io"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io"
+        }
+      ],
+      "delete": [
+        {
+          "uid": "uid(u1)",
+          "name": null,
+          "email": null
+        },
+        {
+          "uid": "uid(u2)",
+          "name": null,
+          "email": null
+        }
+      ]
+    }
+  ]
 }' | jq
 ```

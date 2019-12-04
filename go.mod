@@ -7,18 +7,19 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
+	github.com/DataDog/zstd v1.4.4 // indirect
+	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/beorn7/perks v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.0.0-20181114232033-e1f5e6cdcd76
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/d4l3k/messagediff v1.2.1 // indirect
-	github.com/dgraph-io/badger v0.0.0-20190917133922-cbdef65095c7
-	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191021171913-3efa60e5593b
-	github.com/dgraph-io/ristretto v0.0.0-20191010170704-2ba187ef9534 // indirect
+	github.com/dgraph-io/badger/v2 v2.0.0
+	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
+	github.com/dgraph-io/ristretto v0.0.0-20191114170855-99d1bbbf28e6 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2
+	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-ini/ini v1.39.0 // indirect
@@ -46,13 +47,13 @@ require (
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.4.0
 	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
-	github.com/twpayne/go-geom v0.0.0-20170317090630-6753ad11e46b
+	github.com/twpayne/go-geom v1.0.5
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-	golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3
+	golang.org/x/net v0.0.0-20191116160921-f9c825593386
+	golang.org/x/sys v0.0.0-20191118090420-b5d5184f72d2
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
