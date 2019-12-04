@@ -701,11 +701,11 @@ func TestShortestPathWithDepth(t *testing.T) {
 	tests := []struct {
 		name, depth, output string
 	}{
-		// {
-		// 	"depth 0",
-		// 	"0",
-		// 	`{"data": {}}`,
-		// },
+		{
+			"depth 0",
+			"0",
+			`{"data":{"path":[]}}`,
+		},
 		{
 			"depth 1",
 			"1",
@@ -785,11 +785,11 @@ func TestShortestPathWithDepth_direct_path_is_shortest(t *testing.T) {
 	tests := []struct {
 		name, depth, output string
 	}{
-		// {
-		// 	"depth 0",
-		// 	"0",
-		// 	`{"data": {}}`,
-		// },
+		{
+			"depth 0",
+			"0",
+			`{"data":{"path":[]}}`,
+		},
 		{
 			"depth 1",
 			"1",
@@ -884,11 +884,11 @@ func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
 	tests := []struct {
 		name, depth, output string
 	}{
-		// {
-		// 	"depth 0",
-		// 	"0",
-		// 	`{"data": {}}`,
-		// },
+		{
+			"depth 0",
+			"0",
+			`{"data":{"path":[]}}`,
+		},
 		{
 			"depth 1",
 			"1",

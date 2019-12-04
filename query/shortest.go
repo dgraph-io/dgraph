@@ -292,9 +292,9 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
-	maxHops := int(sg.Params.ExploreDepth)
-	if maxHops == 0 {
-		maxHops = int(math.MaxInt32)
+	maxHops := math.MaxInt32
+	if sg.Params.ExploreDepth != nil {
+		maxHops = int(*sg.Params.ExploreDepth)
 	}
 	minWeight := sg.Params.MinWeight
 	maxWeight := sg.Params.MaxWeight
@@ -461,11 +461,12 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := 0
-	maxHops := int(sg.Params.ExploreDepth)
-	// TODO - Depth 0 works same as max depth. Fix it so that when depth: 0 is explicitly supplied,
-	// it should return an empty path.
+	maxHops := math.MaxInt32
+	if sg.Params.ExploreDepth != nil {
+		maxHops = int(*sg.Params.ExploreDepth)
+	}
 	if maxHops == 0 {
-		maxHops = int(math.MaxInt32)
+		return nil, nil
 	}
 
 	// next is a channel on to which we send a signal so as to perform another level of expansion.
