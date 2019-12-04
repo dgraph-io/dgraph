@@ -486,12 +486,10 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	resetUser(t)
 	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
 		"-g", devGroup, "-x", "password")
-	fmt.Println(createDevGroup.String())
 	require.NoError(t, createDevGroup.Run())
 
 	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
 		"-l", devGroup, "-x", "password")
-	fmt.Println(addUserToDev.String())
 	require.NoError(t, addUserToDev.Run())
 
 	txn := dg.NewTxn()
@@ -503,30 +501,25 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.NoError(t, err)
 
 	nodeUID, ok := resp.Uids["a"]
-	fmt.Println(nodeUID)
 	require.True(t, ok)
 
 	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
 		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
-	fmt.Println(setPermissionCmd.String())
 	require.NoError(t, setPermissionCmd.Run())
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(20 * time.Second)
+	time.Sleep(6 * time.Second)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
 	txn = userClient.NewTxn()
 	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
-	fmt.Println(mutString)
 	mutation = &api.Mutation{
 		DelNquads: []byte(mutString),
 		CommitNow: true,
 	}
 	resp, err = txn.Mutate(ctx, mutation)
-	fmt.Println(resp)
-	fmt.Println(err)
 	require.NotNil(t, err)
 }
