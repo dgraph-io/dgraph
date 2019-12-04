@@ -618,11 +618,11 @@ func TestShortestPathWithDepth(t *testing.T) {
 	// Shortest path between A and B is the path A => C => D => B but if the depth is less than 3
 	// then the direct path between A and B should be returned.
 	query := `
-	query test ($depth: int) {
+	query test ($depth: int, $numpaths: int) {
 		a as var(func: eq(name, "A"))
 		b as var(func: eq(name, "B"))
 
-		path as shortest(from: uid(a), to: uid(b), depth: $depth) {
+		path as shortest(from: uid(a), to: uid(b), depth: $depth, numpaths: $numpaths) {
 			connects @facets(weight)
 		}
 
@@ -699,39 +699,65 @@ func TestShortestPathWithDepth(t *testing.T) {
 	}`
 
 	tests := []struct {
-		name, depth, output string
+		depth, numpaths, output string
 	}{
 		{
-			"depth 0",
 			"0",
+			"1",
 			`{"data":{"path":[]}}`,
 		},
 		{
-			"depth 1",
+			"1",
 			"1",
 			directPath,
 		},
 		{
-			"depth 2",
 			"2",
+			"1",
 			directPath,
 		},
 		{
-			"depth 3",
 			"3",
+			"1",
 			shortestPath,
 		},
 		{
-			"depth 10",
 			"10",
+			"1",
 			shortestPath,
 		},
+		// {
+		// 	"0",
+		// 	"10",
+		// 	`{"data":{"path":[]}}`,
+		// },
+		// // {
+		// 	"1",
+		// 	"10",
+		// 	directPath,
+		// },
+		// {
+		// 	"2",
+		// 	"10",
+		// 	directPath,
+		// },
+		// {
+		// 	"3",
+		// 	"10",
+		// 	shortestPath,
+		// },
+		// {
+		// 	"10",
+		// 	"10",
+		// 	shortestPath,
+		// },
 	}
 
 	t.Parallel()
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth})
+		t.Run(fmt.Sprintf("depth_%s_numpaths_%s", tc.depth, tc.numpaths), func(t *testing.T) {
+			js, err := processQueryWithVars(t, query, map[string]string{"$depth": tc.depth,
+				"$numpaths": tc.numpaths})
 			require.NoError(t, err)
 			require.JSONEq(t, tc.output, js)
 		})
