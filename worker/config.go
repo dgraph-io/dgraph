@@ -44,6 +44,8 @@ type Options struct {
 	BadgerTables string
 	// BadgerVlog is the name of the mode used to load the badger value log.
 	BadgerVlog string
+	// BadgerKey is the key used for encryption. Enterprise only feature.
+	BadgerKey []byte
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.

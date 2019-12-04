@@ -68,13 +68,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+      - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true
     ports:
       - 8180:8180
       - 9180:9180
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha2:
     image: dgraph/dgraph:latest
@@ -91,13 +95,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+       - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true       
     ports:
       - 8182:8182
       - 9182:9182
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha3:
     image: dgraph/dgraph:latest
@@ -114,13 +122,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+      - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true
     ports:
       - 8183:8183
       - 9183:9183
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha4:
     image: dgraph/dgraph:latest
@@ -137,13 +149,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+      - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true
     ports:
       - 8184:8184
       - 9184:9184
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha5:
     image: dgraph/dgraph:latest
@@ -160,13 +176,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+      - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true
     ports:
       - 8185:8185
       - 9185:9185
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha6:
     image: dgraph/dgraph:latest
@@ -183,13 +203,17 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
+      - type: bind
+        source: ../ee/enc/enc_key_file
+        target: /dgraph-enc/enc_key_file
+        read_only: true
     ports:
       - 8186:8186
       - 9186:9186
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc_key_file" --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   minio1:
     image: minio/minio:latest
