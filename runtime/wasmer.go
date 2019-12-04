@@ -19,7 +19,6 @@ package runtime
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -138,6 +137,7 @@ func (r *Runtime) Load(location, length int32) []byte {
 
 func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) {
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	// Store the data into memory
 	r.Store(data, loc)
@@ -155,12 +155,8 @@ func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) 
 
 	length := int32(resi >> 32)
 	offset := int32(resi)
-	fmt.Printf("offset %d length %d\n", offset, length)
-	mem := r.vm.Memory.Data()
-	rawdata := make([]byte, length)
-	copy(rawdata, mem[offset:offset+length])
 
-	r.mutex.Unlock()
+	rawdata := r.Load(offset, length)
 
 	return rawdata, err
 }

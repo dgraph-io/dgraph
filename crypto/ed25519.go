@@ -9,6 +9,11 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 )
 
+const Ed25519PublicKeyLength int = 32
+const Ed25519SeedLength int = 32
+const Ed25519PrivateKeyLength int = 64
+const Ed25519SignatureLength int = 64
+
 // Ed25519Keypair is a ed25519 public-private keypair
 type Ed25519Keypair struct {
 	public  *Ed25519PublicKey
@@ -29,7 +34,7 @@ func NewEd25519Keypair(priv ed25519.PrivateKey) *Ed25519Keypair {
 }
 
 func NewEd25519KeypairFromSeed(seed []byte) (*Ed25519Keypair, error) {
-	if len(seed) != 32 {
+	if len(seed) != Ed25519SeedLength {
 		return nil, fmt.Errorf("cannot generate key from seed: seed is not 32 bytes long")
 	}
 	edpriv := ed25519.NewKeyFromSeed(seed)
@@ -38,7 +43,7 @@ func NewEd25519KeypairFromSeed(seed []byte) (*Ed25519Keypair, error) {
 
 // GenerateEd25519Keypair returns a new ed25519 keypair
 func GenerateEd25519Keypair() (*Ed25519Keypair, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, Ed25519SeedLength)
 	_, err := rand.Read(buf)
 	if err != nil {
 		return nil, err
@@ -52,7 +57,7 @@ func GenerateEd25519Keypair() (*Ed25519Keypair, error) {
 // NewEd25519PublicKey returns an ed25519 public key that consists of the input bytes
 // Input length must be 32 bytes
 func NewEd25519PublicKey(in []byte) (*Ed25519PublicKey, error) {
-	if len(in) != 32 {
+	if len(in) != Ed25519PublicKeyLength {
 		return nil, fmt.Errorf("cannot create public key: input is not 32 bytes")
 	}
 
@@ -63,7 +68,7 @@ func NewEd25519PublicKey(in []byte) (*Ed25519PublicKey, error) {
 // NewEd25519PrivateKey returns an ed25519 private key that consists of the input bytes
 // Input length must be 64 bytes
 func NewEd25519PrivateKey(in []byte) (*Ed25519PrivateKey, error) {
-	if len(in) != 64 {
+	if len(in) != Ed25519PrivateKeyLength {
 		return nil, fmt.Errorf("cannot create private key: input is not 64 bytes")
 	}
 
@@ -73,6 +78,10 @@ func NewEd25519PrivateKey(in []byte) (*Ed25519PrivateKey, error) {
 
 // Verify returns true if the signature is valid for the given message and public key, false otherwise
 func Ed25519Verify(pub *Ed25519PublicKey, msg, sig []byte) bool {
+	if len(sig) != Ed25519SignatureLength {
+		return false
+	}
+
 	return ed25519.Verify(ed25519.PublicKey(*pub), msg, sig)
 }
 
@@ -120,6 +129,9 @@ func (k *Ed25519PrivateKey) Decode(in []byte) error {
 
 // Verify checks that Ed25519PublicKey was used to create the signature for the message
 func (k *Ed25519PublicKey) Verify(msg, sig []byte) bool {
+	if len(sig) != Ed25519SignatureLength {
+		return false
+	}
 	return ed25519.Verify(ed25519.PublicKey(*k), msg, sig)
 }
 

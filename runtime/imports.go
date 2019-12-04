@@ -517,28 +517,129 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 //export ext_ed25519_public_keys
 func ext_ed25519_public_keys(context unsafe.Pointer, idData, resultLen int32) int32 {
 	log.Trace("[ext_ed25519_public_keys] executing...")
-	log.Warn("[ext_ed25519_public_keys] Not yet implemented.")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	keys := runtimeCtx.keystore.Ed25519PublicKeys()
+	// TODO: when do deallocate?
+	offset, err := runtimeCtx.allocator.Allocate(uint32(len(keys) * 32))
+	if err != nil {
+		log.Error("[ext_ed25519_public_keys]", "error", err)
+		return -1
+	}
+
+	for i, key := range keys {
+		copy(memory[offset+uint32(i*32):offset+uint32((i+1)*32)], key.Encode())
+	}
+
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, uint32(len(keys)))
+	copy(memory[resultLen:resultLen+4], buf)
+	return int32(offset)
 }
 
 //export ext_sr25519_public_keys
 func ext_sr25519_public_keys(context unsafe.Pointer, idData, resultLen int32) int32 {
 	log.Trace("[ext_sr25519_public_keys] executing...")
-	log.Warn("[ext_sr25519_public_keys] Not yet implemented.")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	keys := runtimeCtx.keystore.Sr25519PublicKeys()
+
+	offset, err := runtimeCtx.allocator.Allocate(uint32(len(keys) * 32))
+	if err != nil {
+		log.Error("[ext_sr25519_public_keys]", "error", err)
+		return -1
+	}
+
+	for i, key := range keys {
+		copy(memory[offset+uint32(i*32):offset+uint32((i+1)*32)], key.Encode())
+	}
+
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, uint32(len(keys)))
+	copy(memory[resultLen:resultLen+4], buf)
+	return int32(offset)
 }
 
 //export ext_ed25519_sign
 func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLen, out int32) int32 {
 	log.Debug("[ext_ed25519_sign] executing...")
-	log.Warn("[ext_ed25519_sign] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
+	pubkey, err := crypto.NewEd25519PublicKey(pubkeyBytes)
+	if err != nil {
+		log.Error("[ext_ed25519_sign]", "error", err)
+		return 1
+	}
+
+	signingKey := runtimeCtx.keystore.GetKeypair(pubkey)
+	if signingKey == nil {
+		log.Error("[ext_ed25519_sign] could not find key in keystore", "public key", pubkey)
+		return 1
+	}
+
+	msgLenBytes := memory[msgLen : msgLen+4]
+	msgLength := binary.LittleEndian.Uint32(msgLenBytes)
+	msg := memory[msgData : msgData+int32(msgLength)]
+	sig, err := signingKey.Sign(msg)
+	if err != nil {
+		log.Error("[ext_ed25519_sign] could not sign message")
+		return 1
+	}
+
+	copy(memory[out:out+64], sig)
 	return 0
 }
 
 //export ext_sr25519_sign
 func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLen, out int32) int32 {
 	log.Debug("[ext_sr25519_sign] executing...")
-	log.Warn("[ext_sr25519_sign] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	mutex.RLock()
+	runtimeCtx := registry[*(*int)(instanceContext.Data())]
+	mutex.RUnlock()
+
+	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
+	pubkey, err := crypto.NewSr25519PublicKey(pubkeyBytes)
+	if err != nil {
+		log.Error("[ext_sr25519_sign]", "error", err)
+		return 1
+	}
+
+	signingKey := runtimeCtx.keystore.GetKeypair(pubkey)
+
+	if signingKey == nil {
+		log.Error("[ext_sr25519_sign] could not find key in keystore", "public key", pubkey)
+		return 1
+	}
+
+	msgLenBytes := memory[msgLen : msgLen+4]
+	msgLength := binary.LittleEndian.Uint32(msgLenBytes)
+	msg := memory[msgData : msgData+int32(msgLength)]
+	sig, err := signingKey.Sign(msg)
+	if err != nil {
+		log.Error("[ext_sr25519_sign] could not sign message")
+		return 1
+	}
+
+	copy(memory[out:out+64], sig)
 	return 0
 }
 
