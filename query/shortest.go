@@ -472,6 +472,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
+	// TODO - Check if this goroutine actually improves performance. It doesn't look like it
+	// because we need to fill the adjacency map before we can make progress.
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
@@ -488,8 +490,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var totalWeight float64
 
 	// We continue to pop from the priority queue either
-	// 1. Till we get the destination node in which case we would have gotten to it through
-	// the shortest path.
+	// 1. Till we get the destination node in which case we would have gotten to it through the
+	//    shortest path.
 	// 2. We have expanded maxHops number of times.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
@@ -500,8 +502,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		if numHops >= maxHops {
 			break
 		}
-		// Explore the next level by calling processGraph and add them
-		// to the queue.
+		// Explore the next level by calling processGraph and add them to the queue.
 		if !stopExpansion {
 			next <- true
 			select {
@@ -566,6 +567,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 	}
 
+	// Send next as false so that the expandOut goroutine exits.
 	next <- false
 	// Go through the distance map to find the path.
 	var result []uint64
