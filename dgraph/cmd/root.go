@@ -129,8 +129,8 @@ func initCmds() {
 
 		for _, sc := range subcommands {
 			// Set config file is provided for each subcommand, this is done
-			// for individual subcommand because each subcommand has it's own config
-			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`
+			// for individual subcommand because each subcommand has its own config
+			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`.
 			cfg := sc.Conf.GetString("config")
 			if cfg == "" {
 				continue
