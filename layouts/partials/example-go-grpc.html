@@ -10,50 +10,45 @@
 {{ $majorVersion := int (index $version 0) }}
 {{ $minorVersion := int (index $version 1) }}
 {{ $patchVersion := int (index $version 2) }}
-{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+{{ $versionGe110 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 1)) (and (eq $majorVersion 1) (ge $minorVersion 1) (ge $patchVersion 0)) }}
 
 <pre><code class="no-copy" tabindex="-1">package main
 
 import (
-  "context"
-  "flag"
-  "fmt"
-  "log"
-
-  {{- if $versionGe105 }}
-  "github.com/dgraph-io/dgo"
-  "github.com/dgraph-io/dgo/protos/api"
-  {{ else }}
-  "github.com/dgraph-io/dgraph/client"
-  "github.com/dgraph-io/dgraph/protos/api"
-  {{ end -}}
-  "google.golang.org/grpc"
+	"context"
+	"flag"
+	"fmt"
+	"log"
+    {{ if $versionGe110 }}
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+    {{ else }}
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+    {{ end }}
+	"google.golang.org/grpc"
 )
 
 var (
-  dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph Alpha address")
+	dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph Alpha address")
 )
 
 func main() {
-  flag.Parse()
-  conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
-  if err != nil {
-    log.Fatal(err)
-  }
-  defer conn.Close()
+	flag.Parse()
+	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
 
-  {{ if $versionGe105 }}
-  dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-  {{ else }}
-  dg := client.NewDgraphClient(api.NewDgraphClient(conn))
-  {{ end }}
-  {{ if eq .Vars nil }}
-  resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`)
-  {{ else }}
-  resp, err := dg.NewTxn().QueryWithVars(context.Background(), `<span class="query-content">{{ .Code }}</span>`, map[string]string{{ .Vars }})
-  {{ end }}
-  if err != nil {
-    log.Fatal(err)
-  }
-  fmt.Printf("Response: %s\n", resp.Json)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+    {{ if eq .Vars nil }}
+	resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`)
+	{{ else }}
+	resp, err := dg.NewTxn().QueryWithVars(context.Background(), `<span class="query-content">{{ .Code }}</span>`, map[string]string{{ .Vars }})
+    {{ end }}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Response: %s\n", resp.Json)
 }</code></pre>

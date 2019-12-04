@@ -11,13 +11,14 @@
 async function main() {
   const clientStub = new dgraph.DgraphClientStub("http://localhost:8080");
   const dgraphClient = new dgraph.DgraphClient(clientStub);
+
   const query = `<span class="query-content">{{ .Code }}</span>`;
-{{ if eq .Vars nil }}
+  {{- if eq .Vars nil }}
   const response = await dgraphClient.newTxn().query(query);
-{{ else }}
+  {{ else }}
   const vars = {{ .Vars }};
   const response = await dgraphClient.newTxn().queryWithVars(query, vars);
-{{ end }}
+  {{ end -}}
   console.log("Response: ", JSON.stringify(response.data));
 }
 

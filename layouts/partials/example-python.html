@@ -9,23 +9,17 @@
 <pre><code class="no-copy" tabindex="-1">import pydgraph
 import json
 
-def query_data(client):
-
-    query = """<span class="query-content">{{ .Code }}</span>"""
-
-{{ if eq .Vars nil }}
-    res = client.txn(read_only=True).query(query)
-{{ else }}
-    variables = {{ .Vars }}
-    res = client.txn(read_only=True).query(query, variables=variables)
-{{ end }}
-
-    print('Response: {}'.format(json.loads(res.json)))
-
 def main():
     client_stub = pydgraph.DgraphClientStub("localhost:9080")
     client = pydgraph.DgraphClient(client_stub)
-    query_data(client)
+    query = """<span class="query-content">{{ .Code }}</span>"""
+    {{- if eq .Vars nil }}
+    res = client.txn(read_only=True).query(query)
+    {{ else }}
+    variables = {{ .Vars }}
+    res = client.txn(read_only=True).query(query, variables=variables)
+    {{ end -}}
+    print('Response: {}'.format(json.loads(res.json)))
 
     client_stub.close()
 
