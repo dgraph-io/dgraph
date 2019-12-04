@@ -96,7 +96,6 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	x.Check(err)
 
 	// zero out the key from memory.
-	r.opt.BadgerKey = nil
 	opt.EncryptionKey = nil
 
 	r.dbs = append(r.dbs, db)
