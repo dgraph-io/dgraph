@@ -301,6 +301,10 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.ExploreDepth != nil {
 		maxHops = int(*sg.Params.ExploreDepth)
 	}
+	if maxHops == 0 {
+		return nil, nil
+	}
+
 	minWeight := sg.Params.MinWeight
 	maxWeight := sg.Params.MaxWeight
 	next := make(chan bool, 2)

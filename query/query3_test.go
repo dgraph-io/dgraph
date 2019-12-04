@@ -726,12 +726,12 @@ func TestShortestPathWithDepth(t *testing.T) {
 			"1",
 			shortestPath,
 		},
+		{
+			"0",
+			"10",
+			`{"data":{"path":[]}}`,
+		},
 		// {
-		// 	"0",
-		// 	"10",
-		// 	`{"data":{"path":[]}}`,
-		// },
-		// // {
 		// 	"1",
 		// 	"10",
 		// 	directPath,
