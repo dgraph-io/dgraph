@@ -2058,7 +2058,8 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	return nil
 }
 
-func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result, srcFn *functionContext) error {
+func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result,
+	srcFn *functionContext) error {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleHasFunction")
 	defer stop()
