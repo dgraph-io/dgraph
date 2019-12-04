@@ -181,6 +181,11 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 					continue
 				}
 
+				// Call updateUidMatrix to ensure that entries in the uidMatrix are updated after
+				// intersecting with DestUIDs. This should ideally be called during query
+				// processing but doesn't seem to be called for shortest path queries. So we call
+				// it explicitly here to ensure the results are correct.
+				subgraph.updateUidMatrix()
 				// Send the destuids in res chan.
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
 					// This can happen when trying to go traverse a predicate of type password

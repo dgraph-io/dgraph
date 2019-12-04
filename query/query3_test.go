@@ -1033,8 +1033,6 @@ func TestShortestPath4(t *testing.T) {
 }
 
 func TestShortestPath_filter(t *testing.T) {
-	// TODO (pawan) - Debug this later.
-	t.Skip()
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
