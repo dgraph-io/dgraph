@@ -95,7 +95,7 @@ services:
         source: ../ee/acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
-       - type: bind
+      - type: bind
         source: ../ee/enc/enc_key_file
         target: /dgraph-enc/enc_key_file
         read_only: true       
