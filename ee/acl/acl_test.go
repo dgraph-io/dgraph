@@ -520,6 +520,6 @@ func TestUnauthorizedDeletion(t *testing.T) {
 		DelNquads: []byte(mutString),
 		CommitNow: true,
 	}
-	resp, err = txn.Mutate(ctx, mutation)
+	_, err = txn.Mutate(ctx, mutation)
 	require.NotNil(t, err)
 }
