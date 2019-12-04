@@ -249,7 +249,6 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
@@ -270,7 +269,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)
