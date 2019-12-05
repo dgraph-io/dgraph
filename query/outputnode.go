@@ -867,7 +867,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				// In case of Value we have only one Facets.
 				for i, fcts := range pc.facetsMatrix[idx].FacetsList {
 					if err := attachFacets(dst.(*fastJsonNode), fieldName, pc.List,
-						fcts.Facets, idx+i); err != nil {
+						fcts.Facets, i); err != nil {
 						return err
 					}
 				}

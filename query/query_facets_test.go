@@ -76,6 +76,8 @@ func populateClusterWithFacets() {
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<1> <alt_name> \"Michelle\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<1> <alt_name> \"Michelin\" %s .\n", nameFacets1)
+	triples += fmt.Sprintf("<12000> <name> \"Harry\"@en %s .\n", nameFacets)
+	triples += fmt.Sprintf("<12000> <alt_name> \"Potter\" %s .\n", nameFacets1)
 
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
@@ -1628,7 +1630,7 @@ func TestFacetUIDListPredicate(t *testing.T) {
 func TestFacetValueListPredicate(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{
-		q(func: uid(0x1)) {
+		q(func: uid(1, 12000)) {
 			name@en @facets
 			alt_name @facets
 		}
@@ -1639,23 +1641,40 @@ func TestFacetValueListPredicate(t *testing.T) {
 			"data":{
 				"q":[
 					{
-						"name@en|origin": "french",
+						"name@en|origin":"french",
 						"name@en":"Michelle",
-						"alt_name":[
-							"Michelle",
-							"Michelin"
-						],
-						"alt_name|origin":{
-							"0":"french",
-							"1":"spanish"
-						},
 						"alt_name|dummy":{
 							"0":true,
 							"1":false
 						},
-						"alt_name|isNick": {
-							"1": true
-						}
+						"alt_name|origin":{
+							"0":"french",
+							"1":"spanish"
+						},
+						"alt_name|isNick":{
+							"1":true
+						},
+						"alt_name":[
+							"Michelle",
+							"Michelin"
+						]
+					},
+					{
+						"name@en|dummy":true,
+						"name@en|origin":"french",
+						"name@en":"Harry",
+						"alt_name|dummy":{
+							"0":false
+						},
+						"alt_name|isNick":{
+							"0":true
+						},
+						"alt_name|origin":{
+							"0":"spanish"
+						},
+						"alt_name":[
+							"Potter"
+						]
 					}
 				]
 			}
