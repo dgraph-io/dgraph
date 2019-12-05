@@ -77,14 +77,6 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
-// initialize map if it's nil. caller has to take care of
-// lock.
-func (l *List) initializeMutationMap() {
-	if l.mutationMap == nil {
-		l.mutationMap = make(map[uint64]*pb.PostingList)
-	}
-}
-
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -320,17 +312,19 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 	if hasDeleteAll(mpost) {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
-		l.initializeMutationMap()
+		if l.mutationMap == nil {
+			l.mutationMap = make(map[uint64]*pb.PostingList)
+		}
 		l.mutationMap[mpost.StartTs] = plist
-		return
-	}
-	if l.mutationMap == nil {
 		return
 	}
 	plist, ok := l.mutationMap[mpost.StartTs]
 	if !ok {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
+		if l.mutationMap == nil {
+			l.mutationMap = make(map[uint64]*pb.PostingList)
+		}
 		l.mutationMap[mpost.StartTs] = plist
 		return
 	}
@@ -522,6 +516,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	x.Check(pl.Unmarshal(data))
 
 	l.Lock()
+	if l.mutationMap == nil {
+		l.mutationMap = make(map[uint64]*pb.PostingList)
+	}
 	l.mutationMap[startTs] = pl
 	l.Unlock()
 }
