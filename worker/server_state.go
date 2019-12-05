@@ -138,6 +138,14 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 
 func (s *ServerState) initStorage() {
 	var err error
+
+	if !EnterpriseEnabled2() {
+		glog.Infof("Enterprise License missing. Disable Encryption and proceed.")
+		Config.BadgerKey = nil
+	} else {
+		glog.Info("Encryption feature enabled")
+	}
+
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")

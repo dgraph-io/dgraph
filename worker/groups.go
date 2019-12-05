@@ -603,7 +603,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
 
 	getLeaderConn := func(zc pb.ZeroClient) *conn.Pool {
-		ctx, cancel := context.WithTimeout(gr.ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(g.ctx, 10*time.Second)
 		defer cancel()
 
 		connState, err := zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
@@ -984,4 +984,31 @@ func EnterpriseEnabled() bool {
 	g.RLock()
 	defer g.RUnlock()
 	return g.state.GetLicense().GetEnabled()
+}
+
+func EnterpriseEnabled2() bool {
+	var err error
+	var connState *pb.ConnectionState
+
+	grp := &groupi{
+		blockDeletes: new(sync.Mutex),
+		tablets:      make(map[string]*pb.Tablet),
+	}
+	grp.ctx, grp.cancel = context.WithCancel(context.Background())
+
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+		pl := grp.connToZeroLeader()
+		if pl == nil {
+			continue
+		}
+		zc := pb.NewZeroClient(pl.Get())
+		connState, err = zc.Connect(grp.ctx, &pb.Member{ClusterInfoOnly: true})
+		if connState == nil || connState.GetState() == nil || connState.GetState().GetLicense() == nil {
+			continue
+		}
+		if err == nil || x.ShouldCrash(err) {
+			break
+		}
+	}
+	return connState.GetState().GetLicense().GetEnabled()
 }
