@@ -998,24 +998,38 @@ func askZeroForEE() bool {
 	var connState *pb.ConnectionState
 
 	grp := &groupi{}
-	grp.ctx, grp.cancel = context.WithCancel(context.Background())
 
-	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	conn := func() bool {
+		grp.ctx, grp.cancel = context.WithCancel(context.Background())
+		defer grp.cancel()
+
 		pl := grp.connToZeroLeader()
 		if pl == nil {
-			continue
+			return false
 		}
 		zc := pb.NewZeroClient(pl.Get())
-		connState, err = zc.Connect(grp.ctx, &pb.Member{ClusterInfoOnly: true})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		connState, err = zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
 		if connState == nil ||
 			connState.GetState() == nil ||
 			connState.GetState().GetLicense() == nil {
 			glog.Info("Retry Zero Connection")
-			continue
+			return false
 		}
 		if err == nil || x.ShouldCrash(err) {
+			return true
+		}
+		return false
+	}
+
+	for {
+		if conn() {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 	return connState.GetState().GetLicense().GetEnabled()
 }
