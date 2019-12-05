@@ -139,7 +139,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 func (s *ServerState) initStorage() {
 	var err error
 
-	if !EnterpriseEnabled2() {
+	if !EnterpriseEnabled() {
 		glog.Infof("Enterprise License missing. Disable Encryption and proceed.")
 		Config.BadgerKey = nil
 	} else {

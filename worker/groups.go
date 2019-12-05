@@ -58,7 +58,7 @@ type groupi struct {
 	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
-var gr *groupi
+var gr *groupi = nil
 
 func groups() *groupi {
 	return gr
@@ -981,12 +981,15 @@ func (g *groupi) processOracleDeltaStream() {
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
 	g := groups()
+	if g == nil {
+		return enterpriseEnabled2()
+	}
 	g.RLock()
 	defer g.RUnlock()
 	return g.state.GetLicense().GetEnabled()
 }
 
-func EnterpriseEnabled2() bool {
+func enterpriseEnabled2() bool {
 	var err error
 	var connState *pb.ConnectionState
 
