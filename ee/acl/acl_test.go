@@ -362,7 +362,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	}
 }
 
-func TestPredicateRegex(t *testing.T) {
+func TestPredicatePermission(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
@@ -391,57 +391,6 @@ func TestPredicateRegex(t *testing.T) {
 	// is not allowed.
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
-	alterPredicateWithUserAccount(t, dg, true)
-	// Schema queries should still succeed since they are not tied to specific predicates.
-	querySchemaWithUserAccount(t, dg, false)
-
-	// Create a new group.
-	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "add",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "-x", "password")
-	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to create group:%v", string(errOutput))
-	}
-
-	// Add the user to the group.
-	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-u", userid, "--group_list", devGroup, "-x", "password")
-	if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add user %s to group %s:%v", userid, devGroup, string(errOutput))
-	}
-
-	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "--pred", "name", "-m", strconv.Itoa(int(Read.Code)|int(Write.Code)),
-		"-x",
-		"password")
-	if errOutput, err := addReadToNameCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
-			"name", devGroup, string(errOutput))
-	}
-
-	// Add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group.
-	predRegex := "^predicate_to(.*)$"
-	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "-P", predRegex, "-m",
-		strconv.Itoa(int(Read.Code)|int(Write.Code)), "-x", "password")
-	if errOutput, err := addReadWriteToRegexPermCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ+WRITE permission on %s to group %s:%v",
-			predRegex, devGroup, string(errOutput))
-	}
-
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
-	queryPredicateWithUserAccount(t, dg, false)
-	mutatePredicateWithUserAccount(t, dg, false)
-	// The alter operation should still fail since the regex pred does not have the Modify
-	// permission.
 	alterPredicateWithUserAccount(t, dg, true)
 	// Schema queries should still succeed since they are not tied to specific predicates.
 	querySchemaWithUserAccount(t, dg, false)
