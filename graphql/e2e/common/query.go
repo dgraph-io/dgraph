@@ -1076,7 +1076,7 @@ func queryTypename(t *testing.T) {
 
 }
 
-func typenameForInterface(t *testing.T) {
+func TypenameForInterface(t *testing.T, expected string) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
@@ -1104,21 +1104,6 @@ func typenameForInterface(t *testing.T) {
 
 		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
-
-		expected := `{
-		"queryCharacter": [
-		  {
-			"name":"Han Solo",
-			"__typename": "Human",
-			"totalCredits": 10
-		  },
-		  {
-			"name": "R2-D2",
-			"__typename": "Droid",
-			"primaryFunction": "Robot"
-		  }
-		]
-	  }`
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 

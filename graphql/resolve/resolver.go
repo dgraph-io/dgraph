@@ -772,13 +772,10 @@ func completeValue(
 			// "GraphQL supports type name introspection at any point within a query by the
 			// meta‐field  __typename: String! when querying against any Object, Interface,
 			// or Union. It returns the name of the object type currently being queried."
-			//
-			// FIXME: Dgraph will return multiple types for an object, so we need something more
-			// subtle here to pick out "the name of the object type currently being queried".
 
 			var typeName interface{}
 			if len(val) > 0 {
-				typeName = val[0]
+				typeName = field.TypeName(val)
 			}
 			return completeValue(path, field, typeName)
 		}
