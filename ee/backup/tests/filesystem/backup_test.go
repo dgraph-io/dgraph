@@ -38,7 +38,6 @@ import (
 )
 
 var (
-	backupDir     = "./data/backups"
 	copyBackupDir = "./data/backups_copy"
 	restoreDir    = "./data/restore"
 	testDirs      = []string{restoreDir}
