@@ -220,27 +220,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func mergePostingLists(base *List, deltas *List) *List {
-	base.RLock()
-	defer base.RUnlock()
-	deltas.RLock()
-	defer deltas.RUnlock()
-
-	out := &List{}
-	out.key = append([]byte{}, base.key...)
-	out.plist = proto.Clone(base.plist).(*pb.PostingList)
-	out.mutationMap = make(map[uint64]*pb.PostingList)
-	for commitTs, pl := range base.mutationMap {
-		out.mutationMap[commitTs] = proto.Clone(pl).(*pb.PostingList)
-	}
-	out.minTs = base.minTs
-	// The maxTs was set in the list with the deltas when reading the version
-	// of the corresponding item.
-	out.maxTs = deltas.maxTs
-
-	return out
-}
-
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	cachedVal, ok := plCache.Get(key)
