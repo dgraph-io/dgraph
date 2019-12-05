@@ -361,3 +361,44 @@ $ curl -X POST localhost:8080/login -d '{
   "refresh_token": "<refreshJWT>"
 }'
 ```
+
+## Encryption at Rest
+
+Encryption at rest refers to the encryption of data that is stored physically in any digital
+form. It ensures that sensitive data on disks is not readable by any user or application
+without a valid key that is required for decryption. Dgraph provides encryption at rest as an
+enterprise feature. If encryption is enabled, Dgraph uses AES (Advanced Encryption Standard)
+algorithm to encrypt the data and secure it.
+
+### Setup Encryption
+
+To enable encryption, we need to pass a file that stores the data encryption key with the option
+`--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
+the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
+
+Here is an example encryption key file of size 16 bytes.
+
+*enc_key_file*
+```
+123456789012345
+```
+
+### Turn on Encryption
+
+Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
+
+```bash
+dgraph zero --my=localhost:5080 --replicas 1 --idx 1 --logtostderr --bindall --expose_trace --profile_mode block --block_rate 10 -v=2
+dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr --expose_trace --profile_mode block --block_rate 10 -v=2
+```
+
+### Bulk loader with Encryption
+
+Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
+Later we can point the generated `p` directory to a new alpha server.
+
+Here is an example to bulk load data with encription  :
+
+```bash
+dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+```
