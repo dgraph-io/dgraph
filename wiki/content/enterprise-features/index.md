@@ -154,9 +154,10 @@ and would be loaded to posting directory `p2`.
 
 After running the restore command, the directories inside the `postings`
 directory are copied over to the machines/containers running the alphas and
-`dgraph alpha` is started to load the copied data. For example, In a machine
-with two groups and a replica, `p1` is moved to the location of the first alpha
-and `p2` is moved to the location of the second alpha.
+`dgraph alpha` is started to load the copied data. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` is moved to the
+location of the first Alpha and `p2` is moved to the location of the second
+Alpha.
 
 #### Restore from Amazon S3
 ```sh
