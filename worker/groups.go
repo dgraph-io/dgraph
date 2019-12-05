@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -980,6 +981,9 @@ func (g *groupi) processOracleDeltaStream() {
 
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
+	if !enc.EeBuild {
+		return false
+	}
 	g := groups()
 	if g == nil {
 		return enterpriseEnabled2()

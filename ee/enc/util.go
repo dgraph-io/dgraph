@@ -23,12 +23,19 @@ import (
 	"github.com/spf13/viper"
 )
 
+var EeBuild = false
+
 // EncryptionKeyFile is not exposed for OSS build
 func EncryptionKeyFile(flag *pflag.FlagSet) {
 	return
 }
 
 // GetEncryptionKeyString return empty string for OSS build
-func GetEncryptionKeyString(c *viper.Viper) string {
+func GetEncryptionKeyFile(c *viper.Viper) string {
 	return ""
+}
+
+// ReadEncryptionKeyFile returns nil key for OSS build
+func ReadEncryptionKeyFile(f string) []byte {
+	return nil
 }

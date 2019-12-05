@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -110,7 +111,7 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
-		WithEncryptionKey(Config.BadgerKey)
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -140,10 +141,10 @@ func (s *ServerState) initStorage() {
 	var err error
 
 	if !EnterpriseEnabled() {
-		glog.Infof("Enterprise License missing. Disable Encryption and proceed.")
-		Config.BadgerKey = nil
+		glog.Infof("Enterprise License missing or OSS build. Disable Encryption and proceed.")
+		Config.BadgerKeyFile = ""
 	} else {
-		glog.Info("Encryption feature enabled")
+		glog.Infof("Encryption feature enabled. Encryption Key file %v", Config.BadgerKeyFile)
 	}
 
 	{
@@ -189,7 +190,7 @@ func (s *ServerState) initStorage() {
 		x.Checkf(err, "Error while creating badger KV posting store")
 
 		// zero out from memory
-		Config.BadgerKey = nil
+		Config.BadgerKeyFile = ""
 		opt.EncryptionKey = nil
 	}
 

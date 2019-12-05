@@ -428,9 +428,9 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
-		BadgerTables: Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
-		BadgerKey:    []byte(enc.GetEncryptionKeyString(Alpha.Conf)),
+		BadgerTables:  Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:    Alpha.Conf.GetString("badger.vlog"),
+		BadgerKeyFile: enc.GetEncryptionKeyFile(Alpha.Conf),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),

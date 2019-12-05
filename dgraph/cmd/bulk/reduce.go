@@ -34,6 +34,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -91,7 +92,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
-		WithEncryptionKey(r.opt.BadgerKey)
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile))
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 

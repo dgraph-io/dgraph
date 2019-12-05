@@ -21,6 +21,8 @@ import (
 
 const encFile string = "encryption_key_file"
 
+var EeBuild = true
+
 // EncryptionKeyFile exposes the encryption_key_file flag to sub-cmds.
 func EncryptionKeyFile(flag *pflag.FlagSet) {
 	flag.String(encFile, "",
@@ -30,10 +32,14 @@ func EncryptionKeyFile(flag *pflag.FlagSet) {
 }
 
 // GetEncryptionKeyString returns the configured key
-func GetEncryptionKeyString(c *viper.Viper) string {
-	f := c.GetString(encFile)
+func GetEncryptionKeyFile(c *viper.Viper) string {
+	return c.GetString(encFile)
+}
+
+// ReadEncryptionKeyFile returns the encryption key in the given file.
+func ReadEncryptionKeyFile(f string) []byte {
 	if f == "" {
-		return ""
+		return nil
 	}
 	k, err := ioutil.ReadFile(f)
 	x.Checkf(err, "Error reading Badger Encryption key file (%v)", f)
@@ -43,5 +49,5 @@ func GetEncryptionKeyString(c *viper.Viper) string {
 	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
 		"Invalid Badger encryption key length = %v", klen)
 
-	return string(k)
+	return k
 }

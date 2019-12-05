@@ -53,7 +53,7 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	badgerKey         []byte // used in enterprise builds. nil otherwise.
+	badgerKeyFile     string // used in enterprise builds. nil otherwise.
 }
 
 var opts options
@@ -173,7 +173,7 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		badgerKey:         []byte(enc.GetEncryptionKeyString(Zero.Conf)),
+		badgerKeyFile:     enc.GetEncryptionKeyFile(Zero.Conf),
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
@@ -211,13 +211,13 @@ func run() {
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
 		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).
-		WithEncryptionKey(opts.badgerKey)
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(opts.badgerKeyFile))
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
 	// zero out from memory
-	opts.badgerKey = nil
+	opts.badgerKeyFile = ""
 	kvOpt.EncryptionKey = nil
 
 	store := raftwal.Init(kv, opts.nodeId, 0)
