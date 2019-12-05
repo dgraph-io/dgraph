@@ -21,6 +21,7 @@ import (
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/internal/services"
+	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
 	log "github.com/ChainSafe/log15"
@@ -39,18 +40,31 @@ type Service struct {
 	msgSend chan<- p2p.Message
 }
 
+type ServiceConfig struct {
+	Keystore *keystore.Keystore
+	Runtime  *runtime.Runtime
+	MsgRec   <-chan p2p.Message
+	MsgSend  chan<- p2p.Message
+}
+
 // NewService returns a Service that connects the runtime, BABE, and the p2p messages.
-func NewService(rt *runtime.Runtime, msgRec <-chan p2p.Message, msgSend chan<- p2p.Message) (*Service, error) {
-	b, err := babe.NewSession([32]byte{}, [64]byte{}, rt, msgSend)
+func NewService(cfg *ServiceConfig) (*Service, error) {
+	babeCfg := &babe.SessionConfig{
+		Keystore:             cfg.Keystore,
+		Runtime:              cfg.Runtime,
+		BlockAnnounceChannel: cfg.MsgSend,
+	}
+
+	b, err := babe.NewSession(babeCfg)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Service{
-		rt:      rt,
+		rt:      cfg.Runtime,
 		b:       b,
-		msgRec:  msgRec,
-		msgSend: msgSend,
+		msgRec:  cfg.MsgRec,
+		msgSend: cfg.MsgSend,
 	}, nil
 }
 

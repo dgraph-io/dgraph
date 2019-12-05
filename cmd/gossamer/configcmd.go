@@ -91,7 +91,14 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	srvcs = append(srvcs, p2pSrvc)
 
 	// core.Service
-	coreSrvc, err := core.NewService(r, msgSend, msgRec)
+	coreCfg := &core.ServiceConfig{
+		Keystore: ks,
+		Runtime:  r,
+		MsgRec:   msgRec,
+		MsgSend:  msgSend,
+	}
+
+	coreSrvc, err := core.NewService(coreCfg)
 	if err != nil {
 		return nil, nil, err
 	}

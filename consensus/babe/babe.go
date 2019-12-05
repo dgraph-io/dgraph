@@ -27,22 +27,20 @@ import (
 
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
 // Session contains the VRF keys for the validator
 type Session struct {
-	vrfPublicKey  VrfPublicKey
-	vrfPrivateKey VrfPrivateKey
-	rt            *runtime.Runtime
+	keystore *keystore.Keystore
+	rt       *runtime.Runtime
 
 	config *BabeConfiguration
 
 	authorityIndex uint64
-
-	// authorities []VrfPublicKey
-	authorityWeights []uint64
+	authorityData  []AuthorityData
 
 	epochThreshold *big.Int // validator threshold for this epoch
 	txQueue        *tx.PriorityQueue
@@ -52,16 +50,22 @@ type Session struct {
 	blockAnnounce chan<- p2p.Message
 }
 
+type SessionConfig struct {
+	Keystore             *keystore.Keystore
+	Runtime              *runtime.Runtime
+	BlockAnnounceChannel chan<- p2p.Message
+}
+
 // NewSession returns a new Babe session using the provided VRF keys and runtime
-func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime, blockAnnounceChannel chan<- p2p.Message) (*Session, error) {
+func NewSession(cfg *SessionConfig) (*Session, error) {
 	babeSession := &Session{
-		vrfPublicKey:  pubkey,
-		vrfPrivateKey: privkey,
-		rt:            rt,
+		keystore:      cfg.Keystore,
+		rt:            cfg.Runtime,
 		txQueue:       new(tx.PriorityQueue),
 		isProducer:    make(map[uint64]bool),
-		blockAnnounce: blockAnnounceChannel,
+		blockAnnounce: cfg.BlockAnnounceChannel,
 	}
+
 	err := babeSession.configurationFromRuntime()
 	if err != nil {
 		return nil, err
@@ -150,12 +154,20 @@ func (b *Session) setEpochThreshold() error {
 		return errors.New("cannot set threshold: no babe config")
 	}
 
-	b.epochThreshold, err = calculateThreshold(b.config.C1, b.config.C2, b.authorityIndex, b.authorityWeights)
+	b.epochThreshold, err = calculateThreshold(b.config.C1, b.config.C2, b.authorityIndex, b.authorityWeights())
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (b *Session) authorityWeights() []uint64 {
+	weights := make([]uint64, len(b.authorityData))
+	for i, auth := range b.authorityData {
+		weights[i] = auth.weight
+	}
+	return weights
 }
 
 // calculates the slot lottery threshold for the authority at authorityIndex.

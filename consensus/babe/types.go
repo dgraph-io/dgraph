@@ -16,6 +16,10 @@
 
 package babe
 
+import (
+	"github.com/ChainSafe/gossamer/crypto"
+)
+
 // TODO: change to Schnorrkel keys
 type VrfPublicKey [32]byte
 type VrfPrivateKey [64]byte
@@ -27,13 +31,18 @@ type BabeConfiguration struct {
 	EpochLength        uint64 // duration of epoch in slots
 	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
 	C2                 uint64
-	GenesisAuthorities []AuthorityData
+	GenesisAuthorities []AuthorityDataRaw
 	Randomness         byte
 	SecondarySlots     bool
 }
 
+type AuthorityDataRaw struct {
+	Id     [32]byte
+	Weight uint64
+}
+
+//nolint:structcheck
 type AuthorityData struct {
-	// TODO: change to Schnorrkel public key
-	AuthorityId     [32]byte
-	AuthorityWeight uint64
+	id     *crypto.Sr25519PublicKey
+	weight uint64
 }
