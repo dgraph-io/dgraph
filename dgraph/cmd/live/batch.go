@@ -73,6 +73,11 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
+	threadId uint64
+
+	currentUIDS map[string]uint64
+	uidsLock    sync.RWMutex
+
 	reqNum     uint64
 	reqs       chan api.Mutation
 	reverseRes chan api.Mutation
@@ -160,14 +165,100 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
+func (l *loader) loadOrStore(id string, threadId uint64) bool {
+	if val, ok := l.currentUIDS[id]; !(ok && val != threadId) {
+		l.currentUIDS[id] = threadId
+		return true
+	}
+
+	return false
+}
+
+func (l *loader) recoverMap(ids []string) {
+	for _, id := range ids {
+		delete(l.currentUIDS, id)
+	}
+}
+
+func (l *loader) writeMap(req *api.Mutation, threadId uint64) bool {
+	l.uidsLock.Lock()
+	defer l.uidsLock.Unlock()
+
+	mSlice := make([]string, 0, 2*len(req.Set))
+
+	for _, i := range req.Set {
+		if l.loadOrStore(i.ObjectId, threadId) {
+			mSlice = append(mSlice, i.ObjectId)
+		} else {
+			l.recoverMap(mSlice)
+			return false
+		}
+
+		if !reversePreds[i.Predicate] {
+			continue
+		}
+
+		if l.loadOrStore(i.Subject, threadId) {
+			mSlice = append(mSlice, i.Subject)
+		} else {
+			l.recoverMap(mSlice)
+			return false
+		}
+	}
+
+	return true
+}
+
+func (l *loader) removeMap(req api.Mutation) {
+	l.uidsLock.Lock()
+	defer l.uidsLock.Unlock()
+
+	for _, i := range req.Set {
+		delete(l.currentUIDS, i.ObjectId)
+
+		if !reversePreds[i.Predicate] {
+			continue
+		}
+
+		delete(l.currentUIDS, i.Subject)
+	}
+}
+
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
 func (l *loader) makeRequests(c chan api.Mutation) {
 	defer l.requestsWg.Done()
+
+	threadId := atomic.AddUint64(&l.threadId, 1) - 1
+
+	buffer := make([]*api.Mutation, 0, 100)
+
 	for req := range c {
+		if l.writeMap(&req, threadId) {
+			reqNum := atomic.AddUint64(&l.reqNum, 1)
+			l.request(req, reqNum)
+		} else {
+			buffer = append(buffer, &req)
+		}
+
+		i := 0
+		for _, mu := range buffer {
+			if l.writeMap(mu, threadId) {
+				reqNum := atomic.AddUint64(&l.reqNum, 1)
+				l.request(req, reqNum)
+				continue
+			}
+
+			buffer[i] = mu
+			i++
+		}
+		buffer = buffer[:i]
+	}
+
+	for _, req := range buffer {
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, reqNum)
+		l.request(*req, reqNum)
 	}
 }
 

@@ -208,17 +208,17 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				if len(nq.ObjectId) > 0 {
 					nq.ObjectId = l.uid(nq.ObjectId)
 				}
-				if reversePreds[nq.Predicate] {
-					remainingNqs = append(remainingNqs, nq)
-				} else {
-					nqs[i] = nq
-					i++
-				}
+				nqs[i] = nq
+				i++
 			}
 
 			mu := api.Mutation{Set: nqs[:i]}
-			l.reqs <- mu
-			l.reverseRes <- api.Mutation{Set: remainingNqs}
+			if len(mu.Set) > 0 {
+				l.reqs <- mu
+			}
+			if len(remainingNqs) > 0 {
+				l.reverseRes <- api.Mutation{Set: remainingNqs}
+			}
 		}
 	}()
 
@@ -266,14 +266,15 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	alloc := xidmap.New(connzero, db)
 	l := &loader{
-		opts:       opts,
-		dc:         dc,
-		start:      time.Now(),
-		reqs:       make(chan api.Mutation, opts.Pending*2),
-		reverseRes: make(chan api.Mutation, 2),
-		alloc:      alloc,
-		db:         db,
-		zeroconn:   connzero,
+		opts:        opts,
+		dc:          dc,
+		start:       time.Now(),
+		reqs:        make(chan api.Mutation, opts.Pending*2),
+		reverseRes:  make(chan api.Mutation, 2),
+		currentUIDS: make(map[string]uint64),
+		alloc:       alloc,
+		db:          db,
+		zeroconn:    connzero,
 	}
 
 	l.requestsWg.Add(opts.Pending + 1)
