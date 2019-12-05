@@ -201,24 +201,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			if len(nqs) == 0 {
 				continue
 			}
-			remainingNqs := make([]*api.NQuad, 0, 0)
-			i := 0
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
 					nq.ObjectId = l.uid(nq.ObjectId)
 				}
-				nqs[i] = nq
-				i++
 			}
 
-			mu := api.Mutation{Set: nqs[:i]}
-			if len(mu.Set) > 0 {
-				l.reqs <- mu
-			}
-			if len(remainingNqs) > 0 {
-				l.reverseRes <- api.Mutation{Set: remainingNqs}
-			}
+			mu := api.Mutation{Set: nqs}
+			l.reqs <- mu
 		}
 	}()
 
@@ -270,7 +261,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		dc:          dc,
 		start:       time.Now(),
 		reqs:        make(chan api.Mutation, opts.Pending*2),
-		reverseRes:  make(chan api.Mutation, 2),
 		currentUIDS: make(map[string]uint64),
 		alloc:       alloc,
 		db:          db,
@@ -279,9 +269,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	l.requestsWg.Add(opts.Pending + 1)
 	for i := 0; i < opts.Pending; i++ {
-		go l.makeRequests(l.reqs)
+		go l.makeRequests()
 	}
-	go l.makeRequests(l.reverseRes)
 
 	rand.Seed(time.Now().Unix())
 	return l
@@ -368,7 +357,6 @@ func run() error {
 	}
 
 	close(l.reqs)
-	close(l.reverseRes)
 	// First we wait for requestsWg, when it is done we know all retry requests have been added
 	// to retryRequestsWg. We can't have the same waitgroup as by the time we call Wait, we can't
 	// be sure that all retry requests have been added to the waitgroup.

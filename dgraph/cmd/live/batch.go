@@ -78,10 +78,9 @@ type loader struct {
 	currentUIDS map[string]uint64
 	uidsLock    sync.RWMutex
 
-	reqNum     uint64
-	reqs       chan api.Mutation
-	reverseRes chan api.Mutation
-	zeroconn   *grpc.ClientConn
+	reqNum   uint64
+	reqs     chan api.Mutation
+	zeroconn *grpc.ClientConn
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -227,14 +226,14 @@ func (l *loader) removeMap(req api.Mutation) {
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
-func (l *loader) makeRequests(c chan api.Mutation) {
+func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
 	threadId := atomic.AddUint64(&l.threadId, 1) - 1
 
 	buffer := make([]*api.Mutation, 0, 100)
 
-	for req := range c {
+	for req := range l.reqs {
 		if l.writeMap(&req, threadId) {
 			reqNum := atomic.AddUint64(&l.reqNum, 1)
 			l.request(req, reqNum)
@@ -257,6 +256,9 @@ func (l *loader) makeRequests(c chan api.Mutation) {
 	}
 
 	for _, req := range buffer {
+		for !l.writeMap(req, threadId) {
+			time.Sleep(5)
+		}
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
 		l.request(*req, reqNum)
 	}
