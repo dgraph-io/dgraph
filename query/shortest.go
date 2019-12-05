@@ -507,7 +507,6 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
-			totalWeight = item.cost
 			break
 		}
 
