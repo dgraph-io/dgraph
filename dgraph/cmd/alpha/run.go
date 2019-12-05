@@ -105,9 +105,7 @@ they form a Raft group and provide synchronous replication.
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 	// expose flag for enterprise only.
-	if worker.EnterpriseEnabled() {
-		enc.EncryptionKeyFile(flag)
-	}
+	enc.EncryptionKeyFile(flag)
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
