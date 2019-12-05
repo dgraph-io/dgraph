@@ -267,7 +267,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		zeroconn:    connzero,
 	}
 
-	l.requestsWg.Add(opts.Pending + 1)
+	l.requestsWg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
 		go l.makeRequests()
 	}

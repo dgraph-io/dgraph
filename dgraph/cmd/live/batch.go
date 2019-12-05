@@ -136,6 +136,7 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
+			l.removeMap(req)
 			return
 		}
 		nretries++
@@ -156,6 +157,7 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
+		l.removeMap(req)
 		return
 	}
 	handleError(err, reqNum, false)
