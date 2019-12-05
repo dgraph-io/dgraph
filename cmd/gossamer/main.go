@@ -65,7 +65,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...)),
+		Flags:       append(nodeFlags, rpcFlags...),
 		Category:    "CONFIGURATION DEBUGGING",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
