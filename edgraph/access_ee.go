@@ -579,9 +579,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 		return nil
 	}
 
-	setPreds := parsePredsFromMutation(gmu.Set)
-	delPreds := parsePredsFromMutation(gmu.Del)
-	preds := append(setPreds, delPreds...)
+	preds := parsePredsFromMutation(gmu.Set)
+	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
 	var userId string
 	var groupIds []string

@@ -521,5 +521,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 		CommitNow: true,
 	}
 	_, err = txn.Mutate(ctx, mutation)
-	require.NotNil(t, err)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PermissionDenied")
 }
