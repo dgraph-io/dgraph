@@ -698,13 +698,15 @@ func TestShortestPathWithDepth(t *testing.T) {
 		}
 	}`
 
+	emptyPath := `{"data":{"path":[]}}`
+
 	tests := []struct {
 		depth, numpaths, output string
 	}{
 		{
 			"0",
 			"1",
-			`{"data":{"path":[]}}`,
+			emptyPath,
 		},
 		{
 			"1",
@@ -729,7 +731,7 @@ func TestShortestPathWithDepth(t *testing.T) {
 		{
 			"0",
 			"10",
-			`{"data":{"path":[]}}`,
+			emptyPath,
 		},
 		// {
 		// 	"1",
@@ -907,23 +909,25 @@ func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
 		}
 	  }`
 
+	emptyPath := `{"data":{"path":[]}}`
+
 	tests := []struct {
 		name, depth, output string
 	}{
 		{
 			"depth 0",
 			"0",
-			`{"data":{"path":[]}}`,
+			emptyPath,
 		},
 		{
 			"depth 1",
 			"1",
-			`{"data":{"path":[]}}`,
+			emptyPath,
 		},
 		{
 			"depth 2",
 			"2",
-			`{"data":{"path":[]}}`,
+			emptyPath,
 		},
 		{
 			"depth 3",

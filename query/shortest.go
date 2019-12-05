@@ -42,9 +42,12 @@ type route struct {
 }
 
 type queueItem struct {
-	uid   uint64  // uid of the node.
-	cost  float64 // cost of taking the path till this uid.
-	hop   int     // number of hops taken to reach this node.
+	uid  uint64  // uid of the node.
+	cost float64 // cost of taking the path till this uid.
+	// number of hops taken to reach this node. This is useful in finding out if we need to
+	// expandOut after poping an element from the heap. We only expandOut if item.hop > numHops
+	// otherwise expanding would be useless.
+	hop   int
 	index int
 	path  route // used in k shortest path.
 }
@@ -285,7 +288,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
-	heap.Init(&pq)
 
 	// Initialize and push the source node.
 	srcNode := &queueItem{
@@ -459,7 +461,6 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return runKShortestPaths(ctx, sg)
 	}
 	pq := make(priorityQueue, 0)
-	heap.Init(&pq)
 
 	// Initialize and push the source node.
 	srcNode := &queueItem{
@@ -543,41 +544,33 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if ok && d.cost <= nodeCost {
 				continue
 			}
+
+			var node *queueItem
 			if !ok {
 				// This is the first time we're seeing this node. So
 				// create a new node and add it to the heap and map.
-				node := &queueItem{
+				node = &queueItem{
 					uid:  toUID,
 					cost: nodeCost,
 					hop:  item.hop + 1,
 				}
 				heap.Push(&pq, node)
-				dist[toUID] = nodeInfo{
-					parent: item.uid,
-					node:   node,
-					mapItem: mapItem{
-						cost:  nodeCost,
-						attr:  neighbour.attr,
-						facet: neighbour.facet,
-					},
-				}
 			} else {
 				// We've already seen this node. So, just update the cost
 				// and fix the priority in the heap and map.
-				node := dist[toUID].node
+				node = dist[toUID].node
 				node.cost = nodeCost
 				node.hop = item.hop + 1
 				heap.Fix(&pq, node.index)
-				// Update the map with new values.
-				dist[toUID] = nodeInfo{
-					parent: item.uid,
-					node:   node,
-					mapItem: mapItem{
-						cost:  nodeCost,
-						attr:  neighbour.attr,
-						facet: neighbour.facet,
-					},
-				}
+			}
+			dist[toUID] = nodeInfo{
+				parent: item.uid,
+				node:   node,
+				mapItem: mapItem{
+					cost:  nodeCost,
+					attr:  neighbour.attr,
+					facet: neighbour.facet,
+				},
 			}
 		}
 	}
@@ -588,8 +581,11 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var result []uint64
 	cur := sg.Params.To
 	totalWeight = dist[cur].cost
-	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+	for i := numHops; i >= 0; i-- {
 		result = append(result, cur)
+		if cur == sg.Params.From {
+			break
+		}
 		cur = dist[cur].parent
 	}
 	if cur != sg.Params.From {
@@ -597,7 +593,6 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, nil
 	}
 
-	result = append(result, cur)
 	l := len(result)
 	// Reverse the list.
 	for i := 0; i < l/2; i++ {
