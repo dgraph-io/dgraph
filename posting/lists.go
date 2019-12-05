@@ -152,7 +152,7 @@ func Init(ps *badger.DB) {
 	// go func() {
 	// 	ticker := time.NewTicker(5 * time.Second)
 	// 	for range ticker.C {
-	// 		m := plCache.Metrics()
+	// 		m := plCache.Metrics
 	// 		glog.Infof(m.String())
 	// 	}
 	// }()
