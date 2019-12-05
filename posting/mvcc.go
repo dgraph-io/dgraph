@@ -128,6 +128,24 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+func ClearEntireListCache() {
+	plCache.Clear()
+}
+
+func ClearListCache(key []byte) {
+	plCache.Del(key)
+}
+
+func (txn *Txn) ClearListCache() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+
+	for key := range txn.cache.deltas {
+		plCache.Del(key)
+	}
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
