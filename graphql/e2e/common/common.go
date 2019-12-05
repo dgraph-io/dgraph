@@ -210,6 +210,8 @@ func RunAll(t *testing.T) {
 	t.Run("enum filter", enumFilter)
 	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
+	t.Run("query typename", queryTypename)
+	t.Run("typename for interface", typenameForInterface)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
