@@ -128,21 +128,24 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
-func ClearEntireListCache() {
-	plCache.Clear()
+// ClearListCache will clear all the cached list.
+func ClearListCache() {
+	lCache.Clear()
 }
 
-func ClearListCache(key []byte) {
-	plCache.Del(key)
+// DeleteListCache will delete the list corresponding to the given key.
+func DeleteListCache(key []byte) {
+	lCache.Del(key)
 }
 
-func (txn *Txn) ClearListCache() {
+// ClearCachedList will delete the cached list by this txn.
+func (txn *Txn) ClearCachedList() {
 	if txn == nil || txn.cache == nil {
 		return
 	}
 
 	for key := range txn.cache.deltas {
-		plCache.Del(key)
+		lCache.Del(key)
 	}
 }
 
@@ -222,7 +225,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	cachedVal, ok := plCache.Get(key)
+	cachedVal, ok := lCache.Get(key)
 	if ok {
 		l := cachedVal.(*List)
 
@@ -253,6 +256,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	plCache.Set(key, l, int64(l.DeepSize()))
+	lCache.Set(key, l, int64(l.DeepSize()))
 	return l, nil
 }

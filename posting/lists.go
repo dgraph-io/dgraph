@@ -154,9 +154,9 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore  *badger.DB
-	closer  *y.Closer
-	plCache *ristretto.Cache
+	pstore *badger.DB
+	closer *y.Closer
+	lCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -167,7 +167,7 @@ func Init(ps *badger.DB) {
 
 	// Initialize cache.
 	var err error
-	plCache, err = ristretto.NewCache(&ristretto.Config{
+	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
 		MaxCost:     1e9,
 		BufferItems: 64,
