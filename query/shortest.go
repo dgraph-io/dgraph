@@ -510,11 +510,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			totalWeight = item.cost
 			break
 		}
-		if numHops >= maxHops {
-			break
-		}
 
-		if item.hop > numHops-1 {
+		if numHops < maxHops && item.hop > numHops-1 {
 			// Explore the next level by calling processGraph and add them to the queue.
 			if !stopExpansion {
 				next <- true
@@ -581,7 +578,9 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var result []uint64
 	cur := sg.Params.To
 	totalWeight = dist[cur].cost
-	for i := numHops; i >= 0; i-- {
+	// The length of the path can be greater than numHops hence we loop over the dist map till we
+	// reach sg.Params.From node. See test TestShortestPathWithDepth/depth_2_numpaths_1
+	for i := 0; i < len(dist); i++ {
 		result = append(result, cur)
 		if cur == sg.Params.From {
 			break

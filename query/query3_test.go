@@ -716,7 +716,7 @@ func TestShortestPathWithDepth(t *testing.T) {
 		{
 			"2",
 			"1",
-			directPath,
+			shortestPath,
 		},
 		{
 			"3",
@@ -929,7 +929,7 @@ func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
 		{
 			"depth 2",
 			"2",
-			emptyPath,
+			shortestPath,
 		},
 		{
 			"depth 3",
