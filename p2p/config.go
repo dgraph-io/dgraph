@@ -28,7 +28,7 @@ import (
 	"path/filepath"
 
 	log "github.com/ChainSafe/log15"
-	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -46,8 +46,10 @@ type Config struct {
 	Port uint32
 	// If 0, random host ID will be generated; If non-0, deterministic ID will be produced, keys will not be loaded from data dir
 	RandSeed int64
-	// Disable bootstrapping altogether. BootstrapNodes has no effect over this.
+	// Disables bootstrapping
 	NoBootstrap bool
+	// Disables gossiping
+	NoGossip bool
 	// Disables MDNS discovery
 	NoMdns bool
 	// Global data directory
@@ -78,16 +80,18 @@ func (c *Config) buildOpts() ([]libp2p.Option, error) {
 		return nil, err
 	}
 
-	connMgr := ConnManager{}
+	connmgr := &ConnManager{}
 
-	return []libp2p.Option{
+	options := []libp2p.Option{
 		libp2p.ListenAddrs(addr),
 		libp2p.DisableRelay(),
 		libp2p.Identity(c.privateKey),
 		libp2p.NATPortMap(),
 		libp2p.Ping(true),
-		libp2p.ConnectionManager(connMgr),
-	}, nil
+		libp2p.ConnectionManager(connmgr),
+	}
+
+	return options, nil
 }
 
 // setupPrivKey will attempt to load the nodes private key, if that fails it will create one

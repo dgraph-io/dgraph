@@ -19,63 +19,93 @@ package p2p
 import (
 	"context"
 
-	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
 
 	"github.com/libp2p/go-libp2p-core/connmgr"
-	net "github.com/libp2p/go-libp2p-core/network"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // ConnManager implement connmgr.ConnManager
-// https://godoc.org/github.com/libp2p/go-libp2p-core/connmgr#ConnManager
 type ConnManager struct{}
 
 // Notifee is used to monitor changes to a connection
-func (cm ConnManager) Notifee() net.Notifiee {
-	nb := new(net.NotifyBundle)
-	nb.ConnectedF = Connected
-	nb.OpenedStreamF = OpenedStream
-	nb.ClosedStreamF = ClosedStream
-	nb.DisconnectedF = Disconnected
+func (cm *ConnManager) Notifee() network.Notifiee {
+	nb := new(network.NotifyBundle)
+
+	nb.ListenF = cm.Listen
+	nb.ListenCloseF = cm.ListenClose
+	nb.ConnectedF = cm.Connected
+	nb.DisconnectedF = cm.Disconnected
+	nb.OpenedStreamF = cm.OpenedStream
+	nb.ClosedStreamF = cm.ClosedStream
+
 	return nb
 }
 
-func (_ ConnManager) TagPeer(peer.ID, string, int)             {}
-func (_ ConnManager) UntagPeer(peer.ID, string)                {}
-func (_ ConnManager) UpsertTag(peer.ID, string, func(int) int) {}
-func (_ ConnManager) GetTagInfo(peer.ID) *connmgr.TagInfo      { return &connmgr.TagInfo{} }
-func (_ ConnManager) TrimOpenConns(ctx context.Context)        {}
-func (_ ConnManager) Protect(peer.ID, string)                  {}
-func (_ ConnManager) Unprotect(peer.ID, string) bool           { return false }
-func (_ ConnManager) Close() error                             { return nil }
+func (_ *ConnManager) TagPeer(peer.ID, string, int)             {}
+func (_ *ConnManager) UntagPeer(peer.ID, string)                {}
+func (_ *ConnManager) UpsertTag(peer.ID, string, func(int) int) {}
+func (_ *ConnManager) GetTagInfo(peer.ID) *connmgr.TagInfo      { return &connmgr.TagInfo{} }
+func (_ *ConnManager) TrimOpenConns(ctx context.Context)        {}
+func (_ *ConnManager) Protect(peer.ID, string)                  {}
+func (_ *ConnManager) Unprotect(peer.ID, string) bool           { return false }
+func (_ *ConnManager) Close() error                             { return nil }
 
-func Connected(n net.Network, c net.Conn) {
-	// TODO: replace dummy status message with current state
-	status := &StatusMessage{
-		ProtocolVersion:     0,
-		MinSupportedVersion: 0,
-		Roles:               0,
-		BestBlockNumber:     0,
-		BestBlockHash:       common.Hash{0x00},
-		GenesisHash:         common.Hash{0x00},
-		ChainStatus:         []byte{0},
-	}
-	log.Info("connected", "status", status)
+// Listen is called when network starts listening on an address
+func (cm *ConnManager) Listen(n network.Network, address ma.Multiaddr) {
+	log.Trace(
+		"Started listening",
+		"host", n.LocalPeer(),
+		"address", address,
+	)
 }
 
-func OpenedStream(n net.Network, s net.Stream) {
-	if s.Protocol() == DefaultProtocolId {
-		log.Info("opened stream", "peer", s.Conn().RemotePeer(), "protocol", s.Protocol())
-	}
+// ListenClose is called when network stops listening on an address
+func (cm *ConnManager) ListenClose(n network.Network, address ma.Multiaddr) {
+	log.Trace(
+		"Stopped listening",
+		"host", n.LocalPeer(),
+		"address", address,
+	)
 }
 
-func ClosedStream(n net.Network, s net.Stream) {
-	if s.Protocol() == DefaultProtocolId {
-		log.Info("closed stream", "peer", s.Conn().RemotePeer(), "protocol", s.Protocol())
-	}
+// Connected is called when a connection opened
+func (cm *ConnManager) Connected(n network.Network, c network.Conn) {
+	log.Trace(
+		"Connected to peer",
+		"host", c.LocalPeer(),
+		"peer", c.RemotePeer(),
+	)
 }
 
-func Disconnected(n net.Network, c net.Conn) {
-	log.Info("disconnected")
+// Disconnected is called when a connection closed
+func (cm *ConnManager) Disconnected(n network.Network, c network.Conn) {
+	log.Trace(
+		"Disconnected from peer",
+		"host", c.LocalPeer(),
+		"peer", c.RemotePeer(),
+	)
+}
+
+// OpenedStream is called when a stream opened
+func (cm *ConnManager) OpenedStream(n network.Network, s network.Stream) {
+	log.Trace(
+		"Opened stream",
+		"host", s.Conn().LocalPeer(),
+		"peer", s.Conn().RemotePeer(),
+		"protocol", s.Protocol(),
+	)
+}
+
+// ClosedStream is called when a stream closed
+func (cm *ConnManager) ClosedStream(n network.Network, s network.Stream) {
+	log.Trace(
+		"Closed stream",
+		"host", s.Conn().LocalPeer(),
+		"peer", s.Conn().RemotePeer(),
+		"protocol", s.Protocol(),
+	)
 }
