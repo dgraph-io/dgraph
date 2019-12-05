@@ -18,24 +18,13 @@
 
 package enc
 
-import (
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
-)
+import "github.com/dgraph-io/dgraph/x"
 
+// Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
 
-// EncryptionKeyFile is not exposed for OSS build
-func EncryptionKeyFile(flag *pflag.FlagSet) {
-	return
-}
-
-// GetEncryptionKeyString return empty string for OSS build
-func GetEncryptionKeyFile(c *viper.Viper) string {
-	return ""
-}
-
 // ReadEncryptionKeyFile returns nil key for OSS build
-func ReadEncryptionKeyFile(f string) []byte {
+func ReadEncryptionKeyFile(filepath string) []byte {
+	x.AssertTruef(filepath == "", "encryption_key_file is an Enterprise only feature.")
 	return nil
 }

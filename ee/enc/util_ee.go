@@ -14,40 +14,26 @@ package enc
 
 import (
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"io/ioutil"
 )
 
 const encFile string = "encryption_key_file"
 
+// EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
-// EncryptionKeyFile exposes the encryption_key_file flag to sub-cmds.
-func EncryptionKeyFile(flag *pflag.FlagSet) {
-	flag.String(encFile, "",
-		"The file that stores the data encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
-}
-
-// GetEncryptionKeyString returns the configured key
-func GetEncryptionKeyFile(c *viper.Viper) string {
-	return c.GetString(encFile)
-}
-
 // ReadEncryptionKeyFile returns the encryption key in the given file.
-func ReadEncryptionKeyFile(f string) []byte {
-	if f == "" {
+func ReadEncryptionKeyFile(filepath string) []byte {
+	if filepath == "" {
 		return nil
 	}
-	k, err := ioutil.ReadFile(f)
-	x.Checkf(err, "Error reading Badger Encryption key file (%v)", f)
+	k, err := ioutil.ReadFile(filepath)
+	x.Checkf(err, "Error reading Encryption key file (%v)", filepath)
 
 	// len must be 16,24,32 bytes if given. 0 otherwise. All other lengths are invalid.
 	klen := len(k)
 	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
-		"Invalid Badger encryption key length = %v", klen)
+		"Invalid encryption key length = %v", klen)
 
 	return k
 }

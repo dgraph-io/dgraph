@@ -986,21 +986,18 @@ func EnterpriseEnabled() bool {
 	}
 	g := groups()
 	if g == nil {
-		return enterpriseEnabled2()
+		return askZeroForEE()
 	}
 	g.RLock()
 	defer g.RUnlock()
 	return g.state.GetLicense().GetEnabled()
 }
 
-func enterpriseEnabled2() bool {
+func askZeroForEE() bool {
 	var err error
 	var connState *pb.ConnectionState
 
-	grp := &groupi{
-		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
-	}
+	grp := &groupi{}
 	grp.ctx, grp.cancel = context.WithCancel(context.Background())
 
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
@@ -1010,7 +1007,10 @@ func enterpriseEnabled2() bool {
 		}
 		zc := pb.NewZeroClient(pl.Get())
 		connState, err = zc.Connect(grp.ctx, &pb.Member{ClusterInfoOnly: true})
-		if connState == nil || connState.GetState() == nil || connState.GetState().GetLicense() == nil {
+		if connState == nil ||
+			connState.GetState() == nil ||
+			connState.GetState().GetLicense() == nil {
+			glog.Info("Retry Zero Connection")
 			continue
 		}
 		if err == nil || x.ShouldCrash(err) {

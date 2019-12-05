@@ -90,8 +90,11 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
-	// TODO: Add zero encryption support when license check is enabled.
-	//enc.EncryptionKeyFile(flag)
+	// not supported for zero for now.
+	// flag.String("encryption_key_file", "",
+	// 	"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
+	// 		"The key size determines the corresponding block size for AES encryption "+
+	// 		"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -173,7 +176,12 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		badgerKeyFile:     enc.GetEncryptionKeyFile(Zero.Conf),
+		badgerKeyFile:     Zero.Conf.GetString("encryption_key_file"),
+	}
+
+	// OSS, non-nil key file --> crash
+	if !enc.EeBuild && opts.badgerKeyFile != "" {
+		log.Fatal("Encryption is an Enterpise only feature.")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
@@ -217,7 +225,6 @@ func run() {
 	defer kv.Close()
 
 	// zero out from memory
-	opts.badgerKeyFile = ""
 	kvOpt.EncryptionKey = nil
 
 	store := raftwal.Init(kv, opts.nodeId, 0)

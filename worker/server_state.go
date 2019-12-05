@@ -140,11 +140,15 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 func (s *ServerState) initStorage() {
 	var err error
 
-	if !EnterpriseEnabled() {
-		glog.Infof("Enterprise License missing or OSS build. Disable Encryption and proceed.")
-		Config.BadgerKeyFile = ""
-	} else {
-		glog.Infof("Encryption feature enabled. Encryption Key file %v", Config.BadgerKeyFile)
+	if Config.BadgerKeyFile != "" {
+		// non-nil key file
+		if !EnterpriseEnabled() {
+			// not licensed --> crash.
+			glog.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			// licensed
+			glog.Infof("Encryption feature enabled. Using encryption Key file: %v", Config.BadgerKeyFile)
+		}
 	}
 
 	{
@@ -162,7 +166,8 @@ func (s *ServerState) initStorage() {
 		// storage provided by the Raft library.
 		opt.TableLoadingMode = options.LoadToRAM
 
-		// Print the options w/o exposing key. TODO: Find a better way.
+		// Print the options w/o exposing key.
+		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
 		key := opt.EncryptionKey
 		opt.EncryptionKey = nil
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
@@ -180,7 +185,8 @@ func (s *ServerState) initStorage() {
 			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
 		opt = setBadgerOptions(opt)
 
-		// Print the options w/o exposing key. TODO: Find a better way.
+		// Print the options w/o exposing key.
+		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
 		key := opt.EncryptionKey
 		opt.EncryptionKey = nil
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
