@@ -146,7 +146,7 @@ func (s *ServerState) initStorage() {
 			// not licensed --> crash.
 			glog.Fatal("Enterprise License needed for the Encryption feature.")
 		} else {
-			// licensed
+			// licensed --> OK.
 			glog.Infof("Encryption feature enabled. Using encryption Key file: %v", Config.BadgerKeyFile)
 		}
 	}
@@ -196,7 +196,6 @@ func (s *ServerState) initStorage() {
 		x.Checkf(err, "Error while creating badger KV posting store")
 
 		// zero out from memory
-		Config.BadgerKeyFile = ""
 		opt.EncryptionKey = nil
 	}
 

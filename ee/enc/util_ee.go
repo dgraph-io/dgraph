@@ -17,8 +17,6 @@ import (
 	"io/ioutil"
 )
 
-const encFile string = "encryption_key_file"
-
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
@@ -30,7 +28,7 @@ func ReadEncryptionKeyFile(filepath string) []byte {
 	k, err := ioutil.ReadFile(filepath)
 	x.Checkf(err, "Error reading Encryption key file (%v)", filepath)
 
-	// len must be 16,24,32 bytes if given. 0 otherwise. All other lengths are invalid.
+	// len must be 16,24,32 bytes if given. All other lengths are invalid.
 	klen := len(k)
 	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
 		"Invalid encryption key length = %v", klen)
