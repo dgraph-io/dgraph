@@ -147,12 +147,14 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		}
 
 		nq, err := ParseRDF(str, rc.lexer)
-		if err == ErrEmpty {
+		switch {
+		case err == ErrEmpty:
 			continue // blank line or comment
-		} else if err != nil {
+		case err != nil:
 			return errors.Wrapf(err, "while parsing line %q", str)
+		default:
+			rc.nqs.Push(&nq)
 		}
-		rc.nqs.Push(&nq)
 	}
 	return nil
 }
@@ -166,14 +168,15 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	}
 	// If the file starts with a list rune [, we set the inList flag, and keep consuming maps
 	// until we reach the threshold.
-	if ch == '[' {
+	switch {
+	case ch == '[':
 		jc.inList = true
-	} else if ch == '{' {
+	case ch == '{':
 		// put the rune back for it to be consumed in the consumeMap function
 		if err := r.UnreadRune(); err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		return nil, errors.Errorf("file is not JSON")
 	}
 
