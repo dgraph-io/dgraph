@@ -17,12 +17,8 @@
 package worker
 
 import (
-	"io/ioutil"
 	"math"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
@@ -31,10 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
-)
-
-const (
-	groupFile = "group_id"
 )
 
 // ServerState holds the state of the Dgraph server.
@@ -65,19 +57,12 @@ func InitServerState() {
 	State.initStorage()
 	go State.fillTimestampRequests()
 
-	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
+	groupId, err := x.ReadGroupIdFile(Config.PostingDir)
 	if err != nil {
-		return
+		glog.Warningf("Could not read %s file inside posting directory %s.", x.GroupIdFileName,
+			Config.PostingDir)
 	}
-
-	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
-		Config.PostingDir)
-	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
-	if err != nil {
-		glog.Warningf("Could not read %s file inside posting directory %s.",
-			groupFile, Config.PostingDir)
-	}
-	x.WorkerConfig.ProposedGroupId = uint32(groupId)
+	x.WorkerConfig.ProposedGroupId = groupId
 }
 
 func (s *ServerState) runVlogGC(store *badger.DB) {

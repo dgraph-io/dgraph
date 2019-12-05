@@ -109,6 +109,11 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
 `
+	// GroupIdFileName is the name of the file storing the ID of the group to which
+	// the data in a postings directory belongs. This ID is used to join the proper
+	// group the first time an Alpha comes up with data from a restored backup or a
+	// bulk load.
+	GroupIdFileName = "group_id"
 )
 
 var (

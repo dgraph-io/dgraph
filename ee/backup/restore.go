@@ -55,7 +55,11 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 		if err != nil {
 			return nil
 		}
-		return loadFromBackup(db, gzReader, preds)
+		if err := loadFromBackup(db, gzReader, preds); err != nil {
+			return err
+		}
+
+		return x.WriteGroupIdFile(dir, uint32(groupId))
 	})
 }
 
