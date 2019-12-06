@@ -1,53 +1,72 @@
 variable "region" {
-    default = "us-east-2"
-    description = "The region of the ec2 instance"
-}
-
-variable "shared_credentials_file" {
-    default = "./creds/aws_secrets"
-    description = "Path to aws shared credentials secret file"
+  type        = string
+  default     = "us-east-2"
+  description = "The region to deploy the EC2 instance in."
 }
 
 variable "profile" {
-    default = "terraform"
+  type    = string
+  default = "terraform"
 }
 
-variable "ami" {
-    default = "ami-0c55b159cbfafe1f0"
-    description = "Type of Amazon machine image"
+variable "aws_access_key" {
+  type        = string
+  description = "Access key for the AWS account to create the dgraph deployment in."
+}
+variable "aws_secret_key" {
+  type        = string
+  description = "Secret key for the AWS account."
+}
+
+variable "aws_ami" {
+  type        = string
+  default     = "ami-0c55b159cbfafe1f0"
+  description = "Type of Amazon machine image to use for the instance."
 }
 
 variable "key_pair_name" {
-  default = "aws"
+  type        = string
+  default     = "dgraph-standalone-key"
   description = "The EC2 Key Pair to associate with the EC2 Instance for SSH access."
 }
 
-variable "instance_type" {
-    default = "t2.micro"
-    description="EC2 instance resource type"
-}
-
-variable "instance_name" {
-  default = "dgraph"
-  description = "The Name tag to set for the EC2 Instance."
+variable "public_key" {
+  type        = string
+  description = "Public SSH key to be associated with the instance."
 }
 
 variable "ssh_port" {
-  default = 22
+  type        = number
+  default     = 22
   description = "The port the EC2 Instance should listen on for SSH requests."
 }
 
-variable "ssh_user" {
-  description = "SSH user name to use for remote exec connections,"
-  default     = "ubuntu"
+variable "instance_type" {
+  type        = string
+  default     = "t2.micro"
+  description ="EC2 instance resource type"
+}
+
+variable "instance_name" {
+  type        = string
+  default     = "dgraph-standalone"
+  description = "The Name tag to set for the EC2 Instance."
 }
 
 variable "dgraph_version" {
-    description = "Dgraph version for installation"
-    default = "1.0.13"   
+  type        = string
+  description = "Dgraph version for installation"
+  default     = "1.1.0"   
 }
 
 variable "dgraph_ui_port" {
-    description = "Port number of ratel interface"
-    default="8000"
+  type        = string
+  description = "Port number of ratel interface"
+  default     = "8000"
+}
+
+variable "assign_public_ip" {
+  type        = string
+  default     = true
+  description = "Should a public IP address be assigned to the EC2 instance running dgraph in standalone mode."
 }

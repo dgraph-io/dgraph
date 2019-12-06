@@ -1,28 +1,18 @@
+# --------------------------------------------------------------------------------
+# Setup AWS provider
+# --------------------------------------------------------------------------------
 provider "aws" {
-  region                  = "${var.region}"
-  shared_credentials_file = "${var.shared_credentials_file}"
-  profile                 = "${var.profile}"
+  access_key = var.aws_access_key
+  secret_key = var.aws_secret_key
+  region     = var.region  
+  profile    = var.profile
 }
 
-resource "aws_instance" "dgraph_public" {
-  ami = "${var.ami}"
-  vpc_security_group_ids = ["${aws_security_group.dgraph.id}"]
-  instance_type = "${var.instance_type}"
-  key_name = "${var.key_pair_name}"
-
-  # This EC2 Instance has a public IP and will be accessible directly from the public Internet
-  associate_public_ip_address = true
-
-  tags {
-    Name = "${var.instance_name}-public"
-  }
-}
-
-# ---------------------------------------------------------------------------------------------------------------------
-# CREATE A SECURITY GROUP TO CONTROL WHAT REQUESTS CAN GO IN AND OUT OF THE EC2 INSTANCES                              
-# ---------------------------------------------------------------------------------------------------------------------
-resource "aws_security_group" "dgraph" {
-  name = "${var.instance_name}"
+# --------------------------------------------------------------------------------
+# Security group for dgraph instance in standalone mode.
+# --------------------------------------------------------------------------------
+resource "aws_security_group" "dgraph_standalone" {
+  name = var.instance_name
 
   egress {
     from_port   = 0
@@ -32,8 +22,8 @@ resource "aws_security_group" "dgraph" {
   }
 
   ingress {
-    from_port = "${var.ssh_port}"
-    to_port   = "${var.ssh_port}"
+    from_port = var.ssh_port
+    to_port   = var.ssh_port
     protocol  = "tcp"
 
     # To keep this setup simple, we allow incoming SSH requests from any IP. In real-world usage, you should only
@@ -41,58 +31,58 @@ resource "aws_security_group" "dgraph" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+
   ingress {
-    from_port = "${var.dgraph_ui_port}"
-    to_port   = "${var.dgraph_ui_port}"
+    from_port = var.dgraph_ui_port
+    to_port   = var.dgraph_ui_port
     protocol  = "tcp"
 
-    # To keep this setup simple, we allow incoming SSH requests from any IP. In real-world usage, you should only
-    # allow SSH requests from trusted servers, such as a bastion host or VPN server.
+    # To keep this setup simple, we allow incoming SSH requests from any IP.]
+    # In real-world usage, you should only allow SSH requests from trusted servers,
+    # such as a bastion host or VPN server.
     cidr_blocks = ["0.0.0.0/0"]
   }
 
 }
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Provision the server using remote-exec
-# ---------------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# Create an AWS key pair for ssh purposes.
+# --------------------------------------------------------------------------------
+resource "aws_key_pair" "dgraph_standalone_key" {
+  key_name   = var.key_pair_name
+  public_key = var.public_key
+}
 
-resource "null_resource" "dgraph_provisioner" {
-  triggers {
-    public_ip = "${aws_instance.dgraph_public.public_ip}"
+# --------------------------------------------------------------------------------
+# Launch a dgraph standalone EC2 instance.
+# --------------------------------------------------------------------------------
+resource "aws_instance" "dgraph_standalone" {
+  ami                         = var.aws_ami
+  associate_public_ip_address = var.assign_public_ip
+
+  monitoring                           = true
+  disable_api_termination              = false
+  instance_initiated_shutdown_behavior = "terminate"
+
+  instance_type = var.instance_type
+  key_name      = var.key_pair_name
+
+  # We are not using security group ID here as this is a standalone mode
+  # which deploys dgraph in a single EC2 instance without any VPC constraints.
+  security_groups = [aws_security_group.dgraph_standalone.name]
+
+  ebs_block_device {
+    device_name           = "/dev/sda1"
+    volume_size           = 20
+    volume_type           = "standard"
+    delete_on_termination = true
   }
 
-  connection {
-    type = "ssh"
-    host = "${aws_instance.dgraph_public.public_ip}"
-    user = "${var.ssh_user}"
-    private_key = "${file("creds/aws.pem")}"
-    port = "${var.ssh_port}"
-    agent = true
-  }
-
-  # copy dgraph service files to the server
-  provisioner "file" {
-    source      = "files/"
-    destination = "/tmp/"
-  }
-
-  # change permissions to executable and pipe its output into a new file
-  provisioner "remote-exec" {
-    inline = [    
-      "wget https://github.com/dgraph-io/dgraph/releases/download/v${var.dgraph_version}/dgraph-linux-amd64.tar.gz",
-      "sudo tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz",
-      "sudo groupadd --system dgraph",
-      "sudo useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph",
-      "sudo mkdir -p /var/log/dgraph",
-      "sudo mkdir -p /var/run/dgraph/",
-      "sudo chown -R dgraph:dgraph /var/run/dgraph",
-      "sudo chown -R dgraph:dgraph /var/log/dgraph",
-      "sudo cp /tmp/dgraph* /etc/systemd/system/",
-      "sudo chmod +x /etc/systemd/system/dgraph*",
-      "sudo systemctl daemon-reload",
-      "sudo systemctl enable --now dgraph",
-      "sudo systemctl enable --now dgraph-ui"
-    ]
+  # base64encoded user provided script to run at the time of instance
+  # initialization.
+  user_data_base64 = base64encode(data.template_file.setup_template.rendered)
+  
+  tags = {
+    Name = "dgraph-standalone"
   }
 }
