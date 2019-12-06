@@ -873,6 +873,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
+		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means client has
+		// aborted the transaction by calling txn.Discard(). Hence we should not return this error.
+		if tc.Aborted {
+			return tctx, nil
+		}
+
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
