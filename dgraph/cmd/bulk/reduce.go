@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
@@ -89,6 +90,19 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
+	if r.opt.BadgerKeyFile != "" {
+		// need to set zero addr in workerconfig before doing license check.
+		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
+		// non-nil key file
+		if !worker.EnterpriseEnabled() {
+			// not licensed --> crash.
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			// licensed --> OK.
+			log.Printf("Encryption feature enabled. Using encryption Key file: %v", r.opt.BadgerKeyFile)
+		}
+	}
+
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
