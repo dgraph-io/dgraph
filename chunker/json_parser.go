@@ -474,8 +474,11 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
 
-		buffer.Reset()  // The previous contents are used. Reset here.
-		buffer.Write(b) // Rewrite b into buffer, so it can be consumed.
+		buffer.Reset() // The previous contents are used. Reset here.
+		// Rewrite b into buffer, so it can be consumed.
+		if _, err := buffer.Write(b); err != nil {
+			return err
+		}
 		if err = dec.Decode(&list); err != nil {
 			return err
 		}
