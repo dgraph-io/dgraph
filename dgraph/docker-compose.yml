@@ -98,7 +98,7 @@ services:
       - type: bind
         source: ../ee/enc/enc-key
         target: /dgraph-enc/enc-key
-        read_only: true       
+        read_only: true
     ports:
       - 8182:8182
       - 9182:9182

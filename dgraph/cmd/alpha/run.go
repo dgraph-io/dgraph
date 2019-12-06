@@ -444,7 +444,7 @@ func run() {
 
 	// OSS, non-nil key file --> crash
 	if !enc.EeBuild && opts.BadgerKeyFile != "" {
-		glog.Fatal("Encryption is an Enterpise only feature.")
+		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

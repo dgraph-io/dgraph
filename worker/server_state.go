@@ -144,10 +144,10 @@ func (s *ServerState) initStorage() {
 		// non-nil key file
 		if !EnterpriseEnabled() {
 			// not licensed --> crash.
-			glog.Fatal("Enterprise License needed for the Encryption feature.")
+			glog.Fatal("Valid Enterprise License needed for the Encryption feature.")
 		} else {
 			// licensed --> OK.
-			glog.Infof("Encryption feature enabled. Using encryption Key file: %v", Config.BadgerKeyFile)
+			glog.Infof("Encryption feature enabled. Using encryption key file: %v", Config.BadgerKeyFile)
 		}
 	}
 

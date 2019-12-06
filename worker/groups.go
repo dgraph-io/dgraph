@@ -59,7 +59,7 @@ type groupi struct {
 	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
-var gr *groupi = nil
+var gr *groupi
 
 func groups() *groupi {
 	return gr

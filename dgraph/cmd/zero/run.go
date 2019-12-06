@@ -36,7 +36,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -53,7 +52,6 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	badgerKeyFile     string // used in enterprise builds. nil otherwise.
 }
 
 var opts options
@@ -89,8 +87,6 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-
-	// Encryption not supported for zero for now.
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -172,12 +168,6 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		badgerKeyFile:     Zero.Conf.GetString("encryption_key_file"),
-	}
-
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opts.badgerKeyFile != "" {
-		log.Fatal("Encryption is an Enterpise only feature.")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
@@ -214,8 +204,7 @@ func run() {
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(opts.badgerKeyFile))
+		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()

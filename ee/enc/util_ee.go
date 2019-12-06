@@ -26,7 +26,7 @@ func ReadEncryptionKeyFile(filepath string) []byte {
 		return nil
 	}
 	k, err := ioutil.ReadFile(filepath)
-	x.Checkf(err, "Error reading Encryption key file (%v)", filepath)
+	x.Checkf(err, "Error reading encryption key file (%v)", filepath)
 
 	// len must be 16,24,32 bytes if given. All other lengths are invalid.
 	klen := len(k)

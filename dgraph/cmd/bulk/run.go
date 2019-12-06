@@ -135,7 +135,7 @@ func run() {
 	}
 	// OSS, non-nil key file --> crash
 	if !enc.EeBuild && opt.BadgerKeyFile != "" {
-		fmt.Printf("Encryption is an Enterpise only feature.")
+		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
 		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {
