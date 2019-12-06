@@ -513,10 +513,6 @@ func run() {
 	glog.Infof("worker.Config: %s", worker.Config)
 
 	worker.InitServerState()
-	defer func() {
-		worker.State.Dispose()
-		glog.Info("Finished disposing server state.")
-	}()
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
@@ -577,5 +573,7 @@ func run() {
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
+	glog.Info("Disposing server state.")
+	worker.State.Dispose()
 	glog.Infoln("Server shutdown. Bye!")
 }
