@@ -90,11 +90,7 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
-	// not supported for zero for now.
-	// flag.String("encryption_key_file", "",
-	// 	"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-	// 		"The key size determines the corresponding block size for AES encryption "+
-	// 		"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	// Encryption not supported for zero for now.
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
