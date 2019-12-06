@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -103,6 +104,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
+	flag.String("encryption_key_file", "",
+		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
+			"The key size determines the corresponding block size for AES encryption "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -425,8 +430,9 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
-		BadgerTables: Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+		BadgerTables:  Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:    Alpha.Conf.GetString("badger.vlog"),
+		BadgerKeyFile: Alpha.Conf.GetString("encryption_key_file"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),
@@ -434,6 +440,11 @@ func run() {
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+
+	// OSS, non-nil key file --> crash
+	if !enc.EeBuild && opts.BadgerKeyFile != "" {
+		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

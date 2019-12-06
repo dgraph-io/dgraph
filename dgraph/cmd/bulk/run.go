@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -65,6 +66,11 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
+	flag.String("encryption_key_file", "",
+		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
+			"The key size determines the corresponding block size for AES encryption "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
 	flag.Int64("mapoutput_mb", 64,
@@ -106,6 +112,7 @@ func run() {
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
+		BadgerKeyFile:    Bulk.Conf.GetString("encryption_key_file"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
 		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
@@ -125,6 +132,11 @@ func run() {
 	x.PrintVersion()
 	if opt.Version {
 		os.Exit(0)
+	}
+	// OSS, non-nil key file --> crash
+	if !enc.EeBuild && opt.BadgerKeyFile != "" {
+		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
+		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
