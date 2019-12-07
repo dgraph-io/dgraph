@@ -42,11 +42,11 @@ Enterprise features:
 - Add ability to query `expand(TypeName)` only on certain types. ([#3920][])
 - Expose numUids metrics per query to estimate query cost. ([#4033][])
 - Upsert queries now return query results in the upsert reponse. ([#4269][])
+- Add support for multiple mutation blocks. ([#4210][])
+- Add total time taken to process a query in result under `"total_ns"` field. ([#4312][])
 
 Enterprise features:
 
-- Add support for multiple mutation blocks. ([#4210][])
-- Add total time taken to process a query in result under `"total_ns"` field. ([#4312][])
 - Add encryption-at-rest. ([#4351][])
 
 ### Removed
