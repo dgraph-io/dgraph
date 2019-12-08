@@ -356,6 +356,7 @@ dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 p := Person{
     Uid:     "_:alice",
 	Name:    "Alice",
+	DType: []string{"Person"},
 	Age:     26,
 	Married: true,
 	Location: loc{
@@ -540,7 +541,11 @@ predicate `name` is the name of an account. It's indexed so that we can look up
 accounts based on their name.
 
 ```sh
-$ curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
+$ curl -X POST localhost:8080/alter -d \
+'name: string @index(term) .
+type Person {
+   name
+}'
 ```
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
@@ -549,6 +554,7 @@ Other operations can be performed via the `/alter` endpoint as well. A specific
 predicate or the entire database can be dropped.
 
 To drop the predicate `name`:
+
 ```sh
 $ curl -X POST localhost:8080/alter -d '{"drop_attr": "name"}'
 ```
@@ -655,7 +661,9 @@ are:
 
 ```
 <0x1> <balance> "110" .
+<0x1> <dgraph.type> "Balance" .
 <0x2> <balance> "60" .
+<0x2> <dgraph.type> "Balance" .
 ```
 
 Note that we have to refer to the Alice and Bob nodes by UID in the RDF format.
@@ -671,7 +679,9 @@ $ curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?startTs=
 {
   set {
     <0x1> <balance> "110" .
+    <0x1> <dgraph.type> "Balance" .
     <0x2> <balance> "60" .
+    <0x2> <dgraph.type> "Balance" .
   }
 }
 ' | jq
