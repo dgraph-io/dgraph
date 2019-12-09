@@ -104,11 +104,9 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 }
 
 // Acl represents the permissions in the ACL system.
-// An Acl can have either a single predicate or a regex that can be used to
-// match multiple predicates.
+// An Acl can have a predicate and permission for that predicate.
 type Acl struct {
 	Predicate string `json:"predicate"`
-	Regex     string `json:"regex"`
 	Perm      int32  `json:"perm"`
 }
 
