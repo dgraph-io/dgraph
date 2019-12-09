@@ -234,12 +234,12 @@ type Node {
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
-name_lang					   : string @lang .
+name_lang                      : string @lang .
 lang_type                      : string @index(exact) .
-name_lang_index				   : string @index(exact) @lang .
+name_lang_index                : string @index(exact) @lang .
 alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
-alias_lang					   : string @index(exact) @lang .
+alias_lang                     : string @index(exact) @lang .
 abbr                           : string .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .

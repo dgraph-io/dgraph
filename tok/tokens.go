@@ -22,6 +22,10 @@ import (
 	"golang.org/x/text/language"
 )
 
+var (
+	enLangTag, _ = language.Parse("en")
+)
+
 // GetLangTokenizer returns the correct full-text tokenizer for the given language.
 func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 	if lang == "" {
@@ -34,10 +38,12 @@ func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 		return FullTextTokenizer{lang: lang}
 	case ExactTokenizer:
 		langTag, err := language.Parse(lang)
+		// We default to english if the language is not supported.
 		if err != nil {
-			langTag, _ = language.Parse("en")
+			langTag = enLangTag
 		}
-		return LangTokenizer{lang: lang, cl: collate.New(langTag), buffer: &collate.Buffer{}}
+		return LangTokenizer{langBase: LangBase(lang), cl: collate.New(langTag),
+			buffer: &collate.Buffer{}}
 	}
 	return t
 }

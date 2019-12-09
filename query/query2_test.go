@@ -959,6 +959,69 @@ func TestLanguageOrderIndexed2(t *testing.T) {
 		js)
 }
 
+func TestLanguageOrderIndexed3(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": []
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed4(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@hi)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": []
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexedPaginationOffset(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderasc: name_lang_index@sv, first: 1, offset: 1)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
+			}
+		}`,
+		js)
+}
+
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 
