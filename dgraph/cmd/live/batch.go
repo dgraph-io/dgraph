@@ -228,7 +228,7 @@ func (l *loader) makeRequests() {
 			buffer = append(buffer, &req)
 		}
 
-		for len(buffer) > l.opts.bufferSize-1 {
+		for ok := true; ok; ok = (len(buffer) > l.opts.bufferSize-1) {
 			i := 0
 			for _, mu := range buffer {
 				if l.writeMap(mu) {
@@ -241,7 +241,6 @@ func (l *loader) makeRequests() {
 				i++
 			}
 			buffer = buffer[:i]
-			time.Sleep(5)
 		}
 	}
 
