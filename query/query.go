@@ -2756,21 +2756,19 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 	return temp
 }
 
-// calculateMetrics populates the given map with the number of uids are gathered for each
-// attributes.
+// calculateMetrics populates the given map with the number of UIDs that were seen
+// for each predicate.
 func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
-
-	// skip internal nodes.
+	// Skip internal nodes.
 	if !sg.IsInternal() {
-		// we'll calculate srcUid of the each attribute. because, these are number of uids
-		// processed by this attribute.
-		metrics[sg.Attr] = metrics[sg.Attr] + uint64(len(sg.SrcUIDs.GetUids()))
+		// Add the number of SrcUIDs. This is the number of uids processed by this attribute.
+		metrics[sg.Attr] += uint64(len(sg.SrcUIDs.GetUids()))
 	}
-	// add all the uids gathered by filters
+	// Add all the uids gathered by filters.
 	for _, filter := range sg.Filters {
 		calculateMetrics(filter, metrics)
 	}
-	// calculate metrics for the children as well.
+	// Calculate metrics for the children as well.
 	for _, child := range sg.Children {
 		calculateMetrics(child, metrics)
 	}

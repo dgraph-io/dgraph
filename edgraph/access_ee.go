@@ -580,6 +580,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	}
 
 	preds := parsePredsFromMutation(gmu.Set)
+	// Del predicates weren't included before.
+	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
+	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
 	var userId string
 	var groupIds []string
@@ -600,6 +603,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				// groot is allowed to mutate anything except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
+				} else if isAclPredMutation(gmu.Del) {
+					// even groot can't delete ACL predicates
+					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
 			}
