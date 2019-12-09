@@ -4923,3 +4923,61 @@ func TestParseVarAfterCountQry(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 }
+
+func TestRecurseWithArgs(t *testing.T) {
+	query := `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: true) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	gq, err := Parse(Request{Str: query, Variables: map[string]string{"$hello": "1"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: $hello) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+}
+
+func TestRecurse(t *testing.T) {
+	query := `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: true) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+}
