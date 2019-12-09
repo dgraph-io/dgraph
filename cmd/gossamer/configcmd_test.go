@@ -248,8 +248,7 @@ func TestCreateP2PService(t *testing.T) {
 		ProtocolId: "gossamer",
 	}
 
-	srv, _ := createP2PService(cfg.DefaultConfig(), gendata)
-
+	srv, _, _ := createP2PService(cfg.DefaultConfig(), gendata)
 	if srv == nil {
 		t.Fatalf("failed to create p2p service")
 	}

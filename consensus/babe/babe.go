@@ -28,42 +28,36 @@ import (
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/keystore"
-	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
 // Session contains the VRF keys for the validator
 type Session struct {
-	keystore *keystore.Keystore
-	rt       *runtime.Runtime
-
-	config *BabeConfiguration
-
+	keystore       *keystore.Keystore
+	rt             *runtime.Runtime
+	config         *BabeConfiguration
 	authorityIndex uint64
 	authorityData  []AuthorityData
-
 	epochThreshold *big.Int // validator threshold for this epoch
 	txQueue        *tx.PriorityQueue
-	isProducer     map[uint64]bool // whether we are a block producer at a slot
-
-	// Block announce channel used every time a block is created
-	blockAnnounce chan<- p2p.Message
+	isProducer     map[uint64]bool    // whether we are a block producer at a slot
+	newBlocks      chan<- types.Block // send blocks to core service
 }
 
 type SessionConfig struct {
-	Keystore             *keystore.Keystore
-	Runtime              *runtime.Runtime
-	BlockAnnounceChannel chan<- p2p.Message
+	Keystore  *keystore.Keystore
+	Runtime   *runtime.Runtime
+	NewBlocks chan<- types.Block
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
 func NewSession(cfg *SessionConfig) (*Session, error) {
 	babeSession := &Session{
-		keystore:      cfg.Keystore,
-		rt:            cfg.Runtime,
-		txQueue:       new(tx.PriorityQueue),
-		isProducer:    make(map[uint64]bool),
-		blockAnnounce: cfg.BlockAnnounceChannel,
+		keystore:   cfg.Keystore,
+		rt:         cfg.Runtime,
+		txQueue:    new(tx.PriorityQueue),
+		isProducer: make(map[uint64]bool),
+		newBlocks:  cfg.NewBlocks,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -109,16 +103,7 @@ func (b *Session) invokeBlockAuthoring() {
 			if err != nil {
 				return
 			}
-
-			// Broadcast the block
-			blockAnnounceMsg := &p2p.BlockAnnounceMessage{
-				ParentHash:     block.Header.ParentHash,
-				Number:         block.Header.Number,
-				StateRoot:      block.Header.StateRoot,
-				ExtrinsicsRoot: block.Header.ExtrinsicsRoot,
-				Digest:         block.Header.Digest,
-			}
-			b.blockAnnounce <- blockAnnounceMsg
+			b.newBlocks <- *block
 		}
 
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))

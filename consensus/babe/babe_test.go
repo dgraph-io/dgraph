@@ -31,7 +31,6 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/p2p"
 	db "github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/trie"
@@ -410,11 +409,12 @@ func TestStart(t *testing.T) {
 
 func TestBabeAnnounceMessage(t *testing.T) {
 	rt := newRuntime(t)
-	blockAnnounceChan := make(chan p2p.Message)
+
+	newBlocks := make(chan types.Block)
 
 	cfg := &SessionConfig{
-		Runtime:              rt,
-		BlockAnnounceChannel: blockAnnounceChan,
+		Runtime:   rt,
+		NewBlocks: newBlocks,
 	}
 
 	babesession, err := NewSession(cfg)
@@ -434,14 +434,10 @@ func TestBabeAnnounceMessage(t *testing.T) {
 	time.Sleep(time.Duration(babesession.config.SlotDuration) * time.Duration(babesession.config.EpochLength) * time.Millisecond)
 
 	for i := 0; i < int(babesession.config.EpochLength); i++ {
-		blk := <-blockAnnounceChan
-
-		expectedBlockAnnounceMsg := &p2p.BlockAnnounceMessage{
-			Number: big.NewInt(int64(i)),
-		}
-
-		if !reflect.DeepEqual(blk, expectedBlockAnnounceMsg) {
-			t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", blk, expectedBlockAnnounceMsg)
+		block := <-newBlocks
+		blockNumber := big.NewInt(int64(i))
+		if !reflect.DeepEqual(block.Header.Number, blockNumber) {
+			t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", block.Header.Number, blockNumber)
 		}
 	}
 

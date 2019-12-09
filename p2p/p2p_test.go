@@ -27,7 +27,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-var TestMessageTimeout = 10 * time.Second
+var TestMessageTimeout = 30 * time.Second
 
 func startNewService(t *testing.T, cfg *Config, msgSend chan Message, msgRec chan Message) *Service {
 	node, err := NewService(cfg, msgSend, msgRec)
