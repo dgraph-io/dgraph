@@ -311,7 +311,7 @@ func NewWasmMemory() (*wasm.Memory, error) {
 		return nil, err
 	}
 
-	return &instance.Memory, nil
+	return instance.Memory, nil
 }
 
 // iterates allTests and runs tests on them based on data contained in

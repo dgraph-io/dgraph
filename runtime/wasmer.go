@@ -19,9 +19,7 @@ package runtime
 import (
 	"bytes"
 	"errors"
-	"runtime"
 	"sync"
-	"unsafe"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	"github.com/ChainSafe/gossamer/common"
@@ -73,48 +71,25 @@ func NewRuntime(code []byte, t *trie.Trie, ks *keystore.Keystore) (*Runtime, err
 		return nil, err
 	}
 
-	memAllocator := allocator.NewAllocator(&instance.Memory, 0)
+	memAllocator := allocator.NewAllocator(instance.Memory, 0)
 
-	runtimeCtx := &RuntimeCtx{
+	runtimeCtx := RuntimeCtx{
 		trie:      t,
 		allocator: memAllocator,
 		keystore:  ks,
 	}
-	// add runtimeCtx to registry
-	// lock access to registry to avoid possible concurrent access
-	mutex.Lock()
-	index := handlers
-	handlers++
-	if registry == nil {
-		registry = make(map[int]RuntimeCtx)
-	}
-	registry[index] = *runtimeCtx
-	mutex.Unlock()
 
-	log.Debug("[NewRuntime]", "index", index)
 	log.Debug("[NewRuntime]", "runtimeCtx", runtimeCtx)
-	//nolint:gosec
-	data := unsafe.Pointer(&index)
-	instance.SetContextData(data)
+	instance.SetContextData(&runtimeCtx)
 
-	r := &Runtime{
+	r := Runtime{
 		vm:       instance,
 		trie:     t,
 		mutex:    sync.Mutex{},
 		keystore: ks,
 	}
 
-	// Clean up the registry if r is GC'd
-	runtime.SetFinalizer(r, func(_ *Runtime) {
-		// Launch a goroutine to avoid blocking the GC...
-		go func() {
-			mutex.Lock()
-			delete(registry, index)
-			mutex.Unlock()
-		}()
-	})
-
-	return r, nil
+	return &r, nil
 }
 
 func (r *Runtime) Stop() {
