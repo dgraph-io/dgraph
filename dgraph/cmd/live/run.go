@@ -62,6 +62,7 @@ type options struct {
 	newUids        bool
 	verbose        bool
 	httpAddr       string
+	bufferSize     int
 }
 
 var (
@@ -106,6 +107,7 @@ func init() {
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
+	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -261,7 +263,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		dc:          dc,
 		start:       time.Now(),
 		reqs:        make(chan api.Mutation, opts.Pending*2),
-		currentUIDS: make(map[string]uint64),
+		currentUIDS: make(map[uint64]struct{}),
 		alloc:       alloc,
 		db:          db,
 		zeroconn:    connzero,
@@ -291,6 +293,7 @@ func run() error {
 		newUids:        Live.Conf.GetBool("new_uids"),
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
+		bufferSize:     Live.Conf.GetInt("bufferSize"),
 	}
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
@@ -304,6 +307,7 @@ func run() error {
 		PrintCounters: true,
 		Ctx:           ctx,
 		MaxRetries:    math.MaxUint32,
+		bufferSize:    opt.bufferSize,
 	}
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)

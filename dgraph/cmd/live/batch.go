@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/dgryski/go-farm"
 	"github.com/dustin/go-humanize/english"
 )
 
@@ -46,6 +47,7 @@ type batchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
+	bufferSize    int
 	// User could pass a context so that we can stop retrying requests once context is done
 	Ctx context.Context
 }
@@ -73,9 +75,7 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	threadId uint64
-
-	currentUIDS map[string]uint64
+	currentUIDS map[uint64]struct{}
 	uidsLock    sync.RWMutex
 
 	reqNum   uint64
@@ -166,45 +166,33 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
-func (l *loader) loadOrStore(id string, threadId uint64) bool {
-	if val, ok := l.currentUIDS[id]; !(ok && val != threadId) {
-		l.currentUIDS[id] = threadId
-		return true
-	}
-
-	return false
-}
-
-func (l *loader) recoverMap(ids []string) {
-	for _, id := range ids {
-		delete(l.currentUIDS, id)
-	}
-}
-
-func (l *loader) writeMap(req *api.Mutation, threadId uint64) bool {
+func (l *loader) writeMap(req *api.Mutation) bool {
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	mSlice := make([]string, 0, 2*len(req.Set))
+	mSlice := make([]uint64, 0, 2*len(req.Set))
 
 	for _, i := range req.Set {
-		if l.loadOrStore(i.ObjectId, threadId) {
-			mSlice = append(mSlice, i.ObjectId)
-		} else {
-			l.recoverMap(mSlice)
+		objectKey := farm.Fingerprint64([]byte(i.ObjectId))
+		subjectKey := farm.Fingerprint64([]byte(i.Subject))
+
+		if _, ok := l.currentUIDS[objectKey]; ok {
 			return false
 		}
+		mSlice = append(mSlice, objectKey)
 
 		if !reversePreds[i.Predicate] {
 			continue
 		}
 
-		if l.loadOrStore(i.Subject, threadId) {
-			mSlice = append(mSlice, i.Subject)
-		} else {
-			l.recoverMap(mSlice)
+		if _, ok := l.currentUIDS[subjectKey]; ok {
 			return false
 		}
+		mSlice = append(mSlice, subjectKey)
+	}
+
+	for _, val := range mSlice {
+		l.currentUIDS[val] = struct{}{}
 	}
 
 	return true
@@ -215,13 +203,13 @@ func (l *loader) removeMap(req api.Mutation) {
 	defer l.uidsLock.Unlock()
 
 	for _, i := range req.Set {
-		delete(l.currentUIDS, i.ObjectId)
+		delete(l.currentUIDS, farm.Fingerprint64([]byte(i.ObjectId)))
 
 		if !reversePreds[i.Predicate] {
 			continue
 		}
 
-		delete(l.currentUIDS, i.Subject)
+		delete(l.currentUIDS, farm.Fingerprint64([]byte(i.Subject)))
 	}
 }
 
@@ -231,34 +219,34 @@ func (l *loader) removeMap(req api.Mutation) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
-	threadId := atomic.AddUint64(&l.threadId, 1) - 1
-
-	buffer := make([]*api.Mutation, 0, 100)
-
+	buffer := make([]*api.Mutation, 0, l.opts.bufferSize)
 	for req := range l.reqs {
-		if l.writeMap(&req, threadId) {
+		if l.writeMap(&req) {
 			reqNum := atomic.AddUint64(&l.reqNum, 1)
 			l.request(req, reqNum)
 		} else {
 			buffer = append(buffer, &req)
 		}
 
-		i := 0
-		for _, mu := range buffer {
-			if l.writeMap(mu, threadId) {
-				reqNum := atomic.AddUint64(&l.reqNum, 1)
-				l.request(req, reqNum)
-				continue
-			}
+		for len(buffer) > l.opts.bufferSize-1 {
+			i := 0
+			for _, mu := range buffer {
+				if l.writeMap(mu) {
+					reqNum := atomic.AddUint64(&l.reqNum, 1)
+					l.request(req, reqNum)
+					continue
+				}
 
-			buffer[i] = mu
-			i++
+				buffer[i] = mu
+				i++
+			}
+			buffer = buffer[:i]
+			time.Sleep(5)
 		}
-		buffer = buffer[:i]
 	}
 
 	for _, req := range buffer {
-		for !l.writeMap(req, threadId) {
+		for !l.writeMap(req) {
 			time.Sleep(5)
 		}
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
