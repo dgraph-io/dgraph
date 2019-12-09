@@ -263,7 +263,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		dc:          dc,
 		start:       time.Now(),
 		reqs:        make(chan api.Mutation, opts.Pending*2),
-		currentUIDS: make(map[uint64]struct{}),
+		currentUIDS: make(map[uint64]bool),
 		alloc:       alloc,
 		db:          db,
 		zeroconn:    connzero,

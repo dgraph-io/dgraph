@@ -75,7 +75,7 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	currentUIDS map[uint64]struct{}
+	currentUIDS map[uint64]bool
 	uidsLock    sync.RWMutex
 
 	reqNum   uint64
@@ -166,17 +166,30 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
-func (l *loader) writeMap(req *api.Mutation) bool {
+func (l *loader) print(req api.Mutation) {
+	fmt.Println("======================")
+	for i := 0; i < 10; i++ {
+		fmt.Printf("%s %s %s\n", req.Set[i].ObjectId, req.Set[i].Predicate, req.Set[i].Subject)
+	}
+	fmt.Println("======================")
+}
+
+func (l *loader) writeMap(req api.Mutation) bool {
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
 	mSlice := make([]uint64, 0, 2*len(req.Set))
 
 	for _, i := range req.Set {
-		objectKey := farm.Fingerprint64([]byte(i.ObjectId))
-		subjectKey := farm.Fingerprint64([]byte(i.Subject))
+		predKey := farm.Fingerprint64([]byte(i.Predicate))
+		objectKey := farm.Fingerprint64([]byte(i.ObjectId)) ^ predKey
+		subjectKey := farm.Fingerprint64([]byte(i.Subject)) ^ predKey
 
-		if _, ok := l.currentUIDS[objectKey]; ok {
+		if i.ObjectId == nil {
+			continue
+		}
+
+		if val, ok := l.currentUIDS[objectKey]; ok && val {
 			return false
 		}
 		mSlice = append(mSlice, objectKey)
@@ -185,14 +198,14 @@ func (l *loader) writeMap(req *api.Mutation) bool {
 			continue
 		}
 
-		if _, ok := l.currentUIDS[subjectKey]; ok {
+		if val, ok := l.currentUIDS[subjectKey]; ok && val {
 			return false
 		}
 		mSlice = append(mSlice, subjectKey)
 	}
 
 	for _, val := range mSlice {
-		l.currentUIDS[val] = struct{}{}
+		l.currentUIDS[val] = true
 	}
 
 	return true
@@ -202,15 +215,23 @@ func (l *loader) removeMap(req api.Mutation) {
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
+	fmt.Println(len(l.currentUIDS))
+
 	for _, i := range req.Set {
-		delete(l.currentUIDS, farm.Fingerprint64([]byte(i.ObjectId)))
+		predKey := farm.Fingerprint64([]byte(i.Predicate))
+		objectKey := farm.Fingerprint64([]byte(i.ObjectId)) ^ predKey
+		subjectKey := farm.Fingerprint64([]byte(i.Subject)) ^ predKey
+
+		delete(l.currentUIDS, objectKey)
 
 		if !reversePreds[i.Predicate] {
 			continue
 		}
 
-		delete(l.currentUIDS, farm.Fingerprint64([]byte(i.Subject)))
+		delete(l.currentUIDS, subjectKey)
 	}
+
+	fmt.Println(len(l.currentUIDS))
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
@@ -219,29 +240,27 @@ func (l *loader) removeMap(req api.Mutation) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
-	buffer := make([]*api.Mutation, 0, l.opts.bufferSize)
+	buffer := make([]api.Mutation, 0, l.opts.bufferSize)
 	for req := range l.reqs {
-		if l.writeMap(&req) {
+		if l.writeMap(req) {
 			reqNum := atomic.AddUint64(&l.reqNum, 1)
 			l.request(req, reqNum)
 		} else {
-			buffer = append(buffer, &req)
+			buffer = append(buffer, req)
 		}
 
-		for ok := true; ok; ok = (len(buffer) > l.opts.bufferSize-1) {
-			i := 0
-			for _, mu := range buffer {
-				if l.writeMap(mu) {
-					reqNum := atomic.AddUint64(&l.reqNum, 1)
-					l.request(req, reqNum)
-					continue
-				}
-
-				buffer[i] = mu
-				i++
+		i := 0
+		for _, mu := range buffer {
+			if l.writeMap(mu) {
+				reqNum := atomic.AddUint64(&l.reqNum, 1)
+				l.request(req, reqNum)
+				continue
 			}
-			buffer = buffer[:i]
+
+			buffer[i] = mu
+			i++
 		}
+		buffer = buffer[:i]
 	}
 
 	for _, req := range buffer {
@@ -249,7 +268,7 @@ func (l *loader) makeRequests() {
 			time.Sleep(5)
 		}
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(*req, reqNum)
+		l.request(req, reqNum)
 	}
 }
 

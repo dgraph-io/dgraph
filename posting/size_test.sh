@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # get the p directory
-wget https://storage.googleapis.com/dgraph-datasets/21million/p/p.tar.gz
+#wget https://storage.googleapis.com/dgraph-datasets/21million/p/p.tar.gz
 
 #untar it
 tar -xvf p.tar.gz 
