@@ -2,3 +2,4 @@
 *.tfvars
 *.tfstate
 *.tfstate.*
+account.json
