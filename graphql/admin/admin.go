@@ -42,22 +42,13 @@ const (
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
 	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
-	// FIXME: dgraphAdminSchema will change to this once we have @dgraph(pred: "...")
-	// dgraphAdminSchema = `
-	// type dgraph.graphql {
-	// 	dgraph.graphql.schema
-	// 	dgraph.graphql.date
-	// }
-	// dgraph.graphql.schema string .
-	// dgraph.graphql.date @index(day) .
-	// `
 	dgraphAdminSchema = `
-	type Schema {
-		Schema.schema
-		Schema.date
+	type dgraph.graphql {
+		dgraph.graphql.schema
+		dgraph.graphql.date
 	}
-	Schema.schema: string .
-	Schema.date: dateTime @index(day) .
+	dgraph.graphql.schema: string .
+	dgraph.graphql.date: dateTime @index(day) .
 	`
 
 	// GraphQL schema for /admin endpoint.
@@ -67,7 +58,7 @@ const (
 	// hand crafted to be one of our schemas so we can pass it into the
 	// pipeline.
 	graphqlAdminSchema = `
- type Schema {
+ type Schema @dgraph(name: "dgraph.graphql") {
 	schema: String!  # the input schema, not the expanded schema
 	date: DateTime!
  }
@@ -84,6 +75,8 @@ const (
  }
 
  scalar DateTime
+
+ directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
 
  type SchemaDiff {
 	types: [TypeDiff!]
