@@ -370,7 +370,7 @@ without a valid key that is required for decryption. Dgraph provides encryption 
 enterprise feature. If encryption is enabled, Dgraph uses AES (Advanced Encryption Standard)
 algorithm to encrypt the data and secure it.
 
-### Setup Encryption
+### Set up Encryption
 
 To enable encryption, we need to pass a file that stores the data encryption key with the option
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
@@ -388,8 +388,8 @@ Here is an example encryption key file of size 16 bytes.
 Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
 
 ```bash
-dgraph zero --my=localhost:5080 --replicas 1 --idx 1 --logtostderr --bindall --expose_trace --profile_mode block --block_rate 10 -v=2
-dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr --expose_trace --profile_mode block --block_rate 10 -v=2
+dgraph zero --my=localhost:5080 --replicas 1 --idx 1
+dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
 
 ### Bulk loader with Encryption
@@ -397,7 +397,7 @@ dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb
 Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
 Later we can point the generated `p` directory to a new alpha server.
 
-Here is an example to bulk load data with encription  :
+Here's an example to run bulk loader with a key used to write encrypted data:
 
 ```bash
 dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
