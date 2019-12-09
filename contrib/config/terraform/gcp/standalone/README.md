@@ -5,7 +5,7 @@ This setup deploys terraform in standalone mode inside a single GCP compute inst
 
 Here are the steps to be followed:
 
-1. You must have an GCP account set up.
+1. You must have a GCP account set up.
 
 2. [Download](https://terraform.io/downloads.html) and install terraform.
 
@@ -20,8 +20,19 @@ gcloud iam service-accounts keys create ./account.json \
 
 ```sh
 $ terraform init
+
 $ TF_VAR_project_name=<GCP Project Name> terraform plan
+
 $ terraform apply
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+dgraph_ip = <OUTPUT_IP>
 ```
+
+The output of `terraform apply` will contain the IP address assigned to your instance. Dgraph-ratel will be available on `<OUTPUT_IP>:8000`.
+Change the server URL in the dashboard to `<OUTPUT_IP>:8080` and start playing with dgraph.
 
 5. Use `terraform destroy` to delete the setup and restore the state.

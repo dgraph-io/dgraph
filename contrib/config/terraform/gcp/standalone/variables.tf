@@ -1,11 +1,19 @@
 variable "region" {
   type        = string
-  default     = "us-east-2"
+  default     = "us-central1"
   description = "The region to deploy the compute instance in."
 }
 
+variable "zone" {
+  type        = string
+  default     = "us-central1-a"
+  description = "Zone to create the instance in."
+}
+
+
 variable "project_name" {
-  type    = string
+  type        = string
+  description = "Name of the GCP project to create the instance in."
 }
 
 variable "credential_file" {
