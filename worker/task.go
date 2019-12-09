@@ -1622,7 +1622,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 
 			var lang string
 			if len(q.Langs) > 0 {
-				// Only one languge is allowed.
+				// Only one language is allowed.
 				lang = q.Langs[0]
 			}
 
