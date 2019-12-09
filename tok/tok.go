@@ -309,31 +309,38 @@ func (t ExactTokenizer) IsLossy() bool    { return false }
 
 // LangTokenizer returns the exact string along with language prefix as a token.
 type LangTokenizer struct {
-	lang   string
-	cl     *collate.Collator
-	buffer *collate.Buffer
+	langBase string
+	cl       *collate.Collator
+	buffer   *collate.Buffer
 }
 
 func (t LangTokenizer) Name() string { return "lang" }
 func (t LangTokenizer) Type() string { return "string" }
 func (t LangTokenizer) Tokens(v interface{}) ([]string, error) {
-	if term, ok := v.(string); ok {
-		lang := LangBase(t.lang)
-		encodedTerm := t.cl.KeyFromString(t.buffer, term)
-
-		term := make([]byte, 0, len(lang)+2+len(encodedTerm))
-		term = append(term, []byte(lang)...)
-		term = append(term, IdentDelimiter)
-		term = append(term, encodedTerm...)
-
-		t.buffer.Reset()
-		return []string{string(term)}, nil
+	val, ok := v.(string)
+	if !ok {
+		return nil, errors.Errorf("Lang indices only supported for string types")
 	}
-	return nil, errors.Errorf("Lang indices only supported for string types")
+
+	encodedTerm := t.cl.KeyFromString(t.buffer, val)
+
+	term := make([]byte, 0, len(t.langBase)+2+len(encodedTerm))
+	term = append(term, []byte(t.langBase)...)
+	term = append(term, IdentDelimiter)
+	term = append(term, encodedTerm...)
+
+	t.buffer.Reset()
+	return []string{string(term)}, nil
 }
 func (t LangTokenizer) Identifier() byte { return IdentExactLang }
 func (t LangTokenizer) IsSortable() bool { return true }
 func (t LangTokenizer) IsLossy() bool    { return false }
+func (t LangTokenizer) Prefix() []byte {
+	prefix := []byte{IdentExactLang}
+	prefix = append(prefix, []byte(t.langBase)...)
+	prefix = append(prefix, IdentDelimiter)
+	return prefix
+}
 
 // FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }
