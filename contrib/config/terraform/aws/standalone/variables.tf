@@ -44,7 +44,7 @@ variable "ssh_port" {
 variable "instance_type" {
   type        = string
   default     = "t2.micro"
-  description ="EC2 instance resource type"
+  description = "EC2 instance resource type"
 }
 
 variable "instance_name" {
@@ -63,6 +63,12 @@ variable "dgraph_ui_port" {
   type        = string
   description = "Port number of ratel interface"
   default     = "8000"
+}
+
+variable "dgraph_server_port" {
+  type        = string
+  description = "Port number of dgraph server for ratel to connect to."
+  default     = "8080"
 }
 
 variable "assign_public_ip" {

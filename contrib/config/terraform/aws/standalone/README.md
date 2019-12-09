@@ -20,4 +20,7 @@ $ terraform plan
 $ terraform apply
 ```
 
+The output of `terraform apply` will contain the IP address assigned to your EC2 instance. Dgraph-ratel will be available on `<OUTPUT_IP>:8000`.
+Change the server URL in the dashboard to `<OUTPUT_IP>:8080` and start playing with dgraph.
+
 5. Use `terraform destroy` to delete the setup and restore the state.
