@@ -60,8 +60,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"unsafe"
+
+	"github.com/ChainSafe/gossamer/codec"
 
 	common "github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/crypto"
@@ -377,10 +380,17 @@ func ext_blake2_256_enumerated_trie_root(context unsafe.Pointer, valuesData, len
 		valueLenBytes := memory[lensData+i*4 : lensData+(i+1)*4]
 		valueLen := int32(binary.LittleEndian.Uint32(valueLenBytes))
 		value := memory[valuesData+pos : valuesData+pos+valueLen]
-		log.Trace("[ext_blake2_256_enumerated_trie_root]", "key", i, "value", fmt.Sprintf("%x", value), "valueLen", valueLen)
+		log.Trace("[ext_blake2_256_enumerated_trie_root]", "key", i, "value", fmt.Sprintf("%d", value), "valueLen", valueLen)
 		pos += valueLen
 
-		err := t.Put([]byte{byte(i)}, value)
+		// encode the key
+		encodedOutput, err := codec.Encode(big.NewInt(int64(i)))
+		if err != nil {
+			log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)
+			return
+		}
+		log.Trace("[ext_blake2_256_enumerated_trie_root]", "key", i, "key value", encodedOutput)
+		err = t.Put(encodedOutput, value)
 		if err != nil {
 			log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)
 			return
@@ -388,11 +398,11 @@ func ext_blake2_256_enumerated_trie_root(context unsafe.Pointer, valuesData, len
 	}
 
 	root, err := t.Hash()
+	log.Trace("[ext_blake2_256_enumerated_trie_root]", "root hash", fmt.Sprintf("0x%x", root))
 	if err != nil {
 		log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)
 		return
 	}
-
 	copy(memory[result:result+32], root[:])
 }
 
