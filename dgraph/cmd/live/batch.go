@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -136,7 +137,7 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
-			l.removeMap(req)
+			l.removeMap(&req)
 			return
 		}
 		nretries++
@@ -157,7 +158,7 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
-		l.removeMap(req)
+		l.removeMap(&req)
 		return
 	}
 	handleError(err, reqNum, false)
@@ -170,38 +171,42 @@ func (l *loader) print(req api.Mutation) {
 	fmt.Println("======================")
 	for i := 0; i < 10; i++ {
 		fmt.Printf("%s %s %s\n", req.Set[i].ObjectId, req.Set[i].Predicate, req.Set[i].Subject)
+		fmt.Printf("%+v\n", req.Set[i])
 	}
 	fmt.Println("======================")
 }
 
-func (l *loader) writeMap(req api.Mutation) bool {
+func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
+	sid, _ := strconv.ParseUint(nq.Subject, 0, 64)
+	keys := make([]uint64, 0, 1)
+	keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
+
+	if reversePreds[nq.Predicate] {
+		oi, _ := strconv.ParseUint(nq.ObjectId, 0, 64)
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
+	}
+
+	return keys
+}
+
+func (l *loader) getConflicts(req *api.Mutation) []uint64 {
+	keys := make([]uint64, 0, len(req.Set))
+	for _, i := range req.Set {
+		keys = append(keys, l.getConflictKeys(i)...)
+	}
+	return keys
+}
+
+func (l *loader) writeMap(req *api.Mutation) bool {
+	mSlice := l.getConflicts(req)
+
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	mSlice := make([]uint64, 0, 2*len(req.Set))
-
-	for _, i := range req.Set {
-		predKey := farm.Fingerprint64([]byte(i.Predicate))
-		objectKey := farm.Fingerprint64([]byte(i.ObjectId)) ^ predKey
-		subjectKey := farm.Fingerprint64([]byte(i.Subject)) ^ predKey
-
-		if i.ObjectId == nil {
-			continue
-		}
-
-		if val, ok := l.currentUIDS[objectKey]; ok && val {
+	for _, val := range mSlice {
+		if t, ok := l.currentUIDS[val]; ok && t {
 			return false
 		}
-		mSlice = append(mSlice, objectKey)
-
-		if !reversePreds[i.Predicate] {
-			continue
-		}
-
-		if val, ok := l.currentUIDS[subjectKey]; ok && val {
-			return false
-		}
-		mSlice = append(mSlice, subjectKey)
 	}
 
 	for _, val := range mSlice {
@@ -211,27 +216,15 @@ func (l *loader) writeMap(req api.Mutation) bool {
 	return true
 }
 
-func (l *loader) removeMap(req api.Mutation) {
+func (l *loader) removeMap(req *api.Mutation) {
+	mSlice := l.getConflicts(req)
+
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	fmt.Println(len(l.currentUIDS))
-
-	for _, i := range req.Set {
-		predKey := farm.Fingerprint64([]byte(i.Predicate))
-		objectKey := farm.Fingerprint64([]byte(i.ObjectId)) ^ predKey
-		subjectKey := farm.Fingerprint64([]byte(i.Subject)) ^ predKey
-
-		delete(l.currentUIDS, objectKey)
-
-		if !reversePreds[i.Predicate] {
-			continue
-		}
-
-		delete(l.currentUIDS, subjectKey)
+	for _, i := range mSlice {
+		delete(l.currentUIDS, i)
 	}
-
-	fmt.Println(len(l.currentUIDS))
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
@@ -242,7 +235,7 @@ func (l *loader) makeRequests() {
 
 	buffer := make([]api.Mutation, 0, l.opts.bufferSize)
 	for req := range l.reqs {
-		if l.writeMap(req) {
+		if l.writeMap(&req) {
 			reqNum := atomic.AddUint64(&l.reqNum, 1)
 			l.request(req, reqNum)
 		} else {
@@ -251,7 +244,7 @@ func (l *loader) makeRequests() {
 
 		i := 0
 		for _, mu := range buffer {
-			if l.writeMap(mu) {
+			if l.writeMap(&mu) {
 				reqNum := atomic.AddUint64(&l.reqNum, 1)
 				l.request(req, reqNum)
 				continue
@@ -264,7 +257,7 @@ func (l *loader) makeRequests() {
 	}
 
 	for _, req := range buffer {
-		for !l.writeMap(req) {
+		for !l.writeMap(&req) {
 			time.Sleep(5)
 		}
 		reqNum := atomic.AddUint64(&l.reqNum, 1)

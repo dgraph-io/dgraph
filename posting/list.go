@@ -495,6 +495,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	default:
 		// Don't assign a conflictKey.
 	}
+
 	txn.addConflictKey(conflictKey)
 	return nil
 }
