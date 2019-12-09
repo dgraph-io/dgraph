@@ -161,7 +161,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return Config.HmacSecret, nil
+		return worker.Config.HmacSecret, nil
 	})
 
 	if err != nil {
@@ -224,16 +224,16 @@ func validateLoginRequest(request *api.LoginRequest) error {
 }
 
 // getAccessJwt constructs an access jwt with the given user id, groupIds,
-// and expiration TTL specified by Config.AccessJwtTtl
+// and expiration TTL specified by worker.Config.AccessJwtTtl
 func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userid": userId,
 		"groups": acl.GetGroupIDs(groups),
 		// set the jwt exp according to the ttl
-		"exp": time.Now().Add(Config.AccessJwtTtl).Unix(),
+		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(Config.HmacSecret)
+	jwtString, err := token.SignedString(worker.Config.HmacSecret)
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -241,14 +241,14 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 }
 
 // getRefreshJwt constructs a refresh jwt with the given user id, and expiration ttl specified by
-// Config.RefreshJwtTtl
+// worker.Config.RefreshJwtTtl
 func getRefreshJwt(userId string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userid": userId,
-		"exp":    time.Now().Add(Config.RefreshJwtTtl).Unix(),
+		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(Config.HmacSecret)
+	jwtString, err := token.SignedString(worker.Config.HmacSecret)
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -297,12 +297,12 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
 func RefreshAcls(closer *y.Closer) {
 	defer closer.Done()
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
 	}
 
-	ticker := time.NewTicker(Config.AclRefreshInterval)
+	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
@@ -353,7 +353,7 @@ const queryAcls = `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
 func ResetAcl() {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// The acl feature is not turned on.
 		return
 	}
@@ -463,7 +463,7 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -574,12 +574,15 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 
 // authorizeMutation authorizes the mutation using the aclCachePtr
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
 	preds := parsePredsFromMutation(gmu.Set)
+	// Del predicates weren't included before.
+	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
+	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
 	var userId string
 	var groupIds []string
@@ -600,6 +603,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				// groot is allowed to mutate anything except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
+				} else if isAclPredMutation(gmu.Del) {
+					// even groot can't delete ACL predicates
+					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
 			}
@@ -667,7 +673,7 @@ func logAccess(log *accessEntry) {
 
 //authorizeQuery authorizes the query using the aclCachePtr
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}

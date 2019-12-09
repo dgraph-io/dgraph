@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -603,7 +604,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
 
 	getLeaderConn := func(zc pb.ZeroClient) *conn.Pool {
-		ctx, cancel := context.WithTimeout(gr.ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(g.ctx, 10*time.Second)
 		defer cancel()
 
 		connState, err := zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
@@ -980,8 +981,55 @@ func (g *groupi) processOracleDeltaStream() {
 
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
+	if !enc.EeBuild {
+		return false
+	}
 	g := groups()
+	if g == nil {
+		return askZeroForEE()
+	}
 	g.RLock()
 	defer g.RUnlock()
 	return g.state.GetLicense().GetEnabled()
+}
+
+func askZeroForEE() bool {
+	var err error
+	var connState *pb.ConnectionState
+
+	grp := &groupi{}
+
+	conn := func() bool {
+		grp.ctx, grp.cancel = context.WithCancel(context.Background())
+		defer grp.cancel()
+
+		pl := grp.connToZeroLeader()
+		if pl == nil {
+			return false
+		}
+		zc := pb.NewZeroClient(pl.Get())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		connState, err = zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
+		if connState == nil ||
+			connState.GetState() == nil ||
+			connState.GetState().GetLicense() == nil {
+			glog.Info("Retry Zero Connection")
+			return false
+		}
+		if err == nil || x.ShouldCrash(err) {
+			return true
+		}
+		return false
+	}
+
+	for {
+		if conn() {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	return connState.GetState().GetLicense().GetEnabled()
 }
