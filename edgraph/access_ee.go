@@ -70,6 +70,7 @@ func (s *Server) Login(ctx context.Context,
 		glog.Errorf(errMsg)
 		return nil, errors.Errorf(errMsg)
 	}
+	glog.Infof("%s logged in successfully", user.UserID)
 
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(user.UserID, user.Groups)
