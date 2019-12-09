@@ -414,3 +414,63 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 	// Schema queries should fail if the user has not logged in.
 	querySchemaWithUserAccount(t, dg, true)
 }
+
+func TestUnauthorizedDeletion(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	unAuthPred := "unauthorizedPredicate"
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	op = api.Operation{
+		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-g", devGroup, "-x", "password")
+	require.NoError(t, createDevGroup.Run())
+
+	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
+		"-l", devGroup, "-x", "password")
+	require.NoError(t, addUserToDev.Run())
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID, ok := resp.Uids["a"]
+	require.True(t, ok)
+
+	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
+	require.NoError(t, setPermissionCmd.Run())
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	txn = userClient.NewTxn()
+	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
+	mutation = &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PermissionDenied")
+}
