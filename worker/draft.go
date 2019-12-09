@@ -159,11 +159,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
-		// Clear all the cache.
-		posting.ClearListCache()
+
 		if err := posting.DeleteAll(); err != nil {
 			return err
 		}
+
+		// Clear all the cache.
+		posting.ResetCache()
 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
@@ -542,7 +544,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
 		// Clear all the cached list.
-		txn.ClearCachedList()
+		txn.ClearCachedKeys()
 	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -1057,7 +1059,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		atomic.AddUint64(&numKeys, 1)
 		kvs, err := l.Rollup()
 		// delete the list while rollup.
-		posting.DeleteListCache(key)
+		posting.RemoveCacheFor(key)
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
 		// size calculations.
