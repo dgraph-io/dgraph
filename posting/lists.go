@@ -172,15 +172,19 @@ func Init(ps *badger.DB) {
 		MaxCost:     1e9,
 		BufferItems: 64,
 		Metrics:     true,
+		Cost: func(val interface{}) int64 {
+			l := val.(*List)
+			return int64(l.DeepSize())
+		},
 	})
 	x.Check(err)
-	// go func() {
-	// 	ticker := time.NewTicker(5 * time.Second)
-	// 	for range ticker.C {
-	// 		m := plCache.Metrics
-	// 		glog.Infof(m.String())
-	// 	}
-	// }()
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			m := lCache.Metrics
+			glog.Infof(m.String())
+		}
+	}()
 }
 
 // Cleanup waits until the closer has finished processing.

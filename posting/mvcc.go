@@ -128,18 +128,18 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
-// ClearListCache will clear all the cached list.
-func ClearListCache() {
+// ResetCache will clear all the cached list.
+func ResetCache() {
 	lCache.Clear()
 }
 
-// DeleteListCache will delete the list corresponding to the given key.
-func DeleteListCache(key []byte) {
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
 	lCache.Del(key)
 }
 
-// ClearCachedList will delete the cached list by this txn.
-func (txn *Txn) ClearCachedList() {
+// ClearCachedKeys will delete the cached list by this txn.
+func (txn *Txn) ClearCachedKeys() {
 	if txn == nil || txn.cache == nil {
 		return
 	}
@@ -230,14 +230,17 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		l := cachedVal.(*List)
 
 		// No need to clone the immutable layer or the key since mutations will not modify it.
-		lCopy := new(List)
-		lCopy.minTs = l.minTs
-		lCopy.maxTs = l.maxTs
-		lCopy.key = key
-		lCopy.plist = l.plist
-		lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-		for ts, pl := range l.mutationMap {
-			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+		lCopy := &List{
+			minTs: l.minTs,
+			maxTs: l.maxTs,
+			key:   key,
+			plist: l.plist,
+		}
+		if l.mutationMap != nil {
+			lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+			for ts, pl := range l.mutationMap {
+				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+			}
 		}
 		return lCopy, nil
 	}
@@ -256,6 +259,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	lCache.Set(key, l, int64(l.DeepSize()))
+	lCache.Set(key, l, 0)
 	return l, nil
 }
