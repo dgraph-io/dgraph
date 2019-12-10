@@ -39,6 +39,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/schema"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
@@ -114,7 +115,7 @@ func init() {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
+func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) (*schema.ParsedSchema, error) {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
@@ -151,7 +152,8 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	return dgraphClient.Alter(ctx, op)
+	sch, err := schema.Parse(op.Schema)
+	return sch, dgraphClient.Alter(ctx, op)
 }
 
 func (l *loader) uid(val string) string {
@@ -317,7 +319,8 @@ func run() error {
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		if err := processSchemaFile(ctx, opt.schemaFile, dg); err != nil {
+		sch, err := processSchemaFile(ctx, opt.schemaFile, dg)
+		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil
@@ -325,6 +328,7 @@ func run() error {
 			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
+		l.sch = sch
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
