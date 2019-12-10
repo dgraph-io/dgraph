@@ -75,7 +75,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
 
-	plist, ok := l.mutationMap[startTs]
+	indexedPlist, ok := l.mutationMap[startTs]
 	if !ok {
 		// It was already committed, might be happening due to replay.
 		return nil
@@ -87,8 +87,8 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	}
 
 	// We have a valid commit.
-	plist.CommitTs = commitTs
-	for _, mpost := range plist.Postings {
+	indexedPlist.plist.CommitTs = commitTs
+	for _, mpost := range indexedPlist.plist.Postings {
 		mpost.CommitTs = commitTs
 	}
 
