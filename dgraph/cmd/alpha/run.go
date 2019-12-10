@@ -276,13 +276,17 @@ func grpcPort() int {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if err := x.HealthCheck(); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, err = w.Write([]byte(err.Error()))
-		if err != nil {
-			glog.V(2).Infof("Error while writing health check response: %v", err)
+
+	_, ok := r.URL.Query()["live"]
+	if !ok {
+		if err := x.HealthCheck(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, err = w.Write([]byte(err.Error()))
+			if err != nil {
+				glog.V(2).Infof("Error while writing health check response: %v", err)
+			}
+			return
 		}
-		return
 	}
 
 	info := struct {

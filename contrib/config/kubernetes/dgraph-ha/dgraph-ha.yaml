@@ -169,6 +169,24 @@ spec:
             else
               exec dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas 3
             fi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /state
+            port: 6080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
@@ -285,6 +303,24 @@ spec:
           - |
             set -ex
             dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+        livenessProbe:
+          httpGet:
+            path: /health?live=1
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
       terminationGracePeriodSeconds: 600
       volumes:
       - name: datadir
