@@ -36,14 +36,11 @@ const SendStatusInterval = 5 * time.Minute
 
 // Service describes a p2p service
 type Service struct {
-	ctx          context.Context
-	host         *host
-	msgRec       <-chan Message
-	msgSend      chan<- Message
-	blockAnnRec  map[string]bool
-	blockReqRec  map[string]bool
-	blockRespRec map[string]bool
-	txMessageRec map[string]bool
+	ctx     context.Context
+	host    *host
+	gossip  *gossip
+	msgRec  <-chan Message
+	msgSend chan<- Message
 }
 
 // TODO: use generated status message
@@ -66,15 +63,17 @@ func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*S
 		return nil, err
 	}
 
+	gossip, err := newGossip(host)
+	if err != nil {
+		return nil, err
+	}
+
 	p2p := &Service{
-		ctx:          ctx,
-		host:         host,
-		msgRec:       msgRec,
-		msgSend:      msgSend,
-		blockAnnRec:  make(map[string]bool),
-		blockReqRec:  make(map[string]bool),
-		blockRespRec: make(map[string]bool),
-		txMessageRec: make(map[string]bool),
+		ctx:     ctx,
+		host:    host,
+		gossip:  gossip,
+		msgRec:  msgRec,
+		msgSend: msgSend,
 	}
 
 	return p2p, err
@@ -91,13 +90,13 @@ func (s *Service) Start() error {
 	s.host.bootstrap()
 	s.host.printHostAddresses()
 
-	// start broadcasting messages from core service to all connected peers
-	go s.broadcastReceivedMessages()
+	// receive messages from core service
+	go s.receiveCoreMessages()
 
 	return nil
 }
 
-// Stop shuts down the host and the msgSend channel
+// Stop shuts down the host and message channel to core service
 func (s *Service) Stop() error {
 
 	// close host and host services
@@ -106,7 +105,7 @@ func (s *Service) Stop() error {
 		log.Error("Failed to close host", "err", err)
 	}
 
-	// close msgSend channel
+	// close channel to core service
 	if s.msgSend != nil {
 		close(s.msgSend)
 	}
@@ -117,15 +116,19 @@ func (s *Service) Stop() error {
 // handleConn starts processes that manage the connection
 func (s *Service) handleConn(conn network.Conn) {
 
-	// starts sending status messages to the connected peer
-	go s.sendStatusMessages(conn.RemotePeer())
+	// check if status exchange is enabled
+	if !s.host.noStatus {
 
+		// starts sending status messages to connected peer
+		go s.sendStatusMessages(conn.RemotePeer())
+
+	}
 }
 
 // sendStatusMessages starts sending status messages to the connected peer
 func (s *Service) sendStatusMessages(peer peer.ID) {
 	for {
-		// TODO: use generated message
+		// TODO: use generated status message
 		msg := statusMessage
 
 		// send status message to connected peer
@@ -139,98 +142,71 @@ func (s *Service) sendStatusMessages(peer peer.ID) {
 	}
 }
 
-// broadcastReceivedMessages starts polling the msgRec channel for messages
-// from the core service and broadcasts the new messages to connected peers
-func (s *Service) broadcastReceivedMessages() {
+// receiveCoreMessages broadcasts messages from the core service
+func (s *Service) receiveCoreMessages() {
 	for {
-		// receive message from core service (from BABE session)
+		// receive message from core service
 		msg := <-s.msgRec
 
 		log.Trace(
-			"Received message",
-			"host", s.host.id(),
+			"Broadcasting message from core service",
+			"host", s.ID(),
+			"type", msg.GetType(),
 		)
 
-		// check if message should be broadcasted
-		if !s.shouldBroadcast(msg) {
-			log.Trace(
-				"Message ignored",
-				"host", s.host.id(),
-				"type", msg.GetType(),
-			)
-			return
-		}
-
-		// send message to each connected peer
+		// broadcast message to connected peers
 		s.host.broadcast(msg)
 	}
-}
-
-// shouldBroadcast checks if message is new with a valid type, storing the
-// result for later checks and returning true if its a valid new message
-func (s *Service) shouldBroadcast(msg Message) bool {
-	msgType := msg.GetType()
-
-	switch msgType {
-	case BlockRequestMsgType:
-		if s.blockReqRec[msg.Id()] {
-			return false
-		}
-		s.blockReqRec[msg.Id()] = true
-	case BlockResponseMsgType:
-		if s.blockRespRec[msg.Id()] {
-			return false
-		}
-		s.blockRespRec[msg.Id()] = true
-	case BlockAnnounceMsgType:
-		if s.blockAnnRec[msg.Id()] {
-			return false
-		}
-		s.blockAnnRec[msg.Id()] = true
-	case TransactionMsgType:
-		if s.txMessageRec[msg.Id()] {
-			return false
-		}
-		s.txMessageRec[msg.Id()] = true
-	default:
-		// status message type not valid
-		return false
-	}
-
-	return true
 }
 
 // handleStream parses the message written to the data stream and calls the
 // associated message handler (status or non-status) based on message type
 func (s *Service) handleStream(stream net.Stream) {
 
-	log.Trace(
-		"Received message",
-		"host", stream.Conn().LocalPeer(),
-		"peer", stream.Conn().RemotePeer(),
-	)
-
 	// parse message and exit on error
 	msg, err := parseMessage(stream)
 	if err != nil {
-		log.Error("Failed to parse message", "err", err)
+		log.Error("Failed to parse message from peer", "err", err)
 		return // exit on error
 	}
 
-	if msg.GetType() == StatusMsgType {
-		// handle status message type
-		s.handleStreamStatus(stream, msg)
+	log.Trace(
+		"Received message from peer",
+		"host", stream.Conn().LocalPeer(),
+		"peer", stream.Conn().RemotePeer(),
+		"type", msg.GetType(),
+	)
+
+	if msg.GetType() != StatusMsgType {
+		s.handleMessage(stream, msg)
 	} else {
-		// handle other message types
-		s.handleStreamNonStatus(stream, msg)
+		s.handleStatusMessage(stream, msg)
 	}
 
-	// send message to core service
-	s.msgSend <- msg
 }
 
-// handleStreamStatus handles status messages written to the stream
-func (s *Service) handleStreamStatus(stream network.Stream, msg Message) {
+// handleMessage handles non-status messages written to the stream
+func (s *Service) handleMessage(stream network.Stream, msg Message) {
+
+	// check if status exchange is disabled or peer status is confirmed
+	if s.host.noStatus || s.host.peerStatus[stream.Conn().RemotePeer()] {
+
+		// send all non-status messages to core service
+		s.msgSend <- msg
+
+	}
+
+	// check if gossip is enabled
+	if !s.host.noGossip {
+
+		// broadcast message if message has not been seen
+		s.gossip.handleMessage(stream, msg)
+
+	}
+}
+
+// handleStatusMessage handles status messages written to the stream
+func (s *Service) handleStatusMessage(stream network.Stream, msg Message) {
 
 	// TODO: use generated status message
 	hostStatus := statusMessage
@@ -262,29 +238,6 @@ func (s *Service) handleStreamStatus(stream network.Stream, msg Message) {
 			log.Error("Failed to close peer", "err", err)
 		}
 
-	}
-}
-
-// handleStreamNonStatus handles non-status messages written to the stream
-func (s *Service) handleStreamNonStatus(stream network.Stream, msg Message) {
-
-	status := s.host.peerStatus[stream.Conn().RemotePeer()]
-
-	// ignore message if peer status message has not been confirmed
-	if !status {
-		return
-	}
-
-	// check if message should be broadcasted
-	if !s.shouldBroadcast(msg) {
-		return
-	}
-
-	// broadcast to all connected peers if gossip enabled
-	if !s.host.noGossip {
-
-		// send message to each connected peer
-		s.host.broadcast(msg)
 	}
 }
 
