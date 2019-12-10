@@ -299,7 +299,9 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
 		if err == nil {
-			buf.Write(line)
+			if _, err := buf.Write(line); err != nil {
+				return err
+			}
 		}
 	}
 	return err
@@ -653,7 +655,9 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 	closeFunc := func() {
 		for _, c := range conns {
-			c.Close()
+			if err := c.Close(); err != nil {
+				glog.Warningf("Error closing connection to Dgraph client: %v", err)
+			}
 		}
 	}
 	return dg, closeFunc

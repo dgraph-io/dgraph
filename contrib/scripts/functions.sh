@@ -31,11 +31,8 @@ function restartCluster {
 }
 
 function stopCluster {
-  basedir=$(dirname "${BASH_SOURCE[0]}")/../..
-  pushd $basedir/dgraph >/dev/null
   docker ps --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker stop | sed 's/^/Stopped /'
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker rm | sed 's/^/Removed /'
-  popd >/dev/null
 }
