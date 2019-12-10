@@ -19,6 +19,7 @@ package live
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -209,14 +211,74 @@ func typeValFrom(val *api.Value) (types.Val, error) {
 	return p1, nil
 }
 
+func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
+		Entity:    sid,
+		Attr:      nq.Predicate,
+		Label:     nq.Label,
+		Lang:      nq.Lang,
+		Facets:    nq.Facets,
+		ValueId:   oid,
+		ValueType: pb.Posting_UID,
+	}
+}
+
+func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
+	p := &pb.DirectedEdge{
+		Entity: sid,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
+		Lang:   nq.Lang,
+		Facets: nq.Facets,
+	}
+	val, err := typeValFrom(nq.ObjectValue)
+	if err == nil {
+		p.Value = val.Value.([]byte)
+		p.ValueType = val.Tid.Enum()
+		return p, nil
+	}
+	return p, err
+}
+
+func fingerprintEdge(t *pb.DirectedEdge, pred *LivePredicate) uint64 {
+	var id uint64 = math.MaxUint64
+
+	// Value with a lang type.
+	if len(t.Lang) > 0 {
+		id = farm.Fingerprint64([]byte(t.Lang))
+	} else if pred.List {
+		id = farm.Fingerprint64(t.Value)
+	}
+	return id
+}
+
 func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 	sid, _ := strconv.ParseUint(nq.Subject, 0, 64)
+
+	var oid uint64
+	var de *pb.DirectedEdge
+
+	if nq.ObjectValue == nil {
+		oid, _ = strconv.ParseUint(nq.ObjectId, 0, 64)
+		de = createUidEdge(nq, sid, oid)
+	} else {
+		var err error
+		de, err = createValueEdge(nq, sid)
+		x.Check(err)
+	}
+
 	keys := make([]uint64, 0, 1)
-	keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
 
 	pred, ok := l.sch.preds[nq.Predicate]
 	if !ok {
 		return keys
+	}
+
+	if pred.List {
+		key := fingerprintEdge(de, pred)
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid))^key)
+	} else {
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
 	}
 
 	if pred.Reverse {
@@ -233,9 +295,13 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 		if !ok {
 			fmt.Printf("unknown tokenizer %q", tokerName)
 		}
-		val, err := typeValFrom(nq.ObjectValue)
-		x.Check(err)
-		schemaVal, err := types.Convert(val, types.TypeID(pred.ValueType))
+
+		storageVal := types.Val{
+			Tid:   types.TypeID(de.GetValueType()),
+			Value: de.GetValue(),
+		}
+
+		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
 		x.Check(err)
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
 		x.Check(err)

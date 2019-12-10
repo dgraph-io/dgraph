@@ -73,6 +73,8 @@ type LivePredicate struct {
 	Tokenizer []string `json:"tokenizer,omitempty"`
 	Count     bool     `json:"count,omitempty"`
 	List      bool     `json:"list,omitempty"`
+	Lang      bool     `json:"lang,omitempty"`
+	Index     bool     `json:"index,omitempty"`
 	Upsert    bool     `json:"upsert,omitempty"`
 	Reverse   bool     `json:"reverse,omitempty"`
 
