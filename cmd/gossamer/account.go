@@ -12,6 +12,8 @@ import (
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/keystore"
 
 	log "github.com/ChainSafe/log15"
@@ -164,13 +166,13 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 	var err error
 	if keytype == crypto.Sr25519Type {
 		// generate sr25519 keys
-		kp, err = crypto.GenerateSr25519Keypair()
+		kp, err = sr25519.GenerateKeypair()
 		if err != nil {
 			return "", fmt.Errorf("could not generate sr25519 keypair: %s", err)
 		}
 	} else if keytype == crypto.Ed25519Type {
 		// generate ed25519 keys
-		kp, err = crypto.GenerateEd25519Keypair()
+		kp, err = ed25519.GenerateKeypair()
 		if err != nil {
 			return "", fmt.Errorf("could not generate ed25519 keypair: %s", err)
 		}

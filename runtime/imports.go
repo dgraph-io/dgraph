@@ -66,7 +66,8 @@ import (
 	"github.com/ChainSafe/gossamer/codec"
 
 	common "github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	xxhash "github.com/OneOfOne/xxhash"
@@ -481,7 +482,7 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	seedBytes := memory[seed : seed+seedLen]
 
-	kp, err := crypto.NewSr25519KeypairFromSeed(seedBytes)
+	kp, err := sr25519.NewKeypairFromSeed(seedBytes)
 	if err != nil {
 		log.Debug("ext_sr25519_generate cannot generate key", "error", err)
 	}
@@ -554,7 +555,7 @@ func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
-	pubkey, err := crypto.NewEd25519PublicKey(pubkeyBytes)
+	pubkey, err := ed25519.NewPublicKey(pubkeyBytes)
 	if err != nil {
 		log.Error("[ext_ed25519_sign]", "error", err)
 		return 1
@@ -588,7 +589,7 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
-	pubkey, err := crypto.NewSr25519PublicKey(pubkeyBytes)
+	pubkey, err := sr25519.NewPublicKey(pubkeyBytes)
 	if err != nil {
 		log.Error("[ext_sr25519_sign]", "error", err)
 		return 1
@@ -623,7 +624,7 @@ func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 	msg := memory[msgData : msgData+msgLen]
 	sig := memory[sigData : sigData+64]
 
-	pub, err := crypto.NewSr25519PublicKey(memory[pubkeyData : pubkeyData+32])
+	pub, err := sr25519.NewPublicKey(memory[pubkeyData : pubkeyData+32])
 	if err != nil {
 		return 1
 	}
@@ -648,7 +649,7 @@ func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	seedBytes := memory[seed : seed+seedLen]
 
-	kp, err := crypto.NewEd25519KeypairFromSeed(seedBytes)
+	kp, err := ed25519.NewKeypairFromSeed(seedBytes)
 	if err != nil {
 		log.Debug("ext_ed25519_generate cannot generate key", "error", err)
 	}
@@ -668,12 +669,12 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 
 	msg := memory[msgData : msgData+msgLen]
 	sig := memory[sigData : sigData+64]
-	pubkey, err := crypto.NewEd25519PublicKey(memory[pubkeyData : pubkeyData+32])
+	pubkey, err := ed25519.NewPublicKey(memory[pubkeyData : pubkeyData+32])
 	if err != nil {
 		return 1
 	}
 
-	if crypto.Ed25519Verify(pubkey, msg, sig) {
+	if pubkey.Verify(msg, sig) {
 		return 0
 	}
 

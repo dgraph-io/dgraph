@@ -17,12 +17,8 @@
 package babe
 
 import (
-	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
-
-// TODO: change to Schnorrkel keys
-type VrfPublicKey [32]byte
-type VrfPrivateKey [64]byte
 
 // BabeConfiguration contains the starting data needed for Babe
 // see: https://github.com/paritytech/substrate/blob/426c26b8bddfcdbaf8d29f45b128e0864b57de1c/core/consensus/babe/primitives/src/lib.rs#L132
@@ -43,6 +39,6 @@ type AuthorityDataRaw struct {
 
 //nolint:structcheck
 type AuthorityData struct {
-	id     *crypto.Sr25519PublicKey
+	id     *sr25519.PublicKey
 	weight uint64
 }

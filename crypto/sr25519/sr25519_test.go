@@ -1,4 +1,4 @@
-package crypto
+package sr25519
 
 import (
 	"crypto/rand"
@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func TestNewSr25519KeypairFromSeed(t *testing.T) {
+func TestNewKeypairFromSeed(t *testing.T) {
 	seed := make([]byte, 32)
 	_, err := rand.Read(seed)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	kp, err := NewSr25519KeypairFromSeed(seed)
+	kp, err := NewKeypairFromSeed(seed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,8 +23,8 @@ func TestNewSr25519KeypairFromSeed(t *testing.T) {
 	}
 }
 
-func TestSr25519SignAndVerify(t *testing.T) {
-	kp, err := GenerateSr25519Keypair()
+func TestSignAndVerify(t *testing.T) {
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,21 +35,21 @@ func TestSr25519SignAndVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pub := kp.Public().(*Sr25519PublicKey)
+	pub := kp.Public().(*PublicKey)
 	ok := pub.Verify(msg, sig)
 	if !ok {
 		t.Fatal("Fail: did not verify sr25519 sig")
 	}
 }
 
-func TestSr25519PublicKeys(t *testing.T) {
-	kp, err := GenerateSr25519Keypair()
+func TestPublicKeys(t *testing.T) {
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	priv := kp.Private().(*Sr25519PrivateKey)
-	kp2, err := NewSr25519Keypair(priv.key)
+	priv := kp.Private().(*PrivateKey)
+	kp2, err := NewKeypair(priv.key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,39 +58,39 @@ func TestSr25519PublicKeys(t *testing.T) {
 	}
 }
 
-func TestSr25519EncodeAndDecodePrivateKey(t *testing.T) {
-	kp, err := GenerateSr25519Keypair()
+func TestEncodeAndDecodePrivateKey(t *testing.T) {
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	enc := kp.Private().Encode()
-	res := new(Sr25519PrivateKey)
+	res := new(PrivateKey)
 	err = res.Decode(enc)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	exp := kp.Private().(*Sr25519PrivateKey).key.Encode()
+	exp := kp.Private().(*PrivateKey).key.Encode()
 	if !reflect.DeepEqual(res.key.Encode(), exp) {
 		t.Fatalf("Fail: got %x expected %x", res.key.Encode(), exp)
 	}
 }
 
-func TestSr25519EncodeAndDecodePublicKey(t *testing.T) {
-	kp, err := GenerateSr25519Keypair()
+func TestEncodeAndDecodePublicKey(t *testing.T) {
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	enc := kp.Public().Encode()
-	res := new(Sr25519PublicKey)
+	res := new(PublicKey)
 	err = res.Decode(enc)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	exp := kp.Public().(*Sr25519PublicKey).key.Encode()
+	exp := kp.Public().(*PublicKey).key.Encode()
 	if !reflect.DeepEqual(res.key.Encode(), exp) {
 		t.Fatalf("Fail: got %v expected %v", res.key, exp)
 	}

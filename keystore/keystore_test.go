@@ -4,13 +4,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
 func TestKeystore(t *testing.T) {
 	ks := NewKeystore()
 
-	kp, err := crypto.GenerateSr25519Keypair()
+	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}

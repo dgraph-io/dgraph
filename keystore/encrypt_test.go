@@ -8,7 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/crypto"
+	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
 func TestEncryptAndDecrypt(t *testing.T) {
@@ -37,7 +38,7 @@ func TestEncryptAndDecryptPrivateKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	priv, err := crypto.NewEd25519PrivateKey(buf)
+	priv, err := ed25519.NewPrivateKey(buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestEncryptAndDecryptFromFile_Ed25519(t *testing.T) {
 	file, fp := createTestFile(t)
 	defer os.Remove(fp)
 
-	kp, err := crypto.GenerateSr25519Keypair()
+	kp, err := ed25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestEncryptAndDecryptFromFile_Sr25519(t *testing.T) {
 	file, fp := createTestFile(t)
 	defer os.Remove(fp)
 
-	kp, err := crypto.GenerateSr25519Keypair()
+	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package crypto
+package ed25519
 
 import (
 	"reflect"
@@ -7,8 +7,8 @@ import (
 	ed25519 "crypto/ed25519"
 )
 
-func TestEd25519SignAndVerify(t *testing.T) {
-	kp, err := GenerateEd25519Keypair()
+func TestSignAndVerify(t *testing.T) {
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,32 +16,32 @@ func TestEd25519SignAndVerify(t *testing.T) {
 	msg := []byte("helloworld")
 	sig, _ := kp.Sign(msg)
 
-	ok := Ed25519Verify(kp.Public().(*Ed25519PublicKey), msg, sig)
+	ok := Verify(kp.Public().(*PublicKey), msg, sig)
 	if !ok {
 		t.Fatal("Fail: did not verify ed25519 sig")
 	}
 }
 
 func TestPublicKeys(t *testing.T) {
-	kp, err := GenerateEd25519Keypair()
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	kp2 := NewEd25519Keypair(ed25519.PrivateKey(*(kp.Private().(*Ed25519PrivateKey))))
+	kp2 := NewKeypair(ed25519.PrivateKey(*(kp.Private().(*PrivateKey))))
 	if !reflect.DeepEqual(kp.Public(), kp2.Public()) {
 		t.Fatal("Fail: pubkeys do not match")
 	}
 }
 
 func TestEncodeAndDecodePrivateKey(t *testing.T) {
-	kp, err := GenerateEd25519Keypair()
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	enc := kp.Private().Encode()
-	res := new(Ed25519PrivateKey)
+	res := new(PrivateKey)
 	err = res.Decode(enc)
 	if err != nil {
 		t.Fatal(err)
@@ -53,13 +53,13 @@ func TestEncodeAndDecodePrivateKey(t *testing.T) {
 }
 
 func TestEncodeAndDecodePublicKey(t *testing.T) {
-	kp, err := GenerateEd25519Keypair()
+	kp, err := GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	enc := kp.Public().Encode()
-	res := new(Ed25519PublicKey)
+	res := new(PublicKey)
 	err = res.Decode(enc)
 	if err != nil {
 		t.Fatal(err)

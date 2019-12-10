@@ -1,8 +1,6 @@
 package crypto
 
 import (
-	"errors"
-
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/btcsuite/btcutil/base58"
 	"golang.org/x/crypto/blake2b"
@@ -32,18 +30,6 @@ type PrivateKey interface {
 	Public() (PublicKey, error)
 	Encode() []byte
 	Decode([]byte) error
-}
-
-func DecodePrivateKey(in []byte, keytype KeyType) (priv PrivateKey, err error) {
-	if keytype == Ed25519Type {
-		priv, err = NewEd25519PrivateKey(in)
-	} else if keytype == Sr25519Type {
-		priv, err = NewSr25519PrivateKey(in)
-	} else {
-		return nil, errors.New("cannot decode key: invalid key type")
-	}
-
-	return priv, err
 }
 
 var ss58Prefix = []byte("SS58PRE")
