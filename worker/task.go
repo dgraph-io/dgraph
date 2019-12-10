@@ -1480,6 +1480,8 @@ func (qs *queryState) getValsForUID(attr, lang string, uid, ReadTs uint64) ([]ty
 	var val types.Val
 	if lang == "" {
 		if schema.State().IsList(attr) {
+			// NOTE: we will never reach here if this function is called from handleHasFunction, as
+			// @lang is not allowed for list predicates.
 			vals, err = pl.AllValues(ReadTs)
 		} else {
 			val, err = pl.Value(ReadTs)
@@ -2093,6 +2095,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 	lang := langForFunc(q.Langs)
 	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+
+	// This function checks if we should include uid in result or not when has is queried with
+	// @lang(eg: has(name@en)). We need to do this inside this function to return correct result
+	// for first.
 	checkInclusion := func(uid uint64) error {
 		if !needFiltering {
 			return nil
