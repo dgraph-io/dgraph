@@ -73,7 +73,7 @@ func (l *List) DeepSize() uint64 {
 	}
 	// adding the size of all the entries in the map.
 	for _, v := range l.mutationMap {
-		size += calculatePostingListSize(v)
+		size += calculatePostingListSize(v.plist)
 	}
 
 	return size
