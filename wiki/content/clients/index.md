@@ -489,6 +489,11 @@ These third-party clients are contributed by the community and are not officiall
 - https://github.com/liveforeverx/dlex
 - https://github.com/ospaarmann/exdgraph
 
+### JavaScript
+
+- https://github.com/ashokvishwakarma/dgraph-orm
+- https://github.com/gverse/gverse
+
 ### Rust
 
 - https://github.com/Swoorup/dgraph-rs
