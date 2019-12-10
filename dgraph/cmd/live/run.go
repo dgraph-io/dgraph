@@ -153,6 +153,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	op := &api.Operation{}
 	op.Schema = string(b)
 	sch, err := schema.Parse(op.Schema)
+	x.Check(err)
 	return sch, dgraphClient.Alter(ctx, op)
 }
 

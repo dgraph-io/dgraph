@@ -171,15 +171,6 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
-func (l *loader) print(req api.Mutation) {
-	fmt.Println("======================")
-	for i := 0; i < 10; i++ {
-		fmt.Printf("%s %s %s\n", req.Set[i].ObjectId, req.Set[i].Predicate, req.Set[i].Subject)
-		fmt.Printf("%+v\n", req.Set[i])
-	}
-	fmt.Println("======================")
-}
-
 func typeValFrom(val *api.Value) (types.Val, error) {
 	var p types.Val
 	switch val.Val.(type) {
@@ -229,7 +220,7 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
 	}
 
-	if nq.ObjectValue == nil {
+	if nq.ObjectValue == nil || l.sch == nil {
 		return keys
 	}
 
@@ -317,10 +308,9 @@ func (l *loader) makeRequests() {
 		for _, mu := range buffer {
 			if l.writeMap(&mu) {
 				reqNum := atomic.AddUint64(&l.reqNum, 1)
-				l.request(req, reqNum)
+				l.request(mu, reqNum)
 				continue
 			}
-
 			buffer[i] = mu
 			i++
 		}
