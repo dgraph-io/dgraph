@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -85,7 +84,7 @@ type loader struct {
 	reqNum   uint64
 	reqs     chan api.Mutation
 	zeroconn *grpc.ClientConn
-	sch      *schema.ParsedSchema
+	sch      *LiveSchema
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -215,37 +214,36 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 	keys := make([]uint64, 0, 1)
 	keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
 
-	if reversePreds[nq.Predicate] {
+	pred, ok := l.sch.preds[nq.Predicate]
+	if !ok {
+		return keys
+	}
+
+	if pred.Reverse {
 		oi, _ := strconv.ParseUint(nq.ObjectId, 0, 64)
 		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
 	}
 
-	if nq.ObjectValue == nil || l.sch == nil {
+	if nq.ObjectValue == nil {
 		return keys
 	}
 
-	for _, pred := range l.sch.Preds {
-		if pred.Predicate != nq.Predicate {
-			continue
+	for _, tokerName := range pred.Tokenizer {
+		toker, ok := tok.GetTokenizer(tokerName)
+		if !ok {
+			fmt.Printf("unknown tokenizer %q", tokerName)
+		}
+		val, err := typeValFrom(nq.ObjectValue)
+		x.Check(err)
+		schemaVal, err := types.Convert(val, types.TypeID(pred.ValueType))
+		x.Check(err)
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
+		x.Check(err)
+
+		for _, t := range toks {
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Predicate, t))^sid)
 		}
 
-		for _, tokerName := range pred.GetTokenizer() {
-			toker, ok := tok.GetTokenizer(tokerName)
-			if !ok {
-				fmt.Printf("unknown tokenizer %q", tokerName)
-			}
-			val, err := typeValFrom(nq.ObjectValue)
-			x.Check(err)
-			schemaVal, err := types.Convert(val, types.TypeID(pred.ValueType))
-			x.Check(err)
-			toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
-			x.Check(err)
-
-			for _, t := range toks {
-				keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Predicate, t))^sid)
-			}
-
-		}
 	}
 
 	return keys

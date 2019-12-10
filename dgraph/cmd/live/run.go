@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -39,9 +40,9 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/schema"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -66,11 +67,36 @@ type options struct {
 	bufferSize     int
 }
 
+type LivePredicate struct {
+	Predicate string   `json:"predicate,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	Tokenizer []string `json:"tokenizer,omitempty"`
+	Count     bool     `json:"count,omitempty"`
+	List      bool     `json:"list,omitempty"`
+	Upsert    bool     `json:"upsert,omitempty"`
+	Reverse   bool     `json:"reverse,omitempty"`
+
+	ValueType types.TypeID
+}
+
+type LiveSchema struct {
+	Predicates []*LivePredicate `json:"schema,omitempty"`
+
+	preds map[string]*LivePredicate
+}
+
+func (l *LiveSchema) init() {
+	l.preds = make(map[string]*LivePredicate)
+	for _, i := range l.Predicates {
+		i.ValueType, _ = types.TypeForName(i.Type)
+		l.preds[i.Predicate] = i
+	}
+}
+
 var (
 	opt options
 	// Live is the sub-command invoked when running "dgraph live".
-	Live         x.SubCommand
-	reversePreds map[string]bool
+	Live x.SubCommand
 )
 
 func init() {
@@ -114,8 +140,29 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*LiveSchema, error) {
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		fmt.Println("here")
+	}
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		return nil, err
+	}
+
+	var sch LiveSchema
+	json.Unmarshal(res.GetJson(), &sch)
+	sch.init()
+	return &sch, nil
+}
+
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) (*schema.ParsedSchema, error) {
+func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
@@ -140,21 +187,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 		x.Checkf(err, "Error while reading file")
 	}
 
-	reversePreds = make(map[string]bool)
-
-	for _, schemaLine := range strings.Split(string(b), "\n") {
-		if !strings.Contains(schemaLine, "@reverse") {
-			continue
-		}
-		predicate := strings.Fields(schemaLine)[0]
-		reversePreds[predicate] = true
-	}
-
 	op := &api.Operation{}
 	op.Schema = string(b)
-	sch, err := schema.Parse(op.Schema)
-	x.Check(err)
-	return sch, dgraphClient.Alter(ctx, op)
+	return dgraphClient.Alter(ctx, op)
 }
 
 func (l *loader) uid(val string) string {
@@ -320,7 +355,7 @@ func run() error {
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		sch, err := processSchemaFile(ctx, opt.schemaFile, dg)
+		err := processSchemaFile(ctx, opt.schemaFile, dg)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -329,8 +364,14 @@ func run() error {
 			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
-		l.sch = sch
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
+	}
+
+	var err error
+	l.sch, err = getSchema(ctx, dg)
+	if err != nil {
+		fmt.Printf("Error while loading schema from alpha %s\n", err)
+		return err
 	}
 
 	if opt.dataFiles == "" {
