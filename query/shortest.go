@@ -202,6 +202,9 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							rch <- err
 							return
 						}
+						if canSkipRing(adjacencyMap, toUID, fromUID) {
+							continue
+						}
 						adjacencyMap[fromUID][toUID] = mapItem{
 							cost:  cost,
 							facet: facet,
@@ -685,4 +688,13 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		res = append(res, shortestSg)
 	}
 	return res
+}
+
+func canSkipRing(adjacencyMap map[uint64]map[uint64]mapItem, k, v uint64) bool {
+	if adjacencyMap[k] != nil {
+		if _, ok := adjacencyMap[k][v]; ok {
+			return true
+		}
+	}
+	return false
 }
