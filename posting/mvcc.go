@@ -185,9 +185,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					mpost.CommitTs = item.Version()
 				}
 				if l.mutationMap == nil {
-					l.mutationMap = make(map[uint64]*pb.PostingList)
+					l.mutationMap = make(map[uint64]*pListMutation)
 				}
-				l.mutationMap[pl.CommitTs] = pl
+				l.mutationMap[pl.CommitTs] = newListMutation(pl)
 				return nil
 			})
 			if err != nil {

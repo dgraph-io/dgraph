@@ -67,12 +67,34 @@ const (
 	BitEmptyPosting byte = 0x10
 )
 
+// pListMutation keep the index of the postings to avoid iterate over them.
+type pListMutation struct {
+	plist   *pb.PostingList
+	indexes map[uint64]int
+}
+
+func (li *pListMutation) append(p *pb.Posting) {
+	li.indexes[p.Uid] = len(li.plist.Postings)
+	li.plist.Postings = append(li.plist.Postings, p)
+}
+
+func newListMutation(pl *pb.PostingList) *pListMutation {
+	ret := pListMutation{
+		plist:   pl,
+		indexes: make(map[uint64]int, len(pl.Postings)),
+	}
+	for i, p := range pl.Postings {
+		ret.indexes[p.Uid] = i
+	}
+	return &ret
+}
+
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
 	key         []byte
 	plist       *pb.PostingList
-	mutationMap map[uint64]*pb.PostingList
+	mutationMap map[uint64]*pListMutation
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
@@ -313,29 +335,27 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		if l.mutationMap == nil {
-			l.mutationMap = make(map[uint64]*pb.PostingList)
+			l.mutationMap = make(map[uint64]*pListMutation)
 		}
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap[mpost.StartTs] = newListMutation(plist)
 		return
 	}
-	plist, ok := l.mutationMap[mpost.StartTs]
+	lmutation, ok := l.mutationMap[mpost.StartTs]
 	if !ok {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		if l.mutationMap == nil {
-			l.mutationMap = make(map[uint64]*pb.PostingList)
+			l.mutationMap = make(map[uint64]*pListMutation)
 		}
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap[mpost.StartTs] = newListMutation(plist)
 		return
 	}
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
-	for i, prev := range plist.Postings {
-		if prev.Uid == mpost.Uid {
-			plist.Postings[i] = mpost
-			return
-		}
+	if idx, ok := lmutation.indexes[mpost.Uid]; ok {
+		lmutation.plist.Postings[idx] = mpost
+		return
 	}
-	plist.Postings = append(plist.Postings, mpost)
+	lmutation.append(mpost)
 }
 
 // TypeID returns the typeid of destination vertex
@@ -419,8 +439,8 @@ func (l *List) release() {
 		}
 	}
 	fromList(l.plist)
-	for _, plist := range l.mutationMap {
-		fromList(plist)
+	for _, lmutation := range l.mutationMap {
+		fromList(lmutation.plist)
 	}
 	l.plist = nil
 	l.mutationMap = nil
@@ -503,8 +523,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
-	if pl, ok := l.mutationMap[startTs]; ok {
-		data, err := pl.Marshal()
+	if lmutation, ok := l.mutationMap[startTs]; ok {
+		data, err := lmutation.plist.Marshal()
 		x.Check(err)
 		return data
 	}
@@ -517,9 +537,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 
 	l.Lock()
 	if l.mutationMap == nil {
-		l.mutationMap = make(map[uint64]*pb.PostingList)
+		l.mutationMap = make(map[uint64]*pListMutation)
 	}
-	l.mutationMap[startTs] = pl
+	l.mutationMap[startTs] = newListMutation(pl)
 	l.Unlock()
 }
 
@@ -561,12 +581,12 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// First pick up the postings.
 	var deleteBelowTs uint64
 	var posts []*pb.Posting
-	for startTs, plist := range l.mutationMap {
+	for startTs, lmutation := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, plist.CommitTs)
+		effectiveTs := effective(startTs, lmutation.plist.CommitTs)
 		if effectiveTs > deleteBelowTs {
 			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
-			for _, mpost := range plist.Postings {
+			for _, mpost := range lmutation.plist.Postings {
 				if hasDeleteAll(mpost) {
 					deleteBelowTs = effectiveTs
 					continue
