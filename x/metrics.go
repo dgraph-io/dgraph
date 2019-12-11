@@ -81,6 +81,45 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
+	// CacheInUse records the amount of memory used by cache.
+	CacheInUse = stats.Int64("cache_in_use_bytes",
+		"Amount of memory used by cache", stats.UnitBytes)
+	// CacheAddedKeys records the number of keys added to cache.
+	CacheAddedKeys = stats.Int64("cache_added_keys",
+		"Number of keys added to cache", stats.UnitDimensionless)
+	// CacheEvictedKeys records the number of keys evicted by cache.
+	CacheEvictedKeys = stats.Int64("cache_evicted_keys",
+		"Number of keys evicted by cache", stats.UnitDimensionless)
+	// CacheUpdatedKeys records the number of keys updated to cache.
+	CacheUpdatedKeys = stats.Int64("cache_updated_keys",
+		"Number of keys updated to cache", stats.UnitDimensionless)
+	// CacheHitRatio records the hit ratio of cache.
+	CacheHitRatio = stats.Float64("cache_hit_ratio",
+		"Number of keys updated to cache", stats.UnitDimensionless)
+	// CacheHits records the number of cache hits.
+	CacheHits = stats.Int64("cache_hits",
+		"Number of cache hits", stats.UnitDimensionless)
+	// CacheMiss records the number of cache miss.
+	CacheMiss = stats.Int64("cache_miss",
+		"Number of cache miss", stats.UnitDimensionless)
+	// CacheAddedBytes records the number of bytes added to cache.
+	CacheAddedBytes = stats.Int64("cache_added_bytes",
+		"Number of bytes added to cache", stats.UnitBytes)
+	// CacheEvictedBytes records the number of bytes evicted by cache.
+	CacheEvictedBytes = stats.Int64("cache_bytes_evicted",
+		"Number of bytes evicted by cache", stats.UnitBytes)
+	// CacheDroppedSet records the number of sets has been dropped by cache.
+	CacheDroppedSet = stats.Int64("cache_dropped_sets",
+		"Number of sets has been dropped", stats.UnitDimensionless)
+	// CacheRejectedSet records the number of sets has been rejected by cache policy.
+	CacheRejectedSet = stats.Int64("cache_rejected_sets",
+		"Number of sets has been rejected by cache policy", stats.UnitDimensionless)
+	// CacheDroppedGets records the number of gets has been dropped by cache policy.
+	CacheDroppedGets = stats.Int64("cache_dropped_gets",
+		"Number of gets has been dropped by cache policy", stats.UnitDimensionless)
+	// CacheKeptGets records the number of gets has been kept by cache policy.
+	CacheKeptGets = stats.Int64("cache_kept_gets",
+		"Number of gets has been kept by cache policy", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -193,6 +232,99 @@ var (
 			Name:        AlphaHealth.Name(),
 			Measure:     AlphaHealth,
 			Description: AlphaHealth.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+
+		// Cache Metrics.
+		{
+			Name:        CacheInUse.Name(),
+			Measure:     CacheInUse,
+			Description: CacheInUse.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheAddedKeys.Name(),
+			Measure:     CacheAddedKeys,
+			Description: CacheAddedKeys.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheEvictedKeys.Name(),
+			Measure:     CacheEvictedKeys,
+			Description: CacheEvictedKeys.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheUpdatedKeys.Name(),
+			Measure:     CacheUpdatedKeys,
+			Description: CacheUpdatedKeys.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheHitRatio.Name(),
+			Measure:     CacheHitRatio,
+			Description: CacheHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheHits.Name(),
+			Measure:     CacheHits,
+			Description: CacheHits.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheMiss.Name(),
+			Measure:     CacheMiss,
+			Description: CacheMiss.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheAddedBytes.Name(),
+			Measure:     CacheAddedBytes,
+			Description: CacheAddedBytes.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheEvictedBytes.Name(),
+			Measure:     CacheEvictedBytes,
+			Description: CacheEvictedBytes.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheDroppedSet.Name(),
+			Measure:     CacheDroppedSet,
+			Description: CacheDroppedSet.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheRejectedSet.Name(),
+			Measure:     CacheRejectedSet,
+			Description: CacheRejectedSet.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheDroppedGets.Name(),
+			Measure:     CacheDroppedGets,
+			Description: CacheDroppedGets.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        CacheDroppedGets.Name(),
+			Measure:     CacheDroppedGets,
+			Description: CacheDroppedGets.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
