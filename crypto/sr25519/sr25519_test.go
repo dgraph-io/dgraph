@@ -36,7 +36,10 @@ func TestSignAndVerify(t *testing.T) {
 	}
 
 	pub := kp.Public().(*PublicKey)
-	ok := pub.Verify(msg, sig)
+	ok, err := pub.Verify(msg, sig)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !ok {
 		t.Fatal("Fail: did not verify sr25519 sig")
 	}

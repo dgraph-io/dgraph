@@ -4,6 +4,7 @@ import (
 	ed25519 "crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/ChainSafe/gossamer/common"
@@ -79,12 +80,12 @@ func NewPrivateKey(in []byte) (*PrivateKey, error) {
 }
 
 // Verify returns true if the signature is valid for the given message and public key, false otherwise
-func Verify(pub *PublicKey, msg, sig []byte) bool {
+func Verify(pub *PublicKey, msg, sig []byte) (bool, error) {
 	if len(sig) != SignatureLength {
-		return false
+		return false, errors.New("invalid signature length")
 	}
 
-	return ed25519.Verify(ed25519.PublicKey(*pub), msg, sig)
+	return ed25519.Verify(ed25519.PublicKey(*pub), msg, sig), nil
 }
 
 // Sign uses the keypair to sign the message using the ed25519 signature algorithm
@@ -130,11 +131,11 @@ func (k *PrivateKey) Decode(in []byte) error {
 }
 
 // Verify checks that Ed25519PublicKey was used to create the signature for the message
-func (k *PublicKey) Verify(msg, sig []byte) bool {
+func (k *PublicKey) Verify(msg, sig []byte) (bool, error) {
 	if len(sig) != SignatureLength {
-		return false
+		return false, errors.New("invalid signature length")
 	}
-	return ed25519.Verify(ed25519.PublicKey(*k), msg, sig)
+	return ed25519.Verify(ed25519.PublicKey(*k), msg, sig), nil
 }
 
 // Encode returns the encoding of the ed25519 PublicKey

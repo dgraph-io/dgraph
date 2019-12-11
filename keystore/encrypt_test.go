@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
@@ -109,6 +110,32 @@ func TestEncryptAndDecryptFromFile_Sr25519(t *testing.T) {
 	defer os.Remove(fp)
 
 	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	priv := kp.Private()
+
+	err = EncryptAndWriteToFile(file, priv, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := ReadFromFileAndDecrypt(fp, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(priv.Encode(), res.Encode()) {
+		t.Fatalf("Fail: got %v expected %v", res, priv)
+	}
+}
+
+func TestEncryptAndDecryptFromFile_Secp256k1(t *testing.T) {
+	password := []byte("noot")
+	file, fp := createTestFile(t)
+	defer os.Remove(fp)
+
+	kp, err := secp256k1.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}

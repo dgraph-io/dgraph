@@ -14,6 +14,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/crypto"
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"golang.org/x/crypto/blake2b"
 )
@@ -29,6 +30,8 @@ func DecodePrivateKey(in []byte, keytype crypto.KeyType) (priv crypto.PrivateKey
 		priv, err = ed25519.NewPrivateKey(in)
 	} else if keytype == crypto.Sr25519Type {
 		priv, err = sr25519.NewPrivateKey(in)
+	} else if keytype == crypto.Secp256k1Type {
+		priv, err = secp256k1.NewPrivateKey(in)
 	} else {
 		return nil, errors.New("cannot decode key: invalid key type")
 	}
@@ -124,8 +127,12 @@ func EncryptAndWriteToFile(file *os.File, pk crypto.PrivateKey, password []byte)
 		keytype = crypto.Sr25519Type
 	}
 
+	if _, ok := pk.(*secp256k1.PrivateKey); ok {
+		keytype = crypto.Secp256k1Type
+	}
+
 	if keytype == "" {
-		return errors.New("cannot write key not of type sr25519, ed25519")
+		return errors.New("cannot write key not of type sr25519, ed25519, secp256k1")
 	}
 
 	keydata := &EncryptedKeystore{

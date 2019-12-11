@@ -629,11 +629,11 @@ func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 		return 1
 	}
 
-	if pub.Verify(msg, sig) {
-		return 0
+	if ok, err := pub.Verify(msg, sig); err != nil || !ok {
+		return 1
 	}
 
-	return 1
+	return 0
 }
 
 //export ext_ed25519_generate
@@ -674,11 +674,11 @@ func ext_ed25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 		return 1
 	}
 
-	if pubkey.Verify(msg, sig) {
-		return 0
+	if ok, err := pubkey.Verify(msg, sig); err != nil || !ok {
+		return 1
 	}
 
-	return 1
+	return 0
 }
 
 //export ext_secp256k1_ecdsa_recover

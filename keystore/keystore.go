@@ -7,6 +7,7 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/crypto"
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
@@ -74,6 +75,26 @@ func (ks *Keystore) Sr25519Keypairs() []crypto.Keypair {
 		}
 	}
 	return edkeys
+}
+
+func (ks *Keystore) Secp256k1PublicKeys() []crypto.PublicKey {
+	sckeys := []crypto.PublicKey{}
+	for _, key := range ks.keys {
+		if _, ok := key.(*secp256k1.Keypair); ok {
+			sckeys = append(sckeys, key.Public())
+		}
+	}
+	return sckeys
+}
+
+func (ks *Keystore) Secp256k1Keypairs() []crypto.Keypair {
+	sckeys := []crypto.Keypair{}
+	for _, key := range ks.keys {
+		if _, ok := key.(*secp256k1.Keypair); ok {
+			sckeys = append(sckeys, key)
+		}
+	}
+	return sckeys
 }
 
 func (ks *Keystore) GetKeypair(pub crypto.PublicKey) crypto.Keypair {

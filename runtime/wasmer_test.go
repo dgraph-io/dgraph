@@ -1248,7 +1248,10 @@ func TestExt_ed25519_sign(t *testing.T) {
 
 	sig := mem[out : out+ed25519.SignatureLength]
 
-	ok = kp.Public().Verify(msgData, sig)
+	ok, err = kp.Public().Verify(msgData, sig)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !ok {
 		t.Fatalf("Fail: did not verify signature")
 	}
@@ -1298,7 +1301,10 @@ func TestExt_sr25519_sign(t *testing.T) {
 	sig := mem[out : out+sr25519.SignatureLength]
 	t.Log(sig)
 
-	ok = kp.Public().Verify(msgData, sig)
+	ok, err = kp.Public().Verify(msgData, sig)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !ok {
 		t.Fatalf("Fail: did not verify signature")
 	}

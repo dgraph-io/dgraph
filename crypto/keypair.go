@@ -10,6 +10,7 @@ type KeyType = string
 
 const Ed25519Type KeyType = "ed25519"
 const Sr25519Type KeyType = "sr25519"
+const Secp256k1Type KeyType = "secp256k1"
 
 type Keypair interface {
 	Sign(msg []byte) ([]byte, error)
@@ -18,7 +19,7 @@ type Keypair interface {
 }
 
 type PublicKey interface {
-	Verify(msg, sig []byte) bool
+	Verify(msg, sig []byte) (bool, error)
 	Encode() []byte
 	Decode([]byte) error
 	Address() common.Address
