@@ -20,7 +20,7 @@ import (
 	"os"
 
 	log "github.com/ChainSafe/log15"
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/snappy"
 )
 

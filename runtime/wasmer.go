@@ -19,6 +19,7 @@ package runtime
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"sync"
 
 	scale "github.com/ChainSafe/gossamer/codec"
@@ -120,7 +121,7 @@ func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) 
 
 	runtimeFunc, ok := r.vm.Exports[function]
 	if !ok {
-		return nil, errors.New("could not find exported function")
+		return nil, fmt.Errorf("could not find exported function %s", function)
 	}
 	res, err := runtimeFunc(loc, leng)
 	if err != nil {
