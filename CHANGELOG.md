@@ -31,7 +31,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 Enterprise features:
 
 - ACL: Disallow schema queries when an user has not logged in. ([#4107][])
-- Depricate ACL rules with regex. ([#4360][])
 - Block delete if predicate permission is zero. Fixes [#4265][]. ([#4349][])
 
 ### Added
@@ -50,14 +49,16 @@ Enterprise features:
 Enterprise features:
 
 - Add encryption-at-rest. ([#4351][])
-- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][]) 
-- Write group_id files to postings directories during restore. ([#4365][]) 
 
 ### Removed
 
 - **Breaking change**: Remove `@type` directive from query language. To filter
   an edge by a type, use `@filter(type(TypeName))` instead of `@type(TypeName)`.
   ([#4016][])
+  
+Enterprise features:
+  
+- Remove regexp ACL rules. ([#4360][])
 
 ### Fixed
 
@@ -103,12 +104,13 @@ Enterprise features:
 - Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][]) 
 - Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
 - Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
-- Update helm chart to work with Kubernetes v1.16.0. ([#4393][])
 - Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
 
 Enterprise features:
 
 - Fix bug when overriding credentials in backup request. Fixes [#4044][]. ([#4047][])
+- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][]) 
+- Write group_id files to postings directories during restore. ([#4365][]) 
 
 [#4119]: https://github.com/dgraph-io/dgraph/issues/4119
 [#4171]: https://github.com/dgraph-io/dgraph/issues/4171
@@ -215,7 +217,6 @@ Enterprise features:
 [#4352]: https://github.com/dgraph-io/dgraph/issues/4352
 [#4315]: https://github.com/dgraph-io/dgraph/issues/4315
 [#4365]: https://github.com/dgraph-io/dgraph/issues/4365
-[#4393]: https://github.com/dgraph-io/dgraph/issues/4393
 [#4282]: https://github.com/dgraph-io/dgraph/issues/4282
 [#4331]: https://github.com/dgraph-io/dgraph/issues/4331
 
