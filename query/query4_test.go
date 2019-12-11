@@ -630,7 +630,7 @@ func TestHasFirst(t *testing.T) {
 
 func TestHasCountPredicateWithLang(t *testing.T) {
 	query := `{
-		q(func:has(name@en), first: 5) {
+		q(func:has(name@en), first: 11) {
 			 count(uid)
 		 }
 	 }`
@@ -639,7 +639,7 @@ func TestHasCountPredicateWithLang(t *testing.T) {
 			"data":{
 				"q":[
 					{
-						"count":5
+						"count":11
 					}
 				]
 			}
