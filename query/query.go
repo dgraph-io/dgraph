@@ -2479,45 +2479,6 @@ func getPredicatesFromTypes(typeNames []string) []string {
 	return preds
 }
 
-// getReversePredicates queries the schema and returns a list of the reverse
-// predicates that exist within the given preds.
-func getReversePredicates(ctx context.Context, preds []string) ([]string, error) {
-	var rpreds []string
-	predMap := make(map[string]bool)
-	for _, pred := range preds {
-		predMap[pred] = true
-	}
-
-	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, sch := range schs {
-		if _, ok := predMap[sch.Predicate]; !ok {
-			continue
-		}
-		if !sch.Reverse {
-			continue
-		}
-		rpreds = append(rpreds, "~"+sch.Predicate)
-	}
-	return rpreds, nil
-}
-
-// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
-func GetAllPredicates(subGraphs []*SubGraph) []string {
-	predicatesMap := make(map[string]struct{})
-	for _, sg := range subGraphs {
-		sg.getAllPredicates(predicatesMap)
-	}
-	predicates := make([]string, 0, len(predicatesMap))
-	for predicate := range predicatesMap {
-		predicates = append(predicates, predicate)
-	}
-	return predicates
-}
-
 func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
 	if len(sg.Attr) != 0 {
 		predicates[sg.Attr] = struct{}{}
