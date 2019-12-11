@@ -169,7 +169,7 @@ func Init(ps *badger.DB) {
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
-		MaxCost:     1e9,
+		MaxCost:     500000000,
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
@@ -182,7 +182,17 @@ func Init(ps *badger.DB) {
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
 			m := lCache.Metrics
-			glog.Infof(m.String())
+			ostats.Record(context.Background(), x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
+				x.CacheAddedKeys.M(int64(m.KeysAdded())),
+				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
+				x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
+				x.CacheHits.M(int64(m.Hits())),
+				x.CacheHitRatio.M(m.Ratio()),
+				x.CacheMiss.M(int64(m.Misses())),
+				x.CacheAddedBytes.M(int64(m.CostAdded())),
+				x.CacheEvictedBytes.M(int64(m.CostEvicted())),
+				x.CacheDroppedSet.M(int64(m.SetsDropped())),
+				x.CacheRejectedSet.M(int64(m.SetsRejected())))
 		}
 	}()
 }

@@ -261,6 +261,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	lCache.Set(key, l, 0)
+	lCache.Set(key, l, 100000000)
 	return l, nil
 }
