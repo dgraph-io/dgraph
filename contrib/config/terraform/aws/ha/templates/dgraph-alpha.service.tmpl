@@ -1,0 +1,15 @@
+[Unit]
+Description=dgraph.io data server
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero ${healthy_zero_ip}:5080 -p /var/run/dgraph/p -w /var/run/dgraph/w
+StandardOutput=journal
+StandardError=journal
+User=dgraph
+Group=dgraph
+
+[Install]
+WantedBy=multi-user.target 
