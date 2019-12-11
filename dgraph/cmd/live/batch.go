@@ -368,17 +368,19 @@ func (l *loader) makeRequests() {
 			buffer = append(buffer, req)
 		}
 
-		i := 0
-		for _, mu := range buffer {
-			if l.writeMap(&mu) {
-				reqNum := atomic.AddUint64(&l.reqNum, 1)
-				l.request(mu, reqNum)
-				continue
+		for ok := true; ok; ok = (len(buffer) >= l.opts.bufferSize-1) {
+			i := 0
+			for _, mu := range buffer {
+				if l.writeMap(&mu) {
+					reqNum := atomic.AddUint64(&l.reqNum, 1)
+					l.request(mu, reqNum)
+					continue
+				}
+				buffer[i] = mu
+				i++
 			}
-			buffer[i] = mu
-			i++
+			buffer = buffer[:i]
 		}
-		buffer = buffer[:i]
 	}
 
 	for _, req := range buffer {
