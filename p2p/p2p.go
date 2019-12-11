@@ -36,11 +36,12 @@ const SendStatusInterval = 5 * time.Minute
 
 // Service describes a p2p service
 type Service struct {
-	ctx     context.Context
-	host    *host
-	gossip  *gossip
-	msgRec  <-chan Message
-	msgSend chan<- Message
+	ctx       context.Context
+	host      *host
+	discovery *discovery
+	gossip    *gossip
+	msgRec    <-chan Message
+	msgSend   chan<- Message
 }
 
 // TODO: use generated status message
@@ -63,17 +64,23 @@ func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*S
 		return nil, err
 	}
 
+	discovery, err := newDiscovery(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
 	gossip, err := newGossip(host)
 	if err != nil {
 		return nil, err
 	}
 
 	p2p := &Service{
-		ctx:     ctx,
-		host:    host,
-		gossip:  gossip,
-		msgRec:  msgRec,
-		msgSend: msgSend,
+		ctx:       ctx,
+		host:      host,
+		discovery: discovery,
+		gossip:    gossip,
+		msgRec:    msgRec,
+		msgSend:   msgSend,
 	}
 
 	return p2p, err
@@ -86,9 +93,16 @@ func (s *Service) Start() error {
 	s.host.registerConnHandler(s.handleConn)
 	s.host.registerStreamHandler(s.handleStream)
 
-	s.host.startMdns()
 	s.host.bootstrap()
 	s.host.printHostAddresses()
+
+	// check if mDNS discovery service is enabled
+	if !s.host.noMdns {
+
+		// start mDNS discovery service
+		s.discovery.startMdns()
+
+	}
 
 	// receive messages from core service
 	go s.receiveCoreMessages()
@@ -103,6 +117,12 @@ func (s *Service) Stop() error {
 	err := s.host.close()
 	if err != nil {
 		log.Error("Failed to close host", "err", err)
+	}
+
+	// close discovery and discovery services
+	err = s.discovery.close()
+	if err != nil {
+		log.Error("Failed to close discovery", "err", err)
 	}
 
 	// close channel to core service
@@ -167,7 +187,7 @@ func (s *Service) handleStream(stream net.Stream) {
 	msg, err := parseMessage(stream)
 	if err != nil {
 		log.Error("Failed to parse message from peer", "err", err)
-		return // exit on error
+		return // exit
 	}
 
 	log.Trace(

@@ -19,7 +19,6 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
@@ -31,21 +30,17 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p/p2p/discovery"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
 const DefaultProtocolId = protocol.ID("/gossamer/dot/0")
 
-const mdnsPeriod = time.Minute
-
 // host wraps libp2p host with host services and information
 type host struct {
 	ctx         context.Context
 	h           libp2phost.Host
 	dht         *kaddht.IpfsDHT
-	mdns        discovery.Service
 	bootnodes   []peer.AddrInfo
 	noBootstrap bool
 	noGossip    bool
@@ -148,35 +143,6 @@ func (h *host) bootstrap() {
 		if err != nil {
 			log.Error("Failed to bootstrap peer", "err", err)
 		}
-	}
-}
-
-// startMdns starts a new MDNS discovery service
-func (h *host) startMdns() {
-	if !h.noMdns {
-
-		log.Trace(
-			"Starting MDNS...",
-			"host", h.id(),
-			"period", mdnsPeriod,
-			"protocol", h.protocolId,
-		)
-
-		// create new MDNS service
-		mdns, err := discovery.NewMdnsService(
-			h.ctx,
-			h.h,
-			mdnsPeriod,
-			string(h.protocolId),
-		)
-		if err != nil {
-			log.Error("Failed to start MDNS", "err", err)
-		}
-
-		// register notifee on MDNS service
-		mdns.RegisterNotifee(Notifee{ctx: h.ctx, host: h.h})
-
-		h.mdns = mdns
 	}
 }
 
@@ -297,6 +263,11 @@ func (h *host) peerCount() int {
 	return len(peers)
 }
 
+// fullAddr returns the first full multiaddress of the host
+func (h *host) fullAddr() (maddrs ma.Multiaddr) {
+	return h.fullAddrs()[0]
+}
+
 // fullAddrs returns the full multiaddresses of the host
 func (h *host) fullAddrs() (maddrs []ma.Multiaddr) {
 	addrs := h.h.Addrs()
@@ -308,4 +279,14 @@ func (h *host) fullAddrs() (maddrs []ma.Multiaddr) {
 		maddrs = append(maddrs, maddr)
 	}
 	return maddrs
+}
+
+// addrInfo returns the libp2p AddrInfo of the host
+func (h *host) addrInfo() (addrInfo *peer.AddrInfo, err error) {
+	addr := h.fullAddr()
+	addrInfo, err = peer.AddrInfoFromP2pAddr(addr)
+	if err != nil {
+		return nil, err
+	}
+	return addrInfo, nil
 }

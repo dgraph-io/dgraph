@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/network"
 )
 
@@ -41,11 +42,16 @@ func (g *gossip) handleMessage(stream network.Stream, msg Message) {
 	// check if message has not been seen
 	if !g.hasSeen[msg.Id()] {
 
-		// broadcast message to connected peers
-		g.host.broadcast(msg)
-
 		// set message to has been seen
 		g.hasSeen[msg.Id()] = true
 
+		log.Trace(
+			"Gossiping message from peer",
+			"host", g.host.id(),
+			"type", msg.GetType(),
+		)
+
+		// broadcast message to connected peers
+		g.host.broadcast(msg)
 	}
 }
