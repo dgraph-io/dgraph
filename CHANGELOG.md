@@ -31,6 +31,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 Enterprise features:
 
 - ACL: Disallow schema queries when an user has not logged in. ([#4107][])
+- Depricate ACL rules with regex. ([#4360][])
+- Block delete if predicate permission is zero. Fixes [#4265][]. ([#4349][])
 
 ### Added
 
@@ -41,13 +43,15 @@ Enterprise features:
 - Support filtering by facets on values. ([#4217][])
 - Add ability to query `expand(TypeName)` only on certain types. ([#3920][])
 - Expose numUids metrics per query to estimate query cost. ([#4033][])
-- Upsert queries now return query results in the upsert reponse. ([#4269][])
+- Upsert queries now return query results in the upsert response. ([#4269][], [#4375][])
 - Add support for multiple mutation blocks. ([#4210][])
 - Add total time taken to process a query in result under `"total_ns"` field. ([#4312][])
 
 Enterprise features:
 
 - Add encryption-at-rest. ([#4351][])
+- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][]) 
+- Write group_id files to postings directories during restore. ([#4365][]) 
 
 ### Removed
 
@@ -96,6 +100,11 @@ Enterprise features:
 - Close store after stoping worker. ([#4356][])
 - Don't pre allocate mutation map. ([#4343][])
 - Cmd: fix config file from env variable issue in subcommands. Fixes [#4311][]. ([#4344][])
+- Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][]) 
+- Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
+- Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
+- Update helm chart to work with Kubernetes v1.16.0. ([#4393][])
+- Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
 
 Enterprise features:
 
@@ -194,6 +203,21 @@ Enterprise features:
 [#3740]: https://github.com/dgraph-io/dgraph/issues/3740
 [#4311]: https://github.com/dgraph-io/dgraph/issues/4311
 [#4047]: https://github.com/dgraph-io/dgraph/issues/4047
+[#4375]: https://github.com/dgraph-io/dgraph/issues/4375
+[#4394]: https://github.com/dgraph-io/dgraph/issues/4394
+[#4288]: https://github.com/dgraph-io/dgraph/issues/4288
+[#4360]: https://github.com/dgraph-io/dgraph/issues/4360
+[#4265]: https://github.com/dgraph-io/dgraph/issues/4265
+[#4349]: https://github.com/dgraph-io/dgraph/issues/4349
+[#4169]: https://github.com/dgraph-io/dgraph/issues/4169
+[#4347]: https://github.com/dgraph-io/dgraph/issues/4347
+[#4389]: https://github.com/dgraph-io/dgraph/issues/4389
+[#4352]: https://github.com/dgraph-io/dgraph/issues/4352
+[#4315]: https://github.com/dgraph-io/dgraph/issues/4315
+[#4365]: https://github.com/dgraph-io/dgraph/issues/4365
+[#4393]: https://github.com/dgraph-io/dgraph/issues/4393
+[#4282]: https://github.com/dgraph-io/dgraph/issues/4282
+[#4331]: https://github.com/dgraph-io/dgraph/issues/4331
 
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
