@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -247,6 +248,13 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	t.Logf("--- Restoring from: %q", backupLocation)
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
+
+	for i, pdir := range []string{"p1", "p2", "p3"} {
+		pdir = filepath.Join("./data/restore", pdir)
+		groupId, err := x.ReadGroupIdFile(pdir)
+		require.NoError(t, err)
+		require.Equal(t, uint32(i+1), groupId)
+	}
 
 	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
