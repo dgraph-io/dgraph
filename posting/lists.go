@@ -179,9 +179,10 @@ func Init(ps *badger.DB) {
 	})
 	x.Check(err)
 	go func() {
+		m := lCache.Metrics
+
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
-			m := lCache.Metrics
 			ostats.Record(context.Background(), x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
 				x.CacheAddedKeys.M(int64(m.KeysAdded())),
 				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
@@ -192,7 +193,9 @@ func Init(ps *badger.DB) {
 				x.CacheAddedBytes.M(int64(m.CostAdded())),
 				x.CacheEvictedBytes.M(int64(m.CostEvicted())),
 				x.CacheDroppedSet.M(int64(m.SetsDropped())),
-				x.CacheRejectedSet.M(int64(m.SetsRejected())))
+				x.CacheRejectedSet.M(int64(m.SetsRejected())),
+				x.CacheDroppedGets.M(int64(m.GetsDropped())),
+				x.CacheKeptGets.M(int64(m.GetsKept())))
 		}
 	}()
 }
