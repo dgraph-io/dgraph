@@ -38,6 +38,10 @@ const (
 	countFunc = "count"
 )
 
+var (
+	errExpandType = "expand is only compatible with type filters"
+)
+
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // pb.y used query.SubGraph before processing the query.
 type GraphQuery struct {
@@ -2251,8 +2255,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		valid = false
 	}
 	it.Next()
-	// No directive is allowed on pb.subgraph like expand all, value variables.
-	if !valid || curp == nil || curp.IsInternal {
+
+	isExpand := false
+	if curp != nil && len(curp.Expand) > 0 {
+		isExpand = true
+	}
+	// No directive is allowed on pb.subgraph like expand all (except type filters),
+	// value variables, etc.
+	if !valid || curp == nil || (curp.IsInternal && !isExpand) {
 		return item.Errorf("Invalid use of directive.")
 	}
 
@@ -2261,6 +2271,10 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return item.Errorf("Expected directive or language list")
+	}
+
+	if isExpand && item.Val != "filter" {
+		return item.Errorf(errExpandType)
 	}
 
 	if item.Val == "facets" { // because @facets can come w/t '()'
@@ -2303,6 +2317,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
+			}
+			if filter.Func.Name != "type" {
+				return item.Errorf(errExpandType)
 			}
 			curp.Filter = filter
 		case "groupby":

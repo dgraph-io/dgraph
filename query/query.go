@@ -1849,6 +1849,15 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 		preds = uniquePreds(preds)
 
+		// There's a types filter at this level so filter out any non-uid predicates
+		// since only uid nodes can have a type.
+		if len(child.Filters) > 0 {
+			preds, err = filterUidPredicates(ctx, preds)
+			if err != nil {
+				return out, err
+			}
+		}
+
 		for _, pred := range preds {
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
@@ -1866,6 +1875,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.Params.IsInternal = false
 			temp.Params.Expand = ""
 			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
+			temp.Filters = child.Filters
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -2516,6 +2526,24 @@ func GetAllPredicates(subGraphs []*SubGraph) []string {
 		predicates = append(predicates, predicate)
 	}
 	return predicates
+}
+
+// filterUidPredicates takes a list of predicates and returns a list of the predicates
+// that are of type uid or [uid].
+func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) {
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
+	if err != nil {
+		return nil, err
+	}
+
+	filteredPreds := make([]string, 0)
+	for _, sch := range schs {
+		if sch.GetType() != "uid" {
+			continue
+		}
+		filteredPreds = append(filteredPreds, sch.GetPredicate())
+	}
+	return filteredPreds, nil
 }
 
 func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {

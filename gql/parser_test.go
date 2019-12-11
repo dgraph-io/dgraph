@@ -4923,3 +4923,22 @@ func TestParseVarAfterCountQry(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 }
+
+func TestParseExpandFilter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(type(Person)) {
+					uid
+				}
+			}
+		}`
+
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+}
