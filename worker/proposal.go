@@ -189,25 +189,27 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		pctx := &conn.ProposalCtx{
 			ErrCh: errCh,
 			Ctx:   cctx,
+			Found: 1,
 		}
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
 		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
-		data, err := proposal.Marshal()
-		if err != nil {
-			return err
-		}
-		if err = n.Raft().Propose(cctx, data); err != nil {
-			return errors.Wrapf(err, "While proposing")
-		}
+		// data, err := proposal.Marshal()
+		// if err != nil {
+		// 	return err
+		// }
+		// if err = n.Raft().Propose(cctx, data); err != nil {
+		// 	return errors.Wrapf(err, "While proposing")
+		// }
+		n.applyCh <- []*pb.Proposal{proposal}
 
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
 
 		for {
 			select {
-			case err = <-errCh:
+			case err := <-errCh:
 				// We arrived here by a call to n.Proposals.Done().
 				return err
 			case <-ctx.Done():

@@ -465,7 +465,7 @@ func (n *node) processApplyCh() {
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
 				}
-				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
+				glog.Infof("Applied proposal with key: %s, index: %d. Err: %v",
 					proposal.Key, proposal.Index, perr)
 
 				var tags []tag.Mutator
@@ -483,9 +483,9 @@ func (n *node) processApplyCh() {
 			n.Applied.Done(proposal.Index)
 			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
-		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
-			glog.Warningf("Pending size should remain above zero: %d", sz)
-		}
+		// if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
+		// 	glog.Warningf("Pending size should remain above zero: %d", sz)
+		// }
 	}
 
 	maxAge := 10 * time.Minute
