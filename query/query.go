@@ -2479,24 +2479,6 @@ func getPredicatesFromTypes(typeNames []string) []string {
 	return preds
 }
 
-func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
-	if len(sg.Attr) != 0 {
-		predicates[sg.Attr] = struct{}{}
-	}
-	for _, o := range sg.Params.Order {
-		predicates[o.Attr] = struct{}{}
-	}
-	for _, pred := range sg.Params.GroupbyAttrs {
-		predicates[pred.Attr] = struct{}{}
-	}
-	for _, filter := range sg.Filters {
-		filter.getAllPredicates(predicates)
-	}
-	for _, child := range sg.Children {
-		child.getAllPredicates(predicates)
-	}
-}
-
 // UidsToHex converts the new UIDs to hex string.
 func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
