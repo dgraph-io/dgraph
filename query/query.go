@@ -179,7 +179,7 @@ type params struct {
 
 	// ExploreDepth is used by recurse and shortest path queries to specify the maximum graph
 	// depth to explore.
-	ExploreDepth uint64
+	ExploreDepth *uint64
 
 	// IsInternal determines if processTask has to be called or not.
 	IsInternal bool
@@ -630,7 +630,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			args.ExploreDepth = depth
+			args.ExploreDepth = &depth
 		}
 
 		if v, ok := gq.Args["numpaths"]; ok {
