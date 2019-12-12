@@ -276,18 +276,11 @@ func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
 // PushPredHint pushes and aggregates hints about the type of the predicate derived
 // during the parsing. This  metadata is expected to be a lot smaller than the set of
 // NQuads so it's not  necessary to send them in batches.
-func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.ParseMetadata_HintType) error {
+func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.ParseMetadata_HintType) {
 	if oldHint, ok := buf.predHints[pred]; ok && hint != oldHint {
-		if hint == pb.ParseMetadata_SINGLE {
-			return errors.Errorf("Predicate %s is being used as a single scalar/object but "+
-				"it's been previously used as a list", pred)
-		}
-
-		return errors.Errorf("Predicate %s is being used as a list but it's "+
-			"been previously used as a single scalar/object", pred)
+		hint = pb.ParseMetadata_LIST
 	}
 	buf.predHints[pred] = hint
-	return nil
 }
 
 // Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
@@ -414,9 +407,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
-			if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
-				return mr, err
-			}
+			buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -428,9 +419,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
-				if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
-					return mr, err
-				}
+				buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
 				continue
 			}
 
@@ -443,13 +432,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
-			if err := buf.PushPredHint(pred, pb.ParseMetadata_SINGLE); err != nil {
-				return mr, err
-			}
+			buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
 		case []interface{}:
-			if err := buf.PushPredHint(pred, pb.ParseMetadata_LIST); err != nil {
-				return mr, err
-			}
+			buf.PushPredHint(pred, pb.ParseMetadata_LIST)
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,

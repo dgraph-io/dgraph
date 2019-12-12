@@ -90,7 +90,6 @@ func TestSystem(t *testing.T) {
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
 	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
-	t.Run("json consistency check", wrap(JSONConsistencyCheck))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1813,24 +1812,4 @@ func ForceSchemaAsSingleJSON(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
 		string(resp.Json))
-}
-
-func JSONConsistencyCheck(t *testing.T, c *dgo.Dgraph) {
-	txn := c.NewTxn()
-	_, err := txn.Mutate(context.Background(), &api.Mutation{
-		CommitNow: true,
-		SetJson: []byte(`
-			[{"person": {"name": "Bob"}}, {"person": ["Alice"]}, {"nickname": "Carol"}]`),
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is being used as")
-
-	txn = c.NewTxn()
-	_, err = txn.Mutate(context.Background(), &api.Mutation{
-		CommitNow: true,
-		SetJson: []byte(`
-			[{"name": ["Bob","Bob Marley"]}, {"name": "Alice"}, {"nickname": "Carol"}]`),
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is being used as")
 }
