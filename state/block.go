@@ -11,8 +11,9 @@ import (
 )
 
 type blockState struct {
-	bt *blocktree.BlockTree
-	db *polkadb.BlockDB
+	bt          *blocktree.BlockTree
+	db          *polkadb.BlockDB
+	latestBlock types.BlockHeaderWithHash
 }
 
 func NewBlockState() *blockState {
@@ -65,8 +66,7 @@ func (bs *blockState) GetBlockData(hash common.Hash) (types.BlockData, error) {
 }
 
 func (bs *blockState) GetLatestBlock() types.BlockHeaderWithHash {
-	// Can't do yet
-	return types.BlockHeaderWithHash{}
+	return bs.latestBlock
 
 }
 
@@ -110,4 +110,14 @@ func (bs *blockState) SetBlockData(hash common.Hash, blockData types.BlockData) 
 
 	err = bs.db.Db.Put(blockDataKey(hash), bh)
 	return err
+}
+
+func (bs *blockState) AddBlock(block types.BlockHeaderWithHash) error {
+	// Set the latest block
+	if block.Number.Cmp(bs.latestBlock.Number) == 1 {
+		bs.latestBlock = block
+	}
+
+	//TODO: Implement Add Block
+	return nil
 }
