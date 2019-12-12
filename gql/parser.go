@@ -421,7 +421,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			gq.RecurseArgs.Depth = depth
 		}
 
-		// Update the loop if the get the depth as
+		// Update the loop if the get the loop as
 		// a variable in the query.
 		varName, ok = gq.RecurseArgs.varMap["loop"]
 		if ok {
