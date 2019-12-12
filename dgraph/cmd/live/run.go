@@ -29,6 +29,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -97,6 +98,8 @@ func (l *LiveSchema) init() {
 
 var (
 	opt options
+	sch LiveSchema
+
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
 )
@@ -157,7 +160,6 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*LiveSchema, erro
 		return nil, err
 	}
 
-	var sch LiveSchema
 	json.Unmarshal(res.GetJson(), &sch)
 	sch.init()
 	return &sch, nil
@@ -239,6 +241,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	// Spin a goroutine to push NQuads to mutation channel.
 	go func() {
 		defer wg.Done()
+		bufferSize := 50
+		buffer := make([]*api.NQuad, 0, bufferSize*opt.batchSize)
 		for nqs := range nqbuf.Ch() {
 			if len(nqs) == 0 {
 				continue
@@ -250,8 +254,53 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				}
 			}
 
-			mu := api.Mutation{Set: nqs}
+			buffer = append(buffer, nqs...)
+
+			if len(buffer) >= bufferSize*opt.batchSize {
+				sort.Slice(buffer, func(i, j int) bool {
+					iPred := sch.preds[buffer[i].Predicate]
+					jPred := sch.preds[buffer[j].Predicate]
+
+					t := func(a *LivePredicate) int {
+						if a == nil {
+							return 0
+						}
+						if a.Count {
+							return 1
+						}
+						return 0
+					}
+
+					if t(iPred) != t(jPred) {
+						return t(iPred) < t(jPred)
+					}
+
+					return buffer[i].Predicate < buffer[j].Predicate
+				})
+
+				for len(buffer) > 0 {
+
+					f := opt.batchSize
+					if len(buffer) < opt.batchSize {
+						f = len(buffer)
+					}
+
+					mu := api.Mutation{Set: buffer[:f]}
+					l.reqs <- mu
+					buffer = buffer[f:]
+				}
+			}
+		}
+
+		for len(buffer) > 0 {
+			f := opt.batchSize
+			if len(buffer) < opt.batchSize {
+				f = len(buffer)
+			}
+
+			mu := api.Mutation{Set: buffer[:f]}
 			l.reqs <- mu
+			buffer = buffer[f:]
 		}
 	}()
 

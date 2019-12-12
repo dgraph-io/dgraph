@@ -286,7 +286,7 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
 	}
 
-	if nq.ObjectValue == nil {
+	if nq.ObjectValue == nil || !(pred.Count || pred.Index) {
 		return keys
 	}
 
@@ -368,7 +368,7 @@ func (l *loader) makeRequests() {
 			buffer = append(buffer, req)
 		}
 
-		for ok := true; ok; ok = (len(buffer) >= l.opts.bufferSize-1) {
+		for len(buffer) >= l.opts.bufferSize-1 {
 			i := 0
 			for _, mu := range buffer {
 				if l.writeMap(&mu) {
@@ -383,12 +383,18 @@ func (l *loader) makeRequests() {
 		}
 	}
 
-	for _, req := range buffer {
-		for !l.writeMap(&req) {
-			time.Sleep(5)
+	for len(buffer) >= l.opts.bufferSize-1 {
+		i := 0
+		for _, mu := range buffer {
+			if l.writeMap(&mu) {
+				reqNum := atomic.AddUint64(&l.reqNum, 1)
+				l.request(mu, reqNum)
+				continue
+			}
+			buffer[i] = mu
+			i++
 		}
-		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, reqNum)
+		buffer = buffer[:i]
 	}
 }
 
