@@ -53,7 +53,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 
 	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {
-		return nil, errors.New("unable to find operation to resolve")
+		return nil, errors.Errorf("unable to find operation to resolve: [%s]", req.OperationName)
 	}
 
 	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)

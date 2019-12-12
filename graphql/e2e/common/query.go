@@ -1185,3 +1185,74 @@ func queryStateByXidRegex(t *testing.T) {
 	require.Nil(t, gqlResponse.Errors)
 	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
 }
+
+func multipleOperations(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `query sortCountryByNameDesc {
+			queryCountry(order: { desc: name }, first: 1) {
+				name
+			}
+		}
+
+		query sortCountryByNameAsc {
+			queryCountry(order: { asc: name }, first: 1) {
+				name
+			}
+		}
+		`,
+		OperationName: "sortCountryByNameAsc",
+	}
+
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	var expected, result struct {
+		QueryCountry []*country
+	}
+	expected.QueryCountry = []*country{{Name: "Angola"}}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	params.OperationName = "sortCountryByNameDesc"
+	gqlResponse = params.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected.QueryCountry = []*country{{Name: "Mozambique"}}
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func multipleOperationsWithIncorrectOperationName(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `query sortCountryByNameDesc {
+			queryCountry(order: { desc: name }, first: 1) {
+				name
+			}
+		}
+
+		query sortCountryByNameAsc {
+			queryCountry(order: { asc: name }, first: 1) {
+				name
+			}
+		}
+		`,
+	}
+
+	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Equal(t, "unable to find operation to resolve: []", gqlResponse.Errors[0].Error())
+
+	params.OperationName = "sortCountryByName"
+	gqlResponse = params.ExecuteAsPost(t, graphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Equal(t, "unable to find operation to resolve: [sortCountryByName]",
+		gqlResponse.Errors[0].Error())
+}
