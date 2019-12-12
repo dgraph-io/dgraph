@@ -322,9 +322,9 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        CacheDroppedGets.Name(),
-			Measure:     CacheDroppedGets,
-			Description: CacheDroppedGets.Description(),
+			Name:        CacheKeptGets.Name(),
+			Measure:     CacheKeptGets,
+			Description: CacheKeptGets.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
