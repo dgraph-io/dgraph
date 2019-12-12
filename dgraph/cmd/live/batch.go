@@ -80,13 +80,13 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	currentUIDS map[uint64]bool
-	uidsLock    sync.RWMutex
+	conflicts map[uint64]bool
+	uidsLock  sync.RWMutex
 
 	reqNum   uint64
 	reqs     chan api.Mutation
 	zeroconn *grpc.ClientConn
-	sch      *LiveSchema
+	sch      *schema
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -130,6 +130,7 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 
 func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 	defer l.retryRequestsWg.Done()
+	defer l.deregister(&req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
@@ -142,7 +143,6 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
-			l.removeMap(&req)
 			return
 		}
 		nretries++
@@ -163,7 +163,7 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
-		l.removeMap(&req)
+		l.deregister(&req)
 		return
 	}
 	handleError(err, reqNum, false)
@@ -240,7 +240,7 @@ func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 	return p, err
 }
 
-func fingerprintEdge(t *pb.DirectedEdge, pred *LivePredicate) uint64 {
+func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 	var id uint64 = math.MaxUint64
 
 	// Value with a lang type.
@@ -286,7 +286,7 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
 	}
 
-	if nq.ObjectValue == nil {
+	if nq.ObjectValue == nil || !(pred.Count || pred.Index) {
 		return keys
 	}
 
@@ -323,33 +323,33 @@ func (l *loader) getConflicts(req *api.Mutation) []uint64 {
 	return keys
 }
 
-func (l *loader) writeMap(req *api.Mutation) bool {
+func (l *loader) addConflictKeys(req *api.Mutation) bool {
 	mSlice := l.getConflicts(req)
 
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
 	for _, val := range mSlice {
-		if t, ok := l.currentUIDS[val]; ok && t {
+		if t, ok := l.conflicts[val]; ok && t {
 			return false
 		}
 	}
 
 	for _, val := range mSlice {
-		l.currentUIDS[val] = true
+		l.conflicts[val] = true
 	}
 
 	return true
 }
 
-func (l *loader) removeMap(req *api.Mutation) {
+func (l *loader) deregister(req *api.Mutation) {
 	mSlice := l.getConflicts(req)
 
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
 	for _, i := range mSlice {
-		delete(l.currentUIDS, i)
+		delete(l.conflicts, i)
 	}
 }
 
@@ -361,17 +361,17 @@ func (l *loader) makeRequests() {
 
 	buffer := make([]api.Mutation, 0, l.opts.bufferSize)
 	for req := range l.reqs {
-		if l.writeMap(&req) {
+		if l.addConflictKeys(&req) {
 			reqNum := atomic.AddUint64(&l.reqNum, 1)
 			l.request(req, reqNum)
 		} else {
 			buffer = append(buffer, req)
 		}
 
-		for ok := true; ok; ok = (len(buffer) >= l.opts.bufferSize-1) {
+		for len(buffer) >= l.opts.bufferSize-1 {
 			i := 0
 			for _, mu := range buffer {
-				if l.writeMap(&mu) {
+				if l.addConflictKeys(&mu) {
 					reqNum := atomic.AddUint64(&l.reqNum, 1)
 					l.request(mu, reqNum)
 					continue
@@ -383,12 +383,18 @@ func (l *loader) makeRequests() {
 		}
 	}
 
-	for _, req := range buffer {
-		for !l.writeMap(&req) {
-			time.Sleep(5)
+	for len(buffer) >= 0 {
+		i := 0
+		for _, mu := range buffer {
+			if l.addConflictKeys(&mu) {
+				reqNum := atomic.AddUint64(&l.reqNum, 1)
+				l.request(mu, reqNum)
+				continue
+			}
+			buffer[i] = mu
+			i++
 		}
-		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, reqNum)
+		buffer = buffer[:i]
 	}
 }
 

@@ -68,7 +68,7 @@ type options struct {
 	bufferSize     int
 }
 
-type LivePredicate struct {
+type predicate struct {
 	Predicate string   `json:"predicate,omitempty"`
 	Type      string   `json:"type,omitempty"`
 	Tokenizer []string `json:"tokenizer,omitempty"`
@@ -78,18 +78,16 @@ type LivePredicate struct {
 	Index     bool     `json:"index,omitempty"`
 	Upsert    bool     `json:"upsert,omitempty"`
 	Reverse   bool     `json:"reverse,omitempty"`
-
 	ValueType types.TypeID
 }
 
-type LiveSchema struct {
-	Predicates []*LivePredicate `json:"schema,omitempty"`
-
-	preds map[string]*LivePredicate
+type schema struct {
+	Predicates []*predicate `json:"schema,omitempty"`
+	preds      map[string]*predicate
 }
 
-func (l *LiveSchema) init() {
-	l.preds = make(map[string]*LivePredicate)
+func (l *schema) init() {
+	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
 		l.preds[i.Predicate] = i
@@ -98,7 +96,7 @@ func (l *LiveSchema) init() {
 
 var (
 	opt options
-	sch LiveSchema
+	sch schema
 
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
@@ -145,7 +143,7 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*LiveSchema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
 		md.Append("auth-token", opt.authToken)
@@ -160,7 +158,10 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*LiveSchema, erro
 		return nil, err
 	}
 
-	json.Unmarshal(res.GetJson(), &sch)
+	err = json.Unmarshal(res.GetJson(), &sch)
+	if err != nil {
+		return nil, err
+	}
 	sch.init()
 	return &sch, nil
 }
@@ -261,7 +262,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 					iPred := sch.preds[buffer[i].Predicate]
 					jPred := sch.preds[buffer[j].Predicate]
 
-					t := func(a *LivePredicate) int {
+					t := func(a *predicate) int {
 						if a == nil {
 							return 0
 						}
@@ -348,14 +349,14 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	alloc := xidmap.New(connzero, db)
 	l := &loader{
-		opts:        opts,
-		dc:          dc,
-		start:       time.Now(),
-		reqs:        make(chan api.Mutation, opts.Pending*2),
-		currentUIDS: make(map[uint64]bool),
-		alloc:       alloc,
-		db:          db,
-		zeroconn:    connzero,
+		opts:      opts,
+		dc:        dc,
+		start:     time.Now(),
+		reqs:      make(chan api.Mutation, opts.Pending*2),
+		conflicts: make(map[uint64]bool),
+		alloc:     alloc,
+		db:        db,
+		zeroconn:  connzero,
 	}
 
 	l.requestsWg.Add(opts.Pending)
