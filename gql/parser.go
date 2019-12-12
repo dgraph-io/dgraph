@@ -406,7 +406,8 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		}
 	}
 	if gq.RecurseArgs.varMap != nil {
-		// update depth
+		// Update the depth if the get the depth as
+		// a variable in the query.
 		varName, ok := gq.RecurseArgs.varMap["depth"]
 		if ok {
 			val, ok := vmap[varName]
@@ -420,7 +421,8 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			gq.RecurseArgs.Depth = depth
 		}
 
-		// update loop
+		// Update the loop if the get the depth as
+		// a variable in the query.
 		varName, ok = gq.RecurseArgs.varMap["loop"]
 		if ok {
 			val, ok := vmap[varName]
@@ -806,7 +808,7 @@ func parseVarName(it *lex.ItemIterator) (string, error) {
 	if item.Typ != itemName {
 		return "", it.Errorf("Expected variable name")
 	}
-	return fmt.Sprintf("$%s", item.Val), nil
+	return "$" + item.Val, nil
 }
 
 func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
@@ -831,14 +833,14 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 			return it.Errorf("Expected argument")
 		}
 
-		// consume the next item
+		// Consume the next item.
 		item = it.Item()
 		val = item.Val
 		switch key {
 		case "depth":
-			// check whether the argument is variable or value.
+			// Check whether the argument is variable or value.
 			if item.Typ == itemDollar {
-				// consume the variable name.
+				// Consume the variable name.
 				varName, err := parseVarName(it)
 				if err != nil {
 					return err
@@ -859,7 +861,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case "loop":
 			if item.Typ == itemDollar {
-				// consume the variable name.
+				// Consume the variable name.
 				varName, err := parseVarName(it)
 				if err != nil {
 					return err

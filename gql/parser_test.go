@@ -4966,6 +4966,60 @@ func TestRecurseWithArgs(t *testing.T) {
 	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
 }
 
+func TestRecurseWithArgsWithError(t *testing.T) {
+	query := `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: true) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: $hello) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "sd", "$hello1": "true"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing \"sd\": invalid syntax")
+
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "tre"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseBool: parsing \"tre\"")
+}
+
 func TestRecurse(t *testing.T) {
 	query := `
 	{
@@ -4980,4 +5034,31 @@ func TestRecurse(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
 	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+}
+
+func TestRecurseWithError(t *testing.T) {
+	query := `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: hello, loop: true) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing \"hello\": invalid syntax")
+	query = `
+	{
+		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: tre) {
+			name@en
+			~genre (first:10) @filter(gt(count(starring), 2))
+			starring (first: 2)
+			performance.actor
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseBool: parsing \"tre\"")
 }
