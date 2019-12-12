@@ -19,6 +19,7 @@ package alpha
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -40,49 +41,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
 )
-
-var q0 = `
-	{
-		user(func: uid(0x1)) {
-			name
-		}
-	}
-`
-
-var m = `
-	mutation {
-		set {
-                        # comment line should be ignored
-			<0x1> <name> "Alice" .
-		}
-	}
-`
-
-type raftServer struct {
-}
-
-func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return in, nil
-}
-
-func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func (c *raftServer) JoinCluster(ctx context.Context, in *pb.RaftContext) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func childAttrs(sg *query.SubGraph) []string {
-	var out []string
-	for _, c := range sg.Children {
-		out = append(out, c.Attr)
-	}
-	return out
-}
 
 type defaultContextKey int
 
@@ -937,44 +901,6 @@ func TestSchemaValidationError(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
-var m6 = `
-	{
-		set {
-                        # comment line should be ignored
-			<0x5> <name2> "1"^^<xs:int> .
-			<0x6> <name2> "1.5"^^<xs:float> .
-		}
-	}
-`
-
-var q6 = `
-	{
-		user(func: uid(<id>)) {
-			name2
-		}
-	}
-`
-
-//func TestSchemaConversion(t *testing.T) {
-//	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
-//	require.NoError(t, err)
-//
-//	var l query.Latency
-//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-//	_, err = qr.ProcessWithMutation(defaultContext())
-//
-//	require.NoError(t, err)
-//	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-//	require.JSONEq(t, `{"data": {"user":[{"name2":1}]}}`, output)
-//
-//	s, ok := schema.State().Get("name2")
-//	require.True(t, ok)
-//	s.ValueType = uint32(types.FloatID)
-//	schema.State().Set("name2", s)
-//	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-//	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
-//}
-
 func TestMutationError(t *testing.T) {
 	var qErr = `
  	{
@@ -986,33 +912,6 @@ func TestMutationError(t *testing.T) {
 	err := runMutation(qErr)
 	require.Error(t, err)
 }
-
-var qm = `
-	{
-		set {
-			<0x0a> <pred.rel> _:x .
-			_:x <pred.val> "value" .
-			_:x <pred.rel> _:y .
-			_:y <pred.val> "value2" .
-		}
-	}
-`
-
-//func TestAssignUid(t *testing.T) {
-//	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
-//	require.NoError(t, err)
-//
-//	var l query.Latency
-//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-//	er, err := qr.ProcessWithMutation(defaultContext())
-//	require.NoError(t, err)
-//
-//	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
-//	_, ok := er.Allocations["x"]
-//	require.True(t, ok)
-//	_, ok = er.Allocations["y"]
-//	require.True(t, ok)
-//}
 
 var q1 = `
 {
@@ -1038,26 +937,6 @@ func BenchmarkQuery(b *testing.B) {
 		processToFastJSON(q1)
 	}
 }
-
-var threeNiceFriends = `{
-	"data": {
-	  "me": [
-	    {
-	      "friend": [
-	        {
-	          "nice": "true"
-	        },
-	        {
-	          "nice": "true"
-	        },
-	        {
-	          "nice": "true"
-	        }
-	      ]
-	    }
-	  ]
-	}
-}`
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
@@ -1694,6 +1573,113 @@ func TestJSONQueryWithVariables(t *testing.T) {
 	exp := `{"data":{"q":[{"user_id":"user2","user_name":"second user",` +
 		`"follows":[{"uid":"0x1403","user_id":"user4"}]}]}}`
 	require.JSONEq(t, exp, res)
+}
+
+func TestGeoDataInvalidString(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{
+				StrVal: `{"type": "Point", "coordintaes": [1.0, 2.0]}`,
+			},
+		},
+	}
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.Contains(t, err.Error(), "geom: unsupported layout NoLayout")
+}
+
+// This test shows that GeoVal API doesn't accept string data. Though, mutation
+// succeeds querying the data returns an error. Ideally, we should not accept
+// invalid data in a mutation though that is left as future work.
+func TestGeoCorruptData(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_GeoVal{
+				GeoVal: []byte(`{"type": "Point", "coordinates": [1.0, 2.0]}`),
+			},
+		},
+	}
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.NoError(t, err)
+
+	q := `
+{
+  all(func: has(loc)) {
+      uid
+      loc
+  }
+}`
+	_, err = dg.NewReadOnlyTxn().Query(ctx, q)
+	require.Contains(t, err.Error(), "wkb: unknown byte order: 1111011")
+}
+
+// This test shows how we could use the GeoVal API to store geo data.
+// As far as I (Aman) know, this is something that should not be used
+// by a common user unless user knows what she is doing.
+func TestGeoValidWkbData(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
+	s := `{"type": "Point", "coordinates": [1.0, 2.0]}`
+	var gt geom.T
+	if err := geojson.Unmarshal([]byte(s), &gt); err != nil {
+		panic(err)
+	}
+	data, err := wkb.Marshal(gt, binary.LittleEndian)
+	if err != nil {
+		panic(err)
+	}
+	n := &api.NQuad{
+		Subject:   "_:test",
+		Predicate: "loc",
+		ObjectValue: &api.Value{
+			Val: &api.Value_GeoVal{
+				GeoVal: data,
+			},
+		},
+	}
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		Set:       []*api.NQuad{n},
+	})
+	require.NoError(t, err)
+	q := `
+{
+  all(func: has(loc)) {
+      uid
+      loc
+  }
+}`
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
 
 var addr = "http://localhost:8180"

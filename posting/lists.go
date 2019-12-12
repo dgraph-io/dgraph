@@ -30,8 +30,8 @@ import (
 
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/golang/glog"
 
@@ -246,9 +246,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		}
 	} else {
 		pl = &List{
-			key:         key,
-			mutationMap: make(map[uint64]*pb.PostingList),
-			plist:       new(pb.PostingList),
+			key:   key,
+			plist: new(pb.PostingList),
 		}
 	}
 

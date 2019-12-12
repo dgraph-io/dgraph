@@ -27,7 +27,7 @@ const enBase = "en"
 
 // langBaseCache keeps a copy of lang -> base conversions.
 var langBaseCache struct {
-	sync.Mutex
+	sync.RWMutex
 	m map[string]string
 }
 
@@ -38,15 +38,26 @@ func langBase(lang string) string {
 	if lang == "" {
 		return enBase // default to this
 	}
+
+	// Acquire the read lock and lookup for the lang in cache.
+	langBaseCache.RLock()
+
+	// check if we already have this
+	if s, found := langBaseCache.m[lang]; found {
+		langBaseCache.RUnlock()
+		return s
+	}
+
+	// Upgrade the lock only since the lang is not found in cache.
+	langBaseCache.RUnlock()
 	langBaseCache.Lock()
 	defer langBaseCache.Unlock()
-	if langBaseCache.m == nil {
-		langBaseCache.m = make(map[string]string)
-	}
-	// check if we already have this
+
+	// Recheck if the lang is added to the cache.
 	if s, found := langBaseCache.m[lang]; found {
 		return s
 	}
+
 	// Parse will return the best guess for a language tag.
 	// It will return undefined, or 'language.Und', if it gives up. That means the language
 	// tag is either new (to the standard) or simply invalid.
@@ -70,4 +81,8 @@ func langBase(lang string) string {
 	glog.Warningf("Unable to find lang %q. Reverting to English.", lang)
 	langBaseCache.m[lang] = enBase
 	return enBase
+}
+
+func init() {
+	langBaseCache.m = make(map[string]string)
 }

@@ -166,7 +166,7 @@ type mutationResponse struct {
 	keys    []string
 	preds   []string
 	startTs uint64
-	vars    map[string][]string
+	data    json.RawMessage
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -193,18 +193,22 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 		return mr, err
 	}
 
-	type resData struct {
-		MutationVars map[string][]string `json:"vars"`
-	}
-	var rd resData
-	if err := json.Unmarshal(r.Data, &rd); err != nil {
-		return mr, err
-	}
-
-	mr.vars = rd.MutationVars
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	sort.Strings(mr.preds)
+
+	var d map[string]interface{}
+	if err := json.Unmarshal(r.Data, &d); err != nil {
+		return mr, err
+	}
+	delete(d, "code")
+	delete(d, "message")
+	delete(d, "uids")
+	mr.data, err = json.Marshal(d)
+	if err != nil {
+		return mr, err
+	}
 	return mr, nil
 }
 

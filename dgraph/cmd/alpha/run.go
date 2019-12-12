@@ -33,9 +33,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -103,6 +104,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
+	flag.String("encryption_key_file", "",
+		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
+			"The key size determines the corresponding block size for AES encryption "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -424,16 +429,22 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	opts := edgraph.Options{
-		BadgerTables: Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+	opts := worker.Options{
+		BadgerTables:  Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:    Alpha.Conf.GetString("badger.vlog"),
+		BadgerKeyFile: Alpha.Conf.GetString("encryption_key_file"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),
 
-		MutationsMode:  edgraph.AllowMutations,
+		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+
+	// OSS, non-nil key file --> crash
+	if !enc.EeBuild && opts.BadgerKeyFile != "" {
+		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -456,17 +467,17 @@ func run() {
 
 	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
 	case "allow":
-		opts.MutationsMode = edgraph.AllowMutations
+		opts.MutationsMode = worker.AllowMutations
 	case "disallow":
-		opts.MutationsMode = edgraph.DisallowMutations
+		opts.MutationsMode = worker.DisallowMutations
 	case "strict":
-		opts.MutationsMode = edgraph.StrictMutations
+		opts.MutationsMode = worker.StrictMutations
 	default:
 		glog.Error("--mutations argument must be one of allow, disallow, or strict")
 		os.Exit(1)
 	}
 
-	edgraph.SetConfiguration(opts)
+	worker.SetConfiguration(opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
@@ -483,7 +494,7 @@ func run() {
 		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
-		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:          secretFile != "",
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:      abortDur,
@@ -499,13 +510,9 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("edgraph.Config: %s", edgraph.Config)
+	glog.Infof("worker.Config: %s", worker.Config)
 
-	edgraph.InitServerState()
-	defer func() {
-		edgraph.State.Dispose()
-		glog.Info("Finished disposing server state.")
-	}()
+	worker.InitServerState()
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
@@ -520,10 +527,10 @@ func run() {
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	schema.Init(edgraph.State.Pstore)
-	posting.Init(edgraph.State.Pstore)
+	schema.Init(worker.State.Pstore)
+	posting.Init(worker.State.Pstore)
 	defer posting.Cleanup()
-	worker.Init(edgraph.State.Pstore)
+	worker.Init(worker.State.Pstore)
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 3)
@@ -555,7 +562,7 @@ func run() {
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)
 	go func() {
-		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl()
@@ -566,5 +573,7 @@ func run() {
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
+	glog.Info("Disposing server state.")
+	worker.State.Dispose()
 	glog.Infoln("Server shutdown. Bye!")
 }
