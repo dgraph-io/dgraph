@@ -18,7 +18,7 @@ package posting
 
 import (
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"math"
@@ -107,12 +107,13 @@ func (ir *IncRollup) HandleIncrementalRollups() {
 	for batch := range ir.Ch {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
-			hashBytes := sha1.Sum(key)
-			hash := binary.BigEndian.Uint64(hashBytes[0:]) // take 1st 8 bytes of the SHA1 hash
+			hashBytes := sha256.Sum256(key)
+			hash := binary.BigEndian.Uint64(hashBytes[0:]) // take 1st 8 bytes of the SHA256 hash
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
-				// Key not present or Key present but last roll up was more than 10 sec ago. Add/Update map and rollup.
+				// Key not present or Key present but last roll up was more than 10 sec ago.
+				// Add/Update map and rollup.
 				m[hash] = currTs
-				ir.RollUpKey(writer, key)
+				_ = ir.RollUpKey(writer, key)
 			}
 		}
 		// clear the batch and put it back in Sync pool
