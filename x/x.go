@@ -289,6 +289,22 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
+// Union takes two array and returns their union with no duplicate entries.
+func Union(a *[]string, b []string) {
+	keys := make(map[string]struct{})
+	for _, val := range *a {
+		keys[val] = struct{}{}
+	}
+	for _, val := range b {
+		keys[val] = struct{}{}
+	}
+
+	*a = make([]string, 0, len(keys))
+	for key := range keys {
+		*a = append(*a, key)
+	}
+}
+
 // ReadLine reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
 // method for loading long lines which could be longer than the buffer
