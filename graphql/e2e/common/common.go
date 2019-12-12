@@ -174,7 +174,6 @@ func RunAll(t *testing.T) {
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
-	t.Run("graphql schema", schemaTests)
 
 	// encoding
 	t.Run("gzip compression", gzipCompression)
