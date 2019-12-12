@@ -46,10 +46,7 @@ const (
 	type dgraph.graphql {
 		dgraph.graphql.schema
 		dgraph.graphql.date
-	}
-	dgraph.graphql.schema: string .
-	dgraph.graphql.date: dateTime @index(day) .
-	`
+	}`
 
 	// GraphQL schema for /admin endpoint.
 	//

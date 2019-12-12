@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -154,6 +155,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
+	go gr.watchGraphqlSchemaChanges()
 
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
@@ -975,6 +977,39 @@ func (g *groupi) processOracleDeltaStream() {
 				blockingReceiveAndPropose()
 			}
 		}
+	}
+}
+
+func (g *groupi) watchGraphqlSchemaChanges() {
+	defer g.closer.Done()
+
+	// TODO - Only do this for servers in group 1.
+	prefix := x.DataKey("dgraph.graphql.schema", 0)
+	// Remove uid from the key, to get the correct prefix
+	prefix = prefix[:len(prefix)-8]
+	cb := func(kvs *badger.KVList) {
+		for _, kv := range kvs.Kv {
+
+			fmt.Println("max: ", posting.Oracle().MaxAssigned())
+			maxAssigned := posting.Oracle().MaxAssigned()
+			cache := posting.Oracle().CacheAt(maxAssigned)
+			list, err := cache.GetFromDelta(kv.Key)
+			if err != nil {
+				glog.Errorf("got error from GetNoStore for key: %s, %v", kv.Key, err)
+				continue
+			}
+			fmt.Printf("list: %+v\n", list)
+			rval, err := list.Value(maxAssigned)
+			if err != nil {
+				glog.Errorf("got error while fetching value for key: %s, %v", kv.Key, err)
+				continue
+			}
+			fmt.Printf("rval: %+v\n", rval)
+		}
+	}
+	if err := pstore.Subscribe(context.Background(), cb,
+		prefix); err != nil && err != context.Canceled {
+		glog.Errorf("error from subscribe command: %v", err)
 	}
 }
 
