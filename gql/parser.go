@@ -2318,7 +2318,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			if filter.Func.Name != "type" {
+			if isExpand && filter != nil && filter.Func != nil && filter.Func.Name != "type" {
 				return item.Errorf(errExpandType)
 			}
 			curp.Filter = filter

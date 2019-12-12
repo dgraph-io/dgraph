@@ -4942,3 +4942,18 @@ func TestParseExpandFilter(t *testing.T) {
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
 }
+
+func TestParseExpandFilterErr(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(has(Person)) {
+					uid
+				}
+			}
+		}`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}
