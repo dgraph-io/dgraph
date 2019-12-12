@@ -37,7 +37,7 @@ import (
 
 // IncRollup is used to batch keys for rollup incrementally.
 type IncRollup struct {
-	// IncrRollupCh is populated with batch of 64 keys that needs to be rolled up during reads
+	// Ch is populated with batch of 64 keys that needs to be rolled up during reads
 	Ch chan *[][]byte
 	// Pool is sync.Pool to share the batched keys to rollup.
 	Pool sync.Pool
@@ -59,7 +59,6 @@ var (
 
 // RollUpKey takes the given key's posting lists, rolls it up and writes back to badger
 func (ir *IncRollup) RollUpKey(writer *TxnWriter, key []byte) error {
-
 	l, err := GetNoStore(key)
 	if err != nil {
 		return err
@@ -94,12 +93,10 @@ func (ir *IncRollup) addKeyToBatch(key []byte) {
 		*batch = (*batch)[:0]
 		ir.Pool.Put(batch)
 	}
-
 }
 
 // HandleIncrementalRollups will rollup batches of 64 keys in a go routine.
 func (ir *IncRollup) HandleIncrementalRollups() {
-
 	m := make(map[uint64]int64) // map from hash(key) to timestamp
 	limiter := time.Tick(10 * time.Millisecond)
 	writer := NewTxnWriter(pstore)
@@ -108,7 +105,7 @@ func (ir *IncRollup) HandleIncrementalRollups() {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hashBytes := sha256.Sum256(key)
-			hash := binary.BigEndian.Uint64(hashBytes[0:]) // take 1st 8 bytes of the SHA256 hash
+			hash := binary.BigEndian.Uint64(hashBytes[0:]) // 1st 8 bytes of the SHA256 hash
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
