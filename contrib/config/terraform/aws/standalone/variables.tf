@@ -13,6 +13,7 @@ variable "aws_access_key" {
   type        = string
   description = "Access key for the AWS account to create the dgraph deployment in."
 }
+
 variable "aws_secret_key" {
   type        = string
   description = "Secret key for the AWS account."
@@ -56,7 +57,7 @@ variable "instance_name" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation"
-  default     = "1.1.0"   
+  default     = "1.1.0"
 }
 
 variable "dgraph_ui_port" {

@@ -4,7 +4,7 @@
 provider "aws" {
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
-  region     = var.region  
+  region     = var.region
   profile    = var.profile
 }
 
@@ -85,7 +85,7 @@ resource "aws_instance" "dgraph_standalone" {
   # base64encoded user provided script to run at the time of instance
   # initialization.
   user_data_base64 = base64encode(data.template_file.setup_template.rendered)
-  
+
   tags = {
     Name = "dgraph-standalone"
   }
