@@ -8,6 +8,7 @@ module "aws_lt" {
 
   deployment_name = local.deployment_name
   disk_size       = var.disk_size
+  disk_iops       = var.disk_iops
   instance_type   = var.instance_type
 
   ami_id    = var.ami_id
@@ -23,7 +24,7 @@ module "aws_tg" {
 
   vpc_id = var.vpc_id
   port   = local.alpha_port
-  
+
   deployment_name = local.deployment_name
 }
 

@@ -39,7 +39,7 @@ variable "zero_count" {
 variable "alpha_instance_type" {
   type        = string
   description = "EC2 Instance type for dgraph alpha component."
-  default     = "t3a.small"
+  default     = "m5a.large"
 }
 
 variable "zero_instance_type" {
@@ -57,19 +57,25 @@ variable "ratel_instance_type" {
 variable "alpha_disk_size" {
   type        = number
   description = "Disk size for the alpha node."
-  default     = 50
+  default     = 500
 }
 
 variable "zero_disk_size" {
   type        = number
   description = "Disk size for dgraph zero node."
-  default     = 20
+  default     = 250
 }
 
 variable "ratel_disk_size" {
   type        = number
   description = "Disk size for the ratel node."
-  default     = 10
+  default     = 100
+}
+
+variable "disk_iops" {
+  type        = number
+  description = "IOPS limit for the disk associated with the instance."
+  default     = 1000
 }
 
 variable "service_prefix" {
@@ -116,5 +122,5 @@ variable "public_key" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation."
-  default     = "1.1.0"   
+  default     = "1.1.0"
 }

@@ -8,6 +8,11 @@ variable "disk_size" {
   description = "Disk size to associate with the running instance."
 }
 
+variable "disk_iops" {
+  type        = number
+  description = "IOPS limit for the disk associated with the instance."
+}
+
 variable "instance_type" {
   type        = string
   description = "AWS instance type to launch."

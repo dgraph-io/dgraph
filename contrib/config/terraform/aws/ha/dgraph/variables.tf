@@ -43,6 +43,11 @@ variable "ratel_disk_size" {
   description = "Disk size for dgraph ratel node."
 }
 
+variable "disk_iops" {
+  type        = number
+  description = "IOPS limit for the disk associated with the instance."
+}
+
 variable "cidr_block" {
   type        = string
   description = "CIDR block to assign to the VPC running the dgraph cluster, only used if a new VPC is created."

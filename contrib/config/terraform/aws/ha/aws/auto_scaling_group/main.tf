@@ -6,7 +6,7 @@ resource "aws_autoscaling_group" "dgraph" {
   desired_capacity          = var.instance_count
 
   vpc_zone_identifier       = [var.subnet_id]
-  
+
   launch_template {
     id      = var.launch_template_id
     version = "$Latest"

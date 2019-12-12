@@ -29,8 +29,10 @@ resource "aws_instance" "dgraph" {
   }
 
   root_block_device {
-    volume_size = var.disk_size
+    volume_size           = var.disk_size
     delete_on_termination = true
+    volume_type           = "io1"
+    iops                  = var.disk_iops
   }
 
   user_data = base64encode(var.user_scripts[count.index].rendered)

@@ -20,7 +20,7 @@
 provider "aws" {
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
-  region     = var.region  
+  region     = var.region
   profile    = var.profile
 }
 
@@ -47,6 +47,7 @@ module "dgraph" {
   alpha_disk_size = var.alpha_disk_size
   zero_disk_size  = var.zero_disk_size
   ratel_disk_size = var.ratel_disk_size
+  disk_iops       = var.disk_iops
 
   key_pair_name   = var.key_pair_name
   public_key      = var.public_key

@@ -35,12 +35,13 @@ module "zero" {
   vpc_id = module.aws_vpc.vpc_id
   sg_id  = module.aws_vpc.sg_id
   instance_count = var.zero_count
-  
+
   subnet_id = module.aws_vpc.subnet_id
   lb_arn    = module.aws_lb.arn
-  
+
   instance_type = var.zero_instance_type
   disk_size     = var.zero_disk_size
+  disk_iops     = var.disk_iops
 
   key_pair_name = var.key_pair_name
   subnet_cidr_block = var.subnet_cidr_block
@@ -57,12 +58,13 @@ module "alpha" {
   vpc_id = module.aws_vpc.vpc_id
   sg_id  = module.aws_vpc.sg_id
   instance_count = var.alpha_count
-  
+
   subnet_id = module.aws_vpc.subnet_id
   lb_arn    = module.aws_lb.arn
-  
+
   instance_type = var.alpha_instance_type
   disk_size     = var.alpha_disk_size
+  disk_iops     = var.disk_iops
 
   key_pair_name   = var.key_pair_name
   healthy_zero_ip = module.zero.healthy_zero_ip
@@ -83,12 +85,13 @@ module "ratel" {
   name   = local.deployment_name
   vpc_id = module.aws_vpc.vpc_id
   sg_id  = module.aws_vpc.sg_id
-  
+
   subnet_id = module.aws_vpc.subnet_id
   lb_arn    = module.aws_lb.arn
-  
+
   instance_type = var.ratel_instance_type
   disk_size     = var.ratel_disk_size
+  disk_iops     = var.disk_iops
 
   key_pair_name     = var.key_pair_name
   alpha_completed   = module.alpha.alpha_completed

@@ -10,8 +10,9 @@ module "aws_instance" {
   instance_count = var.instance_count
 
   deployment_name = local.deployment_name
-  
+
   disk_size     = var.disk_size
+  disk_iops     = var.disk_iops
   instance_type = var.instance_type
   ami_id        = var.ami_id
   key_pair_name = var.key_pair_name

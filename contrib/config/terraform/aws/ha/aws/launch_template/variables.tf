@@ -8,6 +8,11 @@ variable "disk_size" {
   description = "Disk size to associate with the instance running through the launch template."
 }
 
+variable "disk_iops" {
+  type        = number
+  description = "IOPS limit for the disk associated with the instance."
+}
+
 variable "instance_type" {
   type        = string
   description = "Type of instance to launch from the launch template."

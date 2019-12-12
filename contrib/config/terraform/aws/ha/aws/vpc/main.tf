@@ -14,7 +14,7 @@
 # to 0.0.0.0/0 via internet gateway so that it is accessible.
 #
 # A typical outbound connection from dgraph instance to google.com looks something like this
-# Instance --> Route --> NAT Instance(in public subnet) --> Route --> Internet Gateway(in public subnet) 
+# Instance --> Route --> NAT Instance(in public subnet) --> Route --> Internet Gateway(in public subnet)
 resource "aws_vpc" "dgraph" {
   cidr_block           = var.cidr_block
   enable_dns_support   = true
@@ -93,7 +93,7 @@ resource "aws_route_table_association" "nat_gw" {
 resource "aws_subnet" "dgraph" {
   vpc_id     = aws_vpc.dgraph.id
   cidr_block = var.subnet_cidr_block
-  
+
   availability_zone_id = data.aws_availability_zones.az.zone_ids[0]
 
   tags = {
@@ -113,18 +113,61 @@ resource "aws_subnet" "dgraph_secondary" {
   }
 }
 
-resource "aws_security_group" "allow_everything" {
-  name        = "allow_everything"
+resource "aws_security_group" "dgraph_services" {
+  name        = "dgraph_services"
   description = "Allow all traffic associated with this security group."
   vpc_id      = aws_vpc.dgraph.id
 
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks     = ["0.0.0.0/0"]
+    from_port   = 5080
+    to_port     = 5080
+    protocol    = "tcp"
+    cidr_blocks = [var.subnet_cidr_block]
+    description = "For zero internal GRPC communication."
   }
 
+  ingress {
+    from_port   = 6080
+    to_port     = 6080
+    protocol    = "tcp"
+    cidr_blocks = [var.cidr_block]
+    description = "For zero external GRPC communication."
+  }
+
+  ingress {
+    from_port   = 7080
+    to_port     = 7080
+    protocol    = "tcp"
+    cidr_blocks = [var.subnet_cidr_block]
+    description = "For alpha internal GRPC communication."
+  }
+
+  ingress {
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "For external ratel communication, this is opened to everyone to try."
+  }
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "For alpha exteranl HTTP communication."
+  }
+
+  ingress {
+    from_port   = 9080
+    to_port     = 9080
+    protocol    = "tcp"
+    cidr_blocks = [var.cidr_block]
+    description = "For alpha external GRPC communication."
+  }
+
+  # Allow egress to everywhere from within any instance in the cluster, this
+  # is useful for bootstrap of the instance.
   egress {
     from_port       = 0
     to_port         = 0

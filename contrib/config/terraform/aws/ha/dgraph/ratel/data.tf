@@ -15,8 +15,8 @@ data "template_file" "setup_template" {
 
 data "null_data_source" "ips" {
   count = var.instance_count
-  
+
   inputs = {
-    private = cidrhost(var.subnet_cidr_block, count.index + 9)
+    private = cidrhost(var.subnet_cidr_block, count.index + 5)
   }
 }

@@ -19,6 +19,6 @@ output "default_sg_id" {
 }
 
 output "sg_id" {
-  value       = aws_security_group.allow_everything.id
+  value       = aws_security_group.dgraph_services.id
   description = "Security group ID for the auxilary security group created for dgraph."
 }

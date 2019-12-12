@@ -9,7 +9,9 @@ resource "aws_launch_template" "dgraph" {
     device_name = "/dev/sda1"
 
     ebs {
-      volume_size           = var.disk_size  
+      volume_size           = var.disk_size
+      volume_type           = "io1"
+      iops                  = var.disk_iops
       delete_on_termination = true
     }
   }
@@ -24,7 +26,7 @@ resource "aws_launch_template" "dgraph" {
 
   disable_api_termination = false
   # ebs_optimized           = true
- 
+
   image_id = var.ami_id
 
   instance_initiated_shutdown_behavior = "terminate"
@@ -38,7 +40,7 @@ resource "aws_launch_template" "dgraph" {
 
   network_interfaces {
     delete_on_termination       = true
-    associate_public_ip_address = true
+    associate_public_ip_address = false
     subnet_id                   = var.subnet_id
 
     security_groups = [var.vpc_sg_id]

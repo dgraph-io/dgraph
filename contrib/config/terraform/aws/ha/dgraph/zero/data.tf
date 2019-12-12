@@ -6,7 +6,7 @@ data "template_file" "service_template" {
   vars = {
     private_ip      = cidrhost(var.subnet_cidr_block, count.index + 10)
     healthy_zero_ip = local.healthy_zero_ip
-    index           = count.index
+    index           = count.index + 1
     replicas_count  = local.replicas_count
   }
 }
@@ -25,7 +25,7 @@ data "template_file" "setup_template" {
 
 data "null_data_source" "ips" {
   count = var.instance_count
-  
+
   inputs = {
     private = cidrhost(var.subnet_cidr_block, count.index + 10)
   }

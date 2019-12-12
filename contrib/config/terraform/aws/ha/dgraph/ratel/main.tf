@@ -8,7 +8,7 @@ module "aws_tg" {
 
   vpc_id = var.vpc_id
   port   = local.ratel_port
-  
+
   deployment_name   = local.deployment_name
   health_check_path = "/"
 }
@@ -26,15 +26,16 @@ module "aws_instance" {
   source = "./../../aws/instance"
 
   deployment_name = local.deployment_name
-  
+
   disk_size     = var.disk_size
+  disk_iops     = var.disk_iops
   instance_type = var.instance_type
   ami_id        = var.ami_id
   key_pair_name = var.key_pair_name
   sg_id         = var.sg_id
   subnet_id     = var.subnet_id
   private_ips   = data.null_data_source.ips
-  
+
   user_scripts     = data.template_file.setup_template
   instance_count   = var.instance_count
 }
