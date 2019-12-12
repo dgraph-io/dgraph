@@ -23,16 +23,15 @@ import (
 	"encoding/hex"
 	"math"
 	"strconv"
-	"sync/atomic"
 	"sync"
-	"time"	
+	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	
 )
 
 // IncRollup is used to batch keys for rollup incrementally.
