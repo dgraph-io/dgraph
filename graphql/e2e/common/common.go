@@ -211,6 +211,12 @@ func RunAll(t *testing.T) {
 	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
 
+	t.Run("get state by xid", getStateByXid)
+	t.Run("get state without args", getStateWithoutArgs)
+	t.Run("get state by both xid and uid", getStateByBothXidAndUid)
+	t.Run("query state by xid", queryStateByXid)
+	t.Run("query state by xid regex", queryStateByXidRegex)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)

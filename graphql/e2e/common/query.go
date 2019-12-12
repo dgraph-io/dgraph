@@ -1116,10 +1116,10 @@ func queryByMultipleInvalidIds(t *testing.T) {
 	require.Equal(t, 0, len(result.QueryPost))
 }
 
-func TestGetStateByXid(t *testing.T) {
+func getStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(code: "nsw") {
+			getState(xcode: "nsw") {
 				name
 			}
 		}`,
@@ -1130,7 +1130,7 @@ func TestGetStateByXid(t *testing.T) {
 	require.Equal(t, `{"getState":{"name":"NSW"}}`, string(gqlResponse.Data))
 }
 
-func TestGetStateWithoutArgs(t *testing.T) {
+func getStateWithoutArgs(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
 			getState {
@@ -1144,10 +1144,10 @@ func TestGetStateWithoutArgs(t *testing.T) {
 	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
 }
 
-func TestGetStateByBothXidAndUid(t *testing.T) {
+func getStateByBothXidAndUid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(code: "nsw", id: "0x1") {
+			getState(xcode: "nsw", id: "0x1") {
 				name
 			}
 		}`,
@@ -1158,10 +1158,10 @@ func TestGetStateByBothXidAndUid(t *testing.T) {
 	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
 }
 
-func TestQueryStateByXid(t *testing.T) {
+func queryStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { code: { eq: "nsw"}}) {
+			queryState(filter: { xcode: { eq: "nsw"}}) {
 				name
 			}
 		}`,
@@ -1172,10 +1172,10 @@ func TestQueryStateByXid(t *testing.T) {
 	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
 }
 
-func TestQueryStateByXidRegex(t *testing.T) {
+func queryStateByXidRegex(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { code: { regexp: "/n/"}}) {
+			queryState(filter: { xcode: { regexp: "/n/"}}) {
 				name
 			}
 		}`,
