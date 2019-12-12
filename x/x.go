@@ -289,20 +289,19 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
-// Union takes two array and returns their union with no duplicate entries.
-func Union(a *[]string, b []string) {
+// Unique takes an array and return it with no duplicate entries.
+func Unique(a []string) []string {
 	keys := make(map[string]struct{})
-	for _, val := range *a {
-		keys[val] = struct{}{}
-	}
-	for _, val := range b {
+	for _, val := range a {
 		keys[val] = struct{}{}
 	}
 
-	*a = make([]string, 0, len(keys))
+	a = a[:0]
 	for key := range keys {
-		*a = append(*a, key)
+		a = append(a, key)
 	}
+
+	return a
 }
 
 // ReadLine reads a single line from a buffered reader. The line is read into the
