@@ -560,7 +560,7 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 			if typeName(origTyp) != styp || origTyp.Kind != ast.Object {
 				continue
 			}
-			return styp
+			return origTyp.Name
 		}
 
 	}

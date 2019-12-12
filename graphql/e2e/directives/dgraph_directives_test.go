@@ -29,26 +29,6 @@ func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
 }
 
-func TestTypeName_WithDgraphDirectives(t *testing.T) {
-	t.Run("typename for interface", func(t *testing.T) {
-		expected := `{
-		"queryCharacter": [
-		  {
-			"name":"Han Solo",
-			"__typename": "Human",
-			"totalCredits": 10
-		  },
-		  {
-			"name": "R2-D2",
-			"__typename": "roboDroid",
-			"primaryFunction": "Robot"
-		  }
-		]
-	  }`
-		common.TypenameForInterface(t, expected)
-	})
-}
-
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)

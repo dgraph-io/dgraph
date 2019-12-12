@@ -29,26 +29,6 @@ func TestRunAll_Normal(t *testing.T) {
 	common.RunAll(t)
 }
 
-func TestTypeName(t *testing.T) {
-	t.Run("typename for interface", func(t *testing.T) {
-		expected := `{
-		"queryCharacter": [
-		  {
-			"name":"Han Solo",
-			"__typename": "Human",
-			"totalCredits": 10
-		  },
-		  {
-			"name": "R2-D2",
-			"__typename": "Droid",
-			"primaryFunction": "Robot"
-		  }
-		]
-	  }`
-		common.TypenameForInterface(t, expected)
-	})
-}
-
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
