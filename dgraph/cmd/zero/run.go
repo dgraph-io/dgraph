@@ -208,6 +208,10 @@ func run() {
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
+
+	// zero out from memory
+	kvOpt.EncryptionKey = nil
+
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
 	// Initialize the servers.

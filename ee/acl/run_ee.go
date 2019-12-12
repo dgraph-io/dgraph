@@ -111,8 +111,6 @@ func initSubcommands() []*x.SubCommand {
 		"The list of groups to be set for the user")
 	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
 	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
-	modFlags.StringP("pred_regex", "P", "", "The regular expression specifying predicates"+
-		" whose acls are to be changed")
 	modFlags.IntP("perm", "m", 0, "The acl represented using "+
 		"an integer: 4 for read, 2 for write, and 1 for modify. Use a negative value to remove a "+
 		"predicate from the group")

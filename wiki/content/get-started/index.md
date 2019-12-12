@@ -2,7 +2,7 @@
 title = "Get Started with Dgraph"
 +++
 
-{{% notice "note" %}}You can see an older version of the Getting Started page [here](/get-started-old).{{% /notice %}}
+{{% notice "note" %}}You can see an older version of the Getting Started page [here](../get-started-old).{{% /notice %}}
 
 ## Tutorials
 
@@ -59,6 +59,18 @@ title = "Get Started with Dgraph"
           </p>
         </div>
       </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-5/index.md">}}">
+              5 - String Indices and Modeling Tweet Graph
+            </a>
+          </div>
+          <p class="section-desc">
+            Learn about string indices, modeling tweet graph, and keyword-based searching.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -68,8 +80,8 @@ title = "Get Started with Dgraph"
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help

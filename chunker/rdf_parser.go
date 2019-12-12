@@ -117,11 +117,12 @@ L:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			if rnq.Subject == "" {
+			switch {
+			case rnq.Subject == "":
 				rnq.Subject = x.Star
-			} else if rnq.Predicate == "" {
+			case rnq.Predicate == "":
 				rnq.Predicate = x.Star
-			} else {
+			default:
 				rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			}
 

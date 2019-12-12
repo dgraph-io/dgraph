@@ -179,7 +179,7 @@ type params struct {
 
 	// ExploreDepth is used by recurse and shortest path queries to specify the maximum graph
 	// depth to explore.
-	ExploreDepth uint64
+	ExploreDepth *uint64
 
 	// IsInternal determines if processTask has to be called or not.
 	IsInternal bool
@@ -630,7 +630,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			args.ExploreDepth = depth
+			args.ExploreDepth = &depth
 		}
 
 		if v, ok := gq.Args["numpaths"]; ok {
@@ -2479,63 +2479,6 @@ func getPredicatesFromTypes(typeNames []string) []string {
 	return preds
 }
 
-// getReversePredicates queries the schema and returns a list of the reverse
-// predicates that exist within the given preds.
-func getReversePredicates(ctx context.Context, preds []string) ([]string, error) {
-	var rpreds []string
-	predMap := make(map[string]bool)
-	for _, pred := range preds {
-		predMap[pred] = true
-	}
-
-	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, sch := range schs {
-		if _, ok := predMap[sch.Predicate]; !ok {
-			continue
-		}
-		if !sch.Reverse {
-			continue
-		}
-		rpreds = append(rpreds, "~"+sch.Predicate)
-	}
-	return rpreds, nil
-}
-
-// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
-func GetAllPredicates(subGraphs []*SubGraph) []string {
-	predicatesMap := make(map[string]struct{})
-	for _, sg := range subGraphs {
-		sg.getAllPredicates(predicatesMap)
-	}
-	predicates := make([]string, 0, len(predicatesMap))
-	for predicate := range predicatesMap {
-		predicates = append(predicates, predicate)
-	}
-	return predicates
-}
-
-func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
-	if len(sg.Attr) != 0 {
-		predicates[sg.Attr] = struct{}{}
-	}
-	for _, o := range sg.Params.Order {
-		predicates[o.Attr] = struct{}{}
-	}
-	for _, pred := range sg.Params.GroupbyAttrs {
-		predicates[pred.Attr] = struct{}{}
-	}
-	for _, filter := range sg.Filters {
-		filter.getAllPredicates(predicates)
-	}
-	for _, child := range sg.Children {
-		child.getAllPredicates(predicates)
-	}
-}
-
 // UidsToHex converts the new UIDs to hex string.
 func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
@@ -2756,21 +2699,19 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 	return temp
 }
 
-// calculateMetrics populates the given map with the number of uids are gathered for each
-// attributes.
+// calculateMetrics populates the given map with the number of UIDs that were seen
+// for each predicate.
 func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
-
-	// skip internal nodes.
+	// Skip internal nodes.
 	if !sg.IsInternal() {
-		// we'll calculate srcUid of the each attribute. because, these are number of uids
-		// processed by this attribute.
-		metrics[sg.Attr] = metrics[sg.Attr] + uint64(len(sg.SrcUIDs.GetUids()))
+		// Add the number of SrcUIDs. This is the number of uids processed by this attribute.
+		metrics[sg.Attr] += uint64(len(sg.SrcUIDs.GetUids()))
 	}
-	// add all the uids gathered by filters
+	// Add all the uids gathered by filters.
 	for _, filter := range sg.Filters {
 		calculateMetrics(filter, metrics)
 	}
-	// calculate metrics for the children as well.
+	// Calculate metrics for the children as well.
 	for _, child := range sg.Children {
 		calculateMetrics(child, metrics)
 	}
