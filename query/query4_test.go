@@ -549,10 +549,10 @@ func TestHasOrderAsc(t *testing.T) {
 				"name": ""
 			  },
 			  {
-				"name": "Alex"
+				"name": "A"
 			  },
 			  {
-				"name": "Alice"
+				"name": "Alex"
 			  },
 			  {
 				"name": "Alice"
@@ -582,10 +582,10 @@ func TestHasOrderAscOffset(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"name": "Alice\""
+				"name": "Alice"
 			  },
 			  {
-				"name": "Andre"
+				"name": "Alice\""
 			  }
 			]
 		  }
@@ -619,6 +619,57 @@ func TestHasFirst(t *testing.T) {
 			  }
 			]
 		  }
+	}`, js)
+}
+
+// This test is not working currently, but start working after
+// PR https://github.com/dgraph-io/dgraph/pull/4316 is merged.
+// func TestHasFirstLangPredicate(t *testing.T) {
+// 	query := `{
+// 		q(func:has(name@lang), orderasc: name, first:5) {
+// 			 name@lang
+// 		 }
+// 	 }`
+// 	js := processQueryNoErr(t, query)
+// 	require.JSONEq(t, `{
+// 		{
+// 			"data":{
+// 				"q":[
+// 					{
+// 						"name@en":"Alex"
+// 					},
+// 					{
+// 						"name@en":"Amit"
+// 					},
+// 					{
+// 						"name@en":"Andrew"
+// 					},
+// 					{
+// 						"name@en":"Artem Tkachenko"
+// 					},
+// 					{
+// 						"name@en":"European badger"
+// 					}
+// 				]
+// 			}
+// 		}`, js)
+// }
+
+func TestHasCountPredicateWithLang(t *testing.T) {
+	query := `{
+		q(func:has(name@en), first: 11) {
+			 count(uid)
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+			"data":{
+				"q":[
+					{
+						"count":11
+					}
+				]
+			}
 	}`, js)
 }
 

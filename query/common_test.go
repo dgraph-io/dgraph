@@ -372,6 +372,17 @@ func populateCluster() {
 		<11003> <name> "No. 5 the film"@en .
 		<11100> <name> "expand" .
 
+		<51> <name> "A" .
+		<52> <name> "B" .
+		<53> <name> "C" .
+		<54> <name> "D" .
+		<55> <name> "E" .
+		<56> <name> "F" .
+		<57> <name> "G" .
+		<58> <name> "H" .
+		<59> <name> "I" .
+		<60> <name> "J" .
+
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
@@ -631,6 +642,30 @@ func populateCluster() {
 		<502> <boss> <510> .
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
+
+		<51> <connects> <52>  (weight=10) .
+		<51> <connects> <53>  (weight=1) .
+		<51> <connects> <54>  (weight=10) .
+
+		<53> <connects> <51>  (weight=10) .
+		<53> <connects> <52>  (weight=10) .
+		<53> <connects> <54>  (weight=1) .
+
+		<52> <connects> <51>  (weight=10) .
+		<52> <connects> <53>  (weight=10) .
+		<52> <connects> <54>  (weight=10) .
+
+		<54> <connects> <51>  (weight=10) .
+		<54> <connects> <52>  (weight=1) .
+		<54> <connects> <53>  (weight=10) .
+		<54> <connects> <55>  (weight=1) .
+
+
+		# tests for testing hop behavior for shortest path queries
+		<56> <connects> <57> (weight=1) .
+		<56> <connects> <58> (weight=1) .
+		<58> <connects> <59> (weight=1) .
+		<59> <connects> <60> (weight=1) .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
