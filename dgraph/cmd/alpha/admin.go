@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -136,9 +135,9 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if memoryMB < edgraph.MinAllottedMemory {
+	if memoryMB < worker.MinAllottedMemory {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", edgraph.MinAllottedMemory)
+		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", worker.MinAllottedMemory)
 		return
 	}
 

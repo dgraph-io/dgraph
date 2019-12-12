@@ -109,6 +109,11 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
 `
+	// GroupIdFileName is the name of the file storing the ID of the group to which
+	// the data in a postings directory belongs. This ID is used to join the proper
+	// group the first time an Alpha comes up with data from a restored backup or a
+	// bulk load.
+	GroupIdFileName = "group_id"
 )
 
 var (
@@ -354,7 +359,9 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
 		if err == nil {
-			buf.Write(line)
+			if _, err := buf.Write(line); err != nil {
+				return err
+			}
 		}
 	}
 	return err
@@ -708,7 +715,9 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 	closeFunc := func() {
 		for _, c := range conns {
-			c.Close()
+			if err := c.Close(); err != nil {
+				glog.Warningf("Error closing connection to Dgraph client: %v", err)
+			}
 		}
 	}
 	return dg, closeFunc

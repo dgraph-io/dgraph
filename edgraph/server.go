@@ -18,18 +18,13 @@ package edgraph
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -64,20 +59,6 @@ const (
 	groupFile    = "group_id"
 )
 
-// ServerState holds the state of the Dgraph server.
-type ServerState struct {
-	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh chan struct{} // channel to signal shutdown.
-
-	Pstore   *badger.DB
-	WALstore *badger.DB
-
-	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
-	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
-
-	needTs chan tsReq
-}
-
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
 	NeedAuthorize = iota
@@ -86,218 +67,8 @@ const (
 	NoAuthorize
 )
 
-// State is the instance of ServerState used by the current server.
-var State ServerState
-
-// InitServerState initializes this server's state.
-func InitServerState() {
-	Config.validate()
-
-	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
-	State.needTs = make(chan tsReq, 100)
-
-	State.initStorage()
-	go State.fillTimestampRequests()
-
-	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
-	if err != nil {
-		return
-	}
-
-	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
-		Config.PostingDir)
-	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
-	if err != nil {
-		glog.Warningf("Could not read %s file inside posting directory %s.",
-			groupFile, Config.PostingDir)
-	}
-	x.WorkerConfig.ProposedGroupId = uint32(groupId)
-}
-
-func (s *ServerState) runVlogGC(store *badger.DB) {
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
-
-	runGC := func() {
-		var err error
-		for err == nil {
-			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.7)
-		}
-		_, lastVlogSize = store.Size()
-	}
-
-	for {
-		select {
-		case <-s.vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-s.mandatoryVlogTicker.C:
-			runGC()
-		}
-	}
-}
-
-func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
-
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch Config.BadgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
-
-	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch Config.BadgerVlog {
-	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
-	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
-	return opt
-}
-
-func (s *ServerState) initStorage() {
-	var err error
-	{
-		// Write Ahead Log directory
-		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
-
-		// We should always force load LSM tables to memory, disregarding user settings, because
-		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
-		// down way too much, causing cluster membership issues. Because of prefix compression and
-		// value separation provided by Badger, this is still better than using the memory based WAL
-		// storage provided by the Raft library.
-		opt.TableLoadingMode = options.LoadToRAM
-
-		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		s.WALstore, err = badger.Open(opt)
-		x.Checkf(err, "Error while creating badger KV WAL store")
-	}
-	{
-		// Postings directory
-		// All the writes to posting store should be synchronous. We use batched writers
-		// for posting lists, so the cost of sync writes is amortized.
-		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
-		opt = setBadgerOptions(opt)
-
-		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
-		s.Pstore, err = badger.OpenManaged(opt)
-		x.Checkf(err, "Error while creating badger KV posting store")
-	}
-
-	s.vlogTicker = time.NewTicker(1 * time.Minute)
-	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
-	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
-}
-
-// Dispose stops and closes all the resources inside the server state.
-func (s *ServerState) Dispose() {
-	if err := s.Pstore.Close(); err != nil {
-		glog.Errorf("Error while closing postings store: %v", err)
-	}
-	if err := s.WALstore.Close(); err != nil {
-		glog.Errorf("Error while closing WAL store: %v", err)
-	}
-	s.vlogTicker.Stop()
-	s.mandatoryVlogTicker.Stop()
-}
-
 // Server implements protos.DgraphServer
 type Server struct{}
-
-func (s *ServerState) fillTimestampRequests() {
-	const (
-		initDelay = 10 * time.Millisecond
-		maxDelay  = time.Second
-	)
-
-	var reqs []tsReq
-	for {
-		// Reset variables.
-		reqs = reqs[:0]
-		delay := initDelay
-
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
-			}
-		}
-
-		// Generate the request.
-		num := &pb.Num{}
-		for _, r := range reqs {
-			if r.readOnly {
-				num.ReadOnly = true
-			} else {
-				num.Val++
-			}
-		}
-
-		// Execute the request with infinite retries.
-	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ts, err := worker.Timestamps(ctx, num)
-		cancel()
-		if err != nil {
-			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
-				" Will retry...\n", err, delay)
-			time.Sleep(delay)
-			delay *= 2
-			if delay > maxDelay {
-				delay = maxDelay
-			}
-			goto retry
-		}
-		var offset uint64
-		for _, req := range reqs {
-			if req.readOnly {
-				req.ch <- ts.ReadOnly
-			} else {
-				req.ch <- ts.StartId + offset
-				offset++
-			}
-		}
-		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
-	}
-}
-
-type tsReq struct {
-	readOnly bool
-	// A one-shot chan which we can send a txn timestamp upon.
-	ch chan uint64
-}
-
-func (s *ServerState) getTimestamp(readOnly bool) uint64 {
-	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
-	s.needTs <- tr
-	return <-tr.ch
-}
 
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
@@ -340,7 +111,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
@@ -884,7 +655,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		req.StartTs = State.getTimestamp(false)
+		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
@@ -944,7 +715,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
@@ -1102,6 +873,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
+		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
+		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		if tc.Aborted {
+			return tctx, nil
+		}
+
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
@@ -1125,7 +902,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if Config.MutationsMode != DisallowMutations {
+	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)
@@ -1142,7 +919,7 @@ func isAlterAllowed(ctx context.Context) error {
 	if ok {
 		glog.Infof("Got Alter request from %q\n", p.Addr)
 	}
-	if len(Config.AuthToken) == 0 {
+	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -1153,7 +930,7 @@ func isAlterAllowed(ctx context.Context) error {
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
-	if tokens[0] != Config.AuthToken {
+	if tokens[0] != worker.Config.AuthToken {
 		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
 	}
 	return nil
@@ -1297,11 +1074,6 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		// These are used in the response of a mutation in HTTP API.
-		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
-			return errors.Errorf("query alias [%v] not allowed", a)
-		}
-
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}

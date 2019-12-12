@@ -25,10 +25,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Show line and column numbers for errors in HTTP API responses. ([#4012][])
 - Do not store non-pointer values in sync.Pool. ([#4089][])
 - Verify that all the fields in a type exist in the schema. ([#4114][])
+- Update badger to version v2.0.0. ([#4200][])
+- Introduce StreamDone in bulk loader. ([#4297][])
 
 Enterprise features:
 
 - ACL: Disallow schema queries when an user has not logged in. ([#4107][])
+- Block delete if predicate permission is zero. Fixes [#4265][]. ([#4349][])
 
 ### Added
 
@@ -39,12 +42,23 @@ Enterprise features:
 - Support filtering by facets on values. ([#4217][])
 - Add ability to query `expand(TypeName)` only on certain types. ([#3920][])
 - Expose numUids metrics per query to estimate query cost. ([#4033][])
+- Upsert queries now return query results in the upsert response. ([#4269][], [#4375][])
+- Add support for multiple mutation blocks. ([#4210][])
+- Add total time taken to process a query in result under `"total_ns"` field. ([#4312][])
+
+Enterprise features:
+
+- Add encryption-at-rest. ([#4351][])
 
 ### Removed
 
 - **Breaking change**: Remove `@type` directive from query language. To filter
   an edge by a type, use `@filter(type(TypeName))` instead of `@type(TypeName)`.
   ([#4016][])
+  
+Enterprise features:
+  
+- Remove regexp ACL rules. ([#4360][])
 
 ### Fixed
 
@@ -71,10 +85,32 @@ Enterprise features:
 - Only allow one alias per predicate. ([#4236][])
 - Change member removal logic to remove members only once. ([#4254][])
 - Disallow uid as a predicate name. ([#4219][])
+- Drain apply channel when a snapshot is received. ([#4273][])
+- Added RegExp filter to func name. Fixes [#3268][]. ([#4230][])
+- Acquire read lock instead of exclusive lock for langBaseCache. ([#4279][])
+- Added proper handling of int and float for math op. [#4132][]. ([#4257][])
+- Don't delete group if there is no member in the group. ([#4274][])
+- Sort alphabets of languages for non indexed fields. Fixes [#4005][]. ([#4260][])
+- Copy xid string to reduce memory usage in bulk loader. ([#4287][])
+- Adding more details for mutation error messages with scalar/uid type mismatch. ([#4317][])
+- Limit UIDs per variable in upsert. Fixes [#4021][]. ([#4268][])
+- Return error instead of panic when geo data is corrupted. Fixes [#3740][]. ([#4318][])
+- Use txn writer to write schema postings. ([#4296][])
+- Fix connection log message in dgraph alpha from "CONNECTED" to "CONNECTING" when establishing a connection to a peer. Fixes [#4298][]. ([#4303][])
+- Fix segmentation fault in backup. ([#4314][])
+- Close store after stoping worker. ([#4356][])
+- Don't pre allocate mutation map. ([#4343][])
+- Cmd: fix config file from env variable issue in subcommands. Fixes [#4311][]. ([#4344][])
+- Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][]) 
+- Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
+- Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
+- Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
 
 Enterprise features:
 
 - Fix bug when overriding credentials in backup request. Fixes [#4044][]. ([#4047][])
+- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][]) 
+- Write group_id files to postings directories during restore. ([#4365][]) 
 
 [#4119]: https://github.com/dgraph-io/dgraph/issues/4119
 [#4171]: https://github.com/dgraph-io/dgraph/issues/4171
@@ -139,6 +175,50 @@ Enterprise features:
 [#4219]: https://github.com/dgraph-io/dgraph/issues/4219
 [#4044]: https://github.com/dgraph-io/dgraph/issues/4044
 [#4047]: https://github.com/dgraph-io/dgraph/issues/4047
+[#4273]: https://github.com/dgraph-io/dgraph/issues/4273
+[#4230]: https://github.com/dgraph-io/dgraph/issues/4230
+[#4279]: https://github.com/dgraph-io/dgraph/issues/4279
+[#4257]: https://github.com/dgraph-io/dgraph/issues/4257
+[#4274]: https://github.com/dgraph-io/dgraph/issues/4274
+[#4200]: https://github.com/dgraph-io/dgraph/issues/4200
+[#4260]: https://github.com/dgraph-io/dgraph/issues/4260
+[#4269]: https://github.com/dgraph-io/dgraph/issues/4269
+[#4287]: https://github.com/dgraph-io/dgraph/issues/4287
+[#4303]: https://github.com/dgraph-io/dgraph/issues/4303
+[#4317]: https://github.com/dgraph-io/dgraph/issues/4317
+[#4210]: https://github.com/dgraph-io/dgraph/issues/4210
+[#4312]: https://github.com/dgraph-io/dgraph/issues/4312
+[#4268]: https://github.com/dgraph-io/dgraph/issues/4268
+[#4318]: https://github.com/dgraph-io/dgraph/issues/4318
+[#4297]: https://github.com/dgraph-io/dgraph/issues/4297
+[#4296]: https://github.com/dgraph-io/dgraph/issues/4296
+[#4314]: https://github.com/dgraph-io/dgraph/issues/4314
+[#4356]: https://github.com/dgraph-io/dgraph/issues/4356
+[#4343]: https://github.com/dgraph-io/dgraph/issues/4343
+[#4344]: https://github.com/dgraph-io/dgraph/issues/4344
+[#4351]: https://github.com/dgraph-io/dgraph/issues/4351
+[#3268]: https://github.com/dgraph-io/dgraph/issues/3268
+[#4132]: https://github.com/dgraph-io/dgraph/issues/4132
+[#4005]: https://github.com/dgraph-io/dgraph/issues/4005
+[#4298]: https://github.com/dgraph-io/dgraph/issues/4298
+[#4021]: https://github.com/dgraph-io/dgraph/issues/4021
+[#3740]: https://github.com/dgraph-io/dgraph/issues/3740
+[#4311]: https://github.com/dgraph-io/dgraph/issues/4311
+[#4047]: https://github.com/dgraph-io/dgraph/issues/4047
+[#4375]: https://github.com/dgraph-io/dgraph/issues/4375
+[#4394]: https://github.com/dgraph-io/dgraph/issues/4394
+[#4288]: https://github.com/dgraph-io/dgraph/issues/4288
+[#4360]: https://github.com/dgraph-io/dgraph/issues/4360
+[#4265]: https://github.com/dgraph-io/dgraph/issues/4265
+[#4349]: https://github.com/dgraph-io/dgraph/issues/4349
+[#4169]: https://github.com/dgraph-io/dgraph/issues/4169
+[#4347]: https://github.com/dgraph-io/dgraph/issues/4347
+[#4389]: https://github.com/dgraph-io/dgraph/issues/4389
+[#4352]: https://github.com/dgraph-io/dgraph/issues/4352
+[#4315]: https://github.com/dgraph-io/dgraph/issues/4315
+[#4365]: https://github.com/dgraph-io/dgraph/issues/4365
+[#4282]: https://github.com/dgraph-io/dgraph/issues/4282
+[#4331]: https://github.com/dgraph-io/dgraph/issues/4331
 
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
