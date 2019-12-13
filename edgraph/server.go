@@ -889,6 +889,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
+		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
+		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		if tc.Aborted {
+			return tctx, nil
+		}
+
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
@@ -1087,11 +1093,6 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		// These are used in the response of a mutation in HTTP API.
-		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
-			return errors.Errorf("query alias [%v] not allowed", a)
-		}
-
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}
@@ -1114,9 +1115,9 @@ func validatePredName(name string) error {
 
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
-func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+func formatTypes(typeList []*pb.TypeUpdate) []map[string]interface{} {
 	var res []map[string]interface{}
-	for _, typ := range types {
+	for _, typ := range typeList {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
 		fields := make([]map[string]string, len(typ.Fields))
