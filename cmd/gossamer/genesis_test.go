@@ -7,11 +7,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/state"
+
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
-	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/trie"
 	"github.com/urfave/cli"
 )
@@ -39,10 +40,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 	}
 
 	setGlobalConfig(ctx, &fig.Global)
-	dbSrv, err := polkadb.NewDbService(fig.Global.DataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dbSrv := state.NewService(fig.Global.DataDir)
 
 	err = dbSrv.Start()
 	if err != nil {
@@ -52,7 +50,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 	defer dbSrv.Stop()
 
 	tdb := &trie.Database{
-		Db: dbSrv.StateDB.Db,
+		Db: dbSrv.Storage.Db.Db,
 	}
 
 	gendata, err := tdb.LoadGenesisData()

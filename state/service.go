@@ -1,27 +1,61 @@
 package state
 
+import (
+	"path/filepath"
+)
+
 type Service struct {
+	dbPath  string
 	Storage *storageState
 	Block   *blockState
 	Net     *networkState
 }
 
-func NewService() *Service {
+func NewService(path string) *Service {
 	return &Service{
-		Storage: &storageState{},
-		Block:   &blockState{},
+		dbPath:  path,
+		Storage: nil,
+		Block:   nil,
 		Net:     &networkState{},
 	}
 }
 
 func (s *Service) Start() error {
-	s.Storage = NewStorageState()
-	s.Block = NewBlockState()
+	if s.Storage != nil || s.Block != nil {
+		return nil
+	}
+
+	stateDataDir := filepath.Join(s.dbPath, "state")
+	blockDataDir := filepath.Join(s.dbPath, "block")
+
+	storageDb, err := NewStorageState(stateDataDir)
+	if err != nil {
+		return err
+	}
+
+	blockDb, err := NewBlockState(blockDataDir)
+	if err != nil {
+		return err
+	}
+
+	s.Storage = storageDb
+	s.Block = blockDb
 	s.Net = NewNetworkState()
 
 	return nil
 }
 
 func (s *Service) Stop() error {
+	// Closing Badger Databases
+	err := s.Storage.Db.Db.Close()
+	if err != nil {
+		return err
+	}
+
+	err = s.Block.db.Db.Close()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

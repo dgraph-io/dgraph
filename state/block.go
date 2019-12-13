@@ -16,11 +16,15 @@ type blockState struct {
 	latestBlock types.BlockHeaderWithHash
 }
 
-func NewBlockState() *blockState {
+func NewBlockState(dataDir string) (*blockState, error) {
+	blockDb, err := polkadb.NewBlockDB(dataDir)
+	if err != nil {
+		return nil, err
+	}
 	return &blockState{
 		bt: &blocktree.BlockTree{},
-		db: &polkadb.BlockDB{},
-	}
+		db: blockDb,
+	}, nil
 }
 
 var (

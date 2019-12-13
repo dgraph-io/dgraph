@@ -29,10 +29,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/state"
+
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/internal/api"
-	"github.com/ChainSafe/gossamer/polkadb"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -431,7 +432,7 @@ func TestMakeNode(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			db := node.Services.Get(&polkadb.DbService{})
+			db := node.Services.Get(&state.Service{})
 
 			err = db.Stop()
 			if err != nil {

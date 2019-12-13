@@ -20,10 +20,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/state"
+
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/p2p"
-	"github.com/ChainSafe/gossamer/polkadb"
 )
 
 // Creates a Dot with default configurations. Does not include RPC server.
@@ -46,10 +47,7 @@ func createTestDot(t *testing.T) *Dot {
 
 	// DB
 	dataDir := "../test_data"
-	dbSrv, err := polkadb.NewDbService(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dbSrv := state.NewService(dataDir)
 	services = append(services, dbSrv)
 
 	// API
@@ -63,7 +61,7 @@ func TestDot_Start(t *testing.T) {
 	var availableServices = [...]services.Service{
 		&p2p.Service{},
 		&api.Service{},
-		&polkadb.DbService{},
+		&state.Service{},
 	}
 
 	dot := createTestDot(t)

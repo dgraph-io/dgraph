@@ -8,14 +8,18 @@ import (
 
 type storageState struct {
 	trie *trie.Trie
-	db   *polkadb.StateDB
+	Db   *polkadb.StateDB
 }
 
-func NewStorageState() *storageState {
+func NewStorageState(dataDir string) (*storageState, error) {
+	stateDb, err := polkadb.NewStateDB(dataDir)
+	if err != nil {
+		return nil, err
+	}
 	return &storageState{
 		trie: &trie.Trie{},
-		db:   &polkadb.StateDB{},
-	}
+		Db:   stateDb,
+	}, nil
 }
 
 func (s *storageState) ExistsStorage(key []byte) (bool, error) {

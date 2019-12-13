@@ -18,6 +18,8 @@ package polkadb
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"fmt"
@@ -41,14 +43,14 @@ func testSetup() []data {
 }
 
 func TestBadgerDB_PutGetDel(t *testing.T) {
-	db, remove := newTestDBService(t)
+	db, remove := newTestBadgerDB(t)
 	defer remove()
 
-	testPutGetter(db.StateDB.Db, t)
-	testHasGetter(db.StateDB.Db, t)
-	testUpdateGetter(db.StateDB.Db, t)
-	testDelGetter(db.StateDB.Db, t)
-	testGetPath(db.StateDB.Db, t)
+	testPutGetter(db, t)
+	testHasGetter(db, t)
+	testUpdateGetter(db, t)
+	testDelGetter(db, t)
+	testGetPath(db, t)
 }
 
 func testPutGetter(db Database, t *testing.T) {
@@ -133,9 +135,9 @@ func testGetPath(db Database, t *testing.T) {
 }
 
 func TestBadgerDB_Batch(t *testing.T) {
-	db, remove := newTestDBService(t)
+	db, remove := newTestBadgerDB(t)
 	defer remove()
-	testBatchPut(db.StateDB.Db, t)
+	testBatchPut(db, t)
 }
 
 func batchTestSetup(db Database) (func(i int) []byte, func(i int) []byte, Batch) {
@@ -177,12 +179,12 @@ func testBatchPut(db Database, t *testing.T) {
 }
 
 func TestBadgerDB_Iterator(t *testing.T) {
-	db, remove := newTestDBService(t)
+	db, remove := newTestBadgerDB(t)
 	defer remove()
 
-	testNewIterator(db.StateDB.Db, t)
-	testNextKeyIterator(db.StateDB.Db, t)
-	testSeekKeyValueIterator(db.StateDB.Db, t)
+	testNewIterator(db, t)
+	testNextKeyIterator(db, t)
+	testSeekKeyValueIterator(db, t)
 }
 
 func testIteratorSetup(db Database, t *testing.T) {
@@ -280,5 +282,27 @@ func testSeekKeyValueIterator(db Database, t *testing.T) {
 				t.Fatalf("failed to retrieve presented key, got %v, expected %v", it.Key(), k.expected)
 			}
 		})
+	}
+}
+
+func newTestBadgerDB(t *testing.T) (Database, func()) {
+	dir, err := ioutil.TempDir(os.TempDir(), "test_data")
+	if err != nil {
+		t.Fatal("failed to create temp dir: " + err.Error())
+	}
+
+	badgerDb, err := NewBadgerDB(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db := Database(badgerDb)
+	return db, func() {
+		if err := db.Close(); err != nil {
+			fmt.Println("Close of BedgerDB failed")
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Println("removal of temp directory test_data failed")
+		}
 	}
 }
