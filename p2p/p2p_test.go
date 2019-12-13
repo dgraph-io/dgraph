@@ -25,17 +25,8 @@ import (
 	"github.com/ChainSafe/gossamer/common/optional"
 )
 
-// wait time to discover and connect using mdns discovery
-var TestDiscoveryTimeout = 3 * time.Second
-
-// wait time for status messages to be exchanged and handled
-var TestStatusTimeout = time.Second
-
-// maximum wait time for non-status message to be handled
-var TestMessageTimeout = 10 * time.Second
-
 // arbitrary block request message
-var testMessage = &BlockRequestMessage{
+var TestMessage = &BlockRequestMessage{
 	ID:            1,
 	RequestedData: 1,
 	// TODO: investigate starting block mismatch with different slice length
@@ -44,6 +35,9 @@ var testMessage = &BlockRequestMessage{
 	Direction:     1,
 	Max:           optional.NewUint32(true, 1),
 }
+
+// maximum wait time for non-status message to be handled
+var TestMessageTimeout = 10 * time.Second
 
 // helper method to create and start a new p2p service
 func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan Message, msgRec chan Message) {
@@ -75,54 +69,6 @@ func TestStartService(t *testing.T) {
 	}
 	node, _, _ := createTestService(t, config)
 	node.Stop()
-}
-
-// test mdns discovery service (discovers and connects)
-func TestDiscovery(t *testing.T) {
-	configA := &Config{
-		Port:        7001,
-		RandSeed:    1,
-		NoBootstrap: true,
-		NoGossip:    true,
-	}
-
-	nodeA, _, _ := createTestService(t, configA)
-	defer nodeA.Stop()
-
-	nodeA.host.noStatus = true
-
-	configB := &Config{
-		Port:        7002,
-		RandSeed:    2,
-		NoBootstrap: true,
-		NoGossip:    true,
-	}
-
-	nodeB, _, _ := createTestService(t, configB)
-	defer nodeB.Stop()
-
-	nodeB.host.noStatus = true
-
-	time.Sleep(TestDiscoveryTimeout)
-
-	peerCountA := nodeA.host.peerCount()
-	peerCountB := nodeB.host.peerCount()
-
-	if peerCountA != 1 {
-		t.Error(
-			"node A does not have expected peer count",
-			"\nexpected:", 1,
-			"\nreceived:", peerCountA,
-		)
-	}
-
-	if peerCountB != 1 {
-		t.Error(
-			"node B does not have expected peer count",
-			"\nexpected:", 1,
-			"\nreceived:", peerCountB,
-		)
-	}
 }
 
 // test broacast messages from core service
@@ -164,198 +110,18 @@ func TestBroadcastMessages(t *testing.T) {
 	}
 
 	// simulate message sent from core service
-	msgRecA <- testMessage
+	msgRecA <- TestMessage
 
 	select {
 	case msg := <-msgSendB:
-		if !reflect.DeepEqual(msg, testMessage) {
+		if !reflect.DeepEqual(msg, TestMessage) {
 			t.Error(
 				"node B received unexpected message from node A",
-				"\nexpected:", testMessage,
+				"\nexpected:", TestMessage,
 				"\nreceived:", msg,
 			)
 		}
 	case <-time.After(TestMessageTimeout):
 		t.Error("node B timeout waiting for message")
-	}
-}
-
-// test exchange status messages after peer connected
-func TestExchangeStatusMessages(t *testing.T) {
-	configA := &Config{
-		Port:        7001,
-		RandSeed:    1,
-		NoBootstrap: true,
-		NoGossip:    true,
-		NoMdns:      true,
-	}
-
-	nodeA, _, _ := createTestService(t, configA)
-	defer nodeA.Stop()
-
-	configB := &Config{
-		Port:        7002,
-		RandSeed:    2,
-		NoBootstrap: true,
-		NoGossip:    true,
-		NoMdns:      true,
-	}
-
-	nodeB, _, _ := createTestService(t, configB)
-	defer nodeB.Stop()
-
-	addrInfoB, err := nodeB.host.addrInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = nodeA.host.connect(*addrInfoB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	time.Sleep(TestStatusTimeout)
-
-	statusB := nodeA.host.peerStatus[nodeB.host.h.ID()]
-	if statusB == false {
-		t.Error(
-			"node A did not receive status message from node B",
-			"\nreceived:", statusB,
-			"\nexpected:", true,
-		)
-	}
-
-	statusA := nodeB.host.peerStatus[nodeA.host.h.ID()]
-	if statusA == false {
-		t.Error(
-			"node B did not receive status message from node A",
-			"\nreceived:", statusA,
-			"\nexpected:", true,
-		)
-	}
-}
-
-// test gossip messages to connected peers
-func TestGossipMessages(t *testing.T) {
-	configA := &Config{
-		Port:        7001,
-		RandSeed:    1,
-		NoBootstrap: true,
-		NoMdns:      true,
-	}
-
-	nodeA, msgSendA, _ := createTestService(t, configA)
-	defer nodeA.Stop()
-
-	nodeA.host.noStatus = true
-
-	configB := &Config{
-		Port:        7002,
-		RandSeed:    2,
-		NoBootstrap: true,
-		NoMdns:      true,
-	}
-
-	nodeB, msgSendB, _ := createTestService(t, configB)
-	defer nodeB.Stop()
-
-	nodeB.host.noStatus = true
-
-	addrInfoA, err := nodeA.host.addrInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = nodeB.host.connect(*addrInfoA)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	configC := &Config{
-		Port:        7003,
-		RandSeed:    3,
-		NoBootstrap: true,
-		NoMdns:      true,
-	}
-
-	nodeC, msgSendC, _ := createTestService(t, configC)
-	defer nodeC.Stop()
-
-	nodeC.host.noStatus = true
-
-	err = nodeC.host.connect(*addrInfoA)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	addrInfoB, err := nodeB.host.addrInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = nodeC.host.connect(*addrInfoB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = nodeA.host.send(addrInfoB.ID, testMessage)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// node A sends message to node B
-	select {
-	case <-msgSendB:
-	case <-time.After(TestMessageTimeout):
-		t.Error("node A timeout waiting for message")
-	}
-
-	// node B gossips message to node A and node C
-	for i := 0; i < 2; i++ {
-		select {
-		case <-msgSendA:
-		case <-msgSendC:
-		case <-time.After(TestMessageTimeout):
-			t.Error("node A timeout waiting for message")
-		}
-	}
-
-	// node A gossips message to node B and node C
-	// node C gossips message to node A and node B
-	for i := 0; i < 4; i++ {
-		select {
-		case <-msgSendA:
-		case <-msgSendB:
-		case <-msgSendC:
-		case <-time.After(TestMessageTimeout):
-			t.Error("timeout waiting for messages")
-		}
-	}
-
-	hasSeenB := nodeB.gossip.hasSeen[testMessage.Id()]
-	if hasSeenB == false {
-		t.Error(
-			"node B did not receive block request message from node A",
-			"\nreceived:", hasSeenB,
-			"\nexpected:", true,
-		)
-	}
-
-	hasSeenA := nodeA.gossip.hasSeen[testMessage.Id()]
-	if hasSeenA == false {
-		t.Error(
-			"node A did not receive block request message from node B or node C",
-			"\nreceived:", hasSeenA,
-			"\nexpected:", true,
-		)
-	}
-
-	hasSeenC := nodeC.gossip.hasSeen[testMessage.Id()]
-	if hasSeenC == false {
-		t.Error(
-			"node C did not receive block request message from node A or node B",
-			"\nreceived:", hasSeenC,
-			"\nexpected:", true,
-		)
 	}
 }

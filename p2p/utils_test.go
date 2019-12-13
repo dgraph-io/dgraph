@@ -17,9 +17,9 @@ var TestPeers = []string{
 	"/ip6/2a03:b0c0:0:1010::23:1001/tcp/4001/ipfs/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
 }
 
-func TestStringToPeerInfo(t *testing.T) {
+func TestStringToAddrInfo(t *testing.T) {
 	for _, str := range TestPeers {
-		pi, err := stringToPeerInfo(str)
+		pi, err := stringToAddrInfo(str)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -30,8 +30,8 @@ func TestStringToPeerInfo(t *testing.T) {
 	}
 }
 
-func TestStringsToPeerInfos(t *testing.T) {
-	pi, err := stringsToPeerInfos(TestPeers)
+func TestStringsToAddrInfos(t *testing.T) {
+	pi, err := stringsToAddrInfos(TestPeers)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,58 +17,64 @@
 package p2p
 
 import (
-	"bufio"
 	"context"
-	"time"
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/network"
-	net "github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 var _ services.Service = &Service{}
-
-// SendStatusInterval is the time between sending status messages
-const SendStatusInterval = 5 * time.Minute
 
 // Service describes a p2p service
 type Service struct {
 	ctx       context.Context
 	host      *host
+	status    *status
 	discovery *discovery
 	gossip    *gossip
 	msgRec    <-chan Message
 	msgSend   chan<- Message
 }
 
-// TODO: use generated status message
-var statusMessage = &StatusMessage{
-	ProtocolVersion:     0,
-	MinSupportedVersion: 0,
-	Roles:               0,
-	BestBlockNumber:     0,
-	BestBlockHash:       common.Hash{0x00},
-	GenesisHash:         common.Hash{0x00},
-	ChainStatus:         []byte{0},
+// NetworkState is network information about host needed for the rpc server
+type NetworkState struct {
+	PeerId string
+}
+
+// PeerInfo is network information about peers needed for the rpc server
+type PeerInfo struct {
+	PeerId          string
+	Roles           byte
+	ProtocolVersion uint32
+	BestHash        common.Hash
+	BestNumber      uint64
 }
 
 // NewService creates a new p2p service from the configuration and message channels
 func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*Service, error) {
 	ctx := context.Background()
 
+	// create a new host wrapper
 	host, err := newHost(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
 
+	// create a new status instance
+	status, err := newStatus(host)
+	if err != nil {
+		return nil, err
+	}
+
+	// create a new discovery instance
 	discovery, err := newDiscovery(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
+	// create a new gossip instance
 	gossip, err := newGossip(host)
 	if err != nil {
 		return nil, err
@@ -77,6 +83,7 @@ func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*S
 	p2p := &Service{
 		ctx:       ctx,
 		host:      host,
+		status:    status,
 		discovery: discovery,
 		gossip:    gossip,
 		msgRec:    msgRec,
@@ -101,7 +108,6 @@ func (s *Service) Start() error {
 
 		// start mDNS discovery service
 		s.discovery.startMdns()
-
 	}
 
 	// receive messages from core service
@@ -133,35 +139,6 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-// handleConn starts processes that manage the connection
-func (s *Service) handleConn(conn network.Conn) {
-
-	// check if status exchange is enabled
-	if !s.host.noStatus {
-
-		// starts sending status messages to connected peer
-		go s.sendStatusMessages(conn.RemotePeer())
-
-	}
-}
-
-// sendStatusMessages starts sending status messages to the connected peer
-func (s *Service) sendStatusMessages(peer peer.ID) {
-	for {
-		// TODO: use generated status message
-		msg := statusMessage
-
-		// send status message to connected peer
-		err := s.host.send(peer, msg)
-		if err != nil {
-			log.Error("Failed to send status message", "err", err)
-		}
-
-		// wait between sending messages
-		time.Sleep(SendStatusInterval)
-	}
-}
-
 // receiveCoreMessages broadcasts messages from the core service
 func (s *Service) receiveCoreMessages() {
 	for {
@@ -170,7 +147,7 @@ func (s *Service) receiveCoreMessages() {
 
 		log.Trace(
 			"Broadcasting message from core service",
-			"host", s.ID(),
+			"host", s.host.id(),
 			"type", msg.GetType(),
 		)
 
@@ -179,9 +156,20 @@ func (s *Service) receiveCoreMessages() {
 	}
 }
 
+// handleConn starts processes that manage the connection
+func (s *Service) handleConn(conn network.Conn) {
+
+	// check if status exchange is enabled
+	if !s.host.noStatus {
+
+		// starts sending status messages to connected peer
+		s.status.handleConn(conn)
+	}
+}
+
 // handleStream parses the message written to the data stream and calls the
-// associated message handler (status or non-status) based on message type
-func (s *Service) handleStream(stream net.Stream) {
+// associated message handler (non-status or status) based on message type
+func (s *Service) handleStream(stream network.Stream) {
 
 	// parse message and exit on error
 	msg, err := parseMessage(stream)
@@ -198,22 +186,23 @@ func (s *Service) handleStream(stream net.Stream) {
 	)
 
 	if msg.GetType() != StatusMsgType {
+		// handle non-status message with service
 		s.handleMessage(stream, msg)
 	} else {
-		s.handleStatusMessage(stream, msg)
+		// handle status message with status submodule
+		s.status.handleMessage(stream, msg.(*StatusMessage))
 	}
-
 }
 
 // handleMessage handles non-status messages written to the stream
 func (s *Service) handleMessage(stream network.Stream, msg Message) {
+	peer := stream.Conn().RemotePeer()
 
-	// check if status exchange is disabled or peer status is confirmed
-	if s.host.noStatus || s.host.peerStatus[stream.Conn().RemotePeer()] {
+	// check if status is disabled or peer status is confirmed
+	if s.host.noStatus || s.status.peerConfirmed[peer] {
 
 		// send all non-status messages to core service
 		s.msgSend <- msg
-
 	}
 
 	// check if gossip is enabled
@@ -221,59 +210,19 @@ func (s *Service) handleMessage(stream network.Stream, msg Message) {
 
 		// broadcast message if message has not been seen
 		s.gossip.handleMessage(stream, msg)
-
 	}
 }
 
-// handleStatusMessage handles status messages written to the stream
-func (s *Service) handleStatusMessage(stream network.Stream, msg Message) {
-
-	// TODO: use generated status message
-	hostStatus := statusMessage
-
-	switch {
-
-	// TODO: implement status message validation
-	case hostStatus.String() == msg.String():
-		log.Trace(
-			"Received valid status message",
-			"host", stream.Conn().LocalPeer(),
-			"peer", stream.Conn().RemotePeer(),
-		)
-
-		s.host.peerStatus[stream.Conn().RemotePeer()] = true
-
-	default:
-		log.Trace(
-			"Received invalid status message",
-			"host", stream.Conn().LocalPeer(),
-			"peer", stream.Conn().RemotePeer(),
-		)
-
-		s.host.peerStatus[stream.Conn().RemotePeer()] = false
-
-		// close connection with peer if status message is not valid
-		err := s.host.h.Network().ClosePeer(stream.Conn().RemotePeer())
-		if err != nil {
-			log.Error("Failed to close peer", "err", err)
-		}
-
-	}
-}
-
-// ID returns the host id
+// ID returns host id
 func (s *Service) ID() string {
 	return s.host.id()
 }
 
-// Peers returns connected peers
-func (s *Service) Peers() []string {
-	return PeerIdToStringArray(s.host.h.Network().Peers())
-}
-
-// PeerCount returns the number of connected peers
-func (s *Service) PeerCount() int {
-	return s.host.peerCount()
+// NetworkState returns information about host needed for the rpc server
+func (s *Service) NetworkState() (ns NetworkState) {
+	return NetworkState{
+		PeerId: s.host.id(),
+	}
 }
 
 // NoBootstrapping returns true if bootstrapping is disabled, otherwise false
@@ -281,22 +230,21 @@ func (s *Service) NoBootstrapping() bool {
 	return s.host.noBootstrap
 }
 
-// parseMessage reads message from the provided stream
-func parseMessage(stream net.Stream) (Message, error) {
+// Peers returns connected peers
+func (s *Service) Peers() []string {
+	return peerIdsToStrings(s.host.peers())
+}
 
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+// PeerCount returns the number of connected peers
+func (s *Service) PeerCount() int {
+	return s.host.peerCount()
+}
 
-	// check read byte
-	_, err := rw.Reader.ReadByte()
-	if err != nil {
-		return nil, err
+// PeerInfo returns information about a peer needed for the rpc server
+func (s *Service) PeerInfo(peerId string) (peerInfo PeerInfo) {
+	p := stringToPeerId(peerId)
+	if s.status.peerConfirmed[p] {
+		peerInfo = s.status.peerInfo[p]
 	}
-
-	// decode message
-	msg, err := DecodeMessage(rw.Reader)
-	if err != nil {
-		return nil, err
-	}
-
-	return msg, nil
+	return peerInfo
 }

@@ -222,17 +222,17 @@ func TestSend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = nodeA.host.send(addrInfoB.ID, testMessage)
+	err = nodeA.host.send(addrInfoB.ID, TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	select {
 	case msg := <-msgSendB:
-		if !reflect.DeepEqual(msg, testMessage) {
+		if !reflect.DeepEqual(msg, TestMessage) {
 			t.Error(
 				"node B received unexpected message from node A",
-				"\nexpected:", testMessage,
+				"\nexpected:", TestMessage,
 				"\nreceived:", msg,
 			)
 		}
@@ -304,14 +304,14 @@ func TestBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodeA.host.broadcast(testMessage)
+	nodeA.host.broadcast(TestMessage)
 
 	select {
 	case msg := <-msgSendB:
-		if !reflect.DeepEqual(msg, testMessage) {
+		if !reflect.DeepEqual(msg, TestMessage) {
 			t.Error(
 				"node B received unexpected message from node A",
-				"\nexpected:", testMessage,
+				"\nexpected:", TestMessage,
 				"\nreceived:", msg,
 			)
 		}
@@ -321,10 +321,10 @@ func TestBroadcast(t *testing.T) {
 
 	select {
 	case msg := <-msgSendC:
-		if !reflect.DeepEqual(msg, testMessage) {
+		if !reflect.DeepEqual(msg, TestMessage) {
 			t.Error(
 				"node C received unexpected message from node A",
-				"\nexpected:", testMessage,
+				"\nexpected:", TestMessage,
 				"\nreceived:", msg,
 			)
 		}

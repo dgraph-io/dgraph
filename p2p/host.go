@@ -48,7 +48,6 @@ type host struct {
 	noStatus    bool
 	address     ma.Multiaddr
 	protocolId  protocol.ID
-	peerStatus  map[peer.ID]bool
 }
 
 // newHost creates a host wrapper with a new libp2p host instance
@@ -86,24 +85,21 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 	}
 
 	// format bootstrap nodes list
-	bootstrapNodes, err := stringsToPeerInfos(cfg.BootstrapNodes)
+	bootnodes, err := stringsToAddrInfos(cfg.BootstrapNodes)
 	if err != nil {
 		return nil, err
 	}
-
-	peerStatus := make(map[peer.ID]bool)
 
 	return &host{
 		ctx:         ctx,
 		h:           h,
 		dht:         dht,
-		bootnodes:   bootstrapNodes,
+		bootnodes:   bootnodes,
 		noBootstrap: cfg.NoBootstrap,
 		noGossip:    cfg.NoGossip,
 		noMdns:      cfg.NoMdns,
 		address:     address,
 		protocolId:  protocolId,
-		peerStatus:  peerStatus,
 	}, nil
 
 }

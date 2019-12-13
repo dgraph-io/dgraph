@@ -10,7 +10,6 @@ require (
 	github.com/dgraph-io/badger/v2 v2.0.0
 	github.com/disiqueira/gotree v1.0.0
 	github.com/ethereum/go-ethereum v1.9.6
-	github.com/filecoin-project/go-leb128 v0.0.0-20190212224330-8d79a5489543
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.3.1 // indirect
