@@ -447,7 +447,7 @@ func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
 func TestTypeFilterAtExpand(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
-			expand(_all_) @filter(Person) {
+			expand(_all_) @filter(type(Person)) {
 				owner_name
 				uid
 			}
@@ -461,7 +461,7 @@ func TestTypeFilterAtExpand(t *testing.T) {
 func TestTypeFilterAtExpandEmptyResults(t *testing.T) {
 	query := `{
 		q(func: eq(make, "Toyota")) {
-			expand(_all_) @filter(Animal) {
+			expand(_all_) @filter(type(Animal)) {
 				owner_name
 				uid
 			}
