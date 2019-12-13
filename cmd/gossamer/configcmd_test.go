@@ -410,7 +410,6 @@ func TestMakeNode(t *testing.T) {
 	}{
 		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesispath}, cfgClone},
 		{"default node (norpc)", []string{"genesis"}, []interface{}{genesispath}, cfgClone},
-		{"default node (rpc)", []string{"rpc", "genesis"}, []interface{}{true, genesispath}, cfgClone},
 	}
 
 	for _, c := range tc {
