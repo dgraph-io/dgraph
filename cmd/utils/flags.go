@@ -22,11 +22,6 @@ import (
 )
 
 var (
-	Ed25519KeyType = "ed25519"
-	Sr25519KeyType = "sr25519"
-)
-
-var (
 	// BadgerDB directory
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
@@ -47,6 +42,11 @@ var (
 	ConfigFileFlag = cli.StringFlag{
 		Name:  "config",
 		Usage: "TOML configuration file",
+	}
+	// unlock keystore
+	UnlockFlag = cli.StringFlag{
+		Name:  "unlock",
+		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
 	}
 )
 
@@ -118,5 +118,8 @@ var (
 		Name:  "sr25519",
 		Usage: "Specify account type as sr25519",
 	}
-	// TODO: account unlocking
+	Secp256k1Flag = cli.BoolFlag{
+		Name:  "secp256k1",
+		Usage: "Specify account type as secp256k1",
+	}
 )

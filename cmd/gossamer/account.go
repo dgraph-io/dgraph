@@ -13,6 +13,7 @@ import (
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/crypto"
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/keystore"
 
@@ -49,11 +50,13 @@ func handleAccounts(ctx *cli.Context) error {
 		log.Info("generating keypair...")
 
 		// check if --ed25519 or --sr25519 is set
-		keytype := utils.Sr25519KeyType
+		keytype := crypto.Sr25519Type
 		if flagtype := ctx.Bool(utils.Sr25519Flag.Name); flagtype {
-			keytype = utils.Sr25519KeyType
+			keytype = crypto.Sr25519Type
 		} else if flagtype := ctx.Bool(utils.Ed25519Flag.Name); flagtype {
-			keytype = utils.Ed25519KeyType
+			keytype = crypto.Ed25519Type
+		} else if flagtype := ctx.Bool(utils.Secp256k1Flag.Name); flagtype {
+			keytype = crypto.Secp256k1Type
 		}
 
 		// check if --password is set
@@ -127,6 +130,20 @@ func importKey(filename, datadir string) (string, error) {
 
 // listKeys lists all the keys in the datadir/keystore/ directory and returns them as a list of filepaths
 func listKeys(datadir string) ([]string, error) {
+	keys, err := getKeyFiles(datadir)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, key := range keys {
+		fmt.Printf("[%d] %s\n", i, key)
+	}
+
+	return keys, nil
+}
+
+// getKeyFiles returns the filenames of all the keys in the datadir's keystore
+func getKeyFiles(datadir string) ([]string, error) {
 	keystorepath, err := keystoreDir(datadir)
 	if err != nil {
 		return nil, fmt.Errorf("could not get keystore directory: %s", err)
@@ -142,7 +159,6 @@ func listKeys(datadir string) ([]string, error) {
 	for _, f := range files {
 		ext := filepath.Ext(f.Name())
 		if ext == ".key" {
-			fmt.Println(f.Name())
 			keys = append(keys, f.Name())
 		}
 	}
@@ -155,11 +171,11 @@ func listKeys(datadir string) ([]string, error) {
 // it returns the resulting filepath of the new key
 func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 	if password == nil {
-		password = getPassword()
+		password = getPassword("Enter password to encrypt keystore file:")
 	}
 
 	if keytype == "" {
-		keytype = utils.Sr25519KeyType
+		keytype = crypto.Sr25519Type
 	}
 
 	var kp crypto.Keypair
@@ -175,6 +191,12 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 		kp, err = ed25519.GenerateKeypair()
 		if err != nil {
 			return "", fmt.Errorf("could not generate ed25519 keypair: %s", err)
+		}
+	} else if keytype == crypto.Secp256k1Type {
+		// generate secp256k1 keys
+		kp, err = secp256k1.GenerateKeypair()
+		if err != nil {
+			return "", fmt.Errorf("could not generate secp256k1 keypair: %s", err)
 		}
 	}
 
@@ -216,21 +238,30 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 func keystoreDir(datadir string) (keystorepath string, err error) {
 	// datadir specified, return datadir/keystore as absolute path
 	if datadir != "" {
-		keystorepath, err = filepath.Abs(datadir)
+		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
 			return "", err
 		}
 	} else {
 		// datadir not specified, return ~/.gossamer/keystore as absolute path
-		home := cfg.DefaultDataDir()
+		datadir = cfg.DefaultDataDir()
 
-		keystorepath, err = filepath.Abs(home + "/keystore")
+		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
 			return "", fmt.Errorf("could not create keystore file path: %s", err)
 		}
 	}
 
-	if _, err := os.Stat(keystorepath); os.IsNotExist(err) {
+	// if datadir does not exist, create it
+	if _, err = os.Stat(datadir); os.IsNotExist(err) {
+		err = os.Mkdir(datadir, os.ModePerm)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// if datadir/keystore does not exist, create it
+	if _, err = os.Stat(keystorepath); os.IsNotExist(err) {
 		err = os.Mkdir(keystorepath, os.ModePerm)
 		if err != nil {
 			return "", err
@@ -241,14 +272,15 @@ func keystoreDir(datadir string) (keystorepath string, err error) {
 }
 
 // prompt user to enter password for encrypted keystore
-func getPassword() []byte {
+func getPassword(msg string) []byte {
 	for {
-		fmt.Println("Enter password to encrypt keystore file:")
+		fmt.Println(msg)
 		fmt.Print("> ")
 		password, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			fmt.Printf("invalid input: %s\n", err)
 		} else {
+			fmt.Printf("\n")
 			return password
 		}
 	}

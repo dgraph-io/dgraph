@@ -44,6 +44,19 @@ func NewKeypair(priv *sr25519.SecretKey) (*Keypair, error) {
 	}, nil
 }
 
+// NewKeypairFromPrivate returns a sr25519 Keypair given a *sr25519.PrivateKey
+func NewKeypairFromPrivate(priv *PrivateKey) (*Keypair, error) {
+	pub, err := priv.Public()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Keypair{
+		public:  pub.(*PublicKey),
+		private: priv,
+	}, nil
+}
+
 // NewKeypairFromSeed returns a new sr25519 Keypair given a seed
 func NewKeypairFromSeed(seed []byte) (*Keypair, error) {
 	buf := [SeedLength]byte{}

@@ -18,8 +18,39 @@ package common
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 )
+
+func TestStringToInts(t *testing.T) {
+	in := "1,2,3,4,-1"
+	expected := []int{1, 2, 3, 4, -1}
+	res, err := StringToInts(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, expected) {
+		t.Fatalf("Fail: got %v expected %v", res, expected)
+	}
+
+	in = "17"
+	expected = []int{17}
+	res, err = StringToInts(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, expected) {
+		t.Fatalf("Fail: got %v expected %v", res, expected)
+	}
+
+	in = "1,noot"
+	_, err = StringToInts(in)
+	if err == nil {
+		t.Fatal("should fail")
+	}
+}
 
 func TestHexToBytes(t *testing.T) {
 	tests := []struct {

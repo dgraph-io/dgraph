@@ -19,14 +19,28 @@ package common
 import (
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"strings"
 )
 
-// Length of hashes in bytes.
 const (
-	// HashLength is the expected length of the hash
+	// HashLength is the expected length of the common.Hash type
 	HashLength = 32
 )
+
+// StringToInts turns a string consisting of ints separated by commas into an int array
+func StringToInts(in string) ([]int, error) {
+	intstrs := strings.Split(in, ",")
+	res := []int{}
+	for _, intstr := range intstrs {
+		i, err := strconv.Atoi(intstr)
+		if err != nil {
+			return res, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
 
 // StringArrayToBytes turns an array of strings into an array of byte arrays
 func StringArrayToBytes(in []string) [][]byte {

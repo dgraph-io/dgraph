@@ -35,6 +35,18 @@ func NewKeypair(priv ed25519.PrivateKey) *Keypair {
 	}
 }
 
+// NewKeypairFromPrivate returns a ed25519 Keypair given a *ed25519.PrivateKey
+func NewKeypairFromPrivate(priv *PrivateKey) (*Keypair, error) {
+	pub, err := priv.Public()
+	if err != nil {
+		return nil, err
+	}
+	return &Keypair{
+		public:  pub.(*PublicKey),
+		private: priv,
+	}, nil
+}
+
 // NewKeypairFromSeed generates a new ed25519 keypair from a 32 byte seed
 func NewKeypairFromSeed(seed []byte) (*Keypair, error) {
 	if len(seed) != SeedLength {

@@ -12,7 +12,7 @@ import (
 	"github.com/ChainSafe/gossamer/keystore"
 )
 
-var testKeystoreDir = "./test_keystore/"
+var testKeystoreDir = "./test_datadir/"
 var testPassword = []byte("1234")
 
 func TestGenerateCommand(t *testing.T) {
@@ -116,6 +116,43 @@ func TestGenerateKey_Ed25519(t *testing.T) {
 
 	if kscontents.Type != "ed25519" {
 		t.Fatalf("Fail: got %s expected %s", kscontents.Type, "ed25519")
+	}
+}
+
+func TestGenerateKey_Secp256k1(t *testing.T) {
+	keyfile, err := generateKeypair("secp256k1", testKeystoreDir, testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(testKeystoreDir)
+
+	keys, err := listKeys(testKeystoreDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(keys) != 1 {
+		t.Fatal("Fail: expected 1 key in keystore")
+	}
+
+	if strings.Compare(keys[0], filepath.Base(keyfile)) != 0 {
+		t.Fatalf("Fail: got %s expected %s", keys[0], keyfile)
+	}
+
+	contents, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kscontents := new(keystore.EncryptedKeystore)
+	err = json.Unmarshal(contents, kscontents)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if kscontents.Type != "secp256k1" {
+		t.Fatalf("Fail: got %s expected %s", kscontents.Type, "secp256k1")
 	}
 }
 

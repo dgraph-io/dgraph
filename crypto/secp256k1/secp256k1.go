@@ -36,6 +36,18 @@ func NewKeypair(pk ecdsa.PrivateKey) *Keypair {
 	}
 }
 
+func NewKeypairFromPrivate(priv *PrivateKey) (*Keypair, error) {
+	pub, err := priv.Public()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Keypair{
+		public:  pub.(*PublicKey),
+		private: priv,
+	}, nil
+}
+
 func NewPrivateKey(in []byte) (*PrivateKey, error) {
 	if len(in) != PrivateKeyLength {
 		return nil, errors.New("input to create secp256k1 private key is not 32 bytes")

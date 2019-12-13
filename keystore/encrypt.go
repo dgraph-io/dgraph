@@ -25,20 +25,6 @@ type EncryptedKeystore struct {
 	Ciphertext []byte
 }
 
-func DecodePrivateKey(in []byte, keytype crypto.KeyType) (priv crypto.PrivateKey, err error) {
-	if keytype == crypto.Ed25519Type {
-		priv, err = ed25519.NewPrivateKey(in)
-	} else if keytype == crypto.Sr25519Type {
-		priv, err = sr25519.NewPrivateKey(in)
-	} else if keytype == crypto.Secp256k1Type {
-		priv, err = secp256k1.NewPrivateKey(in)
-	} else {
-		return nil, errors.New("cannot decode key: invalid key type")
-	}
-
-	return priv, err
-}
-
 // gcmFromPassphrase creates a symmetric AES key given a password
 func gcmFromPassphrase(password []byte) (cipher.AEAD, error) {
 	hash := blake2b.Sum256(password)
