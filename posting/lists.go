@@ -39,10 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	emptyPostingList []byte // Used for indexing.
-)
-
 const (
 	mb = 1 << 20
 )
