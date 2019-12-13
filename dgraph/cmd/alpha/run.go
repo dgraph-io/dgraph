@@ -182,6 +182,11 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
+	// Allow values to predicates of type uid to be overwritten.
+	flag.Bool("overwrite_uid_pred_values", false,
+		"If false, values to predicates of type uid cannot be overwritten. This is the default "+
+			"behavior due to backwards-compatibility concerns.")
+
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
@@ -505,6 +510,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
+	x.Config.OverwriteUidPredValues = Alpha.Conf.GetBool("overwrite_uid_pred_values")
 
 	x.PrintVersion()
 

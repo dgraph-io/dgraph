@@ -389,7 +389,7 @@ func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 	}
 
 	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
-		if obj.Uid != edge.GetValueId() {
+		if obj.Uid != edge.GetValueId() && !x.Config.OverwriteUidPredValues {
 			return errors.Errorf(
 				"cannot add value with uid %x to predicate %s because one of the existing "+
 					"values does not match this uid, either delete the existing values first or "+
