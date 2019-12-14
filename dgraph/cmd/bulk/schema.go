@@ -37,7 +37,7 @@ type schemaStore struct {
 	*state
 }
 
-func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *schemaStore {
+func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *schemaStore {
 	s := &schemaStore{
 		schemaMap: map[string]*pb.SchemaUpdate{},
 		state:     state,

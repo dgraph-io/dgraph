@@ -477,7 +477,7 @@ func run() {
 		os.Exit(1)
 	}
 
-	worker.SetConfiguration(opts)
+	worker.SetConfiguration(&opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)

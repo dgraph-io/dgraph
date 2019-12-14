@@ -604,7 +604,7 @@ func (histogram *HistogramData) Update(value int64) {
 }
 
 // PrintHistogram prints the histogram data in a human-readable format.
-func (histogram HistogramData) PrintHistogram() {
+func (histogram *HistogramData) PrintHistogram() {
 	fmt.Printf("Min value: %d\n", histogram.Min)
 	fmt.Printf("Max value: %d\n", histogram.Max)
 	fmt.Printf("Mean: %.2f\n", float64(histogram.Sum)/float64(histogram.Count))
@@ -676,7 +676,7 @@ func sizeHistogram(db *badger.DB) {
 	valueSizeHistogram.PrintHistogram()
 }
 
-func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bool) {
+func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]bool) {
 	switch {
 	case pr.Mutations != nil:
 		fmt.Fprintf(buf, " Mutation . StartTs: %d . Edges: %d .",
@@ -718,7 +718,7 @@ func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bo
 	}
 }
 
-func printZeroProposal(buf *bytes.Buffer, zpr pb.ZeroProposal) {
+func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 	switch {
 	case len(zpr.SnapshotTs) > 0:
 		fmt.Fprintf(buf, " Snapshot: %+v .", zpr.SnapshotTs)

@@ -42,7 +42,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range result.Preds {
-		State().Set(update.Predicate, *update)
+		State().Set(update.Predicate, update)
 	}
 	return nil
 }

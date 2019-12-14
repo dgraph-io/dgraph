@@ -94,18 +94,18 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 	}
 }
 
-func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
+func setBadgerOptions(opt *badger.Options) *badger.Options {
+	badgerOpt := opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
 	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
+		badgerOpt.TableLoadingMode = options.MemoryMap
 	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
+		badgerOpt.TableLoadingMode = options.LoadToRAM
 	case "disk":
-		opt.TableLoadingMode = options.FileIO
+		badgerOpt.TableLoadingMode = options.FileIO
 	default:
 		x.Fatalf("Invalid Badger Tables options")
 	}
@@ -113,13 +113,13 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
 	switch Config.BadgerVlog {
 	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
+		badgerOpt.ValueLogLoadingMode = options.MemoryMap
 	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
+		badgerOpt.ValueLogLoadingMode = options.FileIO
 	default:
 		x.Fatalf("Invalid Badger Value log options")
 	}
-	return opt
+	return &badgerOpt
 }
 
 func (s *ServerState) initStorage() {
@@ -140,7 +140,7 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
+		opt = *setBadgerOptions(&opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
 
@@ -168,7 +168,7 @@ func (s *ServerState) initStorage() {
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
-		opt = setBadgerOptions(opt)
+		opt = *setBadgerOptions(&opt)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.

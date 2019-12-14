@@ -117,13 +117,13 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
+func (l *loader) infinitelyRetry(req *api.Mutation, reqNum uint64) {
 	defer l.retryRequestsWg.Done()
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
-		_, err := txn.Mutate(l.opts.Ctx, &req)
+		_, err := txn.Mutate(l.opts.Ctx, req)
 		if err == nil {
 			if opt.verbose {
 				fmt.Printf("Transaction #%d succeeded after %s.\n",
@@ -143,10 +143,10 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 	}
 }
 
-func (l *loader) request(req api.Mutation, reqNum uint64) {
+func (l *loader) request(req *api.Mutation, reqNum uint64) {
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
-	_, err := txn.Mutate(l.opts.Ctx, &req)
+	_, err := txn.Mutate(l.opts.Ctx, req)
 
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
@@ -166,7 +166,7 @@ func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 	for req := range l.reqs {
 		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, reqNum)
+		l.request(&req, reqNum)
 	}
 }
 

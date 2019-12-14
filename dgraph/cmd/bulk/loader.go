@@ -86,7 +86,7 @@ type loader struct {
 	zero    *grpc.ClientConn
 }
 
-func newLoader(opt options) *loader {
+func newLoader(opt *options) *loader {
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -97,7 +97,7 @@ func newLoader(opt options) *loader {
 		grpc.WithInsecure())
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
-		opt:    opt,
+		opt:    *opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.

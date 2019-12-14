@@ -31,7 +31,7 @@ const (
 	reduceShardDir = "shards"
 )
 
-func mergeMapShardsIntoReduceShards(opt options) {
+func mergeMapShardsIntoReduceShards(opt *options) {
 	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
 	if len(shardDirs) == 0 {
 		fmt.Printf(

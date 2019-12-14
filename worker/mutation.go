@@ -145,10 +145,9 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		return err
 	}
 	old, _ := schema.State().Get(update.Predicate)
-	current := *update
 	// Sets only in memory, we will update it on disk only after schema mutations
 	// are successful and  written to disk.
-	schema.State().Set(update.Predicate, current)
+	schema.State().Set(update.Predicate, update)
 
 	// Once we remove index or reverse edges from schema, even though the values
 	// are present in db, they won't be used due to validation in work/task.go
@@ -166,7 +165,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		Attr:          update.Predicate,
 		StartTs:       startTs,
 		OldSchema:     &old,
-		CurrentSchema: &current,
+		CurrentSchema: update,
 	}
 	return rebuild.Run(ctx)
 }
@@ -174,7 +173,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate) error {
-	schema.State().Set(s.Predicate, *s)
+	schema.State().Set(s.Predicate, s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()

@@ -343,8 +343,11 @@ func (w *DiskStorage) Snapshot() (snap raftpb.Snapshot, rerr error) {
 // setSnapshot would store the snapshot. We can delete all the entries up until the snapshot
 // index. But, keep the raft entry at the snapshot index, to make it easier to build the logic; like
 // the dummy entry in MemoryStorage.
-func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) error {
-	if raft.IsEmptySnap(s) {
+func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s *raftpb.Snapshot) error {
+	if s == nil {
+		return nil
+	}
+	if raft.IsEmptySnap(*s) {
 		return nil
 	}
 	data, err := s.Marshal()
@@ -374,13 +377,16 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) e
 		}
 	}
 	// Cache snapshot.
-	w.cache.Store(snapshotKey, proto.Clone(&s))
+	w.cache.Store(snapshotKey, proto.Clone(s))
 	return nil
 }
 
 // SetHardState saves the current HardState.
-func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st raftpb.HardState) error {
-	if raft.IsEmptyHardState(st) {
+func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st *raftpb.HardState) error {
+	if st == nil {
+		return nil
+	}
+	if raft.IsEmptyHardState(*st) {
 		return nil
 	}
 	data, err := st.Marshal()
@@ -613,7 +619,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
-	if err := w.setSnapshot(batch, snap); err != nil {
+	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
 	}
 	if err := w.deleteUntil(batch, snap.Metadata.Index); err != nil {
@@ -626,7 +632,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 // first, then HardState and Snapshot if they are not empty. If persistent storage supports atomic
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
-func (w *DiskStorage) Save(h raftpb.HardState, es []raftpb.Entry, snap raftpb.Snapshot) error {
+func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.Snapshot) error {
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
 

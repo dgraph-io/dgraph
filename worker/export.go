@@ -275,7 +275,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	return listWrap(kv), err
 }
 
-func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
+func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
 	buf.WriteRune('<')
@@ -471,7 +471,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toSchema(pk.Attr, update)
+			return toSchema(pk.Attr, &update)
 
 		case pk.IsType():
 			var update pb.TypeUpdate
