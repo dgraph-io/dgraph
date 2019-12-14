@@ -160,13 +160,15 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 }
 
 func jepsenUp() {
-	cmd := command("./up.sh",
-		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
+	cmd := command("./up.sh", "--dev", "--daemon")
 	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	env := os.Environ()
 	cmd.Env = append(env, fmt.Sprintf("JEPSEN_ROOT=%s", *jepsenRoot))
+	cmd.Env = append(env, fmt.Sprintf(`COMPOSE="-f %s -f %s"`,
+		"../dgraph/docker/docker-compose.yml",
+		"../dgraph/docker/docker-compose-concurrent.yml"))
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
