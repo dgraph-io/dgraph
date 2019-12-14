@@ -178,6 +178,7 @@ func jepsenDown() {
 	cmd := command("docker-compose",
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
+		"-f", "../dgraph/docker/docker-compose-concurrent.yml",
 		"down")
 	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
