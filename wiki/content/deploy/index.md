@@ -621,9 +621,9 @@ services:
         constraints:
           - node.hostname == aws01
     command: dgraph zero --my=zero:5080 --replicas 3
-  alpha_1:
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -635,10 +635,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -650,10 +650,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -665,7 +665,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -711,10 +711,10 @@ Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
 vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
-69oge03y0koz        dgraph_alpha_2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_alpha_3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
+69oge03y0koz        dgraph_alpha2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6        dgraph_alpha3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
 uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
-v9jlw00iz2gg        dgraph_alpha_1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
+v9jlw00iz2gg        dgraph_alpha1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
 ```
 
 To stop the cluster run
@@ -747,7 +747,7 @@ version: "3"
 networks:
   dgraph:
 services:
-  zero_1:
+  zero1:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -760,8 +760,8 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero --my=zero_1:5080 --replicas 3 --idx 1
-  zero_2:
+    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
+  zero2:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -774,7 +774,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
   zero_3:
     image: dgraph/dgraph:latest
     volumes:
@@ -788,10 +788,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
-  alpha_1:
+    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero1:5080 --idx 3
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -804,10 +804,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero_1:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -820,10 +820,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero_1:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -836,7 +836,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero_1:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
   alpha_4:
     image: dgraph/dgraph:latest
     hostname: "alpha_4"
@@ -851,7 +851,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero_1:5080 -o 3
+    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
   alpha_5:
     image: dgraph/dgraph:latest
     hostname: "alpha_5"
@@ -866,7 +866,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero_1:5080 -o 4
+    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
   alpha_6:
     image: dgraph/dgraph:latest
     hostname: "alpha_6"
@@ -881,7 +881,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero_1:5080 -o 5
+    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
