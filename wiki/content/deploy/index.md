@@ -513,7 +513,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 If you are on AWS, below is the security group (**docker-machine**) after
 necessary changes.
 
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -737,8 +737,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
-
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 Copy the following file on your host machine and name it as docker-compose.yml
 
