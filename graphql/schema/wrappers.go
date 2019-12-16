@@ -181,6 +181,10 @@ type fieldDefinition struct {
 type mutation field
 type query field
 
+var (
+	inverseMap map[string][]*ast.Definition
+)
+
 func (s *schema) Queries(t QueryType) []string {
 	var result []string
 	for _, q := range s.schema.Query.Fields {
@@ -556,8 +560,17 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 		if !ok {
 			continue
 		}
-		for _, origTyp := range f.op.inSchema.schema.Types {
-			if typeName(origTyp) != styp || origTyp.Kind != ast.Object {
+
+		if inverseMap == nil {
+			inverseMap = make(map[string][]*ast.Definition)
+			for _, origTyp := range f.op.inSchema.schema.Types {
+				name := typeName(origTyp)
+				inverseMap[name] = append(inverseMap[name], origTyp)
+			}
+		}
+
+		for _, origTyp := range inverseMap[styp] {
+			if origTyp.Kind != ast.Object {
 				continue
 			}
 			return origTyp.Name

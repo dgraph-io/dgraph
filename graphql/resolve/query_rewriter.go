@@ -244,12 +244,10 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
+		} else if f.Name() == "__typename" {
+			child.Attr = "dgraph.type"
 		} else {
-			if f.Name() == "__typename" {
-				child.Attr = "dgraph.type"
-			} else {
-				child.Attr = f.DgraphPredicate()
-			}
+			child.Attr = f.DgraphPredicate()
 		}
 
 		filter, _ := f.ArgValue("filter").(map[string]interface{})
