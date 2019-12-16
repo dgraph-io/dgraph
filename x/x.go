@@ -289,7 +289,7 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
-// Unique takes an array and return it with no duplicate entries.
+// Unique takes an array and returns it with no duplicate entries.
 func Unique(a []string) []string {
 	keys := make(map[string]struct{})
 	for _, val := range a {
