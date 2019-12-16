@@ -1230,7 +1230,7 @@ func multipleOperations(t *testing.T) {
 		{
 			"operation name is empty",
 			"",
-			"unable to find operation to resolve: []",
+			"operation name must by supplied when query has more than 1 operation",
 			nil,
 		},
 	}

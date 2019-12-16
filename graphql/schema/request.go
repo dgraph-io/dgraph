@@ -51,6 +51,11 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, listErr
 	}
 
+	if len(doc.Operations) > 1 && req.OperationName == "" {
+		return nil, errors.Errorf("operation name must by supplied when query has more " +
+			"than 1 operation")
+	}
+
 	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {
 		return nil, errors.Errorf("unable to find operation to resolve: [%s]", req.OperationName)
