@@ -383,7 +383,7 @@ func (l *loader) makeRequests() {
 		}
 	}
 
-	for len(buffer) >= 0 {
+	for len(buffer) > 0 {
 		i := 0
 		for _, mu := range buffer {
 			if l.addConflictKeys(&mu) {
