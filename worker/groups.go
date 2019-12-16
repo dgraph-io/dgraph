@@ -337,10 +337,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	// Unsubsribe all the graphql schema publisher. It'll reconnect and get latest updates.
 	g.unSubscribeAllStream()
 
-	// Stop if the we're reciving the graphql schema updates.
-	if g.groupId() != 1 {
-		g.graphQLSchemaReceiverCloser.SignalAndWait()
-	}
 	g.Lock()
 	defer g.Unlock()
 	// We don't update state if we get any old state. Counter stores the raftindex of
@@ -348,6 +344,10 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	// updated at same counter value. So ignore only if counter is less.
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
+	}
+	// Stop if the we're reciving the graphql schema updates.
+	if g.groupId() != 1 {
+		g.graphQLSchemaReceiverCloser.SignalAndWait()
 	}
 	oldState := g.state
 	g.state = state
@@ -1088,9 +1088,12 @@ func (g *groupi) receiveGraphQLSchemaChange() {
 	defer g.graphQLSchemaReceiverCloser.Done()
 RETRY:
 	select {
-	case <-g.closer.HasBeenClosed():
+	case <-g.graphQLSchemaReceiverCloser.HasBeenClosed():
 		return
 	default:
+		if g.groupId() == 0 {
+			goto RETRY
+		}
 	}
 	servers := g.AnyTwoServers(1)
 	if len(servers) == 0 {
@@ -1116,7 +1119,6 @@ RETRY:
 			if err != nil {
 				goto RETRY
 			}
-
 			if GraphQLSchemaUpdater != nil {
 				GraphQLSchemaUpdater(msg.GetSchema())
 			}
