@@ -198,10 +198,17 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 
 // createP2PService creates a p2p service from the command configuration and genesis data
 func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Service, chan p2p.Message, chan p2p.Message) {
+	// Default bootnodes are from genesis
+	boostrapNodes := common.BytesToStringArray(gendata.Bootnodes)
+
+	// If bootnodes flag has more than 1 bootnode, overwrite
+	if len(fig.P2p.BootstrapNodes) > 0 {
+		boostrapNodes = fig.P2p.BootstrapNodes
+	}
 
 	// p2p service configuation
 	p2pConfig := p2p.Config{
-		BootstrapNodes: append(fig.P2p.BootstrapNodes, common.BytesToStringArray(gendata.Bootnodes)...),
+		BootstrapNodes: boostrapNodes,
 		Port:           fig.P2p.Port,
 		RandSeed:       0,
 		NoBootstrap:    fig.P2p.NoBootstrap,
