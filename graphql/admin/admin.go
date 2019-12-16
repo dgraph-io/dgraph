@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
+	"github.com/dgraph-io/dgraph/worker"
 )
 
 const (
@@ -178,7 +179,6 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection)
 	adminServer := web.NewServer(adminResolvers)
-
 	return mainServer, adminServer
 }
 
@@ -203,9 +203,29 @@ func newAdminResolver(
 		fns:               fns,
 		withIntrospection: withIntrospection,
 	}
+	worker.GraphQLSchemaUpdater = func(graphqlSchema string) {
 
+		schHandler, err := schema.NewHandler(graphqlSchema)
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+		}
+
+		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			return
+		}
+
+		glog.Infof("Successfully loaded GraphQL schema.  Now serving GraphQL API.")
+
+		server.status = healthy
+		server.resetSchema(gqlSchema)
+	}
 	go server.initServer()
-
+	// Start listening for graphql schema changes.
+	worker.ListenForGraphqlChanges()
 	return server.resolver
 }
 

@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -473,7 +473,14 @@ service Worker {
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+	rpc StreamGraphQLSchema(Empty) 			returns (stream GraphQLSchema) {}
 }
+
+message GraphQLSchema{
+	string schema = 1;
+}
+
+message Empty {}
 
 message Num {
 	uint64 val = 1;

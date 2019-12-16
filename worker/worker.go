@@ -95,6 +95,8 @@ func StoreStats() string {
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
 	glog.Infof("Stopping group...")
+	// cancel the graphQL Subscriber.
+	groups().cancel()
 	groups().closer.SignalAndWait()
 
 	glog.Infof("Stopping node...")
