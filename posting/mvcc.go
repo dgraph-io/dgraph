@@ -58,18 +58,17 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	ctx.StartTs = txn.StartTs
-
-	keys := make([]string, 0, len(txn.conflicts))
 	for key := range txn.conflicts {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
 		fps := strconv.FormatUint(key, 36)
-		keys = append(keys, fps)
+		if !x.HasString(ctx.Keys, fps) {
+			ctx.Keys = append(ctx.Keys, fps)
+		}
 	}
-	x.Union(&ctx.Keys, keys)
-
 	txn.Unlock()
+
 	txn.Update()
 	txn.cache.fillPreds(ctx, gid)
 }

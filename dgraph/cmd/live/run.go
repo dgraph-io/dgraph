@@ -242,8 +242,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	// Spin a goroutine to push NQuads to mutation channel.
 	go func() {
 		defer wg.Done()
-		bufferSize := 50
-		buffer := make([]*api.NQuad, 0, bufferSize*opt.batchSize)
+		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
 		for nqs := range nqbuf.Ch() {
 			if len(nqs) == 0 {
 				continue
@@ -257,7 +256,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 			buffer = append(buffer, nqs...)
 
-			if len(buffer) >= bufferSize*opt.batchSize {
+			if len(buffer) >= opt.bufferSize*opt.batchSize {
 				sort.Slice(buffer, func(i, j int) bool {
 					iPred := sch.preds[buffer[i].Predicate]
 					jPred := sch.preds[buffer[j].Predicate]
