@@ -291,15 +291,18 @@ func HasString(a []string, b string) bool {
 
 // Unique takes an array and returns it with no duplicate entries.
 func Unique(a []string) []string {
+	if len(a) < 2 {
+		return a
+	}
+
 	sort.Strings(a)
-	previous := ""
-	idx := 0
+	idx := 1
 	for _, val := range a {
-		if previous == "" || previous != val {
-			a[idx] = val
-			previous = val
-			idx++
+		if a[idx-1] == val {
+			continue
 		}
+		a[idx] = val
+		idx++
 	}
 	return a[:idx]
 }
