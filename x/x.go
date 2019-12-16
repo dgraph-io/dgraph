@@ -291,17 +291,17 @@ func HasString(a []string, b string) bool {
 
 // Unique takes an array and returns it with no duplicate entries.
 func Unique(a []string) []string {
-	keys := make(map[string]struct{})
+	sort.Strings(a)
+	previous := ""
+	idx := 0
 	for _, val := range a {
-		keys[val] = struct{}{}
+		if previous == "" || previous != val {
+			a[idx] = val
+			previous = val
+			idx++
+		}
 	}
-
-	a = a[:0]
-	for key := range keys {
-		a = append(a, key)
-	}
-
-	return a
+	return a[:idx]
 }
 
 // ReadLine reads a single line from a buffered reader. The line is read into the
