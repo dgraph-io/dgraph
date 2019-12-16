@@ -67,7 +67,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	// Txn: 3 -> 4
 	entries = append(entries, getEntryForMutation(1, 1), getEntryForMutation(2, 3),
 		getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
 	posting.Oracle().RegisterStartTs(2)
 	snap, err := n.calculateSnapshot(0, 1)
@@ -94,7 +94,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	entries = entries[:0]
 	entries = append(entries, getEntryForMutation(6, 7), getEntryForCommit(7, 7, 8),
 		getEntryForCommit(8, 2, 9))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
 	posting.Oracle().ResetTxns()
 	snap, err = n.calculateSnapshot(0, 1)
@@ -111,7 +111,7 @@ func TestCalculateSnapshot(t *testing.T) {
 
 	entries = entries[:0]
 	entries = append(entries, getEntryForMutation(9, 11))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(9)
 	snap, err = n.calculateSnapshot(0, 0)
 	require.NoError(t, err)
