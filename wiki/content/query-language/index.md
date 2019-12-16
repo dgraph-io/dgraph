@@ -364,7 +364,7 @@ Index Required: `trigram`
 Matches predicate values by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) to the string,
 also known as _fuzzy matching_. The distance parameter must be greater than zero (0). Using a greater distance value can yield more but less accurate results.
 
-Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of 8.
+Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of less than or equal to 8.
 
 {{< runnable >}}
 {
