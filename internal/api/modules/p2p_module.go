@@ -17,51 +17,40 @@
 package module
 
 import (
+	"github.com/ChainSafe/gossamer/p2p"
 	log "github.com/ChainSafe/log15"
 )
 
 type P2pModule struct {
-	P2p P2pApi
+	P2pApi P2pApi
 }
 
-// P2pApi is the interface expected to implemented by `p2p` package
+// P2pApi is the interface for the p2p package
 type P2pApi interface {
-	PeerCount() int
-	Peers() []string
-	NoBootstrapping() bool
-	ID() string
+	Health() p2p.Health
+	NetworkState() p2p.NetworkState
+	Peers() []p2p.PeerInfo
 }
 
-// P2pModule implements all the P2pApis
-func NewP2PModule(p2papi P2pApi) *P2pModule {
-	return &P2pModule{p2papi}
+// P2pModule implements P2pApi
+func NewP2pModule(p2pApi P2pApi) *P2pModule {
+	return &P2pModule{p2pApi}
 }
 
-// PeerCount Returns the number of peers of a node
-func (p *P2pModule) PeerCount() int {
-	log.Debug("[rpc] Executing System.PeerCount", "params", nil)
-	return len(p.Peers())
+// Health returns p2p service Health()
+func (m *P2pModule) Health() p2p.Health {
+	log.Debug("[rpc] Executing System.Health", "params", nil)
+	return m.P2pApi.Health()
 }
 
-// Peers of the node
-func (p *P2pModule) Peers() []string {
-	log.Debug("[rpc] Executing System.Peers", "params", nil)
-	return p.P2p.Peers()
-}
-
-// NoBootstrapping Returns true the node can bootstrap to other nodes
-func (p *P2pModule) NoBootstrapping() bool {
-	log.Debug("[rpc] Executing System.NoBootstrapping", "params", nil)
-	return p.P2p.NoBootstrapping()
-}
-
-// ID Returns the ID of the node
-func (p *P2pModule) ID() string {
+// NetworkState returns p2p service NetworkState()
+func (m *P2pModule) NetworkState() p2p.NetworkState {
 	log.Debug("[rpc] Executing System.NetworkState", "params", nil)
-	return p.P2p.ID()
+	return m.P2pApi.NetworkState()
 }
 
-// IsSyncing is true if the node is Syncing
-func (p *P2pModule) IsSyncing() bool {
-	return false
+// Peers returns p2p service Peers()
+func (m *P2pModule) Peers() []p2p.PeerInfo {
+	log.Debug("[rpc] Executing System.Peers", "params", nil)
+	return m.P2pApi.Peers()
 }

@@ -21,18 +21,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func peerIdsToStrings(ids []peer.ID) []string {
-	strings := make([]string, len(ids))
-	for i, id := range ids {
-		strings[i] = id.String()
-	}
-	return strings
-}
-
-func stringToPeerId(string string) peer.ID {
-	return peer.ID(string)
-}
-
 func stringToAddrInfo(s string) (peer.AddrInfo, error) {
 	maddr, err := ma.NewMultiaddr(s)
 	if err != nil {

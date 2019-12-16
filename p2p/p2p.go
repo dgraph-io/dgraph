@@ -38,6 +38,13 @@ type Service struct {
 	msgSend   chan<- Message
 }
 
+// Health is network information about host needed for the rpc server
+type Health struct {
+	Peers           int
+	IsSyncing       bool
+	ShouldHavePeers bool
+}
+
 // NetworkState is network information about host needed for the rpc server
 type NetworkState struct {
 	PeerId string
@@ -213,38 +220,28 @@ func (s *Service) handleMessage(stream network.Stream, msg Message) {
 	}
 }
 
-// ID returns host id
-func (s *Service) ID() string {
-	return s.host.id()
+// Health returns information about host needed for the rpc server
+func (s *Service) Health() Health {
+	return Health{
+		Peers:           s.host.peerCount(),
+		IsSyncing:       false, // TODO
+		ShouldHavePeers: !s.host.noBootstrap,
+	}
 }
 
 // NetworkState returns information about host needed for the rpc server
-func (s *Service) NetworkState() (ns NetworkState) {
+func (s *Service) NetworkState() NetworkState {
 	return NetworkState{
 		PeerId: s.host.id(),
 	}
 }
 
-// NoBootstrapping returns true if bootstrapping is disabled, otherwise false
-func (s *Service) NoBootstrapping() bool {
-	return s.host.noBootstrap
-}
-
-// Peers returns connected peers
-func (s *Service) Peers() []string {
-	return peerIdsToStrings(s.host.peers())
-}
-
-// PeerCount returns the number of connected peers
-func (s *Service) PeerCount() int {
-	return s.host.peerCount()
-}
-
-// PeerInfo returns information about a peer needed for the rpc server
-func (s *Service) PeerInfo(peerId string) (peerInfo PeerInfo) {
-	p := stringToPeerId(peerId)
-	if s.status.peerConfirmed[p] {
-		peerInfo = s.status.peerInfo[p]
+// Peers returns information about connected peers needed for the rpc server
+func (s *Service) Peers() (peers []PeerInfo) {
+	for _, p := range s.host.peers() {
+		if s.status.peerConfirmed[p] {
+			peers = append(peers, s.status.peerInfo[p])
+		}
 	}
-	return peerInfo
+	return peers
 }

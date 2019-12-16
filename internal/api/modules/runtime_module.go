@@ -21,30 +21,42 @@ import (
 )
 
 type RuntimeModule struct {
-	Rt RuntimeApi
+	RuntimeApi RuntimeApi
 }
 
-// RuntimeApi is the interface expected to implemented by `runtime` package
+// RuntimeApi is the interface for the runtime package
 type RuntimeApi interface {
-	// Chain() string  //Cannot implement yet
-	Name() string //Replace with dynamic name later
-	// properties() string //Cannot implement yet
+	Chain() string
+	Name() string
+	Properties() string
 	Version() string
 }
 
-func NewRuntimeModule(RTapi RuntimeApi) *RuntimeModule {
-	return &RuntimeModule{RTapi}
+// RuntimeModule implements RuntimeApi
+func NewRuntimeModule(runtimeApi RuntimeApi) *RuntimeModule {
+	return &RuntimeModule{runtimeApi}
 }
 
-// Release version
-func (r *RuntimeModule) Version() string {
-	log.Debug("[rpc] Executing System.Version", "params", nil)
-	//TODO: Replace with dynamic version
-	return "0.0.1"
+// Chain returns runtime Chain()
+func (m *RuntimeModule) Chain() string {
+	log.Debug("[rpc] Executing System.Chain", "params", nil)
+	return m.RuntimeApi.Chain()
 }
 
-func (r *RuntimeModule) Name() string {
+// Name returns runtime Name()
+func (m *RuntimeModule) Name() string {
 	log.Debug("[rpc] Executing System.Name", "params", nil)
-	//TODO: Replace with dynamic name
-	return "Gossamer"
+	return m.RuntimeApi.Name()
+}
+
+// Properties returns runtime Properties()
+func (m *RuntimeModule) Properties() string {
+	log.Debug("[rpc] Executing System.Properties", "params", nil)
+	return m.RuntimeApi.Properties()
+}
+
+// Version returns runtime Version()
+func (m *RuntimeModule) Version() string {
+	log.Debug("[rpc] Executing System.Version", "params", nil)
+	return m.RuntimeApi.Version()
 }

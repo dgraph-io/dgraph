@@ -3,29 +3,27 @@ package state
 import "github.com/ChainSafe/gossamer/p2p"
 
 type networkState struct {
-	peer *p2p.Service
+	p2p *p2p.Service
 }
 
 func NewNetworkState() *networkState {
 	return &networkState{
-		peer: &p2p.Service{},
+		// TODO: pass p2p service instance to network state
+		p2p: &p2p.Service{},
 	}
 }
 
-func (ns *networkState) Peers() []string {
-	return ns.peer.Peers()
+func (ns *networkState) Health() p2p.Health {
+	// TODO: return Health() of p2p service
+	return p2p.Health{}
 }
 
-func (ns *networkState) State() string {
-	// TODO: return the network's state
-	return ""
+func (ns *networkState) NetworkState() p2p.NetworkState {
+	// TODO: return NetworkState() of p2p service
+	return p2p.NetworkState{}
 }
 
-func (ns *networkState) PeerCount() int {
-	return ns.peer.PeerCount()
-}
-
-func (ns *networkState) Status() string {
-	// TODO: return the network'status
-	return ""
+func (ns *networkState) Peers() []p2p.PeerInfo {
+	// TODO: return Peers() of p2p service
+	return []p2p.PeerInfo{}
 }

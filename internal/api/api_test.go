@@ -18,90 +18,100 @@ package api
 
 import (
 	"testing"
+
+	"github.com/ChainSafe/gossamer/p2p"
 )
 
-// -------------- Mock Apis ------------------
 var (
-	testPeerCount   = 1
-	testVersion     = "0.0.1"
-	name            = "Gossamer"
-	peerID          = "Qmc85Ephxa3sR7xaTzTq2UpCJ4a4HWAfxxaV6TarXHWVVh"
-	noBootstrapping = false
-	peers           = []string{"QmeQeqpf3fz3CG2ckQq3CUWwUnyT2cqxJepHpjji7ehVtX"}
+	testChain        = "Chain"
+	testName         = "Gossamer"
+	testProperties   = "Properties"
+	testVersion      = "0.0.1"
+	testHealth       = p2p.Health{}
+	testNetworkState = p2p.NetworkState{}
+	testPeers        = append([]p2p.PeerInfo{}, p2p.PeerInfo{})
 )
 
-// Creating a mock peer
-type MockP2pApi struct{}
-
-func (a *MockP2pApi) PeerCount() int {
-	return testPeerCount
-}
-
-func (a *MockP2pApi) Peers() []string {
-	return peers
-}
-
-func (b *MockP2pApi) ID() string {
-	return peerID
-}
-
-func (b *MockP2pApi) NoBootstrapping() bool {
-	return noBootstrapping
-}
-
-// Creating a mock runtime API
+// Mock RuntimeApi
 type MockRuntimeApi struct{}
 
-func (a *MockRuntimeApi) Name() string {
-	//TODO: Replace with dynamic name
-	return name
+func (r *MockRuntimeApi) Chain() string {
+	return testChain
 }
 
-func (a *MockRuntimeApi) Version() string {
+func (r *MockRuntimeApi) Name() string {
+	return testName
+}
+
+func (r *MockRuntimeApi) Properties() string {
+	return testProperties
+}
+
+func (r *MockRuntimeApi) Version() string {
 	return testVersion
 }
 
-// func (a *MockRuntimeApi) Chain() string {
-// 	return Chain
-// }
+// Mock P2pApi
+type MockP2pApi struct{}
 
-// // System properties not implemented yet
-// func (b *MockRuntimeApi) properties() string {
-// 	return properties
-// }
+func (n *MockP2pApi) Health() p2p.Health {
+	return testHealth
+}
 
-// -------------------------------------------
+func (n *MockP2pApi) NetworkState() p2p.NetworkState {
+	return testNetworkState
+}
+
+func (n *MockP2pApi) Peers() []p2p.PeerInfo {
+	return testPeers
+}
 
 func TestSystemModule(t *testing.T) {
-	srvc := NewApiService(&MockP2pApi{}, &MockRuntimeApi{})
+	s := NewApiService(&MockP2pApi{}, &MockRuntimeApi{})
+
+	// Runtime Module
+
+	// System.Chain
+	chain := s.Api.RuntimeModule.Chain()
+	if chain != testChain {
+		t.Fatalf("System.Chain - expected %+v got: %+v\n", testChain, chain)
+	}
 
 	// System.Name
-	n := srvc.Api.RuntimeModule.Name()
-	if n != name {
-		t.Fatalf("System.Name - expected %+v got: %+v\n", name, n)
+	name := s.Api.RuntimeModule.Name()
+	if name != testName {
+		t.Fatalf("System.Name - expected %+v got: %+v\n", testName, name)
 	}
 
-	// System.networkState
-	s := srvc.Api.P2pModule.ID()
-	if s != peerID {
-		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", peerID, s)
-	}
-
-	// System.peers
-	p := srvc.Api.P2pModule.Peers()
-	if s != peerID {
-		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", peers, p)
-	}
-
-	// System.PeerCount
-	c := srvc.Api.P2pModule.PeerCount()
-	if c != testPeerCount {
-		t.Fatalf("System.PeerCount - expected: %d got: %d\n", testPeerCount, c)
+	// System.Properties
+	properties := s.Api.RuntimeModule.Properties()
+	if properties != testProperties {
+		t.Fatalf("System.Properties - expected: %s got: %s\n", testProperties, properties)
 	}
 
 	// System.Version
-	v := srvc.Api.RuntimeModule.Version()
-	if v != testVersion {
-		t.Fatalf("System.Version - expected: %s got: %s\n", testVersion, v)
+	version := s.Api.RuntimeModule.Version()
+	if version != testVersion {
+		t.Fatalf("System.Version - expected: %s got: %s\n", testVersion, version)
+	}
+
+	// Network Module
+
+	// System.Health
+	health := s.Api.P2pModule.Health()
+	if health != testHealth {
+		t.Fatalf("System.Health - expected %+v got: %+v\n", testHealth, health)
+	}
+
+	// System.NetworkState
+	networkState := s.Api.P2pModule.NetworkState()
+	if networkState != testNetworkState {
+		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", testNetworkState, networkState)
+	}
+
+	// System.Peers
+	peers := s.Api.P2pModule.Peers()
+	if len(peers) != len(testPeers) {
+		t.Fatalf("System.Peers - expected %+v got: %+v\n", testPeers, peers)
 	}
 }

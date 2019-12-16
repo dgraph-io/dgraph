@@ -8,7 +8,7 @@ type Service struct {
 	dbPath  string
 	Storage *storageState
 	Block   *blockState
-	Net     *networkState
+	Network *networkState
 }
 
 func NewService(path string) *Service {
@@ -16,7 +16,7 @@ func NewService(path string) *Service {
 		dbPath:  path,
 		Storage: nil,
 		Block:   nil,
-		Net:     &networkState{},
+		Network: nil,
 	}
 }
 
@@ -40,7 +40,7 @@ func (s *Service) Start() error {
 
 	s.Storage = storageDb
 	s.Block = blockDb
-	s.Net = NewNetworkState()
+	s.Network = NewNetworkState()
 
 	return nil
 }

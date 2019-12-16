@@ -13,31 +13,39 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
 package state
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/p2p"
 )
 
-// helper method to create and start test state service
-func newTestService(t *testing.T) (state *Service) {
-	dir, err := ioutil.TempDir(os.TempDir(), "test_data")
-	if err != nil {
-		t.Fatal("failed to create temp dir: " + err.Error())
-	}
+var testHealth = p2p.Health{}
+var testNetworkState = p2p.NetworkState{}
+var testPeers = []p2p.PeerInfo{}
 
-	state = NewService(dir)
+// test state.Network
+func TestNetworkState(t *testing.T) {
 
-	return state
-}
-
-func TestService_Start(t *testing.T) {
 	state := newTestService(t)
 
-	err := state.Start()
-	if err != nil {
-		t.Fatal(err)
+	// test state.Network.Health()
+	health := state.Network.Health()
+	if health != testHealth {
+		t.Errorf("System.Health - expected %+v got: %+v\n", testHealth, health)
+	}
+
+	// test state.Network.NetworkState()
+	networkState := state.Network.NetworkState()
+	if networkState != testNetworkState {
+		t.Errorf("System.NetworkState - expected %+v got: %+v\n", testNetworkState, networkState)
+	}
+
+	// test state.Network.Peers()
+	peers := state.Network.Peers()
+	if len(peers) != len(testPeers) {
+		t.Errorf("System.Peers - expected %+v got: %+v\n", testPeers, peers)
 	}
 }
