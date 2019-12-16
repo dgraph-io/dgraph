@@ -217,8 +217,6 @@ func RunAll(t *testing.T) {
 	t.Run("query state by xid", queryStateByXid)
 	t.Run("query state by xid regex", queryStateByXidRegex)
 	t.Run("multiple operations", multipleOperations)
-	t.Run("multiple operations with no operation name",
-		multipleOperationsWithIncorrectOperationName)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)

@@ -1203,56 +1203,59 @@ func multipleOperations(t *testing.T) {
 		OperationName: "sortCountryByNameAsc",
 	}
 
-	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	var expected, result struct {
-		QueryCountry []*country
+	cases := []struct {
+		name          string
+		operationName string
+		expectedError string
+		expected      []*country
+	}{
+		{
+			"second query name as operation name",
+			"sortCountryByNameAsc",
+			"",
+			[]*country{{Name: "Angola"}},
+		},
+		{
+			"first query name as operation name",
+			"sortCountryByNameDesc",
+			"",
+			[]*country{{Name: "Mozambique"}},
+		},
+		{
+			"operation name doesn't exist",
+			"sortCountryByName",
+			"unable to find operation to resolve: [sortCountryByName]",
+			nil,
+		},
+		{
+			"operation name is empty",
+			"",
+			"unable to find operation to resolve: []",
+			nil,
+		},
 	}
-	expected.QueryCountry = []*country{{Name: "Angola"}}
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
 
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-
-	params.OperationName = "sortCountryByNameDesc"
-	gqlResponse = params.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	expected.QueryCountry = []*country{{Name: "Mozambique"}}
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func multipleOperationsWithIncorrectOperationName(t *testing.T) {
-	params := &GraphQLParams{
-		Query: `query sortCountryByNameDesc {
-			queryCountry(order: { desc: name }, first: 1) {
-				name
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			params.OperationName = test.operationName
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			if test.expectedError != "" {
+				require.NotNil(t, gqlResponse.Errors)
+				require.Equal(t, test.expectedError, gqlResponse.Errors[0].Error())
+				return
 			}
-		}
+			require.Nil(t, gqlResponse.Errors)
 
-		query sortCountryByNameAsc {
-			queryCountry(order: { asc: name }, first: 1) {
-				name
+			var expected, result struct {
+				QueryCountry []*country
 			}
-		}
-		`,
+			expected.QueryCountry = test.expected
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			if diff := cmp.Diff(expected, result); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
-
-	gqlResponse := params.ExecuteAsPost(t, graphqlURL)
-	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "unable to find operation to resolve: []", gqlResponse.Errors[0].Error())
-
-	params.OperationName = "sortCountryByName"
-	gqlResponse = params.ExecuteAsPost(t, graphqlURL)
-	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "unable to find operation to resolve: [sortCountryByName]",
-		gqlResponse.Errors[0].Error())
 }
