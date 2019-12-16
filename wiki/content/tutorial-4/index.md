@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Multi-language strings"
 
 **Welcome to the fourth tutorial of getting started with Dgraph.**
 
-In the [previous tutorial]({{< relref "tutorial-3/index.md">}}, we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
+In the [previous tutorial]({{< relref "tutorial-3/index.md" >}}), we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
 
 In this tutorial, we'll learn about using multi-language strings and operations on them using the language tags.
 
@@ -114,7 +114,7 @@ Let's go, amigos!
   ]
 }
 ```
-_Note: If this mutation syntax is new to you, refer to the [first tutorial]({{< relref "tutorial-1/index.md">}} to learn basics of mutation in Dgraph._
+_Note: If this mutation syntax is new to you, refer to the [first tutorial]({{< relref "tutorial-1/index.md">}}) to learn basics of mutation in Dgraph._
 
 Here's our Graph!
 
@@ -131,7 +131,7 @@ You can check that out from the schema tab.
 
 {{% load-img "/images/tutorials/4/c-schema.png" "full graph" %}}
 
-_Note: Check out the [previous tutorial]({{< relref "tutorial-3/index.md">}} to know more about data types in Dgraph._
+_Note: Check out the [previous tutorial]({{< relref "tutorial-3/index.md">}}) to know more about data types in Dgraph._
 
 Let's write a query to fetch all the food items, their reviews, and their country of origin.
 
@@ -151,7 +151,7 @@ Go to the query tab, paste the query, and click Run.
 }
 ```
 
-_Note: Check the [second tutorial]({{< relref "tutorial-2/index.md">}} if you want to learn more about traversal queries like the above one_
+_Note: Check the [second tutorial]({{< relref "tutorial-2/index.md">}}) if you want to learn more about traversal queries like the above one_
 
 Now, Let's fetch only the food items and their reviews,
 
@@ -220,7 +220,7 @@ In the above mutation:
 
 In the mutation above, Dgraph creates a new node for the reviews, and stores `comment`, `comment@ru`, and `comment@jp` in different predicates inside the same node.
 
-_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial]({{< relref "tutorial-1/index.md">}}._
+_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial]({{< relref "tutorial-1/index.md">}})._
 
 Let's run the above mutation.
 
@@ -278,7 +278,7 @@ In our next section, let's make use of the language tags in our queries.
 
 Let's obtain the review comments only for `Sushi`.
 
-In the [previous article]({{< relref "tutorial-3/index.md">}}, we learned about using the `eq` operator and the `hash` index to query for string predicate values.
+In the [previous article]({{< relref "tutorial-3/index.md">}}), we learned about using the `eq` operator and the `hash` index to query for string predicate values.
 
 Using that knowledge, let's first add the `hash` index for the `food_name` predicate.
 

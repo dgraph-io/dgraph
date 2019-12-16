@@ -175,7 +175,7 @@ You can easily specify which predicates you want to get back.
 
 Similarly, you can use the `has` function to find all nodes with the `age` predicate.
 
-```sh
+```graphql
 {
   people(func: has(age)) {
     name

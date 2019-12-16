@@ -12,7 +12,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
 <section class="toc">
   <div class="container">
     <div class="row row-no-padding">
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -25,7 +24,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -38,7 +36,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -51,7 +48,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -64,7 +60,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -77,7 +72,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -90,7 +84,6 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -103,12 +96,12 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
           </p>
         </div>
       </div>
-
     </div>
   </div>
 </section>
 
 ## Contribute
+
 <section class="toc">
   <div class="container">
     <div class="row row-no-padding">
