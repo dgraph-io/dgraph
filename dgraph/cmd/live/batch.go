@@ -52,7 +52,8 @@ type batchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
-	bufferSize    int
+	// BufferSize is the number of requests that a live loader thread can store at a time
+	bufferSize int
 	// User could pass a context so that we can stop retrying requests once context is done
 	Ctx context.Context
 }
@@ -317,38 +318,38 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 
 func (l *loader) getConflicts(req *api.Mutation) []uint64 {
 	keys := make([]uint64, 0, len(req.Set))
-	for _, i := range req.Set {
-		keys = append(keys, l.getConflictKeys(i)...)
+	for _, nq := range req.Set {
+		keys = append(keys, l.getConflictKeys(nq)...)
 	}
 	return keys
 }
 
 func (l *loader) addConflictKeys(req *api.Mutation) bool {
-	mSlice := l.getConflicts(req)
+	keys := l.getConflicts(req)
 
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	for _, val := range mSlice {
-		if t, ok := l.conflicts[val]; ok && t {
+	for _, key := range keys {
+		if t, ok := l.conflicts[key]; ok && t {
 			return false
 		}
 	}
 
-	for _, val := range mSlice {
-		l.conflicts[val] = true
+	for _, key := range keys {
+		l.conflicts[key] = true
 	}
 
 	return true
 }
 
 func (l *loader) deregister(req *api.Mutation) {
-	mSlice := l.getConflicts(req)
+	keys := l.getConflicts(req)
 
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	for _, i := range mSlice {
+	for _, i := range keys {
 		delete(l.conflicts, i)
 	}
 }
@@ -360,15 +361,9 @@ func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
 	buffer := make([]api.Mutation, 0, l.opts.bufferSize)
-	for req := range l.reqs {
-		if l.addConflictKeys(&req) {
-			reqNum := atomic.AddUint64(&l.reqNum, 1)
-			l.request(req, reqNum)
-		} else {
-			buffer = append(buffer, req)
-		}
 
-		for len(buffer) >= l.opts.bufferSize-1 {
+	drain := func(min int) {
+		for len(buffer) > min {
 			i := 0
 			for _, mu := range buffer {
 				if l.addConflictKeys(&mu) {
@@ -381,21 +376,20 @@ func (l *loader) makeRequests() {
 			}
 			buffer = buffer[:i]
 		}
+
 	}
 
-	for len(buffer) > 0 {
-		i := 0
-		for _, mu := range buffer {
-			if l.addConflictKeys(&mu) {
-				reqNum := atomic.AddUint64(&l.reqNum, 1)
-				l.request(mu, reqNum)
-				continue
-			}
-			buffer[i] = mu
-			i++
+	for req := range l.reqs {
+		if l.addConflictKeys(&req) {
+			reqNum := atomic.AddUint64(&l.reqNum, 1)
+			l.request(req, reqNum)
+		} else {
+			buffer = append(buffer, req)
 		}
-		buffer = buffer[:i]
+		drain(l.opts.bufferSize - 1)
 	}
+
+	drain(0)
 }
 
 func (l *loader) printCounters() {

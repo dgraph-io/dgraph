@@ -148,7 +148,6 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 		md := metadata.New(nil)
 		md.Append("auth-token", opt.authToken)
 		ctx = metadata.NewOutgoingContext(ctx, md)
-		fmt.Println("here")
 	}
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
@@ -243,6 +242,42 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	go func() {
 		defer wg.Done()
 		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
+
+		drain := func() {
+			sort.Slice(buffer, func(i, j int) bool {
+				iPred := sch.preds[buffer[i].Predicate]
+				jPred := sch.preds[buffer[j].Predicate]
+
+				t := func(a *predicate) int {
+					if a != nil && a.Count {
+						return 1
+					}
+					return 0
+				}
+
+				// Sorts the nquads on basis of their predicates, while keeping the
+				// predicates with count index later than those without it.
+				if t(iPred) != t(jPred) {
+					return t(iPred) < t(jPred)
+				}
+
+				return buffer[i].Predicate < buffer[j].Predicate
+			})
+
+			for len(buffer) > 0 {
+
+				f := opt.batchSize
+				if len(buffer) < opt.batchSize {
+					f = len(buffer)
+				}
+
+				mu := api.Mutation{Set: buffer[:f]}
+				l.reqs <- mu
+				buffer = buffer[f:]
+			}
+
+		}
+
 		for nqs := range nqbuf.Ch() {
 			if len(nqs) == 0 {
 				continue
@@ -255,53 +290,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			}
 
 			buffer = append(buffer, nqs...)
-
-			if len(buffer) >= opt.bufferSize*opt.batchSize {
-				sort.Slice(buffer, func(i, j int) bool {
-					iPred := sch.preds[buffer[i].Predicate]
-					jPred := sch.preds[buffer[j].Predicate]
-
-					t := func(a *predicate) int {
-						if a == nil {
-							return 0
-						}
-						if a.Count {
-							return 1
-						}
-						return 0
-					}
-
-					if t(iPred) != t(jPred) {
-						return t(iPred) < t(jPred)
-					}
-
-					return buffer[i].Predicate < buffer[j].Predicate
-				})
-
-				for len(buffer) > 0 {
-
-					f := opt.batchSize
-					if len(buffer) < opt.batchSize {
-						f = len(buffer)
-					}
-
-					mu := api.Mutation{Set: buffer[:f]}
-					l.reqs <- mu
-					buffer = buffer[f:]
-				}
-			}
-		}
-
-		for len(buffer) > 0 {
-			f := opt.batchSize
-			if len(buffer) < opt.batchSize {
-				f = len(buffer)
+			if len(buffer) < opt.bufferSize*opt.batchSize {
+				continue
 			}
 
-			mu := api.Mutation{Set: buffer[:f]}
-			l.reqs <- mu
-			buffer = buffer[f:]
+			drain()
 		}
+		drain()
 	}()
 
 	for {
