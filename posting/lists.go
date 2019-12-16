@@ -39,10 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	emptyPostingList []byte // Used for indexing.
-)
-
 const (
 	mb = 1 << 20
 )
@@ -63,7 +59,7 @@ func init() {
 	x.AddInit(func() {
 		pl := pb.PostingList{}
 		var err error
-		emptyPostingList, err = pl.Marshal()
+		_, err = pl.Marshal()
 		x.Check(err)
 	})
 }
