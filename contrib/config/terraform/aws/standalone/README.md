@@ -1,5 +1,8 @@
 # Deploy Dgraph on AWS using Terraform
 
+> **NOTE: This Terraform template creates a Dgraph database cluster with a public IP accessible to anyone. You can set the `assign_public_ip` variable
+to false to skip creating a public IP address and you can configure access to Dgraph yourself.**
+
 [Terraform](https://terraform.io/) automates the process spinning up the EC2 instance, setting up and running Dgraph in it.
 This setup deploys terraform in standalone mode inside a single EC2 instance.
 
