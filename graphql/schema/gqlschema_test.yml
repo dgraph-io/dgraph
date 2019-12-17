@@ -465,7 +465,7 @@ invalid_schemas:
     name: "ID field can't have @dgraph directive"
     input: |
       type X {
-        id: ID @dgraph(name: "X.id")
+        id: ID @dgraph(pred: "X.id")
         name: String
       }
     errlist: [
