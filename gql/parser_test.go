@@ -4952,6 +4952,17 @@ func TestRecurseWithArgs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
 	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello_hello, loop: $hello1_heelo1) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello_hello": "1",
+		"$hello1_heelo1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
 }
 
 func TestRecurseWithArgsWithError(t *testing.T) {
