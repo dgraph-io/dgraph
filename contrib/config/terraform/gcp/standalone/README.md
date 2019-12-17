@@ -1,5 +1,7 @@
 # Deploy Dgraph on GCP using Terraform
 
+> **NOTE: This Terraform template creates a Dgraph database cluster with a public IP accessible to anyone.**
+
 [Terraform](https://terraform.io/) automates the process spinning up GCP compute instance, setting up and running Dgraph in it.
 This setup deploys terraform in standalone mode inside a single GCP compute instance.
 

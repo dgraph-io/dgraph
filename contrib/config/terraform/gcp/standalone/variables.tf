@@ -10,7 +10,6 @@ variable "zone" {
   description = "Zone to create the instance in."
 }
 
-
 variable "project_name" {
   type        = string
   description = "Name of the GCP project to create the instance in."
@@ -49,11 +48,17 @@ variable "instance_name" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation"
-  default     = "1.1.0"   
+  default     = "1.1.0"
 }
 
 variable "dgraph_ui_port" {
   type        = string
   description = "Port number of ratel interface"
   default     = "8000"
+}
+
+variable "assign_public_ip" {
+  type        = string
+  default     = "true"
+  description = "Should a public IP address be assigned to the compute instance running dgraph in standalone mode."
 }
