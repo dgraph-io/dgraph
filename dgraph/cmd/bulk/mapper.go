@@ -249,7 +249,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	// Also, checked that sb goes on the stack whereas sb.String() goes on
 	// heap. Note that the calls to the strings.Builder.* are inlined.
 	sb := strings.Builder{}
-	sb.WriteString(xid)
+	_, _ = sb.WriteString(xid)
 	uid, isNew := m.xids.AssignUid(sb.String())
 	if !m.opt.StoreXids || !isNew {
 		return uid
