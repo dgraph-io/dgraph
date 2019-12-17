@@ -105,6 +105,7 @@ Enterprise features:
 - Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
 - Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
 - Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
+- Make uid function work with value variables in upsert blocks. Fixes [#4424][]. ([#4425][])
 
 Enterprise features:
 
@@ -219,6 +220,8 @@ Enterprise features:
 [#4365]: https://github.com/dgraph-io/dgraph/issues/4365
 [#4282]: https://github.com/dgraph-io/dgraph/issues/4282
 [#4331]: https://github.com/dgraph-io/dgraph/issues/4331
+[#4424]: https://github.com/dgraph-io/dgraph/issues/4424
+[#4425]: https://github.com/dgraph-io/dgraph/issues/4425
 
 ## [1.1.0] - 2019-09-03
 [1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
