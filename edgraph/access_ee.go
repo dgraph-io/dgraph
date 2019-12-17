@@ -730,7 +730,6 @@ func authorizeState(ctx context.Context) error {
 	}
 
 	var userId string
-
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeState := func() error {
 		userData, err := extractUserAndGroups(ctx)

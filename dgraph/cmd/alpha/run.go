@@ -315,8 +315,10 @@ func state(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write(aResp.Json)
-	return
+	if _, err = w.Write(aResp.Json); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
 }
 
 // storeStatsHandler outputs some basic stats for data store.
