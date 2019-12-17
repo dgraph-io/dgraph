@@ -1608,6 +1608,50 @@ upsert {
 	testutil.CompareJSON(t, res, expectedRes)
 }
 
+func TestUpsertWithValueVar(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`amount: int .`))
+	res, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	b, _ := json.MarshalIndent(res, "", "  ")
+	fmt.Printf("%s\n", b)
+
+	const (
+		// this upsert block increments the value of the counter by one
+		m = `
+upsert {
+  query {
+    var(func: has(amount)) {
+      amount as amount
+      amt as math(amount+1)
+    }
+  }
+  mutation {
+    set {
+      uid(amt) <amount> val(amt) .
+    }
+  }
+}`
+
+		q = `
+{
+  q(func: has(amount)) {
+    amount
+  }
+}`
+	)
+
+	for count := 1; count < 3; count++ {
+		res, err = mutationWithTs(m, "application/rdf", false, true, 0)
+		require.NoError(t, err)
+
+		got, _, err := queryWithTs(q, "application/graphql+-", "", res.startTs)
+		require.NoError(t, err)
+
+		require.JSONEq(t, fmt.Sprintf(`{"data":{"q":[{"amount":%d}]}}`, count), got)
+	}
+}
+
 func TestValInSubject(t *testing.T) {
 	m3 := `
 upsert {
