@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -173,32 +174,12 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
-func typeValFrom(val *api.Value) (types.Val, error) {
-	var p types.Val
-	switch val.Val.(type) {
-	case *api.Value_BytesVal:
-		p = types.Val{Tid: types.BinaryID, Value: val.GetBytesVal()}
-	case *api.Value_IntVal:
-		p = types.Val{Tid: types.IntID, Value: val.GetIntVal()}
-	case *api.Value_StrVal:
-		p = types.Val{Tid: types.StringID, Value: val.GetStrVal()}
-	case *api.Value_BoolVal:
-		p = types.Val{Tid: types.BoolID, Value: val.GetBoolVal()}
-	case *api.Value_DoubleVal:
-		p = types.Val{Tid: types.FloatID, Value: val.GetDoubleVal()}
-	case *api.Value_GeoVal:
-		p = types.Val{Tid: types.GeoID, Value: val.GetGeoVal()}
-	case *api.Value_DatetimeVal:
-		p = types.Val{Tid: types.DateTimeID, Value: val.GetDatetimeVal()}
-	case *api.Value_PasswordVal:
-		p = types.Val{Tid: types.PasswordID, Value: val.GetPasswordVal()}
-	case *api.Value_DefaultVal:
-		p = types.Val{Tid: types.DefaultID, Value: val.GetDefaultVal()}
-	default:
-		p = types.Val{Tid: types.StringID, Value: ""}
-	}
+func getTypeVal(val *api.Value) (types.Val, error) {
+	p := gql.TypeValFrom(val)
+	//Convert value to bytes
 
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
+		// Already in bytes format
 		p.Value = p.Value.([]byte)
 		return p, nil
 	}
@@ -232,7 +213,7 @@ func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 		Lang:   nq.Lang,
 		Facets: nq.Facets,
 	}
-	val, err := typeValFrom(nq.ObjectValue)
+	val, err := getTypeVal(nq.ObjectValue)
 	if err == nil {
 		p.Value = val.Value.([]byte)
 		p.ValueType = val.Tid.Enum()
