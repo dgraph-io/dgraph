@@ -18,7 +18,10 @@ package edgraph
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -578,6 +581,36 @@ type queryContext struct {
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
 	span *trace.Span
+}
+
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
+	return s.doState(ctx, NeedAuthorize)
+}
+
+func (s *Server) doState(ctx context.Context, authorize int) (
+	*api.Response, error) {
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if err := authorizeState(ctx); err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://localhost:6080/state"))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.Response{Json: body}, nil
 }
 
 // Query handles queries or mutations

@@ -301,6 +301,24 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+func state(w http.ResponseWriter, r *http.Request) {
+	var err error
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx := context.Background()
+	ctx = attachAccessJwt(ctx, r)
+
+	var aResp *api.Response
+	if aResp, err = (&edgraph.Server{}).State(ctx); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	w.Write(aResp.Json)
+	return
+}
+
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
@@ -390,6 +408,7 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
+	http.HandleFunc("/state", state)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
