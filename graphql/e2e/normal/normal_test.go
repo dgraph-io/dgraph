@@ -186,6 +186,11 @@ func TestSchema_Normal(t *testing.T) {
 			"type": "float"
 		  }, 
 		  {
+			"predicate": "dgraph.author",
+			"type": "uid",
+			"list": true
+		  },
+		  {
 			"predicate": "dgraph.author.country",
 			"type": "uid"
 		  }, 

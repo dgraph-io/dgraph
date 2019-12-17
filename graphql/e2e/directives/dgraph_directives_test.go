@@ -157,6 +157,10 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "credits",
 		"type": "float"
 	}, {
+		"predicate": "dgraph.author",
+		"type": "uid",
+		"list": true
+	}, {
 		"predicate": "dgraph.author.country",
 		"type": "uid"
 	}, {
