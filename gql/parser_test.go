@@ -4927,11 +4927,7 @@ func TestParseVarAfterCountQry(t *testing.T) {
 func TestRecurseWithArgs(t *testing.T) {
 	query := `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: true) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad")) @recurse(depth: $hello , loop: true) {
 		}
 	}`
 	gq, err := Parse(Request{Str: query, Variables: map[string]string{"$hello": "1"}})
@@ -4940,11 +4936,7 @@ func TestRecurseWithArgs(t *testing.T) {
 
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: $hello) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: 1 , loop: $hello) {
 		}
 	}`
 	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "true"}})
@@ -4953,11 +4945,7 @@ func TestRecurseWithArgs(t *testing.T) {
 
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
 		}
 	}`
 	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "true"}})
@@ -4969,11 +4957,7 @@ func TestRecurseWithArgs(t *testing.T) {
 func TestRecurseWithArgsWithError(t *testing.T) {
 	query := `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: true) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: true) {
 		}
 	}`
 	_, err := Parse(Request{Str: query})
@@ -4982,11 +4966,7 @@ func TestRecurseWithArgsWithError(t *testing.T) {
 
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: $hello) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: $hello) {
 		}
 	}`
 	_, err = Parse(Request{Str: query})
@@ -4995,39 +4975,27 @@ func TestRecurseWithArgsWithError(t *testing.T) {
 
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
 		}
 	}`
 	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "sd", "$hello1": "true"}})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "parsing \"sd\": invalid syntax")
+	require.Contains(t, err.Error(), "should be type of integer")
 
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: $hello, loop: $hello1) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
 		}
 	}`
 	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "tre"}})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "strconv.ParseBool: parsing \"tre\"")
+	require.Contains(t, err.Error(), "should be type of boolean")
 }
 
 func TestRecurse(t *testing.T) {
 	query := `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: true) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: true) {
 		}
 	}`
 	gq, err := Parse(Request{Str: query})
@@ -5039,26 +5007,18 @@ func TestRecurse(t *testing.T) {
 func TestRecurseWithError(t *testing.T) {
 	query := `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: hello, loop: true) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: hello, loop: true) {
 		}
 	}`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "parsing \"hello\": invalid syntax")
+	require.Contains(t, err.Error(), "Value inside depth should be type of integer")
 	query = `
 	{
-		me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 1, loop: tre) {
-			name@en
-			~genre (first:10) @filter(gt(count(starring), 2))
-			starring (first: 2)
-			performance.actor
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: tre) {
 		}
 	}`
 	_, err = Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "strconv.ParseBool: parsing \"tre\"")
+	require.Contains(t, err.Error(), "Value inside bool should be type of boolean")
 }
