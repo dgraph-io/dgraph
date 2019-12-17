@@ -39,10 +39,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// GraphQLSchemaUpdater is singleton schema updater method. It is used to update the lastest graqphql
+// schema. It is intialized by graphql package.
 var GraphQLSchemaUpdater func(scehma string)
 
-// graphQLSchemaUpdate is used to communicate data between schema listener and schema watcher.
-type graphQLSchemaUpdate struct {
+// schemaUpdate is used to communicate data between schema listener and schema watcher.
+type schemaUpdate struct {
 	schema     string
 	stopStream bool
 }
@@ -62,48 +64,49 @@ type groupi struct {
 
 	// Group checksum is used to determine if the tablets served by the groups have changed from
 	// the membership information that the Alpha has. If so, Alpha cannot service a read.
-	deltaChecksum            uint64                              // Checksum received by OracleDelta.
-	membershipChecksum       uint64                              // Checksum received by MembershipState.
-	graphQLSchemaSubscribers map[uint64]chan graphQLSchemaUpdate // GraphQL schema subscriber channels.
-	graphQLSubscriberMaxId   uint64                              // Current Max id graphql schema subscriber
-	// It is used for generating id for graphql
-	// schema subscriber
+	deltaChecksum            uint64                       // Checksum received byOracleDelta.
+	membershipChecksum       uint64                       // Checksum received by MembershipState.
+	graphQLSchemaSubscribers map[uint64]chan schemaUpdate // GraphQL schema subscriber channels.
+	graphQLSubscriberMaxId   uint64                       // Current Max id graphql schema subscriber
+	// It is used for generating id for graphql schema subscriber
 	graphQLSchemaReceiverCloser *y.Closer
 }
 
 var gr *groupi
 
 // registerGraphQLSchemaSubscriber is used to subscribe the updates on graphQL schema.
-func (g *groupi) registerGraphQLSchemaSubscriber(subscriber chan graphQLSchemaUpdate) uint64 {
-	gr.Lock()
+func (g *groupi) registerGraphQLSchemaSubscriber(subscriber chan schemaUpdate) uint64 {
+	g.Lock()
 	defer gr.Unlock()
+	glog.Info("Registring graphql schema subscribe")
 	// Generate local ID and register the subscriber.
-	gr.graphQLSubscriberMaxId++
-	gr.graphQLSchemaSubscribers[gr.graphQLSubscriberMaxId] = subscriber
-
-	return gr.graphQLSubscriberMaxId
+	g.graphQLSubscriberMaxId++
+	g.graphQLSchemaSubscribers[gr.graphQLSubscriberMaxId] = subscriber
+	glog.Info("registered subscribers %d", len(g.graphQLSchemaSubscribers))
+	return g.graphQLSubscriberMaxId
 }
 
 // unSubscribeAllStream will cancel all the streams and reset the subscriber list.
 func (g *groupi) unSubscribeAllStream() {
 	g.Lock()
 	defer g.Unlock()
+	glog.Info("Unsubscribing all the graphql schema subscribers")
 	// Send stop message to all the streams.
 	for _, subscriber := range g.graphQLSchemaSubscribers {
-		subscriber <- graphQLSchemaUpdate{
+		subscriber <- schemaUpdate{
 			stopStream: true,
 		}
 	}
 
 	// Reset the subscriber list.
-	g.graphQLSchemaSubscribers = make(map[uint64]chan graphQLSchemaUpdate)
+	g.graphQLSchemaSubscribers = make(map[uint64]chan schemaUpdate)
 }
 
 // deRegisterGraphQLSchemaSubscriber delete the subscriber from the subscriber list.
 func (g *groupi) deRegisterGraphQLSchemaSubscriber(Id uint64) {
 	gr.Lock()
 	defer gr.Unlock()
-
+	glog.Info("Deregistring grapql schema subscriber")
 	delete(gr.graphQLSchemaSubscribers, Id)
 }
 
@@ -117,8 +120,9 @@ func groups() *groupi {
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
-		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
+		blockDeletes:             new(sync.Mutex),
+		tablets:                  make(map[string]*pb.Tablet),
+		graphQLSchemaSubscribers: make(map[uint64]chan schemaUpdate),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -334,9 +338,6 @@ func UpdateMembershipState(ctx context.Context) error {
 
 func (g *groupi) applyState(state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
-	// Unsubsribe all the graphql schema publisher. It'll reconnect and get latest updates.
-	g.unSubscribeAllStream()
-
 	g.Lock()
 	defer g.Unlock()
 	// We don't update state if we get any old state. Counter stores the raftindex of
@@ -345,12 +346,9 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
-	// Stop if the we're reciving the graphql schema updates.
-	if g.groupId() != 1 {
-		g.graphQLSchemaReceiverCloser.SignalAndWait()
-	}
 	oldState := g.state
 	g.state = state
+	prevGroupId := g.groupId()
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	var foundSelf bool
@@ -358,6 +356,19 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if x.WorkerConfig.RaftId == member.Id {
+				// Stop the schema updater if necessary.
+				if gid == 1 && prevGroupId != 1 {
+					g.graphQLSchemaReceiverCloser.SignalAndWait()
+				}
+				// Start the schema updater if necessary.
+				if prevGroupId == 1 && gid != 1 {
+					g.graphQLSchemaReceiverCloser = y.NewCloser(1)
+					// Receive graphql schema changes if we not group 1. Because, we'll get update from
+					// badger subscribe method.
+					// Unsubsribe all the graphql schema publisher. It'll reconnect and get latest updates.
+					g.unSubscribeAllStream()
+					go g.receiveGraphQLSchemaChange()
+				}
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
@@ -377,12 +388,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.GetPools().Connect(member.Addr)
 		}
-	}
-
-	if g.groupId() != 1 {
-		g.graphQLSchemaReceiverCloser = y.NewCloser(1)
-		// Receive graphql schema changes.
-		go g.receiveGraphQLSchemaChange()
 	}
 	if !foundSelf {
 		// I'm not part of this cluster. I should crash myself.
@@ -1077,18 +1082,22 @@ func (g *groupi) broadcastGraphqlSchema(schema string) {
 	GraphQLSchemaUpdater(schema)
 	g.RLock()
 	defer g.RUnlock()
+	glog.Infof("Brodcasting graphql schema to %d alpha nodes.", len(g.graphQLSchemaSubscribers))
 	for _, subscriber := range g.graphQLSchemaSubscribers {
-		subscriber <- graphQLSchemaUpdate{
+		subscriber <- schemaUpdate{
 			schema: schema,
 		}
+		glog.Info("Sending graphql schema to the alpha node")
 	}
 }
 
 func (g *groupi) receiveGraphQLSchemaChange() {
+	glog.Info("Started listening for graphql schema updates.")
 	defer g.graphQLSchemaReceiverCloser.Done()
 RETRY:
 	select {
 	case <-g.graphQLSchemaReceiverCloser.HasBeenClosed():
+		glog.Info("Stopping listening on graphql schema changes in alpha.")
 		return
 	default:
 		if g.groupId() == 0 {
@@ -1103,7 +1112,7 @@ RETRY:
 	client := pb.NewWorkerClient(pool.Get())
 	stream, err := client.StreamGraphQLSchema(context.Background(), &pb.Empty{})
 	if err != nil {
-		// retry
+		glog.Errorf("error from graphql schema update stream: %v", err)
 		goto RETRY
 	}
 
@@ -1112,7 +1121,7 @@ RETRY:
 		case <-g.closer.HasBeenClosed():
 			return
 		case <-g.graphQLSchemaReceiverCloser.HasBeenClosed():
-			glog.Info("Stopping listening on graphql schema changes in alpha")
+			glog.Info("Stopping listening on graphql schema changes in alpha.")
 			return
 		default:
 			msg, err := stream.Recv()
@@ -1126,8 +1135,9 @@ RETRY:
 	}
 }
 
-func (w *grpcWorker) StreamGraphQLSchema(_ *pb.Empty, stream pb.Worker_StreamGraphQLSchemaServer) error {
-	subscriberCh := make(chan graphQLSchemaUpdate, 10)
+func (w *grpcWorker) StreamGraphQLSchema(_ *pb.Empty,
+	stream pb.Worker_StreamGraphQLSchemaServer) error {
+	subscriberCh := make(chan schemaUpdate, 10)
 	id := groups().registerGraphQLSchemaSubscriber(subscriberCh)
 	for {
 		update := <-subscriberCh

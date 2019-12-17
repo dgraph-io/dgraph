@@ -204,6 +204,7 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 	}
 	worker.GraphQLSchemaUpdater = func(graphqlSchema string) {
+		glog.Info("Updating graphql schema")
 
 		schHandler, err := schema.NewHandler(graphqlSchema)
 		if err != nil {
