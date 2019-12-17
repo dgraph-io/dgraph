@@ -538,7 +538,7 @@ func TestSchema_Normal(t *testing.T) {
 	`
 
 	t.Run("graphql schema", func(t *testing.T) {
-		common.SchemaTests(t, expectedDgraphSchema)
+		common.SchemaTest(t, expectedDgraphSchema)
 	})
 }
 

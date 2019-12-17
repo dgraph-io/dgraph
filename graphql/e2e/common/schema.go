@@ -100,7 +100,7 @@ const (
     } }`
 )
 
-func SchemaTests(t *testing.T, expectedDgraphSchema string) {
+func SchemaTest(t *testing.T, expectedDgraphSchema string) {
 	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
