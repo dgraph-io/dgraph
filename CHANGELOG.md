@@ -4,8 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## 1.1.1 - [Unreleased][Unreleased-v1.1.1]
-[Unreleased-v1.1.1]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...master
+## [1.1.1] - 2019-12-16
+[1.1.1]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...v1.1.1
 
 ### Changed
 
@@ -782,8 +782,8 @@ Tracing
 [18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
 [802ec4c39]: https://github.com/dgraph-io/dgraph/commit/802ec4c39
 
-## 1.0.18 - [Unreleased][Unreleased-v1.0.18]
-[Unreleased-v1.0.18]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...release/v1.0
+## [1.0.18] - 2019-12-16
+[1.0.18]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.0.18
 
 ### Fixed
 
