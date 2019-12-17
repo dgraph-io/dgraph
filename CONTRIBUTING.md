@@ -67,7 +67,7 @@ To compile the proto file using the `protoc` plugin and the gogo compiler plugin
 
 This should generate the required `.pb.go` file.
 
-### Building Dgraph
+### Build Dgraph
 
 You can build Dgraph using `make dgraph` (like `go build`) or `make install`
 (like `go install`) which add the version information to the binary:
