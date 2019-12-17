@@ -33,6 +33,7 @@
 It's best to put the Dgraph repo somewhere in `$GOPATH`.
 
     $ mkdir -p "$(go env GOPATH)/src/github.com/dgraph-io"
+    $ cd "$(go env GOPATH)/src/github.com/dgraph-io"
     $ git clone https://github.com/dgraph-io/dgraph.git
     $ cd ./dgraph
     $ make install
