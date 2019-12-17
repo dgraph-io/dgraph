@@ -18,7 +18,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION="1.12.5"
+GOVERSION="1.13.5"
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
@@ -64,12 +64,17 @@ go get -d google.golang.org/grpc
 go get -u github.com/prometheus/client_golang/prometheus
 go get -u github.com/dgraph-io/dgo
 # go get github.com/stretchr/testify/require
-go get -u github.com/dgraph-io/badger
+go get -u -d github.com/dgraph-io/badger
 go get -u github.com/golang/protobuf/protoc-gen-go
 go get -u github.com/gogo/protobuf/protoc-gen-gofast
 
 pushd $GOPATH/src/google.golang.org/grpc
   git checkout v1.13.0
+popd
+
+# Dgraph v1.0 does not support Badger v2.0.0+.
+pushd $GOPATH/src/github.com/dgraph-io/badger
+  git checkout v1.6.0
 popd
 
 basedir=$GOPATH/src/github.com/dgraph-io
