@@ -390,7 +390,7 @@ func searchValidation(
 	return nil
 }
 
-func dgraphNameValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
+func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
 
 	if isID(field) {
@@ -400,13 +400,11 @@ func dgraphNameValidation(sch *ast.Schema, typ *ast.Definition, field *ast.Field
 				"can't have the @dgraph directive.", typ.Name, field.Name)
 	}
 
-	dgraphArg := dir.Arguments.ForName(dgraphArgs)
-	if dgraphArg == nil {
-		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	predArg := dir.Arguments.ForName(dgraphPredArg)
+	if predArg != nil && predArg.Value.Raw == "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s: @dgraph directive doesn't have name argument.",
+			"Type %s; Field %s: pred argument for @dgraph directive should not be empty.",
 			typ.Name, field.Name,
 		)
 	}
