@@ -70,8 +70,12 @@ This should generate the required `.pb.go` file.
 
 ### Build Dgraph
 
-You can build Dgraph using `make dgraph` (like `go build`) or `make install`
-(like `go install`) which add the version information to the binary:
+You can build Dgraph using `make dgraph` or `make install`
+which add the version information to the binary.
+
+- `make dgraph`: Creates a `dgraph` binary at `./dgraph/dgraph`
+- `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You can add
+  `$GOPATH/bin` to your `$PATH`.
 
 ```text
 $ make install
@@ -92,9 +96,6 @@ To say hi to the community       , visit https://dgraph.slack.com.
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
 Copyright 2015-2018 Dgraph Labs, Inc.
 ```
-
-If you don't need the version info, you can also use the standard Go commands
-`go build` and `go install` from the ./dgraph subdirectory.
 
 ### Build Docker Image
 
