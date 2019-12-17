@@ -71,6 +71,9 @@ var Config Options
 // String will generate the string output an Options struct without including
 // the HmacSecret field, which prevents revealing the secret during logging
 func (opt *Options) String() string {
+	if opt == nil {
+		return ""
+	}
 	//return fmt.Sprintf()
 	return fmt.Sprintf("{PostingDir:%s BadgerTables:%s BadgerVlog:%s WALDir:%s MutationsMode:%d "+
 		"AuthToken:%s AllottedMemory:%.1fMB AccessJwtTtl:%v RefreshJwtTtl:%v "+
@@ -82,7 +85,7 @@ func (opt *Options) String() string {
 // SetConfiguration sets the server configuration to the given config.
 func SetConfiguration(newConfig *Options) {
 	if newConfig == nil {
-		return
+		newConfig = &Options{}
 	}
 	newConfig.validate()
 	Config = *newConfig

@@ -110,6 +110,9 @@ func (s *state) DeleteType(typeName string) error {
 }
 
 func logUpdate(schema *pb.SchemaUpdate, pred string) string {
+	if schema == nil {
+		return ""
+	}
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
 		typ = fmt.Sprintf("[%s]", typ)

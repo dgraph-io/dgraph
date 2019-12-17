@@ -87,6 +87,9 @@ type loader struct {
 }
 
 func newLoader(opt *options) *loader {
+	if opt == nil {
+		opt = &options{}
+	}
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

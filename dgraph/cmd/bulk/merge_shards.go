@@ -32,6 +32,9 @@ const (
 )
 
 func mergeMapShardsIntoReduceShards(opt *options) {
+	if opt == nil {
+		opt = &options{}
+	}
 	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
 	if len(shardDirs) == 0 {
 		fmt.Printf(

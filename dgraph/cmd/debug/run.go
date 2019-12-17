@@ -677,6 +677,9 @@ func sizeHistogram(db *badger.DB) {
 }
 
 func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]bool) {
+	if pr == nil {
+		return
+	}
 	switch {
 	case pr.Mutations != nil:
 		fmt.Fprintf(buf, " Mutation . StartTs: %d . Edges: %d .",
@@ -719,6 +722,9 @@ func printAlphaProposal(buf *bytes.Buffer, pr *pb.Proposal, pending map[uint64]b
 }
 
 func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
+	if zpr == nil {
+		return
+	}
 	switch {
 	case len(zpr.SnapshotTs) > 0:
 		fmt.Fprintf(buf, " Snapshot: %+v .", zpr.SnapshotTs)

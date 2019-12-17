@@ -276,6 +276,10 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 }
 
 func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
+	if update == nil {
+		return nil, nil
+	}
+
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
 	buf.WriteRune('<')

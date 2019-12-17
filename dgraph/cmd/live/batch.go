@@ -118,6 +118,9 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 }
 
 func (l *loader) infinitelyRetry(req *api.Mutation, reqNum uint64) {
+	if req == nil {
+		return
+	}
 	defer l.retryRequestsWg.Done()
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
@@ -144,6 +147,9 @@ func (l *loader) infinitelyRetry(req *api.Mutation, reqNum uint64) {
 }
 
 func (l *loader) request(req *api.Mutation, reqNum uint64) {
+	if req == nil {
+		return
+	}
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
 	_, err := txn.Mutate(l.opts.Ctx, req)

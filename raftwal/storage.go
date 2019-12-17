@@ -344,10 +344,7 @@ func (w *DiskStorage) Snapshot() (snap raftpb.Snapshot, rerr error) {
 // index. But, keep the raft entry at the snapshot index, to make it easier to build the logic; like
 // the dummy entry in MemoryStorage.
 func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s *raftpb.Snapshot) error {
-	if s == nil {
-		return nil
-	}
-	if raft.IsEmptySnap(*s) {
+	if s == nil || raft.IsEmptySnap(*s) {
 		return nil
 	}
 	data, err := s.Marshal()

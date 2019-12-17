@@ -38,6 +38,9 @@ type schemaStore struct {
 }
 
 func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *schemaStore {
+	if opt == nil {
+		opt = &options{}
+	}
 	s := &schemaStore{
 		schemaMap: map[string]*pb.SchemaUpdate{},
 		state:     state,
