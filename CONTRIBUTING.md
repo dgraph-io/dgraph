@@ -24,11 +24,18 @@
 ### Prerequisites
 
 - Install [Git](https://git-scm.com/) (may be already installed on your system, or available through your OS package manager)
-- [Install Go 1.8 or above](https://golang.org/doc/install)
+- Install [Make](https://www.gnu.org/software/make/) (may be already installed on your system, or available through your OS package manager)
+- Install [Docker](https://docs.docker.com/install/) and [Docker Compose](https://docs.docker.com/compose/install/).
+- [Install Go 1.13 or above](https://golang.org/doc/install).
 
 ### Setup Dgraph from source repo
 
-    $ go get -v -t github.com/dgraph-io/dgraph/...
+It's best to put the Dgraph repo somewhere in `$GOPATH`.
+
+    $ mkdir -p $(go env GOPATH)/src/github.com/dgraph-io"
+    $ git clone https://github.com/dgraph-io/dgraph.git
+    $ cd ./dgraph
+    $ make install
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and compile the binaries to `$GOPATH/bin`.
 
