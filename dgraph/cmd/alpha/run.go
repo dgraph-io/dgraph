@@ -182,11 +182,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	// Allow values to predicates of type uid to be overwritten.
-	flag.Bool("overwrite_uid_pred_values", false,
-		"If false, values to predicates of type uid cannot be overwritten. This is the default "+
-			"behavior due to backwards-compatibility concerns.")
-
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
