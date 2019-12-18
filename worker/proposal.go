@@ -18,6 +18,7 @@ package worker
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,30 +48,25 @@ func newTimeout(retry int) time.Duration {
 var limiter rateLimiter
 
 func init() {
-	go limiter.bleed()
+	go limiter.scream()
 }
 
 type rateLimiter struct {
-	iou int32
+	iou int
+	max int
+	c   *sync.Cond
 }
 
 // Instead of using the time/rate package, we use this simple one, because that
 // allows a certain number of ops per second, without taking any feedback into
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
-func (rl *rateLimiter) bleed() {
-	ctx := context.Background()
-
+func (rl *rateLimiter) scream() {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
 	for range tick.C {
-		if atomic.AddInt32(&rl.iou, -1) >= 0 {
-			<-pendingProposals
-			ostats.Record(ctx, x.PendingProposals.M(-1))
-		} else {
-			atomic.AddInt32(&rl.iou, 1)
-		}
+		rl.c.Broadcast()
 	}
 }
 
@@ -78,26 +74,36 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
 	weight := 1 << uint(retry) // Use an exponentially increasing weight.
-	for i := 0; i < weight; i++ {
+	c := rl.c
+	c.L.Lock()
+
+	for {
+		if rl.iou+weight <= rl.max {
+			rl.iou += weight
+			c.L.Unlock()
+			ostats.Record(ctx, x.PendingProposals.M(int64(weight)))
+			return nil
+		}
+		c.Wait()
+		// We woke up after some time. Let's check if the context is done.
 		select {
-		case pendingProposals <- struct{}{}:
-			ostats.Record(context.Background(), x.PendingProposals.M(1))
 		case <-ctx.Done():
+			c.L.Unlock()
 			return ctx.Err()
+		default:
 		}
 	}
-	return nil
 }
 
 // Done would slowly bleed the retries out.
 func (rl *rateLimiter) decr(retry int) {
-	if retry == 0 {
-		<-pendingProposals
-		ostats.Record(context.Background(), x.PendingProposals.M(-1))
-		return
-	}
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
-	atomic.AddInt32(&rl.iou, int32(weight))
+
+	rl.c.L.Lock()
+	rl.iou -= weight
+	rl.c.Broadcast()
+	rl.c.L.Unlock()
+	ostats.Record(context.Background(), x.PendingProposals.M(-int64(weight)))
 }
 
 // uniqueKey is meant to be unique across all the replicas.
