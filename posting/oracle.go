@@ -92,6 +92,7 @@ func (txn *Txn) Store(pl *List) *List {
 	return txn.cache.SetIfAbsent(string(pl.key), pl)
 }
 
+// Per namespace.
 type oracle struct {
 	x.SafeMutex
 

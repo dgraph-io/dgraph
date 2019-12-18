@@ -127,6 +127,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 	// If we have less available than what we need, we need to renew our lease.
 	if available < num.Val+1 { // +1 for a potential readonly ts.
 		// Blocking propose to get more ids or timestamps.
+		// All proposals would need to be namespace aware.
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}
@@ -144,6 +145,8 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 			s.nextTxnTs++
 			out.ReadOnly = s.readOnlyTs
 		}
+		// We are namespace aware here. So, we pick the right oracle for the
+		// namespace. Update the doneUntil for that namespace.
 		s.orc.doneUntil.Begin(x.Max(out.EndId, out.ReadOnly))
 	} else {
 		out.StartId = s.nextLeaseId

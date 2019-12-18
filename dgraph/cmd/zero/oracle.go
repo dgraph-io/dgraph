@@ -40,6 +40,9 @@ type syncMark struct {
 // Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
 	x.SafeMutex
+	// Namespace aware. Stores the namespace.
+	// Zero server holds a map of namespace -> Oracle.
+
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
 	keyCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
@@ -269,6 +272,7 @@ func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	}
 
 	// Now send it out to updates.
+	// Send with the namespace in it.
 	o.updates <- &pb.OracleDelta{MaxAssigned: max}
 
 	o.Lock()
@@ -433,6 +437,9 @@ func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
 	}
+	// I need to subscribe to k namespaces.
+	// Loop over the oracles corresponding to those namespaces and subscribe to
+	// those specifically.
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 
@@ -499,6 +506,7 @@ func (s *Server) TryAbort(ctx context.Context,
 }
 
 // Timestamps is used to assign startTs for a new transaction
+// This would also have to be namespace aware.
 func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	ctx, span := otrace.StartSpan(ctx, "Zero.Timestamps")
 	defer span.End()
@@ -511,6 +519,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 	reply, err := s.lease(ctx, num, true)
 	span.Annotatef(nil, "Response: %+v. Error: %v", reply, err)
 
+	// Get namespace oracle.
 	if err == nil {
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)

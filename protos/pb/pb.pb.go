@@ -7,15 +7,16 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+	math_bits "math/bits"
+
 	pb "github.com/dgraph-io/badger/v2/pb"
 	api "github.com/dgraph-io/dgo/v2/protos/api"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	io "io"
-	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1247,6 +1248,9 @@ func (m *License) GetEnabled() bool {
 }
 
 type ZeroProposal struct {
+	// Most likely no need to have namespace here. If we can do MaxAssigned w/ namespace,
+	// without having separate Txn timestamps / UIDs, then we're good. No need
+	// to change this.
 	SnapshotTs           map[uint32]uint64 `protobuf:"bytes,1,rep,name=snapshot_ts,json=snapshotTs,proto3" json:"snapshot_ts,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	Member               *Member           `protobuf:"bytes,2,opt,name=member,proto3" json:"member,omitempty"`
 	Tablet               *Tablet           `protobuf:"bytes,3,opt,name=tablet,proto3" json:"tablet,omitempty"`
@@ -3332,6 +3336,7 @@ func (m *TxnStatus) GetCommitTs() uint64 {
 }
 
 type OracleDelta struct {
+	// Should have Namespace as well.
 	Txns                 []*TxnStatus      `protobuf:"bytes,1,rep,name=txns,proto3" json:"txns,omitempty"`
 	MaxAssigned          uint64            `protobuf:"varint,2,opt,name=max_assigned,json=maxAssigned,proto3" json:"max_assigned,omitempty"`
 	GroupChecksums       map[uint32]uint64 `protobuf:"bytes,3,rep,name=group_checksums,json=groupChecksums,proto3" json:"group_checksums,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
@@ -3544,6 +3549,7 @@ func (m *RaftBatch) GetPayload() *api.Payload {
 }
 
 type Num struct {
+	// Would need to be namespace aware.
 	Val                  uint64   `protobuf:"varint,1,opt,name=val,proto3" json:"val,omitempty"`
 	ReadOnly             bool     `protobuf:"varint,2,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
 	Forwarded            bool     `protobuf:"varint,3,opt,name=forwarded,proto3" json:"forwarded,omitempty"`
