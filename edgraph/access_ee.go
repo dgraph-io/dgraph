@@ -733,11 +733,12 @@ func authorizeState(ctx context.Context) error {
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeState := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			return status.Error(codes.PermissionDenied, err.Error())
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			if userId == x.GrootId {
 				return nil
