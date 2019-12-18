@@ -2339,8 +2339,8 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &pb.List{Uids: uids},
-			facetList, []bool{sg.Params.FacetOrderDesc}, ""); err != nil {
+		if err := types.SortWithFacet(values, &uids, facetList,
+			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2387,8 +2387,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &pb.List{Uids: uids},
-			[]bool{sg.Params.Order[0].Desc}, ""); err != nil {
+		if err := types.Sort(values, &uids, []bool{sg.Params.Order[0].Desc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
