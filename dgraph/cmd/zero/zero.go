@@ -783,6 +783,6 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 }
 
 // CurrentState return the current membership state.
-func (s *Server) CurrentState(ctx context.Context, _ *api.Payload) (*pb.MembershipState, error) {
+func (s *Server) State(ctx context.Context, _ *api.Payload) (*pb.MembershipState, error) {
 	return s.latestMembershipState(ctx)
 }
