@@ -276,8 +276,9 @@ func hashSearch(t *testing.T) {
 	var expected, result struct {
 		QueryAuthor []*author
 	}
+	dob := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 	expected.QueryAuthor = []*author{
-		&author{Name: "Ann Author", Dob: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)}}
+		&author{Name: "Ann Author", Dob: &dob}}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
@@ -338,7 +339,7 @@ func deepFilter(t *testing.T) {
 
 	expected := &author{
 		Name:  "Ann Other Author",
-		Posts: []post{{Title: "Learning GraphQL in Dgraph"}},
+		Posts: []*post{{Title: "Learning GraphQL in Dgraph"}},
 	}
 
 	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
