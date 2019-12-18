@@ -24,11 +24,19 @@
 ### Prerequisites
 
 - Install [Git](https://git-scm.com/) (may be already installed on your system, or available through your OS package manager)
-- [Install Go 1.8 or above](https://golang.org/doc/install)
+- Install [Make](https://www.gnu.org/software/make/) (may be already installed on your system, or available through your OS package manager)
+- Install [Docker](https://docs.docker.com/install/) and [Docker Compose](https://docs.docker.com/compose/install/).
+- [Install Go 1.13 or above](https://golang.org/doc/install).
 
 ### Setup Dgraph from source repo
 
-    $ go get -v -t github.com/dgraph-io/dgraph/...
+It's best to put the Dgraph repo somewhere in `$GOPATH`.
+
+    $ mkdir -p "$(go env GOPATH)/src/github.com/dgraph-io"
+    $ cd "$(go env GOPATH)/src/github.com/dgraph-io"
+    $ git clone https://github.com/dgraph-io/dgraph.git
+    $ cd ./dgraph
+    $ make install
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and compile the binaries to `$GOPATH/bin`.
 
@@ -52,13 +60,80 @@ We use [gogo protobuf](https://github.com/gogo/protobuf) in Dgraph. To get the p
 
     $ go get -u github.com/gogo/protobuf/protoc-gen-gofast
 
-To compile the proto file using the `protoc` plugin and the gogo compiler plugin run the script `gen.sh` from within the directory containing the `.proto` files.
+To compile the proto file using the `protoc` plugin and the gogo compiler plugin run the command `make regenerate` from within the directory containing the `.proto` files.
 
 
     $ cd protos
-    $ ./gen.sh
+    $ make regenerate
 
 This should generate the required `.pb.go` file.
+
+### Build Dgraph
+
+You can build Dgraph using `make dgraph` or `make install`
+which add the version information to the binary.
+
+- `make dgraph`: Creates a `dgraph` binary at `./dgraph/dgraph`
+- `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You can add
+  `$GOPATH/bin` to your `$PATH`.
+
+```text
+$ make install
+$ dgraph version
+[Decoder]: Using assembly version of decoder
+
+Dgraph version   : v1.1.1
+Dgraph SHA-256   : 97326c9328aff93851290b12d846da81a7da5b843e97d7c63f5d79091b9063c1
+Commit SHA-1     : 8994a57
+Commit timestamp : 2019-12-16 18:24:50 -0800
+Branch           : HEAD
+Go version       : go1.13.5
+
+For Dgraph official documentation, visit https://docs.dgraph.io.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+To say hi to the community       , visit https://dgraph.slack.com.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2018 Dgraph Labs, Inc.
+```
+
+### Build Docker Image
+
+```sh
+make image
+```
+
+To build a test Docker image from source, use `make image`. This builds a Dgraph
+binary using `make dgraph` and creates a Docker image named `dgraph/dgraph`
+tagged as the current branch name. The image only contains the `dgraph` binary.
+
+Example:
+```
+$ git rev-parse --abbrev-ref HEAD # current branch
+master
+$ make image
+Successfully built c74d564d911f
+Successfully tagged dgraph/dgraph:master
+$ $ docker run --rm -it dgraph/dgraph:master dgraph version
+[Decoder]: Using assembly version of decoder
+
+Dgraph version   : v1.1.1-1-g5fa139a0e
+Dgraph SHA-256   : 31f8c9324eb90a6f4659066937fcebc67bbca251c20b9da0461c2fd148187689
+Commit SHA-1     : 5fa139a0e
+Commit timestamp : 2019-12-16 20:52:06 -0800
+Branch           : master
+Go version       : go1.13.5
+
+For Dgraph official documentation, visit https://docs.dgraph.io.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+To say hi to the community       , visit https://dgraph.slack.com.
+
+Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
+Copyright 2015-2018 Dgraph Labs, Inc.
+```
+
+For release images, follow [Doing a release](#doing-a-release). It creates
+Docker images that contains `dgraph`, `dgraph-ratel`, and `badger` commands.
 
 ### Testing
 
