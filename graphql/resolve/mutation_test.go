@@ -38,16 +38,20 @@ import (
 // So can't test GQL errors here - that's integration testing on the pipeline to
 // ensure that those errors get caught before they reach rewriting.
 
-type TestCase struct {
+type testCase struct {
 	Name         string
 	GQLMutation  string
 	GQLVariables string
 	Explanation  string
-	DgraphSet    string
-	DgraphDelete string
-	DgraphQuery  string
-	Condition    string
+	DGMutations  []*dgraphMutation
+	DGQuery      string
 	Error        *x.GqlError
+}
+
+type dgraphMutation struct {
+	SetJSON    string
+	DeleteJSON string
+	Cond       string
 }
 
 func TestMutationRewriting(t *testing.T) {
@@ -66,7 +70,7 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
-	var tests []TestCase
+	var tests []testCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
@@ -74,6 +78,7 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {
 				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
@@ -89,23 +94,23 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 
 			mut := test.GetMutation(t, op)
 
+			// -- Act --
 			q, muts, err := rewriterToTest.Rewrite(mut)
 
+			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.Equal(t, tcase.Error.Error(), err.Error())
 			} else {
-				require.Len(t, muts, 1)
-				require.Equal(t, tcase.Condition, muts[0].Cond)
-				require.Equal(t, tcase.DgraphQuery, dgraph.AsString(q))
-
-				setMut := string(muts[0].SetJson)
-				if setMut != "" || tcase.DgraphSet != "" {
-					require.JSONEq(t, tcase.DgraphSet, setMut)
-				}
-
-				delMut := string(muts[0].DeleteJson)
-				if delMut != "" || tcase.DgraphDelete != "" {
-					require.JSONEq(t, tcase.DgraphDelete, delMut)
+				require.Equal(t, tcase.DGQuery, dgraph.AsString(q))
+				require.Len(t, muts, len(tcase.DGMutations))
+				for i, expected := range tcase.DGMutations {
+					require.Equal(t, expected.Cond, muts[i].Cond)
+					if len(muts[i].SetJson) > 0 || expected.SetJSON != "" {
+						require.JSONEq(t, expected.SetJSON, string(muts[i].SetJson))
+					}
+					if len(muts[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+						require.JSONEq(t, expected.DeleteJSON, string(muts[i].DeleteJson))
+					}
 				}
 			}
 		})
@@ -116,14 +121,19 @@ func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]struct {
 		mut      string
 		rewriter MutationRewriter
+		assigned map[string]string
+		result   map[string]interface{}
 	}{
 		"Add Post ": {
-			`addPost(input: {title: "A Post", author: {id: "0x1"}})`,
-			NewAddRewriter(),
+			mut:      `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
+			rewriter: NewAddRewriter(),
+			assigned: map[string]string{"Post1": "0x4"},
 		},
 		"Update Post ": {
-			`updatePost(input: { filter: { ids:  ["0x4"] }, set: { text: "Updated text" } }) `,
-			NewUpdateRewriter(),
+			mut:      `updatePost(input: {filter: {ids:  ["0x4"]}, set: {text: "Updated text"} }) `,
+			rewriter: NewUpdateRewriter(),
+			result: map[string]interface{}{
+				"updatePost": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 		},
 	}
 
@@ -146,7 +156,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 			tt := testTypes[name]
 			for _, tcase := range tests[testType] {
 				t.Run(name+testType+tcase.Name, func(t *testing.T) {
-
+					// -- Arrange --
 					gqlMutationStr := strings.Replace(tcase.GQLQuery, testType, tt.mut, 1)
 					op, err := gqlSchema.Operation(
 						&schema.Request{
@@ -155,17 +165,14 @@ func TestMutationQueryRewriting(t *testing.T) {
 						})
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
+					_, _, err = tt.rewriter.Rewrite(gqlMutation)
+					require.Nil(t, err)
 
-					assigned := map[string]string{}
-					mutated := []string{}
-					if name == "Add Post " {
-						assigned["newnode"] = "0x4"
-					} else {
-						mutated = []string{"0x4"}
-					}
+					// -- Act --
 					dgQuery, err := tt.rewriter.FromMutationResult(
-						gqlMutation, assigned, mutated)
+						gqlMutation, tt.assigned, tt.result)
 
+					// -- Assert --
 					require.Nil(t, err)
 					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 				})

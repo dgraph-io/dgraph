@@ -17,8 +17,9 @@
     }
   explanation: "A uid and type should get injected and all data transformed to
     underlying Dgraph edge names"
-  dgraphset: |
-    { "uid":"_:newnode",
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.dob":"2000-01-01",
@@ -37,8 +38,9 @@
     }
   explanation: "The input should be used for the mutation, with a uid and type getting
     injected and all data transformed to underlying Dgraph edge names"
-  dgraphset: |
-    { "uid":"_:newnode",
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
@@ -58,8 +60,9 @@
     { "name":  "A.N. Author" }
   explanation: "The input and variables should be used for the mutation, with a uid and type
     getting injected and all data transformed to underlying Dgraph edge names"
-  dgraphset: |
-    { "uid":"_:newnode",
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.posts":[]
@@ -84,13 +87,21 @@
     }
   explanation: "The reference to country should get transformed to 'uid' for the
     Dgraph JSON mutation"
-  dgraphset: |
-    { "uid":"_:newnode",
+  dgquery: |-
+    query {
+      Country2 as Country2(func: uid(0x123)) @filter(type(Country)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
       "dgraph.type":["Author"],
       "Author.name":"A.N. Author",
       "Author.country": { "uid": "0x123" },
       "Author.posts":[]
     }
+      cond: "@if(eq(len(Country2), 1))"
 
 -
   name: "Add mutation with invalid reference"
@@ -111,7 +122,8 @@
     }
   explanation: "A reference must be a valid UID"
   error:
-    { "message": "ID argument (HI!) was not able to be parsed" }
+    { "message": 
+      "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
 
 -
   name: "Add mutation with inverse reference"
@@ -132,16 +144,24 @@
     }
   explanation: "The reference to the author node should be transformed to include
     a new 'posts' edge."
-  dgraphset: |
-    { "uid" : "_:newnode",
+  dgquery: |-
+    query {
+      Author2 as Author2(func: uid(0x2)) @filter(type(Author)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Post1",
       "dgraph.type" : ["Post"],
       "Post.title" : "Exciting post",
       "Post.text" : "A really good post",
       "Post.author": {
         "uid" : "0x2",
-        "Author.posts" : { "uid": "_:newnode" }
+            "Author.posts" : [ { "uid": "_:Post1" } ]
       }
     }
+      cond: "@if(eq(len(Author2), 1))"
 
 -
   name: "Add mutation for a type that implements an interface"
@@ -164,8 +184,9 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphset: |
-    { "uid" : "_:newnode",
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Human1",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
@@ -192,8 +213,18 @@
       }
     }
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphset: |
-    { "uid" : "uid(x)",
+  dgquery: |-
+    query {
+      State1 as State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2 as Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:State1",
       "dgraph.type": ["State"],
       "State.name": "NSW",
       "State.code": "nsw",
@@ -201,11 +232,7 @@
         "uid": "0x12"
       }
     }
-  dgraphquery: |-
-    query {
-      x as addState(func: eq(State.code, "nsw")) @filter(type(State))
-    }
-  condition: "@if(eq(len(x), 0))"
+      cond: "@if(eq(len(State1), 0) AND eq(len(Country2), 1))"
 
 -
   name: "Add mutation using code on type which also has an ID field"
@@ -225,14 +252,159 @@
       }
     }
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphset: |
-    { "uid" : "uid(x)",
+  dgquery: |-
+    query {
+      Editor1 as Editor1(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Editor1",
       "dgraph.type": ["Editor"],
       "Editor.name": "A.N. Editor",
       "Editor.code": "editor"
     }
-  dgraphquery: |-
-    query {
-      x as addEditor(func: eq(Editor.code, "editor")) @filter(type(Editor))
+      cond: "@if(eq(len(Editor1), 0))"
+
+-
+  name: "Deep add mutation"
+  gqlmutation: |
+    mutation addAuthor($author: AuthorInput!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
     }
-  condition: "@if(eq(len(x), 0))"
+  gqlvariables: |
+    { "author": 
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          { 
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Author1",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New post",
+              "Post.text" : "A really new post",
+              "Post.author": {
+                "uid" : "_:Author1"
+              }
+            }
+          ]
+        }
+
+-
+  name: "Deep add with existing"
+  gqlmutation: |
+    mutation addAuthor($author: AuthorInput!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": 
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          { 
+            "title": "New post",
+            "text": "A really new post"
+          },
+          {
+            "postID": "0x123",
+            "title": "Old post",
+            "text": "A really old post"
+          }
+        ]
+      }
+    }
+  dgquery: |-
+    query {
+      Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New post",
+              "Post.text": "A really new post",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            },
+            {
+              "uid": "0x123",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post3), 1))"
+
+-
+  name: "Deep add with null"
+  gqlmutation: |
+    mutation addAuthor($author: AuthorInput!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": 
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          { 
+            "postID": null,
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Author1",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New post",
+              "Post.text" : "A really new post",
+              "Post.author": {
+                "uid" : "_:Author1"
+              }
+            }
+          ]
+    }

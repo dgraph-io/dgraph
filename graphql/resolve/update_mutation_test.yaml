@@ -19,17 +19,18 @@
       }
     }
   explanation: "The update patch should get rewritten into the Dgraph set mutation"
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "Post.text": "updated text"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update delete mutation with variables and value"
@@ -52,17 +53,18 @@
       }
     }
   explanation: "The update patch should get rewritten into the Dgraph delete mutation"
-  dgraphdelete: |
+  dgmutations:
+    - deletejson: |
     { "uid" : "uid(x)",
       "Post.text": "delete this text"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update delete mutation with variables and null"
@@ -85,17 +87,18 @@
       }
     }
   explanation: "The update patch should get rewritten into the Dgraph mutation"
-  dgraphdelete: |
+  dgmutations:
+    - deletejson: |
     { "uid" : "uid(x)",
       "Post.text": null
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation for a type that implements an interface"
@@ -123,20 +126,21 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "Character.name": "Bob",
       "Employee.ename": "employee no. 1",
       "Human.dob": "2000-01-01",
       "Human.female": true
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updateHuman(func: type(Human)) @filter(uid(0x123)) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation for an interface"
@@ -150,17 +154,18 @@
       }
     }
   explanation: "The mutation should get rewritten with correct edges from the interface."
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "Character.name": "Bob"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updateCharacter(func: type(Character)) @filter(uid(0x123)) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation using filters"
@@ -183,17 +188,18 @@
       }
     }
   explanation: "The update patch should get rewritten into the Dgraph mutation"
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "Post.text": "updated text"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo")) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation using code"
@@ -216,17 +222,18 @@
       }
     }
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "State.name": "nsw"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updateState(func: type(State)) @filter(eq(State.code, "nsw")) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
 
 -
   name: "Update mutation using code on type which also has an ID field"
@@ -250,14 +257,57 @@
       }
     }
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
-  dgraphset: |
+  dgmutations:
+    - setjson: |
     { "uid" : "uid(x)",
       "Editor.name": "A.N. Editor"
     }
-  dgraphquery: |-
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
     query {
       x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2))) {
         uid
       }
     }
-  condition: "@if(gt(len(x), 0))"
+
+-
+  name: "Update remove reference"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123"]
+        },
+        "remove": {
+          "posts": [ { "postID": "0x456" } ]
+        }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        { "uid" : "uid(x)",
+          "Author.posts": [ 
+            { 
+              "uid": "0x456", 
+              "Post.author": { "uid": "uid(x)" } 
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+        uid
+      }
+      Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
+        uid
+      }
+    }
+

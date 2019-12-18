@@ -36,6 +36,13 @@ type Post {
         isPublished: Boolean @search
         postType: PostType @search
         author: Author!
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
 }
 
 enum PostType {

@@ -128,7 +128,7 @@ func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, e
 
 func (ex *executor) Mutate(ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 	ex.failMutation--
 	if ex.failMutation == 0 {
 		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
@@ -251,7 +251,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		"Add mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
-			mutResponse: map[string]string{"newnode": "0x1"},
+			mutResponse: map[string]string{"Post1": "0x1"},
 			queryResponse: `{ "post" : [
 				{ "title": "A Post",
 				"text": "Some text",
@@ -400,7 +400,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Dgraph fail": {
 			explanation:   "a Dgraph, network or error in rewritten query failed the mutation",
 			idValue:       "0x1",
-			mutResponse:   map[string]string{"newnode": "0x1"},
+			mutResponse:   map[string]string{"Post1": "0x1"},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": { "title": "A Post" } },
@@ -417,7 +417,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Rewriting error": {
 			explanation:   "The reference ID is not a uint64, so can't be converted to a uid",
 			idValue:       "hi",
-			mutResponse:   map[string]string{"newnode": "0x1"},
+			mutResponse:   map[string]string{"Post1": "0x1"},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": { "title": "A Post" } },
