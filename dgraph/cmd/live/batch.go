@@ -82,13 +82,13 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	conflicts map[uint64]bool
+	conflicts map[uint64]struct{}
 	uidsLock  sync.RWMutex
 
 	reqNum   uint64
-	reqs     chan api.Mutation
+	reqs     chan request
 	zeroconn *grpc.ClientConn
-	sch      *schema
+	schema   *schema
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -110,7 +110,7 @@ type Counter struct {
 // server expects TLS and our certificate does not match or the host name is not verified. When
 // the node certificate is created the name much match the request host name. e.g., localhost not
 // 127.0.0.1.
-func handleError(err error, reqNum uint64, isRetry bool) {
+func handleError(err error, isRetry bool) {
 	s := status.Convert(err)
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
@@ -119,7 +119,7 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
 		if !isRetry && opt.verbose {
-			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
+			fmt.Printf("Transaction aborted. Will retry in background.\n")
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
@@ -130,25 +130,25 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
+func (l *loader) infinitelyRetry(req request) {
 	defer l.retryRequestsWg.Done()
 	defer l.deregister(&req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
-		_, err := txn.Mutate(l.opts.Ctx, &req)
+		_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 		if err == nil {
 			if opt.verbose {
-				fmt.Printf("Transaction #%d succeeded after %s.\n",
-					reqNum, english.Plural(nretries, "retry", "retries"))
+				fmt.Printf("Transaction succeeded after %s.\n",
+					english.Plural(nretries, "retry", "retries"))
 			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
 		nretries++
-		handleError(err, reqNum, true)
+		handleError(err, true)
 		atomic.AddUint64(&l.aborts, 1)
 		if i >= 10*time.Second {
 			i = 10 * time.Second
@@ -157,10 +157,11 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 	}
 }
 
-func (l *loader) request(req api.Mutation, reqNum uint64) {
+func (l *loader) request(req request) {
+	atomic.AddUint64(&l.reqNum, 1)
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
-	_, err := txn.Mutate(l.opts.Ctx, &req)
+	_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
@@ -168,10 +169,10 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 		l.deregister(&req)
 		return
 	}
-	handleError(err, reqNum, false)
+	handleError(err, false)
 	atomic.AddUint64(&l.aborts, 1)
 	l.retryRequestsWg.Add(1)
-	go l.infinitelyRetry(req, reqNum)
+	go l.infinitelyRetry(req)
 }
 
 func getTypeVal(val *api.Value) (types.Val, error) {
@@ -214,12 +215,13 @@ func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 		Facets: nq.Facets,
 	}
 	val, err := getTypeVal(nq.ObjectValue)
-	if err == nil {
-		p.Value = val.Value.([]byte)
-		p.ValueType = val.Tid.Enum()
-		return p, nil
+	if err != nil {
+		return p, err
 	}
-	return p, err
+
+	p.Value = val.Value.([]byte)
+	p.ValueType = val.Tid.Enum()
+	return p, nil
 }
 
 func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
@@ -234,8 +236,13 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 	return id
 }
 
-func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
-	sid, _ := strconv.ParseUint(nq.Subject, 0, 64)
+func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
+	// Calculates the conflict keys, inspired by the logic in
+	// addMutationInteration in posting/list.go.
+	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
+	if err != nil {
+		return nil, err
+	}
 
 	var oid uint64
 	var de *pb.DirectedEdge
@@ -250,10 +257,9 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 	}
 
 	keys := make([]uint64, 0, 1)
-
-	pred, ok := l.sch.preds[nq.Predicate]
+	pred, ok := l.schema.preds[nq.Predicate]
 	if !ok {
-		return keys
+		return keys, nil
 	}
 
 	if pred.List {
@@ -264,18 +270,23 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 	}
 
 	if pred.Reverse {
-		oi, _ := strconv.ParseUint(nq.ObjectId, 0, 64)
+		oi, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		if err != nil {
+			return keys, err
+		}
 		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
 	}
 
 	if nq.ObjectValue == nil || !(pred.Count || pred.Index) {
-		return keys
+		return keys, nil
 	}
 
-	for _, tokerName := range pred.Tokenizer {
-		toker, ok := tok.GetTokenizer(tokerName)
+	errs := make([]string, 0, 0)
+	for _, tokName := range pred.Tokenizer {
+		token, ok := tok.GetTokenizer(tokName)
 		if !ok {
-			fmt.Printf("unknown tokenizer %q", tokerName)
+			fmt.Printf("unknown tokenizer %q", tokName)
+			continue
 		}
 
 		storageVal := types.Val{
@@ -284,9 +295,13 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 		}
 
 		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
-		x.Check(err)
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
-		x.Check(err)
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(token, nq.Lang))
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
 
 		for _, t := range toks {
 			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Predicate, t))^sid)
@@ -294,43 +309,48 @@ func (l *loader) getConflictKeys(nq *api.NQuad) []uint64 {
 
 	}
 
-	return keys
+	if len(errs) > 0 {
+		return keys, fmt.Errorf(strings.Join(errs, "\n"))
+	}
+	return keys, nil
 }
 
-func (l *loader) getConflicts(req *api.Mutation) []uint64 {
+func (l *loader) conflictKeysForReq(req *request) []uint64 {
+	// Live loader only needs to look at sets and not deletes
 	keys := make([]uint64, 0, len(req.Set))
 	for _, nq := range req.Set {
-		keys = append(keys, l.getConflictKeys(nq)...)
+		conflicts, err := l.conflictKeysForNQuad(nq)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		keys = append(keys, conflicts...)
 	}
 	return keys
 }
 
-func (l *loader) addConflictKeys(req *api.Mutation) bool {
-	keys := l.getConflicts(req)
-
+func (l *loader) addConflictKeys(req *request) bool {
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	for _, key := range keys {
-		if t, ok := l.conflicts[key]; ok && t {
+	for _, key := range req.conflicts {
+		if _, ok := l.conflicts[key]; ok {
 			return false
 		}
 	}
 
-	for _, key := range keys {
-		l.conflicts[key] = true
+	for _, key := range req.conflicts {
+		l.conflicts[key] = struct{}{}
 	}
 
 	return true
 }
 
-func (l *loader) deregister(req *api.Mutation) {
-	keys := l.getConflicts(req)
-
+func (l *loader) deregister(req *request) {
 	l.uidsLock.Lock()
 	defer l.uidsLock.Unlock()
 
-	for _, i := range keys {
+	for _, i := range req.conflicts {
 		delete(l.conflicts, i)
 	}
 }
@@ -341,29 +361,29 @@ func (l *loader) deregister(req *api.Mutation) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
-	buffer := make([]api.Mutation, 0, l.opts.bufferSize)
-
-	drain := func(min int) {
-		for len(buffer) > min {
+	buffer := make([]request, 0, l.opts.bufferSize)
+	drain := func(maxSize int) {
+		for len(buffer) > maxSize {
 			i := 0
-			for _, mu := range buffer {
-				if l.addConflictKeys(&mu) {
-					reqNum := atomic.AddUint64(&l.reqNum, 1)
-					l.request(mu, reqNum)
+			for _, req := range buffer {
+				// If there is no conflict in req, we will use it
+				// and then it would shift all the other reqs in buffer
+				if !l.addConflictKeys(&req) {
+					buffer[i] = req
+					i++
 					continue
 				}
-				buffer[i] = mu
-				i++
+				// Req will no longer be part of a buffer
+				l.request(req)
 			}
 			buffer = buffer[:i]
 		}
-
 	}
 
 	for req := range l.reqs {
+		req.conflicts = l.conflictKeysForReq(&req)
 		if l.addConflictKeys(&req) {
-			reqNum := atomic.AddUint64(&l.reqNum, 1)
-			l.request(req, reqNum)
+			l.request(req)
 		} else {
 			buffer = append(buffer, req)
 		}

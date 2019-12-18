@@ -86,6 +86,11 @@ type schema struct {
 	preds      map[string]*predicate
 }
 
+type request struct {
+	*api.Mutation
+	conflicts []uint64
+}
+
 func (l *schema) init() {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
@@ -144,11 +149,6 @@ func init() {
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
-	if len(opt.authToken) > 0 {
-		md := metadata.New(nil)
-		md.Append("auth-token", opt.authToken)
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -244,10 +244,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
 
 		drain := func() {
+			// We collect opt.bufferSize requests and preprocess them. For the requests
+			// to not confict between themself, we sort them on the basis of their predicates.
+			// Predicates with count index will conflict among themselfs, so we keep them at
+			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
 				iPred := sch.preds[buffer[i].Predicate]
 				jPred := sch.preds[buffer[j].Predicate]
-
 				t := func(a *predicate) int {
 					if a != nil && a.Count {
 						return 1
@@ -260,22 +263,17 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				if t(iPred) != t(jPred) {
 					return t(iPred) < t(jPred)
 				}
-
 				return buffer[i].Predicate < buffer[j].Predicate
 			})
-
 			for len(buffer) > 0 {
-
-				f := opt.batchSize
+				sz := opt.batchSize
 				if len(buffer) < opt.batchSize {
-					f = len(buffer)
+					sz = len(buffer)
 				}
-
-				mu := api.Mutation{Set: buffer[:f]}
+				mu := request{Mutation: &api.Mutation{Set: buffer[:sz]}}
 				l.reqs <- mu
-				buffer = buffer[f:]
+				buffer = buffer[sz:]
 			}
-
 		}
 
 		for nqs := range nqbuf.Ch() {
@@ -346,8 +344,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		opts:      opts,
 		dc:        dc,
 		start:     time.Now(),
-		reqs:      make(chan api.Mutation, opts.Pending*2),
-		conflicts: make(map[uint64]bool),
+		reqs:      make(chan request, opts.Pending*2),
+		conflicts: make(map[uint64]struct{}),
 		alloc:     alloc,
 		db:        db,
 		zeroconn:  connzero,
@@ -414,7 +412,7 @@ func run() error {
 	}
 
 	var err error
-	l.sch, err = getSchema(ctx, dg)
+	l.schema, err = getSchema(ctx, dg)
 	if err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err
