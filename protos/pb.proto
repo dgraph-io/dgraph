@@ -476,7 +476,7 @@ service Worker {
 	rpc StreamGraphQLSchema(Empty) 			returns (stream GraphQLSchema) {}
 }
 
-message GraphQLSchema{
+message GraphQLSchema {
 	string schema = 1;
 }
 

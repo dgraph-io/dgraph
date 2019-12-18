@@ -210,6 +210,7 @@ func newAdminResolver(
 		if err != nil {
 			glog.Infof("Error processing GraphQL schema: %s.  "+
 				"Admin server is connected, but no GraphQL schema is being served.", err)
+			return
 		}
 
 		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
@@ -225,8 +226,6 @@ func newAdminResolver(
 		server.resetSchema(gqlSchema)
 	}
 	go server.initServer()
-	// Start listening for graphql schema changes.
-	worker.ListenForGraphqlChanges()
 	return server.resolver
 }
 
