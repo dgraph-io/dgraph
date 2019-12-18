@@ -394,12 +394,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	xfmt := exportFormats[in.Format]
-	path := func(suffix string) (string, error) {
+	fpath := func(suffix string) (string, error) {
 		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d%s", in.GroupId, suffix)))
 	}
 
 	// Open data file now.
-	dataPath, err := path(xfmt.ext + ".gz")
+	dataPath, err := fpath(xfmt.ext + ".gz")
 	if err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open schema file now.
-	schemaPath, err := path(".schema.gz")
+	schemaPath, err := fpath(".schema.gz")
 	if err != nil {
 		return err
 	}
@@ -652,10 +652,10 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an
 // empty string otherwise.
-func NormalizeExportFormat(fmt string) string {
-	fmt = strings.ToLower(fmt)
-	if _, ok := exportFormats[fmt]; ok {
-		return fmt
+func NormalizeExportFormat(format string) string {
+	format = strings.ToLower(format)
+	if _, ok := exportFormats[format]; ok {
+		return format
 	}
 	return ""
 }
