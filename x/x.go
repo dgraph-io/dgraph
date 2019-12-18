@@ -223,6 +223,17 @@ func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
 	return gqlErr
 }
 
+// WithPath adds a path to a GqlError and returns the same
+// GqlError (fluent style).
+func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
+	if gqlErr == nil {
+		return nil
+	}
+
+	gqlErr.Path = path
+	return gqlErr
+}
+
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
