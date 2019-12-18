@@ -453,6 +453,8 @@ service Zero {
 	rpc Connect (Member)               returns (ConnectionState) {}
 	rpc UpdateMembership (Group)                 returns (api.Payload) {}
 	rpc StreamMembership (api.Payload)       returns (stream MembershipState) {}
+	rpc CurrentState (api.Payload)       returns (MembershipState) {}
+
 
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}

@@ -781,3 +781,8 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 	glog.Infof("Enterprise license state proposed to the cluster")
 	return nil
 }
+
+// CurrentState return the current membership state.
+func (s *Server) CurrentState(ctx context.Context, _ *api.Payload) (resp *pb.MembershipState, err error) {
+	return s.latestMembershipState(ctx)
+}
