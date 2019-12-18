@@ -6,6 +6,8 @@
    * [Setup Dgraph from source repo](#setup-dgraph-from-source-repo)
    * [Setup Badger from source repo](#setup-badger-from-source-repo)
    * [Protocol buffers](#protocol-buffers)
+   * [Build Dgraph](#build-dgraph)
+   * [Build Docker Image](#build-docker-image)
    * [Testing](#testing)
 * [Doing a release](#doing-a-release)
 * [Contributing](#contributing)
