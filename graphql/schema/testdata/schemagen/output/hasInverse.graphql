@@ -135,7 +135,8 @@ input AuthorInput {
 }
 
 input AuthorRef {
-	id: ID!
+	id: ID
+	posts: [PostRef!]
 }
 
 input PatchAuthor {
@@ -156,7 +157,8 @@ input PostInput {
 }
 
 input PostRef {
-	id: ID!
+	id: ID
+	author: AuthorRef
 }
 
 input UpdateAuthorInput {

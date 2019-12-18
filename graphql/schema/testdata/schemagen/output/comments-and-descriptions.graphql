@@ -163,7 +163,10 @@ input TOrder {
 }
 
 input TRef {
-	id: ID!
+	id: ID
+	s: String
+	"""Desc"""
+	i: Int
 }
 
 input UpdateTInput {

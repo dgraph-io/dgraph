@@ -2,8 +2,18 @@
 # Input Schema
 #######################
 
-type Post {
-	content: String! @search
+interface Message {
+	text: String
+}
+
+type Question implements Message {
+	text: String
+	askedBy: User
+}
+
+type User {
+	name: String
+	messages(order: MessageOrder, first: Int, offset: Int): [Message]
 }
 
 #######################
@@ -87,59 +97,68 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddPostPayload {
-	post: Post
+type AddQuestionPayload {
+	question: Question
 }
 
-type DeletePostPayload {
-	msg: String
-}
-
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddUserPayload {
+	user: User
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum PostOrderable {
-	content
+enum MessageOrderable {
+	text
+}
+
+enum QuestionOrderable {
+	text
+}
+
+enum UserOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input PatchPost {
-	content: String
+input MessageOrder {
+	asc: MessageOrderable
+	desc: MessageOrderable
+	then: MessageOrder
 }
 
-input PostFilter {
-	content: StringTermFilter
-	and: PostFilter
-	or: PostFilter
-	not: PostFilter
+input QuestionInput {
+	text: String
+	askedBy: UserRef
 }
 
-input PostInput {
-	content: String!
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
 }
 
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
+input QuestionRef {
+	text: String
+	askedBy: UserRef
 }
 
-input PostRef {
-	content: String
+input UserInput {
+	name: String
 }
 
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserRef {
+	name: String
 }
 
 #######################
@@ -147,7 +166,9 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
+	queryQuestion(order: QuestionOrder, first: Int, offset: Int): [Question]
+	queryUser(order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -155,7 +176,6 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
+	addQuestion(input: QuestionInput!): AddQuestionPayload
+	addUser(input: UserInput!): AddUserPayload
 }

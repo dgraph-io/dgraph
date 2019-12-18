@@ -91,7 +91,8 @@ func TestSchemaString(t *testing.T) {
 			require.NoError(t, err)
 
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
-				t.Errorf("schema mismatch (-want +got):\n%s", diff)
+				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
+				t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
 			}
 		})
 	}

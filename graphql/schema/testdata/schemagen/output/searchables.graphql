@@ -232,7 +232,28 @@ input PostOrder {
 }
 
 input PostRef {
-	postID: ID!
+	postID: ID
+	title: String
+	titleByEverything: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
 }
 
 input PostType_exact {

@@ -7,10 +7,10 @@ type Post {
     content: String!
     author: Author!
 
-    # The generated input type shouldn't have this field because 
-    # Genre has no ID to reference.  This doesn't make sense for
+    # The generated mutation types should allow adding these, but
+    # not adding references to existing.  This doesn't make sense for
     # this schema, but just tests that both list and single objects
-    # work without ID
+    # work without IDs
     genre: Genre  
 }
 
@@ -18,8 +18,8 @@ type Author {
     id: ID
     name: String
 
-    # The input type shouldn't have this field because Post has no
-    # ID to reference.  That's ok in this schema because you'd add 
+    # The input type should allow to create posts as part of adding an
+    # author, but not add by reference.  You can also add 
     # posts with a reference to the author and the author gets hooked
     # up to the post in Dgraph ... just that this GraphQL schema
     # says you can't query by ID for Post, but you can follow the
