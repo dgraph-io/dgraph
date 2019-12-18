@@ -6,7 +6,7 @@
 #   imageRegistry: myRegistryName
 #   imagePullSecrets:
 #     - myRegistryKeySecretName
-  
+
 image:
   registry: docker.io
   repository: dgraph/dgraph
@@ -30,6 +30,7 @@ image:
 
 zero:
   name: zero
+  monitor_label: zero-dgraph-io
   ## StatefulSet controller supports automated updates. There are two valid update strategies: RollingUpdate and OnDelete
   ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
   ##
@@ -103,7 +104,7 @@ zero:
   nodeSelector: {}
   tolerations: []
 
-  ## Configure resource requests 
+  ## Configure resource requests
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   resources:
@@ -135,6 +136,7 @@ zero:
 
 alpha:
   name: alpha
+  monitor_label: alpha-dgraph-io
   ## StatefulSet controller supports automated updates. There are two valid update strategies: RollingUpdate and OnDelete
   ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
   ##
@@ -204,7 +206,7 @@ alpha:
   nodeSelector: {}
   tolerations: []
 
-  ## Configure resource requests 
+  ## Configure resource requests
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   resources:
@@ -255,7 +257,7 @@ ratel:
     fsGroup: 1001
     runAsUser: 1001
 
-  ## Configure resource requests 
+  ## Configure resource requests
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   ## resources:

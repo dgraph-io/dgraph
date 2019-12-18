@@ -43,6 +43,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
 | `zero.name`                          | Zero component name                                                 | `zero`                                              |
 | `zero.updateStrategy`                | Strategy for upgrading zero nodes                                   | `RollingUpdate`                                     |
+| `zero.monitor_label`                 | Monitor label for zero, used by prometheus.                         | `zero-dgraph-io`                                    |
 | `zero.rollingUpdatePartition`        | Partition update strategy                                           | `nil`                                               |
 | `zero.podManagementPolicy`           | Pod management policy for zero nodes                                | `OrderedReady`                                      |
 | `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
@@ -66,6 +67,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
 | `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
 | `alpha.updateStrategy`               | Strategy for upgrading alpha nodes                                  | `RollingUpdate`                                     |
+| `alpha.monitor_label`                | Monitor label for alpha, used by prometheus.                        | `alpha-dgraph-io`                                   |
 | `alpha.rollingUpdatePartition`       | Partition update strategy                                           | `nil`                                               |
 | `alpha.podManagementPolicy`          | Pod management policy for alpha nodes                               | `OrderedReady`                                      |
 | `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |
@@ -94,3 +96,44 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `ratel.securityContext.runAsUser`    | User ID for the ratel container                                     | `1001`                                              |
 | `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
 | `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
+
+## Monitoring
+
+Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
+
+Follow the below mentioned steps to setup prometheus monitoring for your cluster:
+
+* Install Prometheus opeartor:
+
+```sh
+$ kubectl apply -f https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
+```
+
+* Ensure that the instance of `prometheus-operator` has started before continuing.
+
+```sh
+$ kubectl get deployments prometheus-operator
+NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+prometheus-operator   1         1         1            1           3m
+```
+
+* Apply prometheus manifest present [here](/contrib/config/monitoring/prometheus/prometheus.yaml).
+
+```sh
+$ kubectl apply -f prometheus.yaml
+
+serviceaccount/prometheus-dgraph-io created
+clusterrole.rbac.authorization.k8s.io/prometheus-dgraph-io created
+clusterrolebinding.rbac.authorization.k8s.io/prometheus-dgraph-io created
+servicemonitor.monitoring.coreos.com/alpha.dgraph-io created
+servicemonitor.monitoring.coreos.com/zero-dgraph-io created
+prometheus.monitoring.coreos.com/dgraph-io created
+```
+
+To view prometheus UI locally run:
+
+```sh
+$ kubectl port-forward prometheus-dgraph-io-0 13370:9090
+```
+
+The UI is accessible at port 13370. Open http://localhost:13370 in your browser to play around.
