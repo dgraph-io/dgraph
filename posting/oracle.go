@@ -255,8 +255,8 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 }
 
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
-	txn.Lock()
-	defer txn.Unlock()
+	txn.cache.RLock()
+	defer txn.cache.RUnlock()
 	for key := range txn.cache.deltas {
 		if ok([]byte(key)) {
 			return true
