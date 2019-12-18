@@ -391,8 +391,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
 	return c.AssignUids(ctx, num)
 }
 
@@ -403,8 +403,8 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
 	return c.Timestamps(ctx, num)
 }
 
@@ -433,10 +433,10 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 		chr <- res
 		return
 	}
-	conn := pl.Get()
+	con := pl.Get()
 
 	var tc *api.TxnContext
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(con)
 
 	ch := make(chan error, 1)
 	go func() {
@@ -666,8 +666,8 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, err
 	}
 	var attributes []otrace.Attribute
-	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
-	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
+	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)),
+		otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {

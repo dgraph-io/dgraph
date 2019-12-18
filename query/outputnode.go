@@ -716,13 +716,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 
 		fieldName := pc.fieldName()
-		if len(pc.counts) > 0 {
+		switch {
+		case len(pc.counts) > 0:
 			addCount(pc, uint64(pc.counts[idx]), dst)
 
-		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
+		case pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd":
 			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
 
-		} else if idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
+		case idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0:
 			var fcsList []*pb.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
@@ -822,7 +823,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			// add value for count(uid) nodes if any.
 			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
-		} else {
+		default:
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")

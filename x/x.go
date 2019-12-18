@@ -289,6 +289,24 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
+// Unique takes an array and returns it with no duplicate entries.
+func Unique(a []string) []string {
+	if len(a) < 2 {
+		return a
+	}
+
+	sort.Strings(a)
+	idx := 1
+	for _, val := range a {
+		if a[idx-1] == val {
+			continue
+		}
+		a[idx] = val
+		idx++
+	}
+	return a[:idx]
+}
+
 // ReadLine reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
 // method for loading long lines which could be longer than the buffer

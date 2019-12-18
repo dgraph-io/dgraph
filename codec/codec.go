@@ -68,7 +68,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		out.Write(data)
+		_, _ = out.Write(data)
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {

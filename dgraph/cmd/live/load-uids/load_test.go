@@ -122,7 +122,8 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "--user",
+			"groot", "--password", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -136,7 +137,8 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "--user",
+			"groot", "--password", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -150,7 +152,8 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "--user",
+			"groot", "--password", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -164,7 +167,8 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "--user",
+			"groot", "--password", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
