@@ -169,7 +169,7 @@ func Init(ps *badger.DB) {
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
-		MaxCost:     500000000,
+		MaxCost:     int64(Config.AllottedMemory * 1024 * 1024),
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
