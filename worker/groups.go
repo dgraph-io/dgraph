@@ -1056,6 +1056,7 @@ func (g *groupi) broadcastGraphqlSchema(schema string) {
 	}
 }
 
+// receiveGraphQLSchemaChange will receive graphql schema changes from group 1 leader.
 func (g *groupi) receiveGraphQLSchemaChange() {
 	glog.Info("Started listening for graphql schema updates.")
 	defer g.closer.Done()
