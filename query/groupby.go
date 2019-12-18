@@ -391,19 +391,22 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 }
 
 func groupLess(a, b *groupResult) bool {
-	if len(a.uids) < len(b.uids) {
+	switch {
+	case len(a.uids) < len(b.uids):
 		return true
-	} else if len(a.uids) != len(b.uids) {
+	case len(a.uids) != len(b.uids):
 		return false
 	}
-	if len(a.keys) < len(b.keys) {
+	switch {
+	case len(a.keys) < len(b.keys):
 		return true
-	} else if len(a.keys) != len(b.keys) {
+	case len(a.keys) != len(b.keys):
 		return false
 	}
-	if len(a.aggregates) < len(b.aggregates) {
+	switch {
+	case len(a.aggregates) < len(b.aggregates):
 		return true
-	} else if len(a.aggregates) != len(b.aggregates) {
+	case len(a.aggregates) != len(b.aggregates):
 		return false
 	}
 

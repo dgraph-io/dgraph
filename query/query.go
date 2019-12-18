@@ -459,9 +459,10 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	// This is the case when we ask for a variable.
 	if gchild.Attr == "val" {
 		// E.g. a as age, result is returned as var(a)
-		if gchild.Var != "" && gchild.Var != "val" {
+		switch {
+		case gchild.Var != "" && gchild.Var != "val":
 			key = fmt.Sprintf("val(%v)", gchild.Var)
-		} else if len(gchild.NeedsVar) > 0 {
+		case len(gchild.NeedsVar) > 0:
 			// For var(s)
 			key = fmt.Sprintf("val(%v)", gchild.NeedsVar[0].Name)
 		}
@@ -1986,9 +1987,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage) {
+			switch {
+			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
 				sg.UnknownAttr = true
-			} else if err != nil {
+			case err != nil:
 				rch <- err
 				return
 			}
