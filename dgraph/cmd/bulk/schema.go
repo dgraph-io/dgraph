@@ -82,11 +82,11 @@ func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 func (s *schemaStore) setSchemaAsList(pred string) {
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.schemaMap[pred]
+	sch, ok := s.schemaMap[pred]
 	if !ok {
 		return
 	}
-	schema.List = true
+	sch.List = true
 }
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
