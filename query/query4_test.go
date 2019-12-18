@@ -444,6 +444,33 @@ func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
 			"owner": [{"uid": "0xcb"}]}]}}`, js)
 }
 
+func TestTypeFilterAtExpand(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(_all_) @filter(type(Person)) {
+				owner_name
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"q":[{"owner": [{"owner_name": "Owner of Prius", "uid": "0xcb"}]}]}}`, js)
+}
+
+func TestTypeFilterAtExpandEmptyResults(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(_all_) @filter(type(Animal)) {
+				owner_name
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[]}}`, js)
+}
+
 // Test Related to worker based pagination.
 
 func TestHasOrderDesc(t *testing.T) {

@@ -589,6 +589,9 @@ func populateCluster() {
 		<202> <dgraph.type> "CarModel" .
 		<202> <dgraph.type> "Object" .
 
+		<203> <owner_name> "Owner of Prius" .
+		<203> <dgraph.type> "Person" .
+
 		# data for regexp testing
 		_:luke <firstName> "Luke" .
 		_:luke <lastName> "Skywalker" .
