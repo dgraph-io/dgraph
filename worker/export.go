@@ -278,34 +278,34 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	buf.WriteRune('<')
-	buf.WriteString(attr)
-	buf.WriteRune('>')
-	buf.WriteByte(':')
+	_, _ = buf.WriteRune('<')
+	_, _ = buf.WriteString(attr)
+	_, _ = buf.WriteRune('>')
+	_, _ = buf.WriteRune(':')
 	if update.List {
-		buf.WriteRune('[')
+		_, _ = buf.WriteRune('[')
 	}
-	buf.WriteString(types.TypeID(update.ValueType).Name())
+	_, _ = buf.WriteString(types.TypeID(update.ValueType).Name())
 	if update.List {
-		buf.WriteRune(']')
+		_, _ = buf.WriteRune(']')
 	}
 	if update.Directive == pb.SchemaUpdate_REVERSE {
-		buf.WriteString(" @reverse")
+		_, _ = buf.WriteString(" @reverse")
 	} else if update.Directive == pb.SchemaUpdate_INDEX && len(update.Tokenizer) > 0 {
-		buf.WriteString(" @index(")
-		buf.WriteString(strings.Join(update.Tokenizer, ","))
-		buf.WriteByte(')')
+		_, _ = buf.WriteString(" @index(")
+		_, _ = buf.WriteString(strings.Join(update.Tokenizer, ","))
+		_, _ = buf.WriteRune(')')
 	}
 	if update.Count {
-		buf.WriteString(" @count")
+		_, _ = buf.WriteString(" @count")
 	}
 	if update.Lang {
-		buf.WriteString(" @lang")
+		_, _ = buf.WriteString(" @lang")
 	}
 	if update.Upsert {
-		buf.WriteString(" @upsert")
+		_, _ = buf.WriteString(" @upsert")
 	}
-	buf.WriteString(" . \n")
+	_, _ = buf.WriteString(" . \n")
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
 		Version: 2, // Schema value
@@ -331,9 +331,9 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
-	builder.WriteString("\t")
-	builder.WriteString(update.Predicate)
-	builder.WriteString("\n")
+	_, _ = builder.WriteString("\t")
+	_, _ = builder.WriteString(update.Predicate)
+	_, _ = builder.WriteString("\n")
 	return builder.String()
 }
 

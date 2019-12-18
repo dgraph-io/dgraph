@@ -128,11 +128,12 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	if err != nil {
 		return 0.0, nil, err
 	}
-	if tv.Tid == types.IntID {
+	switch {
+	case tv.Tid == types.IntID:
 		cost = float64(tv.Value.(int64))
-	} else if tv.Tid == types.FloatID {
+	case tv.Tid == types.FloatID:
 		cost = float64(tv.Value.(float64))
-	} else {
+	default:
 		rerr = errFacet
 	}
 	return cost, fcs, rerr
@@ -206,10 +207,11 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						}
 						// The default cost we'd use is 1.
 						cost, facet, err := subgraph.getCost(mIdx, lIdx)
-						if err == errFacet {
+						switch {
+						case err == errFacet:
 							// Ignore the edge and continue.
 							continue
-						} else if err != nil {
+						case err != nil:
 							rch <- err
 							return
 						}

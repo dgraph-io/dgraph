@@ -666,8 +666,8 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, err
 	}
 	var attributes []otrace.Attribute
-	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
-	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
+	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)),
+		otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
