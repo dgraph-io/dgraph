@@ -246,7 +246,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		drain := func() {
 			// We collect opt.bufferSize requests and preprocess them. For the requests
 			// to not confict between themself, we sort them on the basis of their predicates.
-			// Predicates with count index will conflict among themselfs, so we keep them at
+			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
 				iPred := sch.preds[buffer[i].Predicate]
