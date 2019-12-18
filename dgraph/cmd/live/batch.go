@@ -281,7 +281,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		return keys, nil
 	}
 
-	errs := make([]string, 0, 0)
+	errs := make([]string, 0)
 	for _, tokName := range pred.Tokenizer {
 		token, ok := tok.GetTokenizer(tokName)
 		if !ok {
