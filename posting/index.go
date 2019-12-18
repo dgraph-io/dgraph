@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math"
+	"os"
 	"time"
 
 	"github.com/golang/glog"
@@ -508,6 +510,20 @@ type rebuilder struct {
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
+	tmpDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+	glog.V(1).Infof("Rebuilding indexes using the tmp folder %s\n", tmpDir)
+
+	opts := badger.DefaultOptions(tmpDir).WithSyncWrites(false)
+	tmpDB, err := badger.Open(opts)
+	if err != nil {
+		return err
+	}
+	defer tmpDB.Close()
+
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.attr, r.startTs, hex.Dump(r.prefix))
@@ -543,6 +559,26 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, err
 		}
 
+		// Convert data into deltas.
+		txn.Update()
+
+		// Write deltas into tmp badger
+		tmpTxn := tmpDB.NewTransaction(true)
+		txn.cache.Lock()
+		for key, data := range txn.cache.deltas {
+			tmpTxn.SetEntry(&badger.Entry{
+				Key:      []byte(key),
+				Value:    data,
+				UserMeta: BitDeltaPosting,
+			})
+		}
+		// Reset deltas
+		for k := range txn.cache.deltas {
+			delete(txn.cache.deltas, k)
+		}
+		txn.cache.Unlock()
+		tmpTxn.Commit()
+
 		return nil, nil
 	}
 	stream.Send = func(*bpb.KVList) error {
@@ -557,28 +593,39 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	glog.V(1).Infof("Rebuilding index for predicate %s: Iteration done. Now committing at ts=%d\n",
 		r.attr, r.startTs)
 
-	// Convert data into deltas.
-	txn.Update()
-
 	// Now we write all the created posting lists to disk.
+	tmpTxn := tmpDB.NewTransaction(true)
+	defer tmpTxn.Discard()
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := tmpTxn.NewIterator(iterOpts)
+	defer it.Close()
+
 	writer := NewTxnWriter(pstore)
-	counter := 0
-	numDeltas := len(txn.cache.deltas)
-	for key, delta := range txn.cache.deltas {
-		if len(delta) == 0 {
-			continue
-		}
-		// We choose to write the PL at r.startTs, so it won't be read by txns,
-		// which occurred before this schema mutation. Typically, we use
-		// kv.Version as the timestamp.
-		if err := writer.SetAt([]byte(key), delta, BitDeltaPosting, r.startTs); err != nil {
+	for it.Rewind(); it.Valid(); {
+		key := it.Item().Key()
+
+		l, err := ReadPostingList(key, it)
+		if err != nil {
 			return err
 		}
 
-		counter++
-		if counter%1e5 == 0 {
-			glog.V(1).Infof("Rebuilding index for predicate %s: wrote %d of %d deltas to disk.\n",
-				r.attr, counter, numDeltas)
+		kvs, err := l.Rollup()
+		if err != nil {
+			return err
+		}
+		for _, kv := range kvs {
+			if len(kv.Value) == 0 {
+				continue
+			}
+
+			// We choose to write the PL at r.startTs, so it won't be read by txns,
+			// which occurred before this schema mutation. Typically, we use
+			// kv.Version as the timestamp.
+			err := writer.SetAt([]byte(kv.Key), kv.Value, BitCompletePosting, r.startTs)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	glog.V(1).Infoln("Rebuild: Flushing all writes.")
