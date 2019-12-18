@@ -151,6 +151,8 @@ type schema struct {
 	dgraphPredicate map[string]map[string]string
 	// Map of mutation field name to mutated type.
 	mutatedType map[string]*astType
+	// Map from typename to ast.Definition
+	typeNameAst map[string][]*ast.Definition
 }
 
 type operation struct {
@@ -180,10 +182,6 @@ type fieldDefinition struct {
 
 type mutation field
 type query field
-
-var (
-	inverseMap map[string][]*ast.Definition
-)
 
 func (s *schema) Queries(t QueryType) []string {
 	var result []string
@@ -389,6 +387,17 @@ func mutatedTypeMapping(s *ast.Schema,
 	return m
 }
 
+func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
+	typeNameAst := make(map[string][]*ast.Definition)
+
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		typeNameAst[name] = append(typeNameAst[name], typ)
+	}
+
+	return typeNameAst
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) Schema {
 	dgraphPredicate := dgraphMapping(s)
@@ -396,6 +405,7 @@ func AsSchema(s *ast.Schema) Schema {
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
+		typeNameAst:     typeMappings(s),
 	}
 }
 
@@ -561,15 +571,7 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 			continue
 		}
 
-		if inverseMap == nil {
-			inverseMap = make(map[string][]*ast.Definition)
-			for _, origTyp := range f.op.inSchema.schema.Types {
-				name := typeName(origTyp)
-				inverseMap[name] = append(inverseMap[name], origTyp)
-			}
-		}
-
-		for _, origTyp := range inverseMap[styp] {
+		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind != ast.Object {
 				continue
 			}
@@ -588,10 +590,7 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		if !ok {
 			continue
 		}
-		for _, origTyp := range f.op.inSchema.schema.Types {
-			if typeName(origTyp) != styp {
-				continue
-			}
+		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
 				// If the field doesn't exist in the map corresponding to the object type, then we
 				// don't need to include it.
