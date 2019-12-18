@@ -62,6 +62,7 @@ type groupi struct {
 	membershipChecksum       uint64                 // Checksum received by MembershipState.
 	graphQLSchemaSubscribers map[uint64]chan string // GraphQL schema subscriber channels.
 	graphQLSubscriberMaxId   uint64                 // Current Max id graphql schema subscriber
+	// It is used for generating id for graphql schema subscriber
 }
 
 var gr *groupi
@@ -1042,8 +1043,7 @@ func (g *groupi) watchGraphqlSchemaChanges(ctx context.Context) {
 
 // broadcastGraphqlSchema will broadcast schema to all the subscribers.
 func (g *groupi) broadcastGraphqlSchema(schema string) {
-	// Alpha get this notification if it's in in group 1.
-	// so update ourself first.
+	// Alpha get this notification if it's in in group 1. so update ourself first.
 	if GraphQLSchemaUpdater != nil {
 		GraphQLSchemaUpdater(schema)
 	}
@@ -1080,6 +1080,7 @@ RETRY:
 		default:
 			msg, err := stream.Recv()
 			if err != nil {
+				glog.Errorf("error from graphql schema update stream: %v", err)
 				goto RETRY
 			}
 			// We might get the update before graphql server initialize this variable. So, checking
