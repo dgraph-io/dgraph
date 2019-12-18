@@ -364,7 +364,7 @@ Index Required: `trigram`
 Matches predicate values by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) to the string,
 also known as _fuzzy matching_. The distance parameter must be greater than zero (0). Using a greater distance value can yield more but less accurate results.
 
-Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of 8.
+Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of less than or equal to 8.
 
 {{< runnable >}}
 {
@@ -758,6 +758,7 @@ Here is how you would add a `Point`.
   set {
     <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
     <_:0xeb1dde9c> <name> "Hamon Tower" .
+    <_:0xeb1dde9c> <dgraph.type> "Location" .
   }
 }
 ```
@@ -769,6 +770,7 @@ Here is how you would associate a `Polygon` with a node. Adding a `MultiPolygon`
   set {
     <_:0xf76c276b> <loc> "{'type':'Polygon','coordinates':[[[-122.409869,37.7785442],[-122.4097444,37.7786443],[-122.4097544,37.7786521],[-122.4096334,37.7787494],[-122.4096233,37.7787416],[-122.4094004,37.7789207],[-122.4095818,37.7790617],[-122.4097883,37.7792189],[-122.4102599,37.7788413],[-122.409869,37.7785442]],[[-122.4097357,37.7787848],[-122.4098499,37.778693],[-122.4099025,37.7787339],[-122.4097882,37.7788257],[-122.4097357,37.7787848]]]}"^^<geo:geojson> .
     <_:0xf76c276b> <name> "Best Western Americana Hotel" .
+    <_:0xf76c276b> <dgraph.type> "Location" .
   }
 }
 ```
@@ -2142,6 +2144,7 @@ Mutation:
   set {
     _:a <公司> "Dgraph Labs Inc"@en .
     _:b <公司> "夏新科技有限责任公司"@zh .
+    _:a <dgraph.type> "Company" .
   }
 }
 ```
@@ -2582,14 +2585,18 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 
     # -- Facets on scalar predicates
     _:alice <name> "Alice" .
+    _:alice <dgraph.type> "Person" .
     _:alice <mobile> "040123456" (since=2006-01-02T15:04:05) .
     _:alice <car> "MA0123" (since=2006-02-02T13:01:09, first=true) .
 
     _:bob <name> "Bob" .
+    _:bob <dgraph.type> "Person" .
     _:bob <car> "MA0134" (since=2006-02-02T13:01:09) .
 
     _:charlie <name> "Charlie" .
+    _:charlie <dgraph.type> "Person" .
     _:dave <name> "Dave" .
+    _:dave <dgraph.type> "Person" .
 
 
     # -- Facets on UID predicates
@@ -2600,8 +2607,11 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 
     # -- Facets for variable propagation
     _:movie1 <name> "Movie 1" .
+    _:movie1 <dgraph.type> "Movie" .
     _:movie2 <name> "Movie 2" .
+    _:movie2 <dgraph.type> "Movie" .
     _:movie3 <name> "Movie 3" .
+    _:movie3 <dgraph.type> "Movie" .
 
     _:alice <rated> _:movie1 (rating=3) .
     _:alice <rated> _:movie2 (rating=2) .
@@ -2672,8 +2682,11 @@ Example:
 {
   set {
     _:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
+    _:person1 <dgraph.type> "Person" .
     _:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
+    _:person2 <dgraph.type> "Person" .
     _:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
+    _:person3 <dgraph.type> "Person" .
   }
 }
 ```
@@ -2956,9 +2969,13 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
     _:c <friend> _:d (weight=0.3) .
     _:a <friend> _:d (weight=1) .
     _:a <name> "Alice" .
+    _:a <dgraph.type> "Person" .
     _:b <name> "Bob" .
+    _:b <dgraph.type> "Person" .
     _:c <name> "Tom" .
+    _:c <dgraph.type> "Person" .
     _:d <name> "Mallory" .
+    _:d <dgraph.type> "Person" .
   }
 }' | python -m json.tool | less
 ```
@@ -3429,9 +3446,13 @@ name: string @index(rune) .
 {
   set{
     _:ad <name> "Adam" .
+    _:ad <dgraph.type> "Person" .
     _:aa <name> "Aaron" .
+    _:aa <dgraph.type> "Person" .
     _:am <name> "Amy" .
+    _:am <dgraph.type> "Person" .
     _:ro <name> "Ronald" .
+    _:ro <dgraph.type> "Person" .
   }
 }
 ```

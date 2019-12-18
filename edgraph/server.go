@@ -774,18 +774,30 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	for name := range qc.uidRes {
 		v := qr.Vars[name]
-		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
+
+		// If the list of UIDs is empty but the map of values is not,
+		// we need to get the UIDs from the keys in the map.
+		var uidList []uint64
+		if v.Uids != nil && len(v.Uids.Uids) > 0 {
+			uidList = v.Uids.Uids
+		} else {
+			uidList = make([]uint64, 0, len(v.Vals))
+			for uid := range v.Vals {
+				uidList = append(uidList, uid)
+			}
+		}
+		if len(uidList) == 0 {
 			continue
 		}
 
 		// We support maximum 1 million UIDs per variable to ensure that we
 		// don't do bad things to alpha and mutation doesn't become too big.
-		if len(v.Uids.Uids) > 1e6 {
+		if len(uidList) > 1e6 {
 			return resp, errors.Errorf("var [%v] has over million UIDs", name)
 		}
 
-		uids := make([]string, len(v.Uids.Uids))
-		for i, u := range v.Uids.Uids {
+		uids := make([]string, len(uidList))
+		for i, u := range uidList {
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
