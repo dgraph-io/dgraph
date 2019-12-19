@@ -17,9 +17,11 @@
 package edgraph
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -41,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -599,23 +599,18 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 		return nil, err
 	}
 
-	// Get the state info from Zero's CurrentState GRPC interface.
-	pl := conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
-	c := pb.NewZeroClient(pl.Get())
-	ms, err := c.CurrentState(ctx, &api.Payload{})
+	resp, err := http.Get(fmt.Sprintf("http://localhost:6080/state"))
 	if err != nil {
 		return nil, err
 	}
-	if ms == nil {
-		return nil, errors.New("No membership state found")
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	m := jsonpb.Marshaler{}
-	var json bytes.Buffer
-	if err := m.Marshal(&json, ms); err != nil {
-		return nil, errors.New("Error marshalling state information to JSON")
-	}
-	return &api.Response{Json: json.Bytes()}, nil
+	return &api.Response{Json: body}, nil
 }
 
 // Query handles queries or mutations
