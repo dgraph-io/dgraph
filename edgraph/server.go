@@ -611,11 +611,11 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 	}
 
 	m := jsonpb.Marshaler{}
-	var jsonState bytes.Buffer
-	if err := m.Marshal(&jsonState, ms); err != nil {
+	var json bytes.Buffer
+	if err := m.Marshal(&json, ms); err != nil {
 		return nil, errors.New("Error marshalling state information to JSON")
 	}
-	return &api.Response{Json: jsonState.Bytes()}, nil
+	return &api.Response{Json: json.Bytes()}, nil
 }
 
 // Query handles queries or mutations
