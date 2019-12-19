@@ -46,11 +46,7 @@ func newTimeout(retry int) time.Duration {
 }
 
 // TODO: Hook this to worker config.
-var limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}
-
-func init() {
-	go limiter.bleed()
-}
+var limiter rateLimiter
 
 type rateLimiter struct {
 	iou int

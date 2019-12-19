@@ -32,8 +32,6 @@ require (
 	github.com/google/codesearch v1.0.0
 	github.com/google/uuid v1.0.0
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1
