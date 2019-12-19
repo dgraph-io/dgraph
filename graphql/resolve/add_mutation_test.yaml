@@ -409,3 +409,54 @@
           ]
         }
 
+-
+  name: "Add three deep"
+  gqlmutation: |
+    mutation addAuthor($author: AuthorInput!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": 
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          { 
+            "title": "Exciting post",
+            "text": "A really good post",
+            "category": {
+              "name": "New Category"
+            }
+          }
+        ]
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "Exciting post",
+              "Post.text": "A really good post",
+              "Post.author": {
+                "uid": "_:Author1"
+              },
+              "Post.category": {
+                "uid": "_:Category3",
+                "dgraph.type": [ "Category" ],
+                "Category.name": "New Category",
+                "Category.Posts": [ 
+                  { "uid": "_:Post2" } 
+                ]
+              }
+            }
+          ]
+        }
