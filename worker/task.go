@@ -131,9 +131,10 @@ func processWithBackupRequest(
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
 	gid, err := groups().BelongsToReadOnly(attr)
-	if err != nil {
+	switch {
+	case err != nil:
 		return &pb.Result{}, err
-	} else if gid == 0 {
+	case gid == 0:
 		return &pb.Result{}, errNonExistentTablet
 	}
 
@@ -374,7 +375,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, listType)
-			if err == posting.ErrNoValue || len(vals) == 0 {
+			switch {
+			case err == posting.ErrNoValue || len(vals) == 0:
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
@@ -388,7 +390,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					}
 				}
 				continue
-			} else if err != nil {
+			case err != nil:
 				return err
 			}
 
@@ -503,11 +505,12 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 	// Retrieve values when facet filtering is not being requested.
 	if q.FacetsFilter == nil {
 		// Retrieve values.
-		if q.ExpandAll {
+		switch {
+		case q.ExpandAll:
 			vals, err = pl.AllValues(args.q.ReadTs)
-		} else if listType && len(q.Langs) == 0 {
+		case listType && len(q.Langs) == 0:
 			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-		} else {
+		default:
 			var val types.Val
 			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
 			vals = append(vals, val)
@@ -806,11 +809,13 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// we get partitioned away from group zero as long as it's not removed.
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
-	if gid, err := groups().BelongsToReadOnly(q.Attr); err != nil {
+	gid, err := groups().BelongsToReadOnly(q.Attr)
+	switch {
+	case err != nil:
 		return &pb.Result{}, err
-	} else if gid == 0 {
+	case gid == 0:
 		return &pb.Result{}, errNonExistentTablet
-	} else if gid != groups().groupId() {
+	case gid != groups().groupId():
 		return &pb.Result{}, errUnservedTablet
 	}
 
@@ -1130,11 +1135,12 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 
 		x.AssertTrue(len(arg.out.UidMatrix) > 0)
 		rowsToFilter := 0
-		if arg.srcFn.fname == eq {
+		switch {
+		case arg.srcFn.fname == eq:
 			// If fn is eq, we could have multiple arguments and hence multiple rows
 			// to filter.
 			rowsToFilter = len(arg.srcFn.tokens)
-		} else if arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken {
+		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
 			// If operation is not eq and ineqValueToken equals first token,
 			// then we need to filter first row..
 			rowsToFilter = 1
@@ -1409,9 +1415,10 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
-		if err == posting.ErrNoValue {
+		switch {
+		case err == posting.ErrNoValue:
 			continue
-		} else if err != nil {
+		case err != nil:
 			return err
 		}
 
@@ -1755,11 +1762,12 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	}
 
 	gid, err := groups().BelongsToReadOnly(q.Attr)
-	if err != nil {
+	switch {
+	case err != nil:
 		return &pb.Result{}, err
-	} else if gid == 0 {
+	case gid == 0:
 		return &pb.Result{}, errNonExistentTablet
-	} else if gid != groups().groupId() {
+	case gid != groups().groupId():
 		return &pb.Result{}, errUnservedTablet
 	}
 
@@ -1876,26 +1884,29 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 			return false, nil
 		}
 		aidx := 0
+	loop:
 		for fidx := 0; aidx < len(argTokens) && fidx < len(fcTokens); {
-			if fcTokens[fidx] < argTokens[aidx] {
+			switch {
+			case fcTokens[fidx] < argTokens[aidx]:
 				fidx++
-			} else if fcTokens[fidx] == argTokens[aidx] {
+			case fcTokens[fidx] == argTokens[aidx]:
 				fidx++
 				aidx++
-			} else {
+			default:
 				// as all of argTokens should match
 				// which is not possible now.
-				break
+				break loop
 			}
 		}
 		return aidx == len(argTokens), nil
 	case "anyofterms":
 		for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
-			if fcTokens[fidx] < argTokens[aidx] {
+			switch {
+			case fcTokens[fidx] < argTokens[aidx]:
 				fidx++
-			} else if fcTokens[fidx] == argTokens[aidx] {
+			case fcTokens[fidx] == argTokens[aidx]:
 				return true, nil
-			} else {
+			default:
 				aidx++
 			}
 		}
@@ -2024,9 +2035,10 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		return nil
 	}
 
-	if cp.fn == "lt" {
+	switch cp.fn {
+	case "lt":
 		count--
-	} else if cp.fn == "gt" {
+	case "gt":
 		count++
 	}
 
@@ -2134,9 +2146,11 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		}
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
-			if err := checkInclusion(pk.Uid); err == posting.ErrNoValue {
+			err := checkInclusion(pk.Uid)
+			switch {
+			case err == posting.ErrNoValue:
 				continue
-			} else if err != nil {
+			case err != nil:
 				return err
 			}
 			result.Uids = append(result.Uids, pk.Uid)
@@ -2153,12 +2167,16 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		if err != nil {
 			return err
 		}
-		if empty, err := l.IsEmpty(q.ReadTs, 0); err != nil {
+		empty, err := l.IsEmpty(q.ReadTs, 0)
+		switch {
+		case err != nil:
 			return err
-		} else if !empty {
-			if err := checkInclusion(pk.Uid); err == posting.ErrNoValue {
+		case !empty:
+			err := checkInclusion(pk.Uid)
+			switch {
+			case err == posting.ErrNoValue:
 				continue
-			} else if err != nil {
+			case err != nil:
 				return err
 			}
 			result.Uids = append(result.Uids, pk.Uid)

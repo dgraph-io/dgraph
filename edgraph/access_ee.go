@@ -470,11 +470,12 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// extract the list of predicates from the operation object
 	var preds []string
-	if len(op.DropAttr) > 0 {
+	switch {
+	case len(op.DropAttr) > 0:
 		preds = []string{op.DropAttr}
-	} else if op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0 {
+	case op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0:
 		preds = []string{op.DropValue}
-	} else {
+	default:
 		update, err := schema.Parse(op.Schema)
 		if err != nil {
 			return err
@@ -492,13 +493,14 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined, per the
 			// fail open approach
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -590,20 +592,22 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
 			if userId == x.GrootId {
 				// groot is allowed to mutate anything except the permission of the acl predicates
-				if isAclPredMutation(gmu.Set) {
+				switch {
+				case isAclPredMutation(gmu.Set):
 					return errors.Errorf("the permission of ACL predicates can not be changed")
-				} else if isAclPredMutation(gmu.Del) {
+				case isAclPredMutation(gmu.Del):
 					// even groot can't delete ACL predicates
 					return errors.Errorf("ACL predicates can't be deleted")
 				}
@@ -685,7 +689,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// Do not allow schema queries unless the user has logged in.
 			if isSchemaQuery {
 				return status.Error(codes.Unauthenticated, err.Error())
@@ -693,9 +698,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 			// Treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined.
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
