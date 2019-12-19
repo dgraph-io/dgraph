@@ -29,6 +29,232 @@ func TestRunAll_Normal(t *testing.T) {
 	common.RunAll(t)
 }
 
+func TestSchema_Normal(t *testing.T) {
+	expectedDgraphSchema := `
+	{
+		"schema": [{
+			"predicate": "Author.country",
+			"type": "uid"
+		}, {
+			"predicate": "Author.dob",
+			"type": "datetime",
+			"index": true,
+			"tokenizer": ["year"]
+		}, {
+			"predicate": "Author.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash", "trigram"]
+		}, {
+			"predicate": "Author.posts",
+			"type": "uid",
+			"list": true
+		}, {
+			"predicate": "Author.reputation",
+			"type": "float",
+			"index": true,
+			"tokenizer": ["float"]
+		}, {
+			"predicate": "Character.appearsIn",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash"],
+			"list": true
+		}, {
+			"predicate": "Character.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"]
+		}, {
+			"predicate": "Country.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["trigram", "hash"]
+		}, {
+			"predicate": "Droid.primaryFunction",
+			"type": "string"
+		}, {
+			"predicate": "Employee.ename",
+			"type": "string"
+		}, {
+			"predicate": "Human.starships",
+			"type": "uid",
+			"list": true
+		}, {
+			"predicate": "Human.totalCredits",
+			"type": "float"
+		}, {
+			"predicate": "Post.author",
+			"type": "uid"
+		}, {
+			"predicate": "Post.isPublished",
+			"type": "bool",
+			"index": true,
+			"tokenizer": ["bool"]
+		}, {
+			"predicate": "Post.numLikes",
+			"type": "int",
+			"index": true,
+			"tokenizer": ["int"]
+		}, {
+			"predicate": "Post.postType",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash", "trigram"]
+		}, {
+			"predicate": "Post.tags",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"],
+			"list": true
+		}, {
+			"predicate": "Post.text",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["fulltext"]
+		}, {
+			"predicate": "Post.title",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["term", "fulltext"]
+		}, {
+			"predicate": "Post.topic",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"]
+		}, {
+			"predicate": "Schema.date",
+			"type": "datetime",
+			"index": true,
+			"tokenizer": ["day"]
+		}, {
+			"predicate": "Schema.schema",
+			"type": "string"
+		}, {
+			"predicate": "Starship.length",
+			"type": "float"
+		}, {
+			"predicate": "Starship.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["term"]
+		}, {
+			"predicate": "State.name",
+			"type": "string"
+		}, {
+			"predicate": "State.xcode",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["trigram", "hash"],
+			"upsert": true
+		}, {
+			"predicate": "dgraph.type",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"],
+			"list": true
+		}],
+		"types": [{
+			"fields": [{
+				"name": "Author.name"
+			}, {
+				"name": "Author.dob"
+			}, {
+				"name": "Author.reputation"
+			}, {
+				"name": "Author.country"
+			}, {
+				"name": "Author.posts"
+			}],
+			"name": "Author"
+		}, {
+			"fields": [{
+				"name": "Character.name"
+			}, {
+				"name": "Character.appearsIn"
+			}],
+			"name": "Character"
+		}, {
+			"fields": [{
+				"name": "Country.name"
+			}],
+			"name": "Country"
+		}, {
+			"fields": [{
+				"name": "Character.name"
+			}, {
+				"name": "Character.appearsIn"
+			}, {
+				"name": "Droid.primaryFunction"
+			}],
+			"name": "Droid"
+		}, {
+			"fields": [{
+				"name": "Employee.ename"
+			}],
+			"name": "Employee"
+		}, {
+			"fields": [{
+				"name": "Employee.ename"
+			}, {
+				"name": "Character.name"
+			}, {
+				"name": "Character.appearsIn"
+			}, {
+				"name": "Human.starships"
+			}, {
+				"name": "Human.totalCredits"
+			}],
+			"name": "Human"
+		}, {
+			"fields": [{
+				"name": "Post.title"
+			}, {
+				"name": "Post.text"
+			}, {
+				"name": "Post.tags"
+			}, {
+				"name": "Post.topic"
+			}, {
+				"name": "Post.numLikes"
+			}, {
+				"name": "Post.isPublished"
+			}, {
+				"name": "Post.postType"
+			}, {
+				"name": "Post.author"
+			}],
+			"name": "Post"
+		}, {
+			"fields": [{
+				"name": "Schema.schema"
+			}, {
+				"name": "Schema.date"
+			}],
+			"name": "Schema"
+		}, {
+			"fields": [{
+				"name": "Starship.name"
+			}, {
+				"name": "Starship.length"
+			}],
+			"name": "Starship"
+		}, {
+			"fields": [{
+				"name": "State.xcode"
+			}, {
+				"name": "State.name"
+			}],
+			"name": "State"
+		}]
+	}
+	`
+
+	t.Run("graphql schema", func(t *testing.T) {
+		common.SchemaTest(t, expectedDgraphSchema)
+	})
+}
+
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
