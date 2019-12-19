@@ -775,7 +775,8 @@ func asIDReference(
 	// query XYZ = ...
 	// query is 123 an author
 	// query(func: uid(XYZ)) { a as author(and not 123) }
-	// { "uid": "XYZ", "title": "...", "author": { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }, ... }
+	// { "uid": "XYZ", "title": "...",
+	//   "author": { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }, ... }
 	// also
 	// delete { uid: uid(a), posts: [ uid: uid(XYZ)] }
 	//

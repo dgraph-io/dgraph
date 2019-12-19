@@ -349,7 +349,8 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	require.NoError(t, err)
 	require.Len(t, result.UpdateAuthor.Author, 1)
 
-	if diff := cmp.Diff(expectedAuthor, result.UpdateAuthor.Author[0], ignoreOpts()...); diff != "" {
+	if diff :=
+		cmp.Diff(expectedAuthor, result.UpdateAuthor.Author[0], ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 
@@ -363,7 +364,10 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	}
 	requirePost(t, newAuth.Posts[0].PostID, p, false, executeRequest)
 
-	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{newAuth}, []*post{newAuth.Posts[0], newAuth.Posts[0], patchSet.Posts[0]})
+	cleanUp(t,
+		[]*country{newCountry, anotherCountry},
+		[]*author{newAuth},
+		[]*post{newAuth.Posts[0], newAuth.Posts[0], patchSet.Posts[0]})
 }
 
 func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExecutor) *author {
