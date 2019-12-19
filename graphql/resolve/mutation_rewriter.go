@@ -740,18 +740,12 @@ func asIDReference(
 	addInverseLink(result, srcField, srcUID)
 
 	qry := &gql.GraphQuery{
-		Var:  variable,
-		Attr: variable,
-		UID:  []uint64{uid},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{gql.Arg{Value: srcField.Type().Name()}},
-			},
-		},
+		Var:      variable,
+		Attr:     variable,
+		UID:      []uint64{uid},
 		Children: []*gql.GraphQuery{{Attr: "uid"}},
 	}
-
+	addTypeFilter(qry, srcField.Type())
 	addUIDFunc(qry, []uint64{uid})
 
 	frag.queries = []*gql.GraphQuery{qry}

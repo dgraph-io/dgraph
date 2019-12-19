@@ -463,7 +463,7 @@ func addPost(t *testing.T, authorID, countryID string,
 	} }`, authorID, countryID)
 
 	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddPost struct {
