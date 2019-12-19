@@ -138,8 +138,8 @@ func RemoveCacheFor(key []byte) {
 	lCache.Del(key)
 }
 
-// ClearCachedKeys will delete the cached list by this txn.
-func (txn *Txn) ClearCachedKeys() {
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
 	if txn == nil || txn.cache == nil {
 		return
 	}

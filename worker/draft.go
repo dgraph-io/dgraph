@@ -547,7 +547,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
 		// Clear all the cached list.
-		txn.ClearCachedKeys()
+		txn.RemoveCachedKeys()
 	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
