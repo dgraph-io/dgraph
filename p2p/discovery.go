@@ -21,9 +21,7 @@ import (
 	"time"
 
 	log "github.com/ChainSafe/log15"
-	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
 	libp2pdiscovery "github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
@@ -32,7 +30,7 @@ const mdnsPeriod = time.Minute
 // See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
 type Notifee struct {
 	ctx  context.Context
-	host libp2phost.Host
+	host *host
 }
 
 // discovery submodule
@@ -51,10 +49,10 @@ func newDiscovery(ctx context.Context, host *host) (d *discovery, err error) {
 	return d, err
 }
 
-// close shuts down any discovery services that are running
+// close shuts down any running discovery services
 func (d *discovery) close() error {
 
-	// check if mdns service running
+	// check if mdns service is running
 	if d.mdns != nil {
 
 		// close mdns service
@@ -90,7 +88,7 @@ func (d *discovery) startMdns() {
 	// register Notifee on mDNS discovery service
 	mdns.RegisterNotifee(Notifee{
 		ctx:  d.ctx,
-		host: d.host.h,
+		host: d.host,
 	})
 
 	d.mdns = mdns
@@ -100,15 +98,12 @@ func (d *discovery) startMdns() {
 func (n Notifee) HandlePeerFound(p peer.AddrInfo) {
 	log.Trace(
 		"Peer found using mDNS discovery service",
-		"host", n.host.ID(),
+		"host", n.host.id(),
 		"peer", p.ID,
 	)
 
-	// add peer address to peerstore
-	n.host.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-
 	// connect to found peer
-	err := n.host.Connect(n.ctx, p)
+	err := n.host.connect(p)
 	if err != nil {
 		log.Error("Failed to connect to peer using mDNS discovery service", "err", err)
 	}

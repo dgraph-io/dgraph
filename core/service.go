@@ -81,6 +81,9 @@ func NewService(cfg *Config, newBlocks chan types.Block) (*Service, error) {
 // Start starts the core service
 func (s *Service) Start() error {
 
+	// TODO: generate host status message and send to p2p service on startup
+	// msgSend <- hostMessage
+
 	// start receiving blocks from BABE session
 	go s.receiveBlocks()
 
@@ -155,6 +158,12 @@ func (s *Service) handleReceivedBlock(block types.Block) (err error) {
 
 	// send block announce message to p2p service
 	s.msgSend <- msg
+
+	// TODO: check if host status message needs to be updated based on new block
+	// information, if so, generate host status message and send to p2p service
+
+	// TODO: send updated host status message to p2p service
+	// s.msgSend <- msg
 
 	return nil
 }

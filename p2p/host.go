@@ -28,6 +28,7 @@ import (
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
@@ -161,8 +162,12 @@ func (h *host) registerStreamHandler(handler func(network.Stream)) {
 }
 
 // connect connects the host to a specific peer address
-func (h *host) connect(addrInfo peer.AddrInfo) (err error) {
-	err = h.h.Connect(h.ctx, addrInfo)
+func (h *host) connect(p peer.AddrInfo) (err error) {
+
+	// add peer address to peerstore
+	h.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
+
+	err = h.h.Connect(h.ctx, p)
 	return err
 }
 
@@ -238,6 +243,12 @@ func (h *host) broadcast(msg Message) {
 	}
 }
 
+// closePeer closes the peer
+func (h *host) closePeer(peer peer.ID) error {
+	err := h.h.Network().ClosePeer(peer)
+	return err
+}
+
 // ping pings a peer using DHT
 func (h *host) ping(peer peer.ID) error {
 	return h.dht.Ping(h.ctx, peer)
@@ -251,6 +262,16 @@ func (h *host) id() string {
 // Peers returns connected peers
 func (h *host) peers() []peer.ID {
 	return h.h.Network().Peers()
+}
+
+// peerConnected checks if peer is connected
+func (h *host) peerConnected(peer peer.ID) bool {
+	for _, p := range h.peers() {
+		if p == peer {
+			return true
+		}
+	}
+	return false
 }
 
 // peerCount returns the number of connected peers

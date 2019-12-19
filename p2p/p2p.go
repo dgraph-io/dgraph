@@ -19,7 +19,6 @@ package p2p
 import (
 	"context"
 
-	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -36,27 +35,6 @@ type Service struct {
 	gossip    *gossip
 	msgRec    <-chan Message
 	msgSend   chan<- Message
-}
-
-// Health is network information about host needed for the rpc server
-type Health struct {
-	Peers           int
-	IsSyncing       bool
-	ShouldHavePeers bool
-}
-
-// NetworkState is network information about host needed for the rpc server
-type NetworkState struct {
-	PeerId string
-}
-
-// PeerInfo is network information about peers needed for the rpc server
-type PeerInfo struct {
-	PeerId          string
-	Roles           byte
-	ProtocolVersion uint32
-	BestHash        common.Hash
-	BestNumber      uint64
 }
 
 // NewService creates a new p2p service from the configuration and message channels
@@ -103,22 +81,28 @@ func NewService(conf *Config, msgSend chan<- Message, msgRec <-chan Message) (*S
 // Start starts the p2p service
 func (s *Service) Start() error {
 
+	// receive messages from core service (including host status messages)
+	go s.receiveCoreMessages()
+
+	// TODO: ensure core service generates host status message and sends to p2p
+	// service before connecting and exchanging status messages with peers
+
 	// set connection and stream handler
 	s.host.registerConnHandler(s.handleConn)
 	s.host.registerStreamHandler(s.handleStream)
-
-	s.host.bootstrap()
 	s.host.printHostAddresses()
 
-	// check if mDNS discovery service is enabled
+	s.host.bootstrap()
+
+	// TODO: ensure bootstrap has connected to bootnodes and addresses have been
+	// registered by the host before discovery attempts to connect to bootnodes
+
+	// check if mDNS is enabled
 	if !s.host.noMdns {
 
 		// start mDNS discovery service
 		s.discovery.startMdns()
 	}
-
-	// receive messages from core service
-	go s.receiveCoreMessages()
 
 	return nil
 }
@@ -152,14 +136,27 @@ func (s *Service) receiveCoreMessages() {
 		// receive message from core service
 		msg := <-s.msgRec
 
-		log.Trace(
-			"Broadcasting message from core service",
-			"host", s.host.id(),
-			"type", msg.GetType(),
-		)
+		// check if non-status message
+		if msg.GetType() != StatusMsgType {
 
-		// broadcast message to connected peers
-		s.host.broadcast(msg)
+			log.Trace(
+				"Broadcasting message from core service",
+				"host", s.host.id(),
+				"type", msg.GetType(),
+			)
+
+			// broadcast message to connected peers
+			s.host.broadcast(msg)
+
+		} else {
+
+			// check if status exchange is enabled
+			if !s.host.noStatus {
+
+				// update host status message
+				s.status.setHostMessage(msg)
+			}
+		}
 	}
 }
 
@@ -169,7 +166,7 @@ func (s *Service) handleConn(conn network.Conn) {
 	// check if status exchange is enabled
 	if !s.host.noStatus {
 
-		// starts sending status messages to connected peer
+		// manage status messages for new connection
 		s.status.handleConn(conn)
 	}
 }
@@ -193,7 +190,6 @@ func (s *Service) handleStream(stream network.Stream) {
 	)
 
 	if msg.GetType() != StatusMsgType {
-		// handle non-status message with service
 		s.handleMessage(stream, msg)
 	} else {
 		// handle status message with status submodule
@@ -206,7 +202,7 @@ func (s *Service) handleMessage(stream network.Stream, msg Message) {
 	peer := stream.Conn().RemotePeer()
 
 	// check if status is disabled or peer status is confirmed
-	if s.host.noStatus || s.status.peerConfirmed[peer] {
+	if s.host.noStatus || s.status.confirmed(peer) {
 
 		// send all non-status messages to core service
 		s.msgSend <- msg
@@ -215,7 +211,7 @@ func (s *Service) handleMessage(stream network.Stream, msg Message) {
 	// check if gossip is enabled
 	if !s.host.noGossip {
 
-		// broadcast message if message has not been seen
+		// broadcast all non-status messages that have not been seen
 		s.gossip.handleMessage(stream, msg)
 	}
 }
@@ -239,8 +235,15 @@ func (s *Service) NetworkState() NetworkState {
 // Peers returns information about connected peers needed for the rpc server
 func (s *Service) Peers() (peers []PeerInfo) {
 	for _, p := range s.host.peers() {
-		if s.status.peerConfirmed[p] {
-			peers = append(peers, s.status.peerInfo[p])
+		if s.status.confirmed(p) {
+			msg := s.status.peerMessage[p]
+			peers = append(peers, PeerInfo{
+				PeerId:          p.String(),
+				Roles:           msg.Roles,
+				ProtocolVersion: msg.ProtocolVersion,
+				BestHash:        msg.BestBlockHash,
+				BestNumber:      msg.BestBlockNumber,
+			})
 		}
 	}
 	return peers
