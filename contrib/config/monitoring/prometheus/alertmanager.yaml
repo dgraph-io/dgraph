@@ -2,12 +2,12 @@
 # This creates a new alertmanager cluster with 3 replicas.
 #
 # Create an alertmanager config using the below command:
-# kubectl create secret generic alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+# kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
 # Make sure the name of secret is of the form alertmanager-{ALERTMANAGER_NAME}
 apiVersion: monitoring.coreos.com/v1
 kind: Alertmanager
 metadata:
-  name: dgraph-io
+  name: alertmanager-dgraph-io
   labels:
     app: dgraph-io
 spec:
@@ -28,4 +28,4 @@ spec:
     protocol: TCP
     targetPort: web
   selector:
-    alertmanager: dgraph-io
+    alertmanager: alertmanager-dgraph-io

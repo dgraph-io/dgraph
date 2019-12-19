@@ -86,7 +86,7 @@ spec:
   alerting:
     alertmanagers:
     - namespace: default
-      name: dgraph-io
+      name: alertmanager-dgraph-io
       port: web
   serviceMonitorSelector:
     matchLabels:
