@@ -378,7 +378,7 @@ func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExe
 						id
 				  		name
 					}
-					posts {
+					posts(order: { asc: title }) {
 						postID
 						title
 						text
