@@ -53,20 +53,6 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	return sgr.toFastJSON(l)
 }
 
-// outputNode is the generic output / writer for preTraverse.
-type outputNode interface {
-	AddValue(attr string, v types.Val)
-	AddListValue(attr string, v types.Val, list bool)
-	AddMapChild(attr string, node outputNode, isRoot bool)
-	AddListChild(attr string, child outputNode)
-	New(attr string) outputNode
-	SetUID(uid uint64, attr string)
-	IsEmpty() bool
-
-	addGroupby(*SubGraph, *groupResults, string)
-	addAggregations(*SubGraph) error
-}
-
 func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonNode {
 	return &fastJsonNode{
 		attr:      attr,
@@ -95,7 +81,7 @@ func (fj *fastJsonNode) AddListValue(attr string, v types.Val, list bool) {
 	}
 }
 
-func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, isRoot bool) {
+func (fj *fastJsonNode) AddMapChild(attr string, val *fastJsonNode, isRoot bool) {
 	var childNode *fastJsonNode
 	for _, c := range fj.attrs {
 		if c.attr == attr {
@@ -105,23 +91,23 @@ func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, isRoot bool) {
 	}
 
 	if childNode != nil {
-		val.(*fastJsonNode).isChild = true
-		val.(*fastJsonNode).attr = attr
-		childNode.attrs = append(childNode.attrs, val.(*fastJsonNode).attrs...)
+		val.isChild = true
+		val.attr = attr
+		childNode.attrs = append(childNode.attrs, val.attrs...)
 	} else {
-		val.(*fastJsonNode).isChild = false
-		val.(*fastJsonNode).attr = attr
-		fj.attrs = append(fj.attrs, val.(*fastJsonNode))
+		val.isChild = false
+		val.attr = attr
+		fj.attrs = append(fj.attrs, val)
 	}
 }
 
-func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
-	child.(*fastJsonNode).attr = attr
-	child.(*fastJsonNode).isChild = true
-	fj.attrs = append(fj.attrs, child.(*fastJsonNode))
+func (fj *fastJsonNode) AddListChild(attr string, child *fastJsonNode) {
+	child.attr = attr
+	child.isChild = true
+	fj.attrs = append(fj.attrs, child)
 }
 
-func (fj *fastJsonNode) New(attr string) outputNode {
+func (fj *fastJsonNode) New(attr string) *fastJsonNode {
 	return &fastJsonNode{attr: attr, isChild: false}
 }
 
@@ -458,7 +444,7 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	return nil
 }
 
-func handleCountUIDNodes(sg *SubGraph, n outputNode, count int) bool {
+func handleCountUIDNodes(sg *SubGraph, n *fastJsonNode, count int) bool {
 	addedNewChild := false
 	fieldName := sg.fieldName()
 	for _, child := range sg.Children {
@@ -531,7 +517,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		}
 
 		// Lets normalize the response now.
-		normalized, err := n1.(*fastJsonNode).normalize()
+		normalized, err := n1.normalize()
 		if err != nil {
 			return err
 		}
@@ -564,7 +550,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	var err error
 	n := seedNode.New("_root_")
 	for _, sg := range sg.Children {
-		err = processNodeUids(n.(*fastJsonNode), sg)
+		err = processNodeUids(n, sg)
 		if err != nil {
 			return nil, err
 		}
@@ -575,12 +561,12 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
 	var bufw bytes.Buffer
-	if len(n.(*fastJsonNode).attrs) == 0 {
+	if len(n.attrs) == 0 {
 		if _, err := bufw.WriteString(`{}`); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := n.(*fastJsonNode).encode(&bufw); err != nil {
+		if err := n.encode(&bufw); err != nil {
 			return nil, err
 		}
 	}
@@ -595,7 +581,7 @@ func (sg *SubGraph) fieldName() string {
 	return fieldName
 }
 
-func addCount(pc *SubGraph, count uint64, dst outputNode) {
+func addCount(pc *SubGraph, count uint64, dst *fastJsonNode) {
 	if pc.Params.Normalize && pc.Params.Alias == "" {
 		return
 	}
@@ -622,7 +608,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
-func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
+func addInternalNode(pc *SubGraph, uid uint64, dst *fastJsonNode) error {
 	sv, ok := pc.Params.UidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
@@ -632,7 +618,7 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst outputNode) {
+func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst *fastJsonNode) {
 	c := types.ValueForType(types.BoolID)
 	if len(vals) == 0 {
 		c.Value = false
@@ -664,7 +650,7 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 	if sg.Params.IgnoreReflex {
 		if alreadySeen(sg.Params.ParentIds, uid) {
 			// A node can't have itself as the child at any level.
@@ -777,7 +763,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						// Now normalize() only flattens one level,
 						// the expectation is that its children have
 						// already been normalized.
-						normAttrs, err := uc.(*fastJsonNode).normalize()
+						normAttrs, err := uc.normalize()
 						if err != nil {
 							return err
 						}

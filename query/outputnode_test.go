@@ -91,6 +91,6 @@ func TestNormalizeJSONLimit(t *testing.T) {
 				types.ValueForType(types.StringID))
 		}
 	}
-	_, err := n.(*fastJsonNode).normalize()
+	_, err := n.normalize()
 	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
 }
