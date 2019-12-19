@@ -21,9 +21,9 @@
   explanation: "The update patch should get rewritten into the Dgraph set mutation"
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "Post.text": "updated text"
-    }
+        { "uid" : "uid(x)",
+          "Post.text": "updated text"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -55,9 +55,9 @@
   explanation: "The update patch should get rewritten into the Dgraph delete mutation"
   dgmutations:
     - deletejson: |
-    { "uid" : "uid(x)",
-      "Post.text": "delete this text"
-    }
+        { "uid" : "uid(x)",
+          "Post.text": "delete this text"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -89,9 +89,9 @@
   explanation: "The update patch should get rewritten into the Dgraph mutation"
   dgmutations:
     - deletejson: |
-    { "uid" : "uid(x)",
-      "Post.text": null
-    }
+        { "uid" : "uid(x)",
+          "Post.text": null
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -128,12 +128,12 @@
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "Character.name": "Bob",
-      "Employee.ename": "employee no. 1",
-      "Human.dob": "2000-01-01",
-      "Human.female": true
-    }
+        { "uid" : "uid(x)",
+          "Character.name": "Bob",
+          "Employee.ename": "employee no. 1",
+          "Human.dob": "2000-01-01",
+          "Human.female": true
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -156,9 +156,9 @@
   explanation: "The mutation should get rewritten with correct edges from the interface."
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "Character.name": "Bob"
-    }
+        { "uid" : "uid(x)",
+          "Character.name": "Bob"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -190,9 +190,9 @@
   explanation: "The update patch should get rewritten into the Dgraph mutation"
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "Post.text": "updated text"
-    }
+        { "uid" : "uid(x)",
+          "Post.text": "updated text"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -224,9 +224,9 @@
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "State.name": "nsw"
-    }
+        { "uid" : "uid(x)",
+          "State.name": "nsw"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
@@ -259,9 +259,9 @@
   explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
   dgmutations:
     - setjson: |
-    { "uid" : "uid(x)",
-      "Editor.name": "A.N. Editor"
-    }
+        { "uid" : "uid(x)",
+          "Editor.name": "A.N. Editor"
+        }
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {

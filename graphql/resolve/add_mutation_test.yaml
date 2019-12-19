@@ -20,11 +20,11 @@
   dgmutations:
     - setjson: |
         { "uid":"_:Author1",
-      "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.dob":"2000-01-01",
-      "Author.posts":[]
-    }
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.dob":"2000-01-01",
+          "Author.posts":[]
+        }
 
 -
   name: "Add Mutation with embedded value"
@@ -41,10 +41,10 @@
   dgmutations:
     - setjson: |
         { "uid":"_:Author1",
-      "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.posts":[]
-    }
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
 
 -
   name: "Add Mutation with mixed vars and embedded value"
@@ -63,10 +63,10 @@
   dgmutations:
     - setjson: |
         { "uid":"_:Author1",
-      "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.posts":[]
-    }
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
 
 -
   name: "Add mutation with reference"
@@ -96,11 +96,11 @@
   dgmutations:
     - setjson: |
         { "uid":"_:Author1",
-      "dgraph.type":["Author"],
-      "Author.name":"A.N. Author",
-      "Author.country": { "uid": "0x123" },
-      "Author.posts":[]
-    }
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.country": { "uid": "0x123" },
+          "Author.posts":[]
+        }
       cond: "@if(eq(len(Country2), 1))"
 
 -
@@ -153,14 +153,14 @@
   dgmutations:
     - setjson: |
         { "uid" : "_:Post1",
-      "dgraph.type" : ["Post"],
-      "Post.title" : "Exciting post",
-      "Post.text" : "A really good post",
-      "Post.author": {
-        "uid" : "0x2",
+          "dgraph.type" : ["Post"],
+          "Post.title" : "Exciting post",
+          "Post.text" : "A really good post",
+          "Post.author": {
+            "uid" : "0x2",
             "Author.posts" : [ { "uid": "_:Post1" } ]
-      }
-    }
+          }
+        }
       cond: "@if(eq(len(Author2), 1))"
 
 -
@@ -187,12 +187,12 @@
   dgmutations:
     - setjson: |
         { "uid" : "_:Human1",
-      "Character.name": "Bob",
-      "Employee.ename": "employee no. 1",
-      "Human.dob": "2000-01-01",
-      "Human.female": true,
-      "dgraph.type": ["Human", "Character", "Employee"]
-    }
+          "Character.name": "Bob",
+          "Employee.ename": "employee no. 1",
+          "Human.dob": "2000-01-01",
+          "Human.female": true,
+          "dgraph.type": ["Human", "Character", "Employee"]
+        }
 
 -
   name: "Add mutation using code"
@@ -225,13 +225,13 @@
   dgmutations:
     - setjson: |
         { "uid" : "_:State1",
-      "dgraph.type": ["State"],
-      "State.name": "NSW",
-      "State.code": "nsw",
-      "State.country": {
-        "uid": "0x12"
-      }
-    }
+          "dgraph.type": ["State"],
+          "State.name": "NSW",
+          "State.code": "nsw",
+          "State.country": {
+            "uid": "0x12"
+          }
+        }
       cond: "@if(eq(len(State1), 0) AND eq(len(Country2), 1))"
 
 -
@@ -261,10 +261,10 @@
   dgmutations:
     - setjson: |
         { "uid" : "_:Editor1",
-      "dgraph.type": ["Editor"],
-      "Editor.name": "A.N. Editor",
-      "Editor.code": "editor"
-    }
+          "dgraph.type": ["Editor"],
+          "Editor.name": "A.N. Editor",
+          "Editor.code": "editor"
+        }
       cond: "@if(eq(len(Editor1), 0))"
 
 -
@@ -407,4 +407,5 @@
               }
             }
           ]
-    }
+        }
+
