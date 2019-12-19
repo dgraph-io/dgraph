@@ -12,7 +12,7 @@ The above command will  install the latest available dgraph docker image. In ord
 $ helm install --name my-release ./ --set image.tag=XXX
 ```
 
-By default zero and alpha services are exposed only within the kubernetes cluster as kubernets service type "ClusterIP". In order to expose the alpha service to internet you can use kubernetes service type "LoadBalancer":
+By default zero and alpha services are exposed only within the kubernetes cluster as kubernetes service type "ClusterIP". In order to expose the alpha service publicly you can use kubernetes service type "LoadBalancer":
 
 ```bash
 $ helm install --name my-release ./ --set alpha.service.type="LoadBalancer"

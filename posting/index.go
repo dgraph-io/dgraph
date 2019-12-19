@@ -318,10 +318,6 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	if err := l.canMutateUid(txn, t); err != nil {
-		return val, found, emptyCountParams, err
-	}
-
 	if doUpdateIndex {
 		// Check original value BEFORE any mutation actually happens.
 		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))

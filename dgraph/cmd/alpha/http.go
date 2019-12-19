@@ -265,17 +265,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var out bytes.Buffer
 	writeEntry := func(key string, js []byte) {
-		out.WriteRune('"')
-		out.WriteString(key)
-		out.WriteRune('"')
-		out.WriteRune(':')
-		out.Write(js)
+		_, _ = out.WriteRune('"')
+		_, _ = out.WriteString(key)
+		_, _ = out.WriteRune('"')
+		_, _ = out.WriteRune(':')
+		_, _ = out.Write(js)
 	}
-	out.WriteRune('{')
+	_, _ = out.WriteRune('{')
 	writeEntry("data", resp.Json)
-	out.WriteRune(',')
+	_, _ = out.WriteRune(',')
 	writeEntry("extensions", js)
-	out.WriteRune('}')
+	_, _ = out.WriteRune('}')
 
 	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,
@@ -423,25 +423,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
-
-	// add query response if any, usual op if resp.Json == '{}' (i.e. l <= 2)
-	l := len(resp.Json)
-	if l > 2 && resp.Json[l-1] == '}' {
-		data, err := json.Marshal(mp)
-		if err != nil {
-			x.SetStatusWithData(w, x.Error, err.Error())
-			return
-		}
-
-		out := bytes.NewBuffer(resp.Json[:(l - 1)])
-		out.WriteRune(',')
-
-		// data[0] must be '{'
-		out.Write(data[1:])
-		response["data"] = json.RawMessage(out.Bytes())
-	} else {
-		response["data"] = mp
-	}
+	mp["queries"] = json.RawMessage(resp.Json)
+	response["data"] = mp
 
 	js, err := json.Marshal(response)
 	if err != nil {

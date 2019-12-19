@@ -758,18 +758,30 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	for name := range qc.uidRes {
 		v := qr.Vars[name]
-		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
+
+		// If the list of UIDs is empty but the map of values is not,
+		// we need to get the UIDs from the keys in the map.
+		var uidList []uint64
+		if v.Uids != nil && len(v.Uids.Uids) > 0 {
+			uidList = v.Uids.Uids
+		} else {
+			uidList = make([]uint64, 0, len(v.Vals))
+			for uid := range v.Vals {
+				uidList = append(uidList, uid)
+			}
+		}
+		if len(uidList) == 0 {
 			continue
 		}
 
 		// We support maximum 1 million UIDs per variable to ensure that we
 		// don't do bad things to alpha and mutation doesn't become too big.
-		if len(v.Uids.Uids) > 1e6 {
+		if len(uidList) > 1e6 {
 			return resp, errors.Errorf("var [%v] has over million UIDs", name)
 		}
 
-		uids := make([]string, len(v.Uids.Uids))
-		for i, u := range v.Uids.Uids {
+		uids := make([]string, len(uidList))
+		for i, u := range uidList {
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
@@ -873,6 +885,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
+		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
+		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		if tc.Aborted {
+			return tctx, nil
+		}
+
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
@@ -1068,11 +1086,6 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		// These are used in the response of a mutation in HTTP API.
-		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
-			return errors.Errorf("query alias [%v] not allowed", a)
-		}
-
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}
@@ -1095,9 +1108,9 @@ func validatePredName(name string) error {
 
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
-func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+func formatTypes(typeList []*pb.TypeUpdate) []map[string]interface{} {
 	var res []map[string]interface{}
-	for _, typ := range types {
+	for _, typ := range typeList {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
 		fields := make([]map[string]string, len(typ.Fields))

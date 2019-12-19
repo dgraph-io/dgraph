@@ -52,11 +52,11 @@ func invokeNetworkRequest(ctx context.Context, addr string,
 		return &pb.Result{}, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 
-	conn := pl.Get()
+	con := pl.Get()
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, "invokeNetworkRequest: Sending request to %v", addr)
 	}
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(con)
 	return f(ctx, c)
 }
 
@@ -902,7 +902,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 
 	if srcFn.fnType == hasFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleHasFunction")
-		if err := qs.handleHasFunction(ctx, q, out); err != nil {
+		if err := qs.handleHasFunction(ctx, q, out, srcFn); err != nil {
 			return nil, err
 		}
 	}
@@ -945,8 +945,9 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		}
 	}
 
-	// For string matching functions, check the language.
-	if needsStringFiltering(srcFn, q.Langs, attr) {
+	// For string matching functions, check the language. We are not checking here
+	// for hasFn as filtering for it has already been done in handleHasFunction.
+	if srcFn.fnType != hasFn && needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
 		if err := qs.filterStringFunction(funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
@@ -1407,25 +1408,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
-		key := x.DataKey(attr, uid)
-		pl, err := qs.cache.Get(key)
-		if err != nil {
-			return err
-		}
-
-		var vals []types.Val
-		var val types.Val
-		if lang == "" {
-			if schema.State().IsList(attr) {
-				vals, err = pl.AllValues(arg.q.ReadTs)
-			} else {
-				val, err = pl.Value(arg.q.ReadTs)
-				vals = append(vals, val)
-			}
-		} else {
-			val, err = pl.ValueForTag(arg.q.ReadTs, lang)
-			vals = append(vals, val)
-		}
+		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
 		if err == posting.ErrNoValue {
 			continue
 		} else if err != nil {
@@ -1484,6 +1467,32 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 	return nil
+}
+
+func (qs *queryState) getValsForUID(attr, lang string, uid, ReadTs uint64) ([]types.Val, error) {
+	key := x.DataKey(attr, uid)
+	pl, err := qs.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	var vals []types.Val
+	var val types.Val
+	if lang == "" {
+		if schema.State().IsList(attr) {
+			// NOTE: we will never reach here if this function is called from handleHasFunction, as
+			// @lang is not allowed for list predicates.
+			vals, err = pl.AllValues(ReadTs)
+		} else {
+			val, err = pl.Value(ReadTs)
+			vals = append(vals, val)
+		}
+	} else {
+		val, err = pl.ValueForTag(ReadTs, lang)
+		vals = append(vals, val)
+	}
+
+	return vals, err
 }
 
 func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
@@ -2051,7 +2060,8 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	return nil
 }
 
-func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
+func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result,
+	srcFn *functionContext) error {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleHasFunction")
 	defer stop()
@@ -2083,6 +2093,21 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
+	lang := langForFunc(q.Langs)
+	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+
+	// This function checks if we should include uid in result or not when has is queried with
+	// @lang(eg: has(name@en)). We need to do this inside this function to return correct result
+	// for first.
+	checkInclusion := func(uid uint64) error {
+		if !needFiltering {
+			return nil
+		}
+
+		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
+		return err
+	}
+
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
@@ -2109,7 +2134,13 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		}
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
+			if err := checkInclusion(pk.Uid); err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
 			result.Uids = append(result.Uids, pk.Uid)
+
 			// We'll stop fetching if we fetch the required count.
 			if len(result.Uids) >= int(q.First) {
 				break
@@ -2125,7 +2156,13 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		if empty, err := l.IsEmpty(q.ReadTs, 0); err != nil {
 			return err
 		} else if !empty {
+			if err := checkInclusion(pk.Uid); err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
 			result.Uids = append(result.Uids, pk.Uid)
+
 			// We'll stop fetching if we fetch the required count.
 			if len(result.Uids) >= int(q.First) {
 				break
