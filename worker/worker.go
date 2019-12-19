@@ -74,7 +74,7 @@ func (w *grpcWorker) SubscribeForKV(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	// Subscribe on given prefixes.
-	pstore.Subscribe(ctx, func(kvs *badgerpb.KVList) {
+	err := pstore.Subscribe(ctx, func(kvs *badgerpb.KVList) {
 		err := stream.Send(&pb.SubscriptionResponse{
 			Kvs: kvs,
 		})
@@ -84,7 +84,7 @@ func (w *grpcWorker) SubscribeForKV(
 			cancel()
 		}
 	}, req.GetPrefixes()...)
-	return nil
+	return err
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
