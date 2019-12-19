@@ -221,10 +221,10 @@ message Mutations {
 	DropOp drop_op = 7;
 	string drop_value = 8;
 
-	ParseMetadata parse_metadata = 9;
+	Metadata metadata = 9;
 }
 
-message ParseMetadata {
+message Metadata {
   // HintType represents a hint that will be passed along the mutation and used
   // to add the predicate to the schema if it's not already there.
   enum HintType {
