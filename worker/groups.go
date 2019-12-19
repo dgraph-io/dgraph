@@ -39,7 +39,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GraphQLSchemaUpdater is singleton schema updater method. It is used to update the lastest graqphql
+// GraphQLSchemaUpdater is singleton schema updater method. It is used to update the latest graqphql
 // schema. It is intialized by graphql package.
 var GraphQLSchemaUpdater func(schema string)
 
@@ -61,8 +61,9 @@ type groupi struct {
 	deltaChecksum            uint64                 // Checksum received byOracleDelta.
 	membershipChecksum       uint64                 // Checksum received by MembershipState.
 	graphQLSchemaSubscribers map[uint64]chan string // GraphQL schema subscriber channels.
-	graphQLSubscriberMaxId   uint64                 // Current Max id graphql schema subscriber
-	// It is used for generating id for graphql schema subscriber
+	// Current Max id graphql schema subscriber. It is used for generating id for graphql
+	// schema subscriber
+	graphQLSubscriberMaxId uint64
 }
 
 var gr *groupi
@@ -79,8 +80,8 @@ func (g *groupi) registerGraphQLSchemaSubscriber(subscriber chan string) uint64 
 	return g.graphQLSubscriberMaxId
 }
 
-// deRegisterGraphQLSchemaSubscriber delete the subscriber from the subscriber list.
-func (g *groupi) deRegisterGraphQLSchemaSubscriber(id uint64) {
+// deregisterGraphQLSchemaSubscriber delete the subscriber from the subscriber list.
+func (g *groupi) deregisterGraphQLSchemaSubscriber(id uint64) {
 	g.Lock()
 	defer g.Unlock()
 	glog.Info("Deregistring grapql schema subscriber")
@@ -325,16 +326,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if x.WorkerConfig.RaftId == member.Id {
-				// We start listening if there is a transition from group 0 to group 1.
-				// group of alpha nodes are not changed. Intially, all alpha node are of group 0.
-				// When transition happens from group 0 to other group. We should decide whether to
-				// push schema changes or listen for schema change updates from group 1.
-				if prevGroupId == 0 && gid != 1 {
-					go g.receiveGraphQLSchemaChange()
-				}
-				if prevGroupId == 0 && gid == 1 {
-					go g.watchGraphqlSchemaChanges(g.ctx)
-				}
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
@@ -354,6 +345,16 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.GetPools().Connect(member.Addr)
 		}
+	}
+	// We start listening if there is a transition from group 0 to group 1.
+	// group of alpha nodes are not changed. Intially, all alpha node are of group 0.
+	// When transition happens from group 0 to other group. We should decide whether to
+	// push schema changes or listen for schema change updates from group 1.
+	if prevGroupId == 0 && g.groupId() != 1 {
+		go g.receiveGraphQLSchemaChange()
+	}
+	if prevGroupId == 0 && g.groupId() == 1 {
+		go g.watchGraphqlSchemaChanges(g.ctx)
 	}
 	if !foundSelf {
 		// I'm not part of this cluster. I should crash myself.
@@ -1062,7 +1063,7 @@ func (g *groupi) receiveGraphQLSchemaChange() {
 	defer g.closer.Done()
 RETRY:
 	pool := g.Leader(1)
-	// We may not coneected to the alpha node. So retrying until we get the pool.
+	// We may not be connected to the alpha node. So retrying until we get the pool.
 	if pool == nil {
 		goto RETRY
 	}
@@ -1098,7 +1099,7 @@ func (w *grpcWorker) StreamGraphQLSchema(_ *pb.Empty,
 	subscriberCh := make(chan string, 10)
 	id := groups().registerGraphQLSchemaSubscriber(subscriberCh)
 	// Unsubscribe before closing the stream.
-	defer groups().deRegisterGraphQLSchemaSubscriber(id)
+	defer groups().deregisterGraphQLSchemaSubscriber(id)
 	for {
 		schema := <-subscriberCh
 		err := stream.Send(&pb.GraphQLSchema{
