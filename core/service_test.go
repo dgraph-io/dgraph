@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/p2p"
@@ -82,9 +83,8 @@ func newRuntime(t *testing.T) *runtime.Runtime {
 		t.Fatal("Failed to create runtime filepath")
 	}
 
-	tt := &trie.Trie{}
-
-	r, err := runtime.NewRuntimeFromFile(fp, tt, nil)
+	ss := NewTestRuntimeStorage()
+	r, err := runtime.NewRuntimeFromFile(fp, ss, nil)
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
@@ -324,4 +324,39 @@ func TestProcessTransactionMessage(t *testing.T) {
 			"\nreceived:", bsTxExt,
 		)
 	}
+}
+
+func NewTestRuntimeStorage() *TestRuntimeStorage {
+	return &TestRuntimeStorage{
+		trie: trie.NewEmptyTrie(nil),
+	}
+}
+
+type TestRuntimeStorage struct {
+	trie *trie.Trie
+}
+
+func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
+	return trs.trie.Put(key, value)
+}
+func (trs TestRuntimeStorage) GetStorage(key []byte) ([]byte, error) {
+	return trs.trie.Get(key)
+}
+func (trs TestRuntimeStorage) StorageRoot() (common.Hash, error) {
+	return trs.trie.Hash()
+}
+func (trs TestRuntimeStorage) SetStorageChild(keyToChild []byte, child *trie.Trie) error {
+	return trs.trie.PutChild(keyToChild, child)
+}
+func (trs TestRuntimeStorage) SetStorageIntoChild(keyToChild, key, value []byte) error {
+	return trs.trie.PutIntoChild(keyToChild, key, value)
+}
+func (trs TestRuntimeStorage) GetStorageFromChild(keyToChild, key []byte) ([]byte, error) {
+	return trs.trie.GetFromChild(keyToChild, key)
+}
+func (trs TestRuntimeStorage) ClearStorage(key []byte) error {
+	return trs.trie.Delete(key)
+}
+func (trs TestRuntimeStorage) Entries() map[string][]byte {
+	return trs.trie.Entries()
 }

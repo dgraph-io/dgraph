@@ -84,9 +84,9 @@ func newRuntime(t *testing.T) *runtime.Runtime {
 		t.Fatal("could not create filepath")
 	}
 
-	tt := &trie.Trie{}
+	ss := NewTestRuntimeStorage()
 
-	r, err := runtime.NewRuntimeFromFile(fp, tt, nil)
+	r, err := runtime.NewRuntimeFromFile(fp, ss, nil)
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
@@ -441,4 +441,39 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		}
 	}
 
+}
+
+func NewTestRuntimeStorage() *TestRuntimeStorage {
+	return &TestRuntimeStorage{
+		trie: trie.NewEmptyTrie(nil),
+	}
+}
+
+type TestRuntimeStorage struct {
+	trie *trie.Trie
+}
+
+func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
+	return trs.trie.Put(key, value)
+}
+func (trs TestRuntimeStorage) GetStorage(key []byte) ([]byte, error) {
+	return trs.trie.Get(key)
+}
+func (trs TestRuntimeStorage) StorageRoot() (common.Hash, error) {
+	return trs.trie.Hash()
+}
+func (trs TestRuntimeStorage) SetStorageChild(keyToChild []byte, child *trie.Trie) error {
+	return trs.trie.PutChild(keyToChild, child)
+}
+func (trs TestRuntimeStorage) SetStorageIntoChild(keyToChild, key, value []byte) error {
+	return trs.trie.PutIntoChild(keyToChild, key, value)
+}
+func (trs TestRuntimeStorage) GetStorageFromChild(keyToChild, key []byte) ([]byte, error) {
+	return trs.trie.GetFromChild(keyToChild, key)
+}
+func (trs TestRuntimeStorage) ClearStorage(key []byte) error {
+	return trs.trie.Delete(key)
+}
+func (trs TestRuntimeStorage) Entries() map[string][]byte {
+	return trs.trie.Entries()
 }

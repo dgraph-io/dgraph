@@ -65,12 +65,12 @@ import (
 
 	"github.com/ChainSafe/gossamer/codec"
 
-	common "github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
-	trie "github.com/ChainSafe/gossamer/trie"
+
 	log "github.com/ChainSafe/log15"
-	xxhash "github.com/OneOfOne/xxhash"
+	"github.com/OneOfOne/xxhash"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -145,10 +145,10 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	val, err := t.Get(key)
+	val, err := s.GetStorage(key)
 	if err != nil {
 		log.Error("[ext_get_storage_into]", "err", err)
 		ret := 1<<32 - 1
@@ -177,12 +177,12 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
 	val := memory[valueData : valueData+valueLen]
 	log.Trace("[ext_set_storage]", "key", key, "val", val)
-	err := t.Put(key, val)
+	err := s.SetStorage(key, val)
 	if err != nil {
 		log.Error("[ext_set_storage]", "error", err)
 	}
@@ -195,13 +195,13 @@ func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
 	value := memory[valueData : valueData+valueLen]
 
-	err := t.PutIntoChild(keyToChild, key, value)
+	err := s.SetStorageIntoChild(keyToChild, key, value)
 	if err != nil {
 		log.Error("[ext_set_child_storage]", "error", err)
 	}
@@ -214,12 +214,12 @@ func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageK
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
 
-	value, err := t.GetFromChild(keyToChild, key)
+	value, err := s.GetStorageFromChild(keyToChild, key)
 	if err != nil {
 		log.Error("[ext_get_child_storage_into]", "error", err)
 		return -(1 << 31)
@@ -237,9 +237,9 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
-	root, err := t.Hash()
+	root, err := s.StorageRoot()
 	if err != nil {
 		log.Error("[ext_storage_root]", "error", err)
 		return
@@ -264,10 +264,10 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	val, err := t.Get(key)
+	val, err := s.GetStorage(key)
 	if err == nil && len(val) >= (1<<32) {
 		err = errors.New("retrieved value length exceeds 2^32")
 	}
@@ -306,10 +306,10 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	err := t.Delete(key)
+	err := s.ClearStorage(key)
 	if err != nil {
 		log.Error("[ext_storage_root]", "error", err)
 	}
@@ -323,13 +323,13 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	memory := instanceContext.Memory().Data()
 
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
-	t := runtimeCtx.trie
+	s := runtimeCtx.storage
 
 	prefix := memory[prefixData : prefixData+prefixLen]
-	entries := t.Entries()
+	entries := s.Entries()
 	for k := range entries {
 		if bytes.Equal([]byte(k)[:prefixLen], prefix) {
-			err := t.Delete([]byte(k))
+			err := s.ClearStorage([]byte(k))
 			if err != nil {
 				log.Error("[ext_clear_prefix]", "err", err)
 			}
@@ -344,8 +344,9 @@ func ext_blake2_256_enumerated_trie_root(context unsafe.Pointer, valuesData, len
 	log.Trace("[ext_blake2_256_enumerated_trie_root] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	t := &trie.Trie{}
 
+	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	s := runtimeCtx.storage
 	var i int32
 	var pos int32 = 0
 	for i = 0; i < lensLen; i++ {
@@ -362,14 +363,13 @@ func ext_blake2_256_enumerated_trie_root(context unsafe.Pointer, valuesData, len
 			return
 		}
 		log.Trace("[ext_blake2_256_enumerated_trie_root]", "key", i, "key value", encodedOutput)
-		err = t.Put(encodedOutput, value)
+		err = s.SetStorage(encodedOutput, value)
 		if err != nil {
 			log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)
 			return
 		}
 	}
-
-	root, err := t.Hash()
+	root, err := s.StorageRoot()
 	log.Trace("[ext_blake2_256_enumerated_trie_root]", "root hash", fmt.Sprintf("0x%x", root))
 	if err != nil {
 		log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)

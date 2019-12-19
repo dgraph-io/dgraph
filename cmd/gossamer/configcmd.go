@@ -39,7 +39,6 @@ import (
 	"github.com/ChainSafe/gossamer/rpc"
 	"github.com/ChainSafe/gossamer/rpc/json2"
 	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli"
@@ -74,15 +73,13 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	}
 
 	// Trie, runtime: load most recent state from DB, load runtime code from trie and create runtime executor
-	db := trie.NewDatabase(stateSrv.Storage.Db.Db)
-	state := trie.NewEmptyTrie(db)
-	r, err := loadStateAndRuntime(state, ks)
+	r, err := loadStateAndRuntime(stateSrv.Storage, ks)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error loading state and runtime: %s", err)
 	}
 
 	// load extra genesis data from DB
-	gendata, err := state.Db().LoadGenesisData()
+	gendata, err := stateSrv.Storage.LoadGenesisData()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -113,23 +110,23 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	return dot.NewDot(string(gendata.Name), srvcs, rpcSrvr), fig, nil
 }
 
-func loadStateAndRuntime(t *trie.Trie, ks *keystore.Keystore) (*runtime.Runtime, error) {
-	latestState, err := t.LoadHash()
+func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
+	latestState, err := ss.LoadHash()
 	if err != nil {
 		return nil, fmt.Errorf("cannot load latest state root hash: %s", err)
 	}
 
-	err = t.LoadFromDB(latestState)
+	err = ss.LoadFromDB(latestState)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load latest state: %s", err)
 	}
 
-	code, err := t.Get([]byte(":code"))
+	code, err := ss.GetStorage([]byte(":code"))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving :code from trie: %s", err)
 	}
 
-	return runtime.NewRuntime(code, t, ks)
+	return runtime.NewRuntime(code, ss, ks)
 }
 
 // getConfig checks for config.toml if --config flag is specified and sets CLI flags

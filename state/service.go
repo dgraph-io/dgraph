@@ -6,7 +6,7 @@ import (
 
 type Service struct {
 	dbPath  string
-	Storage *storageState
+	Storage *StorageState
 	Block   *blockState
 	Network *networkState
 }

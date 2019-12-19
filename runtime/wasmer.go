@@ -26,38 +26,37 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/keystore"
 	allocator "github.com/ChainSafe/gossamer/runtime/allocator"
-	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
 type RuntimeCtx struct {
-	trie      *trie.Trie
+	storage   Storage
 	allocator *allocator.FreeingBumpHeapAllocator
 	keystore  *keystore.Keystore
 }
 
 type Runtime struct {
 	vm       wasm.Instance
-	trie     *trie.Trie
+	storage  Storage
 	keystore *keystore.Keystore
 	mutex    sync.Mutex
 }
 
 // NewRuntimeFromFile instantiates a runtime from a .wasm file
-func NewRuntimeFromFile(fp string, t *trie.Trie, ks *keystore.Keystore) (*Runtime, error) {
+func NewRuntimeFromFile(fp string, s Storage, ks *keystore.Keystore) (*Runtime, error) {
 	// Reads the WebAssembly module as bytes.
 	bytes, err := wasm.ReadBytes(fp)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewRuntime(bytes, t, ks)
+	return NewRuntime(bytes, s, ks)
 }
 
 // NewRuntime instantiates a runtime from raw wasm bytecode
-func NewRuntime(code []byte, t *trie.Trie, ks *keystore.Keystore) (*Runtime, error) {
-	if t == nil {
+func NewRuntime(code []byte, s Storage, ks *keystore.Keystore) (*Runtime, error) {
+	if s == nil {
 		return nil, errors.New("runtime does not have storage trie")
 	}
 
@@ -75,7 +74,7 @@ func NewRuntime(code []byte, t *trie.Trie, ks *keystore.Keystore) (*Runtime, err
 	memAllocator := allocator.NewAllocator(instance.Memory, 0)
 
 	runtimeCtx := RuntimeCtx{
-		trie:      t,
+		storage:   s,
 		allocator: memAllocator,
 		keystore:  ks,
 	}
@@ -85,7 +84,7 @@ func NewRuntime(code []byte, t *trie.Trie, ks *keystore.Keystore) (*Runtime, err
 
 	r := Runtime{
 		vm:       instance,
-		trie:     t,
+		storage:  s,
 		mutex:    sync.Mutex{},
 		keystore: ks,
 	}
@@ -97,8 +96,9 @@ func (r *Runtime) Stop() {
 	r.vm.Close()
 }
 
+// TODO, this should be removed once core is refactored
 func (r *Runtime) StorageRoot() (common.Hash, error) {
-	return r.trie.Hash()
+	return r.storage.StorageRoot()
 }
 
 func (r *Runtime) Store(data []byte, location int32) {
