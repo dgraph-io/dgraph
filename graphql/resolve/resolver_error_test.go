@@ -44,6 +44,7 @@ import (
 type executor struct {
 	resp     string
 	assigned map[string]string
+	result   map[string]interface{}
 
 	// start reporting Dgraph fails at this point (0 = never fail, 1 = fail on
 	// first request, 2 = succeed once and then fail on 2nd request, etc.)
@@ -133,7 +134,7 @@ func (ex *executor) Mutate(ctx context.Context,
 	if ex.failMutation == 0 {
 		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
 	}
-	return ex.assigned, nil, nil
+	return ex.assigned, ex.result, nil
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
@@ -244,6 +245,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 	tests := map[string]struct {
 		explanation   string
 		mutResponse   map[string]string
+		mutQryResp    map[string]interface{}
 		queryResponse string
 		expected      string
 		errors        x.GqlErrorList
@@ -251,7 +253,9 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		"Add mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
-			mutResponse: map[string]string{"Post1": "0x1"},
+			mutResponse: map[string]string{"Post1": "0x2"},
+			mutQryResp: map[string]interface{}{
+				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [
 				{ "title": "A Post",
 				"text": "Some text",
@@ -265,7 +269,9 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
-			mutResponse: map[string]string{"newnode": "0x1"},
+			mutResponse: map[string]string{"Post1": "0x2"},
+			mutQryResp: map[string]interface{}{
+				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [
 				{ "title": "A Post",
 				"text": "Some text",
@@ -284,7 +290,11 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
-				&executor{resp: tcase.queryResponse, assigned: tcase.mutResponse})
+				&executor{
+					resp:     tcase.queryResponse,
+					assigned: tcase.mutResponse,
+					result:   tcase.mutQryResp,
+				})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
 			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
@@ -305,6 +315,11 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 			}
 		}
 	}`
+
+	// There's no need to have mocs for the mutation part here because with nil results all the
+	// rewriting and rewriting from results will silently succeed.  All we care about the is the
+	// result from the query that follows the mutation.  In that add case we have to satisfy
+	// the type checking, but that's not required here.
 
 	tests := map[string]struct {
 		explanation   string
@@ -393,14 +408,17 @@ func TestManyMutationsWithError(t *testing.T) {
 		explanation   string
 		idValue       string
 		mutResponse   map[string]string
+		mutQryResp    map[string]interface{}
 		queryResponse string
 		expected      string
 		errors        x.GqlErrorList
 	}{
 		"Dgraph fail": {
-			explanation:   "a Dgraph, network or error in rewritten query failed the mutation",
-			idValue:       "0x1",
-			mutResponse:   map[string]string{"Post1": "0x1"},
+			explanation: "a Dgraph, network or error in rewritten query failed the mutation",
+			idValue:     "0x1",
+			mutResponse: map[string]string{"Post1": "0x2"},
+			mutQryResp: map[string]interface{}{
+				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": { "title": "A Post" } },
@@ -415,9 +433,11 @@ func TestManyMutationsWithError(t *testing.T) {
 					Locations: []x.Location{{Line: 10, Column: 4}}}},
 		},
 		"Rewriting error": {
-			explanation:   "The reference ID is not a uint64, so can't be converted to a uid",
-			idValue:       "hi",
-			mutResponse:   map[string]string{"Post1": "0x1"},
+			explanation: "The reference ID is not a uint64, so can't be converted to a uid",
+			idValue:     "hi",
+			mutResponse: map[string]string{"Post1": "0x2"},
+			mutQryResp: map[string]interface{}{
+				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": { "title": "A Post" } },
@@ -425,6 +445,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			}`,
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
+					`failed to rewrite mutation payload because ` +
 					`ID argument (hi) was not able to be parsed`},
 				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
 					`a previous error.`,
