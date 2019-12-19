@@ -473,6 +473,15 @@ service Worker {
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+	rpc SubscribeForKV(SubscriptionRequest) returns (stream SubscriptionResponse) {}
+}
+
+message SubscriptionRequest {
+	repeated bytes prefixes = 1;
+}
+
+message SubscriptionResponse {
+    pb.KVList kvs = 1;
 }
 
 message Num {

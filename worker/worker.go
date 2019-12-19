@@ -26,10 +26,12 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/plugin/ocgrpc"
+	"golang.org/x/net/context"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -65,6 +67,24 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+}
+
+func (w *grpcWorker) SubscribeForKV(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeForKVServer) error {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Subscribe on given prefixes.
+	pstore.Subscribe(ctx, func(kvs *badgerpb.KVList) {
+		err := stream.Send(&pb.SubscriptionResponse{
+			Kvs: kvs,
+		})
+		if err != nil {
+			// Cancel the current subscription if not able to push to the stream.
+			// This is stop the current subscription and end the stream.
+			cancel()
+		}
+	}, req.GetPrefixes()...)
+	return nil
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
