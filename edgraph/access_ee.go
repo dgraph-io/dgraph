@@ -729,22 +729,25 @@ func authorizeState(ctx context.Context) error {
 		return nil
 	}
 
-	var userId string
+	var userID string
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeState := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			return status.Error(codes.PermissionDenied, err.Error())
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
-			userId = userData[0]
-			if userId == x.GrootId {
+		default:
+			userID = userData[0]
+			if userID == x.GrootId {
 				return nil
 			}
 		}
-		// Dont allow non groot to do the State API.
-		return status.Error(codes.PermissionDenied, err.Error())
+
+		// Deny non groot users.
+		return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+			"Only User '%v' is authorized.", userID, x.GrootId))
 	}
 
 	return doAuthorizeState()

@@ -17,11 +17,9 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"math"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -595,22 +594,24 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeState(ctx); err != nil {
-		return nil, err
+	if authorize == NeedAuthorize {
+		if err := authorizeState(ctx); err != nil {
+			return nil, err
+		}
 	}
 
-	resp, err := http.Get(fmt.Sprintf("http://localhost:6080/state"))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.New("No membership state found")
 	}
 
-	return &api.Response{Json: body}, nil
+	m := jsonpb.Marshaler{}
+	var jsonState bytes.Buffer
+	if err := m.Marshal(&jsonState, ms); err != nil {
+		return nil, errors.New("Error marshalling state information to JSON")
+	}
+
+	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
 // Query handles queries or mutations
