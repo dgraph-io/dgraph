@@ -736,3 +736,13 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	// update the context so that it has the admin jwt token
 	return nil
 }
+
+func IsSuperUser(groups []string) bool {
+	for _, group := range groups {
+		if group == AdminGId {
+			return true
+		}
+	}
+
+	return false
+}

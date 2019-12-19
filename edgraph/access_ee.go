@@ -529,7 +529,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
+			if x.IsSuperUser(groupIds) {
+				// Members of guardian group are allowed to alter anything.
 				return nil
 			}
 		}
@@ -626,12 +627,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to mutate anything except the permission of the acl predicates
+			if x.IsSuperUser(groupIds) {
+				// Members of guardian group are allowed to mutate anything
+				// except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
 				} else if isAclPredMutation(gmu.Del) {
-					// even groot can't delete ACL predicates
+					// Even members of gurardian group can't delete ACL predicates
 					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
@@ -726,8 +728,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to query anything
+			if x.IsSuperUser(groupIds) {
+				// Members of guardian groups are allowed to query anything.
 				return nil
 			}
 		}
