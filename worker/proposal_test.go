@@ -24,22 +24,18 @@ func PropposeAndWaitDup() error {
 		return nil
 	}
 
-	for i := 0; i < 3; i++ {
+	runPropose := func(i int) error {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
-		// switch {
-		// case proposal.Delta != nil: // Is a delta.
-		// 	// If a proposal is important (like delta updates), let's not run it via the limiter
-		// 	// below. We should always propose it irrespective of how many pending proposals there
-		// 	// might be.
-		// default:
 		if err := limiter.incr(context.Background(), i); err != nil {
 			return err
 		}
 		defer limiter.decr(i)
-		// }
+		return propose(newTimeout(i))
+	}
 
-		if err := propose(newTimeout(i)); err != errInternalRetry {
+	for i := 0; i < 3; i++ {
+		if err := runPropose(i); err != errInternalRetry {
 			return err
 		}
 	}
@@ -50,8 +46,6 @@ var total, pending, completed, aborted int64
 
 func TestLimiter(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
-
-	go limiter.scream()
 
 	go func() {
 		now := time.Now()

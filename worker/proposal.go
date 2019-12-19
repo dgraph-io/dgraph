@@ -45,10 +45,11 @@ func newTimeout(retry int) time.Duration {
 	return timeout
 }
 
+// TODO: Hook this to worker config.
 var limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}
 
 func init() {
-	go limiter.scream()
+	go limiter.bleed()
 }
 
 type rateLimiter struct {
@@ -61,7 +62,7 @@ type rateLimiter struct {
 // allows a certain number of ops per second, without taking any feedback into
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
-func (rl *rateLimiter) scream() {
+func (rl *rateLimiter) bleed() {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
@@ -101,8 +102,8 @@ func (rl *rateLimiter) decr(retry int) {
 
 	rl.c.L.Lock()
 	rl.iou -= weight
-	rl.c.Broadcast()
 	rl.c.L.Unlock()
+	rl.c.Broadcast()
 	ostats.Record(context.Background(), x.PendingProposals.M(-int64(weight)))
 }
 
@@ -250,7 +251,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	//
 	// Let's try 3 times before giving up.
 
-	for i := 0; i < 3; i++ {
+	proposeWithLimit := func(i int) error {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
 		switch {
@@ -262,10 +263,15 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			if err := limiter.incr(ctx, i); err != nil {
 				return err
 			}
+			// We have now acquired slots in limiter. We MUST release them before we retry this
+			// proposal, otherwise we end up with dining philosopher problem.
 			defer limiter.decr(i)
 		}
+		return propose(newTimeout(i))
+	}
 
-		if err := propose(newTimeout(i)); err != errInternalRetry {
+	for i := 0; i < 3; i++ {
+		if err := proposeWithLimit(i); err != errInternalRetry {
 			return err
 		}
 	}
