@@ -595,16 +595,14 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 		return nil, ctx.Err()
 	}
 
-	if authorize == NeedAuthorize {
-		if err := authorizeState(ctx); err != nil {
-			return nil, err
-		}
+	if err := authorizeState(ctx); err != nil {
+		return nil, err
 	}
 
 	// Get the state info from Zero's CurrentState GRPC interface.
 	pl := conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
 	c := pb.NewZeroClient(pl.Get())
-	ms, err := c.State(ctx, &api.Payload{})
+	ms, err := c.CurrentState(ctx, &api.Payload{})
 	if err != nil {
 		return nil, err
 	}

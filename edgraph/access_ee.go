@@ -744,7 +744,7 @@ func authorizeState(ctx context.Context) error {
 				return nil
 			}
 		}
-		// Deny non groot users.
+		// Dont allow non groot to do the State API.
 		return status.Error(codes.PermissionDenied, err.Error())
 	}
 

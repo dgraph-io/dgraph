@@ -301,7 +301,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-func stateHandler(w http.ResponseWriter, r *http.Request) {
+func state(w http.ResponseWriter, r *http.Request) {
 	var err error
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
@@ -410,7 +410,7 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/state", state)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
