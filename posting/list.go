@@ -574,6 +574,8 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	if err != nil {
 		return err
 	}
+
+loop:
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
@@ -599,23 +601,33 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
-			if err := pitr.next(); err != nil {
-				return err
+			if err != nil {
+				break loop
+			}
+
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
-			if err := pitr.next(); err != nil {
-				return err
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 			midx++
 		default:
