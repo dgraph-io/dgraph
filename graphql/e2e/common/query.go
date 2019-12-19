@@ -277,8 +277,7 @@ func hashSearch(t *testing.T) {
 		QueryAuthor []*author
 	}
 	dob := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-	expected.QueryAuthor = []*author{
-		&author{Name: "Ann Author", Dob: &dob}}
+	expected.QueryAuthor = []*author{{Name: "Ann Author", Dob: &dob}}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 

@@ -695,11 +695,7 @@ func invalidObjectFragment(
 		}
 		return []*mutationFragment{xidFrag}
 	}
-	return []*mutationFragment{
-		&mutationFragment{
-			err: err,
-		},
-	}
+	return []*mutationFragment{{err: err}}
 }
 
 // asIDReference makes a mutation fragment that resolves a reference to the uid in val.  There's

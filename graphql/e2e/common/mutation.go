@@ -269,11 +269,11 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		Name:    "New Author",
 		Country: newCountry,
 		Posts: []*post{
-			&post{
+			{
 				Title: "A New Post",
 				Text:  "Text of new post",
 			},
-			&post{
+			{
 				Title: "Another New Post",
 				Text:  "Text of other new post",
 			},
