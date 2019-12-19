@@ -83,10 +83,20 @@ metadata:
     app: prometheus
 spec:
   serviceAccountName: prometheus-dgraph-io
+  alerting:
+    alertmanagers:
+    - namespace: default
+      name: dgraph-io
+      port: web
   serviceMonitorSelector:
     matchLabels:
       app: dgraph-io
   resources:
     requests:
       memory: 400Mi
+  ruleSelector:
+    matchLabels:
+      app: dgraph-io
+      prometheus: dgraph-io
+      role: alert-rules
   enableAdminAPI: false
