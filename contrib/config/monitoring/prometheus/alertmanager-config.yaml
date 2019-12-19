@@ -1,0 +1,24 @@
+global:
+  resolve_timeout: 5m
+route:
+  group_by: ['cluster', 'alertname', 'prometheus']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: 'default_receiver'
+  routes:
+  - receiver: 'slack'
+    group_wait: 10s
+    group_by: ['app']
+    match:
+      severity: high|medium
+receivers:
+- name: 'default_receiver'
+  webhook_configs:
+  - url: 'DEFAULT_WEBHOOK_URL'
+- name: 'slack'
+  slack_configs:
+  - send_resolved: true
+    api_url: 'SLACK_API_URL'
+    channel: ops
+    username: alert-bot
