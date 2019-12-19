@@ -287,7 +287,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 
 	patchSet := &author{
 		Posts: []*post{
-			&post{
+			{
 				Title: "Creating in an update",
 				Text:  "Text of new post",
 			},

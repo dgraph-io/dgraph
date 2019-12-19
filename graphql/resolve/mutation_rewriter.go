@@ -853,8 +853,8 @@ func xidQuery(xidVariable, xidString, xidPredicate string, typ schema.Type) *gql
 		Func: &gql.Function{
 			Name: "eq",
 			Args: []gql.Arg{
-				gql.Arg{Value: typ.DgraphPredicate(xidPredicate)},
-				gql.Arg{Value: maybeQuoteArg("eq", xidString)},
+				{Value: typ.DgraphPredicate(xidPredicate)},
+				{Value: maybeQuoteArg("eq", xidString)},
 			},
 		},
 		Children: []*gql.GraphQuery{{Attr: "uid"}},
