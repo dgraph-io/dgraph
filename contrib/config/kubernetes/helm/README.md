@@ -137,3 +137,29 @@ $ kubectl port-forward prometheus-dgraph-io-0 13370:9090
 ```
 
 The UI is accessible at port 13370. Open http://localhost:13370 in your browser to play around.
+
+To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
+
+* Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
+with the required reciever configuration including the slack webhook credential and create the secret.
+
+```sh
+$ kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+
+$ kubectl get secrets
+NAME                                            TYPE                 DATA   AGE
+alertmanager-alertmanager-dgraph-io             Opaque               1      87m
+```
+
+* Apply the [alertmanager](/contrib/config/monitoring/prometheus/alertmanager.yaml) along with [alert-rules](/contrib/config/monitoring/prometheus/alert-rules.yaml) manifest
+to use the default configured alert configuration. You can also add custom rules based on the metrics exposed by dgraph cluster similar to [alert-rules](/contrib/config/monitoring/prometheus/alert-rules.yaml)
+manifest. 
+
+```sh
+$ kubectl apply -f alertmanager.yaml
+alertmanager.monitoring.coreos.com/alertmanager-dgraph-io created
+service/alertmanager-dgraph-io created
+
+$ kubectl apply -f alert-rules.yaml
+prometheusrule.monitoring.coreos.com/prometheus-rules-dgraph-io created
+```

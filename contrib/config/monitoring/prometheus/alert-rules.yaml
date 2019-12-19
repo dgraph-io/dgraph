@@ -32,7 +32,7 @@ spec:
         summary: Instance {{ $labels.instance }} down
       labels:
         severity: high
-    - alert: HighPendingQueries
+    - alert: HighPendingQueriesCount
       expr: (sum
         by(instance, cluster) (dgraph_pending_queries_total{job="dgraph-alpha-public"}))
         > 1000
@@ -66,8 +66,8 @@ spec:
     - alert: OutOfSyncComponents
       expr: (max
         by(cluster) (dgraph_max_assigned_ts)) - (min by(cluster) (dgraph_max_assigned_ts))
-        > 50
-      for: 5m
+        > 100
+      for: 30s
       annotations:
         description: 'Cluster components timestamp are out of sync by {{ $value }}.'
       labels:
