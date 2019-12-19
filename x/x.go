@@ -101,6 +101,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
+	// adminGId is the ID of the admin group for ACLs.
+	AdminGId = "guardians"
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `

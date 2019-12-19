@@ -175,7 +175,7 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 
 // CreateUserNQuads creates the NQuads needed to store a user with the given ID and
 // password in the ACL system.
-func CreateUserNQuads(userId string, password string) []*api.NQuad {
+func CreateUserNQuads(userId, password string) []*api.NQuad {
 	return []*api.NQuad{
 		{
 			Subject:     "_:newuser",
@@ -191,6 +191,22 @@ func CreateUserNQuads(userId string, password string) []*api.NQuad {
 			Subject:     "_:newuser",
 			Predicate:   "dgraph.type",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+		},
+	}
+}
+
+// CreateGroupNQuads cretes NQuads needed to store a group with the give ID.
+func CreateGroupNQuads(groupId string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
+		},
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
 		},
 	}
 }
