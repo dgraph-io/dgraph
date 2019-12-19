@@ -809,13 +809,13 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// we get partitioned away from group zero as long as it's not removed.
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
-	gid, err := groups().BelongsToReadOnly(q.Attr)
+	knownGid, err := groups().BelongsToReadOnly(q.Attr)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
-	case gid == 0:
+	case knownGid == 0:
 		return &pb.Result{}, errNonExistentTablet
-	case gid != groups().groupId():
+	case knownGid != groups().groupId():
 		return &pb.Result{}, errUnservedTablet
 	}
 
@@ -2120,6 +2120,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
+loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
@@ -2183,7 +2184,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 			// We'll stop fetching if we fetch the required count.
 			if len(result.Uids) >= int(q.First) {
-				break
+				break loop
 			}
 		}
 
