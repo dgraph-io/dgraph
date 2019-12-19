@@ -513,7 +513,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 If you are on AWS, below is the security group (**docker-machine**) after
 necessary changes.
 
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -621,9 +621,9 @@ services:
         constraints:
           - node.hostname == aws01
     command: dgraph zero --my=zero:5080 --replicas 3
-  alpha_1:
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -635,10 +635,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -650,10 +650,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -665,7 +665,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -711,10 +711,10 @@ Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
 vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
-69oge03y0koz        dgraph_alpha_2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_alpha_3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
+69oge03y0koz        dgraph_alpha2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6        dgraph_alpha3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
 uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
-v9jlw00iz2gg        dgraph_alpha_1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
+v9jlw00iz2gg        dgraph_alpha1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
 ```
 
 To stop the cluster run
@@ -737,8 +737,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
-
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 Copy the following file on your host machine and name it as docker-compose.yml
 
@@ -747,7 +746,7 @@ version: "3"
 networks:
   dgraph:
 services:
-  zero_1:
+  zero1:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -760,8 +759,8 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero --my=zero_1:5080 --replicas 3 --idx 1
-  zero_2:
+    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
+  zero2:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -774,7 +773,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
   zero_3:
     image: dgraph/dgraph:latest
     volumes:
@@ -788,10 +787,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
-  alpha_1:
+    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero1:5080 --idx 3
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -804,10 +803,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero_1:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -820,10 +819,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero_1:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -836,7 +835,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero_1:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
   alpha_4:
     image: dgraph/dgraph:latest
     hostname: "alpha_4"
@@ -851,7 +850,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero_1:5080 -o 3
+    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
   alpha_5:
     image: dgraph/dgraph:latest
     hostname: "alpha_5"
@@ -866,7 +865,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero_1:5080 -o 4
+    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
   alpha_6:
     image: dgraph/dgraph:latest
     hostname: "alpha_6"
@@ -881,7 +880,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero_1:5080 -o 5
+    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -1429,6 +1428,49 @@ The server option `--tls_client_auth` accepts different values that change the s
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
+### Using Ratel UI with Client authentication
+
+Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
+connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
+HTTPS requests only. Therefore some adjustments need to be made.
+
+If the `--tls_client_auth` option is set to `REQUEST` (default) or
+`VERIFYIFGIVEN`:
+1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
+2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions.
+(E.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
+for `Secure Socket Layer`).
+
+For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
+also need to install client certificate on your OS / browser:
+
+1. Generate a client certificate: `dgraph -c MyLaptop`.
+2. Convert it to a `.p12` file:
+`openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
+3. Install the generated `MyLaptopCert.p12` file on the client system
+(on Mac OS this means simply double-click the file in Finder).
+4. Next time you use Ratel to connect to an alpha with Client authentication
+enabled the browser will prompt you for a client certificate to use. Select the
+certificate you've just installed in the step above and queries/mutations will
+succeed.
+
+### Troubleshooting Ratel's Client authentication
+
+If you are getting errors in Ratel when server's TLS is enabled try opening
+your alpha URL as a webpage.
+
+Assuming you are running Dgraph on your local machine, opening
+`https://localhost:8080/` in browser should produce a message `Dgraph browser is available for running separately using the dgraph-ratel binary`.
+
+In case you are getting a connection error, try not passing the
+`--tls_client_auth` flag when starting an alpha. If you are still getting an
+error, check that your hostname is correct and the port is open; then make sure
+that "Dgraph Root CA" certificate is installed and trusted correctly.
+
+After that, if things work without `--tls_client_auth` but stop working when
+`REQUIREANY` and `REQUIREANDVERIFY` is set make sure the `.p12` file is
+installed correctly.
+
 ## Cluster Checklist
 
 In setting up a cluster be sure the check the following.
@@ -1891,7 +1933,7 @@ This also works from a browser, provided the HTTP GET is being run from the same
 This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
 1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
-2. For every other group, its group's export data is stored with the Alpha leader of that group. 
+2. For every other group, its group's export data is stored with the Alpha leader of that group.
 
 It is up to the user to retrieve the right export files from the Alphas in the
 cluster. Dgraph does not copy all files to the Alpha that initiated the export.

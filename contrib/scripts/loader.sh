@@ -31,7 +31,7 @@ done
 rm -f alter.txt
 
 echo -e "\nRunning dgraph live."
-dgraph live -f $goldendata -a "127.0.0.1:9180" -z "127.0.0.1:5180" -c 10
+dgraph live -f $goldendata -a "127.0.0.1:9180" -z "127.0.0.1:5180" -c 10 -p password -u groot
 popd
 rm -rf $tmpdir
 

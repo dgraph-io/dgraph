@@ -179,7 +179,7 @@ type params struct {
 
 	// ExploreDepth is used by recurse and shortest path queries to specify the maximum graph
 	// depth to explore.
-	ExploreDepth uint64
+	ExploreDepth *uint64
 
 	// IsInternal determines if processTask has to be called or not.
 	IsInternal bool
@@ -459,9 +459,10 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	// This is the case when we ask for a variable.
 	if gchild.Attr == "val" {
 		// E.g. a as age, result is returned as var(a)
-		if gchild.Var != "" && gchild.Var != "val" {
+		switch {
+		case gchild.Var != "" && gchild.Var != "val":
 			key = fmt.Sprintf("val(%v)", gchild.Var)
-		} else if len(gchild.NeedsVar) > 0 {
+		case len(gchild.NeedsVar) > 0:
 			// For var(s)
 			key = fmt.Sprintf("val(%v)", gchild.NeedsVar[0].Name)
 		}
@@ -630,7 +631,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			args.ExploreDepth = depth
+			args.ExploreDepth = &depth
 		}
 
 		if v, ok := gq.Args["numpaths"]; ok {
@@ -1849,6 +1850,15 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 		preds = uniquePreds(preds)
 
+		// There's a types filter at this level so filter out any non-uid predicates
+		// since only uid nodes can have a type.
+		if len(child.Filters) > 0 {
+			preds, err = filterUidPredicates(ctx, preds)
+			if err != nil {
+				return out, err
+			}
+		}
+
 		for _, pred := range preds {
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
@@ -1866,6 +1876,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.Params.IsInternal = false
 			temp.Params.Expand = ""
 			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
+			temp.Filters = child.Filters
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -1986,9 +1997,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage) {
+			switch {
+			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
 				sg.UnknownAttr = true
-			} else if err != nil {
+			case err != nil:
 				rch <- err
 				return
 			}
@@ -2337,8 +2349,8 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &pb.List{Uids: uids},
-			facetList, []bool{sg.Params.FacetOrderDesc}, ""); err != nil {
+		if err := types.SortWithFacet(values, &uids, facetList,
+			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2385,8 +2397,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &pb.List{Uids: uids},
-			[]bool{sg.Params.Order[0].Desc}, ""); err != nil {
+		if err := types.Sort(values, &uids, []bool{sg.Params.Order[0].Desc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2479,61 +2490,22 @@ func getPredicatesFromTypes(typeNames []string) []string {
 	return preds
 }
 
-// getReversePredicates queries the schema and returns a list of the reverse
-// predicates that exist within the given preds.
-func getReversePredicates(ctx context.Context, preds []string) ([]string, error) {
-	var rpreds []string
-	predMap := make(map[string]bool)
-	for _, pred := range preds {
-		predMap[pred] = true
-	}
-
+// filterUidPredicates takes a list of predicates and returns a list of the predicates
+// that are of type uid or [uid].
+func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) {
 	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
 	if err != nil {
 		return nil, err
 	}
 
+	filteredPreds := make([]string, 0)
 	for _, sch := range schs {
-		if _, ok := predMap[sch.Predicate]; !ok {
+		if sch.GetType() != "uid" {
 			continue
 		}
-		if !sch.Reverse {
-			continue
-		}
-		rpreds = append(rpreds, "~"+sch.Predicate)
+		filteredPreds = append(filteredPreds, sch.GetPredicate())
 	}
-	return rpreds, nil
-}
-
-// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
-func GetAllPredicates(subGraphs []*SubGraph) []string {
-	predicatesMap := make(map[string]struct{})
-	for _, sg := range subGraphs {
-		sg.getAllPredicates(predicatesMap)
-	}
-	predicates := make([]string, 0, len(predicatesMap))
-	for predicate := range predicatesMap {
-		predicates = append(predicates, predicate)
-	}
-	return predicates
-}
-
-func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
-	if len(sg.Attr) != 0 {
-		predicates[sg.Attr] = struct{}{}
-	}
-	for _, o := range sg.Params.Order {
-		predicates[o.Attr] = struct{}{}
-	}
-	for _, pred := range sg.Params.GroupbyAttrs {
-		predicates[pred.Attr] = struct{}{}
-	}
-	for _, filter := range sg.Filters {
-		filter.getAllPredicates(predicates)
-	}
-	for _, child := range sg.Children {
-		child.getAllPredicates(predicates)
-	}
+	return filteredPreds, nil
 }
 
 // UidsToHex converts the new UIDs to hex string.
