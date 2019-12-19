@@ -190,7 +190,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID, hint pb.ParseMetadata_HintType) error {
+func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -205,9 +205,9 @@ func createSchema(attr string, typ types.TypeID, hint pb.ParseMetadata_HintType)
 		}
 
 		switch hint {
-		case pb.ParseMetadata_SINGLE:
+		case pb.Metadata_SINGLE:
 			s.List = false
-		case pb.ParseMetadata_LIST:
+		case pb.Metadata_LIST:
 			s.List = true
 		default:
 		}
@@ -480,7 +480,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
-		mu.ParseMetadata = src.ParseMetadata
+		mu.Metadata = src.Metadata
 	}
 
 	for _, schema := range src.Schema {

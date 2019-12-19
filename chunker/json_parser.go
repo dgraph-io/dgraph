@@ -234,7 +234,7 @@ type NQuadBuffer struct {
 	batchSize int
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
-	predHints map[string]pb.ParseMetadata_HintType
+	predHints map[string]pb.Metadata_HintType
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -246,7 +246,7 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
 	}
-	buf.predHints = make(map[string]pb.ParseMetadata_HintType)
+	buf.predHints = make(map[string]pb.Metadata_HintType)
 	return buf
 }
 
@@ -267,8 +267,8 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 }
 
 // Metadata returns the parse metadata that has been aggregated so far..
-func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
-	return &pb.ParseMetadata{
+func (buf *NQuadBuffer) Metadata() *pb.Metadata {
+	return &pb.Metadata{
 		PredHints: buf.predHints,
 	}
 }
@@ -276,9 +276,9 @@ func (buf *NQuadBuffer) Metadata() *pb.ParseMetadata {
 // PushPredHint pushes and aggregates hints about the type of the predicate derived
 // during the parsing. This  metadata is expected to be a lot smaller than the set of
 // NQuads so it's not  necessary to send them in batches.
-func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.ParseMetadata_HintType) {
+func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.Metadata_HintType) {
 	if oldHint, ok := buf.predHints[pred]; ok && hint != oldHint {
-		hint = pb.ParseMetadata_LIST
+		hint = pb.Metadata_LIST
 	}
 	buf.predHints[pred] = hint
 }
@@ -407,7 +407,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
-			buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -419,7 +419,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
-				buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
+				buf.PushPredHint(pred, pb.Metadata_SINGLE)
 				continue
 			}
 
@@ -432,9 +432,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
-			buf.PushPredHint(pred, pb.ParseMetadata_SINGLE)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
-			buf.PushPredHint(pred, pb.ParseMetadata_LIST)
+			buf.PushPredHint(pred, pb.Metadata_LIST)
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
@@ -533,7 +533,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
-func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.ParseMetadata, error) {
+func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
 	err := buf.ParseJSON(b, op)
 	if err != nil {

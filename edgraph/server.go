@@ -251,10 +251,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	predHints := make(map[string]pb.ParseMetadata_HintType)
+	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
-		for pred, hint := range gmu.ParseMetadata.GetPredHints() {
-			if oldHint := predHints[pred]; oldHint == pb.ParseMetadata_LIST {
+		for pred, hint := range gmu.Metadata.GetPredHints() {
+			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}
 			predHints[pred] = hint
@@ -263,7 +263,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	m := &pb.Mutations{
 		Edges:   edges,
 		StartTs: qc.req.StartTs,
-		ParseMetadata: &pb.ParseMetadata{
+		Metadata: &pb.Metadata{
 			PredHints: predHints,
 		},
 	}
@@ -978,7 +978,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
-		res.ParseMetadata = md
+		res.Metadata = md
 	}
 	if len(mu.DeleteJson) > 0 {
 		// The metadata is not currently needed for delete operations so it can be safely ignored.
@@ -994,7 +994,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
-		res.ParseMetadata = md
+		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
 		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)

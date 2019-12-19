@@ -55,7 +55,7 @@ func sane(s string) bool {
 
 // ParseRDFs is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So, be careful using this.
-func ParseRDFs(b []byte) ([]*api.NQuad, *pb.ParseMetadata, error) {
+func ParseRDFs(b []byte) ([]*api.NQuad, *pb.Metadata, error) {
 	var nqs []*api.NQuad
 	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -328,20 +328,20 @@ type subjectPred struct {
 	pred    string
 }
 
-func calculateTypeHints(nqs []*api.NQuad) *pb.ParseMetadata {
+func calculateTypeHints(nqs []*api.NQuad) *pb.Metadata {
 	// Stores the count of <subject, pred> pairs to help figure out whether
 	// schemas should be created as scalars or lists of scalars.
 	schemaCountMap := make(map[subjectPred]int)
-	predHints := make(map[string]pb.ParseMetadata_HintType)
+	predHints := make(map[string]pb.Metadata_HintType)
 
 	for _, nq := range nqs {
 		subPredPair := subjectPred{subject: nq.Subject, pred: nq.Predicate}
 		schemaCountMap[subPredPair]++
 		if count := schemaCountMap[subPredPair]; count > 1 {
-			predHints[nq.Predicate] = pb.ParseMetadata_LIST
+			predHints[nq.Predicate] = pb.Metadata_LIST
 		}
 	}
-	return &pb.ParseMetadata{PredHints: predHints}
+	return &pb.Metadata{PredHints: predHints}
 }
 
 var typeMap = map[string]types.TypeID{

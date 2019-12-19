@@ -256,8 +256,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			hint := pb.ParseMetadata_DEFAULT
-			if mutHint, ok := proposal.Mutations.ParseMetadata.PredHints[attr]; ok {
+			hint := pb.Metadata_DEFAULT
+			if mutHint, ok := proposal.Mutations.Metadata.PredHints[attr]; ok {
 				hint = mutHint
 			}
 			if err := createSchema(attr, storageType, hint); err != nil {
