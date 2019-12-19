@@ -1,6 +1,9 @@
 package p2p
 
 import (
+	"os"
+	"path"
+	"reflect"
 	"testing"
 )
 
@@ -39,5 +42,39 @@ func TestStringsToAddrInfos(t *testing.T) {
 		if pi.ID.Pretty() != TestPeers[k][len(TestPeers[k])-46:] {
 			t.Errorf("got %s expected %s", pi.ID.Pretty(), TestPeers[k])
 		}
+	}
+}
+
+func TestGenerateKey(t *testing.T) {
+	testDir := path.Join(os.TempDir(), "gossamer-test")
+
+	defer os.RemoveAll(testDir)
+
+	keyA, err := generateKey(0, testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyB, err := generateKey(0, testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if reflect.DeepEqual(keyA, keyB) {
+		t.Error("Generated keys should not match")
+	}
+
+	keyC, err := generateKey(1, testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyD, err := generateKey(1, testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(keyC, keyD) {
+		t.Error("Generated keys should match")
 	}
 }

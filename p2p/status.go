@@ -40,13 +40,12 @@ type status struct {
 }
 
 // newStatus creates a new status instance from host
-func newStatus(host *host) (s *status, err error) {
-	s = &status{
+func newStatus(host *host) *status {
+	return &status{
 		host:          host,
 		peerConfirmed: make(map[peer.ID]time.Time),
 		peerMessage:   make(map[peer.ID]*StatusMessage),
 	}
-	return s, err
 }
 
 // confirmed returns true if peer is confirmed

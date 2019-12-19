@@ -33,7 +33,7 @@ func TestGossip(t *testing.T) {
 	nodeA, msgSendA, _ := createTestService(t, configA)
 	defer nodeA.Stop()
 
-	nodeA.host.noStatus = true
+	nodeA.noStatus = true
 
 	configB := &Config{
 		Port:        7002,
@@ -45,14 +45,14 @@ func TestGossip(t *testing.T) {
 	nodeB, msgSendB, _ := createTestService(t, configB)
 	defer nodeB.Stop()
 
-	nodeB.host.noStatus = true
+	nodeB.noStatus = true
 
-	addrInfoA, err := nodeA.host.addrInfo()
+	addrInfosA, err := nodeA.host.addrInfos()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = nodeB.host.connect(*addrInfoA)
+	err = nodeB.host.connect(*addrInfosA[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,24 +67,24 @@ func TestGossip(t *testing.T) {
 	nodeC, msgSendC, _ := createTestService(t, configC)
 	defer nodeC.Stop()
 
-	nodeC.host.noStatus = true
+	nodeC.noStatus = true
 
-	err = nodeC.host.connect(*addrInfoA)
+	err = nodeC.host.connect(*addrInfosA[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	addrInfoB, err := nodeB.host.addrInfo()
+	addrInfosB, err := nodeB.host.addrInfos()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = nodeC.host.connect(*addrInfoB)
+	err = nodeC.host.connect(*addrInfosB[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = nodeA.host.send(addrInfoB.ID, TestMessage)
+	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}

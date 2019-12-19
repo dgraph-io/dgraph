@@ -22,10 +22,10 @@ import (
 
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/peer"
-	libp2pdiscovery "github.com/libp2p/go-libp2p/p2p/discovery"
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
-const mdnsPeriod = time.Minute
+const MdnsPeriod = time.Minute
 
 // See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
 type Notifee struct {
@@ -33,71 +33,69 @@ type Notifee struct {
 	host *host
 }
 
-// discovery submodule
-type discovery struct {
-	ctx  context.Context
+// mdns submodule
+type mdns struct {
 	host *host
-	mdns libp2pdiscovery.Service
+	mdns discovery.Service
 }
 
-// newDiscovery creates a new discovery instance from the host
-func newDiscovery(ctx context.Context, host *host) (d *discovery, err error) {
-	d = &discovery{
-		ctx:  ctx,
+// newMdns creates a new mDNS instance from the host
+func newMdns(host *host) *mdns {
+	return &mdns{
 		host: host,
 	}
-	return d, err
 }
 
-// close shuts down any running discovery services
-func (d *discovery) close() error {
+// startMdns starts a new mDNS discovery service
+func (m *mdns) start() {
+	log.Trace(
+		"Starting mDNS discovery service...",
+		"host", m.host.id(),
+		"period", MdnsPeriod,
+		"protocol", m.host.protocolId,
+	)
 
-	// check if mdns service is running
-	if d.mdns != nil {
+	// create and start service
+	mdns, err := discovery.NewMdnsService(
+		m.host.ctx,
+		m.host.h,
+		MdnsPeriod,
+		string(m.host.protocolId),
+	)
+	if err != nil {
+		log.Error("Failed to start mDNS discovery service", "err", err)
+	}
 
-		// close mdns service
-		err := d.mdns.Close()
+	// register Notifee on service
+	mdns.RegisterNotifee(Notifee{
+		ctx:  m.host.ctx,
+		host: m.host,
+	})
+
+	m.mdns = mdns
+}
+
+// close shuts down the mDNS discovery service
+func (m *mdns) close() error {
+
+	// check if service is running
+	if m.mdns != nil {
+
+		// close service
+		err := m.mdns.Close()
 		if err != nil {
 			log.Error("Failed to close mDNS discovery service", "err", err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-// startMdns starts a new mDNS discovery service
-func (d *discovery) startMdns() {
-	log.Trace(
-		"Starting mDNS discovery service...",
-		"host", d.host.id(),
-		"period", mdnsPeriod,
-		"protocol", d.host.protocolId,
-	)
-
-	// create and start mDNS discovery service
-	mdns, err := libp2pdiscovery.NewMdnsService(
-		d.ctx,
-		d.host.h,
-		mdnsPeriod,
-		string(d.host.protocolId),
-	)
-	if err != nil {
-		log.Error("Failed to start mDNS discovery service", "err", err)
-	}
-
-	// register Notifee on mDNS discovery service
-	mdns.RegisterNotifee(Notifee{
-		ctx:  d.ctx,
-		host: d.host,
-	})
-
-	d.mdns = mdns
-}
-
-// HandlePeerFound is event handler called when a peer is found with discovery
+// HandlePeerFound is event handler called when a peer is found
 func (n Notifee) HandlePeerFound(p peer.AddrInfo) {
 	log.Trace(
-		"Peer found using mDNS discovery service",
+		"Peer found using mDNS discovery",
 		"host", n.host.id(),
 		"peer", p.ID,
 	)
@@ -105,6 +103,6 @@ func (n Notifee) HandlePeerFound(p peer.AddrInfo) {
 	// connect to found peer
 	err := n.host.connect(p)
 	if err != nil {
-		log.Error("Failed to connect to peer using mDNS discovery service", "err", err)
+		log.Error("Failed to connect to peer using mDNS discovery", "err", err)
 	}
 }

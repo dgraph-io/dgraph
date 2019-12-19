@@ -7,41 +7,8 @@ import (
 	"testing"
 )
 
-func TestGenerateKey(t *testing.T) {
-	testDir := path.Join(os.TempDir(), "gossamer-test")
-
-	defer os.RemoveAll(testDir)
-
-	keyA, err := generateKey(0, testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	keyB, err := generateKey(0, testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(keyA, keyB) {
-		t.Error("Generated keys should not match")
-	}
-
-	keyC, err := generateKey(1, testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	keyD, err := generateKey(1, testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(keyC, keyD) {
-		t.Error("Generated keys should match")
-	}
-}
-
-func TestSetupPrivateKey(t *testing.T) {
+// test setupKey method
+func TestSetupKey(t *testing.T) {
 	testDir := path.Join(os.TempDir(), "gossamer-test")
 
 	defer os.RemoveAll(testDir)
@@ -50,7 +17,7 @@ func TestSetupPrivateKey(t *testing.T) {
 		DataDir: testDir,
 	}
 
-	err := configA.setupPrivKey()
+	err := configA.setupKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +26,7 @@ func TestSetupPrivateKey(t *testing.T) {
 		DataDir: testDir,
 	}
 
-	err = configB.setupPrivKey()
+	err = configB.setupKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +39,7 @@ func TestSetupPrivateKey(t *testing.T) {
 		RandSeed: 1,
 	}
 
-	err = configC.setupPrivKey()
+	err = configC.setupKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +48,7 @@ func TestSetupPrivateKey(t *testing.T) {
 		RandSeed: 2,
 	}
 
-	err = configD.setupPrivKey()
+	err = configD.setupKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,26 +58,27 @@ func TestSetupPrivateKey(t *testing.T) {
 	}
 }
 
-func TestBuildOptions(t *testing.T) {
+// test build configuration method
+func TestBuildConfig(t *testing.T) {
 	testDir := path.Join(os.TempDir(), "gossamer-test")
 
 	defer os.RemoveAll(testDir)
 
-	configA := &Config{
+	cfg := &Config{
 		DataDir: testDir,
 	}
 
-	_, err := configA.buildOpts()
+	err := cfg.build()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	key, err := generateKey(0, testDir)
+	testKey, err := generateKey(0, testDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	configB := &Config{
+	testCfg := &Config{
 		BootstrapNodes: nil,
 		ProtocolId:     "",
 		Port:           0,
@@ -118,10 +86,10 @@ func TestBuildOptions(t *testing.T) {
 		NoBootstrap:    false,
 		NoMdns:         false,
 		DataDir:        testDir,
-		privateKey:     key,
+		privateKey:     testKey,
 	}
 
-	if reflect.DeepEqual(configA, configB) {
+	if reflect.DeepEqual(cfg, testCfg) {
 		t.Error("Configurations should the same")
 	}
 }

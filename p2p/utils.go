@@ -17,10 +17,21 @@
 package p2p
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
+	"io"
+	"io/ioutil"
+	mrand "math/rand"
+	"os"
+	"path"
+	"path/filepath"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+// stringToAddrInfos converts a single string peer id to AddrInfo
 func stringToAddrInfo(s string) (peer.AddrInfo, error) {
 	maddr, err := ma.NewMultiaddr(s)
 	if err != nil {
@@ -33,6 +44,7 @@ func stringToAddrInfo(s string) (peer.AddrInfo, error) {
 	return *p, err
 }
 
+// stringsToAddrInfos converts a string of peer ids to AddrInfo
 func stringsToAddrInfos(peers []string) ([]peer.AddrInfo, error) {
 	pinfos := make([]peer.AddrInfo, len(peers))
 	for i, p := range peers {
@@ -43,4 +55,78 @@ func stringsToAddrInfos(peers []string) ([]peer.AddrInfo, error) {
 		pinfos[i] = p
 	}
 	return pinfos, nil
+}
+
+// generateKey generates an ed25519 private key and writes it to the data directory
+// If the seed is zero, we use real cryptographic randomness. Otherwise, we use a
+// deterministic randomness source to make keys the same across multiple runs.
+func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
+	var r io.Reader
+	if seed == 0 {
+		r = crand.Reader
+	} else {
+		r = mrand.New(mrand.NewSource(seed))
+	}
+	key, _, err := crypto.GenerateECDSAKeyPair(r)
+	if err != nil {
+		return nil, err
+	}
+	if seed == 0 {
+		if err = makeDir(fp); err != nil {
+			return nil, err
+		}
+		if err = saveKey(key, fp); err != nil {
+			return nil, err
+		}
+	}
+	return key, nil
+}
+
+// loadKey attempts to load a private key from the provided filepath
+func loadKey(fp string) (crypto.PrivKey, error) {
+	pth := path.Join(filepath.Clean(fp), KeyFile)
+	if _, err := os.Stat(pth); os.IsNotExist(err) {
+		return nil, nil
+	}
+	keyData, err := ioutil.ReadFile(filepath.Clean(pth))
+	if err != nil {
+		return nil, err
+	}
+	dec := make([]byte, hex.DecodedLen(len(keyData)))
+	_, err = hex.Decode(dec, keyData)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.UnmarshalECDSAPrivateKey(dec)
+}
+
+// makeDir creates `.gossamer` if directory does not already exist
+func makeDir(fp string) error {
+	_, e := os.Stat(fp)
+	if os.IsNotExist(e) {
+		e = os.Mkdir(fp, os.ModePerm)
+		if e != nil {
+			return e
+		}
+	}
+	return e
+}
+
+// saveKey attempts to save a private key to the provided filepath
+func saveKey(priv crypto.PrivKey, fp string) (err error) {
+	pth := path.Join(filepath.Clean(fp), KeyFile)
+	f, err := os.Create(pth)
+	if err != nil {
+		return err
+	}
+	raw, err := priv.Raw()
+	if err != nil {
+		return err
+	}
+	enc := make([]byte, hex.EncodedLen(len(raw)))
+	hex.Encode(enc, raw)
+	if _, err = f.Write(enc); err != nil {
+		return err
+	}
+	return f.Close()
 }

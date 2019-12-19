@@ -17,24 +17,15 @@
 package p2p
 
 import (
-	crand "crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"io"
-	"io/ioutil"
-	mrand "math/rand"
-	"os"
-	"path"
-	"path/filepath"
-
 	log "github.com/ChainSafe/log15"
-	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	ma "github.com/multiformats/go-multiaddr"
+	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
 const KeyFile = "node.key"
+
+const DefaultProtocolId = "/gossamer/dot/0"
 
 // Config is used to configure a p2p service
 type Config struct {
@@ -48,8 +39,6 @@ type Config struct {
 	RandSeed int64
 	// Disables bootstrapping
 	NoBootstrap bool
-	// Disables gossiping
-	NoGossip bool
 	// Disables MDNS discovery
 	NoMdns bool
 	// Global data directory
@@ -58,144 +47,103 @@ type Config struct {
 	privateKey crypto.PrivKey
 }
 
-func (c *Config) buildOpts() ([]libp2p.Option, error) {
-	ip := "0.0.0.0"
-
-	if c.RandSeed == 0 {
-		err := c.setupPrivKey()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		log.Debug("Generating temporary deterministic p2p identity")
-		key, err := generateKey(c.RandSeed, c.DataDir)
-		if err != nil {
-			return nil, err
-		}
-		c.privateKey = key
-	}
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, c.Port))
+// bootnodes formats the configuration bootnodes
+func (c *Config) bootnodes() (peer []peer.AddrInfo, err error) {
+	bootnodes, err := stringsToAddrInfos(c.BootstrapNodes)
 	if err != nil {
 		return nil, err
 	}
-
-	connmgr := &ConnManager{}
-
-	options := []libp2p.Option{
-		libp2p.ListenAddrs(addr),
-		libp2p.DisableRelay(),
-		libp2p.Identity(c.privateKey),
-		libp2p.NATPortMap(),
-		libp2p.Ping(true),
-		libp2p.ConnectionManager(connmgr),
-	}
-
-	return options, nil
+	return bootnodes, nil
 }
 
-// setupPrivKey will attempt to load the nodes private key, if that fails it will create one
-func (c *Config) setupPrivKey() error {
-	// If key exists, load it
-	key, err := tryLoadPrivKey(c.DataDir)
+// protocolId formats the configuration protocol id
+func (c *Config) protocolId() protocol.ID {
+	return protocol.ID(c.ProtocolId)
+}
+
+// build checks the configuration, sets up the private key for the p2p service,
+// and applies default values where appropriate
+func (c *Config) build() error {
+	if c.ProtocolId == "" {
+		c.ProtocolId = DefaultProtocolId
+	}
+
+	if !c.NoBootstrap && len(c.BootstrapNodes) == 0 {
+		log.Warn("Bootstrap is enabled and no bootstrap nodes are defined")
+	}
+
+	// check if random seed set
+	if c.RandSeed == 0 {
+
+		// load existing key or create random key
+		err := c.setupKey()
+		if err != nil {
+			return err
+		}
+
+	} else {
+		log.Warn(
+			"Generating temporary deterministic p2p identity",
+			"directory", c.DataDir,
+			"keyfile", KeyFile,
+		)
+
+		// generate temporary deterministic key
+		key, err := generateKey(c.RandSeed, c.DataDir)
+		if err != nil {
+			return err
+		}
+
+		// set private key
+		c.privateKey = key
+	}
+
+	return nil
+}
+
+// setupKey attempts to load the p2p private key required to start the p2p
+// servce, if a key does not exist or cannot be loaded, it creates a new key
+// using the random seed (if random seed is not set, creates new random key)
+func (c *Config) setupKey() error {
+
+	// attempt to load existing key
+	key, err := loadKey(c.DataDir)
 	if err != nil {
 		return err
 	}
-	// Otherwise, create a key
+
+	// check if key set
 	if key == nil {
-		log.Debug("No existing p2p key, generating a new one", "path", path.Join(filepath.Clean(c.DataDir), KeyFile))
+		log.Trace(
+			"Generating new p2p identity",
+			"directory", c.DataDir,
+			"keyfile", KeyFile,
+		)
+
+		// generate key
 		key, err = generateKey(c.RandSeed, c.DataDir)
 		if err != nil {
 			return err
 		}
+
 	} else {
-		id, _ := peer.IDFromPrivateKey(key)
-		log.Debug("Loaded existing p2p identity", "id", id)
+
+		// get p2p identity from private key
+		id, err := peer.IDFromPrivateKey(key)
+		if err != nil {
+			return err
+		}
+
+		log.Trace(
+			"Using existing p2p identity",
+			"directory", c.DataDir,
+			"keyfile", KeyFile,
+			"id", id,
+		)
 	}
 
+	// set private key
 	c.privateKey = key
+
 	return nil
-}
-
-// tryLoadPrivkey will attempt to load the private key from the provided path
-func tryLoadPrivKey(fp string) (crypto.PrivKey, error) {
-	pth := path.Join(filepath.Clean(fp), KeyFile)
-	if _, err := os.Stat(pth); os.IsNotExist(err) {
-		return nil, nil
-	}
-
-	keyData, err := ioutil.ReadFile(filepath.Clean(pth))
-	if err != nil {
-		return nil, err
-	}
-
-	dec := make([]byte, hex.DecodedLen(len(keyData)))
-	_, err = hex.Decode(dec, keyData)
-	if err != nil {
-		return nil, err
-	}
-
-	return crypto.UnmarshalECDSAPrivateKey(dec)
-}
-
-// generateKey generates an ed25519 private key and writes it to the data directory
-// If the seed is zero, we use real cryptographic randomness. Otherwise, we use a
-// deterministic randomness source to make generated keys stay the same
-// across multiple runs
-func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
-	var r io.Reader
-	if seed == 0 {
-		r = crand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(seed))
-	}
-
-	// Generate a key pair for this host. We will use it at least
-	// to obtain a valid host ID.
-	priv, _, err := crypto.GenerateECDSAKeyPair(r)
-	if err != nil {
-		return nil, err
-	}
-	id, _ := peer.IDFromPrivateKey(priv)
-	log.Debug("Created new p2p identity", "id", id.String())
-
-	// Save the key if its secure
-	if seed == 0 {
-		if err = saveKey(priv, fp); err != nil {
-			return nil, err
-		}
-	}
-
-	return priv, nil
-}
-
-func saveKey(priv crypto.PrivKey, fp string) error {
-	// Create `.gossamer` if it doesn't exist
-	if _, e := os.Stat(fp); os.IsNotExist(e) {
-		if e = os.Mkdir(fp, os.ModePerm); e != nil {
-			return e
-		}
-	} else if e != nil {
-		return e
-	}
-
-	pth := path.Join(filepath.Clean(fp), KeyFile)
-	f, err := os.Create(pth)
-	if err != nil {
-		return err
-	}
-
-	raw, err := priv.Raw()
-	if err != nil {
-		return err
-	}
-
-	enc := make([]byte, hex.EncodedLen(len(raw)))
-	hex.Encode(enc, raw)
-
-	if _, err = f.Write(enc); err != nil {
-		return err
-	}
-
-	return f.Close()
 }

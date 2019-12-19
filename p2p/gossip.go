@@ -28,12 +28,11 @@ type gossip struct {
 }
 
 // newGossip creates a new gossip instance from the host
-func newGossip(host *host) (g *gossip, err error) {
-	g = &gossip{
+func newGossip(host *host) *gossip {
+	return &gossip{
 		host:    host,
 		hasSeen: make(map[string]bool),
 	}
-	return g, err
 }
 
 // handleMessage broadcasts messages that have not been seen

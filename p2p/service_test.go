@@ -64,7 +64,6 @@ func TestStartService(t *testing.T) {
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoGossip:    true,
 		NoMdns:      true,
 	}
 	node, _, _ := createTestService(t, config)
@@ -77,34 +76,34 @@ func TestBroadcastMessages(t *testing.T) {
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoGossip:    true,
 		NoMdns:      true,
 	}
 
 	nodeA, _, msgRecA := createTestService(t, configA)
 	defer nodeA.Stop()
 
-	nodeA.host.noStatus = true
+	nodeA.noGossip = true
+	nodeA.noStatus = true
 
 	configB := &Config{
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
-		NoGossip:    true,
 		NoMdns:      true,
 	}
 
 	nodeB, msgSendB, _ := createTestService(t, configB)
 	defer nodeB.Stop()
 
-	nodeB.host.noStatus = true
+	nodeB.noGossip = true
+	nodeB.noStatus = true
 
-	addrInfoB, err := nodeB.host.addrInfo()
+	addrInfosB, err := nodeB.host.addrInfos()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = nodeA.host.connect(*addrInfoB)
+	err = nodeA.host.connect(*addrInfosB[0])
 	if err != nil {
 		t.Fatal(err)
 	}

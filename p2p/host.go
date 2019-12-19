@@ -23,7 +23,7 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
 	ds "github.com/ipfs/go-datastore"
-	dsync "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/go-datastore/sync"
 	"github.com/libp2p/go-libp2p"
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -35,120 +35,89 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-const DefaultProtocolId = protocol.ID("/gossamer/dot/0")
-
 // host wraps libp2p host with host services and information
 type host struct {
-	ctx         context.Context
-	h           libp2phost.Host
-	dht         *kaddht.IpfsDHT
-	bootnodes   []peer.AddrInfo
-	noBootstrap bool
-	noGossip    bool
-	noMdns      bool
-	noStatus    bool
-	address     ma.Multiaddr
-	protocolId  protocol.ID
+	ctx        context.Context
+	h          libp2phost.Host
+	dht        *kaddht.IpfsDHT
+	bootnodes  []peer.AddrInfo
+	protocolId protocol.ID
 }
 
 // newHost creates a host wrapper with a new libp2p host instance
 func newHost(ctx context.Context, cfg *Config) (*host, error) {
-	opts, err := cfg.buildOpts()
+
+	// use "p2p" for multiaddress format
+	ma.SwapToP2pMultiaddrs()
+
+	// create multiaddress (without p2p identity)
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.Port))
 	if err != nil {
 		return nil, err
 	}
 
+	// set connection manager
+	cm := &ConnManager{}
+
+	// set libp2p host options
+	opts := []libp2p.Option{
+		libp2p.ListenAddrs(addr),
+		libp2p.DisableRelay(),
+		libp2p.Identity(cfg.privateKey),
+		libp2p.NATPortMap(),
+		libp2p.Ping(true),
+		libp2p.ConnectionManager(cm),
+	}
+
+	// create libp2p host instance
 	h, err := libp2p.New(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// use default protocol if none provided
-	protocolId := protocol.ID(cfg.ProtocolId)
-	if protocolId == "" {
-		protocolId = DefaultProtocolId
-	}
+	// create DHT service
+	dht := kaddht.NewDHT(ctx, h, sync.MutexWrap(ds.NewMapDatastore()))
 
-	// create new datastore and DHT
-	dstore := dsync.MutexWrap(ds.NewMapDatastore())
-	dht := kaddht.NewDHT(ctx, h, dstore)
-
-	// wrap host and DHT with routed host so that we can look up peers in DHT
+	// wrap host and DHT service with routed host
 	h = rhost.Wrap(h, dht)
 
-	// use "p2p" for multiaddress format
-	ma.SwapToP2pMultiaddrs()
-
-	// create host multiaddress that includes host "p2p" id
-	address, err := ma.NewMultiaddr(fmt.Sprintf("/p2p/%s", h.ID()))
+	// format bootnodes
+	bns, err := cfg.bootnodes()
 	if err != nil {
 		return nil, err
 	}
 
-	// format bootstrap nodes list
-	bootnodes, err := stringsToAddrInfos(cfg.BootstrapNodes)
-	if err != nil {
-		return nil, err
-	}
+	// format protocol id
+	pid := cfg.protocolId()
 
 	return &host{
-		ctx:         ctx,
-		h:           h,
-		dht:         dht,
-		bootnodes:   bootnodes,
-		noBootstrap: cfg.NoBootstrap,
-		noGossip:    cfg.NoGossip,
-		noMdns:      cfg.NoMdns,
-		address:     address,
-		protocolId:  protocolId,
+		ctx:        ctx,
+		h:          h,
+		dht:        dht,
+		bootnodes:  bns,
+		protocolId: pid,
 	}, nil
 
 }
 
-// close shuts down the host
+// close closes host services and the libp2p host (host services first)
 func (h *host) close() error {
 
-	// shut down host
-	err := h.h.Close()
+	// close DHT service
+	err := h.dht.Close()
 	if err != nil {
+		log.Error("Failed to close DHT service", "err", err)
 		return err
 	}
 
-	// close DHT process
-	err = h.dht.Close()
+	// close libp2p host
+	err = h.h.Close()
 	if err != nil {
+		log.Error("Failed to close libp2p host", "err", err)
 		return err
 	}
 
 	return nil
-}
-
-// bootstrap connects the host to the configured bootnodes
-func (h *host) bootstrap() {
-	log.Trace(
-		"Starting bootstrap...",
-		"host", h.id(),
-	)
-
-	if len(h.bootnodes) == 0 && !h.noBootstrap {
-		log.Error("No bootnodes are defined and bootstrapping is enabled")
-	}
-
-	// loop through bootnode peers and connect to each peer
-	for _, peerInfo := range h.bootnodes {
-		err := h.connect(peerInfo)
-		if err != nil {
-			log.Error("Failed to bootstrap peer", "err", err)
-		}
-	}
-}
-
-// printHostAddresses prints the multiaddresses of the host
-func (h *host) printHostAddresses() {
-	fmt.Println("Listening on the following addresses...")
-	for _, addr := range h.h.Addrs() {
-		fmt.Println(addr.Encapsulate(h.address).String())
-	}
 }
 
 // registerConnHandler registers the connection handler (see handleConn)
@@ -161,58 +130,64 @@ func (h *host) registerStreamHandler(handler func(network.Stream)) {
 	h.h.SetStreamHandler(h.protocolId, handler)
 }
 
+// printHostAddresses prints host multiaddresses to console
+func (h *host) printHostAddresses() {
+	fmt.Println("Listening on the following addresses...")
+	for _, addr := range h.multiaddrs() {
+		fmt.Println(addr)
+	}
+}
+
 // connect connects the host to a specific peer address
 func (h *host) connect(p peer.AddrInfo) (err error) {
-
-	// add peer address to peerstore
 	h.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-
 	err = h.h.Connect(h.ctx, p)
 	return err
 }
 
-// newStream opens a new stream with a specific peer using the host protocol
-func (h *host) newStream(p peer.ID) (network.Stream, error) {
-
-	// create new stream with host protocol id
-	stream, err := h.h.NewStream(h.ctx, p, h.protocolId)
-	if err != nil {
-		return nil, err
+// bootstrap connects the host to the configured bootnodes
+func (h *host) bootstrap() {
+	for _, addrInfo := range h.bootnodes {
+		err := h.connect(addrInfo)
+		if err != nil {
+			log.Error("Failed to bootstrap peer", "err", err)
+		}
 	}
+}
 
-	log.Trace(
-		"Opened stream",
-		"host", stream.Conn().LocalPeer(),
-		"peer", stream.Conn().RemotePeer(),
-		"protocol", stream.Protocol(),
-	)
-
-	return stream, nil
+// ping pings a peer using DHT
+func (h *host) ping(peer peer.ID) error {
+	return h.dht.Ping(h.ctx, peer)
 }
 
 // send sends a non-status message to a specific peer
 func (h *host) send(p peer.ID, msg Message) (err error) {
-	stream, err := h.newStream(p)
+
+	// create new stream with host protocol id
+	s, err := h.h.NewStream(h.ctx, p, h.protocolId)
 	if err != nil {
-		log.Debug("Failed to create new stream", "err", err)
 		return err
 	}
+
+	log.Trace(
+		"Opened stream",
+		"host", h.id(),
+		"peer", p,
+		"protocol", s.Protocol(),
+	)
 
 	encMsg, err := msg.Encode()
 	if err != nil {
-		log.Debug("Failed to encode message", "err", err)
 		return err
 	}
 
-	_, err = stream.Write(common.Uint16ToBytes(uint16(len(encMsg)))[0:1])
+	_, err = s.Write(common.Uint16ToBytes(uint16(len(encMsg)))[0:1])
 	if err != nil {
-		log.Debug("Failed to write message", "err", err)
 		return err
 	}
 
-	_, err = stream.Write(encMsg)
+	_, err = s.Write(encMsg)
 	if err != nil {
-		log.Debug("Failed to write message", "err", err)
 		return err
 	}
 
@@ -228,35 +203,23 @@ func (h *host) send(p peer.ID, msg Message) (err error) {
 
 // broadcast sends a message to each connected peer
 func (h *host) broadcast(msg Message) {
-	log.Trace(
-		"Start broadcasting message...",
-		"host", h.id(),
-		"type", msg.GetType(),
-	)
-
-	// loop through connected peers
-	for _, peer := range h.peers() {
-		err := h.send(peer, msg)
+	for _, p := range h.peers() {
+		err := h.send(p, msg)
 		if err != nil {
-			log.Error("Failed to send message during broadcast", "err", err)
+			log.Error("Failed to send message during broadcast", "peer", p, "err", err)
 		}
 	}
 }
 
-// closePeer closes the peer
+// closePeer closes the peer connection
 func (h *host) closePeer(peer peer.ID) error {
 	err := h.h.Network().ClosePeer(peer)
 	return err
 }
 
-// ping pings a peer using DHT
-func (h *host) ping(peer peer.ID) error {
-	return h.dht.Ping(h.ctx, peer)
-}
-
 // id returns the host id
-func (h *host) id() string {
-	return h.h.ID().String()
+func (h *host) id() peer.ID {
+	return h.h.ID()
 }
 
 // Peers returns connected peers
@@ -280,30 +243,27 @@ func (h *host) peerCount() int {
 	return len(peers)
 }
 
-// fullAddr returns the first full multiaddress of the host
-func (h *host) fullAddr() (maddrs ma.Multiaddr) {
-	return h.fullAddrs()[0]
+// addrInfos returns the libp2p AddrInfos of the host
+func (h *host) addrInfos() (addrInfos []*peer.AddrInfo, err error) {
+	for _, multiaddr := range h.multiaddrs() {
+		addrInfo, err := peer.AddrInfoFromP2pAddr(multiaddr)
+		if err != nil {
+			return nil, err
+		}
+		addrInfos = append(addrInfos, addrInfo)
+	}
+	return addrInfos, nil
 }
 
-// fullAddrs returns the full multiaddresses of the host
-func (h *host) fullAddrs() (maddrs []ma.Multiaddr) {
+// multiaddrs returns the multiaddresses of the host
+func (h *host) multiaddrs() (multiaddrs []ma.Multiaddr) {
 	addrs := h.h.Addrs()
-	for _, a := range addrs {
-		maddr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", a, h.h.ID()))
+	for _, addr := range addrs {
+		multiaddr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", addr, h.id()))
 		if err != nil {
 			continue
 		}
-		maddrs = append(maddrs, maddr)
+		multiaddrs = append(multiaddrs, multiaddr)
 	}
-	return maddrs
-}
-
-// addrInfo returns the libp2p AddrInfo of the host
-func (h *host) addrInfo() (addrInfo *peer.AddrInfo, err error) {
-	addr := h.fullAddr()
-	addrInfo, err = peer.AddrInfoFromP2pAddr(addr)
-	if err != nil {
-		return nil, err
-	}
-	return addrInfo, nil
+	return multiaddrs
 }

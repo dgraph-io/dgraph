@@ -27,7 +27,7 @@ type Health struct {
 	ShouldHavePeers bool
 }
 
-// NetworkState is network information about host needed for the rpc server
+// NetworkState is network information about host needed for the rpc server and the runtime
 type NetworkState struct {
 	PeerId string
 }

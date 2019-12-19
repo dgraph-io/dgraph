@@ -22,35 +22,35 @@ import (
 )
 
 // wait time to discover and connect using mdns discovery
-var TestDiscoveryTimeout = 3 * time.Second
+var TestMdnsTimeout = 3 * time.Second
 
 // test mdns discovery service (discovers and connects)
-func TestDiscovery(t *testing.T) {
+func TestMdns(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoGossip:    true,
 	}
 
 	nodeA, _, _ := createTestService(t, configA)
 	defer nodeA.Stop()
 
-	nodeA.host.noStatus = true
+	nodeA.noGossip = true
+	nodeA.noStatus = true
 
 	configB := &Config{
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
-		NoGossip:    true,
 	}
 
 	nodeB, _, _ := createTestService(t, configB)
 	defer nodeB.Stop()
 
-	nodeB.host.noStatus = true
+	nodeB.noGossip = true
+	nodeB.noStatus = true
 
-	time.Sleep(TestDiscoveryTimeout)
+	time.Sleep(TestMdnsTimeout)
 
 	peerCountA := nodeA.host.peerCount()
 	peerCountB := nodeB.host.peerCount()
