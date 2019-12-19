@@ -45,7 +45,7 @@ func newTimeout(retry int) time.Duration {
 	return timeout
 }
 
-var limiter rateLimiter
+var limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}
 
 func init() {
 	go limiter.scream()
