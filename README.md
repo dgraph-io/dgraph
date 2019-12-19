@@ -11,7 +11,7 @@
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/chainsafeth)
 
-gossamer is an implementation of the [Polkadot Runtime Environment](https://research.web3.foundation/en/latest/web/viewer.html?file=../pdf/polkadot_re_spec.pdf) written in Go. The Polkadot Runtime Environment is a modular, customizable framework for building blockchains. It has a swappable WASM runtime (ie. state transition function) that can be replaced even after the blockchain has launched without hard forks. It also has a generic extrinsic and block format which are specified in the runtime. The runtime can be written in any language that compiles to WASM. 
+gossamer is an implementation of the [Polkadot Runtime Environment](https://github.com/w3f/polkadot-spec) written in Go. The Polkadot Runtime Environment is a modular, customizable framework for building blockchains. It has a swappable WASM runtime (ie. state transition function) that can be replaced even after the blockchain has launched without hard forks. It also has a generic extrinsic and block format which are specified in the runtime. The runtime can be written in any language that compiles to WASM. 
 
 Our packages:
 
