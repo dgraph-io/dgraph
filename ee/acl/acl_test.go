@@ -474,3 +474,73 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PermissionDenied")
 }
+
+func TestSuperUserAcess(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	unAuthPred := "unauthorizedPredicate"
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	op = api.Operation{
+		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	createSuperUser := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-u", "superuser", "-p", "superpassword", "-x", "password")
+	require.NoError(t, createSuperUser.Run(), "Error while creating super user")
+
+	makeSuperUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "superuser",
+		"-l", x.AdminGId, "-x", "password")
+	require.NoError(t, makeSuperUser.Run(), "Error while adding superuser to guardians group")
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID, ok := resp.Uids["a"]
+	require.True(t, ok)
+
+	time.Sleep(6 * time.Second)
+	superClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err, "Error while creating client")
+
+	superClient.Login(ctx, "superuser", "superpassword")
+
+	txn = superClient.NewTxn()
+	mutString := fmt.Sprintf("<%s> <%s> \"testdata\" .", nodeUID, unAuthPred)
+	mutation = &api.Mutation{
+		SetNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err, "Error while mutating unauthorized predicate")
+
+	txn = superClient.NewTxn()
+	query := fmt.Sprintf(`
+                 {
+                     me(func: eq(%s, "testdata")) {
+                         uid
+                     }
+                 }`, unAuthPred)
+
+	resp, err = txn.Query(ctx, query)
+	require.NoError(t, err, "Error while querying unauthorized predicate")
+	require.Contains(t, string(resp.GetJson()), "uid")
+
+	op = api.Operation{
+		Schema: fmt.Sprintf("%s: int .", unAuthPred),
+	}
+	err = superClient.Alter(ctx, &op)
+	require.NoError(t, err, "Error while altering unauthorized predicate")
+}
