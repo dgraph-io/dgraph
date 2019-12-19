@@ -5031,7 +5031,7 @@ func TestRecurseWithError(t *testing.T) {
 	}`
 	_, err = Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Value inside bool should be type of boolean")
+	require.Contains(t, err.Error(), "Value inside loop should be type of boolean")
 }
 func TestParseExpandFilter(t *testing.T) {
 	query := `
