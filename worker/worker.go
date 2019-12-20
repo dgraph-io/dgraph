@@ -72,19 +72,22 @@ type grpcWorker struct {
 func (w *grpcWorker) SubscribeForKV(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeForKVServer) error {
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(stream.Context())
 	// Subscribe on given prefixes.
+	var streamErr error
 	err := pstore.Subscribe(ctx, func(kvs *badgerpb.KVList) {
-		err := stream.Send(&pb.SubscriptionResponse{
-			Kvs: kvs,
-		})
-		if err != nil {
+		streamErr = stream.Send(kvs)
+		if streamErr != nil {
 			// Cancel the current subscription if not able to push to the stream.
 			// This is stop the current subscription and end the stream.
 			cancel()
 		}
 	}, req.GetPrefixes()...)
-	return err
+	// Return the err if there is an err returned by badger.
+	if err != nil {
+		return err
+	}
+	return streamErr
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
