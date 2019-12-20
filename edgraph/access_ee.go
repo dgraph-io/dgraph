@@ -389,7 +389,7 @@ func ResetAcl() {
 		query := fmt.Sprintf(`
 			{
 				grootid as var(func: eq(dgraph.xid, "%s"))
-                                guid as var(func: eq(dgraph.xid, "%s"))
+				guid as var(func: eq(dgraph.xid, "%s"))
 			}
 		`, x.GrootId, x.AdminGId)
 		userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
