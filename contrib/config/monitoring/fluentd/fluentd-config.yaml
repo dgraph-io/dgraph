@@ -1,8 +1,8 @@
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: fluentd-config
-  namespace: kube-system
+  name: fluentd-config-dgraph-io
+  namespace: default
   labels:
     addonmanager.kubernetes.io/mode: Reconcile
 data:
@@ -10,15 +10,16 @@ data:
     <source>
       @id fluentd-containers.log
       @type tail
-      path /var/log/containers/*.log
+      path /var/log/containers/dgraph*.log
       pos_file /var/log/containers.log.pos
 
       tag dgraph.*
       read_from_head true
 
       <parse>
-        @type json
-        keep_time_key true
+        @type regexp
+
+        expression /^(?<time>.+) (?<stream>stdout|stderr) [^ ]* (?<log>.*)$/
         time_format %Y-%m-%dT%H:%M:%S.%NZ
       </parse>
     </source>
@@ -46,13 +47,16 @@ data:
       </record>
     </filter>
 
-    <match dgraph.**>
-      @type route
-      remove_tag_prefix dgraph.var.log.containers
-      add_tag_prefix raw.kubernetes
-    </match>
-
     # Add your log injector and management pipeline here.
-    <match raw.kubernetes.**>
-      @type stdout
+    <match dgraph.**>
+      @type elasticsearch
+
+      logstash_format true
+      include_tag_key true
+
+      host "#{ENV['FLUENT_ELASTICSEARCH_HOST']}"
+      port "#{ENV['FLUENT_ELASTICSEARCH_PORT']}"
+      scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME'] || 'http'}"
+      user "#{ENV['FLUENT_ELASTICSEARCH_USER']}"
+      password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
     </match>
