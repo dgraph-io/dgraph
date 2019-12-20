@@ -22,7 +22,11 @@ func loadGenesis(ctx *cli.Context) error {
 
 	// read genesis file
 	fp := getGenesisPath(ctx)
-	log.Debug("Loading genesis", "genesisfile", fp, "datadir", fig.Global.DataDir)
+	dataDir := fig.Global.DataDir
+	if ctx.String(utils.DataDirFlag.Name) != "" {
+		dataDir = ctx.String(utils.DataDirFlag.Name)
+	}
+	log.Debug("Loading genesis", "genesisfile", fp, "datadir", dataDir)
 
 	gen, err := genesis.LoadGenesisData(fp)
 	if err != nil {
@@ -32,7 +36,7 @@ func loadGenesis(ctx *cli.Context) error {
 	log.Info("🕸\t Initializing node", "name", gen.Name, "id", gen.Id, "protocolID", gen.ProtocolId, "bootnodes", common.BytesToStringArray(gen.Bootnodes))
 
 	// Create service, initialize stateDB and blockDB
-	stateSrv := state.NewService(fig.Global.DataDir)
+	stateSrv := state.NewService(dataDir)
 
 	err = stateSrv.Start()
 	if err != nil {
