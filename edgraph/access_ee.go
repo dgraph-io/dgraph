@@ -742,12 +742,12 @@ func authorizeState(ctx context.Context) error {
 			userID = userData[0]
 			if userID == x.GrootId {
 				return nil
+			} else {
+				// Deny non groot users.
+				return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+					"Only User '%v' is authorized.", userID, x.GrootId))
 			}
 		}
-
-		// Deny non groot users.
-		return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-			"Only User '%v' is authorized.", userID, x.GrootId))
 	}
 
 	return doAuthorizeState()

@@ -602,13 +602,13 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 
 	ms := worker.GetMembershipState()
 	if ms == nil {
-		return nil, errors.New("No membership state found")
+		return nil, errors.Errorf("No membership state found")
 	}
 
 	m := jsonpb.Marshaler{}
 	var jsonState bytes.Buffer
 	if err := m.Marshal(&jsonState, ms); err != nil {
-		return nil, errors.New("Error marshalling state information to JSON")
+		return nil, errors.Errorf("Error marshalling state information to JSON")
 	}
 
 	return &api.Response{Json: jsonState.Bytes()}, nil
