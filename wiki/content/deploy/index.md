@@ -1269,7 +1269,141 @@ These are the **POST** endpoints available:
 * `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
 as part of the body.
 
+### More about /state endpoint
 
+The `/state` endpoint of Dgraph Zero returns a JSON document of the current group membership info:
+
+- Which instances are part of the cluster?
+- How many groups are there (Zero group and Alpha groups)?
+- Who is the current leader per group?
+- The predicates that belong to a group.
+- What is the estimated size in bytes of each predicate?
+- Enterprise license information.
+- Max Leased tranction ID.
+- Max Leased UID.
+- CID (Cluster ID).
+
+Here’s an example of JSON returned from `/state` endpoint for a 6-node Dgraph cluster with three replicas: 
+
+```json
+{
+  "counter": "15",
+  "groups": {
+    "1": {
+      "members": {
+        "1": {
+          "id": "1",
+          "groupId": 1,
+          "addr": "alpha1:7080",
+          "leader": true,
+          "lastUpdate": "1576112366"
+        },
+        "2": {
+          "id": "2",
+          "groupId": 1,
+          "addr": "alpha2:7080"
+        },
+        "3": {
+          "id": "3",
+          "groupId": 1,
+          "addr": "alpha3:7080"
+        }
+      },
+      "tablets": {
+        "counter.val": {
+          "groupId": 1,
+          "predicate": "counter.val"
+        },
+        "dgraph.type": {
+          "groupId": 1,
+          "predicate": "dgraph.type"
+        }
+      },
+      "checksum": "1021598189643258447"
+    }
+  },
+  "zeros": {
+    "1": {
+      "id": "1",
+      "addr": "zero1:5080",
+      "leader": true
+    },
+    "2": {
+      "id": "2",
+      "addr": "zero2:5080"
+    },
+    "3": {
+      "id": "3",
+      "addr": "zero3:5080"
+    }
+  },
+  "maxLeaseId": "10000",
+  "maxTxnTs": "10000",
+  "cid": "3602537a-ee49-43cb-9792-c766eea683dc",
+  "license": {
+    "maxNodes": "18446744073709551615",
+    "expiryTs": "1578704367",
+    "enabled": true
+  }
+}
+```
+
+Here’s the information the above JSON document provides:
+
+- Group 0
+  - members
+    - zero1:5080, id: 1, leader
+    - zero2:5080, id: 2
+    - zero3: 5080, id: 3
+- Group 1
+    - members
+        - alpha1:7080, id: 1, leader
+        - alpha2:7080, id: 2
+        - alpha3:7080, id: 3
+    - predicates
+        - dgraph.type
+        - counter.val
+- Enterprise license
+    - Enabled
+    - maxNodes: unlimited
+    - License expires on Friday, January 10, 2020 4:59:27 PM GMT-08:00 (converted from epoch timestamp)
+- Other data:
+    - maxTxnTs
+        - The current max lease of transaction timestamps used to hand out start timestamps
+          and commit timestamps.
+    
+          This increments in batches of 10,000 IDs. Once the max lease is reached, another
+          10,000 IDs are leased. In the event that the Zero leader is lost, then the new
+          leader starts a brand new lease from maxTxnTs+1 . Any lost transaction IDs
+          in-between will never be used.
+      
+          An admin can use the Zero endpoint HTTP GET `/assign?what=timestamps&num=1000` to
+          increase the current transaction timestamp (in this case, by 1000). This is mainly
+          useful in special-case scenarios, e.g., using an existing p directory to a fresh
+          cluster in order to be able to query the latest data in the DB.
+    - maxLeaseId
+        - The current max lease of UIDs used for blank node UID assignment.
+    
+          This increments in batches of 10,000 IDs. Once the max lease is reached, another
+          10,000 IDs are leased. In the event that the Zero leader is lost, the new leader
+          starts a brand new lease from maxLeaseId+1. Any UIDs lost in-between will never
+          be used for blank-node UID assignment.An admin can use the Zero endpoint HTTP GET
+          `/assign?what=uids&num=1000` to reserve a range of UIDs (in this case, 1000) to
+          use externally (Zero will NEVER use these UIDs for blank node UID assignment, so
+          the user can use the range to assign UIDs manually to their own data sets.
+    - CID
+        - This is a unique UUID representing the *cluster-ID* for this cluster. It is generated
+          during the initial DB startup and is retained across restarts.
+
+    - Group checksum
+        - This is the checksum verification of the data per Alpha group. This is used internally
+          to verify group memberships in the event of a tablet move.
+
+{{% notice "note" %}}
+  "tablet", "predicate", and "edge" are synonymous terms today. The future plan
+  to improve data scalability is to shard a predicate into separate tablets that could
+  be assigned to different groups.
+{{% /notice %}}
 
 ## TLS configuration
 
