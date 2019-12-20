@@ -85,6 +85,10 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"tokenizer",
 		"uid",
 		"within",
+		"upsert",
+		"@if",
+		"len",
+		"type",
 	}
 
 	for _, w := range predefined {
