@@ -101,8 +101,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
-	// adminGId is the ID of the admin group for ACLs.
-	AdminGId = "guardians"
+	// GuardiansId is the ID of the admin group for ACLs.
+	GuardiansId = "guardians"
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
@@ -739,7 +739,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 
 func IsSuperUser(groups []string) bool {
 	for _, group := range groups {
-		if group == AdminGId {
+		if group == GuardiansId {
 			return true
 		}
 	}

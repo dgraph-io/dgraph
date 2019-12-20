@@ -497,7 +497,7 @@ func TestSuperUserAcess(t *testing.T) {
 	require.NoError(t, createSuperUser.Run(), "Error while creating super user")
 
 	makeSuperUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "superuser",
-		"-l", x.AdminGId, "-x", "password")
+		"-l", x.GuardiansId, "-x", "password")
 	require.NoError(t, makeSuperUser.Run(), "Error while adding superuser to guardians group")
 
 	txn := dg.NewTxn()
@@ -538,9 +538,6 @@ func TestSuperUserAcess(t *testing.T) {
 	require.NoError(t, err, "Error while querying unauthorized predicate")
 	require.Contains(t, string(resp.GetJson()), "uid")
 
-	op = api.Operation{
-		Schema: fmt.Sprintf("%s: int .", unAuthPred),
-	}
-	err = superClient.Alter(ctx, &op)
+	err = superClient.Alter(ctx, &api.Operation{Schema: fmt.Sprintf("%s: int .", unAuthPred)})
 	require.NoError(t, err, "Error while altering unauthorized predicate")
 }

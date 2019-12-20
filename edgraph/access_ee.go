@@ -363,8 +363,8 @@ func ResetAcl() {
 			{
 				guid as var(func: eq(dgraph.xid, "%s"))
 			}
-		`, x.AdminGId)
-		groupNQuads := acl.CreateGroupNQuads(x.AdminGId)
+		`, x.GuardiansId)
+		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
 		req := &api.Request{
 			CommitNow: true,
 			Query:     query,
@@ -376,9 +376,8 @@ func ResetAcl() {
 			},
 		}
 
-		_, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
-		if err != nil {
-			return errors.Wrapf(err, "while upserting group with id %s", x.AdminGId)
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
 		}
 
 		glog.Infof("Successfully upserted the guardian group")
@@ -391,7 +390,7 @@ func ResetAcl() {
 				grootid as var(func: eq(dgraph.xid, "%s"))
 				guid as var(func: eq(dgraph.xid, "%s"))
 			}
-		`, x.GrootId, x.AdminGId)
+		`, x.GrootId, x.GuardiansId)
 		userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
 		userNQuads = append(userNQuads, &api.NQuad{
 			Subject:   "_:newuser",
@@ -410,8 +409,7 @@ func ResetAcl() {
 			},
 		}
 
-		_, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
-		if err != nil {
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}
 
@@ -633,7 +631,6 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
 				} else if isAclPredMutation(gmu.Del) {
-					// Even members of gurardian group can't delete ACL predicates
 					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
