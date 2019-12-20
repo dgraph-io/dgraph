@@ -18,9 +18,16 @@ package query
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 func TestBigMathValue(t *testing.T) {
@@ -267,6 +274,102 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("child_pred")
 	setSchema(testSchema)
+}
+
+func TestSchemaUpdateNoConflict(t *testing.T) {
+	// Add new predicate with several indices.
+	s1 := testSchema + "\n noconflict_pred: string @noconflict .\n"
+	setSchema(s1)
+
+	// Verify queries work as expected.
+	q1 := `schema(pred: [noconflict_pred]) { }`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{
+		"data": {
+			"schema": [{
+				"predicate": "noconflict_pred",
+				"type": "string",
+				"no_conflict": true
+			}]
+		}
+	}`, js)
+
+	// Verify queries work as expected.
+	q1 = `schema(pred: [name]) { }`
+	js = processQueryNoErr(t, q1)
+	require.JSONEq(t, `{
+		"data": {
+			"schema": [{
+				"predicate": "name",
+				"type": "string",
+				"index": true,
+				"tokenizer": ["term", "exact", "trigram"],
+				"count": true,
+				"lang": true
+			}]
+		}
+	}`, js)
+}
+
+func TestNoConflictQuery(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	defer dg.Alter(context.Background(), &api.Operation{DropAll: true})
+
+	schema := `
+		type node {
+		name: string
+		child: uid
+		}
+
+		name: string @noconflict .
+		child: uid .
+	`
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
+	require.NoError(t, err)
+
+	type node struct {
+		ID    string `json:"uid"`
+		Name  string `json:"name"`
+		Child *node  `json:"child"`
+	}
+
+	child := node{ID: "_:blank-0", Name: "child"}
+	js, err := json.Marshal(child)
+	require.NoError(t, err)
+
+	res, err := dg.NewTxn().Mutate(context.Background(),
+		&api.Mutation{SetJson: js, CommitNow: true})
+	require.NoError(t, err)
+
+	in := []node{}
+	for i := 0; i < 2; i++ {
+		in = append(in, node{ID: "_:blank-0", Name: fmt.Sprintf("%d", i+1),
+			Child: &node{ID: res.GetUids()["blank-0"]}})
+	}
+
+	errChan := make(chan error)
+	for i := range in {
+		go func(n node) {
+			js, err := json.Marshal(n)
+			require.NoError(t, err)
+
+			_, err = dg.NewTxn().Mutate(context.Background(),
+				&api.Mutation{SetJson: js, CommitNow: true})
+			errChan <- err
+		}(in[i])
+	}
+
+	errs := []error{}
+	for i := 0; i < len(in); i++ {
+		errs = append(errs, <-errChan)
+	}
+
+	for _, e := range errs {
+		assert.NoError(t, e)
+	}
 }
 
 func TestDropPredicate(t *testing.T) {
