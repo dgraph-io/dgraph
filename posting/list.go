@@ -237,8 +237,9 @@ func (it *pIterator) valid() (bool, error) {
 		return false, err
 	case len(it.uids) > 0:
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (it *pIterator) posting() *pb.Posting {
@@ -587,10 +588,11 @@ loop:
 		} else {
 			mp = emptyPosting
 		}
+
 		valid, err := pitr.valid()
 		switch {
 		case err != nil:
-			return err
+			break loop
 		case valid:
 			pp = pitr.posting()
 		default:
@@ -1024,7 +1026,7 @@ func valueToTypesVal(p *pb.Posting) (rval types.Val) {
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, error) {
 	l.AssertRLock()
 
 	any := false
@@ -1034,8 +1036,8 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			any = true
 			break
 		}
-		pos, rerr = l.postingForTag(readTs, lang)
-		if rerr == nil {
+		pos, err := l.postingForTag(readTs, lang)
+		if err == nil {
 			return pos, nil
 		}
 	}
@@ -1052,6 +1054,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 	}
 
 	var found bool
+	var pos *pb.Posting
 	// last resort - return value with smallest lang UID.
 	if any {
 		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
