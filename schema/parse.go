@@ -404,15 +404,6 @@ func parseTypeField(it *lex.ItemIterator, typeName string) (*pb.SchemaUpdate, er
 	return field, nil
 }
 
-func getType(typeName string) pb.Posting_ValType {
-	typ, ok := types.TypeForName(strings.ToLower(typeName))
-	if ok {
-		return pb.Posting_ValType(typ)
-	}
-
-	return pb.Posting_OBJECT
-}
-
 // ParsedSchema represents the parsed schema and type updates.
 type ParsedSchema struct {
 	Preds []*pb.SchemaUpdate

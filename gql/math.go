@@ -362,9 +362,11 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 		// Leaf node.
 		var leafStr int
 		var err error
-		if t.Const.Tid == types.FloatID {
-			leafStr, err = buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
-		} else if t.Const.Tid == types.IntID {
+		switch t.Const.Tid {
+		case types.FloatID:
+			leafStr, err = buf.WriteString(strconv.FormatFloat(
+				t.Const.Value.(float64), 'E', -1, 64))
+		case types.IntID:
 			leafStr, err = buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10))
 		}
 		x.Check2(leafStr, err)

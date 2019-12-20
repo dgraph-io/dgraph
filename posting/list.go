@@ -22,7 +22,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"sync"
 
 	"github.com/dgryski/go-farm"
 
@@ -285,8 +284,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	p := postingPool.Get().(*pb.Posting)
-	*p = pb.Posting{
+	p := &pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     t.ValueType,
@@ -367,63 +365,10 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	return id
 }
 
-// canMutateUid returns an error if all the following conditions are met.
-// * Predicate is of type UidID.
-// * Predicate is not set to a list of UIDs in the schema.
-// * The existing posting list has an entry that does not match the proposed
-//   mutation's UID.
-// In this case, the user should delete the existing predicate and retry, or mutate
-// the schema to allow for multiple UIDs. This method is necessary to support UID
-// predicates with single values because previously all UID predicates were
-// considered lists.
-// This functions returns a nil error in all other cases.
-func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
-	l.AssertRLock()
-
-	if types.TypeID(edge.ValueType) != types.UidID {
-		return nil
-	}
-
-	if schema.State().IsList(edge.Attr) {
-		return nil
-	}
-
-	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
-		if obj.Uid != edge.GetValueId() {
-			return errors.Errorf(
-				"cannot add value with uid %x to predicate %s because one of the existing "+
-					"values does not match this uid, either delete the existing values first or "+
-					"modify the schema to '%s: [uid]'",
-				edge.GetValueId(), edge.Attr, edge.Attr)
-		}
-		return nil
-	})
-}
-
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.Lock()
 	defer l.Unlock()
 	return l.addMutationInternal(ctx, txn, t)
-}
-
-var postingPool = &sync.Pool{
-	New: func() interface{} {
-		return &pb.Posting{}
-	},
-}
-
-func (l *List) release() {
-	fromList := func(list *pb.PostingList) {
-		for _, p := range list.GetPostings() {
-			postingPool.Put(p)
-		}
-	}
-	fromList(l.plist)
-	for _, plist := range l.mutationMap {
-		fromList(plist)
-	}
-	l.plist = nil
-	l.mutationMap = nil
 }
 
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
@@ -629,6 +574,8 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	if err != nil {
 		return err
 	}
+
+loop:
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
@@ -654,23 +601,33 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
-			if err := pitr.next(); err != nil {
-				return err
+			if err != nil {
+				break loop
+			}
+
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
-			if err := pitr.next(); err != nil {
-				return err
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 			midx++
 		default:

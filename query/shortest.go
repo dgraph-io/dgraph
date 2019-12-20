@@ -42,9 +42,12 @@ type route struct {
 }
 
 type queueItem struct {
-	uid   uint64  // uid of the node.
-	cost  float64 // cost of taking the path till this uid.
-	hop   int     // number of hops taken to reach this node.
+	uid  uint64  // uid of the node.
+	cost float64 // cost of taking the path till this uid.
+	// number of hops taken to reach this node. This is useful in finding out if we need to
+	// expandOut after poping an element from the heap. We only expandOut if item.hop > numHops
+	// otherwise expanding would be useless.
+	hop   int
 	index int
 	path  route // used in k shortest path.
 }
@@ -60,16 +63,19 @@ var errFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*queueItem
 
-func (h priorityQueue) Len() int           { return len(h) }
+func (h priorityQueue) Len() int { return len(h) }
+
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
+
 func (h priorityQueue) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index = i
 	h[j].index = j
 }
-func (h *priorityQueue) Push(x interface{}) {
+
+func (h *priorityQueue) Push(val interface{}) {
 	n := len(*h)
-	item := x.(*queueItem)
+	item := val.(*queueItem)
 	item.index = n
 	*h = append(*h, item)
 }
@@ -77,10 +83,10 @@ func (h *priorityQueue) Push(x interface{}) {
 func (h *priorityQueue) Pop() interface{} {
 	old := *h
 	n := len(old)
-	x := old[n-1]
+	val := old[n-1]
 	*h = old[0 : n-1]
-	x.index = -1
-	return x
+	val.index = -1
+	return val
 }
 
 type mapItem struct {
@@ -122,11 +128,12 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	if err != nil {
 		return 0.0, nil, err
 	}
-	if tv.Tid == types.IntID {
+	switch {
+	case tv.Tid == types.IntID:
 		cost = float64(tv.Value.(int64))
-	} else if tv.Tid == types.FloatID {
+	case tv.Tid == types.FloatID:
 		cost = float64(tv.Value.(float64))
-	} else {
+	default:
 		rerr = errFacet
 	}
 	return cost, fcs, rerr
@@ -181,6 +188,11 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 					continue
 				}
 
+				// Call updateUidMatrix to ensure that entries in the uidMatrix are updated after
+				// intersecting with DestUIDs. This should ideally be called during query
+				// processing but doesn't seem to be called for shortest path queries. So we call
+				// it explicitly here to ensure the results are correct.
+				subgraph.updateUidMatrix()
 				// Send the destuids in res chan.
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
 					// This can happen when trying to go traverse a predicate of type password
@@ -195,13 +207,17 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						}
 						// The default cost we'd use is 1.
 						cost, facet, err := subgraph.getCost(mIdx, lIdx)
-						if err == errFacet {
+						switch {
+						case err == errFacet:
 							// Ignore the edge and continue.
 							continue
-						} else if err != nil {
+						case err != nil:
 							rch <- err
 							return
 						}
+
+						// TODO - This simplify overrides the adjacency matrix. What happens if the
+						// cost along the second attribute is more than that along the first.
 						adjacencyMap[fromUID][toUID] = mapItem{
 							cost:  cost,
 							facet: facet,
@@ -277,7 +293,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
-	heap.Init(&pq)
 
 	// Initialize and push the source node.
 	srcNode := &queueItem{
@@ -289,10 +304,14 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
-	maxHops := int(sg.Params.ExploreDepth)
-	if maxHops == 0 {
-		maxHops = int(math.MaxInt32)
+	maxHops := math.MaxInt32
+	if sg.Params.ExploreDepth != nil {
+		maxHops = int(*sg.Params.ExploreDepth)
 	}
+	if maxHops == 0 {
+		return nil, nil
+	}
+
 	minWeight := sg.Params.MinWeight
 	maxWeight := sg.Params.MaxWeight
 	next := make(chan bool, 2)
@@ -447,7 +466,6 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return runKShortestPaths(ctx, sg)
 	}
 	pq := make(priorityQueue, 0)
-	heap.Init(&pq)
 
 	// Initialize and push the source node.
 	srcNode := &queueItem{
@@ -457,14 +475,21 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	heap.Push(&pq, srcNode)
 
-	numHops := -1
-	maxHops := int(sg.Params.ExploreDepth)
-	if maxHops == 0 {
-		maxHops = int(math.MaxInt32)
+	numHops := 0
+	maxHops := math.MaxInt32
+	if sg.Params.ExploreDepth != nil {
+		maxHops = int(*sg.Params.ExploreDepth)
 	}
+	if maxHops == 0 {
+		return nil, nil
+	}
+
+	// next is a channel on to which we send a signal so as to perform another level of expansion.
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
+	// TODO - Check if this goroutine actually improves performance. It doesn't look like it
+	// because we need to fill the adjacency map before we can make progress.
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
@@ -479,105 +504,104 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	var stopExpansion bool
 	var totalWeight float64
+
+	// We continue to pop from the priority queue either
+	// 1. Till we get the destination node in which case we would have gotten to it through the
+	//    shortest path.
+	// 2. We have expanded maxHops number of times.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
-			totalWeight = item.cost
 			break
 		}
-		if item.hop > numHops && numHops < maxHops {
-			// Explore the next level by calling processGraph and add them
-			// to the queue.
+
+		if numHops < maxHops && item.hop > numHops-1 {
+			// Explore the next level by calling processGraph and add them to the queue.
 			if !stopExpansion {
 				next <- true
-			}
-			select {
-			case err = <-expandErr:
-				if err != nil {
-					if err == errStop {
-						stopExpansion = true
-					} else {
-						return nil, err
+				select {
+				case err = <-expandErr:
+					if err != nil {
+						// errStop is returned when ProcessGraph doesn't return any more results
+						// and we can't expand anymore.
+						if err == errStop {
+							stopExpansion = true
+						} else {
+							return nil, err
+						}
 					}
+				case <-ctx.Done():
+					return nil, ctx.Err()
 				}
-			case <-ctx.Done():
-				return nil, ctx.Err()
+				numHops++
 			}
-			numHops++
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			if !stopExpansion {
-				neighbours := adjacencyMap[item.uid]
-				for toUid, info := range neighbours {
-					cost := info.cost
-					d, ok := dist[toUid]
-					if ok && d.cost <= item.cost+cost {
-						continue
-					}
-					if !ok {
-						// This is the first time we're seeing this node. So
-						// create a new node and add it to the heap and map.
-						node := &queueItem{
-							uid:  toUid,
-							cost: item.cost + cost,
-							hop:  item.hop + 1,
-						}
-						heap.Push(&pq, node)
-						dist[toUid] = nodeInfo{
-							parent: item.uid,
-							node:   node,
-							mapItem: mapItem{
-								cost:  item.cost + cost,
-								attr:  info.attr,
-								facet: info.facet,
-							},
-						}
-					} else {
-						// We've already seen this node. So, just update the cost
-						// and fix the priority in the heap and map.
-						node := dist[toUid].node
-						node.cost = item.cost + cost
-						node.hop = item.hop + 1
-						heap.Fix(&pq, node.index)
-						// Update the map with new values.
-						dist[toUid] = nodeInfo{
-							parent: item.uid,
-							node:   node,
-							mapItem: mapItem{
-								cost:  item.cost + cost,
-								attr:  info.attr,
-								facet: info.facet,
-							},
-						}
-					}
+
+		neighbours := adjacencyMap[item.uid]
+		for toUID, neighbour := range neighbours {
+			d, ok := dist[toUID]
+			// Cost of reaching this neighbour node from srcNode is item.cost + neighbour.cost
+			nodeCost := item.cost + neighbour.cost
+			if ok && d.cost <= nodeCost {
+				continue
+			}
+
+			var node *queueItem
+			if !ok {
+				// This is the first time we're seeing this node. So
+				// create a new node and add it to the heap and map.
+				node = &queueItem{
+					uid:  toUID,
+					cost: nodeCost,
+					hop:  item.hop + 1,
 				}
+				heap.Push(&pq, node)
+			} else {
+				// We've already seen this node. So, just update the cost
+				// and fix the priority in the heap and map.
+				node = dist[toUID].node
+				node.cost = nodeCost
+				node.hop = item.hop + 1
+				heap.Fix(&pq, node.index)
+			}
+			dist[toUID] = nodeInfo{
+				parent: item.uid,
+				node:   node,
+				mapItem: mapItem{
+					cost:  nodeCost,
+					attr:  neighbour.attr,
+					facet: neighbour.facet,
+				},
 			}
 		}
 	}
 
+	// Send next as false so that the expandOut goroutine exits.
 	next <- false
 	// Go through the distance map to find the path.
 	var result []uint64
 	cur := sg.Params.To
-	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+	totalWeight = dist[cur].cost
+	// The length of the path can be greater than numHops hence we loop over the dist map till we
+	// reach sg.Params.From node. See test TestShortestPathWithDepth/depth_2_numpaths_1
+	for i := 0; i < len(dist); i++ {
 		result = append(result, cur)
+		if cur == sg.Params.From {
+			break
+		}
 		cur = dist[cur].parent
 	}
-	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
 		sg.DestUIDs = &pb.List{}
 		return nil, nil
 	}
 
-	result = append(result, cur)
 	l := len(result)
 	// Reverse the list.
 	for i := 0; i < l/2; i++ {
 		result[i], result[l-i-1] = result[l-i-1], result[i]
 	}
+	// Put the path in DestUIDs of the root.
 	sg.DestUIDs.Uids = result
 
 	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)
