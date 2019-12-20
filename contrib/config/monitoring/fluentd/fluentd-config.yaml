@@ -1,0 +1,58 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: fluentd-config
+  namespace: kube-system
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+data:
+  containers.input.conf: |-
+    <source>
+      @id fluentd-containers.log
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /var/log/containers.log.pos
+
+      tag dgraph.*
+      read_from_head true
+
+      <parse>
+        @type json
+        keep_time_key true
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    <filter dgraph.**>
+      @type parser
+      key_name log
+
+      <parse>
+        @type regexp
+        expression /^(?<severity>[IWECF])(?<time>\d{4} \d{2}:\d{2}:\d{2}\.\d{6}) +(?<thread>\d+) (?<src_file>[^:]+):(?<src_line>\d+)\] (?<message>(?:.|\n)*)$/
+        time_format %m%d %H:%M:%S.%L
+      </parse>
+
+      reserve_data true
+    </filter>
+
+    <filter dgraph.**>
+      @type record_transformer
+      enable_ruby true
+
+      <record>
+        severity ${ if (record["severity"] == "E") then "Error" elsif (record["severity"] == "W") then "Warning" elsif (record["severity"] == "I") then "Info" elsif (record["severity"] == "D") then "Debug" else record["severity"] end}
+        tag ${tag}
+      </record>
+    </filter>
+
+    <match dgraph.**>
+      @type route
+      remove_tag_prefix dgraph.var.log.containers
+      add_tag_prefix raw.kubernetes
+    </match>
+
+    # Add your log injector and management pipeline here.
+    <match raw.kubernetes.**>
+      @type stdout
+    </match>
