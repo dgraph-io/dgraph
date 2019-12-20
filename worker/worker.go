@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"go.opencensus.io/plugin/ocgrpc"
-	"golang.org/x/net/context"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -71,23 +70,12 @@ type grpcWorker struct {
 
 func (w *grpcWorker) SubscribeForKV(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeForKVServer) error {
-
-	ctx, cancel := context.WithCancel(stream.Context())
 	// Subscribe on given prefixes.
-	var streamErr error
-	err := pstore.Subscribe(ctx, func(kvs *badgerpb.KVList) {
-		streamErr = stream.Send(kvs)
-		if streamErr != nil {
-			// Cancel the current subscription if not able to push to the stream.
-			// This is stop the current subscription and end the stream.
-			cancel()
-		}
+	err := pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+		return stream.Send(kvs)
 	}, req.GetPrefixes()...)
-	// Return the err if there is an err returned by badger.
-	if err != nil {
-		return err
-	}
-	return streamErr
+
+	return err
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
