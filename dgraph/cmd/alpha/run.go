@@ -250,11 +250,12 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 			// string is range like a.b.c.d:w.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
-			if rangeLo == nil {
+			switch {
+			case rangeLo == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[0])
-			} else if rangeHi == nil {
+			case rangeHi == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[1])
-			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
+			case bytes.Compare(rangeLo, rangeHi) > 0:
 				return nil, errors.Errorf("inverted IP address range: %s", s)
 			}
 			ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
