@@ -315,12 +315,12 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	_, _ = buf.WriteString(fmt.Sprintf("type %s {\n", attr))
 	for _, field := range update.Fields {
-		buf.WriteString(fieldToString(field))
+		_, _ = buf.WriteString(fieldToString(field))
 	}
 
-	buf.WriteString("}\n")
+	_, _ = buf.WriteString("}\n")
 
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
