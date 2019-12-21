@@ -796,7 +796,7 @@ func asIDReference(
 // mutation ends up like:
 //
 // query :
-// Author1 as Author1(func: eq(username, "A-user")) @filter(Author) { uid }
+// Author1 as Author1(func: eq(username, "A-user")) @filter(type(Author)) { uid }
 // condition :
 // len(Author1) > 0
 // mutation :
@@ -923,6 +923,63 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 	}
 }
 
+// squashFragments takes two lists of mutationFragments and produces a single list
+// that has all the right fragments squashed into the left.
+//
+// In most cases, this is len(left) == 1 and len(right) == 1 and the result is a
+// single fragment.  For example, if left is what we have built so far for adding a
+// new author and to original input contained:
+// {
+//   ...
+//   country: { id: "0x123" }
+// }
+// rewriteObject is called on `{ id: "0x123" }` to create a fragment with
+// Query: CountryXYZ as CountryXYZ(func: uid(0x123)) @filter(type(Country)) { uid }
+// Condition: eq(len(CountryXYZ), 1)
+// Fragment: { id: "0x123" }
+// In this case, we just need to add `country: { id: "0x123" }`, the query and condition
+// to the left fragment and the result is a single fragment.  If there are no XIDs
+// in the schema, only 1 fragment can ever be generated.  We can always tell if the
+// mutation means to link to an existing object (because the ID value is present),
+// or if the intention is to create a new object (because the ID value isn't there,
+// that means it's not known client side), so there's never any need for more than
+// one conditional mutation.
+//
+// However, if there are XIDs, there can be multiple possible mutations.
+// For example, if schema has `Type Country { code: String! @id, name: String! ... }`
+// and the mutation input is
+// {
+//   ...
+//   country: { code: "ind", name: "India" }
+// }
+// we can't tell from the mutation text if this mutation means to link to an existing
+// country or if it's a deep add on the XID `code: "ind"`.  If the mutation was
+// `country: { code: "ind" }`, we'd know it's a link because they didn't supply
+// all the ! fields to correctly create a new country, but from
+// `country: { code: "ind", name: "India" }` we have to go to the DB to check.
+// So rewriteObject called on `{ code: "ind", name: "India" }` produces two fragments
+//
+// Query: CountryXYZ as CountryXYZ(func: eq(code, "ind")) @filter(type(Country)) { uid }
+//
+// Fragment1 (if "ind" already exists)
+//  Cond: eq(len(CountryXYZ), 1)
+//  Fragment: { uid: uid(CountryXYZ) }
+//
+// and
+//
+// Fragment2 (if "ind" doesn't exist)
+//  Cond eq(len(CountryXYZ), 0)
+//  Fragment: { uid: uid(CountryXYZ), code: "ind", name: "India" }
+//
+// Now we have to squash this into what we've already built for the author (left
+// mutationFragment).  That'll end up as a result with two fragments (two possible
+// mutations guarded by conditions on if the country exists), and to do
+// that, we'll need to make some copies, e.g., because we'll end up with
+// country: { uid: uid(CountryXYZ) }
+// in one fragment, and
+// country: { uid: uid(CountryXYZ), code: "ind", name: "India" }
+// in the other we need to copy what we've already built for the author to represent
+// the different mutation payloads.  Same goes for the conditions.
 func squashFragments(
 	combiner func(interface{}, interface{}, bool) interface{},
 	left, right []*mutationFragment) []*mutationFragment {
