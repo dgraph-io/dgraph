@@ -316,7 +316,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		}
 	}`
 
-	// There's no need to have mocs for the mutation part here because with nil results all the
+	// There's no need to have mocks for the mutation part here because with nil results all the
 	// rewriting and rewriting from results will silently succeed.  All we care about the is the
 	// result from the query that follows the mutation.  In that add case we have to satisfy
 	// the type checking, but that's not required here.
