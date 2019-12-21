@@ -66,13 +66,11 @@ type mutationFragment struct {
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
 type mutationBuilder func(frag *mutationFragment) ([]byte, error)
 
-type counter struct {
-	current int
-}
+type counter int
 
 func (c *counter) next() int {
-	c.current++
-	return c.current
+	*c++
+	return int(*c)
 }
 
 // NewAddRewriter returns new MutationRewriter for add & update mutations.
@@ -174,7 +172,8 @@ func (mrw *addRewriter) Rewrite(
 
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 
-	mrw.frags = rewriteObject(mutatedType, nil, "", &counter{current: 0}, val)
+	counter := counter(0)
+	mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
 	mutations, err := mutationsFromFragments(
 		mrw.frags,
 		func(frag *mutationFragment) ([]byte, error) {
@@ -260,11 +259,11 @@ func (urw *updateRewriter) Rewrite(
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	counter := &counter{current: 0}
+	counter := counter(0)
 
 	if setArg != nil {
 		urw.setFrags =
-			rewriteObject(mutatedType, nil, srcUID, counter, setArg.(map[string]interface{}))
+			rewriteObject(mutatedType, nil, srcUID, &counter, setArg.(map[string]interface{}))
 		addUpdateCondition(urw.setFrags)
 		mutSet, errSet = mutationsFromFragments(
 			urw.setFrags,
@@ -281,7 +280,7 @@ func (urw *updateRewriter) Rewrite(
 
 	if delArg != nil {
 		urw.delFrags =
-			rewriteObject(mutatedType, nil, srcUID, counter, delArg.(map[string]interface{}))
+			rewriteObject(mutatedType, nil, srcUID, &counter, delArg.(map[string]interface{}))
 		addUpdateCondition(urw.delFrags)
 		mutDel, errDel = mutationsFromFragments(
 			urw.delFrags,
