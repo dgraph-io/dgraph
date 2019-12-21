@@ -368,6 +368,64 @@
       cond: "@if(eq(len(Post3), 1))"
 
 -
+  name: "Deep add with two existing"
+  gqlmutation: |
+    mutation addAuthor($author: AuthorInput!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": 
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "postID": "0x123",
+            "title": "Old post",
+            "text": "A really old post"
+          },
+          { 
+            "postID": "0x456"
+          }
+        ]
+      }
+    }
+  dgquery: |-
+    query {
+      Post2 as Post2(func: uid(0x123)) @filter(type(Post)) {
+        uid
+      }
+      Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "0x123",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            },
+            {
+              "uid": "0x456",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post2), 1) AND eq(len(Post3), 1))"
+
+-
   name: "Deep add with null"
   gqlmutation: |
     mutation addAuthor($author: AuthorInput!) {
