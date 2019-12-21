@@ -58,7 +58,7 @@ type mutationFragment struct {
 	queries    []*gql.GraphQuery
 	conditions []string
 	fragment   interface{}
-	deletes    []interface{}
+	deletes    []interface{} // TODO: functionality for next PR
 	check      func(map[string]interface{}) error
 	err        error
 }
