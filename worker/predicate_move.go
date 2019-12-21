@@ -143,7 +143,10 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		kvBatch, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
-			stream.SendAndClose(payload)
+			if err := stream.SendAndClose(payload); err != nil {
+				glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+				return err
+			}
 			break
 		}
 		if err != nil {

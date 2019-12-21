@@ -416,8 +416,12 @@ func setupServer() {
 		defer wg.Done()
 		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		grpcListener.Close()
-		httpListener.Close()
+		if err := grpcListener.Close(); err != nil {
+			glog.Warningf("Error while closing gRPC listener: %s", err)
+		}
+		if err := httpListener.Close(); err != nil {
+			glog.Warningf("Error while closing HTTP listener: %s", err)
+		}
 	}()
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
