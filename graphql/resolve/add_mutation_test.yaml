@@ -511,7 +511,7 @@
                 "uid": "_:Category3",
                 "dgraph.type": [ "Category" ],
                 "Category.name": "New Category",
-                "Category.Posts": [ 
+                "Category.posts": [ 
                   { "uid": "_:Post2" } 
                 ]
               }
