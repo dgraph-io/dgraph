@@ -472,8 +472,12 @@ func run() error {
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
 	if l.db != nil {
-		l.alloc.Flush()
-		l.db.Close()
+		if err := l.alloc.Flush(); err != nil {
+			return err
+		}
+		if err := l.db.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
