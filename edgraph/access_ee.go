@@ -726,3 +726,33 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 	return err
 }
+
+// authorizeState authorizes the State operation
+func authorizeState(ctx context.Context) error {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	var userID string
+	// doAuthorizeState checks if the user is authorized to perform this API request
+	doAuthorizeState := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		switch {
+		case err == errNoJwt:
+			return status.Error(codes.PermissionDenied, err.Error())
+		case err != nil:
+			return status.Error(codes.Unauthenticated, err.Error())
+		default:
+			userID = userData[0]
+			if userID == x.GrootId {
+				return nil
+			}
+			// Deny non groot users.
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+				"Only User '%v' is authorized.", userID, x.GrootId))
+		}
+	}
+
+	return doAuthorizeState()
+}
