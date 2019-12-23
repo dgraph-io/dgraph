@@ -1225,6 +1225,24 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 {{% notice "tip" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 
+### More about /health endpoint
+
+The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+
+Here’s an example of JSON returned from `/health` endpoint:
+
+```json
+{
+  "version": "v1.1.1",
+  "instance": "alpha",
+  "uptime": 75011100974
+}
+```
+
+- `version`: Version of Dgraph running the Alpha server.
+- `instance`: Name of the instance. Always set to `alpha`.
+- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+
 ## More about Dgraph Zero
 
 Dgraph Zero controls the Dgraph cluster. It automatically moves data between
@@ -1279,7 +1297,7 @@ The `/state` endpoint of Dgraph Zero returns a JSON document of the current grou
 - Predicates that belong to a group.
 - Estimated size in bytes of each predicate.
 - Enterprise license information.
-- Max Leased tranction ID.
+- Max Leased transaction ID.
 - Max Leased UID.
 - CID (Cluster ID).
 
