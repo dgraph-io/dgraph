@@ -1002,14 +1002,7 @@ func squashFragments(
 	result := make([]*mutationFragment, 0, len(left)*len(right))
 	for _, l := range left {
 		for _, r := range right {
-			var qs []*gql.GraphQuery
 			var conds []string
-
-			// FIXME: don't copy queries ... should just be one for whole thing
-			if len(l.queries) > 0 {
-				qs = make([]*gql.GraphQuery, len(l.queries), len(l.queries)+len(r.queries))
-				copy(qs, l.queries)
-			}
 
 			if len(l.conditions) > 0 {
 				conds = make([]string, len(l.conditions), len(l.conditions)+len(r.conditions))
@@ -1017,7 +1010,6 @@ func squashFragments(
 			}
 
 			result = append(result, &mutationFragment{
-				queries:    append(qs, r.queries...),
 				conditions: append(conds, r.conditions...),
 				fragment:   combiner(l.fragment, r.fragment, len(right) > 1),
 				check: func(m map[string]interface{}) error {
@@ -1027,5 +1019,17 @@ func squashFragments(
 			})
 		}
 	}
+
+	// queries don't need copying, they just need to be all collected at the end, so
+	// accumulate them all into one of the result fragments
+	var queries []*gql.GraphQuery
+	for _, l := range left {
+		queries = append(queries, l.queries...)
+	}
+	for _, r := range right {
+		queries = append(queries, r.queries...)
+	}
+	result[0].queries = queries
+
 	return result
 }
