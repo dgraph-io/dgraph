@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -143,7 +143,6 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
@@ -179,6 +178,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
 					mpost.CommitTs = item.Version()
+				}
+				if l.mutationMap == nil {
+					l.mutationMap = make(map[uint64]*pb.PostingList)
 				}
 				l.mutationMap[pl.CommitTs] = pl
 				return nil

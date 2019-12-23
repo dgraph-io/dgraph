@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -161,7 +161,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return Config.HmacSecret, nil
+		return worker.Config.HmacSecret, nil
 	})
 
 	if err != nil {
@@ -224,16 +224,16 @@ func validateLoginRequest(request *api.LoginRequest) error {
 }
 
 // getAccessJwt constructs an access jwt with the given user id, groupIds,
-// and expiration TTL specified by Config.AccessJwtTtl
+// and expiration TTL specified by worker.Config.AccessJwtTtl
 func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userid": userId,
 		"groups": acl.GetGroupIDs(groups),
 		// set the jwt exp according to the ttl
-		"exp": time.Now().Add(Config.AccessJwtTtl).Unix(),
+		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(Config.HmacSecret)
+	jwtString, err := token.SignedString(worker.Config.HmacSecret)
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -241,14 +241,14 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 }
 
 // getRefreshJwt constructs a refresh jwt with the given user id, and expiration ttl specified by
-// Config.RefreshJwtTtl
+// worker.Config.RefreshJwtTtl
 func getRefreshJwt(userId string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userid": userId,
-		"exp":    time.Now().Add(Config.RefreshJwtTtl).Unix(),
+		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(Config.HmacSecret)
+	jwtString, err := token.SignedString(worker.Config.HmacSecret)
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -297,12 +297,12 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
 func RefreshAcls(closer *y.Closer) {
 	defer closer.Done()
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
 	}
 
-	ticker := time.NewTicker(Config.AclRefreshInterval)
+	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
@@ -353,7 +353,7 @@ const queryAcls = `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
 func ResetAcl() {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// The acl feature is not turned on.
 		return
 	}
@@ -395,7 +395,7 @@ func ResetAcl() {
 			},
 		}
 
-		_, err = (&Server{}).doMutate(context.Background(), req, NoAuthorize)
+		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
 		if err != nil {
 			return err
 		}
@@ -432,10 +432,38 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
+func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operation) error {
+	for _, pred := range preds {
+		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
+			logAccess(&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: aclOp,
+				allowed:   false,
+			})
+
+			var op string
+			switch aclOp.Name {
+			case acl.OpModify:
+				op = "alter"
+			case acl.OpWrite:
+				op = "mutate"
+			case acl.OpRead:
+				op = "query"
+			}
+
+			return status.Errorf(codes.PermissionDenied,
+				"unauthorized to %s the predicate: %v", op, err)
+		}
+	}
+	return nil
+}
+
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -464,20 +492,19 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined, per the
+			// fail open approach
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
 			if userId == x.GrootId {
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined, per the
-			// fail open approach
-			userId = "anonymous"
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		// if we get here, we know the user is not Groot.
@@ -486,22 +513,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Modify)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Modify,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to alter the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Modify)
 	}
 
 	err := doAuthorizeAlter()
@@ -527,7 +539,7 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 		predsMap[nquad.Predicate] = struct{}{}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -562,12 +574,15 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 
 // authorizeMutation authorizes the mutation using the aclCachePtr
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
 	preds := parsePredsFromMutation(gmu.Set)
+	// Del predicates weren't included before.
+	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
+	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
 	var userId string
 	var groupIds []string
@@ -575,7 +590,12 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -583,32 +603,15 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 				// groot is allowed to mutate anything except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
 					return errors.Errorf("the permission of ACL predicates can not be changed")
+				} else if isAclPredMutation(gmu.Del) {
+					// even groot can't delete ACL predicates
+					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Write)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Write,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to mutate the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Write)
 	}
 
 	err := doAuthorizeMutation()
@@ -643,7 +646,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
@@ -670,7 +673,7 @@ func logAccess(log *accessEntry) {
 
 //authorizeQuery authorizes the query using the aclCachePtr
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
-	if len(Config.HmacSecret) == 0 {
+	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
@@ -678,9 +681,21 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
+	isSchemaQuery := parsedReq != nil && parsedReq.Schema != nil
+
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == nil {
+		if err == errNoJwt {
+			// Do not allow schema queries unless the user has logged in.
+			if isSchemaQuery {
+				return status.Error(codes.Unauthenticated, err.Error())
+			}
+
+			// Treat the user as an anonymous guest who has not joined any group yet
+			// such a user can still get access to predicates that have no ACL rule defined.
+		} else if err != nil {
+			return status.Error(codes.Unauthenticated, err.Error())
+		} else {
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -688,29 +703,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 				// groot is allowed to query anything
 				return nil
 			}
-		} else if err == errNoJwt {
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		} else {
-			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		for _, pred := range preds {
-			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Read)
-			if err != nil {
-				logAccess(&accessEntry{
-					userId:    userId,
-					groups:    groupIds,
-					preds:     preds,
-					operation: acl.Read,
-					allowed:   false,
-				})
-
-				return status.Error(codes.PermissionDenied,
-					fmt.Sprintf("unauthorized to query the predicate: %v", err))
-			}
-		}
-		return nil
+		return authorizePreds(userId, groupIds, preds, acl.Read)
 	}
 
 	err := doAuthorizeQuery()

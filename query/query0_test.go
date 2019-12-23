@@ -153,9 +153,9 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
 		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":46}]}}`},
+			out: `{"data":{"q": [{"count":57}]}}`},
 		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":48}]}}`},
+			out: `{"data":{"q": [{"count":59}]}}`},
 		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
@@ -166,7 +166,7 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":2}]}}`},
 		// NOTE: match with empty string filters values greater than the max distance.
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":28}]}}`},
+			out: `{"data":{"q": [{"count":39}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
 			failure: `Value "" in uid_in is not a number`},
 	}
@@ -693,7 +693,7 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 					x as age
 				}
 				n as min(val(x))
-				condLog as math(cond(a==38, n/2, 1))
+				condLog as math(cond(a==38, n/2.0, 1))
 				condExp as math(cond(a!=38, 1, sqrt(2*n)))
 			}
 
@@ -882,6 +882,96 @@ func TestQueryVarValAggMul(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Andrea","val(mul)":19.000000,"val(n)":19,"val(s)":1},{"name":"Rick Grimes","val(mul)":15.000000,"val(n)":15,"val(s)":1},{"name":"Glenn Rhee","val(mul)":0.000000,"val(n)":15,"val(s)":0},{"name":"Daryl Dixon","val(mul)":0.000000,"val(n)":17,"val(s)":0},{"val(mul)":0.000000,"val(s)":0}]}}`,
 		js)
+}
+
+func TestCountUIDToVar2(t *testing.T) {
+	query := `
+		{
+			q(func: uid( 1)) {
+				f as friend {
+					n as age
+					s as count(uid)
+					friend {
+						n1 as name
+					}
+					mul as math(n * s)
+			  	}
+			}
+
+			me(func: uid(f), orderdesc: val(mul)) {
+				name
+				val(n1)
+				val(s)
+				val(n)
+				val(mul)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"q": [
+					{
+						"friend": [
+							{
+								"age": 15,
+								"friend": [
+									{
+									  "name": "Michonne"
+									}
+						  		],
+								"val(mul)": 75
+							},
+							{
+								"age": 15,
+								"val(mul)": 75
+							},
+							{
+								"age": 17,
+								"val(mul)": 85
+							},
+							{
+								"age": 19,
+								"friend": [
+									{
+										"name": "Glenn Rhee"
+									}
+								],
+								"val(mul)": 95
+							},
+							{
+							  "count": 5
+							}
+						]
+					}
+				],
+				"me": [
+					{
+						"name": "Andrea",
+						"val(n)": 19,
+						"val(mul)": 95
+					},
+					{
+						"name": "Daryl Dixon",
+						"val(n)": 17,
+						"val(mul)": 85
+					},
+					{
+						"name": "Rick Grimes",
+						"val(n)": 15,
+						"val(mul)": 75
+					},
+					{
+						"name": "Glenn Rhee",
+						"val(n1)": "Glenn Rhee",
+						"val(n)": 15,
+						"val(mul)": 75
+					}
+				]
+			}
+		}
+	`, js)
 }
 
 func TestQueryVarValAggOrderDesc(t *testing.T) {

@@ -13,11 +13,11 @@ function restartCluster {
     compose_file="$(readlink -f $1)"
   fi
 
-  basedir=$GOPATH/src/github.com/dgraph-io/dgraph
+  basedir=$(dirname "${BASH_SOURCE[0]}")/../..
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $GOPATH/bin/dgraph
+    (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $(go env GOPATH)/bin/dgraph
   else
     make install
   fi
@@ -31,11 +31,8 @@ function restartCluster {
 }
 
 function stopCluster {
-  basedir=$GOPATH/src/github.com/dgraph-io/dgraph
-  pushd $basedir/dgraph >/dev/null
   docker ps --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker stop | sed 's/^/Stopped /'
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker rm | sed 's/^/Removed /'
-  popd >/dev/null
 }

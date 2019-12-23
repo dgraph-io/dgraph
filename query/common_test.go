@@ -24,18 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
-
-func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
-}
 
 func setSchema(schema string) {
 	err := client.Alter(context.Background(), &api.Operation{
@@ -76,6 +67,16 @@ func processQueryNoErr(t *testing.T, query string) string {
 	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
 	return res
+}
+
+// processQueryForMetrics works like processQuery but returns metrics instead of response.
+func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
+	txn := client.NewTxn()
+	defer txn.Discard(context.Background())
+
+	res, err := txn.Query(context.Background(), query)
+	require.NoError(t, err)
+	return res.Metrics
 }
 
 func processQueryWithVars(t *testing.T, query string,
@@ -208,6 +209,11 @@ type CarModel {
 	<~previous_model>
 }
 
+type Object {
+	name
+	owner
+}
+
 type SchoolInfo {
 	name
 	abbr
@@ -228,6 +234,9 @@ type Node {
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
+name_lang					   : string @lang .
+lang_type                      : string @index(exact) .
+alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 abbr                           : string .
 dob                            : dateTime @index(year) .
@@ -275,6 +284,7 @@ newname                        : string @index(exact, term) .
 newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
+owner                          : [uid] .
 `
 
 func populateCluster() {
@@ -350,12 +360,28 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
-
+		<10101> <name_lang> "zon"@sv .
+		<10101> <name_lang> "öffnen"@de .
+		<10101> <lang_type> "Test" .
+		<10102> <name_lang> "öppna"@sv .
+		<10102> <name_lang> "zumachen"@de .
+		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
 		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
 		<11003> <name> "No. 5 the film"@en .
 		<11100> <name> "expand" .
+
+		<51> <name> "A" .
+		<52> <name> "B" .
+		<53> <name> "C" .
+		<54> <name> "D" .
+		<55> <name> "E" .
+		<56> <name> "F" .
+		<57> <name> "G" .
+		<58> <name> "H" .
+		<59> <name> "I" .
+		<60> <name> "J" .
 
 		<1> <full_name> "Michonne's large name for hashing" .
 
@@ -554,11 +580,14 @@ func populateCluster() {
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
 
+		<202> <name> "Car" .
 		<202> <make> "Toyota" .
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
+		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
+		<202> <dgraph.type> "Object" .
 
 		# data for regexp testing
 		_:luke <firstName> "Luke" .
@@ -610,6 +639,30 @@ func populateCluster() {
 		<502> <boss> <510> .
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
+
+		<51> <connects> <52>  (weight=10) .
+		<51> <connects> <53>  (weight=1) .
+		<51> <connects> <54>  (weight=10) .
+
+		<53> <connects> <51>  (weight=10) .
+		<53> <connects> <52>  (weight=10) .
+		<53> <connects> <54>  (weight=1) .
+
+		<52> <connects> <51>  (weight=10) .
+		<52> <connects> <53>  (weight=10) .
+		<52> <connects> <54>  (weight=10) .
+
+		<54> <connects> <51>  (weight=10) .
+		<54> <connects> <52>  (weight=1) .
+		<54> <connects> <53>  (weight=10) .
+		<54> <connects> <55>  (weight=1) .
+
+
+		# tests for testing hop behavior for shortest path queries
+		<56> <connects> <57> (weight=1) .
+		<56> <connects> <58> (weight=1) .
+		<58> <connects> <59> (weight=1) .
+		<59> <connects> <60> (weight=1) .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,6 @@ import (
 )
 
 var (
-	backupDir     = "./data/backups"
 	copyBackupDir = "./data/backups_copy"
 	restoreDir    = "./data/restore"
 	testDirs      = []string{restoreDir}
@@ -93,7 +93,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.True(t, moveOk)
 
 	// Setup test directories.
-	dirSetup()
+	dirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
@@ -195,7 +195,7 @@ func TestBackupFilesystem(t *testing.T) {
 	runFailingRestore(t, copyBackupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
-	dirCleanup()
+	dirCleanup(t)
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
@@ -220,7 +220,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.Contains(t, string(buf), "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
-	copyToLocalFs()
+	copyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
@@ -244,11 +244,17 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
+
+	for i, pdir := range []string{"p1", "p2", "p3"} {
+		pdir = filepath.Join("./data/restore", pdir)
+		groupId, err := x.ReadGroupIdFile(pdir)
+		require.NoError(t, err)
+		require.Equal(t, uint32(i+1), groupId)
+	}
 
 	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
@@ -262,40 +268,53 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
 }
 
-func dirSetup() {
+func dirSetup(t *testing.T) {
 	// Clean up data from previous runs.
-	dirCleanup()
+	dirCleanup(t)
 
 	for _, dir := range testDirs {
-		x.Check(os.MkdirAll(dir, os.ModePerm))
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			t.Fatalf("Error creating directory: %s", err.Error())
+		}
 	}
 
 	for _, alpha := range alphaContainers {
 		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		x.Check(testutil.DockerExec(alpha, cmd...))
+		if err := testutil.DockerExec(alpha, cmd...); err != nil {
+			t.Fatalf("Error executing command in docker container: %s", err.Error())
+		}
 	}
 }
 
-func dirCleanup() {
-	x.Check(os.RemoveAll(restoreDir))
-	x.Check(os.RemoveAll(copyBackupDir))
+func dirCleanup(t *testing.T) {
+	if err := os.RemoveAll(restoreDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
 
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
-	x.Check(testutil.DockerExec(alphaContainers[0], cmd...))
+	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
+		t.Fatalf("Error executing command in docker container: %s", err.Error())
+	}
 }
 
-func copyToLocalFs() {
+func copyToLocalFs(t *testing.T) {
 	// The original backup files are not accessible because docker creates all files in
 	// the shared volume as the root user. This restriction is circumvented by using
 	// "docker cp" to create a copy that is not owned by the root user.
-	x.Check(os.RemoveAll(copyBackupDir))
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
 	srcPath := "alpha1:/data/backups"
-	x.Check(testutil.DockerCp(srcPath, copyBackupDir))
+	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
+		t.Fatalf("Error copying files from docker container: %s", err.Error())
+	}
 }

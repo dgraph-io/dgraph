@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	bpb "github.com/dgraph-io/badger/pb"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
@@ -121,6 +121,11 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 
 	it.afterUid = afterUid
 	it.deleteBelowTs = deleteBelowTs
+	if deleteBelowTs > 0 {
+		// We don't need to iterate over the immutable layer if this is > 0. Returning here would
+		// mean it.uids is empty and valid() would return false.
+		return nil
+	}
 
 	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
@@ -307,14 +312,19 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 	if hasDeleteAll(mpost) {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
+		if l.mutationMap == nil {
+			l.mutationMap = make(map[uint64]*pb.PostingList)
+		}
 		l.mutationMap[mpost.StartTs] = plist
 		return
 	}
-
 	plist, ok := l.mutationMap[mpost.StartTs]
 	if !ok {
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
+		if l.mutationMap == nil {
+			l.mutationMap = make(map[uint64]*pb.PostingList)
+		}
 		l.mutationMap[mpost.StartTs] = plist
 		return
 	}
@@ -506,6 +516,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	x.Check(pl.Unmarshal(data))
 
 	l.Lock()
+	if l.mutationMap == nil {
+		l.mutationMap = make(map[uint64]*pb.PostingList)
+	}
 	l.mutationMap[startTs] = pl
 	l.Unlock()
 }
@@ -810,16 +823,10 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	var startUid, endUid uint64
 	var splitIdx int
 
-	// Method to properly initialize all the variables described above.
-	init := func() {
+	// Method to properly initialize the variables above
+	// when a multi-part list boundary is crossed.
+	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
-
-		// If not a multi-part list, all UIDs go to the same encoder.
-		if len(l.plist.Splits) == 0 {
-			plist = out.plist
-			endUid = math.MaxUint64
-			return
-		}
 
 		// Otherwise, load the corresponding part and set endUid to correctly
 		// detect the end of the list.
@@ -833,14 +840,21 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		plist = &pb.PostingList{}
 	}
 
-	init()
+	// If not a multi-part list, all UIDs go to the same encoder.
+	if len(l.plist.Splits) == 0 {
+		plist = out.plist
+		endUid = math.MaxUint64
+	} else {
+		initializeSplit()
+	}
+
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
 			splitIdx++
-			init()
+			initializeSplit()
 		}
 
 		enc.Add(p.Uid)
@@ -1013,6 +1027,13 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 		return rval, err
 	}
 	return valueToTypesVal(p), nil
+}
+
+// PostingFor returns the posting according to the preferred language list.
+func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.postingFor(readTs, langs)
 }
 
 func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {

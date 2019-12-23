@@ -37,6 +37,12 @@ func GetGroupIDs(groups []Group) []string {
 	return jwtGroups
 }
 
+var (
+	OpRead   = "Read"
+	OpWrite  = "Write"
+	OpModify = "Modify"
+)
+
 // Operation represents a Dgraph data operation (e.g write or read).
 type Operation struct {
 	Code int32
@@ -47,17 +53,17 @@ var (
 	// Read is used when doing a query.
 	Read = &Operation{
 		Code: 4,
-		Name: "Read",
+		Name: OpRead,
 	}
 	// Write is used when mutating data.
 	Write = &Operation{
 		Code: 2,
-		Name: "Write",
+		Name: OpWrite,
 	}
 	// Modify is used when altering the schema or dropping data.
 	Modify = &Operation{
 		Code: 1,
-		Name: "Modify",
+		Name: OpModify,
 	}
 )
 
@@ -98,11 +104,9 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 }
 
 // Acl represents the permissions in the ACL system.
-// An Acl can have either a single predicate or a regex that can be used to
-// match multiple predicates.
+// An Acl can have a predicate and permission for that predicate.
 type Acl struct {
 	Predicate string `json:"predicate"`
-	Regex     string `json:"regex"`
 	Perm      int32  `json:"perm"`
 }
 

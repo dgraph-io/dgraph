@@ -39,7 +39,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	pb "go.etcd.io/etcd/raft/raftpb"

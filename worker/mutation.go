@@ -21,7 +21,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -190,7 +190,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID) {
+func createSchema(attr string, typ types.TypeID) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -204,9 +204,10 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	if err := updateSchema(&s); err != nil {
-		glog.Errorf("Error while updating schema: %+v", err)
+	if err := checkSchema(&s); err != nil {
+		return err
 	}
+	return updateSchema(&s)
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
@@ -261,6 +262,11 @@ func hasEdges(attr string, startTs uint64) bool {
 func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return errors.Errorf("No predicate specified in schema mutation")
+	}
+
+	if x.IsInternalPredicate(s.Predicate) {
+		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
+			s.Predicate)
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
@@ -352,10 +358,10 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate, AppendLangTa
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -394,8 +400,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
 	return c.AssignUids(ctx, num)
 }
 
@@ -406,8 +412,8 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 		return nil, conn.ErrNoConnection
 	}
 
-	conn := pl.Get()
-	c := pb.NewZeroClient(conn)
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
 	return c.Timestamps(ctx, num)
 }
 
@@ -436,10 +442,10 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 		chr <- res
 		return
 	}
-	conn := pl.Get()
+	con := pl.Get()
 
 	var tc *api.TxnContext
-	c := pb.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(con)
 
 	ch := make(chan error, 1)
 	go func() {
@@ -669,8 +675,8 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, err
 	}
 	var attributes []otrace.Attribute
-	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
-	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
+	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)),
+		otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {

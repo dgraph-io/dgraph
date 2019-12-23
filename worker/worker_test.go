@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -38,8 +38,32 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var raftIndex uint64
 var ts uint64
+
+func commitTs(startTs uint64) uint64 {
+	commit := timestamp()
+	od := &pb.OracleDelta{
+		MaxAssigned: atomic.LoadUint64(&ts),
+	}
+	od.Txns = append(od.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
+	posting.Oracle().ProcessDelta(od)
+	return commit
+}
+
+func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	startTs := timestamp()
+	txn := posting.Oracle().RegisterStartTs(startTs)
+	l = txn.Store(l)
+	err := l.AddMutationWithIndex(context.Background(), edge, txn)
+	require.NoError(t, err)
+
+	commit := commitTs(startTs)
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, commit))
+	require.NoError(t, writer.Flush())
+}
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
@@ -47,11 +71,6 @@ func timestamp() uint64 {
 
 func addEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	edge.Op = pb.DirectedEdge_SET
-	commitTransaction(t, edge, l)
-}
-
-func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
-	edge.Op = pb.DirectedEdge_DEL
 	commitTransaction(t, edge, l)
 }
 
@@ -146,11 +165,6 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 	return dg
 }
 
-func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
-	qs := queryState{cache: nil}
-	return qs.helpProcessTask(context.Background(), query, gid)
-}
-
 func TestProcessTask(t *testing.T) {
 	dg := initClusterTest(t, `neighbour: [uid] .`)
 
@@ -181,29 +195,6 @@ func TestProcessTask(t *testing.T) {
 		}`,
 		string(resp.Json),
 	)
-}
-
-// newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
-	x.AssertTrue(uids == nil || srcFunc == nil)
-	// TODO: Change later, hacky way to make the tests work
-	var srcFun *pb.SrcFunction
-	if len(srcFunc) > 0 {
-		srcFun = new(pb.SrcFunction)
-		srcFun.Name = srcFunc[0]
-		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
-	}
-	q := &pb.Query{
-		UidList: &pb.List{Uids: uids},
-		SrcFunc: srcFun,
-		Attr:    attr,
-		ReadTs:  timestamp(),
-	}
-	// It will have either nothing or attr, lang
-	if len(srcFunc) > 0 && srcFunc[1] != "" {
-		q.Langs = []string{srcFunc[1]}
-	}
-	return q
 }
 
 func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*api.Response, error) {

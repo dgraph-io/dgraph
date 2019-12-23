@@ -30,8 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +52,9 @@ func TestQueries(t *testing.T) {
 	}
 
 	files, err := ioutil.ReadDir(queryDir)
-	x.CheckfNoTrace(err)
+	if err != nil {
+		t.Fatalf("Error reading directory: %s", err.Error())
+	}
 
 	savepath := ""
 	diffs := 0
@@ -66,7 +66,9 @@ func TestQueries(t *testing.T) {
 			filename := path.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename)
 			bytes, err := ioutil.ReadAll(reader)
-			x.CheckfNoTrace(err)
+			if err != nil {
+				t.Fatalf("Error reading file: %s", err.Error())
+			}
 			contents := string(bytes[:])
 			cleanup()
 

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -204,7 +205,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				friend(first:2, orderdesc: alias@en:de:.) {
+				friend(first:2, orderdesc: alias@en) {
 					alias
 				}
 			}
@@ -331,6 +332,49 @@ func TestJSONQueryVariables(t *testing.T) {
 	js, err := processQueryWithVars(t, q, map[string]string{"$a": "2"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}}`, js)
+}
+
+func TestGraphQLVarsInUpsert(t *testing.T) {
+	req := &api.Request{
+		Query: `query test ($a: int = 1) {
+			me(func: uid(0x01)) {
+				v as uid
+				name
+				gender
+				friend(first: $a) {
+					name
+				}
+			}
+		}`,
+		Vars: map[string]string{"$a": "2"},
+		Mutations: []*api.Mutation{
+			&api.Mutation{
+				SetNquads: []byte(`_:user <pred> "value" .`),
+				Cond:      `@if(eq(len(v), 0))`,
+			},
+		},
+		CommitNow: true,
+	}
+	resp, err := client.NewTxn().Do(context.Background(), req)
+	require.NoError(t, err)
+	js := string(resp.GetJson())
+	require.JSONEq(t, `{
+		"me": [
+		  {
+			"friend": [
+			  {
+				"name": "Rick Grimes"
+			  },
+			  {
+				"name": "Glenn Rhee"
+			  }
+			],
+			"uid": "0x1",
+			"gender": "female",
+			"name": "Michonne"
+		  }
+		]
+	  }`, js)
 }
 
 func TestOrderDescFilterCount(t *testing.T) {
@@ -1348,7 +1392,7 @@ func TestMathCeil2(t *testing.T) {
 		}
 
 		me(func: uid(me)) {
-			ceilAge: math(ceil(x2/c))
+			ceilAge: math(ceil((1.0*x2)/c))
 		}
 	}
 	`

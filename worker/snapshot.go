@@ -19,11 +19,11 @@ package worker
 import (
 	"sync/atomic"
 
-	bpb "github.com/dgraph-io/badger/pb"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -41,8 +41,8 @@ type badgerWriter interface {
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
-	conn := pl.Get()
-	c := pb.NewWorkerClient(conn)
+	con := pl.Get()
+	c := pb.NewWorkerClient(con)
 
 	// Set my RaftContext on the snapshot, so it's easier to locate me.
 	ctx := n.ctx

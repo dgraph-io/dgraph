@@ -34,7 +34,7 @@ function run_test {
 	echo "$schema" > $tmp/sch.schema
 
 	# Run bulk loader.
-	$GOPATH/bin/dgraph-bulk-loader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
+	$(go env GOPATH)/bin/dgraph-bulk-loader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
 }
 
 echo "========================="

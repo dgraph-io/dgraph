@@ -5,10 +5,14 @@
 
 package edgraph
 
+import (
+	"github.com/dgraph-io/dgraph/worker"
+)
+
 // #include <unistd.h>
 import "C"
 
 func init() {
 	bytes := int64(C.sysconf(C._SC_PHYS_PAGES) * C.sysconf(C._SC_PAGE_SIZE))
-	availableMemory = bytes / 1024 / 1024
+	worker.AvailableMemory = bytes / 1024 / 1024
 }

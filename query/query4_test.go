@@ -23,6 +23,114 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBigMathValue(t *testing.T) {
+	s1 := testSchema + "\n money: int .\n"
+	setSchema(s1)
+	triples := `
+		_:user1 <money> "48038396025285290" .
+	`
+	addTriplesToCluster(triples)
+
+	t.Run("div", func(t *testing.T) {
+		q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(f/2)
+		}
+	}
+	`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":24019198012642645}
+	]}}`, js)
+
+	})
+
+	t.Run("add", func(t *testing.T) {
+		q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(2+f)
+		}
+	}
+	`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":48038396025285292}
+	]}}`, js)
+
+	})
+
+	t.Run("sub", func(t *testing.T) {
+		q1 := `
+	{
+		q(func: has(money)) {
+			f as money
+			g: math(f-2)
+		}
+	}
+	`
+
+		js := processQueryNoErr(t, q1)
+		require.JSONEq(t, `{"data":{"q":[
+		{"money":48038396025285290,
+		"g":48038396025285288}
+	]}}`, js)
+
+	})
+}
+
+func TestFloatConverstion(t *testing.T) {
+	t.Run("Convert up to float", func(t *testing.T) {
+		query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil((1.0*x2)/c))
+		}
+	}
+	`
+		js := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+	})
+
+	t.Run("Int aggregation only", func(t *testing.T) {
+		query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+		js := processQueryNoErr(t, query)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
+	})
+
+}
+
 func TestDeleteAndReaddIndex(t *testing.T) {
 	// Add new predicate with several indices.
 	s1 := testSchema + "\n numerology: string @index(exact, term, fulltext) .\n"
@@ -306,7 +414,34 @@ func TestTypeExpandLang(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009,
+			"owner": [{"uid": "0xcb"}]}]}}`, js)
+}
+
+func TestTypeExpandExplicitType(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(Object) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Car", "owner": [{"uid": "0xcb"}]}]}}`, js)
+}
+
+func TestTypeExpandMultipleExplicitTypes(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(CarModel, Object) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009,
+			"owner": [{"uid": "0xcb"}]}]}}`, js)
 }
 
 // Test Related to worker based pagination.
@@ -387,10 +522,10 @@ func TestHasOrderAsc(t *testing.T) {
 				"name": ""
 			  },
 			  {
-				"name": "Alex"
+				"name": "A"
 			  },
 			  {
-				"name": "Alice"
+				"name": "Alex"
 			  },
 			  {
 				"name": "Alice"
@@ -420,10 +555,10 @@ func TestHasOrderAscOffset(t *testing.T) {
 				"name": "Alice"
 			  },
 			  {
-				"name": "Alice\""
+				"name": "Alice"
 			  },
 			  {
-				"name": "Andre"
+				"name": "Alice\""
 			  }
 			]
 		  }
@@ -457,6 +592,93 @@ func TestHasFirst(t *testing.T) {
 			  }
 			]
 		  }
+	}`, js)
+}
+
+// This test is not working currently, but start working after
+// PR https://github.com/dgraph-io/dgraph/pull/4316 is merged.
+// func TestHasFirstLangPredicate(t *testing.T) {
+// 	query := `{
+// 		q(func:has(name@lang), orderasc: name, first:5) {
+// 			 name@lang
+// 		 }
+// 	 }`
+// 	js := processQueryNoErr(t, query)
+// 	require.JSONEq(t, `{
+// 		{
+// 			"data":{
+// 				"q":[
+// 					{
+// 						"name@en":"Alex"
+// 					},
+// 					{
+// 						"name@en":"Amit"
+// 					},
+// 					{
+// 						"name@en":"Andrew"
+// 					},
+// 					{
+// 						"name@en":"Artem Tkachenko"
+// 					},
+// 					{
+// 						"name@en":"European badger"
+// 					}
+// 				]
+// 			}
+// 		}`, js)
+// }
+
+func TestHasCountPredicateWithLang(t *testing.T) {
+	query := `{
+		q(func:has(name@en), first: 11) {
+			 count(uid)
+		 }
+	 }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+			"data":{
+				"q":[
+					{
+						"count":11
+					}
+				]
+			}
+	}`, js)
+}
+
+func TestRegExpVariable(t *testing.T) {
+	query := `
+		query {
+			q (func: has(name)) @filter( regexp(name, /King*/) ) {
+				name
+			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [{
+				"name": "King Lear"
+			}]
+		}
+	}`, js)
+}
+
+func TestRegExpVariableReplacement(t *testing.T) {
+	query := `
+		query all($regexp_query: string = "/King*/" ) {
+			q (func: has(name)) @filter( regexp(name, $regexp_query) ) {
+				name
+			}
+		}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"q": [{
+				"name": "King Lear"
+			}]
+		}
 	}`, js)
 }
 
@@ -1130,4 +1352,18 @@ func TestCountUIDNestedMultiple(t *testing.T) {
 			]
 		}
 	}`, js)
+}
+
+func TestNumUids(t *testing.T) {
+	query := `{
+        me(func:has(name), first:10){
+          name
+         friend{
+           name
+          }
+        }
+      }`
+	metrics := processQueryForMetrics(t, query)
+	require.Equal(t, metrics.NumUids["friend"], uint64(10))
+	require.Equal(t, metrics.NumUids["name"], uint64(16))
 }

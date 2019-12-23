@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -175,13 +174,13 @@ var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
 var unusedGroup = "unusedGroup"
-var rootDir = filepath.Join(os.TempDir(), "acl_test")
 var query = fmt.Sprintf(`
 	{
 		q(func: eq(%s, "SF")) {
 			%s
 		}
 	}`, predicateToRead, queryAttr)
+var schemaQuery = "schema {}"
 
 func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
@@ -217,10 +216,21 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
-	// login with alice's account
 	ctx := context.Background()
 	txn := dg.NewTxn()
 	_, err := txn.Query(ctx, query)
+
+	if shouldFail {
+		require.Error(t, err, "the query should have failed")
+	} else {
+		require.NoError(t, err, "the query should have succeeded")
+	}
+}
+
+func querySchemaWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
+	ctx := context.Background()
+	txn := dg.NewTxn()
+	_, err := txn.Query(ctx, schemaQuery)
 
 	if shouldFail {
 		require.Error(t, err, "the query should have failed")
@@ -352,7 +362,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	}
 }
 
-func TestPredicateRegex(t *testing.T) {
+func TestPredicatePermission(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
@@ -367,82 +377,100 @@ func TestPredicateRegex(t *testing.T) {
 	err = dg.Login(ctx, userid, userpassword)
 	require.NoError(t, err, "Logging in with the current password should have succeeded")
 
-	// the operations should be allowed when no rule is defined (the fail open approach)
+	// The operations should be allowed when no rule is defined (the fail open approach).
 	queryPredicateWithUserAccount(t, dg, false)
+	querySchemaWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
 	createGroupAndAcls(t, unusedGroup, false)
 
-	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	// the operations should all fail when there is a rule defined, but the current user is not
-	// allowed
+	// The operations should all fail when there is a rule defined, but the current user
+	// is not allowed.
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
-
-	// create a new group
-	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "add",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "-x", "password")
-	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to create group:%v", string(errOutput))
-	}
-
-	// add the user to the group
-	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-u", userid, "--group_list", devGroup, "-x", "password")
-	if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add user %s to group %s:%v", userid, devGroup, string(errOutput))
-	}
-
-	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "--pred", "name", "-m", strconv.Itoa(int(Read.Code)|int(Write.Code)),
-		"-x",
-		"password")
-	if errOutput, err := addReadToNameCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
-			"name", devGroup, string(errOutput))
-	}
-
-	// add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group
-	predRegex := "^predicate_to(.*)$"
-	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", devGroup, "-P", predRegex, "-m",
-		strconv.Itoa(int(Read.Code)|int(Write.Code)), "-x", "password")
-	if errOutput, err := addReadWriteToRegexPermCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ+WRITE permission on %s to group %s:%v",
-			predRegex, devGroup, string(errOutput))
-	}
-
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
-	queryPredicateWithUserAccount(t, dg, false)
-	mutatePredicateWithUserAccount(t, dg, false)
-	// the alter operation should still fail since the regex pred does not have the Modify
-	// permission
-	alterPredicateWithUserAccount(t, dg, true)
+	// Schema queries should still succeed since they are not tied to specific predicates.
+	querySchemaWithUserAccount(t, dg, false)
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	require.NoError(t, err)
 
 	createAccountAndData(t, dg)
-	// without logging in,
-	// the anonymous user should be evaluated as if the user does not belong to any group,
-	// and access should be granted if there is no ACL rule defined for a predicate (fail open)
+	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// Without logging in, the anonymous user should be evaluated as if the user does not
+	// belong to any group, and access should be granted if there is no ACL rule defined
+	// for a predicate (fail open).
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
+
+	// Schema queries should fail if the user has not logged in.
+	querySchemaWithUserAccount(t, dg, true)
+}
+
+func TestUnauthorizedDeletion(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	unAuthPred := "unauthorizedPredicate"
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	op = api.Operation{
+		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-g", devGroup, "-x", "password")
+	require.NoError(t, createDevGroup.Run())
+
+	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
+		"-l", devGroup, "-x", "password")
+	require.NoError(t, addUserToDev.Run())
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID, ok := resp.Uids["a"]
+	require.True(t, ok)
+
+	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
+	require.NoError(t, setPermissionCmd.Run())
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	txn = userClient.NewTxn()
+	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
+	mutation = &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PermissionDenied")
 }
