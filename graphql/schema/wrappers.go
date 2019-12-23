@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/ast"
 )
 
@@ -121,7 +122,7 @@ type Type interface {
 	Nullable() bool
 	ListType() Type
 	Interfaces() []string
-	CheckValidity(map[string]interface{}) error
+	EnsureNonNulls(map[string]interface{}, string) error
 	fmt.Stringer
 }
 
@@ -930,7 +931,50 @@ func (t *astType) Interfaces() []string {
 	return names
 }
 
-func (t *astType) CheckValidity(obj map[string]interface{}) error {
-	// FIXME: to implement
+// CheckNonNulls checks that any non nullables in t are present in obj.
+// Fields of type ID are not checked, is any exclusion.
+//
+// For our reference types for adding/linking objects, we'd like to have something like
+//
+// input PostRef {
+// 	id: ID!
+// }
+//
+// input PostNew {
+// 	title: String!
+// 	text: String
+// 	author: AuthorRef!
+// }
+//
+// and then have something like this
+//
+// input PostNewOrReference = PostRef | PostNew
+//
+// input AuthorNew {
+//   ...
+//   posts: [PostNewOrReference]
+// }
+//
+// but GraphQL doesn't allow union types in input, so best we can do is
+//
+// input PostRef {
+// 	id: ID
+// 	title: String
+// 	text: String
+// 	author: AuthorRef
+// }
+//
+// and then check ourselves that either there's an ID, or there's all the bits to
+// satisfy a valid post.
+func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
+	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+		if fld.Type.NonNull && !isID(fld) && !(fld.Name == exclusion) {
+			if val, ok := obj[fld.Name]; !ok || val == nil {
+				return errors.Errorf(
+					"type %s requires a value for field %s, but no value present",
+					t.Name(), fld.Name)
+			}
+		}
+	}
 	return nil
 }
