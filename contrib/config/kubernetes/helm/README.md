@@ -103,7 +103,7 @@ Dgraph exposes prometheus metrics to monitor the state of various components inv
 
 Follow the below mentioned steps to setup prometheus monitoring for your cluster:
 
-* Install Prometheus opeartor:
+* Install Prometheus operator:
 
 ```sh
 $ kubectl apply -f https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
@@ -133,15 +133,17 @@ prometheus.monitoring.coreos.com/dgraph-io created
 To view prometheus UI locally run:
 
 ```sh
-$ kubectl port-forward prometheus-dgraph-io-0 13370:9090
+$ kubectl port-forward prometheus-dgraph-io-0 9090:9090
 ```
 
-The UI is accessible at port 13370. Open http://localhost:13370 in your browser to play around.
+The UI is accessible at port 9090. Open http://localhost:9090 in your browser to play around.
 
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
 * Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
 with the required reciever configuration including the slack webhook credential and create the secret.
+
+You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
 
 ```sh
 $ kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml

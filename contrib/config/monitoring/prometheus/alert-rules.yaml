@@ -63,13 +63,13 @@ spec:
         summary: 'Zero instance {{ $labels.instance }} have too many open file descriptors.'
       labels:
         severity: high
-    - alert: OutOfSyncComponents
+    - alert: FollowerBehindTs
       expr: (max
         by(cluster) (dgraph_max_assigned_ts)) - (min by(cluster) (dgraph_max_assigned_ts))
-        > 100
+        > 1000
       for: 30s
       annotations:
-        description: 'Cluster components timestamp are out of sync by {{ $value }}.'
+        description: A follower is behind the leader's latest applied timestamp by {{ $value }}.
       labels:
         severity: medium
 
