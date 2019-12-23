@@ -41,7 +41,15 @@ type pprofCollector struct {
 	tr         http.RoundTripper
 }
 
-var profileTypes = []string{"goroutine", "heap", "threadcreate", "block", "mutex", "profile", "trace"}
+var profileTypes = []string{
+	"goroutine",
+	"heap",
+	"threadcreate",
+	"block",
+	"mutex",
+	"profile",
+	"trace",
+}
 
 func newPprofCollector(host, baseDir, filePrefix string, duration time.Duration) *pprofCollector {
 	timeout := duration + duration/2
@@ -128,7 +136,8 @@ func fetchURL(source string, timeout time.Duration, tr http.RoundTripper) (io.Re
 }
 
 func statusCodeError(resp *http.Response) error {
-	if resp.Header.Get("X-Go-Pprof") != "" && strings.Contains(resp.Header.Get("Content-Type"), "text/plain") {
+	if resp.Header.Get("X-Go-Pprof") != "" &&
+		strings.Contains(resp.Header.Get("Content-Type"), "text/plain") {
 		// error is from pprof endpoint
 		if body, err := ioutil.ReadAll(resp.Body); err == nil {
 			return fmt.Errorf("server response: %s - %s", resp.Status, body)

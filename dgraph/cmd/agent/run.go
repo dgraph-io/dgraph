@@ -17,36 +17,32 @@
 package agent
 
 import (
+	"os"
 	"strings"
 
-    "github.com/dgraph-io/dgraph/x"
-    "github.com/dgraph-io/dgraph/dgraph/cmd/agent/debuginfo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/agent/debuginfo"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-type agentCmdOpts struct {
-	alphaAddr string
-	zeroAddr  string
-	compress  bool
-}
-
-var (
-	Agent    x.SubCommand
-	agentCmd = agentCmdOpts{}
-)
+// Agent is the subcommand for dgraph agent.
+var Agent x.SubCommand
 
 func init() {
 	Agent.Cmd = &cobra.Command{
 		Use:   "agent",
 		Short: "Run the Dgraph agent tool",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				os.Exit(1)
+			}
 		},
 	}
 
-    Agent.EnvPrefix = "DGRAPH_AGENT"
-    sc := debuginfo.DebugInfo
+	Agent.EnvPrefix = "DGRAPH_AGENT"
+	sc := debuginfo.DebugInfo
 	Agent.Cmd.AddCommand(sc.Cmd)
 
 	sc.Conf = viper.New()

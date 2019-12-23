@@ -57,9 +57,14 @@ func init() {
 	flags := DebugInfo.Cmd.Flags()
 	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "", "Address of running dgraph alpha.")
 	flags.StringVarP(&debugInfoCmd.zeroAddr, "zero", "z", "", "Address of running dgraph zero.")
-	flags.StringVarP(&debugInfoCmd.directory, "directory", "d", "", "Directory to generate the debuginfo in, if the directory is not present agent will try to create the directory.")
-	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true, "whether or not to archive the agent info, this could come handy when we need to export the dump.")
-	flags.Uint32VarP(&debugInfoCmd.infoDurationSecs, "duration", "s", 15, "Duration to collect the debuginfo for, this is used for info like pprof profiles etc.")
+	flags.StringVarP(&debugInfoCmd.directory, "directory", "d", "",
+		"Directory to generate the debuginfo in, if the directory is not present agent will "+
+			"try to create the directory.")
+	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
+		"whether or not to archive the agent info, this could come handy when we need to export "+
+			"the dump.")
+	flags.Uint32VarP(&debugInfoCmd.infoDurationSecs, "duration", "s", 15,
+		"Duration to collect the debuginfo for, this is used for info like pprof profiles etc.")
 }
 
 func collectDebugInfo() (err error) {
@@ -77,7 +82,7 @@ func collectDebugInfo() (err error) {
 
 	collectPProfProfiles()
 
-	if debugInfoCmd.archive == true {
+	if debugInfoCmd.archive {
 		return archiveDebugInfo()
 	}
 	return nil
