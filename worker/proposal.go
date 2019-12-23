@@ -45,7 +45,7 @@ func newTimeout(retry int) time.Duration {
 	return timeout
 }
 
-// TODO: Hook this to worker config.
+// limiter is initialized as part of worker Init.
 var limiter rateLimiter
 
 type rateLimiter struct {
@@ -97,6 +97,8 @@ func (rl *rateLimiter) decr(retry int) {
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
 
 	rl.c.L.Lock()
+	// decr() performs opposite of incr().
+	// It reduces the rl.iou by weight as incr increases it by weight.
 	rl.iou -= weight
 	rl.c.L.Unlock()
 	rl.c.Broadcast()
