@@ -105,6 +105,8 @@ var (
 
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
+	// Contains predicates with noconflict directive.
+	noConflictPreds map[string]struct{}
 )
 
 func init() {
@@ -189,6 +191,15 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
+	}
+
+	noConflictPreds = make(map[string]struct{})
+	for _, schemaLine := range strings.Split(string(b), "\n") {
+		if !strings.Contains(schemaLine, "@noconflict") {
+			continue
+		}
+		predicate := strings.Fields(schemaLine)[0]
+		noConflictPreds[predicate] = struct{}{}
 	}
 
 	op := &api.Operation{}
