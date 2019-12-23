@@ -71,7 +71,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	if err := ValidateAndConvert(edge, &su, false); err != nil {
+	if err := ValidateAndConvert(edge, &su); err != nil {
 		return err
 	}
 

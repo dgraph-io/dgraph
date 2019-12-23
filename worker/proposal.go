@@ -155,7 +155,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			su, ok := schema.State().Get(edge.Attr)
 			if !ok {
 				continue
-			} else if err := ValidateAndConvert(edge, &su, false); err != nil {
+			} else if err := ValidateAndConvert(edge, &su); err != nil {
 				return err
 			}
 		}
