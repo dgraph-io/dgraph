@@ -99,8 +99,8 @@ type resolverFactory struct {
 // ResolverFns is a convenience struct for passing blocks of rewriters and executors.
 type ResolverFns struct {
 	Qrw QueryRewriter
-	Arw MutationRewriter
-	Urw MutationRewriter
+	Arw func() MutationRewriter
+	Urw func() MutationRewriter
 	Drw MutationRewriter
 	Qe  QueryExecutor
 	Me  MutationExecutor
@@ -196,14 +196,14 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
-				fns.Arw, fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+				fns.Arw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
-				fns.Urw, fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+				fns.Urw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
