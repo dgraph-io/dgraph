@@ -114,6 +114,61 @@ func graphQLCompletionOn(t *testing.T) {
 	)
 }
 
+func deepMutationErrors(t *testing.T) {
+	executeRequest := postExecutor
+
+	newCountry := addCountry(t, postExecutor)
+
+	tcases := map[string]struct {
+		set *country
+		exp string
+	}{
+		"missing ID and XID": {
+			set: &country{States: []*state{{Name: "NOT A VALID STATE"}}},
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation " +
+				"payload because type State requires a value for field xcode, but no value present",
+		},
+		"ID not valid": {
+			set: &country{States: []*state{{ID: "HI"}}},
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite " +
+				"mutation payload because ID argument (HI) was not able to be parsed",
+		},
+		"ID not found": {
+			set: &country{States: []*state{{ID: "0x1"}}},
+			exp: "couldn't rewrite query for mutation updateCountry because ID \"0x1\" isn't a State",
+		},
+		"XID not found": {
+			set: &country{States: []*state{{Code: "NOT A VALID CODE"}}},
+			exp: "couldn't rewrite query for mutation updateCountry because xid " +
+				"\"NOT A VALID CODE\" doesn't exist and input object not well formed because type " +
+				"State requires a value for field name, but no value present",
+		},
+	}
+
+	for name, tcase := range tcases {
+		t.Run(name, func(t *testing.T) {
+			updateCountryParams := &GraphQLParams{
+				Query: `mutation updateCountry($id: ID!, $set: PatchCountry!) {
+					updateCountry(input: {filter: {ids: [$id]}, set: $set}) {
+						country { id }
+					}
+				}`,
+				Variables: map[string]interface{}{
+					"id":  newCountry.ID,
+					"set": tcase.set,
+				},
+			}
+
+			gqlResponse := executeRequest(t, graphqlURL, updateCountryParams)
+			require.NotNil(t, gqlResponse.Errors)
+			require.Equal(t, 1, len(gqlResponse.Errors))
+			require.EqualError(t, gqlResponse.Errors[0], tcase.exp)
+		})
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
+}
+
 // requestValidationErrors just makes sure we are catching validation failures.
 // Mostly this is provided by an external lib, so just checking we hit common cases.
 func requestValidationErrors(t *testing.T) {
@@ -170,8 +225,8 @@ func panicCatcher(t *testing.T) {
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
-		Arw: resolve.NewAddRewriter(),
-		Urw: resolve.NewUpdateRewriter(),
+		Arw: resolve.NewAddRewriter,
+		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
 		Qe:  &panicClient{},
 		Me:  &panicClient{}}

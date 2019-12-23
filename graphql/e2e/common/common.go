@@ -243,6 +243,8 @@ func RunAll(t *testing.T) {
 	t.Run("graphql completion on", graphQLCompletionOn)
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
+	t.Run("deep mutation errors", deepMutationErrors)
+
 }
 
 func gunzipData(data []byte) ([]byte, error) {
