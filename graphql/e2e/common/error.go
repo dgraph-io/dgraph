@@ -84,7 +84,7 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
-			require.Equal(t, len(result.QueryCountry), 4)
+			require.Equal(t, 4, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
 				&country{Name: "Angola"},
 				&country{Name: "Bangladesh"},
