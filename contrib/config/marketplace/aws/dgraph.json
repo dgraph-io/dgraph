@@ -247,17 +247,6 @@
             ],
             "ConstraintDescription": "must be a valid EC2 instance type."
         },
-        "RatelDiskSize": {
-            "Description": "Size in GB of the EBS io1 volume on each Ratel node",
-            "Type": "Number",
-            "Default": 50,
-            "MinValue": 30
-        },
-        "RatelDiskIops": {
-            "Description": "IOPS of the EBS io1 volume on each Ratel node",
-            "Type": "Number",
-            "Default": 1000
-        },
         "KeyName": {
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
             "Type": "AWS::EC2::KeyPair::KeyName",
@@ -266,7 +255,7 @@
         "DgraphVersion": {
             "Description": "Dgraph version to deploy.",
             "Type": "String",
-            "Default": "1.1.0"
+            "Default": "v1.1.1"
         },
         "Tag": {
             "Description": "Common tag to use for all the deployments.",
@@ -1041,7 +1030,7 @@
                                 "EOT\n",
                                 "\n\n",
                                 "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                "wget https://github.com/dgraph-io/dgraph/releases/download/v",
+                                "wget https://github.com/dgraph-io/dgraph/releases/download/",
                                 {
                                     "Ref": "DgraphVersion"
                                 },
@@ -1188,7 +1177,7 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/v",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
@@ -1367,7 +1356,7 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-alpha.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/v",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
@@ -1448,19 +1437,6 @@
                             "Ebs": {
                                 "VolumeSize": "20"
                             }
-                        },
-                        {
-                            "DeviceName": "/dev/sdk",
-                            "Ebs": {
-                                "VolumeType": "io1",
-                                "DeleteOnTermination": "false",
-                                "Iops": {
-                                    "Ref": "RatelDiskIops"
-                                },
-                                "VolumeSize": {
-                                    "Ref": "RatelDiskSize"
-                                }
-                            }
                         }
                     ],
                     "DisableApiTermination": "false",
@@ -1502,29 +1478,9 @@
                                     "\n\n",
                                     "groupadd --system dgraph\n",
                                     "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
-                                    "dev_name=\"/dev/$(lsblk | grep ",
-                                    {
-                                        "Ref": "RatelDiskSize"
-                                    },
-                                    "G | tr -s ' ' | cut -d ' ' -f 1)\"\n",
-                                    "until [ -b $(readlink -f $dev_name) ]; do sleep 1; done\n",
-                                    "if [[ \"$(lsblk -no FSTYPE $dev_name)\" != \"ext4\" ]]; then\n",
-                                    "    mkfs -t ext4 $dev_name\n",
-                                    "    sleep 5\n",
-                                    "fi\n",
-                                    "\n\n",
                                     "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
-                                    "mount $dev_name /var/run/dgraph\n",
-                                    "resize2fs $dev_name\n",
                                     "chown -R dgraph:dgraph /var/run/dgraph\n",
                                     "chown -R dgraph:dgraph /var/log/dgraph\n",
-                                    "DEVICE_UUID=\"$(blkid -s UUID -o value $dev_name)\"\n",
-                                    "if grep -q \"$DEVICE_UUID\" /etc/fstab; then\n",
-                                    "   echo \"fstab already set\"\n",
-                                    "else\n",
-                                    "   cp /etc/fstab /etc/fstab.original\n",
-                                    "   echo -e \"UUID=$DEVICE_UUID\t/dgraph\text4\tdefaults,nofail\t0\t2\" >> /etc/fstab\n",
-                                    "fi\n",
                                     "\n\n",
                                     "cat <<EOT > /etc/systemd/system/dgraph-ratel.service\n",
                                     "[Unit]\n",
@@ -1543,7 +1499,7 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-ratel.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/v",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
