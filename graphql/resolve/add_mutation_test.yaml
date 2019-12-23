@@ -195,7 +195,7 @@
         }
 
 -
-  name: "Add mutation using code"
+  name: "Add mutation using xid code"
   gqlmutation: |
     mutation addState($input: StateInput!) {
       addState(input: $input) {
@@ -229,7 +229,8 @@
           "State.name": "NSW",
           "State.code": "nsw",
           "State.country": {
-            "uid": "0x12"
+            "uid": "0x12",
+            "Country.states": [ { "uid": "_:State1" } ]
           }
         }
       cond: "@if(eq(len(State1), 0) AND eq(len(Country2), 1))"
@@ -518,3 +519,102 @@
             }
           ]
         }
+
+-
+  name: "Add mutation with deep xid choices"
+  gqlmutation: |
+    mutation addCountry($input: CountryInput!) {
+      addCountry(input: $input) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "dg",
+          "name": "Dgraph"
+        } ]
+      }
+    }
+  explanation: "The add mutation has two options depending on if dg exists"
+  dgquery: |-
+    query {
+      State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { 
+          "uid": "_:Country1",
+          "dgraph.type": ["Country"],
+          "Country.name": "Dgraph Land",
+          "Country.states": [ {
+            "uid": "_:State2",
+            "dgraph.type": ["State"],
+            "State.code": "dg",
+            "State.name": "Dgraph",
+            "State.country": {
+              "uid": "_:Country1"
+            }
+          } ]
+        }
+      cond: "@if(eq(len(State2), 0))"
+    - setjson: |
+        { 
+          "uid": "_:Country1",
+          "dgraph.type": ["Country"],
+          "Country.name": "Dgraph Land",
+          "Country.states": [ {
+            "uid": "uid(State2)",
+            "State.country": {
+              "uid": "_:Country1"
+            }
+          } ]
+        }
+      cond: "@if(eq(len(State2), 1))"
+
+-
+  name: "Add mutation with deep xid that must be reference"
+  gqlmutation: |
+    mutation addCountry($input: CountryInput!) {
+      addCountry(input: $input) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "dg"
+        } ]
+      }
+    }
+  explanation: "The add mutation has only one option because the state isn't a valid create"
+  dgquery: |-
+    query {
+      State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { 
+          "uid": "_:Country1",
+          "dgraph.type": ["Country"],
+          "Country.name": "Dgraph Land",
+          "Country.states": [ {
+            "uid": "uid(State2)",
+            "State.country": {
+              "uid": "_:Country1"
+            }
+          } ]
+        }
+      cond: "@if(eq(len(State2), 1))"

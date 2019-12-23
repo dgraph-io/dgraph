@@ -582,7 +582,14 @@ func rewriteObject(
 	}
 
 	if !atTopLevel { // top level mutations are fully checked by GraphQL validation
-		if err := typ.CheckValidity(obj); err != nil {
+		exclude := ""
+		if srcField != nil {
+			invType, invField := srcField.Inverse()
+			if invType != nil && invField != nil {
+				exclude = invField.Name()
+			}
+		}
+		if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 			// This object is either an invalid deep mutation or it's an xid reference
 			// and asXIDReference must to apply or it's an error.
 			return invalidObjectFragment(err, xidFrag, variable, xidString)
