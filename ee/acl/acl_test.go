@@ -475,7 +475,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.Contains(t, err.Error(), "PermissionDenied")
 }
 
-func TestSuperUserAcess(t *testing.T) {
+func TestGuardianAccess(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 	unAuthPred := "unauthorizedPredicate"
 
@@ -492,13 +492,13 @@ func TestSuperUserAcess(t *testing.T) {
 	}
 	require.NoError(t, dg.Alter(ctx, &op))
 
-	createSuperUser := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
-		"-u", "superuser", "-p", "superpassword", "-x", "password")
-	require.NoError(t, createSuperUser.Run(), "Error while creating super user")
+	createGuardian := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-u", "guardian", "-p", "guardianpass", "-x", "password")
+	require.NoError(t, createGuardian.Run(), "Error while creating super user")
 
-	makeSuperUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "superuser",
+	makeGuardian := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "guardian",
 		"-l", x.GuardiansId, "-x", "password")
-	require.NoError(t, makeSuperUser.Run(), "Error while adding superuser to guardians group")
+	require.NoError(t, makeGuardian.Run(), "Error while adding guardian to guardians group")
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -512,12 +512,12 @@ func TestSuperUserAcess(t *testing.T) {
 	require.True(t, ok)
 
 	time.Sleep(6 * time.Second)
-	superClient, err := testutil.DgraphClient(testutil.SockAddr)
+	guardianClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err, "Error while creating client")
 
-	superClient.Login(ctx, "superuser", "superpassword")
+	guardianClient.Login(ctx, "guardian", "guardianpass")
 
-	txn = superClient.NewTxn()
+	txn = guardianClient.NewTxn()
 	mutString := fmt.Sprintf("<%s> <%s> \"testdata\" .", nodeUID, unAuthPred)
 	mutation = &api.Mutation{
 		SetNquads: []byte(mutString),
@@ -526,7 +526,7 @@ func TestSuperUserAcess(t *testing.T) {
 	_, err = txn.Mutate(ctx, mutation)
 	require.NoError(t, err, "Error while mutating unauthorized predicate")
 
-	txn = superClient.NewTxn()
+	txn = guardianClient.NewTxn()
 	query := fmt.Sprintf(`
                  {
                      me(func: eq(%s, "testdata")) {
@@ -538,6 +538,7 @@ func TestSuperUserAcess(t *testing.T) {
 	require.NoError(t, err, "Error while querying unauthorized predicate")
 	require.Contains(t, string(resp.GetJson()), "uid")
 
-	err = superClient.Alter(ctx, &api.Operation{Schema: fmt.Sprintf("%s: int .", unAuthPred)})
+	err = guardianClient.Alter(ctx,
+		&api.Operation{Schema: fmt.Sprintf("%s: int .", unAuthPred)})
 	require.NoError(t, err, "Error while altering unauthorized predicate")
 }

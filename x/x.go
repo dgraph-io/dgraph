@@ -737,7 +737,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	return nil
 }
 
-func IsSuperUser(groups []string) bool {
+func IsGuardian(groups []string) bool {
 	for _, group := range groups {
 		if group == GuardiansId {
 			return true

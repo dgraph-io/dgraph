@@ -358,6 +358,7 @@ func ResetAcl() {
 		return
 	}
 
+	// guardians is the group of users who have complete access over all predicates.
 	upsertGuardians := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
@@ -384,6 +385,7 @@ func ResetAcl() {
 		return nil
 	}
 
+	// groot is the default user of guardians group.
 	upsertGroot := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
@@ -527,7 +529,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if x.IsSuperUser(groupIds) {
+			if x.IsGuardian(groupIds) {
 				// Members of guardian group are allowed to alter anything.
 				return nil
 			}
@@ -625,7 +627,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if x.IsSuperUser(groupIds) {
+			if x.IsGuardian(groupIds) {
 				// Members of guardian group are allowed to mutate anything
 				// except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
@@ -725,7 +727,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if x.IsSuperUser(groupIds) {
+			if x.IsGuardian(groupIds) {
 				// Members of guardian groups are allowed to query anything.
 				return nil
 			}
