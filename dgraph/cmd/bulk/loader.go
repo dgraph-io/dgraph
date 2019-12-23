@@ -42,26 +42,27 @@ import (
 )
 
 type options struct {
-	DataFiles        string
-	DataFormat       string
-	SchemaFile       string
-	OutDir           string
-	ReplaceOutDir    bool
-	TmpDir           string
-	BadgerKeyFile    string // used only in enterprise build. nil otherwise.
-	NumGoroutines    int
-	MapBufSize       uint64
-	SkipMapPhase     bool
-	CleanupTmp       bool
-	NumReducers      int
-	Version          bool
-	StoreXids        bool
-	ZeroAddr         string
-	HttpAddr         string
-	IgnoreErrors     bool
-	CustomTokenizers string
-	NewUids          bool
-	AppendLangTags   bool
+	DataFiles              string
+	DataFormat             string
+	SchemaFile             string
+	OutDir                 string
+	ReplaceOutDir          bool
+	TmpDir                 string
+	BadgerKeyFile          string // used only in enterprise build. nil otherwise.
+	NumGoroutines          int
+	MapBufSize             uint64
+	SkipMapPhase           bool
+	CleanupTmp             bool
+	NumReducers            int
+	Version                bool
+	StoreXids              bool
+	ZeroAddr               string
+	HttpAddr               string
+	IgnoreErrors           bool
+	CustomTokenizers       string
+	NewUids                bool
+	RemoveInconsistentData bool
+	LangTagsAppend         bool
 
 	MapShards    int
 	ReduceShards int

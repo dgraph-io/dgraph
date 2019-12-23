@@ -18,8 +18,10 @@ package bulk
 
 import (
 	"fmt"
+	"github.com/dgraph-io/dgraph/types"
 	"log"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
@@ -89,7 +91,13 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 	sch.List = true
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool, AppendLangTags bool) {
+//return value of function validate for remove removeIncosistentData
+const (
+	Datatypeincosistent = "data and schema type incosistent"
+	ValidateTypesuccess = "type correct"
+)
+
+func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool, AppendLangTags bool, RemoveInconsistentData bool) string {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
@@ -110,10 +118,39 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool, Append
 		s.Unlock()
 	}
 
-	err := wk.ValidateAndConvert(de, sch, AppendLangTags)
-	if err != nil {
-		log.Fatalf("RDF doesn't match schema: %v", err)
+	var err error
+	if AppendLangTags {
+		err = wk.ValidateAndConvertAppendLangTags(de, sch)
+	} else {
+		err = wk.ValidateAndConvert(de, sch)
 	}
+
+	if err != nil {
+		//yhj-code
+		if RemoveInconsistentData {
+			if strings.Contains(err.Error(), "Input for predicate") && strings.Contains(err.Error(), "of type uid is scalar") {
+				fmt.Printf("RemoveInconsistentData! inconsistent type between rdf data and schema. err = %v \n", err)
+				return Datatypeincosistent
+			} else if strings.Contains(err.Error(), "Input for predicate") && strings.Contains(err.Error(), "of type scalar is uid. Edge") {
+				fmt.Printf("RemoveInconsistentData! inconsistent type between rdf data and schema. err = %v \n", err)
+				return Datatypeincosistent
+			} else {
+
+				log.Fatalf("RDF doesn't match schema: %v, edge info: %v, edge type: %v, schema type: %v", err, de, posting.TypeID(de), types.TypeID(sch.ValueType))
+			}
+		} else {
+			log.Fatalf("RDF doesn't match schema: %v", err)
+		}
+
+		//en
+		//log.Fatalf("RDF doesn't match schema: %v", err)
+	}
+	return ValidateTypesuccess
+
+	//err := wk.ValidateAndConvert(de, sch, AppendLangTags)
+	//if err != nil {
+	//	log.Fatalf("RDF doesn't match schema: %v", err)
+	//}
 }
 
 func (s *schemaStore) getPredicates(db *badger.DB) []string {

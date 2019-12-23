@@ -100,34 +100,36 @@ func init() {
 			"more parallelism, but increases memory usage.")
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
+	flag.Bool("remove_inconsistent_data", false, "Automatically delete rdf that does not match in the data according to schema")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 }
 
 func run() {
 	opt := options{
-		DataFiles:        Bulk.Conf.GetString("files"),
-		DataFormat:       Bulk.Conf.GetString("format"),
-		SchemaFile:       Bulk.Conf.GetString("schema"),
-		OutDir:           Bulk.Conf.GetString("out"),
-		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
-		TmpDir:           Bulk.Conf.GetString("tmp"),
-		BadgerKeyFile:    Bulk.Conf.GetString("encryption_key_file"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:      Bulk.Conf.GetInt("reducers"),
-		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		HttpAddr:         Bulk.Conf.GetString("http"),
-		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:        Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:          Bulk.Conf.GetBool("new_uids"),
-		AppendLangTags:   Bulk.Conf.GetBool("append_langtags"),
+		DataFiles:              Bulk.Conf.GetString("files"),
+		DataFormat:             Bulk.Conf.GetString("format"),
+		SchemaFile:             Bulk.Conf.GetString("schema"),
+		OutDir:                 Bulk.Conf.GetString("out"),
+		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),
+		TmpDir:                 Bulk.Conf.GetString("tmp"),
+		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
+		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:            Bulk.Conf.GetInt("reducers"),
+		Version:                Bulk.Conf.GetBool("version"),
+		StoreXids:              Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:               Bulk.Conf.GetString("zero"),
+		HttpAddr:               Bulk.Conf.GetString("http"),
+		IgnoreErrors:           Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:              Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:           Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers:       Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:                Bulk.Conf.GetBool("new_uids"),
+		RemoveInconsistentData: Bulk.Conf.GetBool("remove_inconsistent_data"),
+		LangTagsAppend:         Bulk.Conf.GetBool("append_langtags"),
 	}
 
 	x.PrintVersion()
