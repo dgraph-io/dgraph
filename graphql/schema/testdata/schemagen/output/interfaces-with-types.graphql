@@ -232,7 +232,11 @@ input DroidOrder {
 }
 
 input DroidRef {
-	id: ID!
+	id: ID
+	name: String
+	friends: [CharacterRef]
+	appearsIn: [Episode!]
+	primaryFunction: String
 }
 
 input Episode_hash {
@@ -263,7 +267,12 @@ input HumanOrder {
 }
 
 input HumanRef {
-	id: ID!
+	id: ID
+	name: String
+	friends: [CharacterRef]
+	appearsIn: [Episode!]
+	starships: [StarshipRef]
+	totalCredits: Int
 }
 
 input PatchCharacter {
@@ -312,7 +321,9 @@ input StarshipOrder {
 }
 
 input StarshipRef {
-	id: ID!
+	id: ID
+	name: String
+	length: Float
 }
 
 input UpdateCharacterInput {

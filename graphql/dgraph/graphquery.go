@@ -40,7 +40,9 @@ func AsString(query *gql.GraphQuery) string {
 }
 
 func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root bool) {
-	b.WriteString(prefix)
+	if query.Var != "" || query.Alias != "" || query.Attr != "" {
+		b.WriteString(prefix)
+	}
 	if query.Var != "" {
 		b.WriteString(fmt.Sprintf("%s as ", query.Var))
 	}
@@ -50,7 +52,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	}
 	b.WriteString(query.Attr)
 
-	if root {
+	if query.Func != nil {
 		writeRoot(b, query)
 	}
 
@@ -67,14 +69,21 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	}
 
 	if len(query.Children) > 0 {
-		b.WriteString(" {\n")
-		for _, c := range query.Children {
-			writeQuery(b, c, prefix+"  ", false)
+		prefixAdd := ""
+		if query.Attr != "" {
+			b.WriteString(" {\n")
+			prefixAdd = "  "
 		}
-		b.WriteString(prefix)
-		b.WriteString("}")
+		for _, c := range query.Children {
+			writeQuery(b, c, prefix+prefixAdd, false)
+		}
+		if query.Attr != "" {
+			b.WriteString(prefix)
+			b.WriteString("}\n")
+		}
+	} else if query.Var != "" || query.Alias != "" || query.Attr != "" {
+		b.WriteString("\n")
 	}
-	b.WriteString("\n")
 }
 
 func writeUidFunc(b *strings.Builder, uids []uint64) {

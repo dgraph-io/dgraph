@@ -145,7 +145,10 @@ input PostOrder {
 }
 
 input PostRef {
-	id: ID!
+	id: ID
+	title: String
+	text: String
+	postType: PostType
 }
 
 input UpdatePostInput {

@@ -194,7 +194,12 @@ input HumanOrder {
 }
 
 input HumanRef {
-	id: ID!
+	id: ID
+	employeeId: String
+	title: String
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
 }
 
 input PatchCharacter {

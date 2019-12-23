@@ -210,6 +210,6 @@ func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 	panic("bugz!!!")
 }

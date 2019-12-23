@@ -121,6 +121,7 @@ type Type interface {
 	Nullable() bool
 	ListType() Type
 	Interfaces() []string
+	CheckValidity(map[string]interface{}) error
 	fmt.Stringer
 }
 
@@ -927,4 +928,9 @@ func (t *astType) Interfaces() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (t *astType) CheckValidity(obj map[string]interface{}) error {
+	// FIXME: to implement
+	return nil
 }
