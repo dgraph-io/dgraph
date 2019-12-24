@@ -401,10 +401,17 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 	}
 
 	predArg := dir.Arguments.ForName(dgraphPredArg)
-	if predArg != nil && predArg.Value.Raw == "" {
+	if predArg == nil || predArg.Value.Raw == "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: pred argument for @dgraph directive should not be empty.",
+			typ.Name, field.Name,
+		)
+	}
+	if predArg.Value.Kind != ast.StringValue {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: pred argument for @dgraph directive should of type String.",
 			typ.Name, field.Name,
 		)
 	}

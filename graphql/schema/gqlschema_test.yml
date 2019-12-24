@@ -509,6 +509,42 @@ invalid_schemas:
       "locations":[{"line":2, "column":3},{"line":3, "column":3}]}
       ]
 
+  -
+    name: "Dgraph directive with wrong argument produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(type: "f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with no argument on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument type on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(pred: 2)
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      of type String.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
