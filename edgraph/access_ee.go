@@ -358,49 +358,76 @@ func ResetAcl() {
 		return
 	}
 
-	upsertGroot := func(ctx context.Context) error {
-		queryVars := map[string]string{
-			"$userid":   x.GrootId,
-			"$password": "",
-		}
-		queryRequest := api.Request{
-			Query: queryUser,
-			Vars:  queryVars,
-		}
-
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
-		if err != nil {
-			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
-		}
-		startTs := queryResp.GetTxn().StartTs
-
-		rootUser, err := acl.UnmarshalUser(queryResp, "user")
-		if err != nil {
-			return errors.Wrapf(err, "while unmarshaling the root user")
-		}
-		if rootUser != nil {
-			glog.Infof("The groot account already exists, no need to insert again")
-			return nil
-		}
-
-		// Insert Groot.
-		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+	// guardians is the group of users who have complete access over all predicates.
+	upsertGuardians := func(ctx context.Context) error {
+		query := fmt.Sprintf(`
+			{
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GuardiansId)
+		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
 		req := &api.Request{
-			StartTs:   startTs,
 			CommitNow: true,
+			Query:     query,
 			Mutations: []*api.Mutation{
 				{
-					Set: createUserNQuads,
+					Set:  groupNQuads,
+					Cond: "@if(eq(len(guid), 0))",
 				},
 			},
 		}
 
-		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
-		if err != nil {
-			return err
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
 		}
-		glog.Infof("Successfully upserted the groot account")
+
+		glog.Infof("Successfully upserted the guardian group")
 		return nil
+	}
+
+	// groot is the default user of guardians group.
+	upsertGroot := func(ctx context.Context) error {
+		query := fmt.Sprintf(`
+			{
+				grootid as var(func: eq(dgraph.xid, "%s"))
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GrootId, x.GuardiansId)
+		userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+		userNQuads = append(userNQuads, &api.NQuad{
+			Subject:   "_:newuser",
+			Predicate: "dgraph.user.group",
+			ObjectId:  "uid(guid)",
+		})
+		req := &api.Request{
+			CommitNow: true,
+			Query:     query,
+			Mutations: []*api.Mutation{
+				{
+					Set: userNQuads,
+					// Assuming that if groot exists, it is in guardian group
+					Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+				},
+			},
+		}
+
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
+		}
+
+		glog.Infof("Successfully upserted groot account")
+		return nil
+	}
+
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := upsertGuardians(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
 	}
 
 	for {
@@ -409,9 +436,9 @@ func ResetAcl() {
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
-		} else {
-			return
+			continue
 		}
+		break
 	}
 }
 
@@ -504,7 +531,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
+			if x.IsGuardian(groupIds) {
+				// Members of guardian group are allowed to alter anything.
 				return nil
 			}
 		}
@@ -704,8 +732,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to query anything
+			if x.IsGuardian(groupIds) {
+				// Members of guardian groups are allowed to query anything.
 				return nil
 			}
 		}
