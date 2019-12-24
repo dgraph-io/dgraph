@@ -39,7 +39,6 @@ var zeroService = testutil.SockAddrZero
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
-	tmpDir      string
 )
 
 func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {

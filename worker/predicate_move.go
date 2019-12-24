@@ -143,7 +143,10 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		kvBatch, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
-			stream.SendAndClose(payload)
+			if err := stream.SendAndClose(payload); err != nil {
+				glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+				return err
+			}
 			break
 		}
 		if err != nil {
@@ -195,11 +198,14 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
-	if gid, err := groups().BelongsTo(in.Predicate); err != nil {
+
+	gid, err := groups().BelongsTo(in.Predicate)
+	switch {
+	case err != nil:
 		return &emptyPayload, err
-	} else if gid == 0 {
+	case gid == 0:
 		return &emptyPayload, errNonExistentTablet
-	} else if gid != groups().groupId() {
+	case gid != groups().groupId():
 		return &emptyPayload, errUnservedTablet
 	}
 
@@ -207,7 +213,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	err := movePredicateHelper(ctx, in)
+	err = movePredicateHelper(ctx, in)
 	if err != nil {
 		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
 	}
@@ -235,12 +241,13 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	// Send schema first.
 	schemaKey := x.SchemaKey(in.Predicate)
 	item, err := txn.Get(schemaKey)
-	if err == badger.ErrKeyNotFound {
+	switch {
+	case err == badger.ErrKeyNotFound:
 		// The predicate along with the schema could have been deleted. In that case badger would
 		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	} else if err != nil {
+	case err != nil:
 		return err
-	} else {
+	default:
 		val, err := item.ValueCopy(nil)
 		if err != nil {
 			return err

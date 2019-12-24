@@ -38,6 +38,10 @@ const (
 	countFunc = "count"
 )
 
+var (
+	errExpandType = "expand is only compatible with type filters"
+)
+
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // pb.y used query.SubGraph before processing the query.
 type GraphQuery struct {
@@ -85,6 +89,8 @@ type GraphQuery struct {
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
+	varMap    map[string]string //varMap holds the variable args name. So, that we can substitute the
+	// argument in the substitution part.
 }
 
 // ShortestPathArgs stores the arguments needed to process the shortest path query.
@@ -404,6 +410,36 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			return err
 		}
 	}
+	if gq.RecurseArgs.varMap != nil {
+		// Update the depth if the get the depth as a variable in the query.
+		varName, ok := gq.RecurseArgs.varMap["depth"]
+		if ok {
+			val, ok := vmap[varName]
+			if !ok {
+				return errors.Errorf("variable %s not defined", varName)
+			}
+			depth, err := strconv.ParseUint(val.Value, 0, 64)
+			if err != nil {
+				return errors.Wrapf(err, varName+" should be type of integer")
+			}
+			gq.RecurseArgs.Depth = depth
+		}
+
+		// Update the loop if the get the loop as a variable in the query.
+		varName, ok = gq.RecurseArgs.varMap["loop"]
+		if ok {
+			val, ok := vmap[varName]
+			if !ok {
+				return errors.Errorf("variable %s not defined", varName)
+			}
+			allowLoop, err := strconv.ParseBool(val.Value)
+			if err != nil {
+				return errors.Wrapf(err, varName+"should be type of boolean")
+			}
+			gq.RecurseArgs.AllowLoop = allowLoop
+		}
+
+	}
 	return nil
 }
 
@@ -528,10 +564,10 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 		item := it.Item()
 		switch item.Typ {
 		case itemOpType:
-			if item.Val == "mutation" {
+			switch item.Val {
+			case "mutation":
 				return res, item.Errorf("Mutation block no longer allowed.")
-			}
-			if item.Val == "schema" {
+			case "schema":
 				if res.Schema != nil {
 					return res, item.Errorf("Only one schema block allowed ")
 				}
@@ -541,14 +577,14 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
 				}
-			} else if item.Val == "fragment" {
+			case "fragment":
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
 				fnode, rerr := getFragment(it)
 				if rerr != nil {
 					return res, rerr
 				}
 				fmap[fnode.Name] = fnode
-			} else if item.Val == "query" {
+			case "query":
 				if res.Schema != nil {
 					return res, item.Errorf("Schema block is not allowed with query block")
 				}
@@ -766,6 +802,31 @@ L2:
 	return gq, nil
 }
 
+// parseVarName returns the variable name.
+func parseVarName(it *lex.ItemIterator) (string, error) {
+	val := "$"
+	var consumeAtLeast bool
+	for {
+		items, err := it.Peek(1)
+		if err != nil {
+			return val, err
+		}
+		if items[0].Typ != itemName {
+			if !consumeAtLeast {
+				return "", it.Errorf("Expected variable name after $")
+			}
+			break
+		}
+		consumeAtLeast = true
+		val += items[0].Val
+		// Consume the current item.
+		if !it.Next() {
+			break
+		}
+	}
+	return val, nil
+}
+
 func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	if ok := trySkipItemTyp(it, itemLeftRound); !ok {
 		// We don't have a (, we can return.
@@ -784,30 +845,59 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		if ok := trySkipItemTyp(it, itemColon); !ok {
 			return it.Errorf("Expected colon(:) after %s", key)
 		}
-
-		if item, ok = tryParseItemType(it, itemName); !ok {
-			return item.Errorf("Expected value inside @recurse() for key: %s", key)
+		if !it.Next() {
+			return it.Errorf("Expected argument")
 		}
-		val = item.Val
 
+		// Consume the next item.
+		item = it.Item()
+		val = item.Val
 		switch key {
 		case "depth":
-			depth, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				return err
+			// Check whether the argument is variable or value.
+			if item.Typ == itemDollar {
+				// Consume the variable name.
+				varName, err := parseVarName(it)
+				if err != nil {
+					return err
+				}
+				if gq.RecurseArgs.varMap == nil {
+					gq.RecurseArgs.varMap = make(map[string]string)
+				}
+				gq.RecurseArgs.varMap["depth"] = varName
+			} else {
+				if item.Typ != itemName {
+					return item.Errorf("Expected value inside @recurse() for key: %s", key)
+				}
+				depth, err := strconv.ParseUint(val, 0, 64)
+				if err != nil {
+					return errors.New("Value inside depth should be type of integer")
+				}
+				gq.RecurseArgs.Depth = depth
 			}
-			gq.RecurseArgs.Depth = depth
 		case "loop":
-			allowLoop, err := strconv.ParseBool(val)
-			if err != nil {
-				return err
+			if item.Typ == itemDollar {
+				// Consume the variable name.
+				varName, err := parseVarName(it)
+				if err != nil {
+					return err
+				}
+				if gq.RecurseArgs.varMap == nil {
+					gq.RecurseArgs.varMap = make(map[string]string)
+				}
+				gq.RecurseArgs.varMap["loop"] = varName
+			} else {
+				allowLoop, err := strconv.ParseBool(val)
+				if err != nil {
+					return errors.New("Value inside loop should be type of boolean")
+				}
+				gq.RecurseArgs.AllowLoop = allowLoop
 			}
-			gq.RecurseArgs.AllowLoop = allowLoop
 		default:
 			return item.Errorf("Unexpected key: [%s] inside @recurse block", key)
 		}
 
-		if _, ok := tryParseItemType(it, itemRightRound); ok {
+		if _, ok = tryParseItemType(it, itemRightRound); ok {
 			return nil
 		}
 
@@ -835,11 +925,12 @@ L:
 	}
 
 	item := it.Item()
-	if item.Typ == itemLeftCurl {
+	switch item.Typ {
+	case itemLeftCurl:
 		if rerr = godeep(it, gq); rerr != nil {
 			return nil, rerr
 		}
-	} else if item.Typ == itemAt {
+	case itemAt:
 		it.Next()
 		item := it.Item()
 		if item.Typ == itemName {
@@ -876,12 +967,12 @@ L:
 			}
 			goto L
 		}
-	} else if item.Typ == itemRightCurl {
+	case itemRightCurl:
 		// Do nothing.
-	} else if item.Typ == itemName {
+	case itemName:
 		it.Prev()
 		return gq, nil
-	} else {
+	default:
 		return nil, item.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
 
@@ -891,9 +982,11 @@ L:
 // getFragment parses a fragment definition (not reference).
 func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 	var name string
+loop:
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemName {
+		switch item.Typ {
+		case itemName:
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 && name == "" {
 				// Currently, we take the first nontrivial token as the
@@ -901,9 +994,9 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 				// a left curl.
 				name = v
 			}
-		} else if item.Typ == itemLeftCurl {
-			break
-		} else {
+		case itemLeftCurl:
+			break loop
+		default:
 			return nil, item.Errorf("Unexpected item in fragment: %v %v", item.Typ, item.Val)
 		}
 	}
@@ -973,13 +1066,14 @@ func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	// can be a or [a,b]
 	it.Next()
 	item = it.Item()
-	if item.Typ == itemName {
+	switch item.Typ {
+	case itemName:
 		if parseTypes {
 			s.Types = append(s.Types, item.Val)
 		} else {
 			s.Predicates = append(s.Predicates, item.Val)
 		}
-	} else if item.Typ == itemLeftSquare {
+	case itemLeftSquare:
 		names, err := parseListItemNames(it)
 		if err != nil {
 			return err
@@ -990,7 +1084,7 @@ func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 		} else {
 			s.Predicates = names
 		}
-	} else {
+	default:
 		return item.Errorf("Invalid schema block")
 	}
 
@@ -1050,11 +1144,13 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
 		return nil
 	}
+loop:
 	for it.Next() {
 		var varName string
 		// Get variable name.
 		item := it.Item()
-		if item.Typ == itemDollar {
+		switch item.Typ {
+		case itemDollar:
 			if !expectArg {
 				return item.Errorf("Missing comma in var declaration")
 			}
@@ -1065,18 +1161,18 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 			} else {
 				return item.Errorf("Expecting a variable name. Got: %v", item)
 			}
-		} else if item.Typ == itemRightRound {
+		case itemRightRound:
 			if expectArg {
 				return item.Errorf("Invalid comma in var block")
 			}
-			break
-		} else if item.Typ == itemComma {
+			break loop
+		case itemComma:
 			if expectArg {
 				return item.Errorf("Invalid comma in var block")
 			}
 			expectArg = true
 			continue
-		} else {
+		default:
 			return item.Errorf("Unexpected item in place of variable. Got: %v %v", item,
 				item.Typ == itemDollar)
 		}
@@ -1120,7 +1216,8 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		}
 
 		// Check for '=' sign and optional default value.
-		if item.Typ == itemEqual {
+		switch item.Typ {
+		case itemEqual:
 			it.Next()
 			it := it.Item()
 			if it.Typ != itemName {
@@ -1143,9 +1240,9 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 					Type:  varType,
 				}
 			}
-		} else if item.Typ == itemRightRound {
-			break
-		} else {
+		case itemRightRound:
+			break loop
+		default:
 			// We consumed an extra item to see if it was an '=' sign, so move back.
 			it.Prev()
 		}
@@ -1169,11 +1266,13 @@ func unquoteIfQuoted(str string) (string, error) {
 func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
 	expectArg := true
 	orderCount := 0
+loop:
 	for it.Next() {
 		var p pair
 		// Get key.
 		item := it.Item()
-		if item.Typ == itemName {
+		switch item.Typ {
+		case itemName:
 			if !expectArg {
 				return result, item.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
@@ -1182,18 +1281,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 				orderCount++
 			}
 			expectArg = false
-		} else if item.Typ == itemRightRound {
+		case itemRightRound:
 			if expectArg {
 				return result, item.Errorf("Expected argument but got ')'.")
 			}
-			break
-		} else if item.Typ == itemComma {
+			break loop
+		case itemComma:
 			if expectArg {
 				return result, item.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
-		} else {
+		default:
 			return result, item.Errorf("Expecting argument name. Got: %v", item)
 		}
 
@@ -1225,14 +1324,15 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			continue
 		}
 
-		if item.Typ == itemDollar {
+		switch {
+		case item.Typ == itemDollar:
 			val = "$"
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
 				return result, item.Errorf("Expecting argument value. Got: %v", item)
 			}
-		} else if item.Typ == itemMathOp {
+		case item.Typ == itemMathOp:
 			if item.Val != "+" && item.Val != "-" {
 				return result, item.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
 					item.Val)
@@ -1240,7 +1340,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			val = item.Val
 			it.Next()
 			item = it.Item()
-		} else if item.Typ != itemName {
+		case item.Typ != itemName:
 			return result, item.Errorf("Expecting argument value. Got: %v", item)
 		}
 
@@ -1282,11 +1382,12 @@ func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
 
 		if len(f.Func.Attr) > 0 {
 			x.Check2(buf.WriteRune(' '))
-			if f.Func.IsCount {
+			switch {
+			case f.Func.IsCount:
 				x.Check2(buf.WriteString("count("))
-			} else if f.Func.IsValueVar {
+			case f.Func.IsValueVar:
 				x.Check2(buf.WriteString("val("))
-			} else if f.Func.IsLenVar {
+			case f.Func.IsLenVar:
 				x.Check2(buf.WriteString("len("))
 			}
 			x.Check2(buf.WriteString(f.Func.Attr))
@@ -1394,6 +1495,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 		return err
 	}
 	depth := 1
+loop:
 	for {
 		if valid := it.Next(); !valid {
 			return it.Errorf("Got EOF while parsing Geo tokens")
@@ -1420,10 +1522,11 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 				item.Val)
 		}
 
-		if depth > 4 || depth < 0 {
+		switch {
+		case depth > 4 || depth < 0:
 			return item.Errorf("Invalid bracket sequence")
-		} else if depth == 0 {
-			break
+		case depth == 0:
+			break loop
 		}
 	}
 	// Lets append the concatenated Geo token to Args.
@@ -1554,9 +1657,10 @@ L:
 				attrItemsAgo++
 			}
 			var val string
-			if itemInFunc.Typ == itemRightRound {
+			switch itemInFunc.Typ {
+			case itemRightRound:
 				break L
-			} else if itemInFunc.Typ == itemComma {
+			case itemComma:
 				if expectArg {
 					return nil, itemInFunc.Errorf("Invalid use of comma.")
 				}
@@ -1565,7 +1669,7 @@ L:
 				}
 				expectArg = true
 				continue
-			} else if itemInFunc.Typ == itemLeftRound {
+			case itemLeftRound:
 				// Function inside a function.
 				if seenFuncArg {
 					return nil, itemInFunc.Errorf("Multiple functions as arguments not allowed")
@@ -1577,7 +1681,8 @@ L:
 					return nil, err
 				}
 				seenFuncArg = true
-				if nestedFunc.Name == valueFunc {
+				switch nestedFunc.Name {
+				case valueFunc:
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
@@ -1592,7 +1697,7 @@ L:
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = ValueVar
-				} else if nestedFunc.Name == lenFunc {
+				case lenFunc:
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil,
 							itemInFunc.Errorf("Multiple variables not allowed in len function")
@@ -1605,33 +1710,33 @@ L:
 					function.Attr = nestedFunc.NeedsVar[0].Name
 					function.IsLenVar = true
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
-				} else if nestedFunc.Name == countFunc {
+				case countFunc:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
-				} else {
+				default:
 					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
 						"within another. Got: %s", nestedFunc.Name)
 				}
 				expectArg = false
 				continue
-			} else if itemInFunc.Typ == itemAt {
+			case itemAt:
 				if attrItemsAgo != 1 {
 					return nil, itemInFunc.Errorf("Invalid usage of '@' in function " +
 						"argument, must only appear immediately after attr.")
 				}
 				expectLang = true
 				continue
-			} else if itemInFunc.Typ == itemMathOp {
+			case itemMathOp:
 				val = itemInFunc.Val
 				it.Next()
 				itemInFunc = it.Item()
-			} else if itemInFunc.Typ == itemDollar {
+			case itemDollar:
 				if isDollar {
 					return nil, itemInFunc.Errorf("Invalid use of $ in func args")
 				}
 				isDollar = true
 				continue
-			} else if itemInFunc.Typ == itemRegex {
+			case itemRegex:
 				ra, err := parseRegexArgs(itemInFunc.Val)
 				if err != nil {
 					return nil, err
@@ -1640,7 +1745,7 @@ L:
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
-			} else if itemInFunc.Typ == itemLeftSquare {
+			case itemLeftSquare:
 				var err error
 				switch {
 				case isGeoFunc(function.Name):
@@ -1657,16 +1762,18 @@ L:
 				}
 				expectArg = false
 				continue
-			} else if itemInFunc.Typ == itemRightSquare {
+			case itemRightSquare:
 				if _, err := it.Peek(1); err != nil {
 					return nil,
 						itemInFunc.Errorf("Unexpected EOF while parsing args")
 				}
 				expectArg = false
 				continue
-			} else if itemInFunc.Typ != itemName {
-				return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
-					function.Name, itemInFunc)
+			default:
+				if itemInFunc.Typ != itemName {
+					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
+						function.Name, itemInFunc)
+				}
 			}
 
 			item, ok := it.PeekOne()
@@ -1710,8 +1817,9 @@ L:
 			}
 
 			// Unlike other functions, uid function has no attribute, everything is args.
-			if len(function.Attr) == 0 && function.Name != uidFunc &&
-				function.Name != typFunc {
+			switch {
+			case len(function.Attr) == 0 && function.Name != uidFunc &&
+				function.Name != typFunc:
 
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
@@ -1719,14 +1827,14 @@ L:
 				}
 				function.Attr = val
 				attrItemsAgo = 0
-			} else if expectLang {
+			case expectLang:
 				if val == "*" {
 					return nil, errors.Errorf(
 						"The * symbol cannot be used as a valid language inside functions")
 				}
 				function.Lang = val
 				expectLang = false
-			} else if function.Name != uidFunc {
+			case function.Name != uidFunc:
 				// For UID function. we set g.UID
 				function.Args = append(function.Args, Arg{Value: val})
 			}
@@ -1736,20 +1844,21 @@ L:
 			}
 
 			expectArg = false
-			if function.Name == valueFunc {
+			switch function.Name {
+			case valueFunc:
 				// E.g. @filter(gt(val(a), 10))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
 					Typ:  ValueVar,
 				})
-			} else if function.Name == lenFunc {
+			case lenFunc:
 				// E.g. @filter(gt(len(a), 10))
 				// TODO(Aman): type could be ValueVar too!
 				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
 					Typ:  UidVar,
 				})
-			} else if function.Name == uidFunc {
+			case uidFunc:
 				// uid function could take variables as well as actual uids.
 				// If we can parse the value that means its an uid otherwise a variable.
 				uid, err := strconv.ParseUint(val, 0, 64)
@@ -1980,17 +2089,19 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	if item.Typ != itemLeftRound {
 		return item.Errorf("Expected a left round after groupby")
 	}
+
+loop:
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemRightRound {
-			break
-		}
-		if item.Typ == itemComma {
+		switch item.Typ {
+		case itemRightRound:
+			break loop
+		case itemComma:
 			if expectArg {
 				return item.Errorf("Expected a predicate but got comma")
 			}
 			expectArg = true
-		} else if item.Typ == itemName {
+		case itemName:
 			if !expectArg {
 				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
@@ -2057,10 +2168,12 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	// valueStack is used to collect the values.
 	valueStack := new(filterTreeStack)
 
+loop:
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		if lval == "and" || lval == "or" || lval == "not" { // Handle operators.
+		switch {
+		case lval == "and" || lval == "or" || lval == "not": // Handle operators.
 			op := lval
 			opPred := filterOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
@@ -2076,7 +2189,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				}
 			}
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
-		} else if item.Typ == itemName { // Value.
+		case item.Typ == itemName: // Value.
 			it.Prev()
 			f, err := parseFunction(it, nil)
 			if err != nil {
@@ -2084,10 +2197,10 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			leaf := &FilterTree{Func: f}
 			valueStack.push(leaf)
-		} else if item.Typ == itemLeftRound { // Just push to op stack.
+		case item.Typ == itemLeftRound: // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
 
-		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
+		case item.Typ == itemRightRound: // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
 				if topOp.Op == "(" {
@@ -2104,9 +2217,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
-				break
+				break loop
 			}
-		} else {
+		default:
 			return nil, item.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
 	}
@@ -2182,17 +2295,19 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 	if item.Typ != itemLeftRound {
 		return count, item.Errorf("Expected a left round after var")
 	}
+
+loop:
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemRightRound {
-			break
-		}
-		if item.Typ == itemComma {
+		switch item.Typ {
+		case itemRightRound:
+			break loop
+		case itemComma:
 			if expectArg {
 				return count, item.Errorf("Expected a variable but got comma")
 			}
 			expectArg = true
-		} else if item.Typ == itemName {
+		case itemName:
 			if !expectArg {
 				return count, item.Errorf("Expected a variable but got comma")
 			}
@@ -2251,8 +2366,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		valid = false
 	}
 	it.Next()
-	// No directive is allowed on pb.subgraph like expand all, value variables.
-	if !valid || curp == nil || curp.IsInternal {
+
+	isExpand := false
+	if curp != nil && len(curp.Expand) > 0 {
+		isExpand = true
+	}
+	// No directive is allowed on pb.subgraph like expand all (except type filters),
+	// value variables, etc.
+	if !valid || curp == nil || (curp.IsInternal && !isExpand) {
 		return item.Errorf("Invalid use of directive.")
 	}
 
@@ -2263,12 +2384,18 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		return item.Errorf("Expected directive or language list")
 	}
 
-	if item.Val == "facets" { // because @facets can come w/t '()'
+	if isExpand && item.Val != "filter" {
+		return item.Errorf(errExpandType)
+	}
+
+	switch {
+	case item.Val == "facets": // because @facets can come w/t '()'
 		res, err := parseFacets(it)
 		if err != nil {
 			return err
 		}
-		if res.f != nil {
+		switch {
+		case res.f != nil:
 			curp.FacetVar = res.vmap
 			curp.FacetOrder = res.facetOrder
 			curp.FacetDesc = res.orderdesc
@@ -2276,7 +2403,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				return item.Errorf("Only one facets allowed")
 			}
 			curp.Facets = res.f
-		} else if res.ft != nil {
+		case res.ft != nil:
 			if curp.FacetsFilter != nil {
 				return item.Errorf("Only one facets filter allowed")
 			}
@@ -2285,14 +2412,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 					"variables are not allowed in facets filter.")
 			}
 			curp.FacetsFilter = res.ft
-		} else {
+		default:
 			return item.Errorf("Facets parsing failed.")
 		}
-	} else if item.Val == "cascade" {
+	case item.Val == "cascade":
 		curp.Cascade = true
-	} else if item.Val == "normalize" {
+	case item.Val == "normalize":
 		curp.Normalize = true
-	} else if peek[0].Typ == itemLeftRound {
+	case peek[0].Typ == itemLeftRound:
 		// this is directive
 		switch item.Val {
 		case "filter":
@@ -2303,6 +2430,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
+			}
+			if isExpand && filter != nil && filter.Func != nil && filter.Func.Name != "type" {
+				return item.Errorf(errExpandType)
 			}
 			curp.Filter = filter
 		case "groupby":
@@ -2316,7 +2446,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		default:
 			return item.Errorf("Unknown directive [%s]", item.Val)
 		}
-	} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
+	case len(curp.Attr) > 0 && len(curp.Langs) == 0:
 		// this is language list
 		if curp.Langs, err = parseLanguageList(it); err != nil {
 			return err
@@ -2324,7 +2454,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		if len(curp.Langs) == 0 {
 			return item.Errorf("Expected at least 1 language in list for %s", curp.Attr)
 		}
-	} else {
+	default:
 		return item.Errorf("Expected directive or language list, got @%s", item.Val)
 	}
 	return nil
@@ -2437,29 +2567,31 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	expectArg := true
 	order := make(map[string]bool)
 	// Parse in KV fashion. Depending on the value of key, decide the path.
+loop:
 	for it.Next() {
 		var key string
 		// Get key.
 		item := it.Item()
-		if item.Typ == itemName {
+		switch item.Typ {
+		case itemName:
 			if !expectArg {
 				return nil, item.Errorf("Not expecting argument. Got: %v", item)
 			}
 			key = item.Val
 			expectArg = false
-		} else if item.Typ == itemRightRound {
+		case itemRightRound:
 			if isEmpty(gq) {
 				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
-			break
-		} else if item.Typ == itemComma {
+			break loop
+		case itemComma:
 			if expectArg {
 				return nil, item.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
-		} else {
+		default:
 			return nil, item.Errorf("Expecting argument name. Got: %v", item)
 		}
 
@@ -2502,9 +2634,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 
 			assignShortestPathFn := func(fn *Function, key string) {
-				if key == "from" {
+				switch key {
+				case "from":
 					gq.ShortestPathArgs.From = fn
-				} else if key == "to" {
+				case "to":
 					gq.ShortestPathArgs.To = fn
 				}
 			}
@@ -2545,7 +2678,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			item := it.Item()
 
-			if item.Typ == itemDollar {
+			switch item.Typ {
+			case itemDollar:
 				it.Next()
 				item = it.Item()
 				if item.Typ == itemName {
@@ -2554,7 +2688,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, item.Errorf("Expecting a variable name. Got: %v", item)
 				}
 				goto ASSIGN
-			} else if item.Typ == itemMathOp {
+			case itemMathOp:
 				if item.Val != "+" && item.Val != "-" {
 					return nil,
 						item.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
@@ -2744,7 +2878,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 			}
 
-			if valLower == "checkpwd" {
+			switch {
+			case valLower == "checkpwd":
 				child := &GraphQuery{
 					Args:  make(map[string]string),
 					Var:   varName,
@@ -2760,7 +2895,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isAggregator(valLower) {
+			case isAggregator(valLower):
 				child := &GraphQuery{
 					Attr:       valueFunc,
 					Args:       make(map[string]string),
@@ -2812,7 +2947,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isMathBlock(valLower) {
+			case isMathBlock(valLower):
 				if varName == "" && alias == "" {
 					return it.Errorf("Function math should be used with a variable or have an alias")
 				}
@@ -2836,7 +2971,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isExpandFunc(valLower) {
+			case isExpandFunc(valLower):
 				if varName != "" {
 					return it.Errorf("expand() cannot be used with a variable: %s", val)
 				}
@@ -2881,7 +3016,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				// Note: curp is not set to nil. So it can have children, filters, etc.
 				curp = child
 				continue
-			} else if valLower == "count" {
+			case valLower == "count":
 				if count != notSeen {
 					return it.Errorf("Invalid mention of function count")
 				}
@@ -2898,9 +3033,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if err != nil {
 					return err
 				}
-				if peekIt[0].Typ == itemRightRound {
+
+				switch {
+				case peekIt[0].Typ == itemRightRound:
 					return it.Errorf("Cannot use count(), please use count(uid)")
-				} else if peekIt[0].Val == uidFunc && peekIt[1].Typ == itemRightRound {
+				case peekIt[0].Val == uidFunc && peekIt[1].Typ == itemRightRound:
 					if gq.IsGroupby {
 						// count(uid) case which occurs inside @groupby
 						val = uidFunc
@@ -2925,7 +3062,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					it.Next()
 				}
 				continue
-			} else if valLower == valueFunc {
+			case valLower == valueFunc:
 				if varName != "" {
 					return it.Errorf("Cannot assign a variable to val()")
 				}
@@ -2959,7 +3096,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if valLower == uidFunc {
+			case valLower == uidFunc:
 				if count == seen {
 					return it.Errorf("Count of a variable is not allowed")
 				}

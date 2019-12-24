@@ -476,3 +476,80 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PermissionDenied")
 }
+
+func TestGuardianAccess(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: "unauthpred: string @index(exact) ."}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	err = addNewUserToGroup("guardian", "guardianpass", "guardians")
+	require.NoError(t, err, "Error while adding user to guardians group")
+
+	mutation := &api.Mutation{
+		SetNquads: []byte("_:a <unauthpred> \"testdata\" ."),
+		CommitNow: true,
+	}
+	resp, err := dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID, ok := resp.Uids["a"]
+	require.True(t, ok)
+
+	time.Sleep(6 * time.Second)
+	gClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err, "Error while creating client")
+
+	gClient.Login(ctx, "guardian", "guardianpass")
+
+	mutString := fmt.Sprintf("<%s> <unauthpred> \"testdata\" .", nodeUID)
+	mutation = &api.Mutation{SetNquads: []byte(mutString), CommitNow: true}
+	_, err = gClient.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err, "Error while mutating unauthorized predicate")
+
+	query := `
+                 {
+                     me(func: eq(unauthpred, "testdata")) {
+                         uid
+                     }
+                 }`
+
+	resp, err = gClient.NewTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying unauthorized predicate")
+	require.Contains(t, string(resp.GetJson()), "uid")
+
+	op = api.Operation{Schema: "unauthpred: int ."}
+	require.NoError(t, gClient.Alter(ctx, &op), "Error while altering unauthorized predicate")
+
+	err = removeUserFromGroups("guardian")
+	require.NoError(t, err, "Error while removing guardian from guardians group")
+
+	_, err = gClient.NewTxn().Query(ctx, query)
+	require.Error(t, err, "Query succeeded. It should have failed.")
+}
+
+func addNewUserToGroup(userName, password, groupName string) error {
+	createGuardian := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-u", userName, "-p", password, "-x", "password")
+	if err := createGuardian.Run(); err != nil {
+		return err
+	}
+
+	makeGuardian := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "guardian",
+		"-l", x.GuardiansId, "-x", "password")
+	if err := makeGuardian.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func removeUserFromGroups(userName string) error {
+	removeUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userName,
+		"-l", "", "-x", "password")
+	return removeUser.Run()
+}

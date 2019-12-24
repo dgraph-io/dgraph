@@ -39,7 +39,6 @@ var zeroService = testutil.SockAddrZero
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
-	tmpDir      string
 )
 
 // Just check the first and last entries and assumes everything in between is okay.

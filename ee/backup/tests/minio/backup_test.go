@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -249,7 +250,6 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
@@ -257,6 +257,13 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
 	require.NoError(t, err)
+
+	for i, pdir := range []string{"p1", "p2", "p3"} {
+		pdir = filepath.Join("./data/restore", pdir)
+		groupId, err := x.ReadGroupIdFile(pdir)
+		require.NoError(t, err)
+		require.Equal(t, uint32(i+1), groupId)
+	}
 
 	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
@@ -270,7 +277,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)

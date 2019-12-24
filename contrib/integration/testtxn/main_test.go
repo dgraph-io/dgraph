@@ -917,6 +917,22 @@ func TestConcurrentQueryMutate(t *testing.T) {
 	t.Logf("Done\n")
 }
 
+func TestTxnDiscardBeforeCommit(t *testing.T) {
+	testutil.DropAll(t, s.dg)
+	alterSchema(s.dg, "name: string .")
+
+	txn := s.dg.NewTxn()
+	mu := &api.Mutation{
+		SetNquads: []byte(`_:1 <name> "abc" .`),
+	}
+	_, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to mutate")
+
+	err = txn.Discard(context.Background())
+	// Since client is discarding this transaction server should not throw ErrAborted err.
+	require.NotEqual(t, err, dgo.ErrAborted)
+}
+
 func alterSchema(dg *dgo.Dgraph, schema string) {
 	op := api.Operation{}
 	op.Schema = schema
