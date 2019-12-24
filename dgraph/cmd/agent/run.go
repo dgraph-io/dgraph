@@ -34,8 +34,7 @@ func init() {
 		Use:   "agent",
 		Short: "Run the Dgraph agent tool",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := cmd.Help()
-			if err != nil {
+			if err := cmd.Help(); err != nil {
 				os.Exit(1)
 			}
 		},

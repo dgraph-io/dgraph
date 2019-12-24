@@ -33,15 +33,15 @@ import (
 )
 
 type pprofCollector struct {
-	host       string
-	baseDir    string
-	filePrefix string
-	duration   time.Duration
-	timeout    time.Duration
-	tr         http.RoundTripper
+	baseDir  string
+	duration time.Duration
+	timeout  time.Duration
+	tr       http.RoundTripper
+
+	profileTypes []string
 }
 
-var profileTypes = []string{
+var pprofProfileTypes = []string{
 	"goroutine",
 	"heap",
 	"threadcreate",
@@ -51,7 +51,8 @@ var profileTypes = []string{
 	"trace",
 }
 
-func newPprofCollector(host, baseDir, filePrefix string, duration time.Duration) *pprofCollector {
+func newPprofCollector(baseDir string, duration time.Duration,
+	profileTypes []string) *pprofCollector {
 	timeout := duration + duration/2
 
 	var transport http.RoundTripper = &http.Transport{
@@ -68,38 +69,39 @@ func newPprofCollector(host, baseDir, filePrefix string, duration time.Duration)
 	}
 
 	return &pprofCollector{
-		host:       host,
-		baseDir:    baseDir,
-		filePrefix: filePrefix,
-		duration:   duration,
-		timeout:    timeout,
-		tr:         transport,
+		baseDir:  baseDir,
+		duration: duration,
+		timeout:  timeout,
+		tr:       transport,
+
+		profileTypes: profileTypes,
 	}
 }
 
 // Collect all the profiles and save them to the directory specified in baseDir.
-func (c *pprofCollector) Collect() {
-	for _, pType := range profileTypes {
-		src, err := c.saveProfile(pType)
+func (c *pprofCollector) Collect(host, filePrefix string) {
+	for _, pType := range c.profileTypes {
+		src, err := c.saveProfile(host, pType, filePrefix)
 		if err != nil {
 			glog.Errorf("error while saving pprof profile from %s: %s", src, err)
 			continue
 		}
 
-		glog.Infof("%s profile saved in %s", pType, src)
+		glog.Infof("saving %s profile in %s", pType,
+			filepath.Join(filepath.Base(c.baseDir), fmt.Sprintf("%s%s.gz", filePrefix, pType)))
 	}
 }
 
 // saveProfile writes the profile specified in the argument fetching it from the host
 // provided in the configuration
-func (c *pprofCollector) saveProfile(profileType string) (src string, err error) {
+func (c *pprofCollector) saveProfile(host, profileType, filePrefix string) (src string, err error) {
 	var resp io.ReadCloser
-	source := fmt.Sprintf("%s/debug/pprof/%s", c.host, profileType)
+	source := fmt.Sprintf("%s/debug/pprof/%s", host, profileType)
 
 	if sourceURL, timeout := adjustURL(source, c.duration, c.timeout); sourceURL != "" {
-		glog.Info("Fetching profile over HTTP from " + sourceURL)
+		glog.Info("fetching profile over HTTP from " + sourceURL)
 		if c.duration > 0 {
-			glog.Info(fmt.Sprintf("Please wait... (%v)", c.duration))
+			glog.Info(fmt.Sprintf("please wait... (%v)", c.duration))
 		}
 		resp, err = fetchURL(sourceURL, timeout, c.tr)
 		src = sourceURL
@@ -109,7 +111,7 @@ func (c *pprofCollector) saveProfile(profileType string) (src string, err error)
 	}
 
 	defer resp.Close()
-	out, err := os.Create(filepath.Join(c.baseDir, fmt.Sprintf("%s%s.gz", c.filePrefix, profileType)))
+	out, err := os.Create(filepath.Join(c.baseDir, fmt.Sprintf("%s%s.gz", filePrefix, profileType)))
 	if err != nil {
 		return
 	}

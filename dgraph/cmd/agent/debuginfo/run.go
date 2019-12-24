@@ -33,6 +33,8 @@ type debugInfoCmdOpts struct {
 	archive          bool
 	directory        string
 	infoDurationSecs uint32
+
+	pprofProfiles []string
 }
 
 var (
@@ -55,16 +57,18 @@ func init() {
 	DebugInfo.EnvPrefix = "DGRAPH_AGENT_DEBUGINFO"
 
 	flags := DebugInfo.Cmd.Flags()
-	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "", "Address of running dgraph alpha.")
+	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "localhost:8080",
+		"Address of running dgraph alpha.")
 	flags.StringVarP(&debugInfoCmd.zeroAddr, "zero", "z", "", "Address of running dgraph zero.")
 	flags.StringVarP(&debugInfoCmd.directory, "directory", "d", "",
-		"Directory to generate the debuginfo in, if the directory is not present agent will "+
-			"try to create the directory.")
+		"Directory to write the debug info into.")
 	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
 		"whether or not to archive the agent info, this could come handy when we need to export "+
 			"the dump.")
-	flags.Uint32VarP(&debugInfoCmd.infoDurationSecs, "duration", "s", 15,
-		"Duration to collect the debuginfo for, this is used for info like pprof profiles etc.")
+	flags.Uint32VarP(&debugInfoCmd.infoDurationSecs, "seconds", "s", 15,
+		"Duration for time-based profile collection.")
+	flags.StringSliceVarP(&debugInfoCmd.pprofProfiles, "profiles", "p", pprofProfileTypes,
+		"list of pprof profiles to dump in debuginfo.")
 }
 
 func collectDebugInfo() (err error) {
@@ -79,6 +83,7 @@ func collectDebugInfo() (err error) {
 			return err
 		}
 	}
+	glog.Infof("using directory %s for debug info dump.", debugInfoCmd.directory)
 
 	collectPProfProfiles()
 
@@ -90,14 +95,13 @@ func collectDebugInfo() (err error) {
 
 func collectPProfProfiles() {
 	var duration time.Duration = time.Duration(debugInfoCmd.infoDurationSecs) * time.Second
+	pc := newPprofCollector(debugInfoCmd.directory, duration, debugInfoCmd.pprofProfiles)
 	if debugInfoCmd.alphaAddr != "" {
-		pc := newPprofCollector(debugInfoCmd.alphaAddr, debugInfoCmd.directory, "alpha_", duration)
-		pc.Collect()
+		pc.Collect(debugInfoCmd.alphaAddr, "alpha_")
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
-		pc := newPprofCollector(debugInfoCmd.zeroAddr, debugInfoCmd.directory, "zero_", duration)
-		pc.Collect()
+		pc.Collect(debugInfoCmd.zeroAddr, "zero_")
 	}
 }
 
