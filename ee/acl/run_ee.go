@@ -39,8 +39,8 @@ func init() {
 
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(gName, "w", x.GrootId, "User performing this operation")
-	flag.StringP(gPassword, "x", "", "Password to authorize this operation")
+	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")
+	flag.StringP(gPassword, "x", "", "Guardian password to authorize this operation")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)

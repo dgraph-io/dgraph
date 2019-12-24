@@ -477,68 +477,77 @@ func TestUnauthorizedDeletion(t *testing.T) {
 
 func TestGuardianAccess(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
-	unAuthPred := "unauthorizedPredicate"
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
-	op := api.Operation{
-		DropAll: true,
-	}
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: "unauthpred: string @index(exact) ."}
 	require.NoError(t, dg.Alter(ctx, &op))
 
-	op = api.Operation{
-		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
-	}
-	require.NoError(t, dg.Alter(ctx, &op))
+	err = addNewUserToGroup("guardian", "guardianpass", "guardians")
+	require.NoError(t, err, "Error while adding user to guardians group")
 
-	createGuardian := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
-		"-u", "guardian", "-p", "guardianpass", "-x", "password")
-	require.NoError(t, createGuardian.Run(), "Error while creating super user")
-
-	makeGuardian := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "guardian",
-		"-l", x.GuardiansId, "-x", "password")
-	require.NoError(t, makeGuardian.Run(), "Error while adding guardian to guardians group")
-
-	txn := dg.NewTxn()
 	mutation := &api.Mutation{
-		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		SetNquads: []byte("_:a <unauthpred> \"testdata\" ."),
 		CommitNow: true,
 	}
-	resp, err := txn.Mutate(ctx, mutation)
+	resp, err := dg.NewTxn().Mutate(ctx, mutation)
 	require.NoError(t, err)
 
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
 	time.Sleep(6 * time.Second)
-	guardianClient, err := testutil.DgraphClient(testutil.SockAddr)
+	gClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err, "Error while creating client")
 
-	guardianClient.Login(ctx, "guardian", "guardianpass")
+	gClient.Login(ctx, "guardian", "guardianpass")
 
-	txn = guardianClient.NewTxn()
-	mutString := fmt.Sprintf("<%s> <%s> \"testdata\" .", nodeUID, unAuthPred)
-	mutation = &api.Mutation{
-		SetNquads: []byte(mutString),
-		CommitNow: true,
-	}
-	_, err = txn.Mutate(ctx, mutation)
+	mutString := fmt.Sprintf("<%s> <unauthpred> \"testdata\" .", nodeUID)
+	mutation = &api.Mutation{SetNquads: []byte(mutString), CommitNow: true}
+	_, err = gClient.NewTxn().Mutate(ctx, mutation)
 	require.NoError(t, err, "Error while mutating unauthorized predicate")
 
-	txn = guardianClient.NewTxn()
-	query := fmt.Sprintf(`
+	query := `
                  {
-                     me(func: eq(%s, "testdata")) {
+                     me(func: eq(unauthpred, "testdata")) {
                          uid
                      }
-                 }`, unAuthPred)
+                 }`
 
-	resp, err = txn.Query(ctx, query)
+	resp, err = gClient.NewTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying unauthorized predicate")
 	require.Contains(t, string(resp.GetJson()), "uid")
 
-	err = guardianClient.Alter(ctx,
-		&api.Operation{Schema: fmt.Sprintf("%s: int .", unAuthPred)})
-	require.NoError(t, err, "Error while altering unauthorized predicate")
+	op = api.Operation{Schema: "unauthpred: int ."}
+	require.NoError(t, gClient.Alter(ctx, &op), "Error while altering unauthorized predicate")
+
+	err = removeUserFromGroups("guardian")
+	require.NoError(t, err, "Error while removing guardian from guardians group")
+
+	resp, err = gClient.NewTxn().Query(ctx, query)
+	require.Error(t, err, "Query succeeded. It should have failed.")
+}
+
+func addNewUserToGroup(userName, password, groupName string) error {
+	createGuardian := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-u", userName, "-p", password, "-x", "password")
+	if err := createGuardian.Run(); err != nil {
+		return err
+	}
+
+	makeGuardian := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "guardian",
+		"-l", x.GuardiansId, "-x", "password")
+	if err := makeGuardian.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func removeUserFromGroups(userName string) error {
+	removeUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userName,
+		"-l", "", "-x", "password")
+	return removeUser.Run()
 }
