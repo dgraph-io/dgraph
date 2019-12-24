@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -95,13 +96,15 @@ func collectDebugInfo() (err error) {
 
 func collectPProfProfiles() {
 	var duration time.Duration = time.Duration(debugInfoCmd.infoDurationSecs) * time.Second
-	pc := newPprofCollector(debugInfoCmd.directory, duration, debugInfoCmd.pprofProfiles)
+
 	if debugInfoCmd.alphaAddr != "" {
-		pc.Collect(debugInfoCmd.alphaAddr, "alpha_")
+		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
+		savePprofProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
-		pc.Collect(debugInfoCmd.zeroAddr, "zero_")
+		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
+		savePprofProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
 	}
 }
 
