@@ -304,10 +304,7 @@ func (s *state) HasLang(pred string) bool {
 func (s *state) HasNoConflict(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.NoConflict
-	}
-	return false
+	return s.predicate[pred].GetNoConflict()
 }
 
 // Init resets the schema state, setting the underlying DB to the given pointer.

@@ -269,7 +269,7 @@ func TestParse9_Error(t *testing.T) {
 	reset()
 	result, err := Parse("age:uid @noconflict .")
 	require.NotNil(t, result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestParseScalarList(t *testing.T) {

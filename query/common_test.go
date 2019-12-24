@@ -285,6 +285,7 @@ newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
+noconflict_pred                : string @noconflict .
 `
 
 func populateCluster() {
