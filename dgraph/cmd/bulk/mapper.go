@@ -277,11 +277,13 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(nq.GetPredicate())
 	if nq.GetObjectValue() != nil {
-		if lang := de.GetLang(); len(lang) > 0 {
+		lang := de.GetLang()
+		switch {
+		case len(lang) > 0:
 			p.Uid = farm.Fingerprint64([]byte(lang))
-		} else if sch.List {
+		case sch.List:
 			p.Uid = farm.Fingerprint64(de.Value)
-		} else {
+		default:
 			p.Uid = math.MaxUint64
 		}
 	}

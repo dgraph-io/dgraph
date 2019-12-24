@@ -250,11 +250,12 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 			// string is range like a.b.c.d:w.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
-			if rangeLo == nil {
+			switch {
+			case rangeLo == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[0])
-			} else if rangeHi == nil {
+			case rangeHi == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[1])
-			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
+			case bytes.Compare(rangeLo, rangeHi) > 0:
 				return nil, errors.Errorf("inverted IP address range: %s", s)
 			}
 			ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
@@ -299,6 +300,30 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+func stateHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx := context.Background()
+	ctx = attachAccessJwt(ctx, r)
+
+	var aResp *api.Response
+	if aResp, err = (&edgraph.Server{}).State(ctx); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	if aResp == nil {
+		x.SetStatus(w, x.ErrorNoData, "No state information available.")
+		return
+	}
+
+	if _, err = w.Write(aResp.Json); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
 }
 
 // storeStatsHandler outputs some basic stats for data store.
@@ -390,6 +415,7 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
+	http.HandleFunc("/state", stateHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -415,8 +441,12 @@ func setupServer() {
 		defer wg.Done()
 		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		grpcListener.Close()
-		httpListener.Close()
+		if err := grpcListener.Close(); err != nil {
+			glog.Warningf("Error while closing gRPC listener: %s", err)
+		}
+		if err := httpListener.Close(); err != nil {
+			glog.Warningf("Error while closing HTTP listener: %s", err)
+		}
 	}()
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())

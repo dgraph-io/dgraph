@@ -220,6 +220,24 @@ message Mutations {
 	}
 	DropOp drop_op = 7;
 	string drop_value = 8;
+
+	Metadata metadata = 9;
+}
+
+message Metadata {
+  // HintType represents a hint that will be passed along the mutation and used
+  // to add the predicate to the schema if it's not already there.
+  enum HintType {
+    // DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+    DEFAULT = 0;
+    // SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+    SINGLE = 1;
+    // LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+    LIST = 2;
+  }
+
+  // Map of predicates to their hints.
+	map<string, HintType> pred_hints = 1;
 }
 
 message Snapshot {

@@ -497,11 +497,12 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// extract the list of predicates from the operation object
 	var preds []string
-	if len(op.DropAttr) > 0 {
+	switch {
+	case len(op.DropAttr) > 0:
 		preds = []string{op.DropAttr}
-	} else if op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0 {
+	case op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0:
 		preds = []string{op.DropValue}
-	} else {
+	default:
 		update, err := schema.Parse(op.Schema)
 		if err != nil {
 			return err
@@ -519,13 +520,14 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined, per the
 			// fail open approach
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -618,21 +620,23 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if x.IsGuardian(groupIds) {
-				// Members of guardian group are allowed to mutate anything
-				// except the permission of the acl predicates
-				if isAclPredMutation(gmu.Set) {
+			if userId == x.GrootId {
+				// groot is allowed to mutate anything except the permission of the acl predicates
+				switch {
+				case isAclPredMutation(gmu.Set):
 					return errors.Errorf("the permission of ACL predicates can not be changed")
-				} else if isAclPredMutation(gmu.Del) {
+				case isAclPredMutation(gmu.Del):
+					// even groot can't delete ACL predicates
 					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
@@ -713,7 +717,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// Do not allow schema queries unless the user has logged in.
 			if isSchemaQuery {
 				return status.Error(codes.Unauthenticated, err.Error())
@@ -721,9 +726,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 			// Treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined.
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
@@ -748,4 +753,34 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	return err
+}
+
+// authorizeState authorizes the State operation
+func authorizeState(ctx context.Context) error {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	var userID string
+	// doAuthorizeState checks if the user is authorized to perform this API request
+	doAuthorizeState := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		switch {
+		case err == errNoJwt:
+			return status.Error(codes.PermissionDenied, err.Error())
+		case err != nil:
+			return status.Error(codes.Unauthenticated, err.Error())
+		default:
+			userID = userData[0]
+			if userID == x.GrootId {
+				return nil
+			}
+			// Deny non groot users.
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+				"Only User '%v' is authorized.", userID, x.GrootId))
+		}
+	}
+
+	return doAuthorizeState()
 }
