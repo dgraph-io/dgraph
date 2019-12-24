@@ -28,7 +28,7 @@ import (
 func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
-	typeValidations = append(typeValidations, idCountCheck)
+	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
 }
@@ -83,6 +83,26 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 		strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
 	)
 	return fieldNamesString, errLocations
+}
+
+func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
+	dir := typ.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return nil
+	}
+
+	typeArg := dir.Arguments.ForName(dgraphTypeArg)
+	if typeArg == nil || typeArg.Value.Raw == "" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; type argument for @dgraph directive should not be empty.", typ.Name)
+	}
+	if typeArg.Value.Kind != ast.StringValue {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; type argument for @dgraph directive should of type String.", typ.Name)
+	}
+	return nil
 }
 
 func idCountCheck(typ *ast.Definition) *gqlerror.Error {
