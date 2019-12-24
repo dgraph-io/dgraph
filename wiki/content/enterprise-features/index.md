@@ -27,6 +27,10 @@ enterprise features.
 
 ## Binary Backups
 
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
+
 Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
@@ -182,6 +186,10 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
 
 ## Access Control Lists
+
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
 Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must
@@ -364,10 +372,18 @@ $ curl -X POST localhost:8080/login -d '{
 
 ## Encryption at Rest
 
-Encryption at rest refers to the encryption of data that is stored physically in any digital
-form. It ensures that sensitive data on disks is not readable by any user or application
-without a valid key that is required for decryption. Dgraph provides encryption at rest as an
-enterprise feature. If encryption is enabled, Dgraph uses AES (Advanced Encryption Standard)
+{{% notice "note" %}}
+This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
+For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
+[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
+preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
+{{% /notice %}}
+
+Encryption at rest refers to the encryption of data that is stored physically in any
+digital form. It ensures that sensitive data on disks is not readable by any user
+or application without a valid key that is required for decryption. Dgraph provides
+encryption at rest as an enterprise feature. If encryption is enabled, Dgraph uses
+[Advanced Encryption Standard (AES)](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
 algorithm to encrypt the data and secure it.
 
 ### Set up Encryption
@@ -376,9 +392,10 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-Here is an example encryption key file of size 16 bytes.
+Here is an example encryption key file of size 16 bytes:
 
 *enc_key_file*
+
 ```
 123456789012345
 ```
