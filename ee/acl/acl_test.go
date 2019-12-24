@@ -526,7 +526,7 @@ func TestGuardianAccess(t *testing.T) {
 	err = removeUserFromGroups("guardian")
 	require.NoError(t, err, "Error while removing guardian from guardians group")
 
-	resp, err = gClient.NewTxn().Query(ctx, query)
+	_, err = gClient.NewTxn().Query(ctx, query)
 	require.Error(t, err, "Query succeeded. It should have failed.")
 }
 
