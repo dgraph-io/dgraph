@@ -1,0 +1,16 @@
+[Unit]
+Description=dgraph.io data server
+Wants=network.target
+After=network.target dgraph-zero.service
+Requires=dgraph-zero.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dgraph alpha --lru_mb 2048 -p /var/run/dgraph/p -w /var/run/dgraph/w
+StandardOutput=journal
+StandardError=journal
+User=dgraph
+Group=dgraph
+
+[Install]
+WantedBy=multi-user.target
