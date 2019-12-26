@@ -51,7 +51,7 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 }
 
 type School struct {
-	Name string `json:",omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type address struct {
@@ -192,6 +192,7 @@ func outputNq(nqs []*api.NQuad) {
 		fmt.Printf("%v\n", nq)
 	}
 }
+
 func TestNquadsFromJson3(t *testing.T) {
 	p := Person{
 		Name: "Alice",
@@ -210,11 +211,11 @@ func TestNquadsFromJson3(t *testing.T) {
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
 name
-school {Name}
+school {name}
 }}`,
 		expected: `{"alice":[{
 "name":"Alice",
-"school": [{"Name":"Wellington Public School"}]
+"school": [{"name":"Wellington Public School"}]
 }]}`,
 	}
 	exp.verify()
