@@ -135,11 +135,11 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	// initially the query, mutate and alter operations should all succeed
-	// when there are no rules defined on the predicates (the fail open approach)
-	queryPredicateWithUserAccount(t, dg, false)
-	mutatePredicateWithUserAccount(t, dg, false)
-	alterPredicateWithUserAccount(t, dg, false)
+	// initially the query, mutate and alter operations should all fail
+	// when there are no rules defined on the predicates
+	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 6 seconds to ensure the new acl have reached all acl caches
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
@@ -377,11 +377,13 @@ func TestPredicatePermission(t *testing.T) {
 	err = dg.Login(ctx, userid, userpassword)
 	require.NoError(t, err, "Logging in with the current password should have succeeded")
 
-	// The operations should be allowed when no rule is defined (the fail open approach).
-	queryPredicateWithUserAccount(t, dg, false)
+	// Schema query is allowed to all logged in users.
 	querySchemaWithUserAccount(t, dg, false)
-	mutatePredicateWithUserAccount(t, dg, false)
-	alterPredicateWithUserAccount(t, dg, false)
+
+	// The operations should be blocked when no rule is defined.
+	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
 
 	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
@@ -405,11 +407,11 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 	require.NoError(t, err)
 
 	// Without logging in, the anonymous user should be evaluated as if the user does not
-	// belong to any group, and access should be granted if there is no ACL rule defined
-	// for a predicate (fail open).
-	queryPredicateWithUserAccount(t, dg, false)
-	mutatePredicateWithUserAccount(t, dg, false)
-	alterPredicateWithUserAccount(t, dg, false)
+	// belong to any group, and access should not be granted if there is no ACL rule defined
+	// for a predicate.
+	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
 
 	// Schema queries should fail if the user has not logged in.
 	querySchemaWithUserAccount(t, dg, true)
