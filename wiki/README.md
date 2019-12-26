@@ -13,7 +13,7 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 2. From within the `wiki` folder, run the command below to get the theme.
 
 ```
-cd themes && git clone https://github.com/dgraph-io/hugo-docs
+git submodule add https://github.com/dgraph-io/hugo-docs.git themes/hugo-docs
 ```
 
 3. Run `./scripts/local.sh` within the `wiki` folder and visit `http://localhost:1313` to see the

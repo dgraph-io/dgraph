@@ -32,7 +32,7 @@ run() {
 
   if [ ! -d "hugo-docs" ]; then
     echo -e "$(date) $GREEN  Cloning hugo-docs repository.$RESET"
-    git clone git@github.com:dgraph-io/hugo-docs.git
+    git submodule add https://github.com/dgraph-io/hugo-docs.git hugo-docs
   else
     pushd hugo-docs > /dev/null
     git pull
