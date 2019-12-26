@@ -632,8 +632,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			groupIds = userData[1:]
 
 			if x.IsGuardian(groupIds) {
-				// Members of guardians group are allowed to mutate anything except
-				// the permission of the acl predicates
+				// Members of guardians group are allowed to mutate anything
+				// (including delete) except the permission of the acl predicates.
 				switch {
 				case isAclPredMutation(gmu.Set):
 					return errors.Errorf("the permission of ACL predicates can not be changed")
