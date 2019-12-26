@@ -517,11 +517,13 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-		if item.DiscardEarlierVersions() {
+
+		switch {
+		case item.DiscardEarlierVersions():
 			x.Check2(buf.WriteString(" {v.las}"))
-		} else if item.IsDeletedOrExpired() {
+		case item.IsDeletedOrExpired():
 			x.Check2(buf.WriteString(" {v.not}"))
-		} else {
+		default:
 			x.Check2(buf.WriteString(" {v.ok}"))
 		}
 

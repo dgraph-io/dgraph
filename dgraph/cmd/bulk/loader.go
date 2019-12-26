@@ -48,6 +48,7 @@ type options struct {
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
+	BadgerKeyFile    string // used only in enterprise build. nil otherwise.
 	NumGoroutines    int
 	MapBufSize       uint64
 	SkipMapPhase     bool
@@ -189,9 +190,9 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType, 1000)
+			chunk := chunker.NewChunker(loadType, 1000)
 			for {
-				chunkBuf, err := chunker.Chunk(r)
+				chunkBuf, err := chunk.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}

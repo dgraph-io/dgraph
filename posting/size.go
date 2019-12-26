@@ -33,6 +33,9 @@ func (l *List) DeepSize() uint64 {
 		return 0
 	}
 
+	l.RLock()
+	defer l.RUnlock()
+
 	var size uint64 = 4*8 + // safe mutex consists of 4 words.
 		1*8 + // plist pointer consists of 1 word.
 		1*8 + // mutation map pointer  consists of 1 word.
@@ -59,8 +62,9 @@ func (l *List) DeepSize() uint64 {
 		// we'll calculate the number of buckets based on pointer arithmetic in hmap struct.
 		// reflect value give us access to the hmap struct.
 		hmap := reflect.ValueOf(l.mutationMap)
-		numBuckets := int(math.Pow(
-			2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(
+			unsafe.Pointer(hmap.Pointer() + uintptr(9))))))) // skipcq: GSC-G103
+		// skipcq: GSC-G103
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += uint64(numOldBuckets * sizeOfBucket)
 		if len(l.mutationMap) > 0 || numBuckets > 1 {
@@ -141,7 +145,7 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 
 	for _, f := range posting.Facets {
 		// Add the size of each facet.
-		size += calcuateFacet(f)
+		size += calculateFacet(f)
 	}
 
 	// Add the size of each entry in XXX_unrecognized array.
@@ -199,8 +203,8 @@ func calculateUIDBlock(block *pb.UidBlock) uint64 {
 	return size
 }
 
-// calcuateFacet is used to calculate size of a facet.
-func calcuateFacet(facet *api.Facet) uint64 {
+// calculateFacet is used to calculate size of a facet.
+func calculateFacet(facet *api.Facet) uint64 {
 	if facet == nil {
 		return 0
 	}

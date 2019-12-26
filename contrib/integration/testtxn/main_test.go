@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 type state struct {
@@ -214,37 +213,26 @@ func TestTxnRead5(t *testing.T) {
 
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	// We don't supply startTs, it should be fetched from zero by dgraph alpha.
-	req := api.Request{
-		Query: q,
-	}
 
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	dc := api.NewDgraphClient(conn)
-
-	resp, err := dc.Query(context.Background(), &req)
+	txn = s.dg.NewReadOnlyTxn()
+	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
-	mu = &api.Mutation{}
+	mu = &api.Mutation{CommitNow: true}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
-	muReq := api.Request{
-		Mutations: []*api.Mutation{mu},
-		CommitNow: true,
-	}
-	res, err := dc.Query(context.Background(), &muReq)
+	txn = s.dg.NewTxn()
+	res, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
 	x.AssertTrue(res.Txn.StartTs > 0)
-	resp, err = dc.Query(context.Background(), &req)
+	txn = s.dg.NewReadOnlyTxn()
+	resp, err = txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -927,6 +915,22 @@ func TestConcurrentQueryMutate(t *testing.T) {
 	}()
 	wg.Wait()
 	t.Logf("Done\n")
+}
+
+func TestTxnDiscardBeforeCommit(t *testing.T) {
+	testutil.DropAll(t, s.dg)
+	alterSchema(s.dg, "name: string .")
+
+	txn := s.dg.NewTxn()
+	mu := &api.Mutation{
+		SetNquads: []byte(`_:1 <name> "abc" .`),
+	}
+	_, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to mutate")
+
+	err = txn.Discard(context.Background())
+	// Since client is discarding this transaction server should not throw ErrAborted err.
+	require.NotEqual(t, err, dgo.ErrAborted)
 }
 
 func alterSchema(dg *dgo.Dgraph, schema string) {

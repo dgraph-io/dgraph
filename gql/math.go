@@ -77,7 +77,8 @@ func isTernary(f string) bool {
 }
 
 func isZero(f string, rval types.Val) bool {
-	if rval.Tid == types.FloatID {
+	switch rval.Tid {
+	case types.FloatID:
 		g, ok := rval.Value.(float64)
 		if !ok {
 			return false
@@ -91,7 +92,7 @@ func isZero(f string, rval types.Val) bool {
 			return g == 1
 		}
 		return false
-	} else if rval.Tid == types.IntID {
+	case types.IntID:
 		g, ok := rval.Value.(int64)
 		if !ok {
 			return false
@@ -113,7 +114,8 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	if err != nil {
 		return errors.Errorf("Invalid Math expression")
 	}
-	if isUnary(topOp.Fn) {
+	switch {
+	case isUnary(topOp.Fn):
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
@@ -127,7 +129,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		}
 		topOp.Child = []*MathTree{topVal}
 
-	} else if isTernary(topOp.Fn) {
+	case isTernary(topOp.Fn):
 		if valueStack.size() < 3 {
 			return errors.Errorf("Invalid Math expression. Expected 3 operands")
 		}
@@ -136,7 +138,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal3 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal3, topVal2, topVal1}
 
-	} else {
+	default:
 		if valueStack.size() < 2 {
 			return errors.Errorf("Invalid Math expression. Expected 2 operands")
 		}
@@ -362,9 +364,11 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 		// Leaf node.
 		var leafStr int
 		var err error
-		if t.Const.Tid == types.FloatID {
-			leafStr, err = buf.WriteString(strconv.FormatFloat(t.Const.Value.(float64), 'E', -1, 64))
-		} else if t.Const.Tid == types.IntID {
+		switch t.Const.Tid {
+		case types.FloatID:
+			leafStr, err = buf.WriteString(strconv.FormatFloat(
+				t.Const.Value.(float64), 'E', -1, 64))
+		case types.IntID:
 			leafStr, err = buf.WriteString(strconv.FormatInt(t.Const.Value.(int64), 10))
 		}
 		x.Check2(leafStr, err)

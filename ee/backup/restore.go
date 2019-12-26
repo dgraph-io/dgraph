@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
@@ -34,6 +35,11 @@ import (
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
 func RunRestore(pdir, location, backupId string) (uint64, error) {
+	// Create the pdir if it doesn't exist.
+	if err := os.MkdirAll(pdir, 0700); err != nil {
+		return 0, err
+	}
+
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, backupId, func(r io.Reader, groupId int, preds predicateSet) error {
@@ -55,7 +61,11 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 		if err != nil {
 			return nil
 		}
-		return loadFromBackup(db, gzReader, preds)
+		if err := loadFromBackup(db, gzReader, preds); err != nil {
+			return err
+		}
+
+		return x.WriteGroupIdFile(dir, uint32(groupId))
 	})
 }
 

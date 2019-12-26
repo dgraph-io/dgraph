@@ -27,6 +27,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -233,6 +234,7 @@ type NQuadBuffer struct {
 	batchSize int
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
+	predHints map[string]pb.Metadata_HintType
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
@@ -244,6 +246,7 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
 	}
+	buf.predHints = make(map[string]pb.Metadata_HintType)
 	return buf
 }
 
@@ -261,6 +264,23 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 			buf.nquads = make([]*api.NQuad, 0, buf.batchSize)
 		}
 	}
+}
+
+// Metadata returns the parse metadata that has been aggregated so far..
+func (buf *NQuadBuffer) Metadata() *pb.Metadata {
+	return &pb.Metadata{
+		PredHints: buf.predHints,
+	}
+}
+
+// PushPredHint pushes and aggregates hints about the type of the predicate derived
+// during the parsing. This  metadata is expected to be a lot smaller than the set of
+// NQuads so it's not  necessary to send them in batches.
+func (buf *NQuadBuffer) PushPredHint(pred string, hint pb.Metadata_HintType) {
+	if oldHint, ok := buf.predHints[pred]; ok && hint != oldHint {
+		hint = pb.Metadata_LIST
+	}
+	buf.predHints[pred] = hint
 }
 
 // Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
@@ -387,6 +407,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				return mr, err
 			}
 			buf.Push(&nq)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -398,6 +419,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			if ok {
 				buf.Push(&nq)
+				buf.PushPredHint(pred, pb.Metadata_SINGLE)
 				continue
 			}
 
@@ -410,7 +432,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
 			buf.Push(&nq)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
+			buf.PushPredHint(pred, pb.Metadata_LIST)
 			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
@@ -474,8 +498,11 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
 
-		buffer.Reset()  // The previous contents are used. Reset here.
-		buffer.Write(b) // Rewrite b into buffer, so it can be consumed.
+		buffer.Reset() // The previous contents are used. Reset here.
+		// Rewrite b into buffer, so it can be consumed.
+		if _, err := buffer.Write(b); err != nil {
+			return err
+		}
 		if err = dec.Decode(&list); err != nil {
 			return err
 		}
@@ -506,12 +533,15 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
-func ParseJSON(b []byte, op int) ([]*api.NQuad, error) {
+func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	if err := buf.ParseJSON(b, op); err != nil {
-		return nil, err
+	err := buf.ParseJSON(b, op)
+	if err != nil {
+		return nil, nil, err
 	}
+
 	buf.Flush()
 	nqs := <-buf.Ch()
-	return nqs, nil
+	metadata := buf.Metadata()
+	return nqs, metadata, nil
 }

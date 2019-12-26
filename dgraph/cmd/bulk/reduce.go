@@ -34,8 +34,10 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
@@ -88,11 +90,29 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
+	if r.opt.BadgerKeyFile != "" {
+		// need to set zero addr in WorkerConfig before doing license check.
+		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
+		// non-nil key file
+		if !worker.EnterpriseEnabled() {
+			// not licensed --> crash.
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			// licensed --> OK.
+			log.Printf("Encryption feature enabled. Using encryption key file: %v", r.opt.BadgerKeyFile)
+		}
+	}
+
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil)
+		WithLogger(nil).WithMaxCacheSize(1 << 20).
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile))
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
+
+	// zero out the key from memory.
+	opt.EncryptionKey = nil
+
 	r.dbs = append(r.dbs, db)
 	return db
 }
@@ -159,19 +179,37 @@ func (r *reducer) encodeAndWrite(
 			streamId = atomic.AddUint32(&r.streamId, 1)
 			preds[pk.Attr] = streamId
 		}
-		// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
-		// should build a way in StreamWriter to indicate that the stream is over, so the
-		// table for that stream can be flushed and memory released.
+
 		kv.StreamId = streamId
 	}
 
+	// Once we have processed all records from single stream, we can mark that stream as done.
+	// This will close underlying table builder in Badger for stream. Since we preallocate 1 MB
+	// of memory for each table builder, this can result in memory saving in case we have large
+	// number of streams.
+	// This change limits maximum number of open streams to number of streams created in a single
+	// write call. This can also be optimised if required.
+	addDone := func(doneSteams []uint32, l *bpb.KVList) {
+		for _, streamId := range doneSteams {
+			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
+		}
+	}
+
+	var doneStreams []uint32
+	var prevSID uint32
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
+				if prevSID != 0 && (prevSID != kv.StreamId) {
+					doneStreams = append(doneStreams, prevSID)
+				}
+				prevSID = kv.StreamId
 			}
+			addDone(doneStreams, list)
 			x.Check(writer.Write(list))
+			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
 			listSize = 0
 		}
@@ -256,15 +294,19 @@ type postingHeap struct {
 func (h *postingHeap) Len() int {
 	return len(h.nodes)
 }
+
 func (h *postingHeap) Less(i, j int) bool {
 	return less(h.nodes[i].mapEntry, h.nodes[j].mapEntry)
 }
+
 func (h *postingHeap) Swap(i, j int) {
 	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
 }
-func (h *postingHeap) Push(x interface{}) {
-	h.nodes = append(h.nodes, x.(heapNode))
+
+func (h *postingHeap) Push(val interface{}) {
+	h.nodes = append(h.nodes, val.(heapNode))
 }
+
 func (h *postingHeap) Pop() interface{} {
 	elem := h.nodes[len(h.nodes)-1]
 	h.nodes = h.nodes[:len(h.nodes)-1]

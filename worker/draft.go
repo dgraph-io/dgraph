@@ -219,7 +219,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Since raft committed logs are serialized, we can derive
 	// schema here without any locking
 
-	// stores a map of predicate and type of first mutation for each predicate
+	// Stores a map of predicate and type of first mutation for each predicate.
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
@@ -232,7 +232,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
-		// Dont derive schema when doing deletion.
+		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
 			continue
 		}
@@ -251,9 +251,16 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		ostats.Record(ctx, x.ActiveMutations.M(int64(-total)))
 	}()
 
+	// Go through all the predicates and their first observed schema type. If we are unable to find
+	// these predicates in the current schema state, add them to the schema state. Note that the
+	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
-			if err := createSchema(attr, storageType); err != nil {
+			hint := pb.Metadata_DEFAULT
+			if mutHint, ok := proposal.Mutations.Metadata.PredHints[attr]; ok {
+				hint = mutHint
+			}
+			if err := createSchema(attr, storageType, hint); err != nil {
 				return err
 			}
 		}
