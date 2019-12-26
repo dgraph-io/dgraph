@@ -153,6 +153,15 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: `_:alice <age> "013"^^<xs:integer> .`,
+		nq: api.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "age",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: 13}},
+		},
+	},
+	{
 		input: `_:alice <secret> "password1"^^<xs:password> .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",

@@ -17,6 +17,7 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"sort"
@@ -39,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -594,6 +596,38 @@ type queryContext struct {
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
 	span *trace.Span
+}
+
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
+	return s.doState(ctx, NeedAuthorize)
+}
+
+func (s *Server) doState(ctx context.Context, authorize int) (
+	*api.Response, error) {
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if authorize == NeedAuthorize {
+		if err := authorizeState(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.Errorf("No membership state found")
+	}
+
+	m := jsonpb.Marshaler{}
+	var jsonState bytes.Buffer
+	if err := m.Marshal(&jsonState, ms); err != nil {
+		return nil, errors.Errorf("Error marshalling state information to JSON")
+	}
+
+	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
 // Query handles queries or mutations
