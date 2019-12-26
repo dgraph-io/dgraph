@@ -350,6 +350,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:date":            types.DateTimeID,
 	"xs:dateTime":        types.DateTimeID,
 	"xs:int":             types.IntID,
+	"xs:integer":         types.IntID,
 	"xs:positiveInteger": types.IntID,
 	"xs:boolean":         types.BoolID,
 	"xs:double":          types.FloatID,
