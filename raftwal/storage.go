@@ -523,6 +523,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rer
 		}
 
 		iopt := badger.DefaultIteratorOptions
+		iopt.PrefetchValues = false
 		iopt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(iopt)
 		defer itr.Close()
