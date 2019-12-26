@@ -181,10 +181,12 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	// valueStack is used to collect the values.
 	valueStack := new(mathTreeStack)
 
+loop:
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		if isMathFunc(lval) {
+		switch {
+		case isMathFunc(lval):
 			op := lval
 			it.Prev()
 			lastItem := it.Item()
@@ -225,7 +227,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 					}
 				}
 			}
-		} else if item.Typ == itemName { // Value.
+		case item.Typ == itemName: // Value.
 			peekIt, err := it.Peek(1)
 			if err != nil {
 				return nil, false, err
@@ -268,10 +270,10 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				}
 			}
 			valueStack.push(child)
-		} else if item.Typ == itemLeftRound { // Just push to op stack.
+		case item.Typ == itemLeftRound: // Just push to op stack.
 			opStack.push(&MathTree{Fn: "("})
 
-		} else if item.Typ == itemComma {
+		case item.Typ == itemComma:
 			for !opStack.empty() {
 				topOp := opStack.peek()
 				if topOp.Fn == "(" {
@@ -298,7 +300,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				return nil, false, err
 			}
 			return res, true, nil
-		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
+		case item.Typ == itemRightRound: // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
 				if topOp.Fn == "(" {
@@ -315,10 +317,11 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
-				break
+				break loop
 			}
-		} else {
-			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v", item)
+		default:
+			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v",
+				item)
 		}
 	}
 
