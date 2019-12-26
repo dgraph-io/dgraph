@@ -631,13 +631,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to mutate anything except the permission of the acl predicates
+			if x.IsGuardian(groupIds) {
+				// Members of guardians group are allowed to mutate anything except
+				// the permission of the acl predicates
 				switch {
 				case isAclPredMutation(gmu.Set):
 					return errors.Errorf("the permission of ACL predicates can not be changed")
 				case isAclPredMutation(gmu.Del):
-					// even groot can't delete ACL predicates
 					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
