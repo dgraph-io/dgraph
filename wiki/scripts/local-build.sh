@@ -27,7 +27,7 @@ run() {
   VERSIONS=${VERSION_STRING} \
   CURRENT_BRANCH="master" \
 
-  pushd $(dirname "$0")/.. > /dev/null
+  pushd "$(dirname "$0")/.." > /dev/null
   pushd themes > /dev/null
 
   if [ ! -d "hugo-docs" ]; then
