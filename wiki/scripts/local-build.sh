@@ -10,8 +10,8 @@ VERSIONS_ARRAY=(
 )
 
 joinVersions() {
-	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
-	echo "${versions:1}"
+  versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
+  echo "${versions:1}"
 }
 
 VERSION_STRING=$(joinVersions)
@@ -34,6 +34,7 @@ run() {
     echo -e "$(date) $GREEN  Cloning hugo-docs repository.$RESET"
     git submodule add https://github.com/dgraph-io/hugo-docs.git hugo-docs
   else
+    echo -e "$(date) $GREEN  hugo-docs repository found. Pulling latest version.$RESET"
     pushd hugo-docs > /dev/null
     git pull
     popd > /dev/null
