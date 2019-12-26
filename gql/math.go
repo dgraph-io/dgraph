@@ -181,6 +181,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	// valueStack is used to collect the values.
 	valueStack := new(mathTreeStack)
 
+loop:
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
@@ -316,7 +317,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
-				break
+				break loop
 			}
 		default:
 			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v",
