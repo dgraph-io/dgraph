@@ -1,0 +1,5 @@
+aws_access_key = "XXXXXXXXXXXXXXX"
+aws_secret_key = "XXXXXXXXXXXXXXX"
+
+# Public key for SSH associated with the created instance.
+public_key = "ssh-rsa AAAXXXXXX"
