@@ -17,11 +17,13 @@
 package p2p
 
 import (
+	"bufio"
 	"context"
 
 	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 var _ services.Service = &Service{}
@@ -57,21 +59,12 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 		return nil, err
 	}
 
-	// create a new mdns instance
-	mdns := newMdns(host)
-
-	// create a new status instance
-	status := newStatus(host)
-
-	// create a new gossip instance
-	gossip := newGossip(host)
-
 	p2p := &Service{
 		ctx:         ctx,
 		host:        host,
-		mdns:        mdns,
-		status:      status,
-		gossip:      gossip,
+		mdns:        newMdns(host),
+		status:      newStatus(host),
+		gossip:      newGossip(host),
 		msgRec:      msgRec,
 		msgSend:     msgSend,
 		noBootstrap: cfg.NoBootstrap,
@@ -144,7 +137,7 @@ func (s *Service) receiveCoreMessages() {
 		if msg.GetType() != StatusMsgType {
 
 			log.Trace(
-				"Broadcasting message to connected peers from core service",
+				"Broadcasting message from core service",
 				"host", s.host.id(),
 				"type", msg.GetType(),
 			)
@@ -175,18 +168,39 @@ func (s *Service) handleConn(conn network.Conn) {
 	}
 }
 
-// handleStream parses the message written to the data stream and calls the
-// associated message handler (non-status or status) based on message type
+// handleStream starts reading from the inbound message stream (substream with
+// a matching protocol id that was opened by the connected peer) and continues
+// reading until the inbound message stream is closed or reset.
 func (s *Service) handleStream(stream network.Stream) {
 	peer := stream.Conn().RemotePeer()
 
-	// parse message and exit on error
-	msg, err := parseMessage(stream)
-	if err != nil {
-		log.Error("Failed to parse message from peer", "err", err)
-		return // exit
+	// create buffer stream for non-blocking read
+	r := bufio.NewReader(stream)
+
+	for {
+		// decode message based on message type
+		msg, err := decodeMessage(r)
+		if err != nil {
+
+			// exit loop if last received byte was nil (stream closed or reset)
+			ub := r.UnreadByte()
+			if ub == nil {
+				return // exit
+			}
+
+			log.Error("Failed to decode message from peer", "peer", peer, "err", err)
+			return // exit
+		}
+
+		// handle message based on peer status and message type
+		s.handleMessage(peer, msg)
 	}
 
+	// the stream stays open until closed or reset
+}
+
+// handleMessage handles the message based on peer status and message type
+func (s *Service) handleMessage(peer peer.ID, msg Message) {
 	log.Trace(
 		"Received message from peer",
 		"host", s.host.id(),
@@ -207,7 +221,7 @@ func (s *Service) handleStream(stream network.Stream) {
 		if !s.noGossip {
 
 			// handle non-status message from peer with gossip submodule
-			s.gossip.handleMessage(stream, msg)
+			s.gossip.handleMessage(msg)
 		}
 
 	} else {
@@ -216,9 +230,8 @@ func (s *Service) handleStream(stream network.Stream) {
 		if !s.noStatus {
 
 			// handle status message from peer with status submodule
-			s.status.handleMessage(stream, msg.(*StatusMessage))
+			s.status.handleMessage(peer, msg.(*StatusMessage))
 		}
-
 	}
 }
 

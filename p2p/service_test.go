@@ -37,7 +37,7 @@ var TestMessage = &BlockRequestMessage{
 }
 
 // maximum wait time for non-status message to be handled
-var TestMessageTimeout = 10 * time.Second
+var TestMessageTimeout = 3 * time.Second
 
 // helper method to create and start a new p2p service
 func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan Message, msgRec chan Message) {

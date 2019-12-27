@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/sync"
@@ -160,28 +159,31 @@ func (h *host) ping(peer peer.ID) error {
 	return h.dht.Ping(h.ctx, peer)
 }
 
-// send sends a non-status message to a specific peer
+// send writes the given message to the outbound message stream for the given
+// peer (gets the already opened outbound message stream or opens a new one).
 func (h *host) send(p peer.ID, msg Message) (err error) {
 
-	// create new stream with host protocol id
-	s, err := h.h.NewStream(h.ctx, p, h.protocolId)
-	if err != nil {
-		return err
-	}
+	// get outbound stream for given peer
+	s := h.getStream(p)
 
-	log.Trace(
-		"Opened stream",
-		"host", h.id(),
-		"peer", p,
-		"protocol", s.Protocol(),
-	)
+	// check if stream needs to be opened
+	if s == nil {
+
+		// open outbound stream with host protocol id
+		s, err = h.h.NewStream(h.ctx, p, h.protocolId)
+		if err != nil {
+			return err
+		}
+
+		log.Trace(
+			"Opened stream",
+			"host", h.id(),
+			"peer", p,
+			"protocol", s.Protocol(),
+		)
+	}
 
 	encMsg, err := msg.Encode()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.Write(common.Uint16ToBytes(uint16(len(encMsg)))[0:1])
 	if err != nil {
 		return err
 	}
@@ -209,6 +211,28 @@ func (h *host) broadcast(msg Message) {
 			log.Error("Failed to send message during broadcast", "peer", p, "err", err)
 		}
 	}
+}
+
+// getStream returns the outbound message stream for the given peer or returns
+// nil if no outbound message stream exists. For each peer, each host opens an
+// outbound message stream and writes to the same stream until closed or reset.
+func (h *host) getStream(p peer.ID) (stream network.Stream) {
+	conns := h.h.Network().ConnsToPeer(p)
+
+	// loop through connections (only one for now)
+	for _, conn := range conns {
+		streams := conn.GetStreams()
+
+		// loop through connection streams (unassigned streams and ipfs dht streams included)
+		for _, stream := range streams {
+
+			// return stream with matching host protocol id and stream direction outbound
+			if stream.Protocol() == h.protocolId && stream.Stat().Direction == network.DirOutbound {
+				return stream
+			}
+		}
+	}
+	return nil
 }
 
 // closePeer closes the peer connection

@@ -90,9 +90,8 @@ func (status *status) handleConn(conn network.Conn) {
 
 // handleMessage checks if the peer status message is compatibale with the host
 // status message, then either manages peer status or closes peer connection
-func (status *status) handleMessage(stream network.Stream, msg *StatusMessage) {
+func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 	ctx := context.Background()
-	peer := stream.Conn().RemotePeer()
 
 	// check if valid status message
 	if status.validMessage(msg) {

@@ -17,19 +17,15 @@
 package p2p
 
 import (
-	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	scale "github.com/ChainSafe/gossamer/codec"
-	// leb128 "github.com/filecoin-project/go-leb128"
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/common/optional"
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/libp2p/go-libp2p-core/network"
 )
 
 const (
@@ -56,60 +52,6 @@ type Message interface {
 	String() string
 	GetType() int
 	Id() string
-}
-
-// TODO: implement LEB128 variable-length encoding
-
-// Decodes a byte array to uint64 using LEB128 variable-length encoding
-// func leb128ToUint64(in []byte) uint64 {
-// 	return leb128.ToUInt64(in)
-// }
-
-func parseMessage(stream network.Stream) (Message, error) {
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-	_, err := rw.Reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	msg, err := decodeMessage(rw.Reader)
-	if err != nil {
-		return nil, err
-	}
-
-	return msg, nil
-}
-
-// decodeMessage accepts a raw message including the type indicator byte and decodes it to its specific message type
-func decodeMessage(r io.Reader) (m Message, err error) {
-	msgType := make([]byte, 1)
-	_, err = r.Read(msgType)
-	if err != nil {
-		return nil, err
-	}
-
-	switch msgType[0] {
-	case StatusMsgType:
-		m = new(StatusMessage)
-		err = m.Decode(r)
-	case BlockRequestMsgType:
-		m = new(BlockRequestMessage)
-		err = m.Decode(r)
-	case BlockResponseMsgType:
-		m = new(BlockResponseMessage)
-		err = m.Decode(r)
-	case BlockAnnounceMsgType:
-		m = new(BlockAnnounceMessage)
-		err = m.Decode(r)
-	case TransactionMsgType:
-		m = new(TransactionMessage)
-		err = m.Decode(r)
-	default:
-		return nil, errors.New("unsupported message type")
-	}
-
-	return m, err
 }
 
 type StatusMessage struct {
@@ -476,43 +418,4 @@ func (tm *TransactionMessage) Id() string {
 		return ""
 	}
 	return hash.String()
-}
-
-func readByte(r io.Reader) (byte, error) {
-	buf := make([]byte, 1)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return buf[0], nil
-}
-
-func readUint32(r io.Reader) (uint32, error) {
-	buf := make([]byte, 4)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint32(buf), nil
-}
-
-func readUint64(r io.Reader) (uint64, error) {
-	buf := make([]byte, 8)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint64(buf), nil
-}
-
-func readHash(r io.Reader) (common.Hash, error) {
-	buf := make([]byte, 32)
-	_, err := r.Read(buf)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	h := [32]byte{}
-	copy(h[:], buf)
-	return common.Hash(h), nil
-
 }

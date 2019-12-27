@@ -331,3 +331,125 @@ func TestBroadcast(t *testing.T) {
 	}
 
 }
+
+// test host send method with existing stream
+func TestExistingStream(t *testing.T) {
+	configA := &Config{
+		Port:        7001,
+		RandSeed:    1,
+		NoBootstrap: true,
+		NoMdns:      true,
+	}
+
+	nodeA, msgSendA, _ := createTestService(t, configA)
+	defer nodeA.Stop()
+
+	nodeA.noGossip = true
+	nodeA.noStatus = true
+
+	addrInfosA, err := nodeA.host.addrInfos()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	configB := &Config{
+		Port:        7002,
+		RandSeed:    2,
+		NoBootstrap: true,
+		NoMdns:      true,
+	}
+
+	nodeB, msgSendB, _ := createTestService(t, configB)
+	defer nodeB.Stop()
+
+	nodeB.noGossip = true
+	nodeB.noStatus = true
+
+	addrInfosB, err := nodeB.host.addrInfos()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = nodeA.host.connect(*addrInfosB[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := nodeA.host.getStream(nodeB.host.id())
+	if stream != nil {
+		t.Error("node A should not have an outbound stream")
+	}
+
+	// node A opens the stream to send the first message
+	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-msgSendB:
+	case <-time.After(TestMessageTimeout):
+		t.Error("node B timeout waiting for message from node A")
+	}
+
+	stream = nodeA.host.getStream(nodeB.host.id())
+	if stream == nil {
+		t.Error("node A should have an outbound stream")
+	}
+
+	// node A uses the stream to send a second message
+	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-msgSendB:
+	case <-time.After(TestMessageTimeout):
+		t.Error("node B timeout waiting for message from node A")
+	}
+
+	stream = nodeA.host.getStream(nodeB.host.id())
+	if stream == nil {
+		t.Error("node A should have an outbound stream")
+	}
+
+	stream = nodeB.host.getStream(nodeA.host.id())
+	if stream != nil {
+		t.Error("node B should not have an outbound stream")
+	}
+
+	// node B opens the stream to send the first message
+	err = nodeB.host.send(addrInfosA[0].ID, TestMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-msgSendA:
+	case <-time.After(TestMessageTimeout):
+		t.Error("node A timeout waiting for message from node B")
+	}
+
+	stream = nodeB.host.getStream(nodeA.host.id())
+	if stream == nil {
+		t.Error("node B should have an outbound stream")
+	}
+
+	// node B uses the stream to send a second message
+	err = nodeB.host.send(addrInfosA[0].ID, TestMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-msgSendA:
+	case <-time.After(TestMessageTimeout):
+		t.Error("node A timeout waiting for message from node B")
+	}
+
+	stream = nodeB.host.getStream(nodeA.host.id())
+	if stream == nil {
+		t.Error("node B should have an outbound stream")
+	}
+}
