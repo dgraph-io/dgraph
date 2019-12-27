@@ -187,12 +187,6 @@ friend {
 	exp.verify()
 }
 
-func outputNq(nqs []*api.NQuad) {
-	for _, nq := range nqs {
-		fmt.Printf("%v\n", nq)
-	}
-}
-
 func TestNquadsFromJson3(t *testing.T) {
 	p := Person{
 		Name: "Alice",
