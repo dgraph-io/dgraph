@@ -42,7 +42,6 @@ type state struct {
 }
 
 var s state
-var addr string = testutil.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
