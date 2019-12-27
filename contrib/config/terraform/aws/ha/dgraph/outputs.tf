@@ -3,6 +3,11 @@ output "vpc_id" {
   value       = module.aws_vpc.vpc_id
 }
 
+output "client_sg_id" {
+  description = "Security group that can be used with the client."
+  value       = module.aws_vpc.client_sg_id
+}
+
 output "lb_dns_name" {
   description = "DNS associated with the application load balancer created for dgraph."
   value       = module.aws_lb.dns_name

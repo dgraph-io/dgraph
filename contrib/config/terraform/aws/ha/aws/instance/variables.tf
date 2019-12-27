@@ -8,6 +8,12 @@ variable "disk_size" {
   description = "Disk size to associate with the running instance."
 }
 
+variable "io_optimized" {
+  type        = string
+  description = "Should we attach an IO optimized disk to the instance."
+  default     = "false"
+}
+
 variable "disk_iops" {
   type        = number
   description = "IOPS limit for the disk associated with the instance."

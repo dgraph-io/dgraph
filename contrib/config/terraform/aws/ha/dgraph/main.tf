@@ -23,7 +23,7 @@ module "aws_lb" {
   deployment_name     = local.deployment_name
   subnet_id           = module.aws_vpc.subnet_id
   secondary_subnet_id = module.aws_vpc.secondary_subnet_id
-  sg_id               = module.aws_vpc.sg_id
+  sg_id               = module.aws_vpc.alb_sg_id
 }
 
 module "zero" {

@@ -45,13 +45,13 @@ variable "alpha_instance_type" {
 variable "zero_instance_type" {
   type        = string
   description = "EC2 instance type for dgraph zero component."
-  default     = "t3a.small"
+  default     = "m5.large"
 }
 
 variable "ratel_instance_type" {
   type        = string
   description = "EC2 instance type for dgraph ratel component."
-  default     = "t3a.small"
+  default     = "m5.large"
 }
 
 variable "alpha_disk_size" {

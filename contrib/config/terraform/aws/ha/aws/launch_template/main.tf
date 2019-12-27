@@ -12,7 +12,7 @@ resource "aws_launch_template" "dgraph" {
       volume_size           = var.disk_size
       volume_type           = "io1"
       iops                  = var.disk_iops
-      delete_on_termination = true
+      delete_on_termination = false
     }
   }
 

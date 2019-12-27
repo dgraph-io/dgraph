@@ -28,11 +28,23 @@ resource "aws_instance" "dgraph" {
     cpu_credits = "standard"
   }
 
-  root_block_device {
-    volume_size           = var.disk_size
-    delete_on_termination = true
-    volume_type           = "io1"
-    iops                  = var.disk_iops
+  dynamic "root_block_device" {
+    for_each = var.io_optimized == "false" ? [] : ["io1"]
+    content {
+      volume_size           = var.disk_size
+      delete_on_termination = false
+      volume_type           = root_block_device.value
+      iops                  = var.disk_iops
+    }
+  }
+
+  dynamic "root_block_device" {
+    for_each = var.io_optimized == "false" ? [] : ["standard"]
+    content {
+      volume_size           = var.disk_size
+      delete_on_termination = false
+      volume_type           = root_block_device.value
+    }
   }
 
   user_data = base64encode(var.user_scripts[count.index].rendered)

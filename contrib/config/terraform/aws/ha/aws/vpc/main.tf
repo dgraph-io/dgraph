@@ -3,7 +3,7 @@
 # * Secondary Subnet - Public subnet from where we route things to the internet.
 #
 # In the primary subnet we deploy all the application that dgraph is concerned with, since
-# this subnet is private these isntances cannot be accessed outside the VPC.
+# this subnet is private these instances cannot be accessed outside the VPC.
 #
 # Primary subnet contains a route table which contains an entry to route all the traffic
 # destining to 0.0.0.0/0 via the nat gateway we have configured. This is so as to allow
@@ -113,8 +113,60 @@ resource "aws_subnet" "dgraph_secondary" {
   }
 }
 
+resource "aws_security_group" "dgraph_client" {
+  name        = "dgraph-cluster-client"
+  description = "Security group that can be used by the client to connect to the dgraph cluster alpha and ratel instance using ALB."
+  vpc_id      = aws_vpc.dgraph.id
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = [var.cidr_block]
+  }
+}
+
+resource "aws_security_group" "dgraph_alb" {
+  name        = "dgraph-alb"
+  description = "Security group associated with the dgraph loadbalancer sitting in front of alpha and ratel instances."
+  vpc_id      = aws_vpc.dgraph.id
+
+  ingress {
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+
+    security_groups = [aws_security_group.dgraph_client.id]
+  }
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+
+    security_groups = [aws_security_group.dgraph_client.id]
+  }
+
+  # Egress to the alpha and ratel instances port only.
+  egress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+
+    cidr_blocks     = [var.subnet_cidr_block]
+  }
+
+  egress {
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+
+    cidr_blocks     = [var.subnet_cidr_block]
+  }
+}
+
 resource "aws_security_group" "dgraph_services" {
-  name        = "dgraph_services"
+  name        = "dgraph-services"
   description = "Allow all traffic associated with this security group."
   vpc_id      = aws_vpc.dgraph.id
 
@@ -146,16 +198,18 @@ resource "aws_security_group" "dgraph_services" {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "For external ratel communication, this is opened to everyone to try."
+
+    security_groups = [aws_security_group.dgraph_alb.id]
+    description     = "For external ratel communication, this is opened to everyone to try."
   }
 
   ingress {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "For alpha exteranl HTTP communication."
+
+    security_groups = [aws_security_group.dgraph_alb.id]
+    description     = "For alpha external HTTP communication."
   }
 
   ingress {

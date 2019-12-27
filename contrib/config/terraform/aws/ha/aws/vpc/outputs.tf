@@ -20,5 +20,15 @@ output "default_sg_id" {
 
 output "sg_id" {
   value       = aws_security_group.dgraph_services.id
-  description = "Security group ID for the auxilary security group created for dgraph."
+  description = "Security group ID for the auxiliary security group created for dgraph."
+}
+
+output "alb_sg_id" {
+  value       = aws_security_group.dgraph_alb.id
+  description = "Security group ID of the sg associated with the load balancer."
+}
+
+output "client_sg_id" {
+  value       = aws_security_group.dgraph_client.id
+  description = "Security group that can be used by the client to connect to the dgraph cluster alpha and ratel instance using ALB."
 }

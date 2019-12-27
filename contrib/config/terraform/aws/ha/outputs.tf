@@ -8,6 +8,11 @@ output "vpc_id" {
   value       = module.dgraph.vpc_id
 }
 
+output "client_sg_id" {
+  description = "Security group that can be used with the client."
+  value       = module.dgraph.client_sg_id
+}
+
 output "healthy_zero_ip" {
   description = "IP address of a healthy zero(initial zero) created."
   value       = module.dgraph.healthy_zero_ip
