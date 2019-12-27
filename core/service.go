@@ -242,7 +242,7 @@ func (s *Service) ProcessTransactionMessage(msg p2p.Message) error {
 		}
 
 		// create new valid transaction
-		vtx := transaction.NewValidTransaction(&tx, val)
+		vtx := transaction.NewValidTransaction(tx, val)
 
 		// push to the transaction queue of BABE session
 		s.bs.PushToTxQueue(vtx)

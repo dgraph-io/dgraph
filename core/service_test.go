@@ -200,7 +200,11 @@ func TestAnnounceBlock(t *testing.T) {
 	defer s.Stop()
 
 	// simulate block sent from BABE session
-	blkRec <- types.Block{}
+	blkRec <- types.Block{
+		Header: &types.BlockHeader{
+			Number: big.NewInt(0),
+		},
+	}
 
 	select {
 	case msg := <-msgSend:

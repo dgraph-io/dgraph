@@ -52,9 +52,9 @@ type ValidTransaction struct {
 	Validity  *Validity
 }
 
-func NewValidTransaction(extrinsic *types.Extrinsic, validity *Validity) *ValidTransaction {
+func NewValidTransaction(extrinsic types.Extrinsic, validity *Validity) *ValidTransaction {
 	return &ValidTransaction{
-		Extrinsic: extrinsic,
+		Extrinsic: &extrinsic,
 		Validity:  validity,
 	}
 }

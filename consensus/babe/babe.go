@@ -25,10 +25,12 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/runtime"
+	log "github.com/ChainSafe/log15"
 )
 
 // Session contains the VRF keys for the validator
@@ -78,6 +80,7 @@ func (b *Session) Start() error {
 		}
 	}
 
+	//TODO: finish implementation of build block
 	go b.invokeBlockAuthoring()
 
 	return nil
@@ -97,15 +100,12 @@ func (b *Session) invokeBlockAuthoring() {
 	var currentSlot uint64 = 0
 
 	for ; currentSlot < b.config.EpochLength; currentSlot++ {
-		if b.isProducer[currentSlot] {
-			// TODO: implement build block
-			block, err := b.buildBlock(big.NewInt(int64(currentSlot)))
-			if err != nil {
-				return
-			}
-			b.newBlocks <- *block
+		// TODO: call buildBlock
+		b.newBlocks <- types.Block{
+			Header: &types.BlockHeader{
+				Number: big.NewInt(0),
+			},
 		}
-
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
 }
@@ -201,11 +201,28 @@ func (b *Session) vrfSign(input []byte) ([]byte, error) {
 	return out, err
 }
 
-// BuildBlock Builds the block
-func (b *Session) buildBlock(number *big.Int) (*types.Block, error) {
-	block := types.Block{
-		Header: types.BlockHeaderWithHash{Number: number},
-		Body:   []byte{1, 2, 3, 4, 5},
+// Block Build
+func (b *Session) buildBlock(parent *types.BlockHeaderWithHash, slot Slot) (*types.Block, error) {
+	log.Debug("build-block", "parent", parent, "slot", slot)
+
+	// Initialize block
+	encodedHeader, err := codec.Encode(parent)
+	if err != nil {
+		return nil, err
 	}
-	return &block, nil
+	err = b.initializeBlock(encodedHeader)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: inherents and extrinsics
+
+	// Finalize block
+	block, err := b.finalizeBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	block.Header.Number.Add(parent.Number, big.NewInt(1))
+	return block, nil
 }

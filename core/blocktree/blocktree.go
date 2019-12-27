@@ -41,7 +41,7 @@ type BlockTree struct {
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
 // Currently passes in arrival time as a parameter instead of setting it as time of instanciation
-func NewBlockTreeFromGenesis(genesis types.Block, db *polkadb.BlockDB) *BlockTree {
+func NewBlockTreeFromGenesis(genesis types.BlockWithHash, db *polkadb.BlockDB) *BlockTree {
 	head := &node{
 		hash:        genesis.Header.Hash,
 		number:      genesis.Header.Number,
@@ -60,7 +60,7 @@ func NewBlockTreeFromGenesis(genesis types.Block, db *polkadb.BlockDB) *BlockTre
 
 // AddBlock inserts the block as child of its parent node
 // Note: Assumes block has no children
-func (bt *BlockTree) AddBlock(block types.Block) {
+func (bt *BlockTree) AddBlock(block types.BlockWithHash) {
 	parent := bt.GetNode(block.Header.ParentHash)
 	// Check if it already exists
 	// TODO: Can shortcut this by checking DB
@@ -106,7 +106,7 @@ func (bt *BlockTree) GetNode(h Hash) *node {
 
 // GetBlockFromBlockNumber finds and returns a block from its number
 // TODO: Grab block details from Db, this currently constructs and returns a block from node info
-func (bt *BlockTree) GetBlockFromBlockNumber(b *big.Int) *types.Block {
+func (bt *BlockTree) GetBlockFromBlockNumber(b *big.Int) *types.BlockWithHash {
 	return bt.getNodeFromBlockNumber(b).getBlockFromNode()
 
 }
@@ -167,11 +167,11 @@ func (bt *BlockTree) SubChain(start Hash, end Hash) []*node {
 }
 
 // SubChain returns the path from the node with Hash start to the node with Hash end
-func (bt *BlockTree) SubBlockchain(start *big.Int, end *big.Int) []*types.Block {
+func (bt *BlockTree) SubBlockchain(start *big.Int, end *big.Int) []*types.BlockWithHash {
 	s := bt.getNodeFromBlockNumber(start)
 	e := bt.getNodeFromBlockNumber(end)
 	sc := bt.SubChain(s.hash, e.hash)
-	var bc []*types.Block
+	var bc []*types.BlockWithHash
 	for _, node := range sc {
 		bc = append(bc, node.getBlockFromNode())
 	}
@@ -185,14 +185,14 @@ func (bt *BlockTree) DeepestLeaf() *node {
 }
 
 // DeepestLeaf returns leftmost deepest block in BlockTree BT
-func (bt *BlockTree) DeepestBlock() *types.Block {
+func (bt *BlockTree) DeepestBlock() *types.BlockWithHash {
 	b := bt.leaves.DeepestLeaf().getBlockFromNode()
 	return b
 }
 
 // computes the slot for a block from genesis
 // helper for now, there's a better way to do this
-func (bt *BlockTree) ComputeSlotForBlock(b *types.Block, sd uint64) uint64 {
+func (bt *BlockTree) ComputeSlotForBlock(b *types.BlockWithHash, sd uint64) uint64 {
 	gt := bt.head.arrivalTime
 	nt := b.GetBlockArrivalTime()
 

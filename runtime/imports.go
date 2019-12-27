@@ -58,7 +58,6 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"unsafe"
@@ -185,6 +184,7 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	err := s.SetStorage(key, val)
 	if err != nil {
 		log.Error("[ext_set_storage]", "error", err)
+		return
 	}
 }
 
@@ -267,35 +267,44 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	val, err := s.GetStorage(key)
-	if err == nil && len(val) >= (1<<32) {
-		err = errors.New("retrieved value length exceeds 2^32")
-	}
+	log.Debug("[ext_get_allocated_storage]", "key", key)
 
+	val, err := s.GetStorage(key)
 	if err != nil {
 		log.Error("[ext_get_allocated_storage]", "error", err)
+		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
 		return 0
 	}
 
-	// writtenOut stores the location of the 4 bytes of memory that was allocated
-	var lenPtr int32 = 1
-	memory[writtenOut] = byte(lenPtr)
+	if len(val) >= (1 << 32) {
+		log.Error("[ext_get_allocated_storage]", "error", "retrieved value length exceeds 2^32")
+		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
+		return 0
+	}
+
 	if val == nil {
-		copy(memory[lenPtr:lenPtr+4], []byte{0xff, 0xff, 0xff, 0xff})
+		log.Debug("[ext_get_allocated_storage]", "value", "nil")
+		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
 		return 0
 	}
 
-	// copy value to memory
-	var ptr int32 = lenPtr + 4
-	copy(memory[ptr:ptr+int32(len(val))], val)
+	// allocate memory for value and copy value to memory
+	ptr, err := runtimeCtx.allocator.Allocate(uint32(len(val)))
+	if err != nil {
+		log.Error("[ext_get_allocated_storage]", "error", err)
+		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
+		return 0
+	}
+	copy(memory[ptr:ptr+uint32(len(val))], val)
 
 	// copy length to memory
 	byteLen := make([]byte, 4)
 	binary.LittleEndian.PutUint32(byteLen, uint32(len(val)))
-	copy(memory[lenPtr:lenPtr+4], byteLen)
+	// writtenOut stores the location of the memory that was allocated
+	copy(memory[writtenOut:writtenOut+4], byteLen)
 
 	// return ptr to value
-	return ptr
+	return int32(ptr)
 }
 
 // deletes the trie entry with key at memory location `keyData` with length `keyLen`

@@ -299,9 +299,77 @@ func TestExt_storage_root(t *testing.T) {
 	}
 }
 
-// test that ext_get_allocated_storage can get a value from the trie and store it
-// in wasm memory
-func TestExt_get_allocated_storage(t *testing.T) {
+// test that ext_get_allocated_storage can get a value from the trie and store it in memory
+func TestSetAndGetAllocatedStorage(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+
+	// key,value we wish to store in the trie
+	key := []byte(":noot")
+	value := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+
+	// copy key and value into wasm memory
+	keyData := 170
+	valueData := 200
+	copy(mem[keyData:keyData+len(key)], key)
+	copy(mem[valueData:valueData+len(value)], value)
+
+	testFunc, ok := runtime.vm.Exports["test_ext_set_storage"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	// call ext_set_storage to set trie key-value
+	_, err = testFunc(keyData, len(key), valueData, len(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// key,value we wish to store in the trie
+	key = []byte(":extrinsic_index")
+	value = []byte{0, 0, 0, 0, 0, 0, 0, 0}
+
+	// copy key and value into wasm memory
+	copy(mem[keyData:keyData+len(key)], key)
+	copy(mem[valueData:valueData+len(value)], value)
+
+	// call ext_set_storage to set trie key-value again
+	_, err = testFunc(keyData, len(key), valueData, len(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// copy key to `keyData` in memory
+	copy(mem[keyData:keyData+len(key)], key)
+	// memory location where length of return value is stored
+	var writtenOut int32 = 166
+
+	testFunc, ok = runtime.vm.Exports["test_ext_get_allocated_storage"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	ret, err := testFunc(keyData, len(key), writtenOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// returns memory location where value is stored
+	retInt := uint32(ret.ToI32())
+	length := binary.LittleEndian.Uint32(mem[writtenOut : writtenOut+4])
+	if length != uint32(len(value)) {
+		t.Error("did not save correct value length to memory")
+	} else if !bytes.Equal(mem[retInt:retInt+length], value) {
+		t.Error("did not save value to memory")
+	}
+}
+
+// test that ext_get_allocated_storage can get a value from the trie and store it in memory
+func Test_ext_get_allocated_storage(t *testing.T) {
 	runtime, err := newTestRuntime()
 	if err != nil {
 		t.Fatal(err)
@@ -334,8 +402,11 @@ func TestExt_get_allocated_storage(t *testing.T) {
 
 	// returns memory location where value is stored
 	retInt := uint32(ret.ToI32())
-	loc := uint32(mem[writtenOut])
-	length := binary.LittleEndian.Uint32(mem[loc : loc+4])
+	if retInt == 0 {
+		t.Fatalf("call failed")
+	}
+
+	length := binary.LittleEndian.Uint32(mem[writtenOut : writtenOut+4])
 	if length != uint32(len(value)) {
 		t.Error("did not save correct value length to memory")
 	} else if !bytes.Equal(mem[retInt:retInt+length], value) {

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/common"
+	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
 	db "github.com/ChainSafe/gossamer/polkadb"
@@ -298,13 +299,13 @@ func TestSlotOffset(t *testing.T) {
 
 func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 
-	genesisBlock := types.Block{
-		Header: types.BlockHeaderWithHash{
+	genesisBlock := types.BlockWithHash{
+		Header: &types.BlockHeaderWithHash{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
 			Hash:       common.Hash{0x00},
 		},
-		Body: types.BlockBody{},
+		Body: &types.BlockBody{},
 	}
 
 	genesisBlock.SetBlockArrivalTime(uint64(1000))
@@ -326,13 +327,13 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 			t.Error(err)
 		}
 
-		block := types.Block{
-			Header: types.BlockHeaderWithHash{
+		block := types.BlockWithHash{
+			Header: &types.BlockHeaderWithHash{
 				ParentHash: previousHash,
 				Hash:       hash,
 				Number:     big.NewInt(int64(i)),
 			},
-			Body: types.BlockBody{},
+			Body: &types.BlockBody{},
 		}
 
 		block.SetBlockArrivalTime(previousAT + uint64(1000))
@@ -379,7 +380,8 @@ func TestSlotTime(t *testing.T) {
 func TestStart(t *testing.T) {
 	rt := newRuntime(t)
 	cfg := &SessionConfig{
-		Runtime: rt,
+		Runtime:   rt,
+		NewBlocks: make(chan types.Block),
 	}
 
 	babesession, err := NewSession(cfg)
@@ -404,7 +406,6 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Duration(conf.SlotDuration) * time.Duration(conf.EpochLength) * time.Millisecond)
 }
 
 func TestBabeAnnounceMessage(t *testing.T) {
@@ -435,12 +436,100 @@ func TestBabeAnnounceMessage(t *testing.T) {
 
 	for i := 0; i < int(babesession.config.EpochLength); i++ {
 		block := <-newBlocks
-		blockNumber := big.NewInt(int64(i))
+		blockNumber := big.NewInt(int64(0))
 		if !reflect.DeepEqual(block.Header.Number, blockNumber) {
 			t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", block.Header.Number, blockNumber)
 		}
 	}
+}
 
+func TestBuildBlock(t *testing.T) {
+	rt := newRuntime(t)
+	cfg := &SessionConfig{
+		Runtime: rt,
+	}
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = babesession.configurationFromRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
+	txb := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
+
+	validity, err := babesession.validateTransaction(txb)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// https://github.com/paritytech/substrate/blob/ea2644a235f4b189c8029b9c9eac9d4df64ee91e/core/test-runtime/src/system.rs#L190
+	expected := &tx.Validity{
+		Priority: 69,
+		Requires: [][]byte{{}},
+		// https://github.com/paritytech/substrate/blob/ea2644a235f4b189c8029b9c9eac9d4df64ee91e/core/test-runtime/src/system.rs#L173
+		Provides:  [][]byte{{146, 157, 61, 99, 63, 98, 30, 242, 128, 49, 150, 90, 140, 165, 187, 249}},
+		Longevity: 64,
+		Propagate: true,
+	}
+
+	if !reflect.DeepEqual(expected, validity) {
+		t.Error(
+			"received unexpected validity",
+			"\nexpected:", expected,
+			"\nreceived:", validity,
+		)
+	}
+
+	vtx := tx.NewValidTransaction(types.Extrinsic(txb), expected)
+	babesession.PushToTxQueue(vtx)
+
+	zeroHash, err := common.HexToHash("0x00")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parentHeader := &types.BlockHeaderWithHash{
+		ParentHash: zeroHash,
+		Number:     big.NewInt(0),
+	}
+
+	slot := Slot{
+		start:    uint64(time.Now().Unix()),
+		duration: uint64(10),
+		number:   1,
+	}
+
+	block, err := babesession.buildBlock(parentHeader, slot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// the hash of an empty trie
+	emptyRootHash, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	extrinsicsHash, err := common.HexToHash("0xad07a4b35c5e14f1e555ab965258cc2679eafcb48d142e378815edc7e6ecfc53")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedBlockHeader := &types.BlockHeader{
+		ParentHash:     zeroHash,
+		Number:         big.NewInt(1),
+		StateRoot:      emptyRootHash,
+		ExtrinsicsRoot: extrinsicsHash,
+		Digest:         []byte{},
+	}
+
+	if !reflect.DeepEqual(block.Header, expectedBlockHeader) {
+		t.Fatalf("Fail: got %v expected %v", block.Header, expectedBlockHeader)
+	}
 }
 
 func NewTestRuntimeStorage() *TestRuntimeStorage {

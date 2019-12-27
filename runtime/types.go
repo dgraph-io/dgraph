@@ -26,7 +26,11 @@ type Version struct {
 
 var (
 	CoreVersion                               = "Core_version"
+	CoreInitializeBlock                       = "Core_initialize_block"
 	CoreExecuteBlock                          = "Core_execute_block"
 	TaggedTransactionQueueValidateTransaction = "TaggedTransactionQueue_validate_transaction"
 	BabeApiConfiguration                      = "BabeApi_configuration"
+	BlockBuilderInherentExtrinsics            = "BlockBuilder_inherent_extrinsics"
+	BlockBuilderApplyExtrinsic                = "BlockBuilder_apply_extrinsic"
+	BlockBuilderFinalizeBlock                 = "BlockBuilder_finalize_block"
 )
