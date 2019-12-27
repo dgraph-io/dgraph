@@ -70,10 +70,21 @@ func (it *UidPackIterator) Valid() bool {
 
 // CopyUidPack creates a copy of the given UidPack.
 func CopyUidPack(pack *pb.UidPack) *pb.UidPack {
-	encoder := Encoder{BlockSize: int(pack.BlockSize)}
-	it := NewUidPackIterator(pack)
-	for ; it.Valid(); it.Next() {
-		encoder.Add(it.Get())
+	if pack == nil {
+		return nil
 	}
-	return encoder.Done()
+
+	packCopy := new(pb.UidPack)
+	packCopy.BlockSize = pack.BlockSize
+	packCopy.Blocks = make([]*pb.UidBlock, len(pack.Blocks))
+
+	for i, block := range pack.Blocks {
+		packCopy.Blocks[i] = new(pb.UidBlock)
+		packCopy.Blocks[i].Base =  block.Base
+		packCopy.Blocks[i].NumUids = block.NumUids
+		packCopy.Blocks[i].Deltas = make([]byte, len(block.Deltas))
+		copy(packCopy.Blocks[i].Deltas, block.Deltas)
+	}
+
+	return packCopy
 }
