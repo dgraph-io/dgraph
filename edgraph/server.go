@@ -582,10 +582,14 @@ type queryContext struct {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(ctx, req, NeedAuthorize)
+	return s.doQuery(ctx, req, NeedAuthorize, false)
 }
 
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
+// QueryForGraphql handles queries or mutations
+func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(ctx, req, NeedAuthorize, true)
+}
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int, graphql bool) (
 	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {
@@ -649,6 +653,12 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		}
 	}
 
+	if !graphql {
+		if rerr = validateDgraphForGraphql(qc); rerr != nil {
+			return
+		}
+	}
+
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
@@ -677,6 +687,25 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	return resp, nil
+}
+
+// validateDgraphForGraphql will check whether graphql reserved predicate are mutated via user facing api.
+func validateDgraphForGraphql(qCtx *queryContext) error {
+	for _, mutation := range qCtx.gmuList {
+		// Check for sets.
+		for _, nquad := range mutation.Set {
+			if x.IsGraphqlReservedPredicate(nquad.Predicate) {
+				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nquad.Predicate)
+			}
+		}
+		// Check for Dels
+		for _, nquad := range mutation.Del {
+			if x.IsGraphqlReservedPredicate(nquad.Predicate) {
+				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nquad.Predicate)
+			}
+		}
+	}
+	return nil
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
