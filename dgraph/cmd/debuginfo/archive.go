@@ -38,14 +38,9 @@ type walker struct {
 	output            tarWriter
 }
 
-func newWalker(baseDir, debugDir string, output tarWriter) *walker {
-	return &walker{
-		baseDir:  baseDir,
-		debugDir: debugDir,
-		output:   output,
-	}
-}
-
+// walkPath function is called for each file present within the directory
+// that walker is processing. The function operates in a best effort manner
+// and tries to archive whatever it can without throwing an error.
 func (w *walker) walkPath(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("Error while walking path %s: %s", path, err)
@@ -71,8 +66,8 @@ func (w *walker) walkPath(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
-	// Just get the latest fileInfo to make sure that the size is correctly
-	// when the file is write to tar file
+	// Just get the latest fileInfo to make sure that the size is correct
+	// when the file is writtern to tar file.
 	fpInfo, err := file.Stat()
 	if err != nil {
 		fpInfo, err = os.Lstat(file.Name())
@@ -123,8 +118,12 @@ func createArchive(debugDir string) (string, error) {
 		baseDir = filepath.Base(debugDir)
 	}
 
-	walker := newWalker(baseDir, debugDir, writer)
-	return archivePath, filepath.Walk(debugDir, walker.walkPath)
+	w := &walker{
+		baseDir:  baseDir,
+		debugDir: debugDir,
+		output:   writer,
+	}
+	return archivePath, filepath.Walk(debugDir, w.walkPath)
 }
 
 // Creates a Gzipped tar archive of the directory provided as parameter.
@@ -156,8 +155,7 @@ func createGzipArchive(debugDir string) (string, error) {
 		return "", err
 	}
 
-	err = os.Remove(source)
-	if err != nil {
+	if err = os.Remove(source); err != nil {
 		glog.Warningf("error while removing intermediate tar file: %s", err)
 	}
 

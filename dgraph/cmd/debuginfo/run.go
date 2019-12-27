@@ -29,11 +29,11 @@ import (
 )
 
 type debugInfoCmdOpts struct {
-	alphaAddr        string
-	zeroAddr         string
-	archive          bool
-	directory        string
-	infoDurationSecs uint32
+	alphaAddr string
+	zeroAddr  string
+	archive   bool
+	directory string
+	duration  uint32
 
 	pprofProfiles []string
 }
@@ -46,10 +46,9 @@ var (
 func init() {
 	DebugInfo.Cmd = &cobra.Command{
 		Use:   "debuginfo",
-		Short: "Generate debug info for dgraph on the current node.",
+		Short: "Generate debug info on the current node.",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := collectDebugInfo()
-			if err != nil {
+			if err := collectDebugInfo(); err != nil {
 				glog.Errorf("error while collecting dgraph debug info: %s", err)
 				os.Exit(1)
 			}
@@ -64,19 +63,18 @@ func init() {
 	flags.StringVarP(&debugInfoCmd.directory, "directory", "d", "",
 		"Directory to write the debug info into.")
 	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
-		"whether or not to archive the agent info, this could come handy when we need to export "+
-			"the dump.")
-	flags.Uint32VarP(&debugInfoCmd.infoDurationSecs, "seconds", "s", 15,
+		"Whether to archive the generated report")
+	flags.Uint32VarP(&debugInfoCmd.duration, "seconds", "s", 15,
 		"Duration for time-based profile collection.")
 	flags.StringSliceVarP(&debugInfoCmd.pprofProfiles, "profiles", "p", pprofProfileTypes,
-		"list of pprof profiles to dump in debuginfo.")
+		"List of pprof profiles to dump in the report.")
 }
 
 func collectDebugInfo() (err error) {
 	if debugInfoCmd.directory == "" {
 		debugInfoCmd.directory, err = ioutil.TempDir("/tmp", "dgraph-debuginfo")
 		if err != nil {
-			return fmt.Errorf("error while creating temporary directory for debuginfo: %s", err)
+			return fmt.Errorf("error while creating temporary directory: %s", err)
 		}
 	} else {
 		err = os.MkdirAll(debugInfoCmd.directory, 0644)
@@ -95,16 +93,16 @@ func collectDebugInfo() (err error) {
 }
 
 func collectPProfProfiles() {
-	var duration time.Duration = time.Duration(debugInfoCmd.infoDurationSecs) * time.Second
+	duration := time.Duration(debugInfoCmd.duration) * time.Second
 
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
-		savePprofProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+		saveProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
-		savePprofProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+		saveProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
 	}
 }
 
@@ -116,8 +114,7 @@ func archiveDebugInfo() error {
 
 	glog.Infof("Debuginfo archive successful: %s", archivePath)
 
-	err = os.RemoveAll(debugInfoCmd.directory)
-	if err != nil {
+	if err = os.RemoveAll(debugInfoCmd.directory); err != nil {
 		glog.Warningf("error while removing debuginfo directory: %s", err)
 	}
 	return nil
