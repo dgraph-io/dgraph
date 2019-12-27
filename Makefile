@@ -17,7 +17,6 @@ help: Makefile
 	@echo
 
 $(GOLANGCI):
-	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s latest
 	wget -O - -q https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s latest
 
 ## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint` on project files.
