@@ -69,16 +69,17 @@ type options struct {
 }
 
 type predicate struct {
-	Predicate string   `json:"predicate,omitempty"`
-	Type      string   `json:"type,omitempty"`
-	Tokenizer []string `json:"tokenizer,omitempty"`
-	Count     bool     `json:"count,omitempty"`
-	List      bool     `json:"list,omitempty"`
-	Lang      bool     `json:"lang,omitempty"`
-	Index     bool     `json:"index,omitempty"`
-	Upsert    bool     `json:"upsert,omitempty"`
-	Reverse   bool     `json:"reverse,omitempty"`
-	ValueType types.TypeID
+	Predicate  string   `json:"predicate,omitempty"`
+	Type       string   `json:"type,omitempty"`
+	Tokenizer  []string `json:"tokenizer,omitempty"`
+	Count      bool     `json:"count,omitempty"`
+	List       bool     `json:"list,omitempty"`
+	Lang       bool     `json:"lang,omitempty"`
+	Index      bool     `json:"index,omitempty"`
+	Upsert     bool     `json:"upsert,omitempty"`
+	Reverse    bool     `json:"reverse,omitempty"`
+	NoConflict bool     `json:"no_conflict,omitempty"`
+	ValueType  types.TypeID
 }
 
 type schema struct {
@@ -105,8 +106,6 @@ var (
 
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
-	// Contains predicates with noconflict directive.
-	noConflictPreds map[string]struct{}
 )
 
 func init() {
@@ -191,15 +190,6 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
-	}
-
-	noConflictPreds = make(map[string]struct{})
-	for _, schemaLine := range strings.Split(string(b), "\n") {
-		if !strings.Contains(schemaLine, "@noconflict") {
-			continue
-		}
-		predicate := strings.Fields(schemaLine)[0]
-		noConflictPreds[predicate] = struct{}{}
 	}
 
 	op := &api.Operation{}
