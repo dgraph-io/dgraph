@@ -271,7 +271,7 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 
 	for {
 		if !decoder.Valid() {
-			return -1
+			break
 		}
 
 		if decoder.PeekNextBase() < uid {
@@ -281,7 +281,7 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 
 		uids := decoder.Uids()
 		if len(uids) == 0 {
-			return -1
+			break
 		}
 
 		i := sort.Search(len(uids), func(i int) bool { return uids[i] >= uid })
@@ -291,4 +291,6 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 
 		decoder.Next()
 	}
+
+	return -1
 }
