@@ -170,25 +170,72 @@ func (mrw *addRewriter) Rewrite(
 
 	mutatedType := m.MutatedType()
 
-	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	val, ok := m.ArgValue(schema.InputArgName).([]interface{})
+	if !ok {
+		val := m.ArgValue(schema.InputArgName).(map[string]interface{})
+		counter := counter(0)
+		mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
+		mutations, err := mutationsFromFragments(
+			mrw.frags,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+
+		return queryFromFragments(mrw.frags),
+			mutations,
+			schema.GQLWrapf(err, "failed to rewrite mutation payload")
+	}
 
 	counter := counter(0)
-	mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
-	mutations, err := mutationsFromFragments(
-		mrw.frags,
-		func(frag *mutationFragment) ([]byte, error) {
-			return json.Marshal(frag.fragment)
-		},
-		func(frag *mutationFragment) ([]byte, error) {
-			if len(frag.deletes) > 0 {
-				return json.Marshal(frag.deletes)
-			}
-			return nil, nil
-		})
+	errs := make([]string, 0)
+	mutationsAll := make([]*dgoapi.Mutation, 0)
+	queries := &gql.GraphQuery{}
+	mrw.frags = make([]*mutationFragment, 0)
 
-	return queryFromFragments(mrw.frags),
-		mutations,
-		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+	for _, i := range val {
+		obj := i.(map[string]interface{})
+		frag := rewriteObject(mutatedType, nil, "", &counter, obj)
+		mrw.frags = append(mrw.frags, frag...)
+
+		mutations, err := mutationsFromFragments(
+			mrw.frags,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+
+		if err != nil {
+			errs = append(errs, schema.GQLWrapf(err,
+				"failed to rewrite mutation payload").Error())
+		}
+
+		mutationsAll = append(mutationsAll, mutations...)
+		qry := queryFromFragments(mrw.frags)
+		if qry != nil {
+			queries.Children = append(queries.Children, qry.Children...)
+		}
+	}
+
+	if len(queries.Children) == 0 {
+		queries = nil
+	}
+
+	if len(errs) > 0 {
+		return queries, mutationsAll, fmt.Errorf(strings.Join(errs, "\n"))
+	} else {
+		return queries, mutationsAll, nil
+	}
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -196,8 +243,6 @@ func (mrw *addRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	var uid uint64
 
 	err := checkResult(mrw.frags, result)
 	if err != nil {
@@ -208,15 +253,24 @@ func (mrw *addRewriter) FromMutationResult(
 		return nil, x.GqlErrorf("no new node was created")
 	}
 
-	node := strings.TrimPrefix(mrw.frags[0].fragment.(map[string]interface{})["uid"].(string), "_:")
-	uid, err = strconv.ParseUint(assigned[node], 0, 64)
-	if err != nil {
-		return nil, schema.GQLWrapf(err,
-			"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-			assigned[node])
+	uids := make([]uint64, 0)
+
+	for _, i := range mrw.frags {
+		node := strings.TrimPrefix(i.fragment.(map[string]interface{})["uid"].(string), "_:")
+		uid, err := strconv.ParseUint(assigned[node], 0, 64)
+		if err != nil {
+			return nil, schema.GQLWrapf(err,
+				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
+				assigned[node])
+		}
+
+		uids = append(uids, uid)
 	}
 
-	return rewriteAsGet(mutation.QueryField(), uid, nil), nil
+	if len(uids) == 1 {
+		return rewriteAsGet(mutation.QueryField(), uids[0], nil), nil
+	}
+	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
 }
 
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.

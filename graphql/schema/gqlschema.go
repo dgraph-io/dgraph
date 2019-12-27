@@ -823,9 +823,10 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Fields: []*ast.FieldDefinition{
 			{
 				Name: strings.ToLower(defn.Name),
-				Type: &ast.Type{
+				Type: ast.ListType(&ast.Type{
 					NamedType: defn.Name,
-				},
+					NonNull:   false,
+				}, nil),
 			},
 		},
 	}
@@ -953,7 +954,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: "input",
 				Type: &ast.Type{
-					NamedType: defn.Name + "Input",
+					NamedType: "[" + defn.Name + "Input]",
 					NonNull:   true,
 				},
 			},
