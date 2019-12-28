@@ -31,6 +31,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -513,8 +514,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	defer os.RemoveAll(indexDir)
 	glog.V(1).Infof("Rebuilding indexes using the tmp folder %s\n", indexDir)
 
-	dbOpts := badger.DefaultOptions(indexDir).WithSyncWrites(false).
-		WithNumVersionsToKeep(math.MaxInt64)
+	dbOpts := badger.DefaultOptions(indexDir).
+		WithSyncWrites(false).
+		WithNumVersionsToKeep(math.MaxInt64).
+		WithCompression(options.None)
 	indexDB, err := badger.Open(dbOpts)
 	if err != nil {
 		return err
@@ -589,20 +592,28 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return nil
 	}
 
+	start := time.Now()
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	glog.V(1).Infof("Rebuilding index for predicate %s: Iteration done. Now committing at ts=%d\n",
-		r.attr, r.startTs)
+	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
+		r.attr, time.Since(start))
+	indexDB.Flatten(5)
 
 	// Now we write all the created posting lists to disk.
-	indexTxn := indexDB.NewTransaction(true)
+	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
+	indexTxn := indexDB.NewTransaction(false)
 	defer indexTxn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
 	it := indexTxn.NewIterator(iterOpts)
 	defer it.Close()
 
+	start = time.Now()
+	defer func() {
+		glog.V(1).Infof("Rebuilding index for predicate %s: writing index took: %v\n",
+			r.attr, time.Since(start))
+	}()
 	writer := NewTxnWriter(pstore)
 	for it.Rewind(); it.Valid(); {
 		keyCopy := it.Item().KeyCopy(nil)
@@ -629,7 +640,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 		}
 	}
-	glog.V(1).Infoln("Rebuild: Flushing all writes.")
+
+	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
 	return writer.Flush()
 }
 
