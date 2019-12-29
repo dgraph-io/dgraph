@@ -598,7 +598,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
-	indexDB.Flatten(5)
+
+	// flatten the LSM tree to optimize reads
+	if err := indexDB.Flatten(5); err != nil {
+		return err
+	}
 
 	// Now we write all the created posting lists to disk.
 	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
