@@ -766,9 +766,9 @@ func completeValue(
 	case map[string]interface{}:
 		return completeObject(path, field.Type(), field.SelectionSet(), val)
 	case []interface{}:
-		if field.Name() == "__typename" {
+		if field.Name() == typeNameDirective {
 			// From GraphQL spec:
-			//   https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
+			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
 			// "GraphQL supports type name introspection at any point within a query by the
 			// meta‐field  __typename: String! when querying against any Object, Interface,
 			// or Union. It returns the name of the object type currently being queried."

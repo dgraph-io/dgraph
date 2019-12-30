@@ -579,7 +579,7 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 		}
 
 	}
-	return dgraphTypes[0].(string)
+	return ""
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {

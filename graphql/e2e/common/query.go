@@ -1076,6 +1076,44 @@ func queryTypename(t *testing.T) {
 
 }
 
+func queryNestedTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				name
+				dob
+				posts {
+					title
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"name": "Ann Author",
+		"dob": "2000-01-01T00:00:00Z",
+		"posts": [
+		  {
+			"title": "Introducing GraphQL in Dgraph",
+			"__typename": "Post"
+		  },
+		  {
+			"title": "GraphQL doco",
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+}
+
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
@@ -1093,10 +1131,10 @@ func typenameForInterface(t *testing.T) {
 					name
 					__typename
 			                ... on Human {
-					      totalCredits
+						totalCredits
 			                }
 			                ... on Droid {
-			                      primaryFunction
+						primaryFunction
 			                }
 				}
 			}`,

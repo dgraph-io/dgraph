@@ -27,6 +27,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	typeNameDirective = "__typename"
+)
+
 type queryRewriter struct{}
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -244,7 +248,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
-		} else if f.Name() == "__typename" {
+		} else if f.Name() == typeNameDirective {
 			child.Attr = "dgraph.type"
 		} else {
 			child.Attr = f.DgraphPredicate()
