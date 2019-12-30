@@ -521,7 +521,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
@@ -544,6 +544,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, asJson(`[`+
 		x.AclPredicates+","+
+		x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],

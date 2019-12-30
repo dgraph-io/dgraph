@@ -59,12 +59,16 @@ const (
 	groupFile    = "group_id"
 )
 
+type key int
+
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
-	NeedAuthorize = iota
+	NeedAuthorize key = iota
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
+	// GraphQL is used to indicate that the request is from graphql admin.
+	GraphQL
 )
 
 // Server implements protos.DgraphServer
@@ -578,18 +582,21 @@ type queryContext struct {
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
 	span *trace.Span
+	// graphql indicates whether the given request is from graphql admin or not.
+	graphql bool
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(ctx, req, NeedAuthorize, false)
+	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
 // QueryForGraphql handles queries or mutations
 func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(ctx, req, NeedAuthorize, true)
+	ctx = context.WithValue(ctx, GraphQL, true)
+	return s.doQuery(ctx, req, NeedAuthorize)
 }
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int, graphql bool) (
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize key) (
 	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {
@@ -642,7 +649,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int, g
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span}
+	isGraphQL, _ := ctx.Value(GraphQL).(bool)
+
+	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -652,13 +661,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int, g
 			return
 		}
 	}
-
-	if !graphql {
-		if rerr = validateDgraphForGraphql(qc); rerr != nil {
-			return
-		}
-	}
-
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
@@ -831,7 +833,7 @@ func parseRequest(qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu)
+			gmu, err := parseMutationObject(mu, qc)
 			if err != nil {
 				return err
 			}
@@ -970,9 +972,22 @@ func isAlterAllowed(ctx context.Context) error {
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
+func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
+	// validate For graphql validate nquads for graphql
+	validateForGraphql := func(nqs []*api.NQuad) error {
+		if qc.graphql {
+			return nil
+		}
+
+		for _, nq := range nqs {
+			if x.IsGraphqlReservedPredicate(nq.Predicate) {
+				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+			}
+		}
+		return nil
+	}
 	if len(mu.SetJson) > 0 {
 		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
@@ -985,6 +1000,11 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		err = validateForGraphql(nqs)
+		if err != nil {
+			return nil, err
+		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
@@ -992,10 +1012,20 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		err = validateForGraphql(nqs)
+		if err != nil {
+			return nil, err
+		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
 		nqs, err := chunker.ParseRDFs(mu.DelNquads)
+		if err != nil {
+			return nil, err
+		}
+
+		err = validateForGraphql(nqs)
 		if err != nil {
 			return nil, err
 		}
