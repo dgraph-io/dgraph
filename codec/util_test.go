@@ -24,7 +24,7 @@ import (
 )
 
 const testSize = 100
-const benchmarkSize = 1e7
+const benchmarkSize = 1e6
 
 func newUidPack(data []uint64) *pb.UidPack {
 	encoder := Encoder{BlockSize: 10}
@@ -61,37 +61,43 @@ func TestCopyUidPack(t *testing.T) {
 }
 
 func BenchmarkIterationNormal(b *testing.B) {
-	b.StopTimer()
 	encoder := Encoder{BlockSize: 100}
 	for i := 0; i < benchmarkSize; i++ {
 		encoder.Add(uint64(i))
 	}
 	packedUids := encoder.Done()
+	unpackedUids := make([]uint64, benchmarkSize)
 
-	decoder := Decoder{Pack: packedUids}
-	decoder.Seek(0, SeekStart)
-	unpackedUids := make([]uint64, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		unpackedUids = unpackedUids[:0]
 
-	b.StartTimer()
-	for ; decoder.Valid(); decoder.Next() {
-		for _, uid := range decoder.Uids() {
-			unpackedUids = append(unpackedUids, uid)
+		decoder := Decoder{Pack: packedUids}
+		decoder.Seek(0, SeekStart)
+		for ; decoder.Valid(); decoder.Next() {
+			uids := decoder.Uids()
+			for _, uid := range uids {
+				unpackedUids = append(unpackedUids, uid)
+			}
 		}
 	}
 }
 
 func BenchmarkIterationWithUtil(b *testing.B) {
-	b.StopTimer()
 	encoder := Encoder{BlockSize: 100}
 	for i := 0; i < benchmarkSize; i++ {
 		encoder.Add(uint64(i))
 	}
 	packedUids := encoder.Done()
+	unpackedUids := make([]uint64, benchmarkSize)
 
-	b.StartTimer()
-	it := NewUidPackIterator(packedUids)
-	unpackedUids := make([]uint64, 0)
-	for ; it.Valid(); it.Next() {
-		unpackedUids = append(unpackedUids, it.Get())
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		unpackedUids = unpackedUids[:0]
+
+		it := NewUidPackIterator(packedUids)
+		for ; it.Valid(); it.Next() {
+			unpackedUids = append(unpackedUids, it.Get())
+		}
 	}
 }

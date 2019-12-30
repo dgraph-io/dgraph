@@ -80,7 +80,7 @@ func CopyUidPack(pack *pb.UidPack) *pb.UidPack {
 
 	for i, block := range pack.Blocks {
 		packCopy.Blocks[i] = new(pb.UidBlock)
-		packCopy.Blocks[i].Base =  block.Base
+		packCopy.Blocks[i].Base = block.Base
 		packCopy.Blocks[i].NumUids = block.NumUids
 		packCopy.Blocks[i].Deltas = make([]byte, len(block.Deltas))
 		copy(packCopy.Blocks[i].Deltas, block.Deltas)
