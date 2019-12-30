@@ -544,7 +544,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("worker.Config: %s", worker.Config)
+	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
 
