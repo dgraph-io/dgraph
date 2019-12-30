@@ -16,7 +16,8 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 git submodule update --init
 ```
 
-You can pull the latest changes from `master` branch of [hugo-docs repository](https://github.com/dgraph-io/hugo-docs) by running the commands below:
+You can pull the latest changes from `master` branch of
+[hugo-docs repository](https://github.com/dgraph-io/hugo-docs) by running the commands below:
 
 ```bash
 cd wiki/themes/hugo-docs
@@ -28,7 +29,8 @@ git pull
 documentation site.
 
 (Optional) To run queries *within* the documentation using a different Dgraph instance, set the `DGRAPH_ENDPOINT` environment variable before starting the local web server:
-```
+
+```bash
 DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true" ./local.sh
 ```
 
