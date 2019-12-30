@@ -230,7 +230,10 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		})
 	}
 	for _, f := range field.SelectionSet() {
-		if f.Skip() || !f.Include() || f.Name() == schema.TypenameDirective {
+		// We skip typename because we can generate the information from schema or
+		// dgraph.type depending upon if the type is interface or not. For interface type
+		// we always query dgraph.type and can pick up the value from there.
+		if f.Skip() || !f.Include() || f.Name() == schema.Typename {
 			continue
 		}
 

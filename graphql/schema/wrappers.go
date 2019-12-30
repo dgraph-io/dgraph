@@ -93,7 +93,7 @@ type Field interface {
 	InterfaceType() bool
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
-	GetField() *ast.Field
+	GetObjectName() string
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -525,8 +525,8 @@ func (f *field) InterfaceType() bool {
 	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
 }
 
-func (f *field) GetField() *ast.Field {
-	return f.field
+func (f *field) GetObjectName() string {
+	return f.field.ObjectDefinition.Name
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -600,7 +600,7 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 				// If the field doesn't exist in the map corresponding to the object type, then we
 				// don't need to include it.
 				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
-				return ok || f.Name() == TypenameDirective
+				return ok || f.Name() == Typename
 			}
 		}
 
@@ -656,8 +656,8 @@ func (q *query) ResponseName() string {
 	return (*field)(q).ResponseName()
 }
 
-func (q *query) GetField() *ast.Field {
-	return q.field
+func (q *query) GetObjectName() string {
+	return q.field.ObjectDefinition.Name
 }
 
 func (q *query) QueryType() QueryType {
@@ -765,8 +765,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) GetField() *ast.Field {
-	return m.field
+func (m *mutation) GetObjectName() string {
+	return m.field.ObjectDefinition.Name
 }
 
 func (m *mutation) MutationType() MutationType {

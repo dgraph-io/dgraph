@@ -1130,10 +1130,10 @@ func typenameForInterface(t *testing.T) {
 				}) {
 					name
 					__typename
-			                ... on Human {
+					... on Human {
 						totalCredits
 			                }
-			                ... on Droid {
+					... on Droid {
 						primaryFunction
 			                }
 				}

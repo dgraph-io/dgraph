@@ -740,9 +740,22 @@ func completeObject(
 		buf.WriteString(`": `)
 
 		val := res[f.ResponseName()]
-		if ok && f.Name() == schema.TypenameDirective {
-			val = res["dgraph.type"]
+		if f.Name() == schema.TypenameDirective {
+			// From GraphQL spec:
+			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
+			// "GraphQL supports type name introspection at any point within a query by the
+			// meta‐field  __typename: String! when querying against any Object, Interface,
+			// or Union. It returns the name of the object type currently being queried."
+
+			// If we have dgraph.type information, we will use that to figure out the type
+			// otherwise we will get it from the schema.
+			if ok {
+				val = f.TypeName(dgraphTypes)
+			} else {
+				val = f.GetObjectName()
+			}
 		}
+
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
@@ -770,19 +783,6 @@ func completeValue(
 	case map[string]interface{}:
 		return completeObject(path, field.Type(), field.SelectionSet(), val)
 	case []interface{}:
-		if field.Name() == schema.TypenameDirective {
-			// From GraphQL spec:
-			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
-			// "GraphQL supports type name introspection at any point within a query by the
-			// meta‐field  __typename: String! when querying against any Object, Interface,
-			// or Union. It returns the name of the object type currently being queried."
-
-			var typeName interface{}
-			if len(val) > 0 {
-				typeName = field.TypeName(val)
-			}
-			return completeValue(path, field, typeName)
-		}
 		return completeList(path, field, val)
 	default:
 		if val == nil {
@@ -799,10 +799,6 @@ func completeValue(
 				// Seems best if we pick [], rather than null, as the list value if
 				// there's nothing in the Dgraph result.
 				return []byte("[]"), nil
-			}
-
-			if field.Name() == schema.TypenameDirective {
-				return completeValue(path, field, field.GetField().ObjectDefinition.Name)
 			}
 
 			if field.Type().Nullable() {
