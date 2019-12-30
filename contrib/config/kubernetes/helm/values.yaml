@@ -45,9 +45,14 @@ zero:
   ##
   podManagementPolicy: OrderedReady
 
-  ## Number of dgraph  zero pods
+  ## Number of dgraph zero pods
   ##
   replicaCount: 3
+
+  ## Max number of replicas per data shard.
+  ## i.e., the max number of Dgraph Alpha instances per group (shard).
+  ##
+  shardReplicaCount: 5
 
   ## zero server pod termination grace period
   ##
