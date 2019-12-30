@@ -10,17 +10,26 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 
 1. Download and install hugo from [here](https://github.com/spf13/hugo/releases).
 
-2. From within the `wiki` folder, run the command below to get the theme.
+2. Run the command below to get the theme.
 
+```bash
+git submodule update --init
 ```
-git submodule add https://github.com/dgraph-io/hugo-docs.git themes/hugo-docs
+
+You can pull the latest changes from `master` branch of [hugo-docs repository](https://github.com/dgraph-io/hugo-docs) by running the commands below:
+
+```bash
+cd wiki/themes/hugo-docs
+git checkout master
+git pull
 ```
 
 3. Run `./scripts/local.sh` within the `wiki` folder and visit `http://localhost:1313` to see the
 documentation site.
 
 (Optional) To run queries *within* the documentation using a different Dgraph instance, set the `DGRAPH_ENDPOINT` environment variable before starting the local web server:
-```
+
+```bash
 DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true" ./local.sh
 ```
 

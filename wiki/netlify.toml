@@ -1,11 +1,5 @@
 [build]
 publish = "public"
-command = "./wiki/scripts/build.sh"
-
-[context.production.environment]
-HUGO_VERSION = "0.58.3"
-HUGO_ENV = "production"
-HUGO_ENABLEGITINFO = "true"
 
 [context.deploy-preview]
 command = "./wiki/scripts/local-build.sh"
