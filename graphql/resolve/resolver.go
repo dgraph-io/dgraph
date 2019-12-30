@@ -740,7 +740,7 @@ func completeObject(
 		buf.WriteString(`": `)
 
 		val := res[f.ResponseName()]
-		if f.Name() == schema.TypenameDirective {
+		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
 			// "GraphQL supports type name introspection at any point within a query by the
