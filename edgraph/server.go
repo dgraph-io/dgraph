@@ -956,19 +956,6 @@ func isAlterAllowed(ctx context.Context) error {
 func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
-	// validate For graphql validate nquads for graphql
-	validateForGraphql := func(nqs []*api.NQuad) error {
-		if qc.graphql {
-			return nil
-		}
-
-		for _, nq := range nqs {
-			if x.IsGraphqlReservedPredicate(nq.Predicate) {
-				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
-			}
-		}
-		return nil
-	}
 	if len(mu.SetJson) > 0 {
 		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
@@ -981,11 +968,6 @@ func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, err
 		if err != nil {
 			return nil, err
 		}
-
-		err = validateForGraphql(nqs)
-		if err != nil {
-			return nil, err
-		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
@@ -993,20 +975,10 @@ func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, err
 		if err != nil {
 			return nil, err
 		}
-
-		err = validateForGraphql(nqs)
-		if err != nil {
-			return nil, err
-		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
 		nqs, err := chunker.ParseRDFs(mu.DelNquads)
-		if err != nil {
-			return nil, err
-		}
-
-		err = validateForGraphql(nqs)
 		if err != nil {
 			return nil, err
 		}
@@ -1022,7 +994,7 @@ func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, err
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del); err != nil {
+	if err := validateNQuads(res.Set, res.Del, qc); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -1049,7 +1021,17 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad) error {
+// validate For graphql validate nquads for graphql
+func validateForGraphql(nq *api.NQuad, qc *queryContext) error {
+	// Check whether the incoming predicate is grqphql reserved predicate or not.
+	if !qc.graphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
+		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+	}
+	return nil
+}
+
+func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
+
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -1064,6 +1046,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
+		if err := validateForGraphql(nq, qc); err != nil {
+			return err
+		}
 	}
 	for _, nq := range del {
 		if err := validatePredName(nq.Predicate); err != nil {
@@ -1075,6 +1060,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+		if err := validateForGraphql(nq, qc); err != nil {
+			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
 		// with bad predicate forms. ex: foo@bar ~something
