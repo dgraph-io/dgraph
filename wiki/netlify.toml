@@ -1,0 +1,8 @@
+[build]
+publish = "public"
+
+[context.deploy-preview]
+command = "./wiki/scripts/local-build.sh"
+
+[context.deploy-preview.environment]
+HUGO_VERSION = "0.58.3"
