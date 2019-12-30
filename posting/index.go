@@ -507,9 +507,11 @@ type rebuilder struct {
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
+	// We write the index in a temporary badger first and then,
+	// merge entries before writing them to p directry.
 	indexDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
 	defer os.RemoveAll(indexDir)
 	glog.V(1).Infof("Rebuilding indexes using the tmp folder %s\n", indexDir)
@@ -517,10 +519,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	dbOpts := badger.DefaultOptions(indexDir).
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
-		WithCompression(options.None)
+		WithCompression(options.None).
+		WithEventLogging(false).
+		WithLogRotatesToFlush(10)
 	indexDB, err := badger.Open(dbOpts)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}
 	defer indexDB.Close()
 
@@ -550,11 +554,15 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 
 		item := itr.Item()
+		// key copy is necessary, it gets overridden with the next entry otherwise.
 		keyCopy := item.KeyCopy(nil)
 		l, err := ReadPostingList(keyCopy, itr)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error in reading posting list from disk")
 		}
+		// No need to write a loop after ReadPostingList to skip unread entries
+		// for a given key because we only wrote BitDeltaPosting to temp badger.
+
 		if err := r.fn(pk.Uid, l, txn); err != nil {
 			return nil, err
 		}
@@ -564,7 +572,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		// Write deltas into tmp index badger
 		indexTxn := indexDB.NewTransaction(true)
+		defer indexTxn.Discard()
 		txn.cache.Lock()
+		defer txn.cache.Unlock()
 		for key, data := range txn.cache.deltas {
 			entry := &badger.Entry{
 				Key:      []byte(key),
@@ -572,7 +582,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 				UserMeta: BitDeltaPosting,
 			}
 			if err := indexTxn.SetEntry(entry); err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "error in setting entries in temp badger")
 			}
 		}
 		// Reset deltas
@@ -580,9 +590,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			delete(txn.cache.deltas, k)
 		}
 		if err := indexTxn.Commit(); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "error in commiting txn in temp badger")
 		}
-		txn.cache.Unlock()
 
 		return nil, nil
 	}
@@ -599,7 +608,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
 
-	// flatten the LSM tree to optimize reads
+	// Flatten the LSM tree to optimize reads, 5 is chosen randomly.
+	// Flatten should not take too long relative to building the index.
 	if err := indexDB.Flatten(5); err != nil {
 		return err
 	}
@@ -638,7 +648,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation. Typically, we use
 			// kv.Version as the timestamp.
-			err := writer.SetAt([]byte(kv.Key), kv.Value, BitCompletePosting, r.startTs)
+			err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs)
 			if err != nil {
 				return err
 			}
