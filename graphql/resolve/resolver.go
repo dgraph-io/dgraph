@@ -740,7 +740,7 @@ func completeObject(
 		buf.WriteString(`": `)
 
 		val := res[f.ResponseName()]
-		if ok && f.Name() == typeNameDirective {
+		if ok && f.Name() == schema.TypenameDirective {
 			val = res["dgraph.type"]
 		}
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
@@ -770,7 +770,7 @@ func completeValue(
 	case map[string]interface{}:
 		return completeObject(path, field.Type(), field.SelectionSet(), val)
 	case []interface{}:
-		if field.Name() == typeNameDirective {
+		if field.Name() == schema.TypenameDirective {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
 			// "GraphQL supports type name introspection at any point within a query by the
@@ -801,7 +801,7 @@ func completeValue(
 				return []byte("[]"), nil
 			}
 
-			if field.Name() == typeNameDirective {
+			if field.Name() == schema.TypenameDirective {
 				return completeValue(path, field, field.GetField().ObjectDefinition.Name)
 			}
 

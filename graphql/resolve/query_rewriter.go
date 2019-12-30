@@ -27,10 +27,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	typeNameDirective = "__typename"
-)
-
 type queryRewriter struct{}
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -234,7 +230,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		})
 	}
 	for _, f := range field.SelectionSet() {
-		if f.Skip() || !f.Include() || f.Name() == typeNameDirective {
+		if f.Skip() || !f.Include() || f.Name() == schema.TypenameDirective {
 			continue
 		}
 
