@@ -105,7 +105,7 @@ input StringHashFilter {
 #######################
 
 type AddTPayload {
-	t: T
+	t: [T]
 }
 
 type DeleteTPayload {
@@ -190,7 +190,7 @@ type Query {
 #######################
 
 type Mutation {
-	addT(input: TInput!): AddTPayload
+	addT(input: [TInput]!): AddTPayload
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 }
