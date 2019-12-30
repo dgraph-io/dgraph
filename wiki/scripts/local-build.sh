@@ -36,6 +36,7 @@ run() {
   else
     echo -e "$(date) $GREEN  hugo-docs repository found. Pulling latest version.$RESET"
     pushd hugo-docs > /dev/null
+    git checkout master
     git pull
     popd > /dev/null
   fi
