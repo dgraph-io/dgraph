@@ -45,7 +45,8 @@ run() {
 
 
   CURRENT_VERSION=${CURRENT_VERSION} hugo \
-    --destination=public 1> /dev/null
+    --destination=public \
+    --baseURL="$DEPLOY_PRIME_URL" 1> /dev/null
   popd > /dev/null
   echo -e "$(date) $GREEN  Done with creating the local build in public folder.$RESET"
 }
