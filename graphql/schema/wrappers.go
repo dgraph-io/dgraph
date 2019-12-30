@@ -93,6 +93,7 @@ type Field interface {
 	InterfaceType() bool
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
+	GetField() *ast.Field
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -524,6 +525,10 @@ func (f *field) InterfaceType() bool {
 	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
 }
 
+func (f *field) GetField() *ast.Field {
+	return f.field
+}
+
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
@@ -651,6 +656,10 @@ func (q *query) ResponseName() string {
 	return (*field)(q).ResponseName()
 }
 
+func (q *query) GetField() *ast.Field {
+	return q.field
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name())
 }
@@ -754,6 +763,10 @@ func (m *mutation) ResponseName() string {
 func (m *mutation) MutatedType() Type {
 	// ATM there's a single field in the mutation payload.
 	return m.op.inSchema.mutatedType[m.Name()]
+}
+
+func (m *mutation) GetField() *ast.Field {
+	return m.field
 }
 
 func (m *mutation) MutationType() MutationType {

@@ -714,7 +714,7 @@ func completeObject(
 
 	buf.WriteRune('{')
 
-	dgraphTypes, _ := res["dgraph.type"].([]interface{})
+	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
@@ -739,7 +739,11 @@ func completeObject(
 		buf.WriteString(f.ResponseName())
 		buf.WriteString(`": `)
 
-		completed, err := completeValue(append(path, f.ResponseName()), f, res[f.ResponseName()])
+		val := res[f.ResponseName()]
+		if ok && f.Name() == typeNameDirective {
+			val = res["dgraph.type"]
+		}
+		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
 			if !f.Type().Nullable() {
@@ -795,6 +799,10 @@ func completeValue(
 				// Seems best if we pick [], rather than null, as the list value if
 				// there's nothing in the Dgraph result.
 				return []byte("[]"), nil
+			}
+
+			if field.Name() == typeNameDirective {
+				return completeValue(path, field, field.GetField().ObjectDefinition.Name)
 			}
 
 			if field.Type().Nullable() {

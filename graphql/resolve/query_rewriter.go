@@ -234,7 +234,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		})
 	}
 	for _, f := range field.SelectionSet() {
-		if f.Skip() || !f.Include() {
+		if f.Skip() || !f.Include() || f.Name() == typeNameDirective {
 			continue
 		}
 
@@ -248,8 +248,6 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
-		} else if f.Name() == typeNameDirective {
-			child.Attr = "dgraph.type"
 		} else {
 			child.Attr = f.DgraphPredicate()
 		}
