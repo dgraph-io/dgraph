@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	"github.com/vektah/gqlparser/ast"
 )
 
 const (
@@ -169,28 +170,36 @@ func (mrw *addRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
+	valType := m.ArgType(schema.InputArgName)
 
-	val, ok := m.ArgValue(schema.InputArgName).([]interface{})
-	if !ok {
-		val := m.ArgValue(schema.InputArgName).(map[string]interface{})
-		counter := counter(0)
-		mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
-		mutations, err := mutationsFromFragments(
-			mrw.frags,
-			func(frag *mutationFragment) ([]byte, error) {
-				return json.Marshal(frag.fragment)
-			},
-			func(frag *mutationFragment) ([]byte, error) {
-				if len(frag.deletes) > 0 {
-					return json.Marshal(frag.deletes)
-				}
-				return nil, nil
-			})
-
-		return queryFromFragments(mrw.frags),
-			mutations,
-			schema.GQLWrapf(err, "failed to rewrite mutation payload")
+	if valType == ast.ListValue {
+		return mrw.handleMultipleMutations(m)
 	}
+
+	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	counter := counter(0)
+	mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
+	mutations, err := mutationsFromFragments(
+		mrw.frags,
+		func(frag *mutationFragment) ([]byte, error) {
+			return json.Marshal(frag.fragment)
+		},
+		func(frag *mutationFragment) ([]byte, error) {
+			if len(frag.deletes) > 0 {
+				return json.Marshal(frag.deletes)
+			}
+			return nil, nil
+		})
+
+	return queryFromFragments(mrw.frags),
+		mutations,
+		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+}
+
+func (mrw *addRewriter) handleMultipleMutations(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	mutatedType := m.MutatedType()
+	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	counter := counter(0)
 	errs := make([]string, 0)
@@ -231,11 +240,11 @@ func (mrw *addRewriter) Rewrite(
 		queries = nil
 	}
 
-	if len(errs) > 0 {
-		return queries, mutationsAll, fmt.Errorf(strings.Join(errs, "\n"))
-	} else {
+	if len(errs) == 0 {
 		return queries, mutationsAll, nil
 	}
+
+	return queries, mutationsAll, fmt.Errorf(strings.Join(errs, "\n"))
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -267,9 +276,6 @@ func (mrw *addRewriter) FromMutationResult(
 		uids = append(uids, uid)
 	}
 
-	if len(uids) == 1 {
-		return rewriteAsGet(mutation.QueryField(), uids[0], nil), nil
-	}
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
 }
 
