@@ -714,7 +714,7 @@ func completeObject(
 
 	buf.WriteRune('{')
 
-	dgraphTypes, _ := res["dgraph.type"].([]interface{})
+	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
@@ -739,7 +739,24 @@ func completeObject(
 		buf.WriteString(f.ResponseName())
 		buf.WriteString(`": `)
 
-		completed, err := completeValue(append(path, f.ResponseName()), f, res[f.ResponseName()])
+		val := res[f.ResponseName()]
+		if f.Name() == schema.Typename {
+			// From GraphQL spec:
+			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
+			// "GraphQL supports type name introspection at any point within a query by the
+			// meta‐field  __typename: String! when querying against any Object, Interface,
+			// or Union. It returns the name of the object type currently being queried."
+
+			// If we have dgraph.type information, we will use that to figure out the type
+			// otherwise we will get it from the schema.
+			if ok {
+				val = f.TypeName(dgraphTypes)
+			} else {
+				val = f.GetObjectName()
+			}
+		}
+
+		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
 			if !f.Type().Nullable() {

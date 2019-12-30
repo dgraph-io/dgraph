@@ -164,7 +164,7 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		// TODO - Add tests for __typename.
-		case "__typename":
+		case Typename:
 			ec.b.WriteString(`"Query"`)
 		case "__type":
 			ec.queryType(field)
@@ -187,7 +187,7 @@ func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspec
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.b.WriteString(`"__Directive"`)
 		case "name":
 			ec.writeStringValue(obj.Name)
@@ -213,7 +213,7 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspec
 		}
 		ec.writeKey(field.Name)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.writeStringValue("__EnumValue")
 		case "name":
 			ec.writeStringValue(obj.Name)
@@ -239,7 +239,7 @@ func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.writeStringValue("__Field")
 		case "name":
 			ec.writeStringValue(obj.Name)
@@ -269,7 +269,7 @@ func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspe
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.writeStringValue("__InputValue")
 		case "name":
 			ec.writeStringValue(obj.Name)
@@ -295,7 +295,7 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		}
 		ec.writeKey(field.Name)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.writeStringValue("__Schema")
 		case "types":
 			ec.marshalIntrospectionTypeSlice(field.Selections, obj.Types())
@@ -323,7 +323,7 @@ func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		case "__typename":
+		case Typename:
 			ec.b.WriteString(`"__Type`)
 		case "kind":
 			ec.writeStringValue(obj.Kind())
