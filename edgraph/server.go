@@ -691,25 +691,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize key) (
 	return resp, nil
 }
 
-// validateDgraphForGraphql will check whether graphql reserved predicate are mutated via user facing api.
-func validateDgraphForGraphql(qCtx *queryContext) error {
-	for _, mutation := range qCtx.gmuList {
-		// Check for sets.
-		for _, nquad := range mutation.Set {
-			if x.IsGraphqlReservedPredicate(nquad.Predicate) {
-				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nquad.Predicate)
-			}
-		}
-		// Check for Dels
-		for _, nquad := range mutation.Del {
-			if x.IsGraphqlReservedPredicate(nquad.Predicate) {
-				return errors.Errorf("Cannot mutate graphql reserved predicate %s", nquad.Predicate)
-			}
-		}
-	}
-	return nil
-}
-
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
 	if len(qc.req.Query) == 0 {
