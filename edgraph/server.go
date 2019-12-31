@@ -1021,10 +1021,10 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-// validate For graphql validate nquads for graphql
-func validateForGraphql(nq *api.NQuad, qc *queryContext) error {
-	// Check whether the incoming predicate is grqphql reserved predicate or not.
-	if !qc.graphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
+// validateForGraphql validate nquads for graphql
+func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
+	// Check whether the incoming predicate is graphql reserved predicate or not.
+	if !isGraphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
 		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
 	}
 	return nil
@@ -1046,7 +1046,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
-		if err := validateForGraphql(nq, qc); err != nil {
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
 			return err
 		}
 	}
@@ -1061,7 +1061,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateForGraphql(nq, qc); err != nil {
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
 			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
