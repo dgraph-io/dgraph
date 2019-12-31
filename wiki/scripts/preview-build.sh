@@ -35,8 +35,8 @@ run() {
     git submodule add https://github.com/dgraph-io/hugo-docs.git hugo-docs
   else
     echo -e "$(date) $GREEN  hugo-docs repository found. Pulling latest version.$RESET"
-    pushd hugo-docs > /dev/null
     git submodule update --init
+    pushd hugo-docs > /dev/null
     git checkout master
     git pull
     popd > /dev/null
