@@ -28,10 +28,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -1849,6 +1852,19 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 		}
 		preds = uniquePreds(preds)
+		if len(worker.Config.HmacSecret) != 0 {
+			userData, err := extractUserAndGroups(ctx)
+			if err != nil {
+				return nil, status.Error(codes.Unauthenticated, err.Error())
+			}
+
+			userId := userData[0]
+			groupIds := userData[1:]
+
+			if !x.IsGuardian(groupIds) {
+				preds, _ := authorizePred(userId, groupIds, preds, acl.Read)
+			}
+		}
 
 		// There's a types filter at this level so filter out any non-uid predicates
 		// since only uid nodes can have a type.
