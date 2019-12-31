@@ -66,7 +66,7 @@ func TestCopyUidPack(t *testing.T) {
 }
 
 func BenchmarkIterationNormal(b *testing.B) {
-	encoder := Encoder{BlockSize: 100}
+	encoder := Encoder{BlockSize: 256}
 	for i := 0; i < benchmarkSize; i++ {
 		encoder.Add(uint64(i))
 	}
@@ -90,7 +90,7 @@ func BenchmarkIterationNormal(b *testing.B) {
 }
 
 func BenchmarkIterationWithUtil(b *testing.B) {
-	encoder := Encoder{BlockSize: 100}
+	encoder := Encoder{BlockSize: 256}
 	for i := 0; i < benchmarkSize; i++ {
 		encoder.Add(uint64(i))
 	}

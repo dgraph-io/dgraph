@@ -23,10 +23,9 @@ import (
 // UidPackIterator is a Wrapper around Decoder to allow simplified iteration over
 // a UidPack.
 type UidPackIterator struct {
-	pack      *pb.UidPack
-	blockSize int
-	decoder   *Decoder
-	uidIdx    int
+	pack    *pb.UidPack
+	decoder *Decoder
+	uidIdx  int
 }
 
 // NewUidPackIterator returns a new iterator from the beginning of the UidPack.
@@ -34,7 +33,6 @@ func NewUidPackIterator(pack *pb.UidPack) *UidPackIterator {
 	it := &UidPackIterator{
 		pack:    pack,
 		decoder: &Decoder{Pack: pack},
-		blockSize: int(pack.GetBlockSize()),
 	}
 	it.decoder.Seek(0, SeekStart)
 	return it
@@ -52,7 +50,7 @@ func (it *UidPackIterator) Next() {
 
 // ValidBlock returns false if the uid counter is past the end of the current block.
 func (it *UidPackIterator) ValidBlock() bool {
-	return it.uidIdx < it.blockSize
+	return it.uidIdx < len(it.decoder.uids)
 }
 
 // NextBlock decodes the next block and resets the uid counter.
