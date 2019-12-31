@@ -69,16 +69,17 @@ type options struct {
 }
 
 type predicate struct {
-	Predicate string   `json:"predicate,omitempty"`
-	Type      string   `json:"type,omitempty"`
-	Tokenizer []string `json:"tokenizer,omitempty"`
-	Count     bool     `json:"count,omitempty"`
-	List      bool     `json:"list,omitempty"`
-	Lang      bool     `json:"lang,omitempty"`
-	Index     bool     `json:"index,omitempty"`
-	Upsert    bool     `json:"upsert,omitempty"`
-	Reverse   bool     `json:"reverse,omitempty"`
-	ValueType types.TypeID
+	Predicate  string   `json:"predicate,omitempty"`
+	Type       string   `json:"type,omitempty"`
+	Tokenizer  []string `json:"tokenizer,omitempty"`
+	Count      bool     `json:"count,omitempty"`
+	List       bool     `json:"list,omitempty"`
+	Lang       bool     `json:"lang,omitempty"`
+	Index      bool     `json:"index,omitempty"`
+	Upsert     bool     `json:"upsert,omitempty"`
+	Reverse    bool     `json:"reverse,omitempty"`
+	NoConflict bool     `json:"no_conflict,omitempty"`
+	ValueType  types.TypeID
 }
 
 type schema struct {
