@@ -511,7 +511,7 @@ func run() {
 		os.Exit(1)
 	}
 
-	worker.SetConfiguration(opts)
+	worker.SetConfiguration(&opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
@@ -544,7 +544,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("worker.Config: %s", worker.Config)
+	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
 
