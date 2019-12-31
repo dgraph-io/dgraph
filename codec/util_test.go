@@ -24,7 +24,7 @@ import (
 )
 
 const testSize = 100
-const benchmarkSize = 1e6
+const benchmarkSize = 1e7
 
 func newUidPack(data []uint64) *pb.UidPack {
 	encoder := Encoder{BlockSize: 10}
@@ -47,8 +47,13 @@ func TestUidPackIterator(t *testing.T) {
 
 	it := NewUidPackIterator(packedUids)
 	unpackedUids := make([]uint64, 0)
-	for ; it.Valid(); it.Next() {
+	for it.Valid() {
 		unpackedUids = append(unpackedUids, it.Get())
+
+		it.Next()
+		if !it.ValidBlock() {
+			it.NextBlock()
+		}
 	}
 	require.Equal(t, testSize, len(unpackedUids))
 	require.Equal(t, uids, unpackedUids)
@@ -70,14 +75,15 @@ func BenchmarkIterationNormal(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		unpackedUids = unpackedUids[:0]
-
 		decoder := Decoder{Pack: packedUids}
 		decoder.Seek(0, SeekStart)
+		counter := 0
+
 		for ; decoder.Valid(); decoder.Next() {
 			uids := decoder.Uids()
 			for _, uid := range uids {
-				unpackedUids = append(unpackedUids, uid)
+				unpackedUids[counter] = uid
+				counter++
 			}
 		}
 	}
@@ -93,11 +99,17 @@ func BenchmarkIterationWithUtil(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		unpackedUids = unpackedUids[:0]
-
 		it := NewUidPackIterator(packedUids)
-		for ; it.Valid(); it.Next() {
-			unpackedUids = append(unpackedUids, it.Get())
+		counter := 0
+
+		for it.Valid() {
+			unpackedUids[counter] = it.Get()
+			counter++
+
+			it.Next()
+			if !it.ValidBlock() {
+				it.NextBlock()
+			}
 		}
 	}
 }
