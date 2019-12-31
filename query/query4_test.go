@@ -18,9 +18,17 @@ package query
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 func TestBigMathValue(t *testing.T) {
@@ -267,6 +275,167 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("child_pred")
 	setSchema(testSchema)
+}
+
+func TestSchemaUpdateNoConflict(t *testing.T) {
+	// Verify schema is as expected for the predicate with noconflict directive.
+	q1 := `schema(pred: [noconflict_pred]) { }`
+	js := processQueryNoErr(t, q1)
+	require.JSONEq(t, `{
+		"data": {
+			"schema": [{
+				"predicate": "noconflict_pred",
+				"type": "string",
+				"no_conflict": true
+			}]
+		}
+	}`, js)
+
+	// Verify schema is as expected for the predicate without noconflict directive.
+	q1 = `schema(pred: [name]) { }`
+	js = processQueryNoErr(t, q1)
+	require.JSONEq(t, `{
+		"data": {
+			"schema": [{
+				"predicate": "name",
+				"type": "string",
+				"index": true,
+				"tokenizer": ["term", "exact", "trigram"],
+				"count": true,
+				"lang": true
+			}]
+		}
+	}`, js)
+}
+
+func TestNoConflictQuery(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	defer dg.Alter(context.Background(), &api.Operation{DropAll: true})
+
+	schema := `
+		type node {
+		name_noconflict: string
+		child: uid
+		}
+
+		name_noconflict: string @noconflict .
+		child: uid .
+	`
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
+	require.NoError(t, err)
+
+	type node struct {
+		ID    string `json:"uid"`
+		Name  string `json:"name_noconflict"`
+		Child *node  `json:"child"`
+	}
+
+	child := node{ID: "_:blank-0", Name: "child"}
+	js, err := json.Marshal(child)
+	require.NoError(t, err)
+
+	res, err := dg.NewTxn().Mutate(context.Background(),
+		&api.Mutation{SetJson: js, CommitNow: true})
+	require.NoError(t, err)
+
+	in := []node{}
+	for i := 0; i < 5; i++ {
+		in = append(in, node{ID: "_:blank-0", Name: fmt.Sprintf("%d", i+1),
+			Child: &node{ID: res.GetUids()["blank-0"]}})
+	}
+
+	errChan := make(chan error)
+	for i := range in {
+		go func(n node) {
+			js, err := json.Marshal(n)
+			require.NoError(t, err)
+
+			_, err = dg.NewTxn().Mutate(context.Background(),
+				&api.Mutation{SetJson: js, CommitNow: true})
+			errChan <- err
+		}(in[i])
+	}
+
+	errs := []error{}
+	for i := 0; i < len(in); i++ {
+		errs = append(errs, <-errChan)
+	}
+
+	for _, e := range errs {
+		assert.NoError(t, e)
+	}
+}
+
+func TestNoConflictQuery2(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	defer dg.Alter(context.Background(), &api.Operation{DropAll: true})
+
+	schema := `
+		type node {
+		name_noconflict: string
+		address_conflict: string
+		child: uid
+		}
+
+		name_noconflict: string @noconflict .
+		address_conflict: string .
+		child: uid .
+	`
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
+	require.NoError(t, err)
+
+	type node struct {
+		ID      string `json:"uid"`
+		Name    string `json:"name_noconflict"`
+		Child   *node  `json:"child"`
+		Address string `json:"address_conflict"`
+	}
+
+	child := node{ID: "_:blank-0", Name: "child", Address: "dgraph labs"}
+	js, err := json.Marshal(child)
+	require.NoError(t, err)
+
+	res, err := dg.NewTxn().Mutate(context.Background(),
+		&api.Mutation{SetJson: js, CommitNow: true})
+	require.NoError(t, err)
+
+	in := []node{}
+	for i := 0; i < 5; i++ {
+		in = append(in, node{ID: "_:blank-0", Name: fmt.Sprintf("%d", i+1),
+			Child: &node{ID: res.GetUids()["blank-0"]}})
+	}
+
+	errChan := make(chan error)
+	for i := range in {
+		go func(n node) {
+			js, err := json.Marshal(n)
+			require.NoError(t, err)
+
+			_, err = dg.NewTxn().Mutate(context.Background(),
+				&api.Mutation{SetJson: js, CommitNow: true})
+			errChan <- err
+		}(in[i])
+	}
+
+	errs := []error{}
+	for i := 0; i < len(in); i++ {
+		errs = append(errs, <-errChan)
+	}
+
+	hasError := false
+	for _, e := range errs {
+		if e != nil {
+			hasError = true
+			require.Contains(t, e.Error(), "Transaction has been aborted. Please retry")
+		}
+	}
+	x.AssertTrue(hasError)
 }
 
 func TestDropPredicate(t *testing.T) {
