@@ -31,10 +31,10 @@ run() {
   pushd themes > /dev/null
 
   if [ ! -d "hugo-docs" ]; then
-    echo -e "$(date) $GREEN  Cloning hugo-docs repository.$RESET"
+    echo -e "$(date) $GREEN  Cloning hugo-docs repository. $RESET"
     git submodule add https://github.com/dgraph-io/hugo-docs.git hugo-docs
   else
-    echo -e "$(date) $GREEN  hugo-docs repository found. Pulling latest version.$RESET"
+    echo -e "$(date) $GREEN  hugo-docs repository found. Pulling latest version. $RESET"
     git submodule update --init
     pushd hugo-docs > /dev/null
     git checkout master
@@ -48,7 +48,7 @@ run() {
     --destination=public \
     --baseURL="$DEPLOY_PRIME_URL" 1> /dev/null
   popd > /dev/null
-  echo -e "$(date) $GREEN  Done with creating the local build in public folder.$RESET"
+  echo -e "$(date) $GREEN  Done with creating the local build in public folder. $RESET"
 }
 
 run
