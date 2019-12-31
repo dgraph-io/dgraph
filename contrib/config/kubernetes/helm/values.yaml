@@ -285,3 +285,8 @@ ratel:
     timeoutSeconds: 5
     failureThreshold: 6
     successThreshold: 1
+
+# Configure trace collection to a Jaeger collector for Dgraph Zero and Dgraph Alpha.
+##
+# jaegerCollector: ""
+

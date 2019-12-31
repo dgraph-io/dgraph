@@ -94,3 +94,4 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `ratel.securityContext.runAsUser`    | User ID for the ratel container                                     | `1001`                                              |
 | `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
 | `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
+| `jaegerCollector`                    | Address to set for `--jaeger.collector` flag for Zero and Alpha     | `""`                                                |
