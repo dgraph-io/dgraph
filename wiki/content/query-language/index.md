@@ -2172,6 +2172,15 @@ This is how you specify the upsert directive for a predicate.
 email: string @index(exact) @upsert .
 ```
 
+### Noconflict directive
+
+To use no conflict directive on a predicate, specify the `@noconflict` directive in the schema. It prevents conflict detection at the predicate level. This is an expermintal feature and not a recommended directive, but exists to help avoid conflicts for predicates which don't have high correctness requirements. This can cause data loss, especially when used for predicates with count index. 
+
+This is how you specify the noconflict directive for a predicate.
+```
+email: string @index(exact) @noconflict .
+```
+
 ### RDF Types
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/index.md#language-and-rdf-types" >}}).
