@@ -405,10 +405,50 @@ func TestReindexData(t *testing.T) {
 
 	q1 := `{
     q(func: eq(name@en, "Runtime")) {
+      uid
       name@en
     }
   }`
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"q":[{"name@en":"Runtime"},{"name@en":"Runtime"}]}}`, res)
+	require.JSONEq(t, `{
+    "data": {
+      "q": [
+        {
+          "uid": "0x2730",
+          "name@en": "Runtime"
+        },
+        {
+          "uid": "0x277f",
+          "name@en": "Runtime"
+        }
+      ]
+    }
+  }`, res)
+
+	// adding another triplet
+	m2 := `{ set { <10400> <name>	"Runtime"@en	. }}`
+	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+    "data": {
+      "q": [
+        {
+          "uid": "0x2730",
+          "name@en": "Runtime"
+        },
+        {
+          "uid": "0x277f",
+          "name@en": "Runtime"
+        },
+        {
+          "uid": "0x28a0",
+          "name@en": "Runtime"
+        }
+      ]
+    }
+  }`, res)
 }
