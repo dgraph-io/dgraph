@@ -570,34 +570,41 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		txn.Update()
 
-		// Write deltas into tmp index badger
-		indexTxn := indexDB.NewTransaction(true)
-		defer indexTxn.Discard()
 		txn.cache.Lock()
 		defer txn.cache.Unlock()
+		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
 		for key, data := range txn.cache.deltas {
-			entry := &badger.Entry{
-				Key:      []byte(key),
-				Value:    data,
-				UserMeta: BitDeltaPosting,
+			kv := bpb.KV{
+				Key:   []byte(key),
+				Value: data,
 			}
-			if err := indexTxn.SetEntry(entry); err != nil {
-				return nil, errors.Wrap(err, "error in setting entries in temp badger")
-			}
+			kvs = append(kvs, &kv)
 		}
 		// Reset deltas
 		for k := range txn.cache.deltas {
 			delete(txn.cache.deltas, k)
 		}
-		if err := indexTxn.Commit(); err != nil {
-			return nil, errors.Wrap(err, "error in commiting txn in temp badger")
+
+		return &bpb.KVList{Kv: kvs}, nil
+	}
+	stream.Send = func(kvList *bpb.KVList) error {
+		for _, kv := range kvList.Kv {
+			indexTxn := indexDB.NewTransaction(true)
+			entry := &badger.Entry{
+				Key:      kv.Key,
+				Value:    kv.Value,
+				UserMeta: BitDeltaPosting,
+			}
+			if err := indexTxn.SetEntry(entry); err != nil {
+				indexTxn.Discard()
+				return errors.Wrap(err, "error in setting entries in temp badger")
+			}
+			if err := indexTxn.Commit(); err != nil {
+				indexTxn.Discard()
+				return errors.Wrap(err, "error in commiting txn in temp badger")
+			}
 		}
 
-		return nil, nil
-	}
-	stream.Send = func(*bpb.KVList) error {
-		// The work of adding the index edges to the transaction is done by r.fn
-		// so this function doesn't have any work to do.
 		return nil
 	}
 
