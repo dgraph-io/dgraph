@@ -508,7 +508,7 @@ type rebuilder struct {
 
 func (r *rebuilder) Run(ctx context.Context) error {
 	// We write the index in a temporary badger first and then,
-	// merge entries before writing them to p directry.
+	// merge entries before writing them to p directory.
 	indexDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
@@ -554,14 +554,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		}
 
 		item := itr.Item()
-		// key copy is necessary, it gets overridden with the next entry otherwise.
 		keyCopy := item.KeyCopy(nil)
 		l, err := ReadPostingList(keyCopy, itr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "error in reading posting list from disk")
+			return nil, errors.Wrapf(err, "error reading posting list from disk")
 		}
-		// No need to write a loop after ReadPostingList to skip unread entries
-		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
 		if err := r.fn(pk.Uid, l, txn); err != nil {
 			return nil, err
@@ -597,11 +594,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 			if err := indexTxn.SetEntry(entry); err != nil {
 				indexTxn.Discard()
-				return errors.Wrap(err, "error in setting entries in temp badger")
+				return errors.Wrap(err, "error setting entries in temp badger")
 			}
 			if err := indexTxn.Commit(); err != nil {
 				indexTxn.Discard()
-				return errors.Wrap(err, "error in commiting txn in temp badger")
+				return errors.Wrap(err, "error commiting txn in temp badger")
 			}
 		}
 
@@ -615,8 +612,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
 
-	// Flatten the LSM tree to optimize reads, 5 is chosen randomly.
-	// Flatten should not take too long relative to building the index.
+	// Flatten the LSM tree to optimize reads, we chose to create 5 workers.
+	// Flatten should not take too long compared to time taken in building the index.
 	if err := indexDB.Flatten(5); err != nil {
 		return err
 	}
@@ -627,8 +624,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	defer indexTxn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
-	it := indexTxn.NewIterator(iterOpts)
-	defer it.Close()
+	indexIt := indexTxn.NewIterator(iterOpts)
+	defer indexIt.Close()
 
 	start = time.Now()
 	defer func() {
@@ -636,12 +633,15 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 	writer := NewTxnWriter(pstore)
-	for it.Rewind(); it.Valid(); {
-		keyCopy := it.Item().KeyCopy(nil)
-		l, err := ReadPostingList(keyCopy, it)
+	for indexIt.Rewind(); indexIt.Valid(); {
+		// key copy is necessary, it gets overridden with the next entry otherwise.
+		keyCopy := indexIt.Item().KeyCopy(nil)
+		l, err := ReadPostingList(keyCopy, indexIt)
 		if err != nil {
 			return err
 		}
+		// No need to write a loop after ReadPostingList to skip unread entries
+		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
 		kvs, err := l.Rollup()
 		if err != nil {
