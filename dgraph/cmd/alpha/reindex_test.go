@@ -30,7 +30,8 @@ func TestReindexLangTerm(t *testing.T) {
     }`
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"q":[{"name@en":"Ab Bc"},{"name@en":"Bc Cd"}]}}`, res)
+	require.Contains(t, res, `{"name@en":"Ab Bc"}`)
+	require.Contains(t, res, `{"name@en":"Bc Cd"}`)
 }
 
 func TestReindexData(t *testing.T) {
