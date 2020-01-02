@@ -22,13 +22,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestBigMathValue(t *testing.T) {
@@ -308,13 +305,7 @@ func TestSchemaUpdateNoConflict(t *testing.T) {
 	}`, js)
 }
 
-func TestNoConflictQuery(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	defer dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
+func TestNoConflictQuery1(t *testing.T) {
 	schema := `
 		type node {
 		name_noconflict: string
@@ -324,8 +315,7 @@ func TestNoConflictQuery(t *testing.T) {
 		name_noconflict: string @noconflict .
 		child: uid .
 	`
-	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
-	require.NoError(t, err)
+	setSchema(schema)
 
 	type node struct {
 		ID    string `json:"uid"`
@@ -337,7 +327,7 @@ func TestNoConflictQuery(t *testing.T) {
 	js, err := json.Marshal(child)
 	require.NoError(t, err)
 
-	res, err := dg.NewTxn().Mutate(context.Background(),
+	res, err := client.NewTxn().Mutate(context.Background(),
 		&api.Mutation{SetJson: js, CommitNow: true})
 	require.NoError(t, err)
 
@@ -353,7 +343,7 @@ func TestNoConflictQuery(t *testing.T) {
 			js, err := json.Marshal(n)
 			require.NoError(t, err)
 
-			_, err = dg.NewTxn().Mutate(context.Background(),
+			_, err = client.NewTxn().Mutate(context.Background(),
 				&api.Mutation{SetJson: js, CommitNow: true})
 			errChan <- err
 		}(in[i])
@@ -370,12 +360,6 @@ func TestNoConflictQuery(t *testing.T) {
 }
 
 func TestNoConflictQuery2(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	defer dg.Alter(context.Background(), &api.Operation{DropAll: true})
-
 	schema := `
 		type node {
 		name_noconflict: string
@@ -387,8 +371,7 @@ func TestNoConflictQuery2(t *testing.T) {
 		address_conflict: string .
 		child: uid .
 	`
-	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
-	require.NoError(t, err)
+	setSchema(schema)
 
 	type node struct {
 		ID      string `json:"uid"`
@@ -401,7 +384,7 @@ func TestNoConflictQuery2(t *testing.T) {
 	js, err := json.Marshal(child)
 	require.NoError(t, err)
 
-	res, err := dg.NewTxn().Mutate(context.Background(),
+	res, err := client.NewTxn().Mutate(context.Background(),
 		&api.Mutation{SetJson: js, CommitNow: true})
 	require.NoError(t, err)
 
@@ -417,7 +400,7 @@ func TestNoConflictQuery2(t *testing.T) {
 			js, err := json.Marshal(n)
 			require.NoError(t, err)
 
-			_, err = dg.NewTxn().Mutate(context.Background(),
+			_, err = client.NewTxn().Mutate(context.Background(),
 				&api.Mutation{SetJson: js, CommitNow: true})
 			errChan <- err
 		}(in[i])
