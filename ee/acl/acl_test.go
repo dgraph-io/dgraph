@@ -554,3 +554,73 @@ func removeUserFromGroups(userName string) error {
 		"-l", "", "-x", "password")
 	return removeUser.Run()
 }
+
+func TestQueryRemoveUnauthorizedPred(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name: string @index(exact) .
+		age: int .
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-g", devGroup, "-x", "password")
+	require.NoError(t, createDevGroup.Run())
+
+	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
+		"-l", devGroup, "-x", "password")
+	require.NoError(t, addUserToDev.Run())
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	// give read access of <name> to alice
+	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", "name", "-m", "4", "-x", "password")
+	require.NoError(t, setPermissionCmd.Run())
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+	query := `
+	{
+		me(func: has(name)) {
+			name
+			age
+		}
+	}
+	`
+	resp, err := userClient.NewTxn().Query(ctx, query)
+	require.NoError(t, err)
+	require.Equal(t, []byte("{\"me\":[{\"name\":\"RandomGuy\"}]}"), resp.Json)
+
+	query = `
+	{
+		me(func: has(age)) {
+			name
+			age
+		}
+	}
+	`
+	resp, err = userClient.NewTxn().Query(ctx, query)
+	require.NoError(t, err)
+	// alice doesn't have read access of <age>
+	require.Equal(t, []byte("{}"), resp.Json)
+}
