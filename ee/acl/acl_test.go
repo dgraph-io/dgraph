@@ -135,9 +135,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	// initially the query, mutate and alter operations should all fail
-	// when there are no rules defined on the predicates
-	queryPredicateWithUserAccount(t, dg, true)
+	// initially the query should return empty result, mutate and alter
+	// operations should all fail when there are no rules defined on the predicates
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
@@ -145,8 +145,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
 
-	// now all these operations should fail since there are rules defined on the unusedGroup
-	queryPredicateWithUserAccount(t, dg, true)
+	// now all these operations except query should fail since
+	// there are rules defined on the unusedGroup
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	// create the dev group and add the user to it
@@ -219,7 +220,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	ctx := context.Background()
 	txn := dg.NewTxn()
 	_, err := txn.Query(ctx, query)
-
 	if shouldFail {
 		require.Error(t, err, "the query should have failed")
 	} else {
@@ -380,8 +380,9 @@ func TestPredicatePermission(t *testing.T) {
 	// Schema query is allowed to all logged in users.
 	querySchemaWithUserAccount(t, dg, false)
 
-	// The operations should be blocked when no rule is defined.
-	queryPredicateWithUserAccount(t, dg, true)
+	// The query should return emptry response, alter and mutation
+	// should be blocked when no rule is defined.
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
@@ -389,9 +390,9 @@ func TestPredicatePermission(t *testing.T) {
 	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	// The operations should all fail when there is a rule defined, but the current user
-	// is not allowed.
-	queryPredicateWithUserAccount(t, dg, true)
+	// The operations except query should fail when there is a rule defined, but the
+	// current user is not allowed.
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	// Schema queries should still succeed since they are not tied to specific predicates.

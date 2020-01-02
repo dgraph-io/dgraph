@@ -789,7 +789,9 @@ func authorizeState(ctx context.Context) error {
 	return doAuthorizeState()
 }
 
-func removePredsFromQuery(gqls []*gql.GraphQuery, unAuthPreds map[string]struct{}) []*gql.GraphQuery {
+func removePredsFromQuery(gqls []*gql.GraphQuery,
+	unAuthPreds map[string]struct{}) []*gql.GraphQuery {
+
 	filter := gqls[:0]
 	for _, gq := range gqls {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {

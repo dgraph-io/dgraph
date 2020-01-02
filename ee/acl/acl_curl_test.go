@@ -44,15 +44,15 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	// No ACL rules are specified, so everything should fail.
+	// No ACL rules are specified, so query should return empty response,
+	// alter and mutate should fail.
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-H", "Content-Type: application/graphql+-",
 			"-d", query, curlQueryEndpoint}
 	}
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail:   true,
-		DgraphErrMsg: "PermissionDenied",
+		ShouldFail: false,
 	})
 
 	mutateArgs := func(jwt string) []string {
@@ -116,11 +116,10 @@ func TestCurlAuthorization(t *testing.T) {
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
-	// verify that with an ACL rule defined, all the operations should be denied when the acsess JWT
-	// does not have the required permissions
+	// verify that with an ACL rule defined, all the operations except query should
+	// does not have the required permissions be denied when the acsess JWT
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail:   true,
-		DgraphErrMsg: "PermissionDenied",
+		ShouldFail: false,
 	})
 	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
