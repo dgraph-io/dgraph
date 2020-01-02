@@ -178,7 +178,9 @@ func (p *Pool) Get() *grpc.ClientConn {
 func (p *Pool) shutdown() {
 	glog.Warningf("Shutting down extra connection to %s", p.Addr)
 	p.closer.SignalAndWait()
-	p.conn.Close()
+	if err := p.conn.Close(); err != nil {
+		glog.Warningf("Could not close pool connection with error: %s", err)
+	}
 }
 
 // SetUnhealthy marks a pool as unhealthy.

@@ -999,7 +999,7 @@ func askZeroForEE() bool {
 
 	grp := &groupi{}
 
-	conn := func() bool {
+	createConn := func() bool {
 		grp.ctx, grp.cancel = context.WithCancel(context.Background())
 		defer grp.cancel()
 
@@ -1026,7 +1026,7 @@ func askZeroForEE() bool {
 	}
 
 	for {
-		if conn() {
+		if createConn() {
 			break
 		}
 		time.Sleep(time.Second)

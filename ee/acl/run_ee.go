@@ -27,7 +27,8 @@ var (
 	CmdAcl x.SubCommand
 )
 
-const gPassword = "gpassword"
+const gName = "guardian_name"
+const gPassword = "guardian_password"
 const defaultGroupList = "dgraph-unused-group"
 
 func init() {
@@ -38,7 +39,8 @@ func init() {
 
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
+	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")
+	flag.StringP(gPassword, "x", "", "Guardian password to authorize this operation")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
