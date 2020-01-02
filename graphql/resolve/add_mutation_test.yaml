@@ -47,6 +47,26 @@
         }
 
 -
+  name: "Add Mutation with embedded value"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: { name: "A.N. Author", posts: []}) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input should be used for the mutation, with a uid and type getting
+    injected and all data transformed to underlying Dgraph edge names"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
+
+-
   name: "Add Mutation with mixed vars and embedded value"
   gqlmutation: |
     mutation addAuthor($name: String!) {
