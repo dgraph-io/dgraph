@@ -16,7 +16,8 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 git submodule update --init
 ```
 
-You can pull the latest changes from `master` branch of [hugo-docs repository](https://github.com/dgraph-io/hugo-docs) by running the commands below:
+You can pull the latest changes from `master` branch of
+[hugo-docs repository](https://github.com/dgraph-io/hugo-docs) by running the commands below:
 
 ```bash
 cd wiki/themes/hugo-docs
