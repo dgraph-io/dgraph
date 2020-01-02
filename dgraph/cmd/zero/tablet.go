@@ -143,6 +143,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Predicate: predicate,
 		Space:     tab.Space,
 		Force:     true,
+		MoveTs:    in.TxnTs,
 	}
 	msg = fmt.Sprintf("Move at Alpha done. Now proposing: %+v", p)
 	span.Annotate(nil, msg)

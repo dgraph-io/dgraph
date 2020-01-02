@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -188,6 +188,7 @@ message Tablet {
 	int64 space      = 7;
 	bool remove      = 8;
   bool read_only   = 9; // If true, do not ask zero to serve any tablets.
+	uint64 move_ts   = 10;
 }
 
 message DirectedEdge {
@@ -307,7 +308,7 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to 
+	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
 	// Default Blocksize is 256 so uint32 would be sufficient.
