@@ -43,6 +43,14 @@ type AuthorityData struct {
 	weight uint64
 }
 
+// BabeHeader as defined in Polkadot RE Spec, definition 5.10 in section 5.1.4
+type BabeHeader struct {
+	VRFOutput          [32]byte
+	VRFProof           [32]byte
+	BlockProducerIndex uint64
+	Slot               uint64
+}
+
 //nolint:structcheck
 type BlockInherentsData struct {
 	timstap0 int64 //nolint:unused
