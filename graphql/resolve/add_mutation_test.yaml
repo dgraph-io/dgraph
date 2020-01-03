@@ -169,6 +169,72 @@
       cond: "@if(eq(len(Country2), 1))"
 
 -
+  name: "Add mutation with object instead of an array"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "country": { "id": "HI!" },
+        "posts": []
+      }
+    }
+  explanation: "Add mutation expects an array instead of an object"
+  validationerror:
+    { "message":
+            "input:2: Variable type provided AuthorInput! is incompatible with expected type [AuthorInput]!\n" }
+
+
+-
+  name: "Add mutation with invalid object"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "posts": []
+      }
+    }
+  explanation: "A reference must be a valid UID"
+  validationerror:
+    { "message":
+      "input: variable.auth.name must be defined" }
+
+-
+  name: "Add multiple mutation with invalid object"
+  gqlmutation: |
+    mutation addAuthor($auth: [AuthorInput!]!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": [
+      { "name": "A.N. Author",
+        "posts": []
+      },
+      { "posts": []
+      }]
+    }
+  explanation: "A reference must be a valid UID"
+  validationerror:
+    { "message":
+      "input: variable.auth[1].name must be defined" }
+
+-
   name: "Add mutation with invalid reference"
   gqlmutation: |
     mutation addAuthor($auth: AuthorInput!) {
@@ -604,8 +670,6 @@
               "uid": "_:Post2",
               "dgraph.type": [ "Post" ],
               "Post.title": "New post",
-I understand there are breaking changes therefore it is waiting v1.2, do I understand/remember correctly? do you know when is 1.2 planned? thanks!
-￼
               "Post.text": "A really new post",
               "Post.author": {
                 "uid": "_:Author1"

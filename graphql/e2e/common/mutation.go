@@ -413,6 +413,10 @@ func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExe
 	return result.AddAuthor.Author[0]
 }
 
+func addMultiplePosts(t *testing.T) {
+
+}
+
 func addPost(t *testing.T, authorID, countryID string,
 	executeRequest requestExecutor) *post {
 

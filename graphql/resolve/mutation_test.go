@@ -27,8 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
 	"gopkg.in/yaml.v2"
 )
 
@@ -41,13 +39,14 @@ import (
 // ensure that those errors get caught before they reach rewriting.
 
 type testCase struct {
-	Name         string
-	GQLMutation  string
-	GQLVariables string
-	Explanation  string
-	DGMutations  []*dgraphMutation
-	DGQuery      string
-	Error        *x.GqlError
+	Name            string
+	GQLMutation     string
+	GQLVariables    string
+	Explanation     string
+	DGMutations     []*dgraphMutation
+	DGQuery         string
+	Error           *x.GqlError
+	ValidationError *x.GqlError
 }
 
 type dgraphMutation struct {
@@ -92,13 +91,13 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 					Query:     tcase.GQLMutation,
 					Variables: vars,
 				})
-			require.NoError(t, err)
-
-			doc, gqlErr := parser.ParseQuery(&ast.Source{Input: tcase.GQLMutation})
-			require.Nil(t, gqlErr)
-
-			gqlerrors := gqlSchema.Validate(doc)
-			require.Nil(t, gqlerrors)
+			if tcase.ValidationError == nil {
+				require.NoError(t, err)
+			} else {
+				require.NotNil(t, err)
+				require.Equal(t, err.Error(), tcase.ValidationError.Error())
+				return
+			}
 
 			mut := test.GetMutation(t, op)
 
