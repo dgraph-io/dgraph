@@ -86,24 +86,17 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
 
-	var singlePredMatch bool
 	if groupPerms, found := predPerms[predicate]; found {
-		singlePredMatch = true
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil
 		}
 	}
 
-	if singlePredMatch {
-		// there is an ACL rule defined that can match the predicate
-		// and the operation has not been allowed
-		return errors.Errorf("unauthorized to do %s on predicate %s",
-			operation.Name, predicate)
-	}
-
 	// no rule has been defined that can match the predicate
-	// by default we follow the fail open approach and allow the operation
-	return nil
+	// by default we block operation
+	return errors.Errorf("unauthorized to do %s on predicate %s",
+		operation.Name, predicate)
+
 }
 
 // hasRequiredAccess checks if any group in the passed in groups is allowed to perform the operation

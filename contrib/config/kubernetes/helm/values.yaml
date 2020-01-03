@@ -45,9 +45,14 @@ zero:
   ##
   podManagementPolicy: OrderedReady
 
-  ## Number of dgraph  zero pods
+  ## Number of dgraph zero pods
   ##
   replicaCount: 3
+
+  ## Max number of replicas per data shard.
+  ## i.e., the max number of Dgraph Alpha instances per group (shard).
+  ##
+  shardReplicaCount: 5
 
   ## zero server pod termination grace period
   ##
@@ -111,7 +116,7 @@ zero:
   livenessProbe:
     enabled: false
     port: 6080
-    path: /state
+    path: /health
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
@@ -215,7 +220,7 @@ alpha:
   livenessProbe:
     enabled: false
     port: 8080
-    path: /health
+    path: /health?live=1
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5

@@ -36,6 +36,14 @@ type QueryResult struct {
 	}
 }
 
+func splitPreds(ps []string) []string {
+	for i, p := range ps {
+		ps[i] = strings.Split(p, "-")[1]
+	}
+
+	return ps
+}
+
 func TestUpsertExample0(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
@@ -59,7 +67,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Queries["q"]))
@@ -95,7 +103,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-name"}, mr.preds)
+	require.Equal(t, []string{"name"}, splitPreds(mr.preds))
 	result = QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Queries["q"]))
@@ -245,7 +253,7 @@ func TestUpsertExample0JSON(t *testing.T) {
 	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-name"}, mr.preds)
+	require.Equal(t, []string{"name"}, splitPreds(mr.preds))
 
 	// query should return correct name
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
@@ -283,7 +291,7 @@ upsert {
 }`
 	resp, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.Equal(t, []string{"1-age"}, resp.preds)
+	require.Equal(t, []string{"age"}, splitPreds(resp.preds))
 }
 
 func TestUpsertWithFragment(t *testing.T) {
@@ -315,13 +323,13 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, 0 == len(mr.keys))
-	require.Equal(t, []string{"1-age"}, mr.preds)
+	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 
 	// Ensure that another run works too
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, 0 == len(mr.keys))
-	require.Equal(t, []string{"1-age"}, mr.preds)
+	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 }
 
 func TestUpsertInvalidErr(t *testing.T) {
@@ -931,7 +939,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Queries["q"]))
@@ -973,7 +981,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-name"}, mr.preds)
+	require.Equal(t, []string{"name"}, splitPreds(mr.preds))
 	result = QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Queries["q"]))
@@ -1039,7 +1047,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	mr, err = mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-name"}, mr.preds)
+	require.Equal(t, []string{"name"}, splitPreds(mr.preds))
 	result = QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Queries["q"]))
@@ -1101,7 +1109,7 @@ upsert {
 	mr, err := mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-color"}, mr.preds)
+	require.Equal(t, []string{"color"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Queries["q"]))
@@ -1598,6 +1606,50 @@ upsert {
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
+}
+
+func TestUpsertWithValueVar(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`amount: int .`))
+	res, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	b, _ := json.MarshalIndent(res, "", "  ")
+	fmt.Printf("%s\n", b)
+
+	const (
+		// this upsert block increments the value of the counter by one
+		m = `
+upsert {
+  query {
+    var(func: has(amount)) {
+      amount as amount
+      amt as math(amount+1)
+    }
+  }
+  mutation {
+    set {
+      uid(amt) <amount> val(amt) .
+    }
+  }
+}`
+
+		q = `
+{
+  q(func: has(amount)) {
+    amount
+  }
+}`
+	)
+
+	for count := 1; count < 3; count++ {
+		res, err = mutationWithTs(m, "application/rdf", false, true, 0)
+		require.NoError(t, err)
+
+		got, _, err := queryWithTs(q, "application/graphql+-", "", res.startTs)
+		require.NoError(t, err)
+
+		require.JSONEq(t, fmt.Sprintf(`{"data":{"q":[{"amount":%d}]}}`, count), got)
+	}
 }
 
 func TestValInSubject(t *testing.T) {
@@ -2165,7 +2217,7 @@ upsert {
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Queries["q"]))
-	require.Equal(t, []string{"1-email", "1-name", "1-works_for"}, mr.preds)
+	require.Equal(t, []string{"email", "name", "works_for"}, splitPreds(mr.preds))
 }
 
 func TestMultipleMutation(t *testing.T) {
@@ -2197,7 +2249,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Queries["q"]))
@@ -2286,7 +2338,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 
 	q1 := `
 {
@@ -2343,7 +2395,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-count", "1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"count", "email", "name"}, splitPreds(mr.preds))
 
 	q1 := `
 {
@@ -2393,7 +2445,7 @@ upsert {
 	mr, err = mutationWithTs(m1Json, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-count"}, mr.preds)
+	require.Equal(t, []string{"count"}, splitPreds(mr.preds))
 
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	expectedRes = `
@@ -2426,7 +2478,7 @@ email: [string] @index(exact) @upsert .`))
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 
 	q1 := `
 {
@@ -2505,7 +2557,7 @@ upsert {
 	mr, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-email", "1-name"}, mr.preds)
+	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 
 	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
@@ -2550,7 +2602,7 @@ func TestJsonOldAndNewAPI(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-color", "1-works_with"}, mr.preds)
+	require.Equal(t, []string{"color", "works_with"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Queries["q"]))
@@ -2629,7 +2681,7 @@ func TestJsonNewAPI(t *testing.T) {
 	mr, err := mutationWithTs(m1, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-color", "1-works_with"}, mr.preds)
+	require.Equal(t, []string{"color", "works_with"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Queries["q"]))
@@ -2699,7 +2751,7 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	mr, err := mutationWithTs(m2, "application/json", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"1-color"}, mr.preds)
+	require.Equal(t, []string{"color"}, splitPreds(mr.preds))
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Queries["q"]))

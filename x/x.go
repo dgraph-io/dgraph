@@ -101,6 +101,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
+	// GuardiansId is the ID of the admin group for ACLs.
+	GuardiansId = "guardians"
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
@@ -287,6 +289,24 @@ func HasString(a []string, b string) bool {
 		}
 	}
 	return false
+}
+
+// Unique takes an array and returns it with no duplicate entries.
+func Unique(a []string) []string {
+	if len(a) < 2 {
+		return a
+	}
+
+	sort.Strings(a)
+	idx := 1
+	for _, val := range a {
+		if a[idx-1] == val {
+			continue
+		}
+		a[idx] = val
+		idx++
+	}
+	return a[:idx]
 }
 
 // ReadLine reads a single line from a buffered reader. The line is read into the
@@ -715,4 +735,14 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
 	return nil
+}
+
+func IsGuardian(groups []string) bool {
+	for _, group := range groups {
+		if group == GuardiansId {
+			return true
+		}
+	}
+
+	return false
 }

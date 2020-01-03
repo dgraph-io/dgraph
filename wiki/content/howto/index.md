@@ -121,6 +121,7 @@ $ curl localhost:8080/alter -d '
 $ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -d '{
   set {
     _:dgraph <name> "Dgraph" .
+    _:dgraph <dgraph.type> "Software" .
     _:dgraph <url> "https://github.com/dgraph-io/dgraph" .
     _:dgraph <description> "Fast, Transactional, Distributed Graph Database." .
   }
@@ -131,6 +132,7 @@ $ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -
 $ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -d '{
   set {
     _:badger <name> "Badger" .
+    _:badger <dgraph.type> "Software" .
     _:badger <url> "https://github.com/dgraph-io/badger" .
     _:badger <description> "Embeddable, persistent and fast key-value (KV) database written in pure Go." .
   }
@@ -869,6 +871,7 @@ Before (in Dgraph v1.0)
 curl -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d '{
   set {
     _:n <name> "Alice" .
+    _:n <dgraph.type> "Person" .
   }
 }'
 ```
@@ -879,6 +882,7 @@ Now (in Dgraph v1.1):
 curl -H 'Content-Type: application/rdf' localhost:8080/mutate?commitNow=true -d '{
   set {
     _:n <name> "Alice" .
+    _:n <dgraph.type> "Person" .
   }
 }'
 ```

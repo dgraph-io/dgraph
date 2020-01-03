@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -188,6 +188,7 @@ message Tablet {
 	int64 space      = 7;
 	bool remove      = 8;
   bool read_only   = 9; // If true, do not ask zero to serve any tablets.
+	uint64 move_ts   = 10;
 }
 
 message DirectedEdge {
@@ -220,6 +221,24 @@ message Mutations {
 	}
 	DropOp drop_op = 7;
 	string drop_value = 8;
+
+	Metadata metadata = 9;
+}
+
+message Metadata {
+  // HintType represents a hint that will be passed along the mutation and used
+  // to add the predicate to the schema if it's not already there.
+  enum HintType {
+    // DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+    DEFAULT = 0;
+    // SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+    SINGLE = 1;
+    // LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+    LIST = 2;
+  }
+
+  // Map of predicates to their hints.
+	map<string, HintType> pred_hints = 1;
 }
 
 message Snapshot {
@@ -289,7 +308,7 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to 
+	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
 	// Default Blocksize is 256 so uint32 would be sufficient.
@@ -360,6 +379,7 @@ message SchemaNode {
 	bool list = 7;
 	bool upsert = 8;
 	bool lang = 9;
+	bool no_conflict = 10;
 }
 
 message SchemaResult {
@@ -390,6 +410,8 @@ message SchemaUpdate {
 	// custom name. This field stores said name.
 	string object_type_name = 12;
 
+	bool no_conflict = 13;
+
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
@@ -410,10 +432,11 @@ message MapEntry {
 }
 
 message MovePredicatePayload {
-	string predicate  = 1;
-	uint32 source_gid = 2;
-	uint32 dest_gid   = 3;
-	uint64 txn_ts     = 4;
+	string predicate         = 1;
+	uint32 source_gid        = 2;
+	uint32 dest_gid          = 3;
+	uint64 txn_ts            = 4;
+	uint64 expected_checksum = 5;
 }
 
 message TxnStatus {
