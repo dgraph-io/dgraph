@@ -237,6 +237,15 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 }
 
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
+	pred, found := l.schema.preds[nq.Predicate]
+
+	// We dont' need to generate conflict keys for predicate with noconflict directive.
+	if found && pred.NoConflict {
+		return nil, nil
+	}
+
+	keys := make([]uint64, 0)
+
 	// Calculates the conflict keys, inspired by the logic in
 	// addMutationInteration in posting/list.go.
 	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
@@ -256,9 +265,8 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		x.Check(err)
 	}
 
-	keys := make([]uint64, 0, 1)
-	pred, ok := l.schema.preds[nq.Predicate]
-	if !ok {
+	// If the predicate is not found in schema then we don't have to generate any more keys.
+	if !found {
 		return keys, nil
 	}
 

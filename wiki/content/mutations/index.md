@@ -279,24 +279,27 @@ RDF types are attached to literals with the standard `^^` separator.  For exampl
 
 The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
 
-| Storage Type                                            | Dgraph type    |
-| -------------                                           | :------------: |
-| &#60;xs:string&#62;                                     | `string`         |
-| &#60;xs:dateTime&#62;                                   | `dateTime`       |
-| &#60;xs:date&#62;                                       | `datetime`       |
-| &#60;xs:int&#62;                                        | `int`            |
-| &#60;xs:boolean&#62;                                    | `bool`           |
-| &#60;xs:double&#62;                                     | `float`          |
-| &#60;xs:float&#62;                                      | `float`          |
-| &#60;geo:geojson&#62;                                   | `geo`            |
-| &#60;xs:password&#62;                                   | `password`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+| Storage Type                                                    | Dgraph type     |
+| -------------                                                   | :------------:   |
+| &#60;xs:string&#62;                                             | `string`         |
+| &#60;xs:dateTime&#62;                                           | `dateTime`       |
+| &#60;xs:date&#62;                                               | `datetime`       |
+| &#60;xs:int&#62;                                                | `int`            |
+| &#60;xs:integer&#62;                                            | `int`            |
+| &#60;xs:boolean&#62;                                            | `bool`           |
+| &#60;xs:double&#62;                                             | `float`          |
+| &#60;xs:float&#62;                                              | `float`          |
+| &#60;geo:geojson&#62;                                           | `geo`            |
+| &#60;xs:password&#62;                                           | `password`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;           | `string`         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62;         | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;             | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;              | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#positiveInteger&#62;  | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#integer&#62;          | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;          | `bool`           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;           | `float`          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;            | `float`          |
 
 
 See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.

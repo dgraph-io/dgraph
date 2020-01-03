@@ -39,7 +39,7 @@ func TestEncodeMemory(t *testing.T) {
 	//	}
 	var wg sync.WaitGroup
 
-	for x := 0; x < runtime.NumCPU(); x++ {
+	for i := 0; i < runtime.NumCPU(); i++ {
 		n := makeFastJsonNode()
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
@@ -49,7 +49,7 @@ func TestEncodeMemory(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 1000; i++ {
+			for j := 0; j < 1000; j++ {
 				var buf bytes.Buffer
 				n.encode(&buf)
 			}
