@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
 )
 
 const (
@@ -170,9 +169,8 @@ func (mrw *addRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
-	valType := m.ArgType(schema.InputArgName)
 
-	if valType == ast.ListValue {
+	if m.IsArgListType(schema.InputArgName) {
 		return mrw.handleMultipleMutations(m)
 	}
 
@@ -213,7 +211,7 @@ func (mrw *addRewriter) handleMultipleMutations(
 		mrw.frags = append(mrw.frags, frag...)
 
 		mutations, err := mutationsFromFragments(
-			mrw.frags,
+			frag,
 			func(frag *mutationFragment) ([]byte, error) {
 				return json.Marshal(frag.fragment)
 			},
@@ -230,7 +228,7 @@ func (mrw *addRewriter) handleMultipleMutations(
 		}
 
 		mutationsAll = append(mutationsAll, mutations...)
-		qry := queryFromFragments(mrw.frags)
+		qry := queryFromFragments(frag)
 		if qry != nil {
 			queries.Children = append(queries.Children, qry.Children...)
 		}

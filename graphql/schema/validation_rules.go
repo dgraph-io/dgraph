@@ -31,6 +31,8 @@ func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			return
 		}
 
+		// ExpectedType.Elem will be not nil if it is of list type. Otherwise
+		// it will be nil. So it's safe to say that value.Kind should be list
 		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
 			return
 		}
@@ -43,7 +45,8 @@ func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.VariableDefinition == nil {
+		if value.Definition == nil || value.ExpectedType == nil ||
+			value.VariableDefinition == nil {
 			return
 		}
 

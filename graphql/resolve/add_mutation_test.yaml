@@ -25,24 +25,43 @@
           "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
-
 -
-  name: "Add Mutation with embedded value"
+  name: "Add multiple mutation with variables"
   gqlmutation: |
-    mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}]) {
+    mutation addAuthor($auth: [AuthorInput!]!) {
+      addAuthor(input: $auth) {
         author {
           name
         }
       }
     }
-  explanation: "The input should be used for the mutation, with a uid and type getting
-    injected and all data transformed to underlying Dgraph edge names"
+  gqlvariables: |
+    { "auth": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": []
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": []
+      }
+      ]
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
   dgmutations:
     - setjson: |
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
+          "Author.dob":"2000-01-01",
+          "Author.posts":[]
+        }
+    - setjson: |
+        { "uid":"_:Author2",
+          "dgraph.type":["Author"],
+          "Author.name":"Different Author",
+          "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
 
@@ -85,6 +104,32 @@
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
+
+-
+  name: "Add Multiple Mutations with embedded value"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: [{ name: "A.N. Author", posts: []}, {name: "Different Author", posts: []}]) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input should be used for the mutation, with a uid and type getting
+    injected and all data transformed to underlying Dgraph edge names"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
+    - setjson: |
+        { "uid":"_:Author2",
+          "dgraph.type":["Author"],
+          "Author.name":"Different Author",
           "Author.posts":[]
         }
 
@@ -142,7 +187,7 @@
     }
   explanation: "A reference must be a valid UID"
   error:
-    { "message": 
+    { "message":
       "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
 
 -
@@ -209,6 +254,50 @@
         { "uid" : "_:Human1",
           "Character.name": "Bob",
           "Employee.ename": "employee no. 1",
+          "Human.dob": "2000-01-01",
+          "Human.female": true,
+          "dgraph.type": ["Human", "Character", "Employee"]
+        }
+
+-
+  name: "Add multiple mutation for a type that implements an interface"
+  gqlmutation: |
+    mutation addHuman($human: [HumanInput!]!) {
+      addHuman(input: $human) {
+        human {
+          name
+          dob
+          female
+        }
+      }
+    }
+  gqlvariables: |
+    { "human": [
+      { "name": "Bob",
+        "dob": "2000-01-01",
+        "female": true,
+        "ename": "employee no. 1"
+      },
+      { "name": "Alice",
+        "dob": "2000-01-01",
+        "female": true,
+        "ename": "employee no. 2"
+      }]
+    }
+  explanation: "The mutation should get rewritten with correct edges from the interface."
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Human1",
+          "Character.name": "Bob",
+          "Employee.ename": "employee no. 1",
+          "Human.dob": "2000-01-01",
+          "Human.female": true,
+          "dgraph.type": ["Human", "Character", "Employee"]
+        }
+    - setjson: |
+        { "uid" : "_:Human2",
+          "Character.name": "Alice",
+          "Employee.ename": "employee no. 2",
           "Human.dob": "2000-01-01",
           "Human.female": true,
           "dgraph.type": ["Human", "Character", "Employee"]
@@ -298,11 +387,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "New post",
             "text": "A really new post"
           }
@@ -329,6 +418,73 @@
         }
 
 -
+  name: "Deep add multiple mutation"
+  gqlmutation: |
+    mutation addAuthor($author: [AuthorInput!]!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New New post",
+            "text": "A wonderful post"
+          }
+        ]
+      }]
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Author1",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New post",
+              "Post.text" : "A really new post",
+              "Post.author": {
+                "uid" : "_:Author1"
+              }
+            }
+          ]
+        }
+    - setjson: |
+        { "uid" : "_:Author3",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post4",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New New post",
+              "Post.text" : "A wonderful post",
+              "Post.author": {
+                "uid" : "_:Author3"
+              }
+            }
+          ]
+        }
+
+-
   name: "Deep add with existing"
   gqlmutation: |
     mutation addAuthor($author: AuthorInput!) {
@@ -339,11 +495,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "New post",
             "text": "A really new post"
           },
@@ -388,6 +544,108 @@
       cond: "@if(eq(len(Post3), 1))"
 
 -
+  name: "Deep add multiple with existing"
+  gqlmutation: |
+    mutation addAuthor($author: [AuthorInput!]!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New post",
+            "text": "A really new post"
+          },
+          {
+            "postID": "0x123",
+            "title": "Old post",
+            "text": "A really old post"
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New new post",
+            "text": "A wonderful post"
+          },
+          {
+            "postID": "0x124",
+            "title": "Another Old post",
+            "text": "Another old post text"
+          }
+        ]
+      }]
+    }
+  dgquery: |-
+    query {
+      Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
+        uid
+      }
+      Post6 as Post6(func: uid(0x124)) @filter(type(Post)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New post",
+I understand there are breaking changes therefore it is waiting v1.2, do I understand/remember correctly? do you know when is 1.2 planned? thanks!
+￼
+              "Post.text": "A really new post",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            },
+            {
+              "uid": "0x123",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post3), 1))"
+    - setjson: |
+        { "uid": "_:Author4",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post5",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New new post",
+              "Post.text": "A wonderful post",
+              "Post.author": {
+                "uid": "_:Author4"
+              }
+            },
+            {
+              "uid": "0x124",
+              "Post.author": {
+                "uid": "_:Author4"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post6), 1))"
+
+-
   name: "Deep add with two existing"
   gqlmutation: |
     mutation addAuthor($author: AuthorInput!) {
@@ -398,7 +656,7 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
@@ -407,7 +665,7 @@
             "title": "Old post",
             "text": "A really old post"
           },
-          { 
+          {
             "postID": "0x456"
           }
         ]
@@ -456,11 +714,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "postID": null,
             "title": "New post",
             "text": "A really new post"
@@ -486,6 +744,75 @@
             }
           ]
         }
+-
+  name: "Deep add multiple with null"
+  gqlmutation: |
+    mutation addAuthor($author: [AuthorInput!]!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "postID": null,
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "postID": null,
+            "title": "New New post",
+            "text": "A wonder post"
+          }
+        ]
+      }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Author1",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New post",
+              "Post.text" : "A really new post",
+              "Post.author": {
+                "uid" : "_:Author1"
+              }
+            }
+          ]
+        }
+    - setjson: |
+        { "uid" : "_:Author3",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post4",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New New post",
+              "Post.text" : "A wonder post",
+              "Post.author": {
+                "uid" : "_:Author3"
+              }
+            }
+          ]
+        }
 
 -
   name: "Add three deep"
@@ -498,11 +825,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "Exciting post",
             "text": "A really good post",
             "category": {
@@ -531,10 +858,99 @@
                 "uid": "_:Category3",
                 "dgraph.type": [ "Category" ],
                 "Category.name": "New Category",
-                "Category.posts": [ 
-                  { "uid": "_:Post2" } 
+                "Category.posts": [
+                  { "uid": "_:Post2" }
                 ]
               }
             }
           ]
         }
+-
+  name: "Add multiple three deep"
+  gqlmutation: |
+    mutation addAuthor($author: [AuthorInput!]!) {
+      addAuthor(input: $author) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "Exciting post",
+            "text": "A really good post",
+            "category": {
+              "name": "New Category"
+            }
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New post",
+            "text": "A really new post",
+            "category": {
+              "name": "Wonder Category"
+            }
+          }
+        ]
+      }]
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "Exciting post",
+              "Post.text": "A really good post",
+              "Post.author": {
+                "uid": "_:Author1"
+              },
+              "Post.category": {
+                "uid": "_:Category3",
+                "dgraph.type": [ "Category" ],
+                "Category.name": "New Category",
+                "Category.posts": [
+                  { "uid": "_:Post2" }
+                ]
+              }
+            }
+          ]
+        }
+    - setjson: |
+        { "uid": "_:Author4",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post5",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New post",
+              "Post.text": "A really new post",
+              "Post.author": {
+                "uid": "_:Author4"
+              },
+              "Post.category": {
+                "uid": "_:Category6",
+                "dgraph.type": [ "Category" ],
+                "Category.name": "Wonder Category",
+                "Category.posts": [
+                  { "uid": "_:Post5" }
+                ]
+              }
+            }
+          ]
+        }
+

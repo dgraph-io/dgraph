@@ -82,7 +82,7 @@ type Field interface {
 	Alias() string
 	ResponseName() string
 	ArgValue(name string) interface{}
-	ArgType(name string) ast.ValueKind
+	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
 	XIDArg() string
 	SetArgTo(arg string, val interface{})
@@ -434,16 +434,16 @@ func (f *field) ArgValue(name string) interface{} {
 	return f.arguments[name]
 }
 
-func (f *field) ArgType(name string) ast.ValueKind {
+func (f *field) IsArgListType(name string) bool {
 	for _, i := range f.field.Arguments {
 		if i.Name != name {
 			continue
 		}
 
-		return i.Value.Kind
+		return i.Value.ExpectedType.Elem != nil
 	}
 
-	return ast.NullValue
+	return false
 }
 
 func (f *field) Skip() bool {
@@ -610,8 +610,8 @@ func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
 
-func (q *query) ArgType(name string) ast.ValueKind {
-	return (*field)(q).ArgType(name)
+func (q *query) IsArgListType(name string) bool {
+	return (*field)(q).IsArgListType(name)
 }
 
 func (q *query) Skip() bool {
@@ -691,8 +691,8 @@ func (m *mutation) SetArgTo(arg string, val interface{}) {
 	(*field)(m).SetArgTo(arg, val)
 }
 
-func (m *mutation) ArgType(name string) ast.ValueKind {
-	return (*field)(m).ArgType(name)
+func (m *mutation) IsArgListType(name string) bool {
+	return (*field)(m).IsArgListType(name)
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
