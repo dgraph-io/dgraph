@@ -729,6 +729,8 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 			if err != nil {
 				return err
 			}
+			// Remove Alpha group information.
+			ms.Groups = nil
 			if err := stream.Send(ms); err != nil {
 				return err
 			}

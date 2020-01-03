@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -307,7 +307,7 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to 
+	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
 	// Default Blocksize is 256 so uint32 would be sufficient.
@@ -445,7 +445,8 @@ message TxnStatus {
 message OracleDelta {
 	repeated TxnStatus txns             = 1;
 	uint64 max_assigned                 = 2;
-	map<uint32, uint64> group_checksums = 3;
+	/* map<uint32, uint64> group_checksums = 3; */
+	map<uint32, Group> groups = 4;
 	// implement tmax.
 }
 
