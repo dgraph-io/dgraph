@@ -1007,8 +1007,6 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	//writer := posting.NewTxnWriter(pstore)
-
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
 
@@ -1037,7 +1035,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	}
 
 	stream := pstore.NewStreamAt(readTs)
-	stream.LogPrefix = "Rolling up"
+	stream.LogPrefix = "Tablet Size Calculation"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:

@@ -48,7 +48,8 @@ var (
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
 
 	// IncrRollup is used to batch keys for rollup incrementally.
-	IncrRollup = IncRollup{make(chan *[][]byte),
+	IncrRollup = IncRollup{
+		make(chan *[][]byte),
 		sync.Pool{
 			New: func() interface{} {
 				return new([][]byte)
@@ -91,8 +92,8 @@ func (ir *IncRollup) addKeyToBatch(key []byte) {
 
 // HandleIncrementalRollups will rollup batches of 64 keys in a go routine.
 func (ir *IncRollup) HandleIncrementalRollups() {
-	m := make(map[uint64]int64) // map from hash(key) to timestamp
-	limiter := time.Tick(100 * time.Millisecond)
+	m := make(map[uint64]int64) // map from hash(key) to timestamp. hash(key) to limit the size of the map.
+	limiter := time.NewTicker(100 * time.Millisecond)
 	writer := NewTxnWriter(pstore)
 
 	for batch := range ir.keysCh {
@@ -114,8 +115,8 @@ func (ir *IncRollup) HandleIncrementalRollups() {
 		*batch = (*batch)[:0]
 		ir.keysPool.Put(batch)
 
-		// throttle to 1 batch = 64 rollups per 10 ms.
-		<-limiter
+		// throttle to 1 batch = 64 rollups per 100 ms.
+		<-limiter.C
 	}
 	// keysCh is closed. This should never happen.
 }
@@ -229,6 +230,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
+	const maxDeltaCount = 2
 	deltaCount := 0
 
 	// Iterates from highest Ts to lowest Ts
@@ -288,7 +290,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		it.Next()
 	}
 
-	if deltaCount >= 2 {
+	if deltaCount >= maxDeltaCount {
 		IncrRollup.addKeyToBatch(key)
 	}
 
