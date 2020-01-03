@@ -26,7 +26,8 @@ import (
 )
 
 func newUidPack(data []uint64) *pb.UidPack {
-	encoder := codec.Encoder{BlockSize: 10}
+	// Using a small block size to make sure multiple blocks are used by the tests.
+	encoder := codec.Encoder{BlockSize: 5}
 	for _, uid := range data {
 		encoder.Add(uid)
 	}
@@ -147,6 +148,13 @@ func TestUIDListIntersect5Packed(t *testing.T) {
 	v := newUidPack([]uint64{3, 5})
 	o := IntersectWithLinPacked(u, v)
 	require.Equal(t, []uint64{3}, codec.Decode(o, 0))
+}
+
+func TestUIDListIntersect6Packed(t *testing.T) {
+	u := newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 9})
+	v := newUidPack([]uint64{1, 3, 5, 7, 8, 9})
+	o := IntersectWithLinPacked(u, v)
+	require.Equal(t, []uint64{1 ,3, 5, 7, 9}, codec.Decode(o, 0))
 }
 
 func TestUIDListIntersectDupFirstPacked(t *testing.T) {
@@ -324,4 +332,11 @@ func TestIndexOfPacked2(t *testing.T) {
 func TestIndexOfPacked3(t *testing.T) {
 	require.Equal(t, -1, IndexOfPacked(nil, 0))
 	require.Equal(t, -1, IndexOfPacked(nil, math.MaxUint64))
+}
+
+func TestApplyFilterUintPacked(t *testing.T) {
+	l := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9}
+	u := newUidPack(l)
+	res := ApplyFilterPacked(u, func(a uint64, idx int) bool { return (l[idx] % 2) == 1 })
+	require.Equal(t, []uint64{1, 3, 5, 7, 9}, codec.Decode(res, 0))
 }

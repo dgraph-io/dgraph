@@ -114,6 +114,15 @@ type Decoder struct {
 	uids     []uint64
 }
 
+// NewDecoder returns a decoder for the given UidPack and properly initializes it.
+func NewDecoder(pack *pb.UidPack) *Decoder {
+	decoder := &Decoder{
+		Pack: pack,
+	}
+	decoder.Seek(0, SeekStart)
+	return decoder
+}
+
 func (d *Decoder) unpackBlock() []uint64 {
 	if len(d.uids) > 0 {
 		// We were previously preallocating the d.uids slice to block size. This caused slowdown
@@ -332,4 +341,25 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 
 func match32MSB(num1, num2 uint64) bool {
 	return (num1 & bitMask) == (num2 & bitMask)
+}
+
+// CopyUidPack creates a copy of the given UidPack.
+func CopyUidPack(pack *pb.UidPack) *pb.UidPack {
+	if pack == nil {
+		return nil
+	}
+
+	packCopy := new(pb.UidPack)
+	packCopy.BlockSize = pack.BlockSize
+	packCopy.Blocks = make([]*pb.UidBlock, len(pack.Blocks))
+
+	for i, block := range pack.Blocks {
+		packCopy.Blocks[i] = new(pb.UidBlock)
+		packCopy.Blocks[i].Base = block.Base
+		packCopy.Blocks[i].NumUids = block.NumUids
+		packCopy.Blocks[i].Deltas = make([]byte, len(block.Deltas))
+		copy(packCopy.Blocks[i].Deltas, block.Deltas)
+	}
+
+	return packCopy
 }
