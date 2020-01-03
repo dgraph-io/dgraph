@@ -14,11 +14,11 @@ func TestJepsen(t *testing.T) {
 	nemeses := testAllNemeses
 	for _, w := range workloads {
 		for _, n := range nemeses {
-			t.Run(fmt.Sprintf("Workload=%v][Nemesis=%v]", w, n), func(t *testing.T) {
+			t.Run(fmt.Sprintf("Workload=%v Nemesis=%v", w, n), func(t *testing.T) {
 				status := runJepsenTest(&jepsenTest{
 					workload:          w,
 					nemesis:           n,
-					timeLimit:         10,
+					timeLimit:         300,
 					concurrency:       "6n",
 					rebalanceInterval: "10h",
 					localBinary:       "/gobin/dgraph",
