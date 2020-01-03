@@ -23,8 +23,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/validator"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -62,7 +60,6 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
-	Validate(doc *ast.QueryDocument) gqlerror.List
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -203,10 +200,6 @@ func (s *schema) Mutations(t MutationType) []string {
 		}
 	}
 	return result
-}
-
-func (s *schema) Validate(doc *ast.QueryDocument) gqlerror.List {
-	return validator.Validate(s.schema, doc)
 }
 
 func (o *operation) IsQuery() bool {
