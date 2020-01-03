@@ -96,11 +96,11 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: [Author]
+	author: [Author!]
 }
 
 type AddPostPayload {
-	post: [Post]
+	post: [Post!]
 }
 
 type DeleteAuthorPayload {

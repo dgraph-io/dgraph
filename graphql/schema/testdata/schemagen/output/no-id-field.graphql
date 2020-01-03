@@ -100,15 +100,15 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: [Author]
+	author: [Author!]
 }
 
 type AddGenrePayload {
-	genre: [Genre]
+	genre: [Genre!]
 }
 
 type AddPostPayload {
-	post: [Post]
+	post: [Post!]
 }
 
 type DeleteAuthorPayload {

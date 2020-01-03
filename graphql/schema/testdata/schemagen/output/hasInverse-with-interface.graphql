@@ -114,15 +114,15 @@ input StringHashFilter {
 #######################
 
 type AddAnswerPayload {
-	answer: [Answer]
+	answer: [Answer!]
 }
 
 type AddAuthorPayload {
-	author: [Author]
+	author: [Author!]
 }
 
 type AddQuestionPayload {
-	question: [Question]
+	question: [Question!]
 }
 
 type DeleteAnswerPayload {

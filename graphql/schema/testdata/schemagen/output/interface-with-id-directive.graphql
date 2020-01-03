@@ -98,11 +98,11 @@ input StringHashFilter {
 #######################
 
 type AddBookPayload {
-	book: [Book]
+	book: [Book!]
 }
 
 type AddLibraryPayload {
-	library: [Library]
+	library: [Library!]
 }
 
 type DeleteBookPayload {

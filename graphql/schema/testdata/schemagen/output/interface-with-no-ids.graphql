@@ -98,11 +98,11 @@ input StringHashFilter {
 #######################
 
 type AddQuestionPayload {
-	question: [Question]
+	question: [Question!]
 }
 
 type AddUserPayload {
-	user: [User]
+	user: [User!]
 }
 
 #######################

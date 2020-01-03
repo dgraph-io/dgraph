@@ -97,7 +97,7 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post: [Post]
+	post: [Post!]
 }
 
 type DeletePostPayload {

@@ -105,7 +105,7 @@ input StringHashFilter {
 #######################
 
 type AddTPayload {
-	t: [T]
+	t: [T!]
 }
 
 type DeleteTPayload {
