@@ -638,32 +638,26 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	// Now we write all the created posting lists to disk.
 	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
-	indexTxn := indexDB.NewTransaction(false)
-	defer indexTxn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	indexIt := indexTxn.NewIterator(iterOpts)
-	defer indexIt.Close()
-
 	start = time.Now()
 	defer func() {
 		glog.V(1).Infof("Rebuilding index for predicate %s: writing index took: %v\n",
 			r.attr, time.Since(start))
 	}()
+
 	writer := NewTxnWriter(pstore)
-	for indexIt.Rewind(); indexIt.Valid(); {
-		// key copy is necessary, it gets overridden with the next entry otherwise.
-		keyCopy := indexIt.Item().KeyCopy(nil)
-		l, err := ReadPostingList(keyCopy, indexIt)
+	indexStream := indexDB.NewStream()
+	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
+	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		l, err := ReadPostingList(key, itr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
 		kvs, err := l.Rollup()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, kv := range kvs {
 			if len(kv.Value) == 0 {
@@ -675,9 +669,18 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			// kv.Version as the timestamp.
 			err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
+
+		return nil, nil
+	}
+	indexStream.Send = func(kvList *bpb.KVList) error {
+		return nil
+	}
+
+	if err := indexStream.Orchestrate(ctx); err != nil {
+		return err
 	}
 
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
