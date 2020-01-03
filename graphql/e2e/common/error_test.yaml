@@ -55,7 +55,8 @@
   gqlvariables: 
     { "filter": "type was wrong" }
   errors:
-    [ { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position 
+    [ { "message": "Variable type provided AuthorFiltarzzz! is incompatible with expected type AuthorFilter", "locations": [{ "line": 2, "column": 23}]}, 
+  { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position 
         expecting type \"AuthorFilter\".",
       "locations": [ { "line": 2, "column": 23 } ] },
       { "message": "Unknown type \"AuthorFiltarzzz\".",

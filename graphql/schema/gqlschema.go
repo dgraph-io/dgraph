@@ -825,7 +825,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 				Name: strings.ToLower(defn.Name),
 				Type: ast.ListType(&ast.Type{
 					NamedType: defn.Name,
-					NonNull:   false,
+					NonNull:   true,
 				}, nil),
 			},
 		},

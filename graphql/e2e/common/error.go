@@ -161,7 +161,7 @@ func panicCatcher(t *testing.T) {
 		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
 		"mutation": &GraphQLParams{
 			Query: `mutation {
-						addCountry(input: { name: "A Country" }) { country { id } }
+						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
 		},
 	}

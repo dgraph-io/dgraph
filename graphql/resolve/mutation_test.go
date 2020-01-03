@@ -27,6 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/parser"
 	"gopkg.in/yaml.v2"
 )
 
@@ -92,6 +94,12 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 				})
 			require.NoError(t, err)
 
+			doc, gqlErr := parser.ParseQuery(&ast.Source{Input: tcase.GQLMutation})
+			require.Nil(t, gqlErr)
+
+			gqlerrors := gqlSchema.Validate(doc)
+			require.Nil(t, gqlerrors)
+
 			mut := test.GetMutation(t, op)
 
 			// -- Act --
@@ -125,7 +133,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 		result   map[string]interface{}
 	}{
 		"Add Post ": {
-			mut:      `addPost(input: {title: "A Post", author: {id: "0x1"}})`,
+			mut:      `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
 			rewriter: NewAddRewriter(),
 			assigned: map[string]string{"Post1": "0x4"},
 		},

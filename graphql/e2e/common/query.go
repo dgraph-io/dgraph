@@ -1054,7 +1054,7 @@ func defaultEnumFilter(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: EMPIRE
+						eq: [EMPIRE]
 					}
 				}) {
 					name

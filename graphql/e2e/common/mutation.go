@@ -937,7 +937,7 @@ func manyMutations(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation addCountries($name1: String!, $filter: CountryFilter!, $name2: String!) {
-			add1: addCountry(input: { name: $name1 }) {
+			add1: addCountry(input: [{ name: $name1 }]) {
 				country {
 					id
 					name
@@ -946,7 +946,7 @@ func manyMutations(t *testing.T) {
 
 			deleteCountry(filter: $filter) { msg }
 
-			add2: addCountry(input: { name: $name2 }) {
+			add2: addCountry(input: [{ name: $name2 }]) {
 				country {
 					id
 					name
