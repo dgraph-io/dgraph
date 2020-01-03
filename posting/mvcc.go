@@ -57,8 +57,8 @@ var (
 	}
 )
 
-// RollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *IncRollup) RollUpKey(writer *TxnWriter, key []byte) error {
+// rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
+func (ir *IncRollup) rollUpKey(writer *TxnWriter, key []byte) error {
 	l, err := GetNoStore(key)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func (ir *IncRollup) HandleIncrementalRollups() {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				err := ir.RollUpKey(writer, key)
+				err := ir.rollUpKey(writer, key)
 				if err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 					continue
