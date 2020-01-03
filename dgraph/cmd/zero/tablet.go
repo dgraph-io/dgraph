@@ -156,15 +156,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	// Let's ask for a new timestamp. This would update MaxAssigned, which would ensure that the new
-	// membership checksum reaches every server, with the predicate move into the destination group.
-	// Having this "jitter", would avoid the source group servers to register that they are no
-	// longer serving the predicate.
-	if _, err := s.Timestamps(ctx, &pb.Num{Val: 1}); err != nil {
-		return errors.Wrapf(err, "while leasing timestamp to update MaxAssigned")
-	}
-
-	// Now that the move has happened, we can delete the predicate from the source group.
+	// Now that the move has happened, we can delete the predicate from the source group. But before
+	// doing that, we should ensure the source group understands that the predicate is now being
+	// served by the destination group. For that, we pass in the expected checksum for the source
+	// group. Only once the source group membership checksum matches, would the source group delete
+	// the predicate. This ensures that it does not service any transaction after deletion of data.
+	checksums := s.groupChecksums()
+	in.ExpectedChecksum = checksums[in.SourceGid]
 	in.DestGid = 0 // Indicates deletion of predicate in the source group.
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",

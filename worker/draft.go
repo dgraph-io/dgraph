@@ -544,6 +544,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 
 	g := groups()
 	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	glog.Infof("Got checksum: %d\n", atomic.LoadUint64(&g.deltaChecksum))
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
