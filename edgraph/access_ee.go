@@ -523,8 +523,6 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
-			// TODO(Animesh): Check if this could possibly lead to
-			// altering ACL predicates.
 			return nil
 		}
 
