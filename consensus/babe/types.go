@@ -51,12 +51,7 @@ type BabeHeader struct {
 	Slot               uint64
 }
 
-//nolint:structcheck
-type BlockInherentsData struct {
-	timstap0 int64 //nolint:unused
-	babeslot int64 //nolint:unused
-}
-
+// Slot represents a BABE slot
 type Slot struct {
 	start    uint64
 	duration uint64
