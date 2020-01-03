@@ -154,7 +154,7 @@ func TestUIDListIntersect6Packed(t *testing.T) {
 	u := newUidPack([]uint64{1, 2, 3, 4, 5, 6, 7, 9})
 	v := newUidPack([]uint64{1, 3, 5, 7, 8, 9})
 	o := IntersectWithLinPacked(u, v)
-	require.Equal(t, []uint64{1 ,3, 5, 7, 9}, codec.Decode(o, 0))
+	require.Equal(t, []uint64{1, 3, 5, 7, 9}, codec.Decode(o, 0))
 }
 
 func TestUIDListIntersectDupFirstPacked(t *testing.T) {
