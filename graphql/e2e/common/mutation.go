@@ -442,7 +442,7 @@ func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 
 	expectedAuthors := []*author{expectedAuthor1, expectedAuthor2}
 
-	for i, _ := range newAuths {
+	for i := range newAuths {
 		requireAuthor(t, newAuths[i].ID, expectedAuthors[i], executeRequest)
 		for j, _ := range newAuths[i].Posts {
 			requirePost(t, newAuths[i].Posts[j].PostID, expectedAuthors[i].Posts[j],
@@ -456,7 +456,8 @@ func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		append(newAuths[0].Posts, newAuths[1].Posts...))
 }
 
-func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author, executeRequest requestExecutor) []*author {
+func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
+	executeRequest requestExecutor) []*author {
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: [AuthorInput!]!) {
 			addAuthor(input: $author) {
