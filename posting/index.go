@@ -585,8 +585,23 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
+		keyMap := make(map[string]struct{})
+		indexTxn := indexDB.NewTransaction(true)
 		for _, kv := range kvList.Kv {
-			indexTxn := indexDB.NewTransaction(true)
+			strKey := string(kv.Key)
+			if _, ok := keyMap[strKey]; ok {
+				if err := indexTxn.Commit(); err != nil {
+					indexTxn.Discard()
+					return errors.Wrap(err, "error commiting txn in temp badger")
+				}
+
+				for k := range keyMap {
+					delete(keyMap, k)
+				}
+
+				indexTxn = indexDB.NewTransaction(true)
+			}
+
 			entry := &badger.Entry{
 				Key:      kv.Key,
 				Value:    kv.Value,
@@ -596,10 +611,13 @@ func (r *rebuilder) Run(ctx context.Context) error {
 				indexTxn.Discard()
 				return errors.Wrap(err, "error setting entries in temp badger")
 			}
-			if err := indexTxn.Commit(); err != nil {
-				indexTxn.Discard()
-				return errors.Wrap(err, "error commiting txn in temp badger")
-			}
+
+			keyMap[strKey] = struct{}{}
+		}
+
+		if err := indexTxn.Commit(); err != nil {
+			indexTxn.Discard()
+			return errors.Wrap(err, "error commiting txn in temp badger")
 		}
 
 		return nil
