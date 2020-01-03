@@ -536,7 +536,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
-				msg.WriteString(key + " ")
+				_, _ = msg.WriteString(key + " ")
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to alter following predicates: %s\n", msg.String())
@@ -642,7 +642,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
-				msg.WriteString(key + " ")
+				_, _ = msg.WriteString(key + " ")
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
@@ -807,9 +807,58 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 			}
 		}
 
+		for _, ord := range gq.Order {
+			if _, ok := blockedPreds[ord.Attr]; ok {
+				continue
+			}
+		}
+
+		gq.FilterTree = removeFilters(gq.FilterTree, blockedPreds)
+		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
 		filter = append(filter, gq)
 	}
 
 	return filter
+}
+
+func removeFilters(f *filterTree, blockedPreds map[string]struct{}) *filterTree {
+	if f == nil {
+		return nil
+	}
+
+	if f.Func != nil && len(gq.Func.Attr) > 0 {
+		if _, ok := blockedPreds[gq.Func.Attr]; ok {
+			return nil
+		}
+	}
+
+	filteredChildren := f.Child[:0]
+	for _, ch := range f.Child {
+		child := removeFilters(ch, blockedPreds)
+		if child != nil {
+			filteredChildren = append(filteredChildren, child)
+		}
+	}
+
+	if len(filteredChildren) != f.Child && (f.Op == "AND" || f.Op == "NOT") {
+		return nil
+	}
+
+	f.Child = filteredChildren
+	return f
+}
+
+func removeGroupBy(groupAttrs []GroupbyAttrs, blockedPreds map[string]struct{}) []GroupbyAttrs {
+	filteredAttrs := groupAttrs[:0]
+
+	for _, gAttr := range groupAttrs {
+		if _, ok := blockedPreds[gAttr.Attr]; ok {
+			continue
+		}
+
+		filteredAttrs = append(filteredAttrs, gAttr)
+	}
+
+	return filteredAttrs
 }
