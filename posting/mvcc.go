@@ -92,7 +92,7 @@ func (ir *IncRollup) addKeyToBatch(key []byte) {
 
 // HandleIncrementalRollups will rollup batches of 64 keys in a go routine.
 func (ir *IncRollup) HandleIncrementalRollups() {
-	m := make(map[uint64]int64) // map from hash(key) to timestamp. hash(key) to limit the size of the map.
+	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
 	limiter := time.NewTicker(100 * time.Millisecond)
 	writer := NewTxnWriter(pstore)
 
