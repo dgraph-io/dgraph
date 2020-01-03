@@ -34,8 +34,9 @@ type tarWriter interface {
 }
 
 type walker struct {
-	baseDir, debugDir string
-	output            tarWriter
+	baseDir  string
+	debugDir string
+	output   tarWriter
 }
 
 // walkPath function is called for each file present within the directory
@@ -66,20 +67,9 @@ func (w *walker) walkPath(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
-	// Just get the latest fileInfo to make sure that the size is correct
-	// when the file is writtern to tar file.
-	fpInfo, err := file.Stat()
+	header, err := tar.FileInfoHeader(info, info.Name())
 	if err != nil {
-		fpInfo, err = os.Lstat(file.Name())
-		if err != nil {
-			glog.Errorf("Failed to retrieve file information: %s", err)
-			return nil
-		}
-	}
-
-	header, err := tar.FileInfoHeader(fpInfo, fpInfo.Name())
-	if err != nil {
-		glog.Errorf("Failed to prepare file info %s: %s", fpInfo.Name(), err)
+		glog.Errorf("Failed to prepare file info %s: %s", info.Name(), err)
 		return nil
 	}
 
