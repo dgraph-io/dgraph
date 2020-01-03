@@ -679,6 +679,18 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 			predsMap[gq.Attr] = struct{}{}
 		}
 
+		for _, ord := range gq.Order {
+			predsMap[ord.Attr] = struct{}{}
+		}
+
+		for _, spec := range gq.GroupbyAttrs {
+			predsMap[spec.Attr] = struct{}{}
+		}
+
+		for _, pred := range parsePredsFromFilter(gq.Filter) {
+			predsMap[pred] = struct{}{}
+		}
+
 		for _, childPred := range parsePredsFromQuery(gq.Children) {
 			predsMap[childPred] = struct{}{}
 		}
@@ -688,6 +700,24 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	for pred := range predsMap {
 		preds = append(preds, pred)
 	}
+	return preds
+}
+
+func parsePredsFromFilter(f *gql.FilterTree) []string {
+	preds := make([]string, 0)
+
+	if f == nil {
+		return preds
+	}
+
+	if f.Func != nil && len(f.Func.Attr) > 0 {
+		preds = append(preds, f.Func.Attr)
+	}
+
+	for _, ch := range f.Child {
+		preds = append(preds, parsePredsFromFilter(ch)...)
+	}
+
 	return preds
 }
 
@@ -813,7 +843,7 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 			}
 		}
 
-		gq.FilterTree = removeFilters(gq.FilterTree, blockedPreds)
+		gq.Filter = removeFilters(gq.Filter, blockedPreds)
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
 		filter = append(filter, gq)
@@ -822,13 +852,13 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 	return filter
 }
 
-func removeFilters(f *filterTree, blockedPreds map[string]struct{}) *filterTree {
+func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
 	if f == nil {
 		return nil
 	}
 
-	if f.Func != nil && len(gq.Func.Attr) > 0 {
-		if _, ok := blockedPreds[gq.Func.Attr]; ok {
+	if f.Func != nil && len(f.Func.Attr) > 0 {
+		if _, ok := blockedPreds[f.Func.Attr]; ok {
 			return nil
 		}
 	}
@@ -841,7 +871,7 @@ func removeFilters(f *filterTree, blockedPreds map[string]struct{}) *filterTree 
 		}
 	}
 
-	if len(filteredChildren) != f.Child && (f.Op == "AND" || f.Op == "NOT") {
+	if len(filteredChildren) != len(f.Child) && (f.Op == "AND" || f.Op == "NOT") {
 		return nil
 	}
 
@@ -849,7 +879,9 @@ func removeFilters(f *filterTree, blockedPreds map[string]struct{}) *filterTree 
 	return f
 }
 
-func removeGroupBy(groupAttrs []GroupbyAttrs, blockedPreds map[string]struct{}) []GroupbyAttrs {
+func removeGroupBy(groupAttrs []gql.GroupByAttr,
+	blockedPreds map[string]struct{}) []gql.GroupByAttr {
+
 	filteredAttrs := groupAttrs[:0]
 
 	for _, gAttr := range groupAttrs {
