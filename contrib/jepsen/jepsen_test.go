@@ -21,6 +21,7 @@ func TestJepsen(t *testing.T) {
 					timeLimit:         600,
 					concurrency:       "6n",
 					rebalanceInterval: "10h",
+					nemesisInterval:   "10",
 					localBinary:       "/gobin/dgraph",
 					nodes:             "n1,n2,n3,n4,n5",
 					skew:              "",
