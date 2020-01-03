@@ -132,6 +132,10 @@ input PostOrder {
 	then: PostOrder
 }
 
+input PostRef {
+	content: String
+}
+
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PatchPost

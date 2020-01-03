@@ -42,10 +42,11 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `image.tag`                          | Container image tag                                                 | `v1.0.13`                                           |
 | `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
 | `zero.name`                          | Zero component name                                                 | `zero`                                              |
-| `zero.updateStrategy`                | Stratergy for upgrading zero nodes                                  | `RollingUpdate`                                     |
+| `zero.updateStrategy`                | Strategy for upgrading zero nodes                                   | `RollingUpdate`                                     |
 | `zero.rollingUpdatePartition`        | Partition update strategy                                           | `nil`                                               |
 | `zero.podManagementPolicy`           | Pod management policy for zero nodes                                | `OrderedReady`                                      |
 | `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
+| `zero.shardReplicaCount`             | Max number of replicas per data shard                               | `5`                                                 |
 | `zero.terminationGracePeriodSeconds` | Zero server pod termination grace period                            | `60`                                                |
 | `zero.antiAffinity`                  | Zero anti-affinity policy                                           | `soft`                                              |
 | `zero.podAntiAffinitytopologyKey`    | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
@@ -64,7 +65,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `zero.livenessProbe`                 | Zero liveness probes                                                | `See values.yaml for defaults`                      |
 | `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
 | `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
-| `alpha.updateStrategy`               | Stratergy for upgrading alpha nodes                                 | `RollingUpdate`                                     |
+| `alpha.updateStrategy`               | Strategy for upgrading alpha nodes                                  | `RollingUpdate`                                     |
 | `alpha.rollingUpdatePartition`       | Partition update strategy                                           | `nil`                                               |
 | `alpha.podManagementPolicy`          | Pod management policy for alpha nodes                               | `OrderedReady`                                      |
 | `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |

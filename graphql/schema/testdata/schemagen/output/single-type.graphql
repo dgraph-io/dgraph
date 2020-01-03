@@ -134,7 +134,10 @@ input MessageOrder {
 }
 
 input MessageRef {
-	id: ID!
+	id: ID
+	content: String
+	author: String
+	datePosted: DateTime
 }
 
 input PatchMessage {

@@ -19,6 +19,7 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
@@ -54,7 +55,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 func Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Mutate")
@@ -67,13 +68,13 @@ func Mutate(
 	queryStr := AsString(query)
 
 	if glog.V(3) {
-		b, err := json.Marshal(mutations)
-		if err != nil {
-			glog.Infof("[%s] Failed to marshal mutations for logging: %s", api.RequestID(ctx), err)
-			b = []byte("unable to marshal mutations for logging")
+		muts := make([]string, len(mutations))
+		for i, m := range mutations {
+			muts[i] = m.String()
 		}
-		glog.Infof("[%s] Executing Dgraph mutation; with Query: \n%s\nwith mutations: \n%s\n",
-			api.RequestID(ctx), queryStr, string(b))
+
+		glog.Infof("[%s] Executing Dgraph mutation; with\nQuery: \n%s\nMutations:%s",
+			api.RequestID(ctx), queryStr, strings.Join(muts, "\n"))
 	}
 
 	req := &dgoapi.Request{
@@ -86,24 +87,12 @@ func Mutate(
 		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}
 
-	var mutated []string
-	// Lets parse the mutated uids for upsert operation from the response.
+	result := make(map[string]interface{})
 	if query != nil && len(resp.GetJson()) != 0 {
-		r := make(map[string]interface{})
-		if err := json.Unmarshal(resp.GetJson(), &r); err != nil {
+		if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
 			return nil, nil,
 				schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 		}
-
-		if val, ok := r[query.Attr].([]interface{}); ok {
-			for _, v := range val {
-				if obj, vok := v.(map[string]interface{}); vok {
-					if uid, uok := obj["uid"].(string); uok {
-						mutated = append(mutated, uid)
-					}
-				}
-			}
-		}
 	}
-	return resp.GetUids(), mutated, schema.GQLWrapf(err, "Dgraph mutation failed")
+	return resp.GetUids(), result, schema.GQLWrapf(err, "Dgraph mutation failed")
 }

@@ -73,7 +73,7 @@ func add(t *testing.T, executeRequest requestExecutor) {
 	// So need to check that the Post was added to the right Author
 	// AND that the Author's posts now includes the new post.
 	newPost = addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
-	requirePost(t, newPost.PostID, newPost, executeRequest)
+	requirePost(t, newPost.PostID, newPost, true, executeRequest)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
@@ -161,6 +161,10 @@ func addAuthor(t *testing.T, countryUID string,
 						id
 				  		name
 					}
+					posts {
+						title
+						text
+					}
 			  	}
 			}
 		}`,
@@ -181,7 +185,8 @@ func addAuthor(t *testing.T, countryUID string,
 			"country": {
 				"id": "%s",
 				"name": "Testland"
-			}
+			},
+			"posts": []
 		}
 	} }`, countryUID)
 
@@ -222,6 +227,11 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 					id
 					name
 				}
+				posts {
+					postID
+					title
+					text
+				}
 			}
 		}`,
 		Variables: map[string]interface{}{"id": authorID},
@@ -235,9 +245,172 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	if diff := cmp.Diff(expectedAuthor, result.GetAuthor); diff != "" {
+	if diff := cmp.Diff(expectedAuthor, result.GetAuthor, ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func ignoreOpts() []cmp.Option {
+	return []cmp.Option{
+		cmpopts.IgnoreFields(author{}, "ID"),
+		cmpopts.IgnoreFields(country{}, "ID"),
+		cmpopts.IgnoreFields(post{}, "PostID"),
+	}
+}
+
+func deepMutations(t *testing.T) {
+	deepMutationsTest(t, postExecutor)
+}
+
+func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+
+	auth := &author{
+		Name:    "New Author",
+		Country: newCountry,
+		Posts: []*post{
+			{
+				Title: "A New Post",
+				Text:  "Text of new post",
+			},
+			{
+				Title: "Another New Post",
+				Text:  "Text of other new post",
+			},
+		},
+	}
+
+	newAuth := addAuthorFromRef(t, auth, executeRequest)
+	requireAuthor(t, newAuth.ID, newAuth, executeRequest)
+
+	anotherCountry := addCountry(t, executeRequest)
+
+	patchSet := &author{
+		Posts: []*post{
+			{
+				Title: "Creating in an update",
+				Text:  "Text of new post",
+			},
+		},
+		// Country: anotherCountry,
+		// FIXME: Won't work till https://github.com/dgraph-io/dgraph/pull/4411 is merged
+	}
+
+	patchRemove := &author{
+		Posts: []*post{newAuth.Posts[0]},
+	}
+
+	expectedAuthor := &author{
+		Name: "New Author",
+		// Country: anotherCountry,
+		Country: newCountry,
+		Posts:   []*post{newAuth.Posts[1], patchSet.Posts[0]},
+	}
+
+	updateAuthorParams := &GraphQLParams{
+		Query: `mutation updateAuthor($id: ID!, $set: PatchAuthor!, $remove: PatchAuthor!) {
+			updateAuthor(
+				input: {
+					filter: {ids: [$id]}, 
+					set: $set,
+					remove: $remove
+				}
+			) {
+			  	author {
+					id
+					name
+					country {
+						id
+				  		name
+					}
+					posts {
+						title
+						text
+					}
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id":     newAuth.ID,
+			"set":    patchSet,
+			"remove": patchRemove,
+		},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		UpdateAuthor struct {
+			Author []*author
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Len(t, result.UpdateAuthor.Author, 1)
+
+	if diff :=
+		cmp.Diff(expectedAuthor, result.UpdateAuthor.Author[0], ignoreOpts()...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	requireAuthor(t, newAuth.ID, expectedAuthor, executeRequest)
+	p := &post{
+		PostID: newAuth.Posts[0].PostID,
+		Title:  newAuth.Posts[0].Title,
+		Text:   newAuth.Posts[0].Text,
+		Tags:   []string{},
+		Author: nil,
+	}
+	requirePost(t, newAuth.Posts[0].PostID, p, false, executeRequest)
+
+	cleanUp(t,
+		[]*country{newCountry, anotherCountry},
+		[]*author{newAuth},
+		[]*post{newAuth.Posts[0], newAuth.Posts[0], patchSet.Posts[0]})
+}
+
+func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExecutor) *author {
+
+	addAuthorParams := &GraphQLParams{
+		Query: `mutation addAuthor($author: AuthorInput!) {
+			addAuthor(input: $author) {
+			  	author {
+					id
+					name
+					country {
+						id
+				  		name
+					}
+					posts(order: { asc: title }) {
+						postID
+						title
+						text
+					}
+			  	}
+			}
+		}`,
+		Variables: map[string]interface{}{"author": newAuthor},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
+	require.Nil(t, gqlResponse.Errors)
+
+	var result struct {
+		AddAuthor struct {
+			Author *author
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddAuthor.Author.ID)
+
+	if diff := cmp.Diff(newAuthor, result.AddAuthor.Author, ignoreOpts()...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddAuthor.Author
 }
 
 func addPost(t *testing.T, authorID, countryID string,
@@ -294,7 +467,7 @@ func addPost(t *testing.T, authorID, countryID string,
 	} }`, authorID, countryID)
 
 	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddPost struct {
@@ -316,11 +489,15 @@ func addPost(t *testing.T, authorID, countryID string,
 	return result.AddPost.Post
 }
 
-func requirePost(t *testing.T, postID string, expectedPost *post,
+func requirePost(
+	t *testing.T,
+	postID string,
+	expectedPost *post,
+	getAuthor bool,
 	executeRequest requestExecutor) {
 
 	params := &GraphQLParams{
-		Query: `query getPost($id: ID!)  {
+		Query: `query getPost($id: ID!, $getAuthor: Boolean!)  {
 			getPost(id: $id) {
 				postID
 				title
@@ -328,7 +505,7 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 				isPublished
 				tags
 				numLikes
-				author {
+				author @include(if: $getAuthor) {
 					id
 					name
 					country {
@@ -338,11 +515,14 @@ func requirePost(t *testing.T, postID string, expectedPost *post,
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"id": postID},
+		Variables: map[string]interface{}{
+			"id":        postID,
+			"getAuthor": getAuthor,
+		},
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetPost *post
@@ -476,7 +656,7 @@ func updateDelete(t *testing.T) {
 	newPost.Tags = []string{"example"} // the intersection of the tags was deleted
 	newPost.IsPublished = false        // must have been deleted because was set to nil in the patch
 	// newPost.NumLikes stays the same because the value in the patch was wrong
-	requirePost(t, newPost.PostID, newPost, postExecutor)
+	requirePost(t, newPost.PostID, newPost, true, postExecutor)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
@@ -1484,7 +1664,8 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 
 	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Contains(t, gqlResponse.Errors[0].Error(), "node with given xcode already exists")
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		"because id cal already exists for type State")
 
 	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}

@@ -276,8 +276,8 @@ func hashSearch(t *testing.T) {
 	var expected, result struct {
 		QueryAuthor []*author
 	}
-	expected.QueryAuthor = []*author{
-		&author{Name: "Ann Author", Dob: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)}}
+	dob := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	expected.QueryAuthor = []*author{{Name: "Ann Author", Dob: &dob}}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
@@ -338,7 +338,7 @@ func deepFilter(t *testing.T) {
 
 	expected := &author{
 		Name:  "Ann Other Author",
-		Posts: []post{{Title: "Learning GraphQL in Dgraph"}},
+		Posts: []*post{{Title: "Learning GraphQL in Dgraph"}},
 	}
 
 	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
@@ -1041,6 +1041,126 @@ func enumFilter(t *testing.T) {
 		})
 
 	}
+}
+
+func queryTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				name
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected := `{
+	"queryCountry": [
+          {
+                "name": "Angola",
+                "__typename": "Country"
+          },
+          {
+                "name": "Bangladesh",
+                "__typename": "Country"
+          },
+          {
+                "name": "Mozambique",
+                "__typename": "Country"
+          }
+        ]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+}
+
+func queryNestedTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				name
+				dob
+				posts {
+					title
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"name": "Ann Author",
+		"dob": "2000-01-01T00:00:00Z",
+		"posts": [
+		  {
+			"title": "Introducing GraphQL in Dgraph",
+			"__typename": "Post"
+		  },
+		  {
+			"title": "GraphQL doco",
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+}
+
+func typenameForInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test __typename for interface types", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: EMPIRE
+					}
+				}) {
+					name
+					__typename
+					... on Human {
+						totalCredits
+			                }
+					... on Droid {
+						primaryFunction
+			                }
+				}
+			}`,
+		}
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"Han Solo",
+			"__typename": "Human",
+			"totalCredits": 10
+		  },
+		  {
+			"name": "R2-D2",
+			"__typename": "Droid",
+			"primaryFunction": "Robot"
+		  }
+		]
+	  }`
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
 
 func defaultEnumFilter(t *testing.T) {

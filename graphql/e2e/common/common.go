@@ -98,28 +98,28 @@ type GraphQLResponse struct {
 }
 
 type country struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type author struct {
-	ID         string
-	Name       string
-	Dob        time.Time
-	Reputation float32
-	Country    country
-	Posts      []post
+	ID         string     `json:"id,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	Dob        *time.Time `json:"dob,omitempty"`
+	Reputation float32    `json:"reputation,omitempty"`
+	Country    *country   `json:"country,omitempty"`
+	Posts      []*post    `json:"posts,omitempty"`
 }
 
 type post struct {
-	PostID      string
-	Title       string
-	Text        string
-	Tags        []string
-	NumLikes    int
-	IsPublished bool
-	PostType    string
-	Author      author
+	PostID      string   `json:"postID,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	Text        string   `json:"text,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	NumLikes    int      `json:"numLikes,omitempty"`
+	IsPublished bool     `json:"isPublished,omitempty"`
+	PostType    string   `json:"postType,omitempty"`
+	Author      *author  `json:"author,omitempty"`
 }
 
 type state struct {
@@ -210,6 +210,9 @@ func RunAll(t *testing.T) {
 	t.Run("enum filter", enumFilter)
 	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
+	t.Run("query typename", queryTypename)
+	t.Run("query nested typename", queryNestedTypename)
+	t.Run("typename for interface", typenameForInterface)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -234,6 +237,7 @@ func RunAll(t *testing.T) {
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
 	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
 	t.Run("add mutation with xid", addMutationWithXID)
+	t.Run("deep mutations", deepMutations)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

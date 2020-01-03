@@ -161,7 +161,10 @@ input AuthorOrder {
 }
 
 input AuthorRef {
-	id: ID!
+	id: ID
+	name: String
+	dob: DateTime
+	posts: [PostRef]
 }
 
 input PatchAuthor {
@@ -198,7 +201,10 @@ input PostOrder {
 }
 
 input PostRef {
-	postID: ID!
+	postID: ID
+	title: String
+	text: String
+	datePublished: DateTime
 }
 
 input StringFullTextFilter_StringTermFilter {

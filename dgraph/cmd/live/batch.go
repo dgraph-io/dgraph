@@ -19,7 +19,9 @@ package live
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,8 +35,13 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/dgryski/go-farm"
 	"github.com/dustin/go-humanize/english"
 )
 
@@ -46,6 +53,8 @@ type batchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
+	// BufferSize is the number of requests that a live loader thread can store at a time
+	bufferSize int
 	// User could pass a context so that we can stop retrying requests once context is done
 	Ctx context.Context
 }
@@ -73,9 +82,13 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
+	conflicts map[uint64]struct{}
+	uidsLock  sync.RWMutex
+
 	reqNum   uint64
-	reqs     chan api.Mutation
+	reqs     chan request
 	zeroconn *grpc.ClientConn
+	schema   *schema
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -97,7 +110,7 @@ type Counter struct {
 // server expects TLS and our certificate does not match or the host name is not verified. When
 // the node certificate is created the name much match the request host name. e.g., localhost not
 // 127.0.0.1.
-func handleError(err error, reqNum uint64, isRetry bool) {
+func handleError(err error, isRetry bool) {
 	s := status.Convert(err)
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
@@ -106,7 +119,7 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
 		if !isRetry && opt.verbose {
-			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
+			fmt.Printf("Transaction aborted. Will retry in background.\n")
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
@@ -117,24 +130,25 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
+func (l *loader) infinitelyRetry(req request) {
 	defer l.retryRequestsWg.Done()
+	defer l.deregister(&req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
-		_, err := txn.Mutate(l.opts.Ctx, &req)
+		_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 		if err == nil {
 			if opt.verbose {
-				fmt.Printf("Transaction #%d succeeded after %s.\n",
-					reqNum, english.Plural(nretries, "retry", "retries"))
+				fmt.Printf("Transaction succeeded after %s.\n",
+					english.Plural(nretries, "retry", "retries"))
 			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
 		nretries++
-		handleError(err, reqNum, true)
+		handleError(err, true)
 		atomic.AddUint64(&l.aborts, 1)
 		if i >= 10*time.Second {
 			i = 10 * time.Second
@@ -143,20 +157,210 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 	}
 }
 
-func (l *loader) request(req api.Mutation, reqNum uint64) {
+func (l *loader) request(req request) {
+	atomic.AddUint64(&l.reqNum, 1)
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
-	_, err := txn.Mutate(l.opts.Ctx, &req)
+	_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
+		l.deregister(&req)
 		return
 	}
-	handleError(err, reqNum, false)
+	handleError(err, false)
 	atomic.AddUint64(&l.aborts, 1)
 	l.retryRequestsWg.Add(1)
-	go l.infinitelyRetry(req, reqNum)
+	go l.infinitelyRetry(req)
+}
+
+func getTypeVal(val *api.Value) (types.Val, error) {
+	p := gql.TypeValFrom(val)
+	//Convert value to bytes
+
+	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
+		// Already in bytes format
+		p.Value = p.Value.([]byte)
+		return p, nil
+	}
+
+	p1 := types.ValueForType(types.BinaryID)
+	if err := types.Marshal(p, &p1); err != nil {
+		return p1, err
+	}
+
+	p1.Value = p1.Value.([]byte)
+	return p1, nil
+}
+
+func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
+		Entity:    sid,
+		Attr:      nq.Predicate,
+		Label:     nq.Label,
+		Lang:      nq.Lang,
+		Facets:    nq.Facets,
+		ValueId:   oid,
+		ValueType: pb.Posting_UID,
+	}
+}
+
+func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
+	p := &pb.DirectedEdge{
+		Entity: sid,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
+		Lang:   nq.Lang,
+		Facets: nq.Facets,
+	}
+	val, err := getTypeVal(nq.ObjectValue)
+	if err != nil {
+		return p, err
+	}
+
+	p.Value = val.Value.([]byte)
+	p.ValueType = val.Tid.Enum()
+	return p, nil
+}
+
+func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
+	var id uint64 = math.MaxUint64
+
+	// Value with a lang type.
+	if len(t.Lang) > 0 {
+		id = farm.Fingerprint64([]byte(t.Lang))
+	} else if pred.List {
+		id = farm.Fingerprint64(t.Value)
+	}
+	return id
+}
+
+func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
+	pred, found := l.schema.preds[nq.Predicate]
+
+	// We dont' need to generate conflict keys for predicate with noconflict directive.
+	if found && pred.NoConflict {
+		return nil, nil
+	}
+
+	keys := make([]uint64, 0)
+
+	// Calculates the conflict keys, inspired by the logic in
+	// addMutationInteration in posting/list.go.
+	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	var oid uint64
+	var de *pb.DirectedEdge
+
+	if nq.ObjectValue == nil {
+		oid, _ = strconv.ParseUint(nq.ObjectId, 0, 64)
+		de = createUidEdge(nq, sid, oid)
+	} else {
+		var err error
+		de, err = createValueEdge(nq, sid)
+		x.Check(err)
+	}
+
+	// If the predicate is not found in schema then we don't have to generate any more keys.
+	if !found {
+		return keys, nil
+	}
+
+	if pred.List {
+		key := fingerprintEdge(de, pred)
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid))^key)
+	} else {
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
+	}
+
+	if pred.Reverse {
+		oi, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		if err != nil {
+			return keys, err
+		}
+		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
+	}
+
+	if nq.ObjectValue == nil || !(pred.Count || pred.Index) {
+		return keys, nil
+	}
+
+	errs := make([]string, 0)
+	for _, tokName := range pred.Tokenizer {
+		token, ok := tok.GetTokenizer(tokName)
+		if !ok {
+			fmt.Printf("unknown tokenizer %q", tokName)
+			continue
+		}
+
+		storageVal := types.Val{
+			Tid:   types.TypeID(de.GetValueType()),
+			Value: de.GetValue(),
+		}
+
+		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(token, nq.Lang))
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+
+		for _, t := range toks {
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Predicate, t))^sid)
+		}
+
+	}
+
+	if len(errs) > 0 {
+		return keys, fmt.Errorf(strings.Join(errs, "\n"))
+	}
+	return keys, nil
+}
+
+func (l *loader) conflictKeysForReq(req *request) []uint64 {
+	// Live loader only needs to look at sets and not deletes
+	keys := make([]uint64, 0, len(req.Set))
+	for _, nq := range req.Set {
+		conflicts, err := l.conflictKeysForNQuad(nq)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		keys = append(keys, conflicts...)
+	}
+	return keys
+}
+
+func (l *loader) addConflictKeys(req *request) bool {
+	l.uidsLock.Lock()
+	defer l.uidsLock.Unlock()
+
+	for _, key := range req.conflicts {
+		if _, ok := l.conflicts[key]; ok {
+			return false
+		}
+	}
+
+	for _, key := range req.conflicts {
+		l.conflicts[key] = struct{}{}
+	}
+
+	return true
+}
+
+func (l *loader) deregister(req *request) {
+	l.uidsLock.Lock()
+	defer l.uidsLock.Unlock()
+
+	for _, i := range req.conflicts {
+		delete(l.conflicts, i)
+	}
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
@@ -164,10 +368,37 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 // caller functions.
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
-	for req := range l.reqs {
-		reqNum := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, reqNum)
+
+	buffer := make([]request, 0, l.opts.bufferSize)
+	drain := func(maxSize int) {
+		for len(buffer) > maxSize {
+			i := 0
+			for _, req := range buffer {
+				// If there is no conflict in req, we will use it
+				// and then it would shift all the other reqs in buffer
+				if !l.addConflictKeys(&req) {
+					buffer[i] = req
+					i++
+					continue
+				}
+				// Req will no longer be part of a buffer
+				l.request(req)
+			}
+			buffer = buffer[:i]
+		}
 	}
+
+	for req := range l.reqs {
+		req.conflicts = l.conflictKeysForReq(&req)
+		if l.addConflictKeys(&req) {
+			l.request(req)
+		} else {
+			buffer = append(buffer, req)
+		}
+		drain(l.opts.bufferSize - 1)
+	}
+
+	drain(0)
 }
 
 func (l *loader) printCounters() {
