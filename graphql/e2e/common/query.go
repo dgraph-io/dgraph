@@ -1344,13 +1344,13 @@ func multipleOperations(t *testing.T) {
 		{
 			"operation name doesn't exist",
 			"sortCountryByName",
-			"unable to find operation to resolve: [sortCountryByName]",
+			"Supplied operation name sortCountryByName isn't present in the request.",
 			nil,
 		},
 		{
 			"operation name is empty",
 			"",
-			"operation name must by supplied when query has more than 1 operation",
+			"Operation name must by supplied when query has more than 1 operation.",
 			nil,
 		},
 	}
