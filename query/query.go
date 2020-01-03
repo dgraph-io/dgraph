@@ -127,10 +127,10 @@ type params struct {
 	// Facet tells us about the requested facets and their aliases.
 	Facet *pb.FacetParams
 	// FacetOrder has the name of the facet by which the results should be sorted.
-	FacetOrder string
+	FacetOrder []string
 	// FacetOrderDesc is true if the facets should be order in descending order. If it's
 	// false, the facets will be ordered in ascending order.
-	FacetOrderDesc bool
+	FacetOrderDesc []bool
 
 	// Var is the name of the variable defined in this SubGraph
 	// (e.g. in "x as name", this would be x).
@@ -514,24 +514,29 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		attrsSeen[key] = struct{}{}
 
 		args := params{
-			Alias:          gchild.Alias,
-			Cascade:        gchild.Cascade || sg.Params.Cascade,
-			Expand:         gchild.Expand,
-			Facet:          gchild.Facets,
-			FacetOrder:     gchild.FacetOrder,
-			FacetOrderDesc: gchild.FacetDesc,
-			FacetVar:       gchild.FacetVar,
-			GetUid:         sg.Params.GetUid,
-			IgnoreReflex:   sg.Params.IgnoreReflex,
-			Langs:          gchild.Langs,
-			NeedsVar:       append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
-			Normalize:      gchild.Normalize || sg.Params.Normalize,
-			Order:          gchild.Order,
-			Var:            gchild.Var,
-			GroupbyAttrs:   gchild.GroupbyAttrs,
-			IsGroupBy:      gchild.IsGroupby,
-			IsInternal:     gchild.IsInternal,
+			Alias:   gchild.Alias,
+			Cascade: gchild.Cascade || sg.Params.Cascade,
+			Expand:  gchild.Expand,
+			Facet:   gchild.Facets,
+			// FacetOrder:     gchild.FacetOrder,
+			// FacetOrderDesc: gchild.FacetDesc,
+			FacetVar:     gchild.FacetVar,
+			GetUid:       sg.Params.GetUid,
+			IgnoreReflex: sg.Params.IgnoreReflex,
+			Langs:        gchild.Langs,
+			NeedsVar:     append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
+			Normalize:    gchild.Normalize || sg.Params.Normalize,
+			Order:        gchild.Order,
+			Var:          gchild.Var,
+			GroupbyAttrs: gchild.GroupbyAttrs,
+			IsGroupBy:    gchild.IsGroupby,
+			IsInternal:   gchild.IsInternal,
 		}
+
+		// if len(gchild.FacetOrder) > 0 {
+		args.FacetOrder = gchild.FacetOrder
+		args.FacetOrderDesc = gchild.FacetDesc
+		// }
 
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -2322,7 +2327,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		return errors.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
-	orderby := sg.Params.FacetOrder
+	orderby := sg.Params.FacetOrder[0]
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
@@ -2356,7 +2361,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			continue
 		}
 		if err := types.SortWithFacet(values, &uids, facetList,
-			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
+			[]bool{sg.Params.FacetOrderDesc[0]}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
