@@ -169,9 +169,8 @@ func jepsenUp() {
 	cmd.Stderr = os.Stderr
 	env := os.Environ()
 	cmd.Env = append(env, fmt.Sprintf("JEPSEN_ROOT=%s", *jepsenRoot))
-	cmd.Env = append(env, fmt.Sprintf("COMPOSE=-f %s -f %s",
-		"../dgraph/docker/docker-compose.yml",
-		"../dgraph/docker/docker-compose-concurrent.yml"))
+	cmd.Env = append(env, fmt.Sprintf("COMPOSE=-f %s",
+		"../dgraph/docker/docker-compose.yml"))
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
