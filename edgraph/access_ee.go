@@ -532,15 +532,14 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		unAuthPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
-		if len(unAuthPreds) > 0 {
-			var preds []string
-			for key := range unAuthPreds {
-				preds = append(preds, key)
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		if len(blockedPreds) > 0 {
+			var msg strings.Builder
+			for key := range blockedPreds {
+				msg.WriteString(key + " ")
 			}
 			return status.Errorf(codes.PermissionDenied,
-				"unauthorized to alter following predicates: %s\n",
-				strings.Join(preds, ","))
+				"unauthorized to alter following predicates: %s\n", msg.String())
 		}
 		return nil
 	}
@@ -639,15 +638,14 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		unAuthPreds := authorizePreds(userId, groupIds, preds, acl.Write)
-		if len(unAuthPreds) > 0 {
-			var preds []string
-			for key := range unAuthPreds {
-				preds = append(preds, key)
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		if len(blockedPreds) > 0 {
+			var msg strings.Builder
+			for key := range blockedPreds {
+				msg.WriteString(key + " ")
 			}
 			return status.Errorf(codes.PermissionDenied,
-				"unauthorized to mutate following predicates: %s\n",
-				strings.Join(preds, ","))
+				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
 
 		return nil
@@ -739,10 +737,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 		return authorizePreds(userId, groupIds, preds, acl.Read), nil
 	}
 
-	unAuthPreds, err := doAuthorizeQuery()
-	if len(unAuthPreds) != 0 {
-		parsedReq.Query = removePredsFromQuery(parsedReq.Query, unAuthPreds)
-	}
+	blockedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -754,7 +749,15 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 		}).String())
 	}
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	if len(blockedPreds) != 0 {
+		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+	}
+
+	return nil
 }
 
 // authorizeState authorizes the State operation
@@ -788,23 +791,23 @@ func authorizeState(ctx context.Context) error {
 }
 
 func removePredsFromQuery(gqls []*gql.GraphQuery,
-	unAuthPreds map[string]struct{}) []*gql.GraphQuery {
+	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
 	filter := gqls[:0]
 	for _, gq := range gqls {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
-			if _, ok := unAuthPreds[gq.Func.Attr]; ok {
+			if _, ok := blockedPreds[gq.Func.Attr]; ok {
 				continue
 			}
 		}
 
 		if len(gq.Attr) > 0 {
-			if _, ok := unAuthPreds[gq.Attr]; ok {
+			if _, ok := blockedPreds[gq.Attr]; ok {
 				continue
 			}
 		}
 
-		gq.Children = removePredsFromQuery(gq.Children, unAuthPreds)
+		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
 		filter = append(filter, gq)
 	}
 
