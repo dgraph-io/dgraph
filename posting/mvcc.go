@@ -18,8 +18,6 @@ package posting
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"strconv"
@@ -32,15 +30,17 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
 // IncRollup is used to batch keys for rollup incrementally.
 type IncRollup struct {
-	// Ch is populated with batch of 64 keys that needs to be rolled up during reads
-	Ch chan *[][]byte
-	// Pool is sync.Pool to share the batched keys to rollup.
-	Pool sync.Pool
+	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
+	keysCh chan *[][]byte
+	// keysPool is sync.Pool to share the batched keys to rollup.
+	keysPool sync.Pool
 }
 
 var (
@@ -69,58 +69,55 @@ func (ir *IncRollup) RollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
-	err = writer.Write(&bpb.KVList{Kv: kvs})
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
 func (ir *IncRollup) addKeyToBatch(key []byte) {
-	batch := ir.Pool.Get().(*[][]byte)
+	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
 	if len(*batch) < 64 {
-		ir.Pool.Put(batch)
+		ir.keysPool.Put(batch)
 		return
 	}
 
 	select {
-	case ir.Ch <- batch:
+	case ir.keysCh <- batch:
 	default:
-		// XXX/pshah: Instead of dropping keys and starting to build the batch again,
-		// maybe we should try again later  -- check with mrjn
+		// Drop keys and build the batch again. Lossy behavior.
 		*batch = (*batch)[:0]
-		ir.Pool.Put(batch)
+		ir.keysPool.Put(batch)
 	}
 }
 
 // HandleIncrementalRollups will rollup batches of 64 keys in a go routine.
 func (ir *IncRollup) HandleIncrementalRollups() {
 	m := make(map[uint64]int64) // map from hash(key) to timestamp
-	limiter := time.Tick(10 * time.Millisecond)
+	limiter := time.Tick(100 * time.Millisecond)
 	writer := NewTxnWriter(pstore)
 
-	for batch := range ir.Ch {
+	for batch := range ir.keysCh {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
-			hashBytes := sha256.Sum256(key)
-			hash := binary.BigEndian.Uint64(hashBytes[0:]) // 1st 8 bytes of the SHA256 hash
+			hash := z.MemHash(key)
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				_ = ir.RollUpKey(writer, key)
+				err := ir.RollUpKey(writer, key)
+				if err != nil {
+					glog.Warningf("Error %v rolling up key %v\n", err, key)
+					continue
+				}
 			}
 		}
-		// clear the batch and put it back in Sync pool
+		// clear the batch and put it back in Sync keysPool
 		*batch = (*batch)[:0]
-		ir.Pool.Put(batch)
+		ir.keysPool.Put(batch)
 
 		// throttle to 1 batch = 64 rollups per 10 ms.
 		<-limiter
 	}
-	// Ch is closed. This should never happen.
+	// keysCh is closed. This should never happen.
 }
 
 // ShouldAbort returns whether the transaction should be aborted.
