@@ -432,10 +432,10 @@ message MapEntry {
 }
 
 message MovePredicatePayload {
-	string predicate  = 1;
-	uint32 source_gid = 2;
-	uint32 dest_gid   = 3;
-	uint64 txn_ts     = 4;
+	string predicate         = 1;
+	uint32 source_gid        = 2;
+	uint32 dest_gid          = 3;
+	uint64 txn_ts            = 4;
 	uint64 expected_checksum = 5;
 }
 
