@@ -18,7 +18,7 @@ func TestJepsen(t *testing.T) {
 				status := runJepsenTest(&jepsenTest{
 					workload:          w,
 					nemesis:           n,
-					timeLimit:         300,
+					timeLimit:         600,
 					concurrency:       "6n",
 					rebalanceInterval: "10h",
 					localBinary:       "/gobin/dgraph",
