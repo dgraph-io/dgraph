@@ -532,11 +532,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.attr, r.startTs, hex.Dump(r.prefix))
 
-	// We create one txn for all the mutations to be housed in. We also create a
-	// localized posting list cache, to avoid stressing or mixing up with the
-	// global lcache (the LRU cache).
-	txn := NewTxn(r.startTs)
-
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	stream.Prefix = r.prefix
@@ -560,6 +555,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, errors.Wrapf(err, "error reading posting list from disk")
 		}
 
+		txn := NewTxn(r.startTs)
 		if err := r.fn(pk.Uid, l, txn); err != nil {
 			return nil, err
 		}
@@ -567,59 +563,28 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		txn.Update()
 
-		txn.cache.Lock()
-		defer txn.cache.Unlock()
-		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
-		for key, data := range txn.cache.deltas {
-			kv := bpb.KV{
-				Key:   []byte(key),
-				Value: data,
-			}
-			kvs = append(kvs, &kv)
-		}
-		// Reset deltas
-		for k := range txn.cache.deltas {
-			delete(txn.cache.deltas, k)
-		}
-
-		return &bpb.KVList{Kv: kvs}, nil
-	}
-	stream.Send = func(kvList *bpb.KVList) error {
-		keyMap := make(map[string]struct{})
 		indexTxn := indexDB.NewTransaction(true)
-		for _, kv := range kvList.Kv {
-			strKey := string(kv.Key)
-			if _, ok := keyMap[strKey]; ok {
-				if err := indexTxn.Commit(); err != nil {
-					indexTxn.Discard()
-					return errors.Wrap(err, "error commiting txn in temp badger")
-				}
+		defer indexTxn.Discard()
 
-				for k := range keyMap {
-					delete(keyMap, k)
-				}
-
-				indexTxn = indexDB.NewTransaction(true)
-			}
-
+		// txn.cache.Lock() is not required because we are the only one making changes to txn.
+		for key, data := range txn.cache.deltas {
 			entry := &badger.Entry{
-				Key:      kv.Key,
-				Value:    kv.Value,
+				Key:      []byte(key),
+				Value:    data,
 				UserMeta: BitDeltaPosting,
 			}
 			if err := indexTxn.SetEntry(entry); err != nil {
-				indexTxn.Discard()
-				return errors.Wrap(err, "error setting entries in temp badger")
+				return nil, errors.Wrap(err, "error setting entries in temp badger")
 			}
-
-			keyMap[strKey] = struct{}{}
 		}
 
 		if err := indexTxn.Commit(); err != nil {
-			indexTxn.Discard()
-			return errors.Wrap(err, "error commiting txn in temp badger")
+			return nil, errors.Wrap(err, "error commiting txn in temp badger")
 		}
 
+		return nil, nil
+	}
+	stream.Send = func(kvList *bpb.KVList) error {
 		return nil
 	}
 
@@ -629,12 +594,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
-
-	// Flatten the LSM tree to optimize reads, we chose to create 5 workers.
-	// Flatten should not take too long compared to time taken in building the index.
-	if err := indexDB.Flatten(5); err != nil {
-		return err
-	}
 
 	// Now we write all the created posting lists to disk.
 	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
@@ -648,6 +607,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	indexStream := indexDB.NewStream()
 	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		// No need to copy key, stream framework passes a cpoied value of key in the arg here.
 		l, err := ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -665,10 +625,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
-			// which occurred before this schema mutation. Typically, we use
-			// kv.Version as the timestamp.
-			err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs)
-			if err != nil {
+			// which occurred before this schema mutation.
+			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
 				return nil, err
 			}
 		}
