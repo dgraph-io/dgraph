@@ -80,6 +80,16 @@ func add(conf *viper.Viper) error {
 	return groupAdd(conf, groupId)
 }
 
+// addTenant will add tenant and create gaurdian group for the tenant.
+func addTenant(conf *viper.Viper) error {
+	tenantName := conf.GetString("tenant")
+	if tenantName == "" {
+		return errors.New("--tenant should be set")
+	}
+
+	return nil
+}
+
 func userAdd(conf *viper.Viper, userid string, password string) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
@@ -550,6 +560,12 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 		return nil, err
 	}
 	return group, nil
+}
+
+func queryTenant(ctx context.Context, txn *dgo.Txn, tenantId string) {
+	query := fmt.Sprintf(
+		``
+	)
 }
 
 func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
