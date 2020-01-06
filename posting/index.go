@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -522,11 +523,15 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10)
-	indexDB, err := badger.Open(dbOpts)
+	indexDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}
 	defer indexDB.Close()
+
+	indexWriter := NewTxnWriter(indexDB)
+	// TODO: need to call defer Flush
+	var counter uint64 = 1
 
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
@@ -563,23 +568,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		txn.Update()
 
-		indexTxn := indexDB.NewTransaction(true)
-		defer indexTxn.Discard()
-
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		for key, data := range txn.cache.deltas {
-			entry := &badger.Entry{
-				Key:      []byte(key),
-				Value:    data,
-				UserMeta: BitDeltaPosting,
-			}
-			if err := indexTxn.SetEntry(entry); err != nil {
+			err := indexWriter.SetAt([]byte(key), data, BitDeltaPosting, atomic.AddUint64(&counter, 1))
+			if err != nil {
 				return nil, errors.Wrap(err, "error setting entries in temp badger")
 			}
-		}
-
-		if err := indexTxn.Commit(); err != nil {
-			return nil, errors.Wrap(err, "error commiting txn in temp badger")
 		}
 
 		return nil, nil
@@ -590,6 +584,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	start := time.Now()
 	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
+	if err := indexWriter.Flush(); err != nil {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
@@ -604,7 +601,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}()
 
 	writer := NewTxnWriter(pstore)
-	indexStream := indexDB.NewStream()
+	indexStream := indexDB.NewStreamAt(counter)
 	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// No need to copy key, stream framework passes a cpoied value of key in the arg here.
