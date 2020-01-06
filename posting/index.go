@@ -530,7 +530,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	defer indexDB.Close()
 
 	indexWriter := NewTxnWriter(indexDB)
-	// TODO: need to call defer Flush
+	// Set it to 1 in case there are no keys found for an index and NewStreamAt is called with ts>0.
 	var counter uint64 = 1
 
 	glog.V(1).Infof(
@@ -579,6 +579,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return nil, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
+		// The work of adding the index edges to the transaction is done by r.fn
+		// so this function doesn't have any work to do.
 		return nil
 	}
 
