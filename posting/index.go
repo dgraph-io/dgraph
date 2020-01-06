@@ -602,7 +602,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
-	writer := NewTxnWriter(pstore)
+	wb := pstore.NewWriteBatchAt(r.startTs)
+	defer wb.Cancel()
+
 	indexStream := indexDB.NewStreamAt(counter)
 	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -625,7 +627,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+			entry := &badger.Entry{
+				Key:      kv.Key,
+				Value:    kv.Value,
+				UserMeta: BitCompletePosting,
+			}
+			if err := wb.SetEntry(entry); err != nil {
 				return nil, err
 			}
 		}
@@ -641,7 +648,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
-	return writer.Flush()
+	return wb.Flush()
 }
 
 // IndexRebuild holds the info needed to initiate a rebuilt of the indices.
