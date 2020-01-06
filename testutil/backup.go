@@ -32,7 +32,6 @@ import (
 
 // GetPValues reads the specified p directory and returns the values for the given
 // attribute in a map.
-// TODO(martinmr): See if this method can be simplified (e.g not use stream framework).
 func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
 		WithReadOnly(true)
