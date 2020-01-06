@@ -282,6 +282,7 @@ newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
+noconflict_pred                : string @noconflict .
 `
 
 func populateCluster() {
@@ -585,6 +586,9 @@ func populateCluster() {
 		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
 		<202> <dgraph.type> "Object" .
+
+		<203> <owner_name> "Owner of Prius" .
+		<203> <dgraph.type> "Person" .
 
 		# data for regexp testing
 		_:luke <firstName> "Luke" .

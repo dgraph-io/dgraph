@@ -1043,6 +1043,126 @@ func enumFilter(t *testing.T) {
 	}
 }
 
+func queryTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				name
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected := `{
+	"queryCountry": [
+          {
+                "name": "Angola",
+                "__typename": "Country"
+          },
+          {
+                "name": "Bangladesh",
+                "__typename": "Country"
+          },
+          {
+                "name": "Mozambique",
+                "__typename": "Country"
+          }
+        ]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+}
+
+func queryNestedTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				name
+				dob
+				posts {
+					title
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"name": "Ann Author",
+		"dob": "2000-01-01T00:00:00Z",
+		"posts": [
+		  {
+			"title": "Introducing GraphQL in Dgraph",
+			"__typename": "Post"
+		  },
+		  {
+			"title": "GraphQL doco",
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+}
+
+func typenameForInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test __typename for interface types", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: EMPIRE
+					}
+				}) {
+					name
+					__typename
+					... on Human {
+						totalCredits
+			                }
+					... on Droid {
+						primaryFunction
+			                }
+				}
+			}`,
+		}
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"Han Solo",
+			"__typename": "Human",
+			"totalCredits": 10
+		  },
+		  {
+			"name": "R2-D2",
+			"__typename": "Droid",
+			"primaryFunction": "Robot"
+		  }
+		]
+	  }`
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		requireNoGQLErrors(t, gqlResponse)
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
 func defaultEnumFilter(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
@@ -1116,10 +1236,10 @@ func queryByMultipleInvalidIds(t *testing.T) {
 	require.Equal(t, 0, len(result.QueryPost))
 }
 
-func TestGetStateByXid(t *testing.T) {
+func getStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(code: "nsw") {
+			getState(xcode: "nsw") {
 				name
 			}
 		}`,
@@ -1130,7 +1250,7 @@ func TestGetStateByXid(t *testing.T) {
 	require.Equal(t, `{"getState":{"name":"NSW"}}`, string(gqlResponse.Data))
 }
 
-func TestGetStateWithoutArgs(t *testing.T) {
+func getStateWithoutArgs(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
 			getState {
@@ -1144,10 +1264,10 @@ func TestGetStateWithoutArgs(t *testing.T) {
 	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
 }
 
-func TestGetStateByBothXidAndUid(t *testing.T) {
+func getStateByBothXidAndUid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			getState(code: "nsw", id: "0x1") {
+			getState(xcode: "nsw", id: "0x1") {
 				name
 			}
 		}`,
@@ -1158,10 +1278,10 @@ func TestGetStateByBothXidAndUid(t *testing.T) {
 	require.JSONEq(t, `{"getState":null}`, string(gqlResponse.Data))
 }
 
-func TestQueryStateByXid(t *testing.T) {
+func queryStateByXid(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { code: { eq: "nsw"}}) {
+			queryState(filter: { xcode: { eq: "nsw"}}) {
 				name
 			}
 		}`,
@@ -1172,10 +1292,10 @@ func TestQueryStateByXid(t *testing.T) {
 	require.Equal(t, `{"queryState":[{"name":"NSW"}]}`, string(gqlResponse.Data))
 }
 
-func TestQueryStateByXidRegex(t *testing.T) {
+func queryStateByXidRegex(t *testing.T) {
 	getStateParams := &GraphQLParams{
 		Query: `{
-			queryState(filter: { code: { regexp: "/n/"}}) {
+			queryState(filter: { xcode: { regexp: "/n/"}}) {
 				name
 			}
 		}`,
@@ -1184,4 +1304,78 @@ func TestQueryStateByXidRegex(t *testing.T) {
 	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
+}
+
+func multipleOperations(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `query sortCountryByNameDesc {
+			queryCountry(order: { desc: name }, first: 1) {
+				name
+			}
+		}
+
+		query sortCountryByNameAsc {
+			queryCountry(order: { asc: name }, first: 1) {
+				name
+			}
+		}
+		`,
+		OperationName: "sortCountryByNameAsc",
+	}
+
+	cases := []struct {
+		name          string
+		operationName string
+		expectedError string
+		expected      []*country
+	}{
+		{
+			"second query name as operation name",
+			"sortCountryByNameAsc",
+			"",
+			[]*country{{Name: "Angola"}},
+		},
+		{
+			"first query name as operation name",
+			"sortCountryByNameDesc",
+			"",
+			[]*country{{Name: "Mozambique"}},
+		},
+		{
+			"operation name doesn't exist",
+			"sortCountryByName",
+			"Supplied operation name sortCountryByName isn't present in the request.",
+			nil,
+		},
+		{
+			"operation name is empty",
+			"",
+			"Operation name must by supplied when query has more than 1 operation.",
+			nil,
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			params.OperationName = test.operationName
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			if test.expectedError != "" {
+				require.NotNil(t, gqlResponse.Errors)
+				require.Equal(t, test.expectedError, gqlResponse.Errors[0].Error())
+				return
+			}
+			require.Nil(t, gqlResponse.Errors)
+
+			var expected, result struct {
+				QueryCountry []*country
+			}
+			expected.QueryCountry = test.expected
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			if diff := cmp.Diff(expected, result); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
 }

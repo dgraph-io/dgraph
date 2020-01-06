@@ -55,6 +55,13 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["float"]
 		}, {
+			"predicate": "Category.name",
+			"type": "string"
+		}, {
+			"predicate": "Category.posts",
+			"type": "uid",
+			"list": true
+		}, {
 			"predicate": "Character.appearsIn",
 			"type": "string",
 			"index": true,
@@ -71,6 +78,10 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["trigram", "hash"]
 		}, {
+			"predicate": "Country.states",
+			"type": "uid",
+			"list": true
+		}, {
 			"predicate": "Droid.primaryFunction",
 			"type": "string"
 		}, {
@@ -85,6 +96,9 @@ func TestSchema_Normal(t *testing.T) {
 			"type": "float"
 		}, {
 			"predicate": "Post.author",
+			"type": "uid"
+		}, {
+			"predicate": "Post.category",
 			"type": "uid"
 		}, {
 			"predicate": "Post.isPublished",
@@ -139,6 +153,9 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["term"]
 		}, {
+			"predicate": "State.country",
+			"type": "uid"
+		}, {
 			"predicate": "State.name",
 			"type": "string"
 		}, {
@@ -169,6 +186,13 @@ func TestSchema_Normal(t *testing.T) {
 			"name": "Author"
 		}, {
 			"fields": [{
+				"name": "Category.name"
+			}, {
+				"name": "Category.posts"
+			}],
+			"name": "Category"
+		}, {
+			"fields": [{
 				"name": "Character.name"
 			}, {
 				"name": "Character.appearsIn"
@@ -177,6 +201,8 @@ func TestSchema_Normal(t *testing.T) {
 		}, {
 			"fields": [{
 				"name": "Country.name"
+			}, {
+				"name": "Country.states"
 			}],
 			"name": "Country"
 		}, {
@@ -223,6 +249,8 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "Post.postType"
 			}, {
 				"name": "Post.author"
+			}, {
+				"name": "Post.category"
 			}],
 			"name": "Post"
 		}, {
@@ -244,6 +272,8 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "State.xcode"
 			}, {
 				"name": "State.name"
+			}, {
+				"name": "State.country"
 			}],
 			"name": "State"
 		}]

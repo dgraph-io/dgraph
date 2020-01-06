@@ -20,7 +20,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/ast"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -147,7 +149,7 @@ type Starship {
 
 func TestDgraphMapping_WithDirectives(t *testing.T) {
 	schemaStr := `
-	type Author @dgraph(name: "dgraph.author") {
+	type Author @dgraph(type: "dgraph.author") {
 			id: ID!
 
 			name: String! @search(by: [hash, trigram])
@@ -156,10 +158,10 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			posts: [Post!] @hasInverse(field: author)
 	}
 
-	type Post @dgraph(name: "dgraph.Post") {
+	type Post @dgraph(type: "dgraph.Post") {
 			postID: ID!
-			postType: PostType @search @dgraph(name: "dgraph.post_type")
-			author: Author! @hasInverse(field: posts) @dgraph(name: "dgraph.post_author")
+			postType: PostType @search @dgraph(pred: "dgraph.post_type")
+			author: Author! @hasInverse(field: posts) @dgraph(pred: "dgraph.post_author")
 	}
 
 	enum PostType {
@@ -168,22 +170,22 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			Opinion
 	}
 
-	interface Employee @dgraph(name: "dgraph.employee.en") {
+	interface Employee @dgraph(type: "dgraph.employee.en") {
 			ename: String!
 	}
 
-	interface Character @dgraph(name:"performance.character") {
+	interface Character @dgraph(type: "performance.character") {
 			id: ID!
 			name: String! @search(by: [exact])
-			appearsIn: [Episode!] @search @dgraph(name: "appears_in")
+			appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
 	}
 
 	type Human implements Character & Employee {
 			starships: [Starship]
-			totalCredits: Float @dgraph(name: "credits")
+			totalCredits: Float @dgraph(pred: "credits")
 	}
 
-	type Droid implements Character @dgraph(name: "roboDroid") {
+	type Droid implements Character @dgraph(type: "roboDroid") {
 			primaryFunction: String
 	}
 
@@ -193,9 +195,9 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			JEDI
 	}
 
-	type Starship @dgraph(name: "star.ship") {
+	type Starship @dgraph(type: "star.ship") {
 			id: ID!
-			name: String! @search(by: [term]) @dgraph(name: "star.ship.name")
+			name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
 			length: Float
 	}`
 
@@ -264,5 +266,60 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
 		t.Errorf("dgraph predicate map mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCheckNonNulls(t *testing.T) {
+
+	gqlSchema, err := FromString(`
+	type T { 
+		req: String!
+		notReq: String
+		alsoReq: String!
+	}`)
+	require.NoError(t, err)
+
+	tcases := map[string]struct {
+		obj map[string]interface{}
+		exc string
+		err error
+	}{
+		"all present": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here", "alsoReq": "here"},
+			err: nil,
+		},
+		"only non-null": {
+			obj: map[string]interface{}{"req": "here", "alsoReq": "here"},
+			err: nil,
+		},
+		"missing non-null": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here"},
+			err: errors.Errorf("type T requires a value for field alsoReq, but no value present"),
+		},
+		"missing all non-null": {
+			obj: map[string]interface{}{"notReq": "here"},
+			err: errors.Errorf("type T requires a value for field req, but no value present"),
+		},
+		"with exclusion": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here"},
+			exc: "alsoReq",
+			err: nil,
+		},
+	}
+
+	typ := &astType{
+		typ:      &ast.Type{NamedType: "T"},
+		inSchema: (gqlSchema.(*schema)).schema,
+	}
+
+	for name, test := range tcases {
+		t.Run(name, func(t *testing.T) {
+			err := typ.EnsureNonNulls(test.obj, test.exc)
+			if test.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, test.err.Error())
+			}
+		})
 	}
 }

@@ -109,7 +109,11 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
-func logUpdate(schema pb.SchemaUpdate, pred string) string {
+func logUpdate(schema *pb.SchemaUpdate, pred string) string {
+	if schema == nil {
+		return ""
+	}
+
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
 		typ = fmt.Sprintf("[%s]", typ)
@@ -124,10 +128,14 @@ func logTypeUpdate(typ pb.TypeUpdate, typeName string) string {
 
 // Set sets the schema for the given predicate in memory.
 // Schema mutations must flow through the update function, which are synced to the db.
-func (s *state) Set(pred string, schema pb.SchemaUpdate) {
+func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
+	if schema == nil {
+		return
+	}
+
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[pred] = &schema
+	s.predicate[pred] = schema
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
@@ -301,6 +309,12 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
+func (s *state) HasNoConflict(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	return s.predicate[pred].GetNoConflict()
+}
+
 // Init resets the schema state, setting the underlying DB to the given pointer.
 func Init(ps *badger.DB) {
 	pstore = ps
@@ -330,9 +344,9 @@ func Load(predicate string) error {
 	if err != nil {
 		return err
 	}
-	State().Set(predicate, s)
-	State().elog.Printf(logUpdate(s, predicate))
-	glog.Infoln(logUpdate(s, predicate))
+	State().Set(predicate, &s)
+	State().elog.Printf(logUpdate(&s, predicate))
+	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
 
@@ -370,7 +384,7 @@ func LoadSchemaFromDb() error {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-			State().Set(attr, s)
+			State().Set(attr, &s)
 			return nil
 		})
 		if err != nil {

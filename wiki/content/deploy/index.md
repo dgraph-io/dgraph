@@ -513,7 +513,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 If you are on AWS, below is the security group (**docker-machine**) after
 necessary changes.
 
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -621,9 +621,9 @@ services:
         constraints:
           - node.hostname == aws01
     command: dgraph zero --my=zero:5080 --replicas 3
-  alpha_1:
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -635,10 +635,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -650,10 +650,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -665,7 +665,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -711,10 +711,10 @@ Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
 vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
-69oge03y0koz        dgraph_alpha_2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_alpha_3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
+69oge03y0koz        dgraph_alpha2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6        dgraph_alpha3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
 uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
-v9jlw00iz2gg        dgraph_alpha_1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
+v9jlw00iz2gg        dgraph_alpha1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
 ```
 
 To stop the cluster run
@@ -737,8 +737,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
-
-![AWS Security Group](./images/aws.png)
+{{% load-img "/images/aws.png" "AWS Security Group" %}}
 
 Copy the following file on your host machine and name it as docker-compose.yml
 
@@ -747,7 +746,7 @@ version: "3"
 networks:
   dgraph:
 services:
-  zero_1:
+  zero1:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -760,8 +759,8 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero --my=zero_1:5080 --replicas 3 --idx 1
-  zero_2:
+    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
+  zero2:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
@@ -774,7 +773,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
   zero_3:
     image: dgraph/dgraph:latest
     volumes:
@@ -788,10 +787,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
-  alpha_1:
+    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero1:5080 --idx 3
+  alpha1:
     image: dgraph/dgraph:latest
-    hostname: "alpha_1"
+    hostname: "alpha1"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -804,10 +803,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha_1:7080 --lru_mb=2048 --zero=zero_1:5080
-  alpha_2:
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
+  alpha2:
     image: dgraph/dgraph:latest
-    hostname: "alpha_2"
+    hostname: "alpha2"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -820,10 +819,10 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha_2:7081 --lru_mb=2048 --zero=zero_1:5080 -o 1
-  alpha_3:
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
+  alpha3:
     image: dgraph/dgraph:latest
-    hostname: "alpha_3"
+    hostname: "alpha3"
     volumes:
       - data-volume:/dgraph
     ports:
@@ -836,7 +835,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha_3:7082 --lru_mb=2048 --zero=zero_1:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
   alpha_4:
     image: dgraph/dgraph:latest
     hostname: "alpha_4"
@@ -851,7 +850,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero_1:5080 -o 3
+    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
   alpha_5:
     image: dgraph/dgraph:latest
     hostname: "alpha_5"
@@ -866,7 +865,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero_1:5080 -o 4
+    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
   alpha_6:
     image: dgraph/dgraph:latest
     hostname: "alpha_6"
@@ -881,7 +880,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero_1:5080 -o 5
+    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -1226,6 +1225,24 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 {{% notice "tip" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 
+### More about /health endpoint
+
+The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+
+Here’s an example of JSON returned from `/health` endpoint:
+
+```json
+{
+  "version": "v1.1.1",
+  "instance": "alpha",
+  "uptime": 75011100974
+}
+```
+
+- `version`: Version of Dgraph running the Alpha server.
+- `instance`: Name of the instance. Always set to `alpha`.
+- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+
 ## More about Dgraph Zero
 
 Dgraph Zero controls the Dgraph cluster. It automatically moves data between
@@ -1243,13 +1260,13 @@ Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can quer
 to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
-  size of predicates and groups they belong to.
+size of predicates and groups they belong to.
 * `/assign?what=uids&num=100` This would allocate `num` uids and return a JSON map
 containing `startId` and `endId`, both inclusive. This id range can be safely assigned
 externally to new nodes during data ingestion.
 * `/assign?what=timestamps&num=100` This would request timestamps from Zero.
-  This is useful to fast forward Zero state when starting from a postings
-  directory, which already has commits higher than Zero's leased timestamp.
+This is useful to fast forward Zero state when starting from a postings
+directory, which already has commits higher than Zero's leased timestamp.
 * `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you
 can remove it and add a new node to the quorum. This endpoint can be used to
 remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, pass
@@ -1262,7 +1279,7 @@ You should not use the same `idx` of a node that was removed earlier.
 {{% /notice %}}
 
 * `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
-  already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
+already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
 
 
 These are the **POST** endpoints available:
@@ -1270,7 +1287,138 @@ These are the **POST** endpoints available:
 * `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
 as part of the body.
 
+### More about /state endpoint
 
+The `/state` endpoint of Dgraph Zero returns a JSON document of the current group membership info:
+
+- Instances which are part of the cluster.
+- Number of instances in Zero group and each Alpha groups.
+- Current leader of each group.
+- Predicates that belong to a group.
+- Estimated size in bytes of each predicate.
+- Enterprise license information.
+- Max Leased transaction ID.
+- Max Leased UID.
+- CID (Cluster ID).
+
+Here’s an example of JSON returned from `/state` endpoint for a 6-node Dgraph cluster with three replicas:
+
+```json
+{
+  "counter": "15",
+  "groups": {
+    "1": {
+      "members": {
+        "1": {
+          "id": "1",
+          "groupId": 1,
+          "addr": "alpha1:7080",
+          "leader": true,
+          "lastUpdate": "1576112366"
+        },
+        "2": {
+          "id": "2",
+          "groupId": 1,
+          "addr": "alpha2:7080"
+        },
+        "3": {
+          "id": "3",
+          "groupId": 1,
+          "addr": "alpha3:7080"
+        }
+      },
+      "tablets": {
+        "counter.val": {
+          "groupId": 1,
+          "predicate": "counter.val"
+        },
+        "dgraph.type": {
+          "groupId": 1,
+          "predicate": "dgraph.type"
+        }
+      },
+      "checksum": "1021598189643258447"
+    }
+  },
+  "zeros": {
+    "1": {
+      "id": "1",
+      "addr": "zero1:5080",
+      "leader": true
+    },
+    "2": {
+      "id": "2",
+      "addr": "zero2:5080"
+    },
+    "3": {
+      "id": "3",
+      "addr": "zero3:5080"
+    }
+  },
+  "maxLeaseId": "10000",
+  "maxTxnTs": "10000",
+  "cid": "3602537a-ee49-43cb-9792-c766eea683dc",
+  "license": {
+    "maxNodes": "18446744073709551615",
+    "expiryTs": "1578704367",
+    "enabled": true
+  }
+}
+```
+
+Here’s the information the above JSON document provides:
+
+- Group 0
+  - members
+    - zero1:5080, id: 1, leader
+    - zero2:5080, id: 2
+    - zero3:5080, id: 3
+- Group 1
+    - members
+        - alpha1:7080, id: 1, leader
+        - alpha2:7080, id: 2
+        - alpha3:7080, id: 3
+    - predicates
+        - dgraph.type
+        - counter.val
+- Enterprise license
+    - Enabled
+    - maxNodes: unlimited
+    - License expires on Friday, January 10, 2020 4:59:27 PM GMT-08:00 (converted from epoch timestamp)
+- Other data:
+    - maxTxnTs
+        - The current max lease of transaction timestamps used to hand out start timestamps
+          and commit timestamps.
+        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
+          10,000 IDs are leased. In the event that the Zero leader is lost, then the new
+          leader starts a brand new lease from maxTxnTs+1 . Any lost transaction IDs
+          in-between will never be used.
+        - An admin can use the Zero endpoint HTTP GET `/assign?what=timestamps&num=1000` to
+          increase the current transaction timestamp (in this case, by 1000). This is mainly
+          useful in special-case scenarios, e.g., using an existing p directory to a fresh
+          cluster in order to be able to query the latest data in the DB.
+    - maxLeaseId
+        - The current max lease of UIDs used for blank node UID assignment.
+        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
+          10,000 IDs are leased. In the event that the Zero leader is lost, the new leader
+          starts a brand new lease from maxLeaseId+1. Any UIDs lost in-between will never
+          be used for blank-node UID assignment.
+        - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
+          reserve a range of UIDs (in this case, 1000) to use externally (Zero will NEVER
+          use these UIDs for blank node UID assignment, so the user can use the range
+          to assign UIDs manually to their own data sets.
+    - CID
+        - This is a unique UUID representing the *cluster-ID* for this cluster. It is generated
+          during the initial DB startup and is retained across restarts.
+    - Group checksum
+        - This is the checksum verification of the data per Alpha group. This is used internally
+          to verify group memberships in the event of a tablet move.
+
+{{% notice "note" %}}
+"tablet", "predicate", and "edge" are synonymous terms today. The future plan to
+improve data scalability is to shard a predicate into separate tablets that could
+be assigned to different groups.
+{{% /notice %}}
 
 ## TLS configuration
 
@@ -1428,6 +1576,49 @@ The server option `--tls_client_auth` accepts different values that change the s
 | REQUIREANDVERIFY | Always require a valid certificate (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
+
+### Using Ratel UI with Client authentication
+
+Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
+connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
+HTTPS requests only. Therefore some adjustments need to be made.
+
+If the `--tls_client_auth` option is set to `REQUEST` (default) or
+`VERIFYIFGIVEN`:
+1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
+2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions.
+(E.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
+for `Secure Socket Layer`).
+
+For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
+also need to install client certificate on your OS / browser:
+
+1. Generate a client certificate: `dgraph -c MyLaptop`.
+2. Convert it to a `.p12` file:
+`openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
+3. Install the generated `MyLaptopCert.p12` file on the client system
+(on Mac OS this means simply double-click the file in Finder).
+4. Next time you use Ratel to connect to an alpha with Client authentication
+enabled the browser will prompt you for a client certificate to use. Select the
+certificate you've just installed in the step above and queries/mutations will
+succeed.
+
+### Troubleshooting Ratel's Client authentication
+
+If you are getting errors in Ratel when server's TLS is enabled try opening
+your alpha URL as a webpage.
+
+Assuming you are running Dgraph on your local machine, opening
+`https://localhost:8080/` in browser should produce a message `Dgraph browser is available for running separately using the dgraph-ratel binary`.
+
+In case you are getting a connection error, try not passing the
+`--tls_client_auth` flag when starting an alpha. If you are still getting an
+error, check that your hostname is correct and the port is open; then make sure
+that "Dgraph Root CA" certificate is installed and trusted correctly.
+
+After that, if things work without `--tls_client_auth` but stop working when
+`REQUIREANY` and `REQUIREANDVERIFY` is set make sure the `.p12` file is
+installed correctly.
 
 ## Cluster Checklist
 
@@ -1891,7 +2082,7 @@ This also works from a browser, provided the HTTP GET is being run from the same
 This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
 1. For the Alpha instance that receives the GET request, the group's export data is stored with this Alpha.
-2. For every other group, its group's export data is stored with the Alpha leader of that group. 
+2. For every other group, its group's export data is stored with the Alpha leader of that group.
 
 It is up to the user to retrieve the right export files from the Alphas in the
 cluster. Dgraph does not copy all files to the Alpha that initiated the export.

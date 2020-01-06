@@ -63,16 +63,19 @@ var errFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*queueItem
 
-func (h priorityQueue) Len() int           { return len(h) }
+func (h priorityQueue) Len() int { return len(h) }
+
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
+
 func (h priorityQueue) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index = i
 	h[j].index = j
 }
-func (h *priorityQueue) Push(x interface{}) {
+
+func (h *priorityQueue) Push(val interface{}) {
 	n := len(*h)
-	item := x.(*queueItem)
+	item := val.(*queueItem)
 	item.index = n
 	*h = append(*h, item)
 }
@@ -80,10 +83,10 @@ func (h *priorityQueue) Push(x interface{}) {
 func (h *priorityQueue) Pop() interface{} {
 	old := *h
 	n := len(old)
-	x := old[n-1]
+	val := old[n-1]
 	*h = old[0 : n-1]
-	x.index = -1
-	return x
+	val.index = -1
+	return val
 }
 
 type mapItem struct {
@@ -125,11 +128,12 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	if err != nil {
 		return 0.0, nil, err
 	}
-	if tv.Tid == types.IntID {
+	switch {
+	case tv.Tid == types.IntID:
 		cost = float64(tv.Value.(int64))
-	} else if tv.Tid == types.FloatID {
+	case tv.Tid == types.FloatID:
 		cost = float64(tv.Value.(float64))
-	} else {
+	default:
 		rerr = errFacet
 	}
 	return cost, fcs, rerr
@@ -203,10 +207,11 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						}
 						// The default cost we'd use is 1.
 						cost, facet, err := subgraph.getCost(mIdx, lIdx)
-						if err == errFacet {
+						switch {
+						case err == errFacet:
 							// Ignore the edge and continue.
 							continue
-						} else if err != nil {
+						case err != nil:
 							rch <- err
 							return
 						}

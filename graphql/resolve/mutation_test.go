@@ -56,17 +56,17 @@ type dgraphMutation struct {
 
 func TestMutationRewriting(t *testing.T) {
 	t.Run("Add Mutation Rewriting", func(t *testing.T) {
-		mutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter())
+		mutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter)
 	})
 	t.Run("Update Mutation Rewriting", func(t *testing.T) {
-		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter())
+		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter)
 	})
 	t.Run("Delete Mutation Rewriting", func(t *testing.T) {
-		mutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter())
+		mutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter)
 	})
 }
 
-func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewriter) {
+func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
 	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
@@ -93,6 +93,8 @@ func mutationRewriting(t *testing.T, file string, rewriterToTest MutationRewrite
 			require.NoError(t, err)
 
 			mut := test.GetMutation(t, op)
+
+			rewriterToTest := rewriterFactory()
 
 			// -- Act --
 			q, muts, err := rewriterToTest.Rewrite(mut)

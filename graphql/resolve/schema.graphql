@@ -4,12 +4,13 @@
 type Country {
         id: ID!
         name: String! @search(by: [trigram])
+        states: [State] @hasInverse(field: country)
 }
 
 type State {
         code: String! @id
         country: Country
-        name: String
+        name: String!
 }
 
 type Author {

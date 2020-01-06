@@ -388,41 +388,7 @@ func TestMutationSingleUid(t *testing.T) {
 		}
 	}
 	`
-	require.Error(t, runMutation(m))
-}
-
-// Verify multiple uids are allowed after mutation.
-func TestSchemaMutationUid(t *testing.T) {
-	// reset Schema
-	require.NoError(t, schema.ParseBytes([]byte(""), 1))
-
-	var s1 = `
-            friend: uid .
-	`
-	require.NoError(t, alterSchema(s1))
-	var m1 = `
-	{
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-		}
-	}
-	`
-	require.Error(t, runMutation(m1))
-
-	var s2 = `
-            friend: [uid] .
-	`
-	require.NoError(t, alterSchema(s2))
-	var m2 = `
-	{
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-		}
-	}
-	`
-	require.NoError(t, runMutation(m2))
+	require.NoError(t, runMutation(m))
 }
 
 // Verify a list uid predicate cannot be converted to a single-element predicate.

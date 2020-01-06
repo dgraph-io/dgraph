@@ -3,14 +3,16 @@
 
 type Country {
         # **Don't delete** Comments in types should work
-        id: ID! # **Don't delete** Comments in in lines should work
+        id: ID! # **Don't delete** Comments in lines should work
         name: String! @search(by: [trigram, hash])
+        states: [State] @hasInverse(field: country) @dgraph(name: "hasStates")
 }
 
 type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
-        name: String
+        name: String!
+        country: Country @dgraph(name: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -21,7 +23,7 @@ type State {
 GraphQL descriptions look like this.  They should work in the input
 schema and should make their way into the generated schema.
 """
-type Author @dgraph(name: "dgraph.author") {
+type Author @dgraph(type: "dgraph.author") {
         id: ID!
 
         """
@@ -36,16 +38,23 @@ type Author @dgraph(name: "dgraph.author") {
         posts: [Post!] @hasInverse(field: author)
 }
 
-type Post @dgraph(name: "myPost") {
+type Post @dgraph(type: "myPost") {
         postID: ID!
         title: String! @search(by: [term, fulltext])
-        text: String @search(by: [fulltext]) @dgraph(name: "text")
+        text: String @search(by: [fulltext]) @dgraph(pred: "text")
         tags: [String] @search(by: [exact])
-        topic: String @search(by: [exact]) @dgraph(name: "dgraph.topic")
+        topic: String @search(by: [exact]) @dgraph(pred: "dgraph.topic")
         numLikes: Int @search
-        isPublished: Boolean @search @dgraph(name: "is_published")
+        isPublished: Boolean @search @dgraph(pred: "is_published")
         postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts) @dgraph(name: "post.author")
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
 }
 
 """
@@ -67,22 +76,22 @@ enum PostType {
 GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
-interface Employee @dgraph(name: "dgraph.employee.en") {
+interface Employee @dgraph(type: "dgraph.employee.en") {
         ename: String!
 }
 
-interface Character @dgraph(name: "performance.character") {
+interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search @dgraph(name: "appears_in")
+        appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
 }
 
 type Human implements Character & Employee {
         starships: [Starship]
-        totalCredits: Float @dgraph(name: "credits")
+        totalCredits: Float @dgraph(pred: "credits")
 }
 
-type Droid implements Character @dgraph(name: "roboDroid") {
+type Droid implements Character @dgraph(type: "roboDroid") {
         primaryFunction: String
 }
 
@@ -92,8 +101,8 @@ enum Episode {
         JEDI
 }
 
-type Starship @dgraph(name: "star.ship") {
+type Starship @dgraph(type: "star.ship") {
         id: ID!
-        name: String! @search(by: [term]) @dgraph(name: "star.ship.name")
+        name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
         length: Float
 }
