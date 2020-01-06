@@ -63,6 +63,11 @@ func (rl *rateLimiter) bleed() {
 	defer tick.Stop()
 
 	for range tick.C {
+		rl.c.L.Lock()
+		iou := rl.iou
+		rl.c.L.Unlock()
+		// Pending proposals is tracking ious.
+		ostats.Record(context.Background(), x.PendingProposals.M(int64(iou)))
 		rl.c.Broadcast()
 	}
 }
@@ -78,7 +83,6 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 		if rl.iou+weight <= rl.max {
 			rl.iou += weight
 			c.L.Unlock()
-			ostats.Record(ctx, x.PendingProposals.M(int64(weight)))
 			return nil
 		}
 		c.Wait()
@@ -102,7 +106,6 @@ func (rl *rateLimiter) decr(retry int) {
 	rl.iou -= weight
 	rl.c.L.Unlock()
 	rl.c.Broadcast()
-	ostats.Record(context.Background(), x.PendingProposals.M(-int64(weight)))
 }
 
 // uniqueKey is meant to be unique across all the replicas.

@@ -54,7 +54,7 @@ func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
-	go limiter.c.Broadcast()
+	go limiter.bleed()
 
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
