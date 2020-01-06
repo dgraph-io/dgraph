@@ -597,7 +597,8 @@
         } ]
       }
     }
-  explanation: "The add mutation has only one option because the state isn't a valid create"
+  explanation: "The add mutation has only one option because the state isn't a valid create
+    because it's missing required field name"
   dgquery: |-
     query {
       State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {

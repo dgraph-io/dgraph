@@ -932,7 +932,7 @@ func (t *astType) Interfaces() []string {
 }
 
 // CheckNonNulls checks that any non nullables in t are present in obj.
-// Fields of type ID are not checked, is any exclusion.
+// Fields of type ID are not checked, nor is any exclusion.
 //
 // For our reference types for adding/linking objects, we'd like to have something like
 //
