@@ -202,8 +202,8 @@ func (b *Session) vrfSign(input []byte) ([]byte, error) {
 }
 
 // construct a block for this slot with the given parent
-func (b *Session) buildBlock(parent *types.BlockHeaderWithHash, slot Slot) (*types.Block, error) {
-	log.Trace("build-block", "parent", parent, "slot", slot)
+func (b *Session) buildBlock(parent *types.BlockHeader, slot Slot) (*types.Block, error) {
+	log.Debug("build-block", "parent", parent, "slot", slot)
 
 	// initialize block
 	encodedHeader, err := codec.Encode(parent)

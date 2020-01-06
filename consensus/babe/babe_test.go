@@ -17,7 +17,6 @@
 package babe
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"math/big"
@@ -298,16 +297,13 @@ func TestSlotOffset(t *testing.T) {
 }
 
 func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
-
-	genesisBlock := types.BlockWithHash{
-		Header: &types.BlockHeaderWithHash{
+	genesisBlock := types.Block{
+		Header: &types.BlockHeader{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
-			Hash:       common.Hash{0x00},
 		},
 		Body: &types.BlockBody{},
 	}
-
 	genesisBlock.SetBlockArrivalTime(uint64(1000))
 
 	d := &db.BlockDB{
@@ -315,27 +311,19 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 	}
 
 	bt := blocktree.NewBlockTreeFromGenesis(genesisBlock, d)
-	previousHash := genesisBlock.Header.Hash
+	previousHash := genesisBlock.Header.Hash()
 	previousAT := genesisBlock.GetBlockArrivalTime()
 
 	for i := 1; i <= depth; i++ {
-		hex := fmt.Sprintf("%06x", i)
-
-		hash, err := common.HexToHash("0x" + hex)
-
-		if err != nil {
-			t.Error(err)
-		}
-
-		block := types.BlockWithHash{
-			Header: &types.BlockHeaderWithHash{
+		block := types.Block{
+			Header: &types.BlockHeader{
 				ParentHash: previousHash,
-				Hash:       hash,
 				Number:     big.NewInt(int64(i)),
 			},
 			Body: &types.BlockBody{},
 		}
 
+		hash := block.Header.Hash()
 		block.SetBlockArrivalTime(previousAT + uint64(1000))
 
 		bt.AddBlock(block)
@@ -344,7 +332,6 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 	}
 
 	return bt
-
 }
 
 func TestSlotTime(t *testing.T) {
@@ -492,7 +479,7 @@ func TestBuildBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parentHeader := &types.BlockHeaderWithHash{
+	parentHeader := &types.BlockHeader{
 		ParentHash: zeroHash,
 		Number:     big.NewInt(0),
 	}

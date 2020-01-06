@@ -10,43 +10,45 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 )
 
-func setup() (polkadb.Database, *types.BlockHeaderWithHash) {
-	h := &types.BlockHeaderWithHash{
+func setup(t *testing.T) (polkadb.Database, *types.BlockHeader) {
+	h := &types.BlockHeader{
 		ParentHash:     common.BytesToHash([]byte("parent_test")),
 		Number:         big.NewInt(2),
 		StateRoot:      common.BytesToHash([]byte("state_root_test")),
 		ExtrinsicsRoot: common.BytesToHash([]byte("extrinsics_test")),
 		Digest:         []byte("digest_test"),
-		Hash:           common.BytesToHash([]byte("hash_test")),
 	}
+	h.Hash()
 	return polkadb.NewMemDatabase(), h
 }
 
 func TestSetHeader(t *testing.T) {
-	memDB, h := setup()
+	memDB, h := setup(t)
 
 	SetHeader(memDB, h)
-	entry := GetHeader(memDB, h.Hash)
+	entry := GetHeader(memDB, h.Hash())
 	if reflect.DeepEqual(entry, h) {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, h)
 	}
-	if h.Hash != entry.Hash {
+	entryHash := entry.Hash()
+	if h.Hash() != entryHash {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, h)
 	}
 }
 
 func TestSetBlockData(t *testing.T) {
 	var body *types.BlockBody
-	memDB, h := setup()
+	memDB, h := setup(t)
 
+	hash := h.Hash()
 	bd := &types.BlockData{
-		Hash:   common.BytesToHash([]byte("bd_hash")),
+		Hash:   hash,
 		Header: h,
 		Body:   body,
 	}
 
 	SetBlockData(memDB, bd)
-	entry := GetBlockData(memDB, bd.Hash)
+	entry := GetBlockData(memDB, bd.Header.Hash())
 	if reflect.DeepEqual(entry, bd) {
 		t.Fatalf("Retrieved blockData mismatch: have %v, want %v", entry, bd)
 	}
