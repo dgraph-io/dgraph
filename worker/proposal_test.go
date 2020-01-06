@@ -28,10 +28,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-// propposeAndWaitEmulator emulates proposeAndWait. It has has one function(propose) inside it,
+// proposeAndWaitEmulator emulates proposeAndWait. It has has one function(propose) inside it,
 // which returns errInternalRetry 50% of the time. Rest of the time it just sleeps for 1 second
 // to emulate successful response.
-func propposeAndWaitEmulator() error {
+func proposeAndWaitEmulator() error {
 	// succeed/fail with equal probability.
 	propose := func(timeout time.Duration) error {
 		num := int(rand.Int31n(10))
@@ -63,10 +63,10 @@ func propposeAndWaitEmulator() error {
 // This test tests for deadlock in rate limiter. It tried some fixed number of proposals in
 // multiple goroutines. At the end it matches if sum of completed and aborted proposals is
 // equal to tried proposals or not.
-func TestLimiter(t *testing.T) {
+func TestLimiterDeadlock(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	toTry := int64(1000) // total proposals count to propose.
+	toTry := int64(10000) // total proposals count to propose.
 	var currentCount, pending, completed, aborted int64
 
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}
@@ -95,7 +95,7 @@ func TestLimiter(t *testing.T) {
 					break
 				}
 				atomic.AddInt64(&pending, 1)
-				if err := propposeAndWaitEmulator(); err != nil {
+				if err := proposeAndWaitEmulator(); err != nil {
 					atomic.AddInt64(&aborted, 1)
 				} else {
 					atomic.AddInt64(&completed, 1)
