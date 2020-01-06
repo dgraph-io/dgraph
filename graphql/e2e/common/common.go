@@ -98,8 +98,9 @@ type GraphQLResponse struct {
 }
 
 type country struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	ID     string   `json:"id,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	States []*state `json:"states,omitempty"`
 }
 
 type author struct {
@@ -112,20 +113,28 @@ type author struct {
 }
 
 type post struct {
-	PostID      string   `json:"postID,omitempty"`
-	Title       string   `json:"title,omitempty"`
-	Text        string   `json:"text,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	NumLikes    int      `json:"numLikes,omitempty"`
-	IsPublished bool     `json:"isPublished,omitempty"`
-	PostType    string   `json:"postType,omitempty"`
-	Author      *author  `json:"author,omitempty"`
+	PostID      string    `json:"postID,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Text        string    `json:"text,omitempty"`
+	Tags        []string  `json:"tags,omitempty"`
+	NumLikes    int       `json:"numLikes,omitempty"`
+	IsPublished bool      `json:"isPublished,omitempty"`
+	PostType    string    `json:"postType,omitempty"`
+	Author      *author   `json:"author,omitempty"`
+	Category    *category `json:"category,omitempty"`
+}
+
+type category struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Posts []post `json:"posts,omitempty"`
 }
 
 type state struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Code string `json:"xcode"`
+	ID      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Code    string   `json:"xcode,omitempty"`
+	Country *country `json:"country,omitempty"`
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -231,11 +240,14 @@ func RunAll(t *testing.T) {
 	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
 	t.Run("add mutation with xid", addMutationWithXID)
 	t.Run("deep mutations", deepMutations)
+	t.Run("deep XID mutations", deepXIDMutations)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
+	t.Run("deep mutation errors", deepMutationErrors)
+
 }
 
 func gunzipData(data []byte) ([]byte, error) {
