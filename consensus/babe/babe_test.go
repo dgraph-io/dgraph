@@ -17,6 +17,7 @@
 package babe
 
 import (
+	"bytes"
 	"io"
 	"math"
 	"math/big"
@@ -83,7 +84,8 @@ func newRuntime(t *testing.T) *runtime.Runtime {
 		t.Fatal("could not create filepath")
 	}
 
-	ss := NewTestRuntimeStorage()
+	tr := trie.NewEmptyTrie(nil)
+	ss := NewTestRuntimeStorage(tr)
 
 	r, err := runtime.NewRuntimeFromFile(fp, ss, nil)
 	if err != nil {
@@ -325,7 +327,6 @@ func TestSlotOffset(t *testing.T) {
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
 	}
-
 }
 
 func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
@@ -404,7 +405,6 @@ func TestSlotTime(t *testing.T) {
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
 	}
-
 }
 
 func TestStart(t *testing.T) {
@@ -504,33 +504,9 @@ func TestBuildBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
-	txb := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
-
-	validity, err := babesession.validateTransaction(txb)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// https://github.com/paritytech/substrate/blob/ea2644a235f4b189c8029b9c9eac9d4df64ee91e/core/test-runtime/src/system.rs#L190
-	expected := &tx.Validity{
-		Priority: 69,
-		Requires: [][]byte{{}},
-		// https://github.com/paritytech/substrate/blob/ea2644a235f4b189c8029b9c9eac9d4df64ee91e/core/test-runtime/src/system.rs#L173
-		Provides:  [][]byte{{146, 157, 61, 99, 63, 98, 30, 242, 128, 49, 150, 90, 140, 165, 187, 249}},
-		Longevity: 64,
-		Propagate: true,
-	}
-
-	if !reflect.DeepEqual(expected, validity) {
-		t.Error(
-			"received unexpected validity",
-			"\nexpected:", expected,
-			"\nreceived:", validity,
-		)
-	}
-
-	vtx := tx.NewValidTransaction(types.Extrinsic(txb), expected)
+	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
+	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
+	vtx := tx.NewValidTransaction(types.Extrinsic(txb), &tx.Validity{})
 	babesession.PushToTxQueue(vtx)
 
 	zeroHash, err := common.HexToHash("0x00")
@@ -545,7 +521,7 @@ func TestBuildBlock(t *testing.T) {
 
 	slot := Slot{
 		start:    uint64(time.Now().Unix()),
-		duration: uint64(10),
+		duration: uint64(10000000),
 		number:   1,
 	}
 
@@ -554,22 +530,27 @@ func TestBuildBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// the hash of an empty trie
-	emptyRootHash, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
+	// hash of parent header
+	parentHash, err := common.HexToHash("0x03106e6f6f740140676f7373616d65725f69735f636f6f6c6c00000000000000")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	extrinsicsHash, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
+	stateRoot, err := common.HexToHash("0x31ce5e74d7141520abc11b8a68f884cb1d01b5476a6376a659d93a199c4884e0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	extrinsicsRoot, err := common.HexToHash("0xd88e048eda17aaefc427c832ea1208508d67a3e96527be0995db742b5cd91a61")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	expectedBlockHeader := &types.BlockHeader{
-		ParentHash:     zeroHash,
+		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
-		StateRoot:      emptyRootHash,
-		ExtrinsicsRoot: extrinsicsHash,
+		StateRoot:      stateRoot,
+		ExtrinsicsRoot: extrinsicsRoot,
 		Digest:         []byte{},
 	}
 
@@ -578,9 +559,69 @@ func TestBuildBlock(t *testing.T) {
 	}
 }
 
-func NewTestRuntimeStorage() *TestRuntimeStorage {
+func TestBuildBlock_failing(t *testing.T) {
+	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &SessionConfig{
+		Runtime: rt,
+		Keypair: kp,
+	}
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = babesession.configurationFromRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
+	// add a valid transaction
+	txa := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
+	vtx := tx.NewValidTransaction(types.Extrinsic(txa), &tx.Validity{})
+	babesession.PushToTxQueue(vtx)
+
+	// add a transaction that can't be included (transfer from account with no balance)
+	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
+	txb := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
+	vtx = tx.NewValidTransaction(types.Extrinsic(txb), &tx.Validity{})
+	babesession.PushToTxQueue(vtx)
+
+	zeroHash, err := common.HexToHash("0x00")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parentHeader := &types.BlockHeader{
+		ParentHash: zeroHash,
+		Number:     big.NewInt(0),
+	}
+
+	slot := Slot{
+		start:    uint64(time.Now().Unix()),
+		duration: uint64(10000000),
+		number:   1,
+	}
+
+	_, err = babesession.buildBlock(parentHeader, slot)
+	if err == nil {
+		t.Fatal("should error when attempting to include invalid tx")
+	}
+
+	txc := babesession.txQueue.Peek()
+	if !bytes.Equal(*txc.Extrinsic, txa) {
+		t.Fatal("did not readd valid transaction to queue")
+	}
+}
+
+func NewTestRuntimeStorage(tr *trie.Trie) *TestRuntimeStorage {
 	return &TestRuntimeStorage{
-		trie: trie.NewEmptyTrie(nil),
+		trie: tr,
 	}
 }
 

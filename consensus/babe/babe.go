@@ -17,6 +17,7 @@
 package babe
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -229,14 +230,62 @@ func (b *Session) buildBlock(parent *types.BlockHeader, slot Slot) (*types.Block
 		return nil, err
 	}
 
+	// add block extrinsics
+	included, err := b.buildBlockExtrinsics(slot)
+	if err != nil {
+		return nil, err
+	}
+
 	// finalize block
+	log.Trace("build_block finalize block")
 	block, err := b.finalizeBlock()
 	if err != nil {
+		b.addToQueue(included)
 		return nil, err
 	}
 
 	block.Header.Number.Add(parent.Number, big.NewInt(1))
 	return block, nil
+}
+
+// buildBlockExtrinsics applies extrinsics to the block. it returns an array of included extrinsics.
+// for each extrinsic in queue, add it to the block, until the slot ends or the block is full.
+// if any extrinsic fails, it returns an empty array and an error.
+func (b *Session) buildBlockExtrinsics(slot Slot) ([]*tx.ValidTransaction, error) {
+	extrinsic := b.nextReadyExtrinsic()
+	included := []*tx.ValidTransaction{}
+
+	// TODO: check when block is full
+	for !hasSlotEnded(slot) && extrinsic != nil {
+		log.Trace("build_block", "applying extrinsic", extrinsic)
+		ret, err := b.applyExtrinsic(*extrinsic)
+		if err != nil {
+			return nil, err
+		}
+
+		// if ret == 0x0001, there is a dispatch error; if ret == 0x01, there is an apply error
+		if ret[0] == 1 || bytes.Equal(ret[:2], []byte{0, 1}) {
+			// TODO: specific error code checking
+			log.Error("build_block apply extrinsic", "error", ret, "extrinsic", extrinsic)
+
+			// remove invalid extrinsic from queue
+			b.txQueue.Pop()
+
+			// readd previously popped extrinsics back to queue
+			b.addToQueue(included)
+
+			return nil, errors.New("could not apply extrinsic")
+		} else {
+			log.Trace("build_block applied extrinsic", "extrinsic", extrinsic)
+		}
+
+		// keep track of included transactions; re-add them to queue later if block building fails
+		t := b.txQueue.Pop()
+		included = append(included, t)
+		extrinsic = b.nextReadyExtrinsic()
+	}
+
+	return included, nil
 }
 
 // buildBlockInherents applies the inherents for a block
@@ -265,4 +314,23 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 	}
 
 	return nil
+}
+
+func (b *Session) addToQueue(txs []*tx.ValidTransaction) {
+	for _, t := range txs {
+		b.txQueue.Insert(t)
+	}
+}
+
+// nextReadyExtrinsic peeks from the transaction queue. it does not remove any transactions from the queue
+func (b *Session) nextReadyExtrinsic() *types.Extrinsic {
+	transaction := b.txQueue.Peek()
+	if transaction == nil {
+		return nil
+	}
+	return transaction.Extrinsic
+}
+
+func hasSlotEnded(slot Slot) bool {
+	return slot.start+slot.duration < uint64(time.Now().Unix())
 }

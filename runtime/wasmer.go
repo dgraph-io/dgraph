@@ -37,10 +37,11 @@ type RuntimeCtx struct {
 }
 
 type Runtime struct {
-	vm       wasm.Instance
-	storage  Storage
-	keystore *keystore.Keystore
-	mutex    sync.Mutex
+	vm        wasm.Instance
+	storage   Storage
+	keystore  *keystore.Keystore
+	mutex     sync.Mutex
+	allocator *allocator.FreeingBumpHeapAllocator
 }
 
 // NewRuntimeFromFile instantiates a runtime from a .wasm file
@@ -83,10 +84,11 @@ func NewRuntime(code []byte, s Storage, ks *keystore.Keystore) (*Runtime, error)
 	instance.SetContextData(&runtimeCtx)
 
 	r := Runtime{
-		vm:       instance,
-		storage:  s,
-		mutex:    sync.Mutex{},
-		keystore: ks,
+		vm:        instance,
+		storage:   s,
+		mutex:     sync.Mutex{},
+		keystore:  ks,
+		allocator: memAllocator,
 	}
 
 	return &r, nil
@@ -111,19 +113,31 @@ func (r *Runtime) Load(location, length int32) []byte {
 	return mem[location : location+length]
 }
 
-func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) {
+func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
+	ptr, err := r.malloc(uint32(len(data)))
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		err = r.free(ptr)
+		if err != nil {
+			log.Error("exec: could not free ptr", "error", err)
+		}
+	}()
+
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	// Store the data into memory
-	r.Store(data, loc)
-	leng := int32(len(data))
+	r.Store(data, int32(ptr))
+	datalen := int32(len(data))
 
 	runtimeFunc, ok := r.vm.Exports[function]
 	if !ok {
 		return nil, fmt.Errorf("could not find exported function %s", function)
 	}
-	res, err := runtimeFunc(loc, leng)
+	res, err := runtimeFunc(int32(ptr), datalen)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +149,14 @@ func (r *Runtime) Exec(function string, loc int32, data []byte) ([]byte, error) 
 	rawdata := r.Load(offset, length)
 
 	return rawdata, err
+}
+
+func (r *Runtime) malloc(size uint32) (uint32, error) {
+	return r.allocator.Allocate(size)
+}
+
+func (r *Runtime) free(ptr uint32) error {
+	return r.allocator.Deallocate(ptr)
 }
 
 func decodeToInterface(in []byte, t interface{}) (interface{}, error) {

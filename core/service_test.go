@@ -348,6 +348,10 @@ type TestRuntimeStorage struct {
 	trie *trie.Trie
 }
 
+func (trs TestRuntimeStorage) TrieAsString() string {
+	return trs.trie.String()
+}
+
 func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
 	return trs.trie.Put(key, value)
 }

@@ -29,9 +29,7 @@ import (
 // runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction
 // and returns *Validity
 func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
-	var loc int32 = 1000
-
-	ret, err := s.rt.Exec(runtime.TaggedTransactionQueueValidateTransaction, loc, e)
+	ret, err := s.rt.Exec(runtime.TaggedTransactionQueueValidateTransaction, e)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +47,7 @@ func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 // runs the block through runtime function Core_execute_block
 // doesn't return data, but will error if the call isn't successful
 func (s *Service) validateBlock(b []byte) error {
-	var loc int32 = 1000
-
-	_, err := s.rt.Exec(runtime.CoreExecuteBlock, loc, b)
+	_, err := s.rt.Exec(runtime.CoreExecuteBlock, b)
 	if err != nil {
 		return err
 	}

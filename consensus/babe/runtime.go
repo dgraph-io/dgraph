@@ -17,23 +17,20 @@
 package babe
 
 import (
-	"errors"
-
 	scale "github.com/ChainSafe/gossamer/codec"
-	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
 // gets the configuration data for Babe from the runtime
 func (b *Session) configurationFromRuntime() error {
-	ret, err := b.rt.Exec(runtime.BabeApiConfiguration, 1, []byte{})
+	data, err := b.rt.Exec(runtime.BabeApiConfiguration, []byte{})
 	if err != nil {
 		return err
 	}
 
 	bc := new(BabeConfiguration)
-	_, err = scale.Decode(ret, bc)
+	_, err = scale.Decode(data, bc)
 	if err != nil {
 		return err
 	}
@@ -46,39 +43,23 @@ func (b *Session) configurationFromRuntime() error {
 
 // calls runtime API function Core_initialize_block
 func (b *Session) initializeBlock(blockHeader []byte) error {
-	// TODO: use allocator to store block header
-	var loc int32 = 1
-	b.rt.Store(blockHeader, loc)
-
-	_, err := b.rt.Exec(runtime.CoreInitializeBlock, loc, blockHeader)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err := b.rt.Exec(runtime.CoreInitializeBlock, blockHeader)
+	return err
 }
 
 // calls runtime API function BlockBuilder_inherent_extrinsics
-func (b *Session) inherentExtrinsics(blockInherentData []byte) ([]byte, error) { //nolint:unused
-	// TODO: use allocator to store inherents data
-	var loc int32 = 1
-	b.rt.Store(blockInherentData, loc)
-
-	return b.rt.Exec(runtime.BlockBuilderInherentExtrinsics, loc, blockInherentData)
+func (b *Session) inherentExtrinsics(data []byte) ([]byte, error) {
+	return b.rt.Exec(runtime.BlockBuilderInherentExtrinsics, data)
 }
 
 // calls runtime API function BlockBuilder_apply_extrinsic
-func (b *Session) applyExtrinsic(e types.Extrinsic) ([]byte, error) { //nolint:unused
-	// TODO: use allocator to store extrinsic
-	var loc int32 = 1
-	b.rt.Store(e, loc)
-
-	return b.rt.Exec(runtime.BlockBuilderApplyExtrinsic, loc, e)
+func (b *Session) applyExtrinsic(data types.Extrinsic) ([]byte, error) {
+	return b.rt.Exec(runtime.BlockBuilderApplyExtrinsic, data)
 }
 
 // calls runtime API function BlockBuilder_finalize_block
 func (b *Session) finalizeBlock() (*types.Block, error) {
-	ret, err := b.rt.Exec(runtime.BlockBuilderFinalizeBlock, 0, []byte{})
+	data, err := b.rt.Exec(runtime.BlockBuilderFinalizeBlock, []byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -88,27 +69,6 @@ func (b *Session) finalizeBlock() (*types.Block, error) {
 		Body:   new(types.BlockBody),
 	}
 
-	_, err = scale.Decode(ret, bh)
+	_, err = scale.Decode(data, bh)
 	return bh, err
-}
-
-// calls runtime API function TaggedTransactionQueue_validate_transaction
-func (b *Session) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
-	// TODO: use allocator to store extrinsic
-	var loc int32 = 1000
-	b.rt.Store(e, loc)
-
-	ret, err := b.rt.Exec(runtime.TaggedTransactionQueueValidateTransaction, loc, e)
-	if err != nil {
-		return nil, err
-	}
-
-	if ret[0] != 0 {
-		return nil, errors.New("could not validate transaction")
-	}
-
-	v := tx.NewValidity(0, [][]byte{{}}, [][]byte{{}}, 0, false)
-	_, err = scale.Decode(ret[1:], v)
-
-	return v, err
 }

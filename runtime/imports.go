@@ -84,7 +84,7 @@ func ext_print_num(context unsafe.Pointer, data C.int64_t) {
 
 //export ext_malloc
 func ext_malloc(context unsafe.Pointer, size int32) int32 {
-	log.Trace("[ext_malloc] executing...")
+	log.Trace("[ext_malloc] executing...", "size", size)
 	instanceContext := wasm.IntoInstanceContext(context)
 	data := instanceContext.Data()
 	runtimeCtx, ok := data.(*RuntimeCtx)
@@ -104,10 +104,8 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 
 //export ext_free
 func ext_free(context unsafe.Pointer, addr int32) {
-	log.Trace("[ext_free] executing...")
-	log.Trace("[ext_free]", "addr", addr)
+	log.Trace("[ext_free] executing...", "addr", addr)
 	instanceContext := wasm.IntoInstanceContext(context)
-
 	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
 
 	// Deallocate memory
