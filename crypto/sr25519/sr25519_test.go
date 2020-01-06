@@ -98,3 +98,25 @@ func TestEncodeAndDecodePublicKey(t *testing.T) {
 		t.Fatalf("Fail: got %v expected %v", res.key, exp)
 	}
 }
+
+func TestVrfSignAndVerify(t *testing.T) {
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := []byte("helloworld")
+	out, proof, err := kp.VrfSign(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub := kp.Public().(*PublicKey)
+	ok, err := pub.VrfVerify(msg, out, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("Fail: did not verify vrf")
+	}
+}

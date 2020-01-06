@@ -24,6 +24,7 @@ import (
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/p2p"
@@ -54,10 +55,24 @@ type Config struct {
 // NewService returns a new core service that connects the runtime, BABE
 // session, and p2p service.
 func NewService(cfg *Config, newBlocks chan types.Block) (*Service, error) {
+	if cfg.Keystore == nil {
+		return nil, fmt.Errorf("no keystore provided")
+	}
+
+	keys := cfg.Keystore.Sr25519Keypairs()
+	// no validator keypair found, generate a new one
+	if len(keys) == 0 {
+		kp, err := sr25519.GenerateKeypair()
+		if err != nil {
+			return nil, err
+		}
+		cfg.Keystore.Insert(kp)
+		keys = cfg.Keystore.Sr25519Keypairs()
+	}
 
 	// BABE session configuration
 	bsConfig := &babe.SessionConfig{
-		Keystore:  cfg.Keystore,
+		Keypair:   keys[0].(*sr25519.Keypair),
 		Runtime:   cfg.Runtime,
 		NewBlocks: newBlocks, // becomes block send channel in BABE session
 	}

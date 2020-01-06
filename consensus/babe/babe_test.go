@@ -31,6 +31,7 @@ import (
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	db "github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/trie"
@@ -38,8 +39,6 @@ import (
 
 const POLKADOT_RUNTIME_FP string = "../../substrate_test_runtime.compact.wasm"
 const POLKADOT_RUNTIME_URL string = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
-
-var zeroHash, _ = common.HexToHash("0x00")
 
 // getRuntimeBlob checks if the polkadot runtime wasm file exists and if not, it fetches it from github
 func getRuntimeBlob() (n int64, err error) {
@@ -164,8 +163,14 @@ func TestCalculateThreshold_AuthorityWeights(t *testing.T) {
 func TestRunLottery(t *testing.T) {
 	rt := newRuntime(t)
 
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &SessionConfig{
 		Runtime: rt,
+		Keypair: kp,
 	}
 
 	babesession, err := NewSession(cfg)
@@ -173,24 +178,45 @@ func TestRunLottery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babesession.authorityIndex = 0
-	babesession.authorityData = []AuthorityData{
-		{nil, 1}, {nil, 1}, {nil, 1},
-	}
-	conf := &BabeConfiguration{
-		SlotDuration:       1000,
-		EpochLength:        6,
-		C1:                 3,
-		C2:                 10,
-		GenesisAuthorities: []AuthorityDataRaw{},
-		Randomness:         0,
-		SecondarySlots:     false,
-	}
-	babesession.config = conf
+	babesession.epochThreshold = big.NewInt(0)
 
-	_, err = babesession.runLottery(0)
+	outAndProof, err := babesession.runLottery(0)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if outAndProof == nil {
+		t.Fatal("proof was nil when over threshold")
+	}
+}
+
+func TestRunLottery_False(t *testing.T) {
+	rt := newRuntime(t)
+
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &SessionConfig{
+		Runtime: rt,
+		Keypair: kp,
+	}
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	babesession.epochThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+
+	outAndProof, err := babesession.runLottery(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if outAndProof != nil {
+		t.Fatal("proof was not nil when under threshold")
 	}
 }
 
@@ -208,8 +234,14 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 
 func TestConfigurationFromRuntime(t *testing.T) {
 	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &SessionConfig{
 		Runtime: rt,
+		Keypair: kp,
 	}
 
 	babesession, err := NewSession(cfg)
@@ -297,6 +329,11 @@ func TestSlotOffset(t *testing.T) {
 }
 
 func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
+	zeroHash, err := common.HexToHash("0x00")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	genesisBlock := types.Block{
 		Header: &types.BlockHeader{
 			ParentHash: zeroHash,
@@ -337,8 +374,14 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 func TestSlotTime(t *testing.T) {
 	rt := newRuntime(t)
 	bt := createFlatBlockTree(t, 100)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &SessionConfig{
 		Runtime: rt,
+		Keypair: kp,
 	}
 
 	babesession, err := NewSession(cfg)
@@ -366,8 +409,14 @@ func TestSlotTime(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &SessionConfig{
 		Runtime:   rt,
+		Keypair:   kp,
 		NewBlocks: make(chan types.Block),
 	}
 
@@ -397,11 +446,15 @@ func TestStart(t *testing.T) {
 
 func TestBabeAnnounceMessage(t *testing.T) {
 	rt := newRuntime(t)
-
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 	newBlocks := make(chan types.Block)
 
 	cfg := &SessionConfig{
 		Runtime:   rt,
+		Keypair:   kp,
 		NewBlocks: newBlocks,
 	}
 
@@ -432,8 +485,14 @@ func TestBabeAnnounceMessage(t *testing.T) {
 
 func TestBuildBlock(t *testing.T) {
 	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &SessionConfig{
 		Runtime: rt,
+		Keypair: kp,
 	}
 
 	babesession, err := NewSession(cfg)

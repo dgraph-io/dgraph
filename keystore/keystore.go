@@ -39,6 +39,10 @@ func (ks *Keystore) Get(pub common.Address) crypto.Keypair {
 
 func (ks *Keystore) Ed25519PublicKeys() []crypto.PublicKey {
 	edkeys := []crypto.PublicKey{}
+	if ks.keys == nil {
+		return edkeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*ed25519.Keypair); ok {
 			edkeys = append(edkeys, key.Public())
@@ -49,6 +53,10 @@ func (ks *Keystore) Ed25519PublicKeys() []crypto.PublicKey {
 
 func (ks *Keystore) Ed25519Keypairs() []crypto.Keypair {
 	edkeys := []crypto.Keypair{}
+	if ks.keys == nil {
+		return edkeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*ed25519.Keypair); ok {
 			edkeys = append(edkeys, key)
@@ -59,6 +67,10 @@ func (ks *Keystore) Ed25519Keypairs() []crypto.Keypair {
 
 func (ks *Keystore) Sr25519PublicKeys() []crypto.PublicKey {
 	srkeys := []crypto.PublicKey{}
+	if ks.keys == nil {
+		return srkeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*sr25519.Keypair); ok {
 			srkeys = append(srkeys, key.Public())
@@ -69,6 +81,10 @@ func (ks *Keystore) Sr25519PublicKeys() []crypto.PublicKey {
 
 func (ks *Keystore) Sr25519Keypairs() []crypto.Keypair {
 	srkeys := []crypto.Keypair{}
+	if ks.keys == nil {
+		return srkeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*sr25519.Keypair); ok {
 			srkeys = append(srkeys, key)
@@ -79,6 +95,10 @@ func (ks *Keystore) Sr25519Keypairs() []crypto.Keypair {
 
 func (ks *Keystore) Secp256k1PublicKeys() []crypto.PublicKey {
 	sckeys := []crypto.PublicKey{}
+	if ks.keys == nil {
+		return sckeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*secp256k1.Keypair); ok {
 			sckeys = append(sckeys, key.Public())
@@ -89,6 +109,10 @@ func (ks *Keystore) Secp256k1PublicKeys() []crypto.PublicKey {
 
 func (ks *Keystore) Secp256k1Keypairs() []crypto.Keypair {
 	sckeys := []crypto.Keypair{}
+	if ks.keys == nil {
+		return sckeys
+	}
+
 	for _, key := range ks.keys {
 		if _, ok := key.(*secp256k1.Keypair); ok {
 			sckeys = append(sckeys, key)
