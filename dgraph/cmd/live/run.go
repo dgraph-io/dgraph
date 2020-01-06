@@ -232,7 +232,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 		}
 	}
 
-	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize))
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize, "default"))
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {

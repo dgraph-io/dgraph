@@ -596,3 +596,19 @@ func IsInternalPredicate(pred string) bool {
 	_, ok := internalPredicateMap[strings.ToLower(pred)]
 	return ok
 }
+
+// PredicateKeyForNamespace returns predicate for the given namespace.
+func PredicateKeyForNamespace(pred, namespace string) string {
+	return namespace + pred
+}
+
+// PredicateFromNamespace trims the namespace from the predicate key.
+func PredicateFromNamespace(pred, namespace string) string {
+	return pred[len(namespace):]
+}
+
+// IsPredicateForNamespace checks whether the given predicate is belong to the given namespace or
+// not.
+func IsPredicateForNamespace(pred, namespace string) bool {
+	return pred[:len(namespace)] == namespace
+}

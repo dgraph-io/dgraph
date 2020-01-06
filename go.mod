@@ -1,5 +1,7 @@
 module github.com/dgraph-io/dgraph
 
+replace github.com/dgraph-io/dgo/v2 => /home/schoolboy/src/github.com/dgraph-io/dgo
+
 go 1.12
 
 require (
@@ -15,6 +17,7 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
+	github.com/dgraph-io/badger v1.6.0
 	github.com/dgraph-io/badger/v2 v2.0.1-0.20191210152157-7c5e6d7f6e8b
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
 	github.com/dgraph-io/ristretto v0.0.1 // indirect

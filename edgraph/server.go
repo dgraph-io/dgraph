@@ -56,9 +56,10 @@ import (
 )
 
 const (
-	methodMutate = "Server.Mutate"
-	methodQuery  = "Server.Query"
-	groupFile    = "group_id"
+	methodMutate     = "Server.Mutate"
+	methodQuery      = "Server.Query"
+	groupFile        = "group_id"
+	defaultNamespace = "default"
 )
 
 const (
@@ -81,6 +82,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 
+	// Set default namespace if there is no namespace.
+	// TODO: In OSS BUIILD, It always has to be default namespace.
+	if op.Namespace == "" {
+		op.Namespace = defaultNamespace
+	}
 	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
@@ -206,11 +212,24 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
+	// Convert schema for the given namespace.
+	convertSchemaForNamespace(op.Namespace, result)
+
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
+	m.Namespace = op.Namespace
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
+}
+
+// convertSchemaForNamespace will convert the predicate name for the given namespace.
+func convertSchemaForNamespace(namespace string, s *schema.ParsedSchema) {
+	for _, pred := range s.Preds {
+		// No need to check for reserved predicate. Because, Alter will reject if there any reserved
+		// predicate.
+		pred.Predicate = x.PredicateKeyForNamespace(pred.Predicate, namespace)
+	}
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -642,6 +661,11 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		return nil, ctx.Err()
 	}
 
+	if req.Namespace == "" {
+		// Set to default namespace.
+		req.Namespace = defaultNamespace
+	}
+
 	l := &query.Latency{}
 	l.Start = time.Now()
 
@@ -736,8 +760,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	qr := query.Request{
-		Latency:  qc.latency,
-		GqlQuery: &qc.gqlRes,
+		Latency:   qc.latency,
+		GqlQuery:  &qc.gqlRes,
+		Namespace: qc.req.GetNamespace(),
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
@@ -864,7 +889,7 @@ func parseRequest(qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu)
+			gmu, err := parseMutationObject(mu, qc.req.Namespace)
 			if err != nil {
 				return err
 			}
@@ -1003,11 +1028,11 @@ func isAlterAllowed(ctx context.Context) error {
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
+func parseMutationObject(mu *api.Mutation, namespace string) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
-		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
+		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1016,14 +1041,14 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	}
 	if len(mu.DeleteJson) > 0 {
 		// The metadata is not currently needed for delete operations so it can be safely ignored.
-		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
+		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads, namespace)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, md, err := chunker.ParseRDFs(mu.SetNquads)
+		nqs, md, err := chunker.ParseRDFs(mu.SetNquads, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1031,7 +1056,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)
+		nqs, _, err := chunker.ParseRDFs(mu.DelNquads, namespace)
 		if err != nil {
 			return nil, err
 		}

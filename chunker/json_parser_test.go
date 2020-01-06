@@ -71,7 +71,7 @@ type Person struct {
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
-	nqs := NewNQuadBuffer(1000)
+	nqs := NewNQuadBuffer(1000, "default")
 	err := nqs.ParseJSON(b, op)
 	return nqs.nquads, err
 }
@@ -355,7 +355,7 @@ func TestJsonNumberParsing(t *testing.T) {
 		nqs, err := Parse([]byte(test.in), SetNquads)
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
-			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
+			require.Equal(t, makeNquad("1", "defaultkey", test.out), nqs[0])
 		} else {
 			require.Error(t, err)
 		}
@@ -575,7 +575,7 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
-	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
+	require.Equal(t, nq[0], makeNquadEdge("1000", "defaultfriend", "1001"))
 }
 
 func TestNquadsFromJsonDeleteStar(t *testing.T) {
@@ -585,7 +585,7 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "name",
+		Predicate: "defaultname",
 		ObjectValue: &api.Value{
 			Val: &api.Value_DefaultVal{
 				DefaultVal: "_STAR_ALL",
@@ -601,7 +601,7 @@ func TestValInUpsert(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "name",
+		Predicate: "defaultname",
 		ObjectId:  "val(name)",
 	}
 	require.Equal(t, expected, nq[0])
@@ -614,7 +614,7 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "name",
+		Predicate: "defaultname",
 		ObjectValue: &api.Value{
 			Val: &api.Value_DefaultVal{
 				DefaultVal: "_STAR_ALL",

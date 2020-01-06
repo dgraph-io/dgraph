@@ -48,34 +48,34 @@ func TestParseNQuads(t *testing.T) {
 		# this line is a comment
 		_:a <join> _:b .
 	`
-	nqs, _, err := chunker.ParseRDFs([]byte(nquads))
+	nqs, _, err := chunker.ParseRDFs([]byte(nquads), "default")
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
-		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
-		makeNquad("_:b", "predB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
-		makeNquadEdge("_:a", "join", "_:b"),
+		makeNquad("_:a", "defaultpredA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
+		makeNquad("_:b", "defaultpredB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
+		makeNquadEdge("_:a", "defaultjoin", "_:b"),
 	}, nqs)
 }
 
 func TestValNquads(t *testing.T) {
 	nquads := `uid(m) <name> val(f) .`
-	_, _, err := chunker.ParseRDFs([]byte(nquads))
+	_, _, err := chunker.ParseRDFs([]byte(nquads), "default")
 	require.NoError(t, err)
 }
 
 func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
-	nqs, _, err := chunker.ParseRDFs([]byte(nquads))
+	nqs, _, err := chunker.ParseRDFs([]byte(nquads), "default")
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
-		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
-		makeNquad("_:b", "predB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
+		makeNquad("_:a", "defaultpredA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
+		makeNquad("_:b", "defaultpredB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
 	}, nqs)
 }
 
 func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
-	nqs, _, err := chunker.ParseRDFs([]byte(nquads))
+	nqs, _, err := chunker.ParseRDFs([]byte(nquads), "default")
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", x.Star, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}),
@@ -107,7 +107,7 @@ func TestValidateKeys(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			nq, _, err := chunker.ParseRDFs([]byte(tc.nquad))
+			nq, _, err := chunker.ParseRDFs([]byte(tc.nquad), "default")
 			require.NoError(t, err)
 
 			err = validateKeys(nq[0])

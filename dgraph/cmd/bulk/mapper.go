@@ -135,7 +135,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
-	chunk := chunker.NewChunker(inputFormat, 1000)
+	chunk := chunker.NewChunker(inputFormat, 1000, "default")
 	nquads := chunk.NQuads()
 	go func() {
 		for chunkBuf := range m.readerChunkCh {

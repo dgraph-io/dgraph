@@ -188,6 +188,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	var params struct {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
+		Namespace string            `json:"namespace"`
 	}
 	contentType := r.Header.Get("Content-Type")
 	switch strings.ToLower(contentType) {
@@ -217,9 +218,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := api.Request{
-		Vars:    params.Variables,
-		Query:   params.Query,
-		StartTs: startTs,
+		Vars:      params.Variables,
+		Query:     params.Query,
+		StartTs:   startTs,
+		Namespace: params.Namespace,
 	}
 
 	if req.StartTs == 0 {

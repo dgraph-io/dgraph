@@ -562,12 +562,6 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	return group, nil
 }
 
-func queryTenant(ctx context.Context, txn *dgo.Txn, tenantId string) {
-	query := fmt.Sprintf(
-		``
-	)
-}
-
 func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
 	return (len(acl1.Predicate) > 0 && len(acl2.Predicate) > 0 &&
 		acl1.Predicate == acl2.Predicate)

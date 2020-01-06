@@ -222,6 +222,7 @@ message Mutations {
 	string drop_value = 8;
 
 	Metadata metadata = 9;
+	string namespace = 10; // Namespace of the current mutation.
 }
 
 message Metadata {

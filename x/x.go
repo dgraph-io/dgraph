@@ -746,8 +746,3 @@ func IsGuardian(groups []string) bool {
 
 	return false
 }
-
-// GaurdianForTenant returns gaurdian name for the given tenant.
-func GaurdianForTenant(tenantName string) string {
-	return fmt.Sprintf("%s-of-%s", GuardiansId, tenantName)
-}

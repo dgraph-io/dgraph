@@ -265,7 +265,8 @@ type SubGraph struct {
 	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
 
-	pathMeta *pathMetadata
+	pathMeta  *pathMetadata
+	namespace string
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -442,7 +443,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		}
 	}
 	for _, ftc := range ft.Child {
-		child := &SubGraph{}
+		child := &SubGraph{namespace: sg.namespace}
 		if err := filterCopy(child, ftc); err != nil {
 			return err
 		}
@@ -554,8 +555,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			Attr:   gchild.Attr,
-			Params: args,
+			Attr:      gchild.Attr,
+			Params:    args,
+			namespace: sg.namespace,
 		}
 		if gchild.MathExp != nil {
 			mathExp := &mathTree{}
@@ -586,7 +588,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		if gchild.Filter != nil {
-			dstf := &SubGraph{}
+			dstf := &SubGraph{namespace: sg.namespace}
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
 				return err
 			}
@@ -684,8 +686,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the pb.SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, gq)
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery, namespace string) (*SubGraph, error) {
+	sg, err := newGraph(ctx, gq, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -732,7 +734,7 @@ func (sg *SubGraph) populate(uids []uint64) error {
 }
 
 // newGraph returns the SubGraph and its task query.
-func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *gql.GraphQuery, namespace string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 
@@ -766,7 +768,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, errors.Wrapf(err, "while filling args")
 	}
 
-	sg := &SubGraph{Params: args}
+	sg := &SubGraph{Params: args, namespace: namespace}
 
 	if gq.Func != nil {
 		// Uid function doesnt have Attr. It just has a list of ids
@@ -793,7 +795,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	// Copy roots filter.
 	if gq.Filter != nil {
-		sgf := &SubGraph{}
+		sgf := &SubGraph{namespace: namespace}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
 			return nil, errors.Wrapf(err, "while copying filter")
 		}
@@ -869,7 +871,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         attr,
+		Attr:         x.PredicateKeyForNamespace(attr, sg.namespace),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1794,6 +1796,7 @@ func uniquePreds(list []string) []string {
 func recursiveCopy(dst *SubGraph, src *SubGraph) {
 	dst.Attr = src.Attr
 	dst.Params = src.Params
+	dst.namespace = src.namespace
 	dst.Params.ParentVars = make(map[string]varValue)
 	for k, v := range src.Params.ParentVars {
 		dst.Params.ParentVars[k] = v
@@ -1861,8 +1864,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			temp := &SubGraph{
-				ReadTs: sg.ReadTs,
-				Attr:   pred,
+				ReadTs:    sg.ReadTs,
+				Attr:      pred,
+				namespace: sg.namespace,
 			}
 			temp.Params = child.Params
 			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
@@ -2148,6 +2152,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					IgnoreResult: true,
 					Langs:        it.Langs,
 				},
+				namespace: sg.namespace,
 			})
 		}
 	}
@@ -2257,7 +2262,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
 	sortMsg := &pb.SortMessage{
-		Order:     sg.Params.Order,
+		Order:     sg.createOrderForTask(),
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2289,6 +2294,20 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// while sorting.
 	sg.updateDestUids()
 	return nil
+}
+
+// createOrderForTask creates namespaced aware order for the task.
+func (sg *SubGraph) createOrderForTask() []*pb.Order {
+	out := []*pb.Order{}
+	for _, o := range sg.Params.Order {
+		oc := &pb.Order{
+			Attr:  x.PredicateKeyForNamespace(o.Attr, sg.namespace),
+			Desc:  o.Desc,
+			Langs: o.Langs,
+		}
+		out = append(out, oc)
+	}
+	return out
 }
 
 func (sg *SubGraph) updateDestUids() {
@@ -2528,7 +2547,8 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	Vars map[string]varValue
+	Vars      map[string]varValue
+	Namespace string // Namespace of the current request.
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2552,7 +2572,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			return errors.Errorf("Invalid query. No function used at root and no aggregation" +
 				" or math variables found in the body.")
 		}
-		sg, err := ToSubGraph(ctx, gq)
+		sg, err := ToSubGraph(ctx, gq, req.Namespace)
 		if err != nil {
 			return errors.Wrapf(err, "while converting to subgraph")
 		}
@@ -2712,9 +2732,27 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+	// Filter schema nodes for the given namespace.
+	er.SchemaNode = filterSchemaNodesForNamespace(req.Namespace, er.SchemaNode)
+
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
+}
+
+// filterSchemaNodesForNamespace will filter schema nodes for the given namespace.
+func filterSchemaNodesForNamespace(namespace string, nodes []*pb.SchemaNode) []*pb.SchemaNode {
+	out := []*pb.SchemaNode{}
+
+	for _, node := range nodes {
+		if !x.IsPredicateForNamespace(node.Predicate, namespace) {
+			// Skip this node, If it's not belong to the current namespace.
+			continue
+		}
+		node.Predicate = x.PredicateFromNamespace(node.Predicate, namespace)
+		out = append(out, node)
+	}
+	return out
 }
 
 // StripBlankNode returns a copy of the map where all the keys have the blank node prefix removed.

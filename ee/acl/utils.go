@@ -210,20 +210,3 @@ func CreateGroupNQuads(groupId string) []*api.NQuad {
 		},
 	}
 }
-
-// CreateTenantNQuads creates NQuads needed to store a tenant with the given tenantName.
-func CreateTenantNQuads(tenantId string) []*api.NQuad {
-	nquads := []*api.NQuad{
-		{
-			Subject:     "_:newtenant",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: tenantId}},
-		},
-		{
-			Subject:     "_:newtenant",
-			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "DgraphTenant"}},
-		},
-	}
-	return append(nquads, CreateGroupNQuads(x.GaurdianForTenant(tenantId))...)
-}
