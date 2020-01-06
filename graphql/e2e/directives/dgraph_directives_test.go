@@ -97,8 +97,7 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			},
 			{
 				"predicate": "dgraph.author",
-				"type": "uid",
-				"list": true
+				"type": "uid"
 			},
 			{
 				"predicate": "dgraph.author.country",
