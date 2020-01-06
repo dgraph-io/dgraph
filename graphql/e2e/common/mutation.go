@@ -431,20 +431,21 @@ func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	expectedAuthor1 := &author{
 		Name:    "New Author1",
 		Country: newCountry,
-		Posts:   []*post{newAuths[0].Posts[0], newAuths[0].Posts[1]},
+		Posts:   newAuths[0].Posts,
 	}
 
 	expectedAuthor2 := &author{
 		Name:    "New Author2",
 		Country: newCountry,
-		Posts:   []*post{newAuths[1].Posts[0], newAuths[1].Posts[1]},
+		Posts:   newAuths[1].Posts,
 	}
 
 	expectedAuthors := []*author{expectedAuthor1, expectedAuthor2}
 
 	for i := range newAuths {
 		requireAuthor(t, newAuths[i].ID, expectedAuthors[i], executeRequest)
-		for j, _ := range newAuths[i].Posts {
+		require.Equal(t, len(newAuths[i].Posts), 2)
+		for j := range newAuths[i].Posts {
 			requirePost(t, newAuths[i].Posts[j].PostID, expectedAuthors[i].Posts[j],
 				false, executeRequest)
 		}
