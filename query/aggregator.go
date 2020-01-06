@@ -72,13 +72,14 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	_, err := types.Less(va, vb)
 	if err != nil {
 		//Try to convert values.
-		if va.Tid == types.IntID {
+		switch {
+		case va.Tid == types.IntID:
 			va.Tid = types.FloatID
 			va.Value = float64(va.Value.(int64))
-		} else if vb.Tid == types.IntID {
+		case vb.Tid == types.IntID:
 			vb.Tid = types.FloatID
 			vb.Value = float64(vb.Value.(int64))
-		} else {
+		default:
 			return false, err
 		}
 	}
@@ -394,11 +395,12 @@ const (
 
 func getValType(v *types.Val) valType {
 	var vBase valType
-	if v.Tid == types.IntID {
+	switch v.Tid {
+	case types.IntID:
 		vBase = INT
-	} else if v.Tid == types.FloatID {
+	case types.FloatID:
 		vBase = FLOAT
-	} else {
+	default:
 		vBase = DEFAULT
 	}
 	return vBase
@@ -498,9 +500,10 @@ func (ag *aggregator) Apply(val types.Val) {
 			res = va
 		}
 	case "sum", "avg":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
+		switch {
+		case va.Tid == types.IntID && vb.Tid == types.IntID:
 			va.Value = va.Value.(int64) + vb.Value.(int64)
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+		case va.Tid == types.FloatID && vb.Tid == types.FloatID:
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		}
 		// Skipping the else case since that means the pair cannot be summed.
@@ -533,9 +536,10 @@ func (ag *aggregator) divideByCount() {
 		return
 	}
 	var v float64
-	if ag.result.Tid == types.IntID {
+	switch ag.result.Tid {
+	case types.IntID:
 		v = float64(ag.result.Value.(int64))
-	} else if ag.result.Tid == types.FloatID {
+	case types.FloatID:
 		v = ag.result.Value.(float64)
 	}
 
@@ -549,11 +553,12 @@ func (ag *aggregator) Value() (types.Val, error) {
 	}
 	ag.divideByCount()
 	if ag.result.Tid == types.FloatID {
-		if math.IsInf(ag.result.Value.(float64), 1) {
+		switch {
+		case math.IsInf(ag.result.Value.(float64), 1):
 			ag.result.Value = math.MaxFloat64
-		} else if math.IsInf(ag.result.Value.(float64), -1) {
+		case math.IsInf(ag.result.Value.(float64), -1):
 			ag.result.Value = -1 * math.MaxFloat64
-		} else if math.IsNaN(ag.result.Value.(float64)) {
+		case math.IsNaN(ag.result.Value.(float64)):
 			ag.result.Value = 0.0
 		}
 	}

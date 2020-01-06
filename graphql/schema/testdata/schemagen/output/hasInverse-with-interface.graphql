@@ -207,7 +207,11 @@ input AnswerOrder {
 }
 
 input AnswerRef {
-	id: ID!
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
 }
 
 input AuthorFilter {
@@ -231,7 +235,10 @@ input AuthorOrder {
 }
 
 input AuthorRef {
-	id: ID!
+	id: ID
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
 }
 
 input PatchAnswer {
@@ -302,7 +309,11 @@ input QuestionOrder {
 }
 
 input QuestionRef {
-	id: ID!
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
 }
 
 input UpdateAnswerInput {

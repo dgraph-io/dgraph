@@ -89,7 +89,7 @@ type MutationRewriter interface {
 	FromMutationResult(
 		m schema.Mutation,
 		assigned map[string]string,
-		mutated []string) (*gql.GraphQuery, error)
+		result map[string]interface{}) (*gql.GraphQuery, error)
 }
 
 // A MutationExecutor can execute a mutation and returns the assigned map, the
@@ -102,7 +102,7 @@ type MutationExecutor interface {
 	Mutate(
 		ctx context.Context,
 		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, []string, error)
+		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
@@ -188,13 +188,13 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	assigned, mutated, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
+	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
-	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, mutated)
+	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())

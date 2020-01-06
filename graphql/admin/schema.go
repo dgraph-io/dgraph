@@ -73,19 +73,19 @@ func (asr *addSchemaResolver) Rewrite(
 func (asr *addSchemaResolver) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
-	mutated []string) (*gql.GraphQuery, error) {
-	return asr.baseMutationRewriter.FromMutationResult(mutation, assigned, mutated)
+	result map[string]interface{}) (*gql.GraphQuery, error) {
+	return asr.baseMutationRewriter.FromMutationResult(mutation, assigned, result)
 }
 
 func (asr *addSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, []string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 
 	asr.admin.mux.Lock()
 	defer asr.admin.mux.Unlock()
 
-	assigned, mutated, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
+	assigned, result, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +107,7 @@ func (asr *addSchemaResolver) Mutate(
 	glog.Infof("[%s] Successfully loaded new GraphQL schema.  Serving New GraphQL API.",
 		api.RequestID(ctx))
 
-	return assigned, mutated, nil
+	return assigned, result, nil
 }
 
 func getSchemaInput(m schema.Mutation) (string, error) {

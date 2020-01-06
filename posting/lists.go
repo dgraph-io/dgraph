@@ -39,34 +39,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	emptyPostingList []byte // Used for indexing.
-)
-
 const (
 	mb = 1 << 20
 )
-
-// syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
-// of many individual mutations, which could be applied to many different posting lists.
-// Thus, each PL when being mutated would send an undone Mark, and each list would
-// accumulate all such pending marks. When the PL is synced to BadgerDB, it would
-// mark all the pending ones as done.
-// This ideally belongs to RAFT node struct (where committed watermark is being tracked),
-// but because the logic of mutations is
-// present here and to avoid a circular dependency, we've placed it here.
-// Note that there's one watermark for each RAFT node/group.
-// This watermark would be used for taking snapshots, to ensure that all the data and
-// index mutations have been syned to BadgerDB, before a snapshot is taken, and previous
-// RAFT entries discarded.
-func init() {
-	x.AddInit(func() {
-		pl := pb.PostingList{}
-		var err error
-		emptyPostingList, err = pl.Marshal()
-		x.Check(err)
-	})
-}
 
 func getMemUsage() int {
 	if runtime.GOOS != "linux" {
@@ -306,8 +281,7 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
-		if !x.HasString(ctx.Preds, predKey) {
-			ctx.Preds = append(ctx.Preds, predKey)
-		}
+		ctx.Preds = append(ctx.Preds, predKey)
 	}
+	ctx.Preds = x.Unique(ctx.Preds)
 }

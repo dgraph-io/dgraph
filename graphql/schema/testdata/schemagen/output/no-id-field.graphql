@@ -146,6 +146,7 @@ input AuthorFilter {
 
 input AuthorInput {
 	name: String
+	posts: [PostRef]
 }
 
 input AuthorOrder {
@@ -156,6 +157,8 @@ input AuthorOrder {
 
 input AuthorRef {
 	id: ID
+	name: String
+	posts: [PostRef]
 }
 
 input GenreInput {
@@ -168,19 +171,31 @@ input GenreOrder {
 	then: GenreOrder
 }
 
+input GenreRef {
+	name: String
+}
+
 input PatchAuthor {
 	name: String
+	posts: [PostRef]
 }
 
 input PostInput {
 	content: String!
 	author: AuthorRef!
+	genre: GenreRef
 }
 
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostRef {
+	content: String
+	author: AuthorRef
+	genre: GenreRef
 }
 
 input UpdateAuthorInput {

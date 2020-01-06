@@ -219,6 +219,7 @@ func run() {
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
 
+	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)

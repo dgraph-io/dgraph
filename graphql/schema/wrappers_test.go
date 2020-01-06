@@ -20,7 +20,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/ast"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -264,5 +266,60 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
 		t.Errorf("dgraph predicate map mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCheckNonNulls(t *testing.T) {
+
+	gqlSchema, err := FromString(`
+	type T { 
+		req: String!
+		notReq: String
+		alsoReq: String!
+	}`)
+	require.NoError(t, err)
+
+	tcases := map[string]struct {
+		obj map[string]interface{}
+		exc string
+		err error
+	}{
+		"all present": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here", "alsoReq": "here"},
+			err: nil,
+		},
+		"only non-null": {
+			obj: map[string]interface{}{"req": "here", "alsoReq": "here"},
+			err: nil,
+		},
+		"missing non-null": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here"},
+			err: errors.Errorf("type T requires a value for field alsoReq, but no value present"),
+		},
+		"missing all non-null": {
+			obj: map[string]interface{}{"notReq": "here"},
+			err: errors.Errorf("type T requires a value for field req, but no value present"),
+		},
+		"with exclusion": {
+			obj: map[string]interface{}{"req": "here", "notReq": "here"},
+			exc: "alsoReq",
+			err: nil,
+		},
+	}
+
+	typ := &astType{
+		typ:      &ast.Type{NamedType: "T"},
+		inSchema: (gqlSchema.(*schema)).schema,
+	}
+
+	for name, test := range tcases {
+		t.Run(name, func(t *testing.T) {
+			err := typ.EnsureNonNulls(test.obj, test.exc)
+			if test.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, test.err.Error())
+			}
+		})
 	}
 }

@@ -56,7 +56,7 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 		fields = s.Fields
 	} else {
 		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
-			"lang"}
+			"lang", "noconflict"}
 	}
 
 	for _, attr := range predicates {
@@ -105,6 +105,8 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 			schemaNode.Upsert = schema.State().HasUpsert(attr)
 		case "lang":
 			schemaNode.Lang = schema.State().HasLang(attr)
+		case "noconflict":
+			schemaNode.NoConflict = schema.State().HasNoConflict(attr)
 		default:
 			//pass
 		}

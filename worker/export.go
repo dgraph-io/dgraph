@@ -275,37 +275,38 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	return listWrap(kv), err
 }
 
-func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
+func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	buf.WriteRune('<')
-	buf.WriteString(attr)
-	buf.WriteRune('>')
-	buf.WriteByte(':')
-	if update.List {
-		buf.WriteRune('[')
+	_, _ = buf.WriteRune('<')
+	_, _ = buf.WriteString(attr)
+	_, _ = buf.WriteRune('>')
+	_, _ = buf.WriteRune(':')
+	if update.GetList() {
+		_, _ = buf.WriteRune('[')
 	}
-	buf.WriteString(types.TypeID(update.ValueType).Name())
-	if update.List {
-		buf.WriteRune(']')
+	_, _ = buf.WriteString(types.TypeID(update.GetValueType()).Name())
+	if update.GetList() {
+		_, _ = buf.WriteRune(']')
 	}
-	if update.Directive == pb.SchemaUpdate_REVERSE {
-		buf.WriteString(" @reverse")
-	} else if update.Directive == pb.SchemaUpdate_INDEX && len(update.Tokenizer) > 0 {
-		buf.WriteString(" @index(")
-		buf.WriteString(strings.Join(update.Tokenizer, ","))
-		buf.WriteByte(')')
+	switch {
+	case update.GetDirective() == pb.SchemaUpdate_REVERSE:
+		_, _ = buf.WriteString(" @reverse")
+	case update.GetDirective() == pb.SchemaUpdate_INDEX && len(update.GetTokenizer()) > 0:
+		_, _ = buf.WriteString(" @index(")
+		_, _ = buf.WriteString(strings.Join(update.GetTokenizer(), ","))
+		_, _ = buf.WriteRune(')')
 	}
-	if update.Count {
-		buf.WriteString(" @count")
+	if update.GetCount() {
+		_, _ = buf.WriteString(" @count")
 	}
-	if update.Lang {
-		buf.WriteString(" @lang")
+	if update.GetLang() {
+		_, _ = buf.WriteString(" @lang")
 	}
-	if update.Upsert {
-		buf.WriteString(" @upsert")
+	if update.GetUpsert() {
+		_, _ = buf.WriteString(" @upsert")
 	}
-	buf.WriteString(" . \n")
+	_, _ = buf.WriteString(" . \n")
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
 		Version: 2, // Schema value
@@ -315,12 +316,12 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	_, _ = buf.WriteString(fmt.Sprintf("type %s {\n", attr))
 	for _, field := range update.Fields {
-		buf.WriteString(fieldToString(field))
+		_, _ = buf.WriteString(fieldToString(field))
 	}
 
-	buf.WriteString("}\n")
+	_, _ = buf.WriteString("}\n")
 
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
@@ -331,9 +332,9 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
-	builder.WriteString("\t")
-	builder.WriteString(update.Predicate)
-	builder.WriteString("\n")
+	_, _ = builder.WriteString("\t")
+	_, _ = builder.WriteString(update.Predicate)
+	_, _ = builder.WriteString("\n")
 	return builder.String()
 }
 
@@ -394,12 +395,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	xfmt := exportFormats[in.Format]
-	path := func(suffix string) (string, error) {
+	fpath := func(suffix string) (string, error) {
 		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d%s", in.GroupId, suffix)))
 	}
 
 	// Open data file now.
-	dataPath, err := path(xfmt.ext + ".gz")
+	dataPath, err := fpath(xfmt.ext + ".gz")
 	if err != nil {
 		return err
 	}
@@ -411,7 +412,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open schema file now.
-	schemaPath, err := path(".schema.gz")
+	schemaPath, err := fpath(".schema.gz")
 	if err != nil {
 		return err
 	}
@@ -471,7 +472,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toSchema(pk.Attr, update)
+			return toSchema(pk.Attr, &update)
 
 		case pk.IsType():
 			var update pb.TypeUpdate
@@ -652,10 +653,10 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an
 // empty string otherwise.
-func NormalizeExportFormat(fmt string) string {
-	fmt = strings.ToLower(fmt)
-	if _, ok := exportFormats[fmt]; ok {
-		return fmt
+func NormalizeExportFormat(format string) string {
+	format = strings.ToLower(format)
+	if _, ok := exportFormats[format]; ok {
+		return format
 	}
 	return ""
 }

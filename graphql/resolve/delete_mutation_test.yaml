@@ -9,9 +9,10 @@
       { "ids": ["0x1", "0x2"] }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
-  dgraphdelete: |-
-    { "uid": "uid(x)" }
-  dgraphquery: |-
+  dgmutations:
+    - deletejson: |
+        { "uid": "uid(x)" }
+  dgquery: |-
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
         uid
@@ -32,9 +33,10 @@
       }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
-  dgraphdelete: |-
-    { "uid": "uid(x)" }
-  dgraphquery: |-
+  dgmutations:
+    - deletejson: |
+        { "uid": "uid(x)" }
+  dgquery: |-
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
         uid
@@ -55,9 +57,10 @@
       }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
-  dgraphdelete: |-
-    { "uid": "uid(x)" }
-  dgraphquery: |-
+  dgmutations:
+    - deletejson: |
+        { "uid": "uid(x)" }
+  dgquery: |-
     query {
       x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
         uid

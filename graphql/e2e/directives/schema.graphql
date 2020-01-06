@@ -3,14 +3,16 @@
 
 type Country {
         # **Don't delete** Comments in types should work
-        id: ID! # **Don't delete** Comments in in lines should work
+        id: ID! # **Don't delete** Comments in lines should work
         name: String! @search(by: [trigram, hash])
+        states: [State] @hasInverse(field: country) @dgraph(name: "hasStates")
 }
 
 type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
-        name: String
+        name: String!
+        country: Country @dgraph(name: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -45,7 +47,14 @@ type Post @dgraph(type: "myPost") {
         numLikes: Int @search
         isPublished: Boolean @search @dgraph(pred: "is_published")
         postType: PostType @search(by: [hash, trigram])
-        author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
+        author: Author! @hasInverse(field: posts) @dgraph(name: "post.author")
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
 }
 
 """

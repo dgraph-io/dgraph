@@ -4,12 +4,13 @@
 type Country {
         id: ID!
         name: String! @search(by: [trigram])
+        states: [State] @hasInverse(field: country)
 }
 
 type State {
         code: String! @id
         country: Country
-        name: String
+        name: String!
 }
 
 type Author {
@@ -36,6 +37,13 @@ type Post {
         isPublished: Boolean @search
         postType: PostType @search
         author: Author!
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
 }
 
 enum PostType {

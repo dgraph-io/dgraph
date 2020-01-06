@@ -98,34 +98,43 @@ type GraphQLResponse struct {
 }
 
 type country struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string   `json:"id,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	States []*state `json:"states,omitempty"`
 }
 
 type author struct {
-	ID         string
-	Name       string
-	Dob        time.Time
-	Reputation float32
-	Country    country
-	Posts      []post
+	ID         string     `json:"id,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	Dob        *time.Time `json:"dob,omitempty"`
+	Reputation float32    `json:"reputation,omitempty"`
+	Country    *country   `json:"country,omitempty"`
+	Posts      []*post    `json:"posts,omitempty"`
 }
 
 type post struct {
-	PostID      string
-	Title       string
-	Text        string
-	Tags        []string
-	NumLikes    int
-	IsPublished bool
-	PostType    string
-	Author      author
+	PostID      string    `json:"postID,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Text        string    `json:"text,omitempty"`
+	Tags        []string  `json:"tags,omitempty"`
+	NumLikes    int       `json:"numLikes,omitempty"`
+	IsPublished bool      `json:"isPublished,omitempty"`
+	PostType    string    `json:"postType,omitempty"`
+	Author      *author   `json:"author,omitempty"`
+	Category    *category `json:"category,omitempty"`
+}
+
+type category struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Posts []post `json:"posts,omitempty"`
 }
 
 type state struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Code string `json:"xcode"`
+	ID      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Code    string   `json:"xcode,omitempty"`
+	Country *country `json:"country,omitempty"`
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -210,6 +219,9 @@ func RunAll(t *testing.T) {
 	t.Run("enum filter", enumFilter)
 	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
+	t.Run("query typename", queryTypename)
+	t.Run("query nested typename", queryNestedTypename)
+	t.Run("typename for interface", typenameForInterface)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -227,11 +239,15 @@ func RunAll(t *testing.T) {
 	t.Run("many mutations with query error", manyMutationsWithQueryError)
 	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
 	t.Run("add mutation with xid", addMutationWithXID)
+	t.Run("deep mutations", deepMutations)
+	t.Run("deep XID mutations", deepXIDMutations)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
+	t.Run("deep mutation errors", deepMutationErrors)
+
 }
 
 func gunzipData(data []byte) ([]byte, error) {

@@ -176,6 +176,9 @@ input AuthorOrder {
 
 input AuthorRef {
 	id: ID
+	name: String
+	pen_name: String
+	posts: [PostRef]
 }
 
 input GenreFilter {
@@ -195,6 +198,10 @@ input GenreOrder {
 	then: GenreOrder
 }
 
+input GenreRef {
+	name: String!
+}
+
 input PatchAuthor {
 	pen_name: String
 	posts: [PostRef]
@@ -203,6 +210,7 @@ input PatchAuthor {
 input PatchPost {
 	content: String
 	author: AuthorRef
+	genre: GenreRef
 }
 
 input PostFilter {
@@ -213,6 +221,7 @@ input PostFilter {
 input PostInput {
 	content: String!
 	author: AuthorRef!
+	genre: GenreRef
 }
 
 input PostOrder {
@@ -223,6 +232,9 @@ input PostOrder {
 
 input PostRef {
 	id: ID
+	content: String
+	author: AuthorRef
+	genre: GenreRef
 }
 
 input StringHashFilter_StringRegExpFilter {

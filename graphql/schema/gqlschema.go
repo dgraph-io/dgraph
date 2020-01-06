@@ -38,6 +38,8 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 
+	Typename = "__typename"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
@@ -417,14 +419,28 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasID(defn) {
-		return
+	var flds ast.FieldList
+	if defn.Kind == ast.Interface {
+		if !hasID(defn) && !hasXID(defn) {
+			return
+		}
+		flds = append(getIDField(defn), getXIDField(defn)...)
+	} else {
+		flds = append(getIDField(defn), getFieldsWithoutIDType(schema, defn)...)
+	}
+
+	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
+		flds[0].Type.NonNull = true
+	} else {
+		for _, fld := range flds {
+			fld.Type.NonNull = false
+		}
 	}
 
 	schema.Types[defn.Name+"Ref"] = &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Ref",
-		Fields: getIDField(defn),
+		Fields: flds,
 	}
 }
 
@@ -483,7 +499,6 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Patch"+defn.Name] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
-
 		fld.Type.NonNull = false
 	}
 }
@@ -1038,9 +1053,14 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
-			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
-			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
+		// Even if a field isn't referenceable with an ID or XID, it can still go into an
+		// input/update type because it can be created (but not linked by reference) as
+		// part of the mutation.
+		//
+		// But if it's an interface, that can't happen because you can't directly create
+		// interfaces - only the types that implement them
+		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
+			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
 
@@ -1056,9 +1076,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		if (schema.Types[fld.Type.Name()].Kind == ast.Object ||
-			schema.Types[fld.Type.Name()].Kind == ast.Interface) &&
-			!hasID(schema.Types[fld.Type.Name()]) { // types without ID, can't be referenced
+		// see also comment in getNonIDFields
+		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
+			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
 
@@ -1071,8 +1091,23 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
-			// Deepcopy is not required because we don't modify values other than nonull
 			newFld := *fld
+			newFldType := *fld.Type
+			newFld.Type = &newFldType
+			fldList = append(fldList, &newFld)
+			break
+		}
+	}
+	return fldList
+}
+
+func getXIDField(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if hasIDDirective(fld) {
+			newFld := *fld
+			newFldType := *fld.Type
+			newFld.Type = &newFldType
 			fldList = append(fldList, &newFld)
 			break
 		}

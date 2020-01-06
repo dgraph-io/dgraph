@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -49,6 +50,52 @@ type params struct {
 	Variables map[string]string `json:"variables"`
 }
 
+// runGzipWithRetry makes request gzip compressed request. If access token is expired,
+// it will try to refresh access token.
+func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool) (
+	*http.Response, error) {
+
+	client := &http.Client{}
+	numRetries := 2
+
+	var resp *http.Response
+	var err error
+	for i := 0; i < numRetries; i++ {
+		req, err := http.NewRequest("POST", url, buf)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Add("Content-Type", contentType)
+		req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
+
+		if gzReq {
+			req.Header.Set("Content-Encoding", "gzip")
+		}
+
+		if gzResp {
+			req.Header.Set("Accept-Encoding", "gzip")
+		}
+
+		resp, err = client.Do(req)
+		if err != nil && strings.Contains(err.Error(), "Token is expired") {
+			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+				Endpoint:   addr + "/login",
+				RefreshJwt: grootRefreshJwt,
+			})
+
+			if err != nil {
+				return nil, err
+			}
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		break
+	}
+
+	return resp, err
+}
+
 func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bool) (
 	string, *http.Response, error) {
 
@@ -72,31 +119,17 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 		buf = bytes.NewBufferString(queryText)
 	}
 
-	req, err := http.NewRequest("POST", url, buf)
+	resp, err := runGzipWithRetry(contentType, url, buf, gzReq, gzResp)
 	if err != nil {
 		return "", nil, err
-	}
-	req.Header.Add("Content-Type", contentType)
-
-	if gzReq {
-		req.Header.Set("Content-Encoding", "gzip")
-	}
-
-	if gzResp {
-		req.Header.Set("Accept-Encoding", "gzip")
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", nil, err
-	}
-	if status := resp.StatusCode; status != http.StatusOK {
-		return "", nil, errors.Errorf("Unexpected status code: %v", status)
 	}
 
 	defer resp.Body.Close()
 	rd := resp.Body
+	if err != nil {
+		return "", nil, err
+	}
+
 	if gzResp {
 		if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
 			rd, err = gzip.NewReader(rd)
