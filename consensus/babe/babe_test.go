@@ -501,7 +501,7 @@ func TestBuildBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	extrinsicsHash, err := common.HexToHash("0x4f4c5f3ebd6112b5c4ec8c354712978db0b0465b30ef06bb46f528802b04407c")
+	extrinsicsHash, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
 	if err != nil {
 		t.Fatal(err)
 	}
