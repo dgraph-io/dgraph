@@ -195,12 +195,12 @@ func (mr *mutationResolver) rewriteAndExecute(
 	}
 
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
-	if err != nil {
+	if err != nil && dgQuery == nil {
 		return nil, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 	}
 
-	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
+	resp, _ := mr.queryExecutor.Query(ctx, dgQuery)
 
 	return resp, resolverSucceeded,
 		schema.GQLWrapf(err, "mutation %s succeeded but query failed", mutation.Name())

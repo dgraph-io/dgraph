@@ -252,19 +252,20 @@ func (mrw *addRewriter) FromMutationResult(
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
 	err := checkResult(mrw.frags, result)
-	if err != nil {
-		return nil, err
-	}
 
 	if len(assigned) == 0 {
-		return nil, x.GqlErrorf("no new node was created")
+		err = fmt.Errorf(err.Error() + "\nno new node was created\n")
 	}
 
 	uids := make([]uint64, 0)
 
 	for _, i := range mrw.frags {
 		node := strings.TrimPrefix(i.fragment.(map[string]interface{})["uid"].(string), "_:")
-		uid, err := strconv.ParseUint(assigned[node], 0, 64)
+		val, ok := assigned[node]
+		if !ok {
+			continue
+		}
+		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
 			return nil, schema.GQLWrapf(err,
 				"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
@@ -274,7 +275,7 @@ func (mrw *addRewriter) FromMutationResult(
 		uids = append(uids, uid)
 	}
 
-	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
+	return rewriteAsQueryByIds(mutation.QueryField(), uids), err
 }
 
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
@@ -436,15 +437,19 @@ func checkResult(frags []*mutationFragment, result map[string]interface{}) error
 		return nil
 	}
 
-	var err error
+	errs := make([]string, 0)
 	for _, frag := range frags {
-		err = frag.check(result)
-		if err == nil {
-			return nil
+		err := frag.check(result)
+		if err != nil {
+			errs = append(errs, err.Error())
 		}
 	}
 
-	return err
+	if len(errs) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(strings.Join(errs, "\n"))
 }
 
 func extractFilter(m schema.Mutation) map[string]interface{} {
