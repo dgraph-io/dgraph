@@ -1427,7 +1427,7 @@ func (n *node) InitAndStartNode() {
 	go n.processRollups()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	go posting.IncrRollup.HandleIncrementalRollups()
+	go posting.IncrRollup.Process()
 	go n.Run()
 }
 
