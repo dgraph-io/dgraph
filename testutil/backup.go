@@ -98,6 +98,7 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 }
 
 type dataType int
+
 const (
 	schemaPredicate dataType = iota
 	schemaType
@@ -109,13 +110,16 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 		return nil, err
 	}
 	defer db.Close()
-
 	values := make([]string, 0)
 
 	stream := db.NewStreamAt(math.MaxUint64)
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
+
+		if item.UserMeta() != posting.BitSchemaPosting {
+			return false
+		}
 		switch {
 		case pk.IsSchema() && dType == schemaPredicate:
 			return true
@@ -128,47 +132,32 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
 		pk, err := x.Parse(key)
 		x.Check(err)
-		pl, err := posting.ReadPostingList(key, it)
-		if err != nil {
-			return nil, err
-		}
+
 		var list bpb.KVList
-		err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-			value := str.Value.(string)
-			list.Kv = append(list.Kv, &bpb.KV{
-				Key:   []byte(fmt.Sprintf("%#x", pk.Uid)),
-				Value: []byte(value),
-			})
-			return nil
+		list.Kv = append(list.Kv, &bpb.KV{
+			Key: []byte(pk.Attr),
 		})
-		return &list, err
+		return &list, nil
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
-			values[string(kv.Key)] = string(kv.Value)
+			values = append(values, string(kv.Key))
 		}
 		return nil
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return nil, err
 	}
+
 	return values, err
 }
 
 // GetPredicateNames returns the list of all the predicates stored in the restored pdir.
 func GetPredicateNames(pdir string, readTs uint64) ([]string, error) {
-	return nil, nil
+	return readSchema(pdir, schemaPredicate)
 }
 
 // GetTypeNames returns the list of all the types stored in the restored pdir.
 func GetTypeNames(pdir string, readTs uint64) ([]string, error) {
-	return nil, nil
+	return readSchema(pdir, schemaType)
 }
