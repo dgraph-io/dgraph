@@ -34,7 +34,7 @@ func TestBigMathValue(t *testing.T) {
 	triples := `
 		_:user1 <money> "48038396025285290" .
 	`
-	addTriplesToCluster(triples)
+	require.NoError(t, addTriplesToCluster(triples))
 
 	t.Run("div", func(t *testing.T) {
 		q1 := `
@@ -144,7 +144,7 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	addTriplesToCluster(triples)
+	require.NoError(t, addTriplesToCluster(triples))
 
 	// Verify fulltext index works as expected.
 	q1 := `
@@ -202,7 +202,7 @@ func TestDeleteAndReaddCount(t *testing.T) {
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	addTriplesToCluster(triples)
+	require.NoError(t, addTriplesToCluster(triples))
 
 	// Verify count index works as expected.
 	q1 := `
@@ -243,7 +243,7 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	s1 := testSchema + "\n child_pred: uid @reverse .\n"
 	setSchema(s1)
 	triples := `<0x666> <child_pred> <0x777>  .`
-	addTriplesToCluster(triples)
+	require.NoError(t, addTriplesToCluster(triples))
 
 	// Verify reverse edges works as expected.
 	q1 := `
@@ -429,7 +429,7 @@ func TestDropPredicate(t *testing.T) {
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	addTriplesToCluster(triples)
+	require.NoError(t, addTriplesToCluster(triples))
 
 	// Verify queries work as expected.
 	q1 := `

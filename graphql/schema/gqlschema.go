@@ -34,7 +34,8 @@ const (
 	searchArgs      = "by"
 
 	dgraphDirective = "dgraph"
-	dgraphArgs      = "name"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
 	idDirective     = "id"
 
 	Typename = "__typename"
@@ -63,7 +64,7 @@ enum DgraphIndex {
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
-directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 
 input IntFilter {
@@ -221,7 +222,7 @@ var scalarToDgraph = map[string]string{
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
-	dgraphDirective:  dgraphNameValidation,
+	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
 }
 

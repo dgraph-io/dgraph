@@ -1,0 +1,25 @@
+global:
+  resolve_timeout: 2m
+route:
+  group_by: ['cluster', 'alertname']
+  group_wait: 30s
+  group_interval: 2m
+  repeat_interval: 3h
+  receiver: 'default_receiver'
+  routes:
+  - receiver: 'slack'
+    group_wait: 10s
+    group_by: ['job']
+    match_re:
+      severity: high|medium
+receivers:
+- name: 'default_receiver'
+  webhook_configs:
+  - url: 'https://alertmanagerwh:8080/' # dummy default webhook.
+- name: 'slack'
+  slack_configs:
+  - send_resolved: true
+    api_url: 'SLACK_WEBHOOK_URL'
+    text: "<!channel> \nsummary: {{ .CommonAnnotations.summary }}\ndescription: {{ .CommonAnnotations.description }}"
+    channel: alerts
+    username: alert-bot

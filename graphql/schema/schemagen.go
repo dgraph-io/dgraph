@@ -159,11 +159,11 @@ func typeName(def *ast.Definition) string {
 	if dir == nil {
 		return name
 	}
-	nameArg := dir.Arguments.ForName(dgraphArgs)
-	if nameArg == nil {
+	typeArg := dir.Arguments.ForName(dgraphTypeArg)
+	if typeArg == nil {
 		return name
 	}
-	return nameArg.Value.Raw
+	return typeArg.Value.Raw
 }
 
 // fieldName returns the dgraph predicate corresponding to a field.
@@ -175,11 +175,11 @@ func fieldName(def *ast.FieldDefinition, typName string) string {
 	if dir == nil {
 		return name
 	}
-	nameArg := dir.Arguments.ForName(dgraphArgs)
-	if nameArg == nil {
+	predArg := dir.Arguments.ForName(dgraphPredArg)
+	if predArg == nil {
 		return name
 	}
-	return nameArg.Value.Raw
+	return predArg.Value.Raw
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.

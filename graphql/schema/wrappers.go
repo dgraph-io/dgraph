@@ -329,9 +329,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			if parentInt != nil {
 				typName = typeName(parentInt)
 			}
-			// 1. For fields that have @dgraph(name: xxxName) directive, field name would be
+			// 1. For fields that have @dgraph(pred: xxxName) directive, field name would be
 			//    xxxName.
-			// 2. For fields where the type (or underlying interface) has a @dgraph(name: xxxName)
+			// 2. For fields where the type (or underlying interface) has a @dgraph(type: xxxName)
 			//    directive, field name would be xxxName.fldName.
 			//
 			// The cases below cover the cases where neither the type or field have @dgraph
@@ -990,7 +990,7 @@ func (t *astType) Interfaces() []string {
 	}
 
 	// Look up the interface types in the schema and find their typeName which could have been
-	// overwritten using @dgraph(name: ...)
+	// overwritten using @dgraph(type: ...)
 	names := make([]string, 0, len(interfaces))
 	for _, intr := range interfaces {
 		i := t.inSchema.Types[intr]

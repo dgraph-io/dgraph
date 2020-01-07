@@ -224,40 +224,40 @@ schemas:
   -
     name: "Schema with @dgraph directive."
     input: |
-      type A @dgraph(name: "dgraph.type.A") {
+      type A @dgraph(type: "dgraph.type.A") {
         id: ID!
         p: Int
-        pList: [Int] @dgraph(name: "pList")
+        pList: [Int] @dgraph(pred: "pList")
         q: Boolean
-        r: String @dgraph(name: "dgraph.r")
+        r: String @dgraph(pred: "dgraph.r")
         rList: [String]
-        s: DateTime @dgraph(name: "s")
+        s: DateTime @dgraph(pred: "s")
         t: Float
-        tList: [Float] @dgraph(name: "dgraph.tList")
+        tList: [Float] @dgraph(pred: "dgraph.tList")
       }
 
-      interface B @dgraph(name: "dgraph.interface.B") {
+      interface B @dgraph(type: "dgraph.interface.B") {
         id: ID!
-        name: String! @search(by: [exact]) @dgraph(name: "dgraph.abc.name")
+        name: String! @search(by: [exact]) @dgraph(pred: "dgraph.abc.name")
         age: Int
       }
 
-      type C implements B @dgraph(name: "type.C") {
-        correct: Boolean @search @dgraph(name: "dgraph.correct")
+      type C implements B @dgraph(type: "type.C") {
+        correct: Boolean @search @dgraph(pred: "dgraph.correct")
         incorrect: Boolean
       }
 
-      type X @dgraph(name: "dgraph.type.X") {
-        e: E @dgraph(name: "dgraph.x.e")
-        f: [E] @dgraph(name: "dgraph.x.eList")
+      type X @dgraph(type: "dgraph.type.X") {
+        e: E @dgraph(pred: "dgraph.x.e")
+        f: [E] @dgraph(pred: "dgraph.x.eList")
       }
       enum E { A }
 
       type Y {
         p: Int
         q: String
-        pList: [Int] @dgraph(name: "dgraph.pList")
-        f: Float @dgraph(name: "f")
+        pList: [Int] @dgraph(pred: "dgraph.pList")
+        f: Float @dgraph(pred: "f")
       }
     output: |
       type dgraph.type.A {

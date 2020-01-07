@@ -223,6 +223,13 @@ func RunAll(t *testing.T) {
 	t.Run("query nested typename", queryNestedTypename)
 	t.Run("typename for interface", typenameForInterface)
 
+	t.Run("get state by xid", getStateByXid)
+	t.Run("get state without args", getStateWithoutArgs)
+	t.Run("get state by both xid and uid", getStateByBothXidAndUid)
+	t.Run("query state by xid", queryStateByXid)
+	t.Run("query state by xid regex", queryStateByXidRegex)
+	t.Run("multiple operations", multipleOperations)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)

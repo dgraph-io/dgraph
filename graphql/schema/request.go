@@ -51,9 +51,15 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, listErr
 	}
 
+	if len(doc.Operations) > 1 && req.OperationName == "" {
+		return nil, errors.Errorf("Operation name must by supplied when query has more " +
+			"than 1 operation.")
+	}
+
 	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {
-		return nil, errors.New("unable to find operation to resolve")
+		return nil, errors.Errorf("Supplied operation name %s isn't present in the request.",
+			req.OperationName)
 	}
 
 	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)
