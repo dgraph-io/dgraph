@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -65,6 +66,14 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+}
+
+func (w *grpcWorker) Subscribe(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
+	// Subscribe on given prefixes.
+	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+		return stream.Send(kvs)
+	}, req.GetPrefixes()...)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
