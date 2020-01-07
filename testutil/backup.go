@@ -17,13 +17,10 @@
 package testutil
 
 import (
-	"context"
 	"fmt"
-	"math"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -47,53 +44,46 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 
 	values := make(map[string]string)
 
-	stream := db.NewStreamAt(math.MaxUint64)
-	stream.ChooseKey = func(item *badger.Item) bool {
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
 		switch {
 		case pk.Attr != attr:
-			return false
-		case pk.IsSchema():
-			return false
+			continue
+		case !pk.IsData():
+			continue
 		}
-		return pk.IsData()
-	}
-	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
-		pk, err := x.Parse(key)
-		x.Check(err)
-		pl, err := posting.ReadPostingList(key, it)
+
+		pl, err := posting.ReadPostingList(item.Key(), itr)
 		if err != nil {
 			return nil, err
 		}
-		var list bpb.KVList
+
 		err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
 			vID := types.TypeID(p.ValType)
 			src := types.ValueForType(vID)
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
 			if err != nil {
-				fmt.Println(err)
 				return err
 			}
 			value := str.Value.(string)
-			list.Kv = append(list.Kv, &bpb.KV{
-				Key:   []byte(fmt.Sprintf("%#x", pk.Uid)),
-				Value: []byte(value),
-			})
+			values[fmt.Sprintf("%#x", pk.Uid)] = value
+
 			return nil
 		})
-		return &list, err
-	}
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
-			values[string(kv.Key)] = string(kv.Value)
+
+		if err != nil {
+			return nil, err
 		}
-		return nil
 	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
-		return nil, err
-	}
+
 	return values, err
 }
 
@@ -112,44 +102,29 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 	defer db.Close()
 	values := make([]string, 0)
 
-	stream := db.NewStreamAt(math.MaxUint64)
-	stream.ChooseKey = func(item *badger.Item) bool {
+	// Predicates and types in the schema are written with timestamp 1.
+	txn := db.NewTransactionAt(1, false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
 
-		if item.UserMeta() != posting.BitSchemaPosting {
-			return false
-		}
 		switch {
-		case pk.IsSchema() && dType == schemaPredicate:
-			return true
-		case pk.IsType() && dType == schemaType:
-			return true
-		default:
-			return false
+		case item.UserMeta() != posting.BitSchemaPosting:
+			continue
+		case pk.IsSchema() && dType != schemaPredicate:
+			continue
+		case pk.IsType() && dType != schemaType:
+			continue
 		}
-	}
-	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
-		pk, err := x.Parse(key)
-		x.Check(err)
 
-		var list bpb.KVList
-		list.Kv = append(list.Kv, &bpb.KV{
-			Key: []byte(pk.Attr),
-		})
-		return &list, nil
+		values = append(values, pk.Attr)
 	}
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
-			values = append(values, string(kv.Key))
-		}
-		return nil
-	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
-		return nil, err
-	}
-
-	return values, err
+	return values, nil
 }
 
 // GetPredicateNames returns the list of all the predicates stored in the restored pdir.
