@@ -6,15 +6,7 @@ title = "Dgraph Documentation"
 **Welcome to the official Dgraph documentation.**
 
 Dgraph is an open source, scalable, distributed, highly available and fast graph database, designed from ground up to be run in production.
-
-## Using Dgraph
-
-<section class="toc">
-  <div class="container">
-    <div class="row row-no-padding">
-      <div class="col-12 col-sm-6">
-        <div class="section-item">
-          <div class="section-name">
+		
             <a href="https://tour.dgraph.io" target="_blank">
               Tour of Dgraph
             </a>
@@ -168,7 +160,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
   </div>
 </section>
 
-## Demo
+## Demo - Dgraph Playground
 
 <section class="toc">
   <div class="container">
