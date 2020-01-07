@@ -1,4 +1,4 @@
-# Dgraph Wiki
+# Dgraph - Wiki
 
 If you are looking for Dgraph documentation, you might find https://docs.dgraph.io much more readable.
 
@@ -6,7 +6,7 @@ If you are looking for Dgraph documentation, you might find https://docs.dgraph.
 
 We use [Hugo](https://gohugo.io/) for our documentation.
 
-### Running locally
+### Running Dgraph documentation locally
 
 1. Download and install hugo from [here](https://github.com/spf13/hugo/releases).
 
