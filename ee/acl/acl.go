@@ -16,7 +16,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -152,18 +151,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		return errors.Errorf("group %q already exists", groupId)
 	}
 
-	createGroupNQuads := []*api.NQuad{
-		{
-			Subject:     "_:newgroup",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
-		},
-		{
-			Subject:     "_:newgroup",
-			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
-		},
-	}
+	createGroupNQuads := CreateGroupNQuads(groupId)
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -259,7 +247,7 @@ func mod(conf *viper.Viper) error {
 
 	if len(userId) != 0 {
 		// when modifying the user, some group options are forbidden
-		if err := checkForbiddenOpts(conf, []string{"pred", "pred_regex", "perm"}); err != nil {
+		if err := checkForbiddenOpts(conf, []string{"pred", "perm"}); err != nil {
 			return err
 		}
 
@@ -412,24 +400,15 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 func chMod(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	predicate := conf.GetString("pred")
-	predRegex := conf.GetString("pred_regex")
 	perm := conf.GetInt("perm")
 	switch {
 	case len(groupId) == 0:
 		return errors.Errorf("the groupid must not be empty")
-	case len(predicate) > 0 && len(predRegex) > 0:
-		return errors.Errorf("one of --pred or --pred_regex must be specified, but not both")
-	case len(predicate) == 0 && len(predRegex) == 0:
-		return errors.Errorf("one of --pred or --pred_regex must be specified, but not both")
+	case len(predicate) == 0:
+		return errors.Errorf("no predicates specified")
 	case perm > 7:
 		return errors.Errorf("the perm value must be less than or equal to 7, "+
 			"the provided value is %d", perm)
-	case len(predRegex) > 0:
-		// make sure the predRegex can be compiled as a regex
-		if _, err := regexp.Compile(predRegex); err != nil {
-			return errors.Wrapf(err, "unable to compile %v as a regular expression",
-				predRegex)
-		}
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
@@ -469,11 +448,6 @@ func chMod(conf *viper.Viper) error {
 		newAcl = Acl{
 			Predicate: predicate,
 			Perm:      int32(perm),
-		}
-	} else {
-		newAcl = Acl{
-			Regex: predRegex,
-			Perm:  int32(perm),
 		}
 	}
 	newAcls, updated := updateAcl(currentAcls, newAcl)
@@ -580,8 +554,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 
 func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
 	return (len(acl1.Predicate) > 0 && len(acl2.Predicate) > 0 &&
-		acl1.Predicate == acl2.Predicate) ||
-		(len(acl1.Regex) > 0 && len(acl2.Regex) > 0 && acl1.Regex == acl2.Regex)
+		acl1.Predicate == acl2.Predicate)
 }
 
 // returns whether the existing acls slice is changed

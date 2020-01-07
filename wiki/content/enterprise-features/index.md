@@ -27,6 +27,10 @@ enterprise features.
 
 ## Binary Backups
 
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
+
 Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
@@ -182,6 +186,10 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
 
 ## Access Control Lists
+
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
 Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must
@@ -360,4 +368,54 @@ The refresh token can be used in the `/login` POST body to receive new access an
 $ curl -X POST localhost:8080/login -d '{
   "refresh_token": "<refreshJWT>"
 }'
+```
+
+## Encryption at Rest
+
+{{% notice "note" %}}
+This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
+For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
+[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
+preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
+{{% /notice %}}
+
+Encryption at rest refers to the encryption of data that is stored physically in any
+digital form. It ensures that sensitive data on disks is not readable by any user
+or application without a valid key that is required for decryption. Dgraph provides
+encryption at rest as an enterprise feature. If encryption is enabled, Dgraph uses
+[Advanced Encryption Standard (AES)](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
+algorithm to encrypt the data and secure it.
+
+### Set up Encryption
+
+To enable encryption, we need to pass a file that stores the data encryption key with the option
+`--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
+the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
+
+Here is an example encryption key file of size 16 bytes:
+
+*enc_key_file*
+
+```
+123456789012345
+```
+
+### Turn on Encryption
+
+Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
+
+```bash
+dgraph zero --my=localhost:5080 --replicas 1 --idx 1
+dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+```
+
+### Bulk loader with Encryption
+
+Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
+Later we can point the generated `p` directory to a new alpha server.
+
+Here's an example to run bulk loader with a key used to write encrypted data:
+
+```bash
+dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```

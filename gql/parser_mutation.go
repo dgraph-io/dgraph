@@ -82,11 +82,12 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 		switch {
 		// upsert {... ===>}<===
 		case item.Typ == itemRightCurl:
-			if req == nil {
+			switch {
+			case req == nil:
 				return nil, it.Errorf("Empty mutation block")
-			} else if !queryFound {
+			case !queryFound:
 				return nil, it.Errorf("Query op not found in upsert block")
-			} else {
+			default:
 				req.Query = queryText
 				return req, nil
 			}
@@ -196,15 +197,17 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			if !parse {
 				return it.Errorf("Mutation syntax invalid.")
 			}
-			if op == "set" {
+
+			switch op {
+			case "set":
 				mu.SetNquads = []byte(item.Val)
-			} else if op == "delete" {
+			case "delete":
 				mu.DelNquads = []byte(item.Val)
-			} else if op == "schema" {
+			case "schema":
 				return it.Errorf("Altering schema not supported through http client.")
-			} else if op == "dropall" {
+			case "dropall":
 				return it.Errorf("Dropall not supported through http client.")
-			} else {
+			default:
 				return it.Errorf("Invalid mutation operation.")
 			}
 		}

@@ -48,7 +48,7 @@ func (s *Server) Login(ctx context.Context,
 
 	if !worker.EnterpriseEnabled() {
 		return nil, errors.New("Enterprise features are disabled. You can enable them by " +
-			"supplying the appropriate license file to Dgraph Zero uing the HTTP endpoint.")
+			"supplying the appropriate license file to Dgraph Zero using the HTTP endpoint.")
 	}
 
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
@@ -70,6 +70,7 @@ func (s *Server) Login(ctx context.Context,
 		glog.Errorf(errMsg)
 		return nil, errors.Errorf(errMsg)
 	}
+	glog.Infof("%s logged in successfully", user.UserID)
 
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(user.UserID, user.Groups)
@@ -358,49 +359,76 @@ func ResetAcl() {
 		return
 	}
 
-	upsertGroot := func(ctx context.Context) error {
-		queryVars := map[string]string{
-			"$userid":   x.GrootId,
-			"$password": "",
-		}
-		queryRequest := api.Request{
-			Query: queryUser,
-			Vars:  queryVars,
-		}
-
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
-		if err != nil {
-			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
-		}
-		startTs := queryResp.GetTxn().StartTs
-
-		rootUser, err := acl.UnmarshalUser(queryResp, "user")
-		if err != nil {
-			return errors.Wrapf(err, "while unmarshaling the root user")
-		}
-		if rootUser != nil {
-			glog.Infof("The groot account already exists, no need to insert again")
-			return nil
-		}
-
-		// Insert Groot.
-		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+	// guardians is the group of users who have complete access over all predicates.
+	upsertGuardians := func(ctx context.Context) error {
+		query := fmt.Sprintf(`
+			{
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GuardiansId)
+		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
 		req := &api.Request{
-			StartTs:   startTs,
 			CommitNow: true,
+			Query:     query,
 			Mutations: []*api.Mutation{
 				{
-					Set: createUserNQuads,
+					Set:  groupNQuads,
+					Cond: "@if(eq(len(guid), 0))",
 				},
 			},
 		}
 
-		_, err = (&Server{}).doQuery(context.Background(), req, NoAuthorize)
-		if err != nil {
-			return err
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
 		}
-		glog.Infof("Successfully upserted the groot account")
+
+		glog.Infof("Successfully upserted the guardian group")
 		return nil
+	}
+
+	// groot is the default user of guardians group.
+	upsertGroot := func(ctx context.Context) error {
+		query := fmt.Sprintf(`
+			{
+				grootid as var(func: eq(dgraph.xid, "%s"))
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GrootId, x.GuardiansId)
+		userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+		userNQuads = append(userNQuads, &api.NQuad{
+			Subject:   "_:newuser",
+			Predicate: "dgraph.user.group",
+			ObjectId:  "uid(guid)",
+		})
+		req := &api.Request{
+			CommitNow: true,
+			Query:     query,
+			Mutations: []*api.Mutation{
+				{
+					Set: userNQuads,
+					// Assuming that if groot exists, it is in guardian group
+					Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+				},
+			},
+		}
+
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
+		}
+
+		glog.Infof("Successfully upserted groot account")
+		return nil
+	}
+
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := upsertGuardians(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
 	}
 
 	for {
@@ -409,9 +437,9 @@ func ResetAcl() {
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
-		} else {
-			return
+			continue
 		}
+		break
 	}
 }
 
@@ -470,11 +498,12 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// extract the list of predicates from the operation object
 	var preds []string
-	if len(op.DropAttr) > 0 {
+	switch {
+	case len(op.DropAttr) > 0:
 		preds = []string{op.DropAttr}
-	} else if op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0 {
+	case op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0:
 		preds = []string{op.DropValue}
-	} else {
+	default:
 		update, err := schema.Parse(op.Schema)
 		if err != nil {
 			return err
@@ -492,17 +521,19 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined, per the
 			// fail open approach
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
+			if x.IsGuardian(groupIds) {
+				// Members of guardian group are allowed to alter anything.
 				return nil
 			}
 		}
@@ -580,6 +611,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	}
 
 	preds := parsePredsFromMutation(gmu.Set)
+	// Del predicates weren't included before.
+	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
+	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
 	var userId string
 	var groupIds []string
@@ -587,19 +621,24 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to mutate anything except the permission of the acl predicates
-				if isAclPredMutation(gmu.Set) {
+			if x.IsGuardian(groupIds) {
+				// Members of guardians group are allowed to mutate anything
+				// (including delete) except the permission of the acl predicates.
+				switch {
+				case isAclPredMutation(gmu.Set):
 					return errors.Errorf("the permission of ACL predicates can not be changed")
+				case isAclPredMutation(gmu.Del):
+					return errors.Errorf("ACL predicates can't be deleted")
 				}
 				return nil
 			}
@@ -679,7 +718,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		if err == errNoJwt {
+		switch {
+		case err == errNoJwt:
 			// Do not allow schema queries unless the user has logged in.
 			if isSchemaQuery {
 				return status.Error(codes.Unauthenticated, err.Error())
@@ -687,14 +727,14 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 
 			// Treat the user as an anonymous guest who has not joined any group yet
 			// such a user can still get access to predicates that have no ACL rule defined.
-		} else if err != nil {
+		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
-		} else {
+		default:
 			userId = userData[0]
 			groupIds = userData[1:]
 
-			if userId == x.GrootId {
-				// groot is allowed to query anything
+			if x.IsGuardian(groupIds) {
+				// Members of guardian groups are allowed to query anything.
 				return nil
 			}
 		}
@@ -714,4 +754,34 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	return err
+}
+
+// authorizeState authorizes the State operation
+func authorizeState(ctx context.Context) error {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	var userID string
+	// doAuthorizeState checks if the user is authorized to perform this API request
+	doAuthorizeState := func() error {
+		userData, err := extractUserAndGroups(ctx)
+		switch {
+		case err == errNoJwt:
+			return status.Error(codes.PermissionDenied, err.Error())
+		case err != nil:
+			return status.Error(codes.Unauthenticated, err.Error())
+		default:
+			userID = userData[0]
+			if userID == x.GrootId {
+				return nil
+			}
+			// Deny non groot users.
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+				"Only User '%v' is authorized.", userID, x.GrootId))
+		}
+	}
+
+	return doAuthorizeState()
 }
