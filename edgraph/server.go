@@ -60,17 +60,19 @@ const (
 	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
+const (
+	// NeedAuthorize is used to indicate that the request needs to be authorized.
+	NeedAuthorize = iota
+	// NoAuthorize is used to indicate that authorization needs to be skipped.
+	// Used when ACL needs to query information for performing the authorization check.
+	NoAuthorize
+)
 
 type key int
 
 const (
-	// NeedAuthorize is used to indicate that the request needs to be authorized.
-	NeedAuthorize key = iota
-	// NoAuthorize is used to indicate that authorization needs to be skipped.
-	// Used when ACL needs to query information for performing the authorization check.
-	NoAuthorize
-	// GraphQL is used to indicate that the request is from graphql admin.
-	GraphQL
+	// isGraphQL is used to indicate that the request is made by the graphql admin or not.
+	isGraphQL key = iota
 )
 
 // Server implements protos.DgraphServer
@@ -643,10 +645,10 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // QueryForGraphql handles queries or mutations
 func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx = context.WithValue(ctx, GraphQL, true)
-	return s.doQuery(ctx, req, NeedAuthorize)
+	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize key) (
+
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {
@@ -699,7 +701,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize key) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	isGraphQL, _ := ctx.Value(GraphQL).(bool)
+	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
 
 	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
