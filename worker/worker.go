@@ -68,14 +68,12 @@ type grpcWorker struct {
 	sync.Mutex
 }
 
-func (w *grpcWorker) SubscribeForKV(
-	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeForKVServer) error {
+func (w *grpcWorker) Subscribe(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
 	// Subscribe on given prefixes.
-	err := pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
 		return stream.Send(kvs)
 	}, req.GetPrefixes()...)
-
-	return err
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
