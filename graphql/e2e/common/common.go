@@ -173,7 +173,7 @@ func BootstrapServer(schema, data []byte) {
 		panic(err)
 	}
 
-	d.Close()
+	panic(d.Close())
 }
 
 // RunAll runs all the test functions in this package as sub tests.
@@ -304,9 +304,11 @@ func gzipCompressionHeader(t *testing.T) {
 	req.Header.Set("Content-Encoding", "gzip")
 
 	resData, err := runGQLRequest(req)
+	require.NoError(t, err)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
+	require.NoError(t, err)
 	require.NotNil(t, result.Errors)
 	require.Contains(t, result.Errors[0].Message, "Unable to parse gzip")
 }
@@ -328,9 +330,11 @@ func gzipCompressionNoHeader(t *testing.T) {
 
 	req.Header.Del("Content-Encoding")
 	resData, err := runGQLRequest(req)
+	require.NoError(t, err)
 
 	var result *GraphQLResponse
 	err = json.Unmarshal(resData, &result)
+	require.NoError(t, err)
 	require.NotNil(t, result.Errors)
 	require.Contains(t, result.Errors[0].Message, "Not a valid GraphQL request body")
 }
@@ -604,6 +608,9 @@ func checkGraphQLHealth(url string, status []string) error {
 		}`,
 	}
 	req, err := health.createGQLPost(url)
+	if err != nil {
+		return errors.Wrap(err, "while creating gql post")
+	}
 
 	resp, err := runGQLRequest(req)
 	if err != nil {
