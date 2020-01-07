@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -1032,4 +1033,37 @@ func askZeroForEE() bool {
 		time.Sleep(time.Second)
 	}
 	return connState.GetState().GetLicense().GetEnabled()
+}
+
+// SubscribeForUpdates will listen for updates for the given group.
+func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group int) {
+	for {
+		// Connect to any of the group 1 nodes.
+		members := groups().AnyTwoServers(1)
+		// There may be a lag while starting so keep retrying.
+		if len(members) == 0 {
+			continue
+		}
+		pool := conn.GetPools().Connect(members[0])
+		client := pb.NewWorkerClient(pool.Get())
+
+		// Get Subscriber stream.
+		stream, err := client.Subscribe(context.Background(), &pb.SubscriptionRequest{
+			Prefixes: prefixes,
+		})
+		if err != nil {
+			glog.Errorf("error from worker subscribe stream: %v", err)
+			continue
+		}
+	receiver:
+		for {
+			// Listen for updates.
+			kvs, err := stream.Recv()
+			if err != nil {
+				glog.Errorf("error from worker subscribe stream: %v", err)
+				break receiver
+			}
+			cb(kvs)
+		}
+	}
 }
