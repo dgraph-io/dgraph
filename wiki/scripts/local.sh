@@ -43,7 +43,6 @@ run() {
   fi
   popd > /dev/null
 
-
   if [[ $1 == "-p" || $1 == "--preview" ]]; then
     CURRENT_VERSION=${CURRENT_VERSION} hugo \
       --destination=public \
