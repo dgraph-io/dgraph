@@ -291,6 +291,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 			{
 				Title:    "A New Post",
 				Text:     "Text of new post",
+				Tags:     []string{},
 				Category: &category{Name: "A Category"},
 			},
 			{
@@ -312,6 +313,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 				Title:    "Creating in an update",
 				Text:     "Text of new post",
 				Category: newAuth.Posts[0].Category,
+				Tags:     []string{},
 			},
 		},
 		// Country: anotherCountry,
@@ -594,11 +596,11 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	// sets up the "XZY" xid that's used by the following mutation.
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($input: CountryInput!) {
-			addState(input: { xcode: "XYZ", name: "A State" }) {
+			addState(input: [{ xcode: "XYZ", name: "A State" }]) {
 				state { id xcode name }
 			}
 
-			addCountry(input: $input)
+			addCountry(input: [$input])
 			{
 				country {
 					id
@@ -619,10 +621,10 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 	var addResult struct {
 		AddState struct {
-			State *state
+			State []*state
 		}
 		AddCountry struct {
-			Country *country
+			Country []*country
 		}
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
@@ -634,9 +636,9 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 	// because the two mutations are linked by an XID, the addCountry mutation shouldn't
 	// have created a new state for "XYZ", so the UIDs should be the same
-	require.Equal(t, addResult.AddState.State.ID, addResult.AddCountry.Country.States[1].ID)
+	require.Equal(t, addResult.AddState.State[0].ID, addResult.AddCountry.Country[0].States[1].ID)
 
-	if diff := cmp.Diff(newCountry, addResult.AddCountry.Country, ignoreOpts()...); diff != "" {
+	if diff := cmp.Diff(newCountry, addResult.AddCountry.Country[0], ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 
@@ -655,7 +657,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 	updateCountryParams := &GraphQLParams{
 		Query: `mutation updateCountry($id: ID!, $set: PatchCountry!, $remove: PatchCountry!) {
-			addState(input: { xcode: "DEF", name: "Definitely A State" }) {
+			addState(input: [{ xcode: "DEF", name: "Definitely A State" }]) {
 				state { id }
 			}
 
@@ -678,7 +680,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"id":     addResult.AddCountry.Country.ID,
+			"id":     addResult.AddCountry.Country[0].ID,
 			"set":    patchSet,
 			"remove": patchRemove,
 		},
@@ -689,7 +691,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 	var updResult struct {
 		AddState struct {
-			State *state
+			State []*state
 		}
 		UpdateCountry struct {
 			Country []*country
@@ -704,15 +706,15 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 
-	requireCountry(t, addResult.AddCountry.Country.ID, expectedCountry, true, executeRequest)
+	requireCountry(t, addResult.AddCountry.Country[0].ID, expectedCountry, true, executeRequest)
 
 	// The "XYZ" state should have its country set back to null like it was before it was
 	// linked to the country
-	requireState(t, addResult.AddState.State.ID, addResult.AddState.State, executeRequest)
+	requireState(t, addResult.AddState.State[0].ID, addResult.AddState.State[0], executeRequest)
 
 	// No need to cleanup states ATM because, beyond this test,
 	// there's no queries that rely on them
-	cleanUp(t, []*country{addResult.AddCountry.Country}, []*author{}, []*post{})
+	cleanUp(t, []*country{addResult.AddCountry.Country[0]}, []*author{}, []*post{})
 }
 
 func addPost(t *testing.T, authorID, countryID string,
