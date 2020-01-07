@@ -1022,7 +1022,7 @@
   name: "Add mutation with deep xid choices"
   gqlmutation: |
     mutation addCountry($input: CountryInput!) {
-      addCountry(input: $input) {
+      addCountry(input: [$input]) {
         country {
           name
         }
@@ -1080,7 +1080,7 @@
   name: "Add mutation with deep xid that must be reference"
   gqlmutation: |
     mutation addCountry($input: CountryInput!) {
-      addCountry(input: $input) {
+      addCountry(input: [$input]) {
         country {
           name
         }
@@ -1117,4 +1117,3 @@
           } ]
         }
       cond: "@if(eq(len(State2), 1))"
->>>>>>> mjc/graphql
