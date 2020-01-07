@@ -1,6 +1,6 @@
 ![](/logo.png)
 
-**Fast, Transactional, Distributed Graph Database.**
+**Fast, Transactional, Distributed, and Native Graph Database.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://docs.dgraph.io)
 [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
