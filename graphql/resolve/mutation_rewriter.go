@@ -59,12 +59,16 @@ type mutationFragment struct {
 	conditions []string
 	fragment   interface{}
 	deletes    []interface{} // TODO: functionality for next PR
-	check      func(map[string]interface{}) error
+	check      resultChecker
 	err        error
 }
 
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
 type mutationBuilder func(frag *mutationFragment) ([]byte, error)
+
+// A resultChecker checks an upsert (query) result and returns an error if the
+// result indicates that the upsert didn't succeed.
+type resultChecker func(map[string]interface{}) error
 
 type counter int
 
@@ -645,7 +649,14 @@ func rewriteObject(
 	}
 
 	if !atTopLevel { // top level mutations are fully checked by GraphQL validation
-		if err := typ.CheckValidity(obj); err != nil {
+		exclude := ""
+		if srcField != nil {
+			invType, invField := srcField.Inverse()
+			if invType != nil && invField != nil {
+				exclude = invField.Name()
+			}
+		}
+		if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 			// This object is either an invalid deep mutation or it's an xid reference
 			// and asXIDReference must to apply or it's an error.
 			return invalidObjectFragment(err, xidFrag, variable, xidString)
@@ -682,14 +693,9 @@ func rewriteObject(
 			}
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
-		frag.check = func(m map[string]interface{}) error {
-			if val, exists := m[variable]; exists && val != nil {
-				if data, ok := val.([]interface{}); ok && len(data) > 0 {
-					return x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
-				}
-			}
-			return nil
-		}
+		frag.check = checkQueryResult(variable,
+			x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name()),
+			nil)
 	}
 
 	for field, val := range obj {
@@ -749,15 +755,25 @@ func invalidObjectFragment(
 	variable, xidString string) []*mutationFragment {
 
 	if xidFrag != nil {
-		xidFrag.check = func(m map[string]interface{}) error {
-			if _, exists := m[variable]; exists {
-				return nil
-			}
-			return schema.GQLWrapf(err, "xid %s doesn't exist and input object not well formed", xidString)
-		}
+		xidFrag.check =
+			checkQueryResult(variable,
+				nil,
+				schema.GQLWrapf(err, "xid \"%s\" doesn't exist and input object not well formed", xidString))
+
 		return []*mutationFragment{xidFrag}
 	}
 	return []*mutationFragment{{err: err}}
+}
+
+func checkQueryResult(qry string, yes, no error) resultChecker {
+	return func(m map[string]interface{}) error {
+		if val, exists := m[qry]; exists && val != nil {
+			if data, ok := val.([]interface{}); ok && len(data) > 0 {
+				return yes
+			}
+		}
+		return no
+	}
 }
 
 // asIDReference makes a mutation fragment that resolves a reference to the uid in val.  There's
@@ -808,14 +824,10 @@ func asIDReference(
 
 	frag.queries = []*gql.GraphQuery{qry}
 	frag.conditions = []string{fmt.Sprintf("eq(len(%s), 1)", variable)}
-	frag.check = func(m map[string]interface{}) error {
-		if val, exists := m[variable]; exists && val != nil {
-			if data, ok := val.([]interface{}); ok && len(data) > 0 {
-				return nil
-			}
-		}
-		return errors.Errorf("ID %#x isn't a %s", uid, srcField.Type().Name())
-	}
+	frag.check =
+		checkQueryResult(variable,
+			nil,
+			errors.Errorf("ID \"%#x\" isn't a %s", uid, srcField.Type().Name()))
 
 	return frag
 
@@ -881,12 +893,9 @@ func asXIDReference(
 
 	frag.queries = []*gql.GraphQuery{xidQuery(xidVariable, xidString, xidFieldName, typ)}
 	frag.conditions = []string{fmt.Sprintf("eq(len(%s), 1)", xidVariable)}
-	frag.check = func(m map[string]interface{}) error {
-		if _, exists := m[xidVariable]; exists {
-			return nil
-		}
-		return errors.Errorf("ID %s isn't a %s", xidString, srcField.Type().Name())
-	}
+	frag.check = checkQueryResult(xidVariable,
+		nil,
+		errors.Errorf("ID \"%s\" isn't a %s", xidString, srcField.Type().Name()))
 
 	// FIXME: and remove any existing
 
@@ -1058,14 +1067,7 @@ func squashFragments(
 	result := make([]*mutationFragment, 0, len(left)*len(right))
 	for _, l := range left {
 		for _, r := range right {
-			var qs []*gql.GraphQuery
 			var conds []string
-
-			// FIXME: don't copy queries ... should just be one for whole thing
-			if len(l.queries) > 0 {
-				qs = make([]*gql.GraphQuery, len(l.queries), len(l.queries)+len(r.queries))
-				copy(qs, l.queries)
-			}
 
 			if len(l.conditions) > 0 {
 				conds = make([]string, len(l.conditions), len(l.conditions)+len(r.conditions))
@@ -1073,15 +1075,28 @@ func squashFragments(
 			}
 
 			result = append(result, &mutationFragment{
-				queries:    append(qs, r.queries...),
 				conditions: append(conds, r.conditions...),
 				fragment:   combiner(l.fragment, r.fragment, len(right) > 1),
-				check: func(m map[string]interface{}) error {
-					return schema.AppendGQLErrs(l.check(m), r.check(m))
-				},
+				check: func(lcheck, rcheck resultChecker) resultChecker {
+					return func(m map[string]interface{}) error {
+						return schema.AppendGQLErrs(lcheck(m), rcheck(m))
+					}
+				}(l.check, r.check),
 				err: schema.AppendGQLErrs(l.err, r.err),
 			})
 		}
 	}
+
+	// queries don't need copying, they just need to be all collected at the end, so
+	// accumulate them all into one of the result fragments
+	var queries []*gql.GraphQuery
+	for _, l := range left {
+		queries = append(queries, l.queries...)
+	}
+	for _, r := range right {
+		queries = append(queries, r.queries...)
+	}
+	result[0].queries = queries
+
 	return result
 }

@@ -61,7 +61,7 @@ func add(t *testing.T, executeRequest requestExecutor) {
 
 	// addCountry() asserts that the mutation response was as expected.
 	// Let's also check that what's in the DB is what we expect.
-	requireCountry(t, newCountry.ID, newCountry, executeRequest)
+	requireCountry(t, newCountry.ID, newCountry, false, executeRequest)
 
 	// Add object with reference to existing object :
 	// An Author links to an existing country.  So need to check that the author
@@ -121,20 +121,25 @@ func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 
 // requireCountry enforces that node with ID uid in the GraphQL store is of type
 // Country and is value expectedCountry.
-func requireCountry(t *testing.T, uid string, expectedCountry *country,
+func requireCountry(t *testing.T, uid string, expectedCountry *country, includeStates bool,
 	executeRequest requestExecutor) {
 
 	params := &GraphQLParams{
-		Query: `query getCountry($id: ID!) {
+		Query: `query getCountry($id: ID!, $includeStates: Boolean!) {
 			getCountry(id: $id) {
 				id
 				name
+				states(order: { asc: xcode }) @include(if: $includeStates) {
+					id
+					xcode
+					name
+				}
 			}
 		}`,
-		Variables: map[string]interface{}{"id": uid},
+		Variables: map[string]interface{}{"id": uid, "includeStates": includeStates},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetCountry *country
@@ -142,7 +147,7 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country,
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	if diff := cmp.Diff(expectedCountry, result.GetCountry); diff != "" {
+	if diff := cmp.Diff(expectedCountry, result.GetCountry, ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -228,11 +233,15 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 					id
 					name
 				}
-				posts {
+				posts(order: { asc: title }) {
 					postID
 					title
 					text
 					tags
+					category {
+						id
+						name
+					}
 				}
 			}
 		}`,
@@ -262,6 +271,8 @@ func ignoreOpts() []cmp.Option {
 		cmpopts.IgnoreFields(author{}, "ID"),
 		cmpopts.IgnoreFields(country{}, "ID"),
 		cmpopts.IgnoreFields(post{}, "PostID"),
+		cmpopts.IgnoreFields(state{}, "ID"),
+		cmpopts.IgnoreFields(category{}, "ID"),
 	}
 }
 
@@ -278,9 +289,9 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		Country: newCountry,
 		Posts: []*post{
 			{
-				Title: "A New Post",
-				Text:  "Text of new post",
-				Tags:  []string{},
+				Title:    "A New Post",
+				Text:     "Text of new post",
+				Category: &category{Name: "A Category"},
 			},
 			{
 				Title: "Another New Post",
@@ -298,9 +309,9 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	patchSet := &author{
 		Posts: []*post{
 			{
-				Title: "Creating in an update",
-				Text:  "Text of new post",
-				Tags:  []string{},
+				Title:    "Creating in an update",
+				Text:     "Text of new post",
+				Category: newAuth.Posts[0].Category,
 			},
 		},
 		// Country: anotherCountry,
@@ -338,6 +349,10 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 						title
 						text
 						tags
+						category {
+							id
+							name
+						}
 					}
 			  	}
 			}
@@ -350,7 +365,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		UpdateAuthor struct {
@@ -475,6 +490,10 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 						title
 						text
 						tags
+						category {
+							id
+							name
+						}
 					}
 			  	}
 			}
@@ -483,7 +502,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		AddAuthor struct {
@@ -556,6 +575,144 @@ func testMultipleMutations(t *testing.T) {
 		[]*country{newCountry},
 		newAuths,
 		[]*post{})
+}
+
+func deepXIDMutations(t *testing.T) {
+	deepXIDTest(t, postExecutor)
+}
+
+func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
+	newCountry := &country{
+		Name: "A Country",
+		States: []*state{
+			{Name: "Alphabet", Code: "ABC"},
+			{Name: "A State", Code: "XYZ"},
+		},
+	}
+
+	// mutations get run serially, each in their own transaction, so the addState
+	// sets up the "XZY" xid that's used by the following mutation.
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: CountryInput!) {
+			addState(input: { xcode: "XYZ", name: "A State" }) {
+				state { id xcode name }
+			}
+
+			addCountry(input: $input)
+			{
+				country {
+					id
+					name
+					states(order: { asc: xcode }) {
+						id
+						xcode
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountry},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddState struct {
+			State *state
+		}
+		AddCountry struct {
+			Country *country
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+
+	require.NotNil(t, addResult)
+	require.NotNil(t, addResult.AddState)
+	require.NotNil(t, addResult.AddCountry)
+
+	// because the two mutations are linked by an XID, the addCountry mutation shouldn't
+	// have created a new state for "XYZ", so the UIDs should be the same
+	require.Equal(t, addResult.AddState.State.ID, addResult.AddCountry.Country.States[1].ID)
+
+	if diff := cmp.Diff(newCountry, addResult.AddCountry.Country, ignoreOpts()...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	patchSet := &country{
+		States: []*state{{Code: "DEF", Name: "Definitely A State"}},
+	}
+
+	patchRemove := &country{
+		States: []*state{{Code: "XYZ"}},
+	}
+
+	expectedCountry := &country{
+		Name:   "A Country",
+		States: []*state{newCountry.States[0], patchSet.States[0]},
+	}
+
+	updateCountryParams := &GraphQLParams{
+		Query: `mutation updateCountry($id: ID!, $set: PatchCountry!, $remove: PatchCountry!) {
+			addState(input: { xcode: "DEF", name: "Definitely A State" }) {
+				state { id }
+			}
+
+			updateCountry(			
+				input: {
+					filter: {ids: [$id]}, 
+					set: $set,
+					remove: $remove
+				}
+			) {
+				country {
+					id
+					name
+					states(order: { asc: xcode }) {
+						id
+						xcode
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id":     addResult.AddCountry.Country.ID,
+			"set":    patchSet,
+			"remove": patchRemove,
+		},
+	}
+
+	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var updResult struct {
+		AddState struct {
+			State *state
+		}
+		UpdateCountry struct {
+			Country []*country
+		}
+	}
+	err = json.Unmarshal([]byte(gqlResponse.Data), &updResult)
+	require.NoError(t, err)
+	require.Len(t, updResult.UpdateCountry.Country, 1)
+
+	if diff :=
+		cmp.Diff(expectedCountry, updResult.UpdateCountry.Country[0], ignoreOpts()...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	requireCountry(t, addResult.AddCountry.Country.ID, expectedCountry, true, executeRequest)
+
+	// The "XYZ" state should have its country set back to null like it was before it was
+	// linked to the country
+	requireState(t, addResult.AddState.State.ID, addResult.AddState.State, executeRequest)
+
+	// No need to cleanup states ATM because, beyond this test,
+	// there's no queries that rely on them
+	cleanUp(t, []*country{addResult.AddCountry.Country}, []*author{}, []*post{})
 }
 
 func addPost(t *testing.T, authorID, countryID string,
@@ -693,8 +850,8 @@ func updateMutationByIds(t *testing.T) {
 		newCountry.Name = newName
 		anotherCountry.Name = newName
 
-		requireCountry(t, newCountry.ID, newCountry, postExecutor)
-		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
@@ -717,7 +874,7 @@ func updateMutationByName(t *testing.T) {
 		newName := "updated name"
 		updateCountry(t, filter, newName, true)
 		newCountry.Name = newName
-		requireCountry(t, newCountry.ID, newCountry, postExecutor)
+		requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
 	})
 
 	anotherCountry := addCountry(t, postExecutor)
@@ -730,8 +887,8 @@ func updateMutationByName(t *testing.T) {
 
 	t.Run("check updated Country", func(t *testing.T) {
 		// newCountry should not have been updated.
-		requireCountry(t, newCountry.ID, newCountry, postExecutor)
-		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
@@ -744,8 +901,8 @@ func updateMutationByNameNoMatch(t *testing.T) {
 	t.Run("update Country", func(t *testing.T) {
 		filter := nameRegexFilter("no match")
 		updateCountry(t, filter, "new name", false)
-		requireCountry(t, newCountry.ID, newCountry, postExecutor)
-		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
@@ -919,7 +1076,7 @@ func filterInUpdate(t *testing.T) {
 			}
 
 			for _, country := range test.Countries {
-				requireCountry(t, country.ID, country, postExecutor)
+				requireCountry(t, country.ID, country, false, postExecutor)
 			}
 			cleanUp(t, test.Countries, nil, nil)
 		})
@@ -936,8 +1093,8 @@ func deleteMutationWithMultipleIds(t *testing.T) {
 	})
 
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, country.ID, nil, postExecutor)
-		requireCountry(t, anotherCountry.ID, nil, postExecutor)
+		requireCountry(t, country.ID, nil, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, nil, false, postExecutor)
 	})
 }
 
@@ -952,8 +1109,8 @@ func deleteMutationWithSingleID(t *testing.T) {
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, postExecutor)
-		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		requireCountry(t, newCountry.ID, nil, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
@@ -979,8 +1136,8 @@ func deleteMutationByName(t *testing.T) {
 
 	// In this case anotherCountry shouldn't be deleted.
 	t.Run("check Country is deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, postExecutor)
-		requireCountry(t, anotherCountry.ID, anotherCountry, postExecutor)
+		requireCountry(t, newCountry.ID, nil, false, postExecutor)
+		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
 }
@@ -1133,7 +1290,7 @@ func manyMutations(t *testing.T) {
 	}
 
 	t.Run("country deleted", func(t *testing.T) {
-		requireCountry(t, newCountry.ID, nil, postExecutor)
+		requireCountry(t, newCountry.ID, nil, false, postExecutor)
 	})
 
 	cleanUp(t, append(result.Add1.Country, result.Add2.Country...), []*author{}, []*post{})
@@ -1708,12 +1865,16 @@ func requireState(t *testing.T, uid string, expectedState *state,
 				id
 				xcode
 				name
+				country {
+					id
+					name
+				}
 			}
 		}`,
 		Variables: map[string]interface{}{"id": uid},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetState *state
@@ -1728,7 +1889,7 @@ func requireState(t *testing.T, uid string, expectedState *state,
 
 func addState(t *testing.T, name string, executeRequest requestExecutor) *state {
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xcode: String!, $name: String) {
+		Query: `mutation addState($xcode: String!, $name: String!) {
 			addState(input: [{ xcode: $xcode, name: $name }]) {
 				state {
 					id
@@ -1743,7 +1904,7 @@ func addState(t *testing.T, name string, executeRequest requestExecutor) *state 
 		{ "addState": { "state": [{ "id": "_UID_", "name": "` + name + `", "xcode": "cal" } ]} }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddState struct {
@@ -1795,7 +1956,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	// Try add again, it should fail this time.
 	name := "Calgary"
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xcode: String!, $name: String) {
+		Query: `mutation addState($xcode: String!, $name: String!) {
 			addState(input: [{ xcode: $xcode, name: $name }]) {
 				state {
 					id

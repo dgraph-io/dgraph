@@ -44,7 +44,6 @@ import (
 var manual = flag.Bool("manual", false, "Set when manually running some tests.")
 var (
 	list    *List
-	plist   *pb.PostingList
 	pack    *pb.UidPack
 	block   *pb.UidBlock
 	posting *pb.Posting

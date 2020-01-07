@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/ast"
 )
 
@@ -93,6 +94,8 @@ type Field interface {
 	// InterfaceType tells us whether this field represents a GraphQL Interface.
 	InterfaceType() bool
 	IncludeInterfaceField(types []interface{}) bool
+	TypeName(dgraphTypes []interface{}) string
+	GetObjectName() string
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -122,7 +125,7 @@ type Type interface {
 	Nullable() bool
 	ListType() Type
 	Interfaces() []string
-	CheckValidity(map[string]interface{}) error
+	EnsureNonNulls(map[string]interface{}, string) error
 	fmt.Stringer
 }
 
@@ -152,6 +155,8 @@ type schema struct {
 	dgraphPredicate map[string]map[string]string
 	// Map of mutation field name to mutated type.
 	mutatedType map[string]*astType
+	// Map from typename to ast.Definition
+	typeNameAst map[string][]*ast.Definition
 }
 
 type operation struct {
@@ -386,6 +391,17 @@ func mutatedTypeMapping(s *ast.Schema,
 	return m
 }
 
+func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
+	typeNameAst := make(map[string][]*ast.Definition)
+
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		typeNameAst[name] = append(typeNameAst[name], typ)
+	}
+
+	return typeNameAst
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) Schema {
 	dgraphPredicate := dgraphMapping(s)
@@ -393,6 +409,7 @@ func AsSchema(s *ast.Schema) Schema {
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
+		typeNameAst:     typeMappings(s),
 	}
 }
 
@@ -523,6 +540,10 @@ func (f *field) InterfaceType() bool {
 	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
 }
 
+func (f *field) GetObjectName() string {
+	return f.field.ObjectDefinition.Name
+}
+
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
@@ -563,6 +584,24 @@ func (f *field) DgraphPredicate() string {
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
+func (f *field) TypeName(dgraphTypes []interface{}) string {
+	for _, typ := range dgraphTypes {
+		styp, ok := typ.(string)
+		if !ok {
+			continue
+		}
+
+		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
+			if origTyp.Kind != ast.Object {
+				continue
+			}
+			return origTyp.Name
+		}
+
+	}
+	return ""
+}
+
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
@@ -571,15 +610,12 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		if !ok {
 			continue
 		}
-		for _, origTyp := range f.op.inSchema.schema.Types {
-			if typeName(origTyp) != styp {
-				continue
-			}
+		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
 				// If the field doesn't exist in the map corresponding to the object type, then we
 				// don't need to include it.
 				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
-				return ok
+				return ok || f.Name() == Typename
 			}
 		}
 
@@ -639,6 +675,10 @@ func (q *query) ResponseName() string {
 	return (*field)(q).ResponseName()
 }
 
+func (q *query) GetObjectName() string {
+	return q.field.ObjectDefinition.Name
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name())
 }
@@ -666,6 +706,10 @@ func (q *query) DgraphPredicate() string {
 
 func (q *query) InterfaceType() bool {
 	return (*field)(q).InterfaceType()
+}
+
+func (q *query) TypeName(dgraphTypes []interface{}) string {
+	return (*field)(q).TypeName(dgraphTypes)
 }
 
 func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
@@ -744,6 +788,10 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
+func (m *mutation) GetObjectName() string {
+	return m.field.ObjectDefinition.Name
+}
+
 func (m *mutation) MutationType() MutationType {
 	return mutationType(m.Name())
 }
@@ -767,6 +815,10 @@ func (m *mutation) Operation() Operation {
 
 func (m *mutation) DgraphPredicate() string {
 	return (*field)(m).DgraphPredicate()
+}
+
+func (m *mutation) TypeName(dgraphTypes []interface{}) string {
+	return (*field)(m).TypeName(dgraphTypes)
 }
 
 func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
@@ -951,7 +1003,50 @@ func (t *astType) Interfaces() []string {
 	return names
 }
 
-func (t *astType) CheckValidity(obj map[string]interface{}) error {
-	// FIXME: to implement
+// CheckNonNulls checks that any non nullables in t are present in obj.
+// Fields of type ID are not checked, nor is any exclusion.
+//
+// For our reference types for adding/linking objects, we'd like to have something like
+//
+// input PostRef {
+// 	id: ID!
+// }
+//
+// input PostNew {
+// 	title: String!
+// 	text: String
+// 	author: AuthorRef!
+// }
+//
+// and then have something like this
+//
+// input PostNewOrReference = PostRef | PostNew
+//
+// input AuthorNew {
+//   ...
+//   posts: [PostNewOrReference]
+// }
+//
+// but GraphQL doesn't allow union types in input, so best we can do is
+//
+// input PostRef {
+// 	id: ID
+// 	title: String
+// 	text: String
+// 	author: AuthorRef
+// }
+//
+// and then check ourselves that either there's an ID, or there's all the bits to
+// satisfy a valid post.
+func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
+	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+		if fld.Type.NonNull && !isID(fld) && !(fld.Name == exclusion) {
+			if val, ok := obj[fld.Name]; !ok || val == nil {
+				return errors.Errorf(
+					"type %s requires a value for field %s, but no value present",
+					t.Name(), fld.Name)
+			}
+		}
+	}
 	return nil
 }

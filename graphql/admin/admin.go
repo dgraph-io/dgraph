@@ -182,8 +182,8 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
-		Arw: resolve.NewAddRewriter(),
-		Urw: resolve.NewUpdateRewriter(),
+		Arw: resolve.NewAddRewriter,
+		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection)

@@ -37,6 +37,8 @@ const (
 	dgraphArgs      = "name"
 	idDirective     = "id"
 
+	Typename = "__typename"
+
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
