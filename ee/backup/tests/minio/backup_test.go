@@ -272,6 +272,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	}
 	pdir := "./data/restore/p1"
 	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	require.NoError(t, err)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
 	require.NoError(t, err)
