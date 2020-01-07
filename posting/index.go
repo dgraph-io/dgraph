@@ -522,7 +522,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithCompression(options.None).
 		WithEventLogging(false).
-		WithLogRotatesToFlush(10)
+		WithLogRotatesToFlush(10).
+		WithMaxCacheSize(50)
 	indexDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
@@ -578,7 +579,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return nil, nil
 	}
-	stream.Send = func(kvList *bpb.KVList) error {
+	stream.Send = func(*bpb.KVList) error {
 		// The work of adding the index edges to the transaction is done by r.fn
 		// so this function doesn't have any work to do.
 		return nil
@@ -639,7 +640,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return nil, nil
 	}
-	indexStream.Send = func(kvList *bpb.KVList) error {
+	indexStream.Send = func(*bpb.KVList) error {
 		return nil
 	}
 
