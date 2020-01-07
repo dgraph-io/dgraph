@@ -194,3 +194,17 @@ func TestSchemaKey(t *testing.T) {
 		require.Equal(t, sattr, pk.Attr)
 	}
 }
+
+func TestTypeKey(t *testing.T) {
+	var uid uint64
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+
+		key := TypeKey(sattr)
+		pk, err := Parse(key)
+		require.NoError(t, err)
+
+		require.True(t, pk.IsType())
+		require.Equal(t, sattr, pk.Attr)
+	}
+}

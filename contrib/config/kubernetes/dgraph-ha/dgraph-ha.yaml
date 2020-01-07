@@ -14,8 +14,9 @@ metadata:
   name: dgraph-zero-public
   labels:
     app: dgraph-zero
+    monitor: zero-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 5080
     targetPort: 5080
@@ -32,8 +33,9 @@ metadata:
   name: dgraph-alpha-public
   labels:
     app: dgraph-alpha
+    monitor: alpha-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8080
     targetPort: 8080
@@ -54,7 +56,7 @@ metadata:
   labels:
     app: dgraph-alpha
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8080
     targetPort: 8080
@@ -69,7 +71,7 @@ metadata:
   labels:
     app: dgraph-ratel
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8000
     targetPort: 8000
