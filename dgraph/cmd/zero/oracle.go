@@ -511,15 +511,14 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 	reply, err := s.lease(ctx, num, true)
 	span.Annotatef(nil, "Response: %+v. Error: %v", reply, err)
 
-	if err == nil {
+	switch err {
+	case nil:
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
-
-	} else if err == errServedFromMemory {
+	case errServedFromMemory:
 		// Avoid calling doneUntil.Done, and storePending.
 		err = nil
-
-	} else {
+	default:
 		glog.Errorf("Got error: %v while leasing timestamps: %+v", err, num)
 	}
 	return reply, err

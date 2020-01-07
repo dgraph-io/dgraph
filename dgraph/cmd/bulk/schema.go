@@ -37,7 +37,11 @@ type schemaStore struct {
 	*state
 }
 
-func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *schemaStore {
+func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *schemaStore {
+	if opt == nil {
+		log.Fatalf("Cannot create schema store with nil options.")
+	}
+
 	s := &schemaStore{
 		schemaMap: map[string]*pb.SchemaUpdate{},
 		state:     state,

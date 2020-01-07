@@ -1,5 +1,7 @@
 #!/bin/bash
 
+basedir=$(dirname "${BASH_SOURCE[0]}")/../..
+source $basedir/contrib/scripts/functions.sh
 pushd $(dirname "${BASH_SOURCE[0]}")/queries &> /dev/null
 
 function run_index_test {
@@ -15,7 +17,8 @@ function run_index_test {
   while (( $attempt < $max_attempts ))
   do
     set +e
-    N=`curl -s -H 'Content-Type: application/graphql+-' localhost:8180/query -XPOST -d @${X}.in`
+    accessToken=`loginWithGroot`
+    N=`curl -s -H 'Content-Type: application/graphql+-' localhost:8180/query -XPOST -d @${X}.in -H "X-Dgraph-AccessToken: $accessToken"`
     exitCode=$?
 
     set -e

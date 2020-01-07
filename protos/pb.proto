@@ -378,6 +378,7 @@ message SchemaNode {
 	bool list = 7;
 	bool upsert = 8;
 	bool lang = 9;
+	bool no_conflict = 10;
 }
 
 message SchemaResult {
@@ -407,6 +408,8 @@ message SchemaUpdate {
 	// If value_type is OBJECT, then this represents an object type with a
 	// custom name. This field stores said name.
 	string object_type_name = 12;
+
+	bool no_conflict = 13;
 
 	// Deleted field:
 	reserved 7;
@@ -491,7 +494,7 @@ service Worker {
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc SubscribeForKV(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
 }
 
 message SubscriptionRequest {
