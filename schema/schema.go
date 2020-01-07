@@ -480,7 +480,12 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			{
 				Predicate: "dgraph.group.acl",
 				ValueType: pb.Posting_STRING,
-			}}...)
+			},
+			{
+				Predicate: "dgraph.graphql.schema",
+				ValueType: pb.Posting_STRING,
+			},
+		}...)
 	}
 
 	return initialSchema

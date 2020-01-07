@@ -560,6 +560,10 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.group.acl":  {},
 }
 
+var graphqlReservedPredicate = map[string]struct{}{
+	"dgraph.graphql.schema": {},
+}
+
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
 // predicate is a predicate that has a special meaning in Dgraph and its query
 // language and should not be allowed as a user-defined  predicate.
@@ -567,10 +571,16 @@ var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }
 
+// IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
+func IsGraphqlReservedPredicate(pred string) bool {
+	_, ok := graphqlReservedPredicate[pred]
+	return ok
+}
+
 // IsReservedPredicate returns true if the predicate is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
 	_, ok := reservedPredicateMap[strings.ToLower(pred)]
-	return ok || IsAclPredicate(pred)
+	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
 
 // IsAclPredicate returns true if the predicate is in the list of reserved
