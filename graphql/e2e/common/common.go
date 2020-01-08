@@ -173,7 +173,9 @@ func BootstrapServer(schema, data []byte) {
 		panic(err)
 	}
 
-	panic(d.Close())
+	if err = d.Close(); err != nil {
+		panic(err)
+	}
 }
 
 // RunAll runs all the test functions in this package as sub tests.
