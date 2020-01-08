@@ -24,30 +24,30 @@ import (
 
 func TestReindexTerm(t *testing.T) {
 	require.NoError(t, dropAll())
-	require.NoError(t, alterSchema(`name: string @lang .`))
+	require.NoError(t, alterSchema(`name: string .`))
 
 	m1 := `{
     set {
-      _:u1 <name> "Ab Bc"@en .
-      _:u2 <name> "Bc Cd"@en .
-      _:u3 <name> "Cd Da"@fr .
+      _:u1 <name> "Ab Bc" .
+      _:u2 <name> "Bc Cd" .
+      _:u3 <name> "Cd Da" .
     }
   }`
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	// perform re-indexing
-	require.NoError(t, alterSchema(`name: string @lang @index(term) .`))
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `{
-      q(func: anyofterms(name@en, "bc")) {
-        name@en
+      q(func: anyofterms(name, "bc")) {
+        name
       }
     }`
 	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
-	require.Contains(t, res, `{"name@en":"Ab Bc"}`)
-	require.Contains(t, res, `{"name@en":"Bc Cd"}`)
+	require.Contains(t, res, `{"name":"Ab Bc"}`)
+	require.Contains(t, res, `{"name":"Bc Cd"}`)
 }
 
 func TestReindexLang(t *testing.T) {
