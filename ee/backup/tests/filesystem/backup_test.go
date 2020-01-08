@@ -57,10 +57,16 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
-	// Add initial data.
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
+
+	// Add schema and types.
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+		type Node {
+			movie
+		}`}))
+
+	// Add initial data.
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -256,9 +262,18 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 		require.Equal(t, uint32(i+1), groupId)
 	}
 
-	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
+	pdir := "./data/restore/p1"
+	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
+
+	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"dgraph.type", "movie"}, restoredPreds)
+
+	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
 
 	return restored
 }
