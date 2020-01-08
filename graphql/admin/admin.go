@@ -230,12 +230,14 @@ func newAdminResolver(
 		err := pl.Unmarshal(kv.GetValue())
 		if err != nil {
 			glog.Errorf("Unable to marshal the psoting list for graphql schema update %s", err)
+			return
 		}
 
 		// There should be only one posting.
 		if len(pl.Postings) != 1 {
 			glog.Errorf("Only one posting is expected in the graphql schema posting list but got %d",
 				len(pl.Postings))
+			return
 		}
 		graphqlSchema := string(pl.Postings[0].Value)
 		glog.Info("Updating graphql schema")
