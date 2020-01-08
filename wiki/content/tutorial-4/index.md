@@ -8,7 +8,11 @@ In the [previous tutorial]({{< relref "tutorial-3/index.md" >}}), we learned abo
 
 In this tutorial, we'll learn about using multi-language strings and operations on them using the language tags.
 
-The accompanying video of the tutorial will be out shortly, so stay tuned to [our YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w).
+You can see the accompanying video below.
+
+{{< youtube _lDE9QXHZC0 >}}
+
+---
 
 ## Strings and languages
 
