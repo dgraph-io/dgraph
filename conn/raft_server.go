@@ -19,6 +19,7 @@ package conn
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,10 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
+)
+
+var (
+	beginTime = time.Now()
 )
 
 type sendmsg struct {
@@ -275,9 +280,22 @@ func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) 
 	ticker := time.NewTicker(echoDuration)
 	defer ticker.Stop()
 
+	info := struct {
+		Version  string        `json:"version"`
+		Instance string        `json:"instance"`
+		Uptime   time.Duration `json:"uptime"`
+	}{
+		Version:  x.Version(),
+		Instance: "alpha",
+		Uptime:   time.Since(beginTime),
+	}
+
 	ctx := stream.Context()
-	out := &api.Payload{Data: []byte("beat")}
+
 	for {
+		info.Uptime = time.Since(beginTime)
+		data, _ := json.Marshal(info)
+		out := &api.Payload{Data: data}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

@@ -48,9 +48,10 @@ type Pool struct {
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
-	lastEcho time.Time
-	Addr     string
-	closer   *y.Closer
+	lastEcho   time.Time
+	Addr       string
+	closer     *y.Closer
+	healthInfo []byte
 }
 
 // Pools manages a concurrency-safe set of Pool.
@@ -79,7 +80,7 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	if !ok {
 		return nil, ErrNoConnection
 	}
-	if !pool.IsHealthy() {
+	if !pool.IsHealthy() || pool.healthInfo == nil {
 		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
@@ -212,13 +213,15 @@ func (p *Pool) listenToHeartbeat() error {
 
 	// This loop can block indefinitely as long as it keeps on receiving pings back.
 	for {
-		_, err := s.Recv()
+		res, err := s.Recv()
 		if err != nil {
 			return err
 		}
+
 		// We do this periodic stream receive based approach to defend against network partitions.
 		p.Lock()
 		p.lastEcho = time.Now()
+		p.healthInfo = res.Data
 		p.Unlock()
 	}
 }
@@ -235,7 +238,7 @@ func (p *Pool) MonitorHealth() {
 		default:
 			err := p.listenToHeartbeat()
 			if lastErr != nil && err == nil {
-				glog.Infof("Connection established with %v\n", p.Addr)
+				glog.Infof("Connection re-established with %v\n", p.Addr)
 			} else if err != nil && lastErr == nil {
 				glog.Warningf("Connection lost with %v. Error: %v\n", p.Addr, err)
 			}
@@ -254,4 +257,11 @@ func (p *Pool) IsHealthy() bool {
 	p.RLock()
 	defer p.RUnlock()
 	return time.Since(p.lastEcho) < 4*echoDuration
+}
+
+// GetHealthInfo returns the healthinfo.
+func (p *Pool) GetHealthInfo() []byte {
+	p.RLock()
+	defer p.RUnlock()
+	return p.healthInfo
 }

@@ -35,6 +35,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -288,6 +289,44 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+	}
+
+	_, ok = r.URL.Query()["all"]
+	if ok {
+		glog.Infof("health?all called")
+		ms := worker.GetMembershipState()
+		for _, vg := range ms.Groups {
+			for _, vm := range vg.Members {
+				_ = conn.GetPools().Connect(vm.GetAddr())
+				time.Sleep(time.Second)
+				p, err := conn.GetPools().Get(vm.GetAddr())
+				if err != nil {
+					// this one is unhealthy.
+					glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
+				} else {
+					// health. Get health info
+					glog.Infof("%v is healthy. HealthInfo: %v\n", vm.GetAddr(), string(p.GetHealthInfo()))
+				}
+			}
+		}
+
+		for _, vz := range ms.Zeros {
+			_ = conn.GetPools().Connect(vz.GetAddr())
+			time.Sleep(time.Second)
+			p, err := conn.GetPools().Get(vz.GetAddr())
+			if err != nil {
+				// this one is unhealthy.
+				glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
+			} else {
+				// health. Get health info
+				glog.Infof("%v is healthy. HealthInfo: %v\n", vz.GetAddr(), string(p.GetHealthInfo()))
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/html")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Healthinfo for all\n"))
+		return
 	}
 
 	info := struct {
