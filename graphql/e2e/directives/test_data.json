@@ -50,7 +50,7 @@
         "myPost.numLikes": 100,
         "is_published": true,
         "myPost.postType": "Fact",
-        "dgraph.author": { "uid": "_:author1" }
+        "post.author": { "uid": "_:author1" }
     },
     {
         "uid": "_:post2",
@@ -62,7 +62,7 @@
         "myPost.numLikes": 87,
         "is_published": true,
         "myPost.postType": "Question",
-        "dgraph.author": { "uid": "_:author2" }
+        "post.author": { "uid": "_:author2" }
     },
     {
         "uid": "_:post3",
@@ -74,7 +74,7 @@
         "myPost.numLikes": 77,
         "is_published": true,
         "myPost.postType": "Opinion",
-        "dgraph.author": { "uid": "_:author1" }
+        "post.author": { "uid": "_:author1" }
     },
     {
         "uid": "_:post4",
@@ -86,7 +86,7 @@
         "myPost.numLikes": 0,
         "is_published": false,
         "myPost.postType": "Fact",
-        "dgraph.author": { "uid": "_:author2" }
+        "post.author": { "uid": "_:author2" }
     },
     {
         "uid": "_:nsw",
