@@ -2,7 +2,7 @@
 title = "Get Started with Dgraph"
 +++
 
-{{% notice "note" %}}You can see an older version of the Getting Started page [here](../get-started-old).{{% /notice %}}
+{{% notice "note" %}}You can see an older version of the Getting Started page [here]({{< relref "get-started-old/index.md" >}}).{{% /notice %}}
 
 ## Tutorials
 
@@ -68,6 +68,18 @@ title = "Get Started with Dgraph"
           </div>
           <p class="section-desc">
             Learn about string indices, modeling tweet graph, and keyword-based searching.
+          </p>
+        </div>
+      </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-6/index.md">}}">
+              6 - Advanced Text Search on Social Graphs
+            </a>
+          </div>
+          <p class="section-desc">
+            Learn about full-text search and regular expression search.
           </p>
         </div>
       </div>

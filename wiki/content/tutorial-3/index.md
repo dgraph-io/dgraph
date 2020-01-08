@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Basic Types and Operations on them"
 
 **Welcome to the third tutorial of getting started with Dgraph.**
 
-In the [previous tutorial](../tutorial-2/) of getting started,
+In the [previous tutorial]({{< relref "tutorial-2/index.md" >}}) of getting started,
 we learned about the CRUD operations using UIDs.
 We also learned about traversals and recursive traversals.
 
@@ -26,7 +26,7 @@ You can see the accompanying video below.
 Let's start by building the following graph of a simple blog application.
 Here's the Graph model of our application
 
-![main graph model](../images/tutorials/3/a-main-graph.JPG)
+{{% load-img "/images/tutorials/3/a-main-graph.JPG" "main graph model" %}}
 
 The above graph has three entities: Author, Blog posts, and Tags.
 The nodes in the graph represent these entities.
@@ -180,7 +180,7 @@ Go to Ratel, click on the mutate tab, paste the following mutation, and click Ru
 
 Our Graph is ready!
 
-![rating-blog-rating](../images/tutorials/3/l-fullgraph-2.png)
+{{% load-img "/images/tutorials/3/l-fullgraph-2.png" "rating-blog-rating" %}}
 
 Our Graph has:
 
@@ -190,14 +190,15 @@ Our Graph has:
 You can see that there are 8 unique tags, and some of the blogs share a common tag.
 
 
-### Data types for predicates
+## Data types for predicates
+
 Dgraph automatically detects the data type of its predicates.
 You can see the auto-detected data types using the Ratel UI.
 
 Click on the schema tab on the left and then check the `Type` column.
 You'll see the predicate names and their corresponding data types.
 
-![rating-blog-rating](../images/tutorials/3/a-initial.png)
+{{% load-img "/images/tutorials/3/a-initial.png" "rating-blog-rating" %}}
 
 These data types include `string`, `float`, and `int` and `uid`.
 Besides them, Dgraph also offers three more basic data types: `geo`, `dateTime`, and `bool`.
@@ -222,7 +223,8 @@ Also, notice that there are no entries in the indices column.
 We'll talk about indices in detail shortly.
 
 
-### Querying for predicate values
+## Querying for predicate values
+
 First, let's query for all the Authors and their ratings.
 
 ```
@@ -234,9 +236,10 @@ First, let's query for all the Authors and their ratings.
   }
 }
 ```
-![authors](../images/tutorials/3/a-find-rating-2.png)
 
-Refer to the [first episode](https://blog.dgraph.io/post/tutorial-1-getting-started/) if you have any questions related to the structure of the query in general.
+{{% load-img "/images/tutorials/3/a-find-rating-2.png" "authors" %}}
+
+Refer to the [first episode]({{< relref "tutorial-1/index.md" >}}) if you have any questions related to the structure of the query in general.
 
 We have 3 authors in total in our dataset.
 Now, let's find the best authors.
@@ -284,14 +287,16 @@ Let's try it out.
   }
 }
 ```
-![index missing](../images/tutorials/3/b-index-missing.png)
+
+{{% load-img "/images/tutorials/3/b-index-missing.png" "index missing" %}}
 
 We got an error! The index for the `rating` predicate is missing.
 You cannot query for the value of a predicate unless you've added an index for it.
 
 Let's learn more about indices in Dgraph and also how to add them.
 
-### Indexing in Dgraph
+## Indexing in Dgraph
+
 Indices are used to speed up your queries on predicates.
 They have to be explicitly added to a predicate when they are required.
 That is, only when you need to query for the value of a predicate.
@@ -324,12 +329,12 @@ Here's the sequence of steps:
 - Click on the `rating` predicate from the list.
 - Tick the index option in the Properties UI on the right.
 
-![Add schema](../images/tutorials/3/c-add-schema.png)
+{{% load-img "/images/tutorials/3/c-add-schema.png" "Add schema" %}}
 
 We successfully added the index for `rating` predicate!
 Let's rerun our previous query.
 
-![rating](../images/tutorials/3/d-rating-query.png)
+{{% load-img "/images/tutorials/3/d-rating-query.png" "rating" %}}
 
 We successfully queried for author nodes with a rating of 4.0 or more.
 
@@ -354,8 +359,10 @@ We need to just traverse the `published` edge starting from the `author` nodes.
   }
 }
 ```
-![rating-blog-rating](../images/tutorials/3/e-rating-blog.png)
-_Check out our [previous tutorial](https://blog.dgraph.io/post/tutorial-2-getting-started/) if you have questions around graph traversal queries._
+
+{{% load-img "/images/tutorials/3/e-rating-blog.png" "rating-blog-rating" %}}
+
+_Check out our [previous tutorial]{{< relref "tutorial-2/index.md">}} if you have questions around graph traversal queries._
 
 
 Similarly, let's extend our previous query to fetch the tags of these blog posts.
@@ -378,14 +385,15 @@ Similarly, let's extend our previous query to fetch the tags of these blog posts
 }
 ```
 
-![rating-blog-rating](../images/tutorials/3/m-four-blogs.png)
+{{% load-img "/images/tutorials/3/m-four-blogs.png" "rating-blog-rating" %}}
+
 _Note: Author nodes are in blue, blogs posts in green, and tags in pink._
 
 We have two authors, four blog posts, and their tags in the result.
 
 If you take a closer look at the result, there's a blog post with 12 dislikes.
 
-![Dislikes](../images/tutorials/3/i-dislikes-2.png)
+{{% load-img "/images/tutorials/3/i-dislikes-2.png" "Dislikes" %}}
 
 Let's filter and fetch only the popular blog posts.
 Let's query for only those blog posts with fewer than 10 dislikes.
@@ -396,7 +404,8 @@ _Hey, traverse the `published` edge, but only return those blogs with fewer than
 Can we also filter the nodes during traversals?
 Yes, we can! Let's learn how to do that in our next section.
 
-### Filtering traversals
+## Filtering traversals
+
 We can filter the result of traversals by using the `@filter` directive.
 
 You can use any of the Dgraph's comparator functions with the `@filter` directive.
@@ -422,18 +431,20 @@ Here's the query.
   }
 }
 ```
-![Dislikes](../images/tutorials/3/j-dislike-index-2.png)
+
+{{% load-img "/images/tutorials/3/j-dislike-index-2.png" "Dislikes" %}}
 
 Oops! We forgot to add the index for the dislike predicate!
 
 Go to the Schema tab, find the `dislikes` predicate, add the index from the UI.
 
-![Add index](../images/tutorials/3/g-dislike-index-3.png)
+{{% load-img "/images/tutorials/3/g-dislike-index-3.png" "Add index" %}}
+
 _Note: Notice that the `dislike` predicate is of integer type._
 
 Let's rerun the query.
 
-![rating-blog-rating](../images/tutorials/3/n-three-blogs.png)
+{{% load-img "/images/tutorials/3/n-three-blogs.png" "rating-blog-rating" %}}
 
 Now, we only have three blogs in the result.
 The blog with 12 dislikes is filtered out.
@@ -450,14 +461,15 @@ Let's run the following query and find all the tags in the database.
 }
 ```
 
-![tags](../images/tutorials/3/o-tags.png)
+{{% load-img "/images/tutorials/3/o-tags.png" "tags" %}}
 
 We got all the tags in the database.
 My favorite tag is `devrel`. What's yours?
 
 In our next section, let's find all the blog posts which are tagged `devrel`.
 
-### Querying string predicates
+## Querying string predicates
+
 The `tag_name` predicate represents the name of a tag.
 It is of type `string`.
 Here are the steps to fetch all blog posts which are tagged `devrel`.
@@ -471,7 +483,7 @@ Here are the steps to fetch all blog posts which are tagged `devrel`.
 Let's start by adding an index to the `tag_name` predicate.
 Go to Ratel, click `tag_name` predicate from the list.
 
-![string index](../images/tutorials/3/p-string-index-2.png)
+{{% load-img "/images/tutorials/3/p-string-index-2.png" "string index" %}}
 
 You can see that there are five choices for indices that can be applied to any `string` predicate.
 The `fulltext`, `term`, and `trigram` are advanced string indices.
@@ -489,7 +501,7 @@ The `hash` index would normally be the most performant to be used with the `eq` 
 
 Let's add the `hash` index to the `tag_name` predicate.
 
-![string index](../images/tutorials/3/m-hash.png)
+{{% load-img "/images/tutorials/3/m-hash.png" "string index" %}}
 
 Let's use the `eq` comparator, and fetch the root node with `tag_name` set to `devrel`.
 
@@ -501,7 +513,7 @@ Let's use the `eq` comparator, and fetch the root node with `tag_name` set to `d
 }
 ```
 
-![string index](../images/tutorials/3/q-devrel-2.png)
+{{% load-img "/images/tutorials/3/q-devrel-2.png" "string index" %}}
 
 We finally have the node we wanted!
 
@@ -530,7 +542,7 @@ Don't be surprised as this is expected.
 
 Let's observe our Graph model again.
 
-![main graph model](../images/tutorials/3/a-main-graph.JPG)
+{{% load-img "/images/tutorials/3/a-main-graph.JPG" "main graph model" %}}
 
 We know that the edges in Dgraph have directions.
 You can see that the `tagged` edge points from a `blog post` node to a `tag` node.
@@ -558,7 +570,7 @@ Let's add the `tilde (~)` at the beginning of the `tagged` edge and initiate a r
 ```
 
 
-![string index](../images/tutorials/3/r-reverse-2.png)
+{{% load-img "/images/tutorials/3/r-reverse-2.png" "string index" %}}
 
 We got an error!
 
@@ -566,7 +578,7 @@ Reverse traversals require an index on their predicate.
 
 Let's go to Ratel and add the `reverse` index to the edge.
 
-![string index](../images/tutorials/3/r-reverse-1.png)
+{{% load-img "/images/tutorials/3/r-reverse-1.png" "string index" %}}
 
 
 Let's re-run the reverse edge traversal.
@@ -584,9 +596,9 @@ Let's re-run the reverse edge traversal.
 }
 ```
 
-![uid index](../images/tutorials/3/s-devrel-blogs.png)
+{{% load-img "/images/tutorials/3/s-devrel-blogs.png" "uid index" %}}
 
-![uid index](../images/tutorials/3/s-devrel-blogs-2.png)
+{{% load-img "/images/tutorials/3/s-devrel-blogs-2.png" "uid index" %}}
 
 Phew! Now we got all the blog posts that are tagged `devrel`.
 
@@ -595,7 +607,7 @@ It requires you to reverse traverse the `published` predicate.
 
 Let's add the reverse index to the `published` edge.
 
-![uid index](../images/tutorials/3/t-reverse-published.png)
+{{% load-img "/images/tutorials/3/t-reverse-published.png" "uid index" %}}
 
 Now, let's run the following query.
 
@@ -616,14 +628,15 @@ Now, let's run the following query.
 }
 ```
 
-![uid index](../images/tutorials/3/u-author-reverse-1.png)
+{{% load-img "/images/tutorials/3/u-author-reverse-1.png" "uid index" %}}
 
-![uid index](../images/tutorials/3/u-author-reverse-2.png)
+{{% load-img "/images/tutorials/3/u-author-reverse-2.png" "uid index" %}}
 
 With our previous query, we just traversed the entire graph in the reverse order.
 Starting from the tag nodes, we traversed up to the author nodes.
 
-### Summary
+## Summary
+
 In this tutorial, we learned about basic types, indices, filtering, and reverse edge traversals.
 
 Before we wrap up, here’s a sneak peek into our next tutorial.
@@ -633,9 +646,9 @@ How about the geo-location querying capabilities?
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series [here](../tutorial-4/).
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-4/index.md" >}}).
 
-### Need Help
+## Need Help
 
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
