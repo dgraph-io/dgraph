@@ -49,53 +49,58 @@ func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 	}
 
 	uDec := codec.NewDecoder(u)
-	uUids := uDec.Uids()
+	uuids := uDec.Uids()
 	vDec := codec.NewDecoder(v)
-	vUids := vDec.Uids()
+	vuids := vDec.Uids()
 	uIdx, vIdx := 0, 0
-	encoder := codec.Encoder{BlockSize: int(u.BlockSize)}
+	result := codec.Encoder{BlockSize: int(u.BlockSize)}
 
 	for {
+		// Break if the end of a list has been reached.
+		if len(uuids) == 0 || len(vuids) == 0 {
+			break
+		}
+
 		// Load the next block of the encoded lists if necessary.
-		if len(uUids) == 0 || uIdx == len(uUids) {
+		if uIdx == len(uuids) {
 			if uDec.Valid() {
-				uUids = uDec.Next()
+				uuids = uDec.Next()
 				uIdx = 0
 			} else {
 				break
 			}
 
 		}
-		if len(vUids) == 0 || vIdx == len(vUids) {
+		if vIdx == len(vuids) {
 			if vDec.Valid() {
-				vUids = vDec.Next()
+				vuids = vDec.Next()
 				vIdx = 0
 			} else {
 				break
 			}
 		}
 
-		uLen := len(uUids)
-		vLen := len(vUids)
+		uLen := len(uuids)
+		vLen := len(vuids)
 
 		for uIdx < uLen && vIdx < vLen {
-			uid := uUids[uIdx]
-			vid := vUids[vIdx]
+			uid := uuids[uIdx]
+			vid := vuids[vIdx]
 			switch {
 			case uid > vid:
-				for vIdx = vIdx + 1; vIdx < vLen && vUids[vIdx] < uid; vIdx++ {
+				for vIdx = vIdx + 1; vIdx < vLen && vuids[vIdx] < uid; vIdx++ {
 				}
 			case uid == vid:
-				encoder.Add(uid)
+				result.Add(uid)
 				vIdx++
 				uIdx++
 			default:
-				for uIdx = uIdx + 1; uIdx < uLen && uUids[uIdx] < vid; uIdx++ {
+				for uIdx = uIdx + 1; uIdx < uLen && uuids[uIdx] < vid; uIdx++ {
 				}
 			}
 		}
 	}
-	return encoder.Done()
+	return result.Done()
 }
 
 type listInfoPacked struct {
