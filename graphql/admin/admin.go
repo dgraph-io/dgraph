@@ -229,7 +229,7 @@ func newAdminResolver(
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
 		if err != nil {
-			glog.Errorf("Unable to marshal the psoting list for graphql schema update %s", err)
+			glog.Errorf("Unable to unmarshal the psoting list for graphql schema update %s", err)
 			return
 		}
 
@@ -256,7 +256,7 @@ func newAdminResolver(
 			return
 		}
 
-		glog.Infof("Successfully loaded GraphQL schema.  Now serving GraphQL API.")
+		glog.Infof("Successfully updated GraphQL schema.  Now serving GraphQL API.")
 
 		server.mux.Lock()
 		defer server.mux.Unlock()
