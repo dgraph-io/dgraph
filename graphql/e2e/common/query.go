@@ -245,7 +245,7 @@ func multipleSearchIndexes(t *testing.T) {
 }
 
 func multipleSearchIndexesWrongField(t *testing.T) {
-	getCountryParams := &GraphQLParams{
+	queryPostParams := &GraphQLParams{
 		Query: `query {
 			queryPost (filter: {title : { regexp : "/Introducing.*$/" }} ) {
 			    title
@@ -253,7 +253,7 @@ func multipleSearchIndexesWrongField(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
 
 	expected := `Field "regexp" is not defined by type StringFullTextFilter_StringTermFilter`
@@ -261,7 +261,7 @@ func multipleSearchIndexesWrongField(t *testing.T) {
 }
 
 func hashSearch(t *testing.T) {
-	getCountryParams := &GraphQLParams{
+	queryAuthorParams := &GraphQLParams{
 		Query: `query {
 			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
 				name
@@ -270,7 +270,7 @@ func hashSearch(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	var expected, result struct {
@@ -287,7 +287,7 @@ func hashSearch(t *testing.T) {
 }
 
 func allPosts(t *testing.T) []*post {
-	queryAuthorParams := &GraphQLParams{
+	queryPostParams := &GraphQLParams{
 		Query: `query {
 			queryPost {
 				postID
@@ -300,7 +300,7 @@ func allPosts(t *testing.T) []*post {
 			}
 		}`,
 	}
-	gqlResponse := queryAuthorParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {
@@ -1378,4 +1378,23 @@ func multipleOperations(t *testing.T) {
 			}
 		})
 	}
+}
+
+func queryPostWithAuthor(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
+				title
+				author {
+					name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	testutil.CompareJSON(t,
+		`{"queryPost":[{"title":"Introducing GraphQL in Dgraph","author":{"name":"Ann Author"}}]}`,
+		string(gqlResponse.Data))
 }
