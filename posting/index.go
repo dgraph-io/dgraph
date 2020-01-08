@@ -515,7 +515,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	os.Mkdir(tmpDir, os.ModePerm)
+	if err := os.Mkdir(tmpDir, os.ModePerm); err != nil {
+		return errors.Wrap(err, "error creating in temp dir for reindexing")
+	}
 	indexDir, err := ioutil.TempDir(tmpDir, "")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
@@ -526,7 +528,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	dbOpts := badger.DefaultOptions(indexDir).
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
-		WithCompression(options.None).
+		WithCompression(options.Snappy).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50)
