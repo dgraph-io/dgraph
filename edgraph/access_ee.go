@@ -536,7 +536,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
-				_, _ = msg.WriteString(key + " ")
+				x.Check2(msg.WriteString(key))
+				x.Check2(msg.WriteString(""))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to alter following predicates: %s\n", msg.String())
@@ -642,7 +643,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
-				_, _ = msg.WriteString(key + " ")
+				x.Check2(msg.WriteString(key))
+				x.Check2(msg.WriteString(" "))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
@@ -670,32 +672,25 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	predsMap := make(map[string]struct{})
 	for _, gq := range gqls {
-
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-
 		if len(gq.Attr) > 0 {
 			predsMap[gq.Attr] = struct{}{}
 		}
-
 		for _, ord := range gq.Order {
 			predsMap[ord.Attr] = struct{}{}
 		}
-
 		for _, spec := range gq.GroupbyAttrs {
 			predsMap[spec.Attr] = struct{}{}
 		}
-
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
 			predsMap[pred] = struct{}{}
 		}
-
 		for _, childPred := range parsePredsFromQuery(gq.Children) {
 			predsMap[childPred] = struct{}{}
 		}
 	}
-
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
@@ -709,15 +704,12 @@ func parsePredsFromFilter(f *gql.FilterTree) []string {
 	if f == nil {
 		return preds
 	}
-
 	if f.Func != nil && len(f.Func.Attr) > 0 {
 		preds = append(preds, f.Func.Attr)
 	}
-
 	for _, ch := range f.Child {
 		preds = append(preds, parsePredsFromFilter(ch)...)
 	}
-
 	return preds
 }
 
@@ -830,7 +822,6 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 				continue
 			}
 		}
-
 		if len(gq.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Attr]; ok {
 				continue
@@ -842,7 +833,6 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 				continue
 			}
 		}
-
 		gq.Filter = removeFilters(gq.Filter, blockedPreds)
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
@@ -856,7 +846,6 @@ func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.Fil
 	if f == nil {
 		return nil
 	}
-
 	if f.Func != nil && len(f.Func.Attr) > 0 {
 		if _, ok := blockedPreds[f.Func.Attr]; ok {
 			return nil
@@ -870,11 +859,9 @@ func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.Fil
 			filteredChildren = append(filteredChildren, child)
 		}
 	}
-
 	if len(filteredChildren) != len(f.Child) && (f.Op == "AND" || f.Op == "NOT") {
 		return nil
 	}
-
 	f.Child = filteredChildren
 	return f
 }
@@ -883,14 +870,11 @@ func removeGroupBy(groupAttrs []gql.GroupByAttr,
 	blockedPreds map[string]struct{}) []gql.GroupByAttr {
 
 	filteredAttrs := groupAttrs[:0]
-
 	for _, gAttr := range groupAttrs {
 		if _, ok := blockedPreds[gAttr.Attr]; ok {
 			continue
 		}
-
 		filteredAttrs = append(filteredAttrs, gAttr)
 	}
-
 	return filteredAttrs
 }
