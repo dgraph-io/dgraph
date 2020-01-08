@@ -25,11 +25,15 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -52,14 +56,10 @@ const (
 	// dgraph.graphql.date @index(day) .
 	// `
 	dgraphAdminSchema = `
-	type Schema {
-		Schema.schema
-		Schema.date
-	}
-	Schema.schema: string .
-	Schema.date: dateTime @index(day) .
-	`
-
+	type dgraph.graphql {
+		dgraph.graphql.schema
+		dgraph.graphql.date
+	}`
 	// GraphQL schema for /admin endpoint.
 	//
 	// Eventually we should generate this from just the types definition.
@@ -67,7 +67,7 @@ const (
 	// hand crafted to be one of our schemas so we can pass it into the
 	// pipeline.
 	graphqlAdminSchema = `
- type Schema {
+ type Schema @dgraph(type: "dgraph.graphql") {
 	schema: String!  # the input schema, not the expanded schema
 	date: DateTime!
  }
@@ -84,6 +84,8 @@ const (
  }
 
  scalar DateTime
+
+ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
  type SchemaDiff {
 	types: [TypeDiff!]
@@ -213,6 +215,54 @@ func newAdminResolver(
 		fns:               fns,
 		withIntrospection: withIntrospection,
 	}
+
+	prefix := x.DataKey("dgraph.graphql.schema", 0)
+	// Remove uid from the key, to get the correct prefix
+	prefix = prefix[:len(prefix)-8]
+	// Listen for graphql schema changes in group 1.
+	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+		// Last update contains the latest value. So, taking the last update.
+		lastIdx := len(kvs.GetKv()) - 1
+		kv := kvs.GetKv()[lastIdx]
+
+		// Unmarshal the incoming posting list.
+		pl := &pb.PostingList{}
+		err := pl.Unmarshal(kv.GetValue())
+		if err != nil {
+			glog.Errorf("Unable to unmarshal the psoting list for graphql schema update %s", err)
+			return
+		}
+
+		// There should be only one posting.
+		if len(pl.Postings) != 1 {
+			glog.Errorf("Only one posting is expected in the graphql schema posting list but got %d",
+				len(pl.Postings))
+			return
+		}
+		graphqlSchema := string(pl.Postings[0].Value)
+		glog.Info("Updating graphql schema")
+
+		schHandler, err := schema.NewHandler(graphqlSchema)
+		if err != nil {
+			glog.Errorf("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			return
+		}
+
+		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
+		if err != nil {
+			glog.Errorf("Error processing GraphQL schema: %s.  "+
+				"Admin server is connected, but no GraphQL schema is being served.", err)
+			return
+		}
+
+		glog.Infof("Successfully updated GraphQL schema.  Now serving GraphQL API.")
+
+		server.mux.Lock()
+		defer server.mux.Unlock()
+		server.status = healthy
+		server.resetSchema(gqlSchema)
+	}, 1)
 
 	go server.initServer()
 
