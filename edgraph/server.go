@@ -17,6 +17,7 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"sort"
@@ -39,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -251,7 +253,23 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	m := &pb.Mutations{Edges: edges, StartTs: qc.req.StartTs}
+	predHints := make(map[string]pb.Metadata_HintType)
+	for _, gmu := range qc.gmuList {
+		for pred, hint := range gmu.Metadata.GetPredHints() {
+			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
+				continue
+			}
+			predHints[pred] = hint
+		}
+	}
+	m := &pb.Mutations{
+		Edges:   edges,
+		StartTs: qc.req.StartTs,
+		Metadata: &pb.Metadata{
+			PredHints: predHints,
+		},
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
@@ -580,6 +598,38 @@ type queryContext struct {
 	span *trace.Span
 }
 
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
+	return s.doState(ctx, NeedAuthorize)
+}
+
+func (s *Server) doState(ctx context.Context, authorize int) (
+	*api.Response, error) {
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if authorize == NeedAuthorize {
+		if err := authorizeState(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.Errorf("No membership state found")
+	}
+
+	m := jsonpb.Marshaler{}
+	var jsonState bytes.Buffer
+	if err := m.Marshal(&jsonState, ms); err != nil {
+		return nil, errors.Errorf("Error marshalling state information to JSON")
+	}
+
+	return &api.Response{Json: jsonState.Bytes()}, nil
+}
+
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	return s.doQuery(ctx, req, NeedAuthorize)
@@ -758,18 +808,30 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	for name := range qc.uidRes {
 		v := qr.Vars[name]
-		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
+
+		// If the list of UIDs is empty but the map of values is not,
+		// we need to get the UIDs from the keys in the map.
+		var uidList []uint64
+		if v.Uids != nil && len(v.Uids.Uids) > 0 {
+			uidList = v.Uids.Uids
+		} else {
+			uidList = make([]uint64, 0, len(v.Vals))
+			for uid := range v.Vals {
+				uidList = append(uidList, uid)
+			}
+		}
+		if len(uidList) == 0 {
 			continue
 		}
 
 		// We support maximum 1 million UIDs per variable to ensure that we
 		// don't do bad things to alpha and mutation doesn't become too big.
-		if len(v.Uids.Uids) > 1e6 {
+		if len(uidList) > 1e6 {
 			return resp, errors.Errorf("var [%v] has over million UIDs", name)
 		}
 
-		uids := make([]string, len(v.Uids.Uids))
-		for i, u := range v.Uids.Uids {
+		uids := make([]string, len(uidList))
+		for i, u := range uidList {
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
@@ -945,28 +1007,31 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
+		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
+		// The metadata is not currently needed for delete operations so it can be safely ignored.
+		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.SetNquads)
+		nqs, md, err := chunker.ParseRDFs(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.DelNquads)
+		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}
@@ -1074,11 +1139,6 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		// These are used in the response of a mutation in HTTP API.
-		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
-			return errors.Errorf("query alias [%v] not allowed", a)
-		}
-
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}
@@ -1101,9 +1161,9 @@ func validatePredName(name string) error {
 
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
-func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+func formatTypes(typeList []*pb.TypeUpdate) []map[string]interface{} {
 	var res []map[string]interface{}
-	for _, typ := range types {
+	for _, typ := range typeList {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
 		fields := make([]map[string]string, len(typ.Fields))

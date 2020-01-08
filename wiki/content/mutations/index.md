@@ -26,6 +26,7 @@ Meaning that the graph node identified by `subject` is linked to `object` with d
 For example, the triple
 ```
 <0x01> <name> "Alice" .
+<0x01> <dgraph.type> "Person" .
 ```
 Represents that graph node with ID `0x01` has a `name` with string value `"Alice"`.  While triple
 ```
@@ -46,10 +47,15 @@ Blank nodes in mutations, written `_:identifier`, identify nodes within a mutati
     _:class <student> _:x .
     _:class <student> _:y .
     _:class <name> "awesome class" .
+    _:class <dgraph.type> "Class" .
     _:x <name> "Alice" .
+    _:x <dgraph.type> "Person" .
+    _:x <dgraph.type> "Student" .
     _:x <planet> "Mars" .
     _:x <friend> _:y .
     _:y <name> "Bob" .
+    _:y <dgraph.type> "Person" .
+    _:y <dgraph.type> "Student" .
  }
 }
 ```
@@ -72,10 +78,15 @@ The graph has thus been updated as if it had stored the triples
 <0x6bc818dc89e78754> <student> <0xc3bcc578868b719d> .
 <0x6bc818dc89e78754> <student> <0xb294fb8464357b0a> .
 <0x6bc818dc89e78754> <name> "awesome class" .
+<0x6bc818dc89e78754> <dgraph.type> "Class" .
 <0xc3bcc578868b719d> <name> "Alice" .
+<0xc3bcc578868b719d> <dgraph.type> "Person" .
+<0xc3bcc578868b719d> <dgraph.type> "Student" .
 <0xc3bcc578868b719d> <planet> "Mars" .
 <0xc3bcc578868b719d> <friend> <0xb294fb8464357b0a> .
 <0xb294fb8464357b0a> <name> "Bob" .
+<0xb294fb8464357b0a> <dgraph.type> "Person" .
+<0xb294fb8464357b0a> <dgraph.type> "Student" .
 ```
 The blank node labels `_:class`, `_:x` and `_:y` do not identify the nodes after the mutation, and can be safely reused to identify new nodes in later mutations.
 
@@ -85,6 +96,8 @@ A later mutation can update the data for existing UIDs.  For example, the follow
  set {
     <0x6bc818dc89e78754> <student> _:x .
     _:x <name> "Chris" .
+    _:x <dgraph.type> "Person" .
+    _:x <dgraph.type> "Student" .
  }
 }
 ```
@@ -111,6 +124,7 @@ Dgraph's input language, RDF, also supports triples of the form `<a_fixed_identi
 
 ```
 _:userA <http://schema.org/type> <http://schema.org/Person> .
+_:userA <dgraph.type> "Person" .
 _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/type> <http://schema.org/Person> .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
@@ -120,6 +134,7 @@ As Dgraph doesn't natively support such external IDs as node identifiers.  Inste
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
+<0x123> <dgraph.type> "ExternalType" .
 ```
 
 While Robin Wright might get UID `0x321` and triples
@@ -128,6 +143,7 @@ While Robin Wright might get UID `0x321` and triples
 <0x321> <xid> "https://www.themoviedb.org/person/32-robin-wright" .
 <0x321> <http://schema.org/type> <0x123> .
 <0x321> <http://schema.org/name> "Robin Wright" .
+<0x321> <dgraph.type> "Person" .
 ```
 
 An appropriate schema might be as follows.
@@ -179,6 +195,7 @@ Set the type first of all.
 {
   set {
     _:blank <xid> "http://schema.org/Person" .
+    _:blank <dgraph.type> "ExternalType" .
   }
 }
 ```
@@ -199,6 +216,7 @@ Now you can create a new person and attach its type using the upsert block.
            uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
            uid(Person) <http://schema.org/type> uid(Type) .
            uid(Person) <http://schema.org/name> "Robin Wright" .
+           uid(Person) <dgraph.type> "Person" .
           }
       }
     }
@@ -221,6 +239,7 @@ You can also delete a person and detach the relation between Type and Person Nod
            uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
            uid(Person) <http://schema.org/type> uid(Type) .
            uid(Person) <http://schema.org/name> "Robin Wright" .
+           uid(Person) <dgraph.type> "Person" .
           }
       }
     }
@@ -248,6 +267,7 @@ RDF N-Quad allows specifying a language for string values and an RDF type.  Lang
 <0x01> <name> "Adelaide"@en .
 <0x01> <name> "Аделаида"@ru .
 <0x01> <name> "Adélaïde"@fr .
+<0x01> <dgraph.type> "Person" .
 ```
 See also [how language strings are handled in queries]({{< relref "query-language/index.md#language-support" >}}).
 
@@ -259,24 +279,27 @@ RDF types are attached to literals with the standard `^^` separator.  For exampl
 
 The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
 
-| Storage Type                                            | Dgraph type    |
-| -------------                                           | :------------: |
-| &#60;xs:string&#62;                                     | `string`         |
-| &#60;xs:dateTime&#62;                                   | `dateTime`       |
-| &#60;xs:date&#62;                                       | `datetime`       |
-| &#60;xs:int&#62;                                        | `int`            |
-| &#60;xs:boolean&#62;                                    | `bool`           |
-| &#60;xs:double&#62;                                     | `float`          |
-| &#60;xs:float&#62;                                      | `float`          |
-| &#60;geo:geojson&#62;                                   | `geo`            |
-| &#60;xs:password&#62;                                   | `password`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+| Storage Type                                                    | Dgraph type     |
+| -------------                                                   | :------------:   |
+| &#60;xs:string&#62;                                             | `string`         |
+| &#60;xs:dateTime&#62;                                           | `dateTime`       |
+| &#60;xs:date&#62;                                               | `datetime`       |
+| &#60;xs:int&#62;                                                | `int`            |
+| &#60;xs:integer&#62;                                            | `int`            |
+| &#60;xs:boolean&#62;                                            | `bool`           |
+| &#60;xs:double&#62;                                             | `float`          |
+| &#60;xs:float&#62;                                              | `float`          |
+| &#60;geo:geojson&#62;                                           | `geo`            |
+| &#60;xs:password&#62;                                           | `password`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;           | `string`         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62;         | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;             | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;              | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#positiveInteger&#62;  | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#integer&#62;          | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;          | `bool`           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;           | `float`          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;            | `float`          |
 
 
 See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
@@ -301,6 +324,7 @@ For example, if the store contained
 ```
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
+<0xf11168064b01135b> <dgraph.type> "Person" .
 ```
 
 Then delete mutation
@@ -374,6 +398,7 @@ curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=
 {
   set {
     _:alice <name> "Alice" .
+    _:alice <dgraph.type> "Person" .
   }
 }'
 ```
@@ -424,13 +449,15 @@ For example:
 ```json
 {
   "name": "diggy",
-  "food": "pizza"
+  "food": "pizza",
+  "dgraph.type": "Mascot"
 }
 ```
 Will be converted into the RDFs:
 ```
 _:blank-0 <name> "diggy" .
 _:blank-0 <food> "pizza" .
+_:blank-0 <dgraph.type> "Mascot" .
 ```
 
 The result of the mutation would also contain a map, which would have the uid assigned corresponding
@@ -440,7 +467,8 @@ to the key `blank-0`. You could specify your own key like
 {
   "uid": "_:diggy",
   "name": "diggy",
-  "food": "pizza"
+  "food": "pizza",
+  "dgraph.type": "Mascot"
 }
 ```
 
@@ -459,13 +487,15 @@ For example, the JSON mutation
   "rating@en": "tastes good",
   "rating@es": "sabe bien",
   "rating@fr": "c'est bon",
-  "rating@it": "è buono"
+  "rating@it": "è buono",
+  "dgraph.type": "Food"
 }
 ```
 
 is equivalent to the following RDF:
 ```
 _:blank-0 <food> "taco" .
+_:blank-0 <dgraph.type> "Food" .
 _:blank-0 <rating> "tastes good"@en .
 _:blank-0 <rating> "sabe bien"@es .
 _:blank-0 <rating> "c'est bon"@fr .
@@ -501,12 +531,14 @@ For example:
   "uid": "0x467ba0",
   "food": "taco",
   "rating": "tastes good",
+  "dgraph.type": "Food"
 }
 ```
 Will be converted into the RDFs:
 ```
 <0x467ba0> <food> "taco" .
 <0x467ba0> <rating> "tastes good" .
+<0x467ba0> <dgraph.type> "Food" .
 ```
 
 ### Edges between nodes
@@ -544,7 +576,9 @@ node.
   }
 }
 ```
+
 Will be converted to:
+
 ```
 _:alice <name> "Alice" .
 _:alice <friend> _:bob .
@@ -638,17 +672,21 @@ used to show facets in query results. E.g.
 {
   "name": "Carol",
   "name|initial": "C",
+  "dgraph.type": "Person",
   "friend": {
     "name": "Daryl",
-    "friend|close": "yes"
+    "friend|close": "yes",
+    "dgraph.type": "Person"
   }
 }
 ```
 Produces the following RDFs:
 ```
 _:blank-0 <name> "Carol" (initial=C) .
+_:blank-0 <dgraph.type> "Person" .
 _:blank-0 <friend> _:blank-1 (close=yes) .
 _:blank-1 <name> "Daryl" .
+_:blank-1 <dgraph.type> "Person" .
 ```
 
 ### Creating a list with JSON and interacting with
@@ -1235,6 +1273,7 @@ upsert {
   mutation @if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
     set {
       _:user <name> "user" .
+      _:user <dgraph.type> "Person" .
       _:user <email> "user_email1@company1.io" .
       _:user <email> "user_email2@company1.io" .
     }
@@ -1258,6 +1297,7 @@ upsert {
   mutation @if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
     set {
       _:user <name> "user" .
+      _:user <dgraph.type> "Person" .
       _:user <email> "user_email1@company1.io" .
       _:user <email> "user_email2@company1.io" .
     }
@@ -1346,15 +1386,18 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
       "set": [
         {
           "uid": "_:user",
-          "name": "user"
+          "name": "user",
+          "dgraph.type": "Person"
         },
         {
           "uid": "_:user",
-          "email": "user_email1@company1.io"
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
         },
         {
           "uid": "_:user",
-          "email": "user_email2@company1.io"
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
         }
       ]
     },
@@ -1363,7 +1406,8 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
       "set": [
         {
           "uid": "uid(u1)",
-          "email": "user_email2@company1.io"
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
         }
       ]
     },
@@ -1372,7 +1416,8 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
       "set": [
         {
           "uid": "uid(u2)",
-          "email": "user_email1@company1.io"
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
         }
       ]
     },
@@ -1381,15 +1426,18 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
       "set": [
         {
           "uid": "_:user",
-          "name": "user"
+          "name": "user",
+          "dgraph.type": "Person"
         },
         {
           "uid": "_:user",
-          "email": "user_email1@company1.io"
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
         },
         {
           "uid": "_:user",
-          "email": "user_email2@company1.io"
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
         }
       ],
       "delete": [

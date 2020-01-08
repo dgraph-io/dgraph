@@ -37,7 +37,11 @@ type schemaStore struct {
 	*state
 }
 
-func newSchemaStore(initial *schema.ParsedSchema, opt options, state *state) *schemaStore {
+func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *schemaStore {
+	if opt == nil {
+		log.Fatalf("Cannot create schema store with nil options.")
+	}
+
 	s := &schemaStore{
 		schemaMap: map[string]*pb.SchemaUpdate{},
 		state:     state,
@@ -82,11 +86,11 @@ func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 func (s *schemaStore) setSchemaAsList(pred string) {
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.schemaMap[pred]
+	sch, ok := s.schemaMap[pred]
 	if !ok {
 		return
 	}
-	schema.List = true
+	sch.List = true
 }
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {

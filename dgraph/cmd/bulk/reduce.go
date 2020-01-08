@@ -294,15 +294,19 @@ type postingHeap struct {
 func (h *postingHeap) Len() int {
 	return len(h.nodes)
 }
+
 func (h *postingHeap) Less(i, j int) bool {
 	return less(h.nodes[i].mapEntry, h.nodes[j].mapEntry)
 }
+
 func (h *postingHeap) Swap(i, j int) {
 	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
 }
-func (h *postingHeap) Push(x interface{}) {
-	h.nodes = append(h.nodes, x.(heapNode))
+
+func (h *postingHeap) Push(val interface{}) {
+	h.nodes = append(h.nodes, val.(heapNode))
 }
+
 func (h *postingHeap) Pop() interface{} {
 	elem := h.nodes[len(h.nodes)-1]
 	h.nodes = h.nodes[:len(h.nodes)-1]

@@ -39,7 +39,6 @@ import (
 var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
-var groupFile = "group_id"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -206,12 +205,7 @@ func run() {
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 
-		groupFile := filepath.Join(dir, groupFile)
-		f, err := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
-		x.Check(err)
-		x.Check2(f.WriteString(strconv.Itoa(i + 1)))
-		x.Check2(f.WriteString("\n"))
-		x.Check(f.Close())
+		x.Check(x.WriteGroupIdFile(dir, uint32(i+1)))
 	}
 
 	// Create a directory just for bulk loader's usage.
@@ -223,10 +217,10 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
-	loader := newLoader(opt)
+	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
-		mergeMapShardsIntoReduceShards(opt)
+		mergeMapShardsIntoReduceShards(&opt)
 	}
 	loader.reduceStage()
 	loader.writeSchema()
