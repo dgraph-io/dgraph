@@ -96,10 +96,6 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 				"type": "float"
 			},
 			{
-				"predicate": "dgraph.author",
-				"type": "uid"
-			},
-			{
 				"predicate": "dgraph.author.country",
 				"type": "uid"
 			},
