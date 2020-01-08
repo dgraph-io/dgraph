@@ -70,7 +70,8 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
-// and loads them to the given badger DB.
+// and loads them to the given badger DB. The set of predicates is used to avoid restoring
+// values from predicates no longer assigned to this group.
 func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
