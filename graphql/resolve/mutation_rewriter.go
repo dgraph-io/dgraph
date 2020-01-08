@@ -255,14 +255,14 @@ func (mrw *addRewriter) FromMutationResult(
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
-	var errs []string
+	var errs x.GqlErrorList
 
 	uids := make([]uint64, 0)
 
 	for _, frag := range mrw.frags {
 		err := checkResult(frag, result)
 		if err != nil {
-			errs = append(errs, err.Error())
+			errs = append(errs, schema.AsGQLErrors(err)...)
 			continue
 		}
 
@@ -284,12 +284,12 @@ func (mrw *addRewriter) FromMutationResult(
 	}
 
 	if len(assigned) == 0 && len(errs) == 0 {
-		errs = append(errs, "No new node was created")
+		errs = append(errs, schema.AsGQLErrors(fmt.Errorf("No new node was created"))...)
 	}
 
 	var err error
 	if len(errs) > 0 {
-		err = fmt.Errorf(strings.Join(errs, "\n"))
+		err = errs
 	}
 
 	if len(uids) == 0 {

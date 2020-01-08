@@ -1985,3 +1985,70 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 func addMutationWithXID(t *testing.T) {
 	addMutationWithXid(t, postExecutor)
 }
+
+func addMultipleMutationWithOneError(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+
+	auth := &author{
+		Name:       "New Author1",
+		Country:    newCountry,
+		Reputation: 7.75,
+		Posts:      []*post{},
+	}
+
+	newAuth := addAuthorFromRef(t, auth, postExecutor)
+	badAuth := &author{
+		ID: "0x0",
+	}
+
+	goodPost := &post{
+		Title:       "Test Post",
+		Text:        "This post is just a test.",
+		IsPublished: true,
+		NumLikes:    1000,
+		Author:      newAuth,
+	}
+
+	badPost := &post{
+		Title:       "Test Post",
+		Text:        "This post is just a test.",
+		IsPublished: true,
+		NumLikes:    1000,
+		Author:      badAuth,
+	}
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($posts: [PostInput!]!) {
+			addPost(input: $posts) {
+			  post {
+				postID
+				title
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"posts": []*post{goodPost, badPost}},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+
+	addPostExpected := `{ "addPost": {
+		"post": [{
+			"title": "Text Post"
+		}]
+	} }`
+
+	var expected, result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		`couldn't rewrite query for mutation addPost because ID "0x0" isn't a Author`)
+
+	cleanUp(t, []*country{}, []*author{newAuth}, []*post{result.AddPost.Post[0]})
+}
