@@ -508,14 +508,20 @@ type rebuilder struct {
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
+	// All the temp indexes go into the following directory. We delete the whole
+	// directory after the indexing step is complete. This deletes any other temp
+	// indexes that may have been left around in case defer wasn't executed.
+	tmpDir := "dgraph_index"
+
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	indexDir, err := ioutil.TempDir("", "")
+	os.Mkdir(tmpDir, os.ModePerm)
+	indexDir, err := ioutil.TempDir(tmpDir, "")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
-	defer os.RemoveAll(indexDir)
-	glog.V(1).Infof("Rebuilding indexes using the tmp folder %s\n", indexDir)
+	defer os.RemoveAll(tmpDir)
+	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", indexDir)
 
 	dbOpts := badger.DefaultOptions(indexDir).
 		WithSyncWrites(false).
@@ -530,14 +536,15 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 	defer indexDB.Close()
 
-	indexWriter := NewTxnWriter(indexDB)
-	// Set it to 1 in case there are no keys found for an index and NewStreamAt is called with ts>0.
-	var counter uint64 = 1
-
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.attr, r.startTs, hex.Dump(r.prefix))
 
+	// Counter is used here to ensure that all keys are commited at different timestamp.
+	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
+	var counter uint64 = 1
+
+	indexWriter := NewTxnWriter(indexDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	stream.Prefix = r.prefix
@@ -554,9 +561,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 		}
 
-		item := itr.Item()
-		keyCopy := item.KeyCopy(nil)
-		l, err := ReadPostingList(keyCopy, itr)
+		l, err := ReadPostingList(key, itr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error reading posting list from disk")
 		}
@@ -571,8 +576,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		for key, data := range txn.cache.deltas {
-			err := indexWriter.SetAt([]byte(key), data, BitDeltaPosting, atomic.AddUint64(&counter, 1))
-			if err != nil {
+			version := atomic.AddUint64(&counter, 1)
+			if err := indexWriter.SetAt([]byte(key), data, BitDeltaPosting, version); err != nil {
 				return nil, errors.Wrap(err, "error setting entries in temp badger")
 			}
 		}
@@ -603,13 +608,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
+	// We choose to write the PL at r.startTs, so it won't be read by txns,
+	// which occurred before this schema mutation.
 	wb := pstore.NewWriteBatchAt(r.startTs)
 	defer wb.Cancel()
 
 	indexStream := indexDB.NewStreamAt(counter)
 	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		// No need to copy key, stream framework passes a cpoied value of key in the arg here.
 		l, err := ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -626,8 +632,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 				continue
 			}
 
-			// We choose to write the PL at r.startTs, so it won't be read by txns,
-			// which occurred before this schema mutation.
 			entry := &badger.Entry{
 				Key:      kv.Key,
 				Value:    kv.Value,
@@ -647,7 +651,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := indexStream.Orchestrate(ctx); err != nil {
 		return err
 	}
-
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
 	return wb.Flush()
 }
