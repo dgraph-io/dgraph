@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -32,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -85,7 +85,7 @@ const (
 
  scalar DateTime
 
- directive @dgraph(name: String!) on OBJECT | INTERFACE | FIELD_DEFINITION
+ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
  type SchemaDiff {
 	types: [TypeDiff!]
@@ -221,29 +221,35 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
 
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
-		x.Check(err)
+		if err != nil {
+			glog.Errorf("Unable to marshal the psoting list for graphql schema update %s", err)
+		}
 
-		// There should be only one posting
-		x.AssertTrue(len(pl.Postings) == 1)
+		// There should be only one posting.
+		if len(pl.Postings) != 1 {
+			glog.Errorf("Only one posting is expected in the graphql schema posting list but got %d",
+				len(pl.Postings))
+		}
 		graphqlSchema := string(pl.Postings[0].Value)
 		glog.Info("Updating graphql schema")
 
 		schHandler, err := schema.NewHandler(graphqlSchema)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
+			glog.Errorf("Error processing GraphQL schema: %s.  "+
 				"Admin server is connected, but no GraphQL schema is being served.", err)
 			return
 		}
 
 		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
+			glog.Errorf("Error processing GraphQL schema: %s.  "+
 				"Admin server is connected, but no GraphQL schema is being served.", err)
 			return
 		}

@@ -1036,10 +1036,10 @@ func askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group int) {
+func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32) {
 	for {
 		// Connect to any of the group 1 nodes.
-		members := groups().AnyTwoServers(1)
+		members := groups().AnyTwoServers(group)
 		// There may be a lag while starting so keep retrying.
 		if len(members) == 0 {
 			continue
@@ -1052,7 +1052,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group
 			Prefixes: prefixes,
 		})
 		if err != nil {
-			glog.Errorf("error from worker subscribe stream: %v", err)
+			glog.Errorf("Error from alpha client subscribe: %v", err)
 			continue
 		}
 	receiver:
@@ -1060,7 +1060,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group
 			// Listen for updates.
 			kvs, err := stream.Recv()
 			if err != nil {
-				glog.Errorf("error from worker subscribe stream: %v", err)
+				glog.Errorf("Error from worker subscribe stream: %v", err)
 				break receiver
 			}
 			cb(kvs)
