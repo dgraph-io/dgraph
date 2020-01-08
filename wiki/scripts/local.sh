@@ -32,7 +32,7 @@ run() {
 
   if [ ! -d "hugo-docs" ]; then
     echo -e "$(date) $GREEN  Hugo-docs repository not found. Cloning the repo. $RESET"
-    git clone git@github.com:dgraph-io/hugo-docs.git
+    git clone https://github.com/dgraph-io/hugo-docs.git
   else
     echo -e "$(date) $GREEN  Hugo-docs repository found. Pulling the latest version from master. $RESET"
     pushd hugo-docs > /dev/null
@@ -42,9 +42,9 @@ run() {
   popd > /dev/null
 
   if [[ $1 == "-p" || $1 == "--preview" ]]; then
-      echo -e "$(date) $GREEN  Generating documentation static pages in the public folder. $RESET"
-      hugo --destination=public 1> /dev/null
-      echo -e "$(date) $GREEN  Done building. $RESET"
+    echo -e "$(date) $GREEN  Generating documentation static pages in the public folder. $RESET"
+    hugo --destination=public 1> /dev/null
+    echo -e "$(date) $GREEN  Done building. $RESET"
   else
     CURRENT_VERSION=${CURRENT_VERSION} hugo server -w --baseURL=http://localhost:1313
   fi
@@ -52,3 +52,4 @@ run() {
 }
 
 run $1
+
