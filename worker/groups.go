@@ -395,7 +395,7 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	g.RUnlock()
 	if tablet != nil {
 		if ts > 0 && ts < tablet.MoveTs {
-			return 0, fmt.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
+			return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
 				ts, tablet.MoveTs, key)
 		}
 		return tablet.GetGroupId(), nil
@@ -423,7 +423,7 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	defer g.Unlock()
 	g.tablets[key] = out
 	if out != nil && ts > 0 && ts < out.MoveTs {
-		return 0, fmt.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
+		return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
 			ts, out.MoveTs, key)
 	}
 	return out.GetGroupId(), nil

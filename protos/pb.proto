@@ -187,7 +187,7 @@ message Tablet {
 	bool force       = 3; // Used while moving predicate.
 	int64 space      = 7;
 	bool remove      = 8;
-  bool read_only   = 9; // If true, do not ask zero to serve any tablets.
+	bool read_only   = 9; // If true, do not ask zero to serve any tablets.
 	uint64 move_ts   = 10;
 }
 
@@ -309,8 +309,10 @@ message UidBlock {
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
 	// num_uids is the number of UIDs in the block. We are including this because we want to
-	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
-	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
+	// switch encoding to groupvarint encoding. Current avaialble open source version implements
+	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
+	// MSB base uids. That is, if the 32 MSBs are different, we will create a new block irrespective
+	// of whether the block is filled with the block_size or not.
 	// Default Blocksize is 256 so uint32 would be sufficient.
 	uint32 num_uids = 3;
 }

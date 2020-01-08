@@ -193,10 +193,10 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errEmptyPredicate
 	}
 
-	// This loop ensures that we have seen the latest membership update, where this predicate now
-	// belongs to another group. So, we won't serve any transaction asking for this predicate.
-	// Without ensuring that we have seen this update, if we delete the tablet below, we'd end up
-	// serving wrong data and cause Jepsen failures.
+	// This loop ensures that we have seen the latest membership update following the move where
+	// this predicate now belongs to another group. Without this check, this group could end up
+	// serving transactions asking for this predicate, even after this tablet has been deleted. This
+	// issue is known to have caused Jepsen failures.
 	for in.ExpectedChecksum > 0 {
 		cur := atomic.LoadUint64(&groups().membershipChecksum)
 		if in.ExpectedChecksum == cur {
