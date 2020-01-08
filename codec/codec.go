@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -68,7 +69,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		_, _ = out.Write(data)
+		x.Check2(out.Write(data))
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
