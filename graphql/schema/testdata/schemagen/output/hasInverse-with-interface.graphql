@@ -114,15 +114,15 @@ input StringHashFilter {
 #######################
 
 type AddAnswerPayload {
-	answer: [Answer!]
+	answer: [Answer]
 }
 
 type AddAuthorPayload {
-	author: [Author!]
+	author: [Author]
 }
 
 type AddQuestionPayload {
-	question: [Question!]
+	question: [Question]
 }
 
 type DeleteAnswerPayload {
@@ -360,15 +360,15 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AuthorInput]!): AddAuthorPayload
+	addAuthor(input: [AuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addQuestion(input: [QuestionInput]!): AddQuestionPayload
+	addQuestion(input: [QuestionInput!]!): AddQuestionPayload
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
-	addAnswer(input: [AnswerInput]!): AddAnswerPayload
+	addAnswer(input: [AnswerInput!]!): AddAnswerPayload
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
 }

@@ -120,15 +120,15 @@ input StringHashFilter {
 #######################
 
 type AddDroidPayload {
-	droid: [Droid!]
+	droid: [Droid]
 }
 
 type AddHumanPayload {
-	human: [Human!]
+	human: [Human]
 }
 
 type AddStarshipPayload {
-	starship: [Starship!]
+	starship: [Starship]
 }
 
 type DeleteCharacterPayload {
@@ -372,13 +372,13 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [HumanInput]!): AddHumanPayload
+	addHuman(input: [HumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	addDroid(input: [DroidInput]!): AddDroidPayload
+	addDroid(input: [DroidInput!]!): AddDroidPayload
 	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
 	deleteDroid(filter: DroidFilter!): DeleteDroidPayload
-	addStarship(input: [StarshipInput]!): AddStarshipPayload
+	addStarship(input: [StarshipInput!]!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }

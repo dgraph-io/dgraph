@@ -188,7 +188,7 @@
   explanation: "Add mutation expects an array instead of an object"
   validationerror:
     { "message":
-            "input:2: Variable type provided AuthorInput! is incompatible with expected type [AuthorInput]!\n" }
+            "input:2: Variable type provided AuthorInput! is incompatible with expected type [AuthorInput!]!\n" }
 
 
 -

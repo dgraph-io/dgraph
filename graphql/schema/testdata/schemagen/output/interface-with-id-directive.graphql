@@ -98,11 +98,11 @@ input StringHashFilter {
 #######################
 
 type AddBookPayload {
-	book: [Book!]
+	book: [Book]
 }
 
 type AddLibraryPayload {
-	library: [Library!]
+	library: [Library]
 }
 
 type DeleteBookPayload {
@@ -214,8 +214,8 @@ type Query {
 
 type Mutation {
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [BookInput]!): AddBookPayload
+	addBook(input: [BookInput!]!): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [LibraryInput]!): AddLibraryPayload
+	addLibrary(input: [LibraryInput!]!): AddLibraryPayload
 }

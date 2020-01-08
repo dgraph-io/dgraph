@@ -104,7 +104,7 @@ input StringHashFilter {
 #######################
 
 type AddHumanPayload {
-	human: [Human!]
+	human: [Human]
 }
 
 type DeleteCharacterPayload {
@@ -246,7 +246,7 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [HumanInput]!): AddHumanPayload
+	addHuman(input: [HumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }

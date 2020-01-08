@@ -107,6 +107,7 @@ func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
+	require.Equal(t, len(result.AddCountry.Country), 1)
 	requireUID(t, result.AddCountry.Country[0].ID)
 
 	// Always ignore the ID of the object that was just created.  That ID is
@@ -209,6 +210,7 @@ func addAuthor(t *testing.T, countryUID string,
 	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
+	require.Equal(t, len(result.AddAuthor.Author), 1)
 	requireUID(t, result.AddAuthor.Author[0].ID)
 
 	opt := cmpopts.IgnoreFields(author{}, "ID")
