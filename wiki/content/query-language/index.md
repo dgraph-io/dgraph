@@ -1836,7 +1836,7 @@ veterinarian
 
 For `string` predicates, `expand` only returns values not tagged with a language
 (see [language preference]({{< relref "#language-support" >}})).  So it's often 
-required to add `name@fr` or `name@.` as well as expand to a query.
+required to add `name@fr` or `name@.` as well to an expand query.
 
 ## Cascade Directive
 
@@ -2460,9 +2460,23 @@ year: int .
 friends: [uid] .
 ```
 
-If a `uid` predicate contains a reverse index, both the predicate and the
-reverse predicate are part of any type definition which contain that predicate.
-Expand queries will follow that convention.
+Reverse predicates can also be included inside a type definition. For example, the type above
+could be expanded to include the parent of the student if there's a predicate `children` with
+a reverse edge (the brackets around the predicate name are needed to properly understand the
+special character `~`).
+
+```
+children: [uid] @reverse .
+
+type Student {
+  name
+  dob
+  home_address
+  year
+  friends
+  <~children>
+}
+```
 
 Edges can be used in multiple types: for example, `name` might be used for both
 a person and a pet. Sometimes, however, it's required to use a different

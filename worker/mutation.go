@@ -145,10 +145,9 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		return err
 	}
 	old, _ := schema.State().Get(update.Predicate)
-	current := *update
 	// Sets only in memory, we will update it on disk only after schema mutations
 	// are successful and  written to disk.
-	schema.State().Set(update.Predicate, current)
+	schema.State().Set(update.Predicate, update)
 
 	// Once we remove index or reverse edges from schema, even though the values
 	// are present in db, they won't be used due to validation in work/task.go
@@ -166,7 +165,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		Attr:          update.Predicate,
 		StartTs:       startTs,
 		OldSchema:     &old,
-		CurrentSchema: &current,
+		CurrentSchema: update,
 	}
 	return rebuild.Run(ctx)
 }
@@ -174,7 +173,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate) error {
-	schema.State().Set(s.Predicate, *s)
+	schema.State().Set(s.Predicate, s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
@@ -190,7 +189,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID) error {
+func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -202,6 +201,14 @@ func createSchema(attr string, typ types.TypeID) error {
 		// all predicates of type UidID were implicitly considered lists.
 		if typ == types.UidID {
 			s.List = true
+		}
+
+		switch hint {
+		case pb.Metadata_SINGLE:
+			s.List = false
+		case pb.Metadata_LIST:
+			s.List = true
+		default:
 		}
 	}
 	if err := checkSchema(&s); err != nil {
@@ -260,6 +267,10 @@ func hasEdges(attr string, startTs uint64) bool {
 	return false
 }
 func checkSchema(s *pb.SchemaUpdate) error {
+	if s == nil {
+		return errors.Errorf("Nil schema")
+	}
+
 	if len(s.Predicate) == 0 {
 		return errors.Errorf("No predicate specified in schema mutation")
 	}
@@ -472,6 +483,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
+		mu.Metadata = src.Metadata
 	}
 
 	for _, schema := range src.Schema {

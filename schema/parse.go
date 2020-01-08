@@ -42,7 +42,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range result.Preds {
-		State().Set(update.Predicate, *update)
+		State().Set(update.Predicate, update)
 	}
 	return nil
 }
@@ -70,6 +70,8 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		schema.Count = true
 	case "upsert":
 		schema.Upsert = true
+	case "noconflict":
+		schema.NoConflict = true
 	case "lang":
 		if t != types.StringID || schema.List {
 			return next.Errorf("@lang directive can only be specified for string type."+

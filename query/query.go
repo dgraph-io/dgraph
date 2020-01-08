@@ -1850,6 +1850,15 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 		preds = uniquePreds(preds)
 
+		// There's a types filter at this level so filter out any non-uid predicates
+		// since only uid nodes can have a type.
+		if len(child.Filters) > 0 {
+			preds, err = filterUidPredicates(ctx, preds)
+			if err != nil {
+				return out, err
+			}
+		}
+
 		for _, pred := range preds {
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
@@ -1867,6 +1876,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.Params.IsInternal = false
 			temp.Params.Expand = ""
 			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
+			temp.Filters = child.Filters
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -2339,8 +2349,8 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &pb.List{Uids: uids},
-			facetList, []bool{sg.Params.FacetOrderDesc}, ""); err != nil {
+		if err := types.SortWithFacet(values, &uids, facetList,
+			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2387,8 +2397,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &pb.List{Uids: uids},
-			[]bool{sg.Params.Order[0].Desc}, ""); err != nil {
+		if err := types.Sort(values, &uids, []bool{sg.Params.Order[0].Desc}, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2479,6 +2488,24 @@ func getPredicatesFromTypes(typeNames []string) []string {
 		}
 	}
 	return preds
+}
+
+// filterUidPredicates takes a list of predicates and returns a list of the predicates
+// that are of type uid or [uid].
+func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) {
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
+	if err != nil {
+		return nil, err
+	}
+
+	filteredPreds := make([]string, 0)
+	for _, sch := range schs {
+		if sch.GetType() != "uid" {
+			continue
+		}
+		filteredPreds = append(filteredPreds, sch.GetPredicate())
+	}
+	return filteredPreds, nil
 }
 
 // UidsToHex converts the new UIDs to hex string.

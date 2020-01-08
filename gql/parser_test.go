@@ -4923,3 +4923,146 @@ func TestParseVarAfterCountQry(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 }
+
+func TestRecurseWithArgs(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad")) @recurse(depth: $hello , loop: true) {
+		}
+	}`
+	gq, err := Parse(Request{Str: query, Variables: map[string]string{"$hello": "1"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1 , loop: $hello) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $_hello_hello, loop: $hello1_heelo1) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$_hello_hello": "1",
+		"$hello1_heelo1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+}
+
+func TestRecurseWithArgsWithError(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: true) {
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: $hello) {
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "sd", "$hello1": "true"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should be type of integer")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "tre"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should be type of boolean")
+}
+
+func TestRecurse(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: true) {
+		}
+	}`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+}
+
+func TestRecurseWithError(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: hello, loop: true) {
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value inside depth should be type of integer")
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: tre) {
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value inside loop should be type of boolean")
+}
+func TestParseExpandFilter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(type(Person)) {
+					uid
+				}
+			}
+		}`
+
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+}
+
+func TestParseExpandFilterErr(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(has(Person)) {
+					uid
+				}
+			}
+		}`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}

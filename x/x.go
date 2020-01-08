@@ -101,6 +101,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
+	// GuardiansId is the ID of the admin group for ACLs.
+	GuardiansId = "guardians"
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
@@ -733,4 +735,14 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
 	return nil
+}
+
+func IsGuardian(groups []string) bool {
+	for _, group := range groups {
+		if group == GuardiansId {
+			return true
+		}
+	}
+
+	return false
 }

@@ -77,7 +77,8 @@ func isTernary(f string) bool {
 }
 
 func isZero(f string, rval types.Val) bool {
-	if rval.Tid == types.FloatID {
+	switch rval.Tid {
+	case types.FloatID:
 		g, ok := rval.Value.(float64)
 		if !ok {
 			return false
@@ -91,7 +92,7 @@ func isZero(f string, rval types.Val) bool {
 			return g == 1
 		}
 		return false
-	} else if rval.Tid == types.IntID {
+	case types.IntID:
 		g, ok := rval.Value.(int64)
 		if !ok {
 			return false
@@ -113,7 +114,8 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	if err != nil {
 		return errors.Errorf("Invalid Math expression")
 	}
-	if isUnary(topOp.Fn) {
+	switch {
+	case isUnary(topOp.Fn):
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
@@ -127,7 +129,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		}
 		topOp.Child = []*MathTree{topVal}
 
-	} else if isTernary(topOp.Fn) {
+	case isTernary(topOp.Fn):
 		if valueStack.size() < 3 {
 			return errors.Errorf("Invalid Math expression. Expected 3 operands")
 		}
@@ -136,7 +138,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal3 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal3, topVal2, topVal1}
 
-	} else {
+	default:
 		if valueStack.size() < 2 {
 			return errors.Errorf("Invalid Math expression. Expected 2 operands")
 		}
@@ -179,10 +181,12 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	// valueStack is used to collect the values.
 	valueStack := new(mathTreeStack)
 
+loop:
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		if isMathFunc(lval) {
+		switch {
+		case isMathFunc(lval):
 			op := lval
 			it.Prev()
 			lastItem := it.Item()
@@ -223,7 +227,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 					}
 				}
 			}
-		} else if item.Typ == itemName { // Value.
+		case item.Typ == itemName: // Value.
 			peekIt, err := it.Peek(1)
 			if err != nil {
 				return nil, false, err
@@ -266,10 +270,10 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				}
 			}
 			valueStack.push(child)
-		} else if item.Typ == itemLeftRound { // Just push to op stack.
+		case item.Typ == itemLeftRound: // Just push to op stack.
 			opStack.push(&MathTree{Fn: "("})
 
-		} else if item.Typ == itemComma {
+		case item.Typ == itemComma:
 			for !opStack.empty() {
 				topOp := opStack.peek()
 				if topOp.Fn == "(" {
@@ -296,7 +300,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				return nil, false, err
 			}
 			return res, true, nil
-		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
+		case item.Typ == itemRightRound: // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
 				if topOp.Fn == "(" {
@@ -313,10 +317,11 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
-				break
+				break loop
 			}
-		} else {
-			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v", item)
+		default:
+			return nil, false, errors.Errorf("Unexpected item while parsing math expression: %v",
+				item)
 		}
 	}
 

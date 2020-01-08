@@ -275,34 +275,35 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	return listWrap(kv), err
 }
 
-func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
+func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
 	_, _ = buf.WriteRune('<')
 	_, _ = buf.WriteString(attr)
 	_, _ = buf.WriteRune('>')
 	_, _ = buf.WriteRune(':')
-	if update.List {
+	if update.GetList() {
 		_, _ = buf.WriteRune('[')
 	}
-	_, _ = buf.WriteString(types.TypeID(update.ValueType).Name())
-	if update.List {
+	_, _ = buf.WriteString(types.TypeID(update.GetValueType()).Name())
+	if update.GetList() {
 		_, _ = buf.WriteRune(']')
 	}
-	if update.Directive == pb.SchemaUpdate_REVERSE {
+	switch {
+	case update.GetDirective() == pb.SchemaUpdate_REVERSE:
 		_, _ = buf.WriteString(" @reverse")
-	} else if update.Directive == pb.SchemaUpdate_INDEX && len(update.Tokenizer) > 0 {
+	case update.GetDirective() == pb.SchemaUpdate_INDEX && len(update.GetTokenizer()) > 0:
 		_, _ = buf.WriteString(" @index(")
-		_, _ = buf.WriteString(strings.Join(update.Tokenizer, ","))
+		_, _ = buf.WriteString(strings.Join(update.GetTokenizer(), ","))
 		_, _ = buf.WriteRune(')')
 	}
-	if update.Count {
+	if update.GetCount() {
 		_, _ = buf.WriteString(" @count")
 	}
-	if update.Lang {
+	if update.GetLang() {
 		_, _ = buf.WriteString(" @lang")
 	}
-	if update.Upsert {
+	if update.GetUpsert() {
 		_, _ = buf.WriteString(" @upsert")
 	}
 	_, _ = buf.WriteString(" . \n")
@@ -315,12 +316,12 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	_, _ = buf.WriteString(fmt.Sprintf("type %s {\n", attr))
 	for _, field := range update.Fields {
-		buf.WriteString(fieldToString(field))
+		_, _ = buf.WriteString(fieldToString(field))
 	}
 
-	buf.WriteString("}\n")
+	_, _ = buf.WriteString("}\n")
 
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
@@ -471,7 +472,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toSchema(pk.Attr, update)
+			return toSchema(pk.Attr, &update)
 
 		case pk.IsType():
 			var update pb.TypeUpdate

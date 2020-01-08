@@ -231,12 +231,15 @@ func (it *pIterator) valid() (bool, error) {
 		return true, nil
 	}
 
-	if err := it.moveToNextValidPart(); err != nil {
+	err := it.moveToNextValidPart()
+	switch {
+	case err != nil:
 		return false, err
-	} else if len(it.uids) > 0 {
+	case len(it.uids) > 0:
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (it *pIterator) posting() *pb.Posting {
@@ -267,20 +270,22 @@ type ListOptions struct {
 // NewPosting takes the given edge and returns its equivalent representation as a posting.
 func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	var op uint32
-	if t.Op == pb.DirectedEdge_SET {
+	switch t.Op {
+	case pb.DirectedEdge_SET:
 		op = Set
-	} else if t.Op == pb.DirectedEdge_DEL {
+	case pb.DirectedEdge_DEL:
 		op = Del
-	} else {
+	default:
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
 	var postingType pb.Posting_PostingType
-	if len(t.Lang) > 0 {
+	switch {
+	case len(t.Lang) > 0:
 		postingType = pb.Posting_VALUE_LANG
-	} else if t.ValueId == 0 {
+	case t.ValueId == 0:
 		postingType = pb.Posting_VALUE
-	} else {
+	default:
 		postingType = pb.Posting_REF
 	}
 
@@ -354,48 +359,16 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	var id uint64 = math.MaxUint64
 
 	// Value with a lang type.
-	if len(t.Lang) > 0 {
+	switch {
+	case len(t.Lang) > 0:
 		id = farm.Fingerprint64([]byte(t.Lang))
-	} else if schema.State().IsList(t.Attr) {
+	case schema.State().IsList(t.Attr):
 		// TODO - When values are deleted for list type, then we should only delete the UID from
 		// index if no other values produces that index token.
 		// Value for list type.
 		id = farm.Fingerprint64(t.Value)
 	}
 	return id
-}
-
-// canMutateUid returns an error if all the following conditions are met.
-// * Predicate is of type UidID.
-// * Predicate is not set to a list of UIDs in the schema.
-// * The existing posting list has an entry that does not match the proposed
-//   mutation's UID.
-// In this case, the user should delete the existing predicate and retry, or mutate
-// the schema to allow for multiple UIDs. This method is necessary to support UID
-// predicates with single values because previously all UID predicates were
-// considered lists.
-// This functions returns a nil error in all other cases.
-func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
-	l.AssertRLock()
-
-	if types.TypeID(edge.ValueType) != types.UidID {
-		return nil
-	}
-
-	if schema.State().IsList(edge.Attr) {
-		return nil
-	}
-
-	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
-		if obj.Uid != edge.GetValueId() {
-			return errors.Errorf(
-				"cannot add value with uid %x to predicate %s because one of the existing "+
-					"values does not match this uid, either delete the existing values first or "+
-					"modify the schema to '%s: [uid]'",
-				edge.GetValueId(), edge.Attr, edge.Attr)
-		}
-		return nil
-	})
 }
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
@@ -435,6 +408,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return err
 	}
 	switch {
+	case schema.State().HasNoConflict(t.Attr):
+		break
 	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
@@ -607,17 +582,22 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	if err != nil {
 		return err
 	}
+
+loop:
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
 			mp = emptyPosting
 		}
-		if valid, err := pitr.valid(); err != nil {
-			return err
-		} else if valid {
+
+		valid, err := pitr.valid()
+		switch {
+		case err != nil:
+			break loop
+		case valid:
 			pp = pitr.posting()
-		} else {
+		default:
 			pp = emptyPosting
 		}
 
@@ -632,23 +612,33 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
-			if err := pitr.next(); err != nil {
-				return err
+			if err != nil {
+				break loop
+			}
+
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
-			if err := pitr.next(); err != nil {
-				return err
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 			midx++
 		default:
@@ -1038,7 +1028,7 @@ func valueToTypesVal(p *pb.Posting) (rval types.Val) {
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, error) {
 	l.AssertRLock()
 
 	any := false
@@ -1048,22 +1038,25 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			any = true
 			break
 		}
-		pos, rerr = l.postingForTag(readTs, lang)
-		if rerr == nil {
+		pos, err := l.postingForTag(readTs, lang)
+		if err == nil {
 			return pos, nil
 		}
 	}
 
 	// look for value without language
 	if any || len(langs) == 0 {
-		if found, pos, err := l.findPosting(readTs, math.MaxUint64); err != nil {
+		found, pos, err := l.findPosting(readTs, math.MaxUint64)
+		switch {
+		case err != nil:
 			return nil, err
-		} else if found {
+		case found:
 			return pos, nil
 		}
 	}
 
 	var found bool
+	var pos *pb.Posting
 	// last resort - return value with smallest lang UID.
 	if any {
 		err := l.iterate(readTs, 0, func(p *pb.Posting) error {

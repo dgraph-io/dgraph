@@ -38,6 +38,10 @@ const (
 	countFunc = "count"
 )
 
+var (
+	errExpandType = "expand is only compatible with type filters"
+)
+
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // pb.y used query.SubGraph before processing the query.
 type GraphQuery struct {
@@ -85,6 +89,8 @@ type GraphQuery struct {
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
+	varMap    map[string]string //varMap holds the variable args name. So, that we can substitute the
+	// argument in the substitution part.
 }
 
 // ShortestPathArgs stores the arguments needed to process the shortest path query.
@@ -403,6 +409,36 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		if err := substituteVariablesFilter(gq.FacetsFilter, vmap); err != nil {
 			return err
 		}
+	}
+	if gq.RecurseArgs.varMap != nil {
+		// Update the depth if the get the depth as a variable in the query.
+		varName, ok := gq.RecurseArgs.varMap["depth"]
+		if ok {
+			val, ok := vmap[varName]
+			if !ok {
+				return errors.Errorf("variable %s not defined", varName)
+			}
+			depth, err := strconv.ParseUint(val.Value, 0, 64)
+			if err != nil {
+				return errors.Wrapf(err, varName+" should be type of integer")
+			}
+			gq.RecurseArgs.Depth = depth
+		}
+
+		// Update the loop if the get the loop as a variable in the query.
+		varName, ok = gq.RecurseArgs.varMap["loop"]
+		if ok {
+			val, ok := vmap[varName]
+			if !ok {
+				return errors.Errorf("variable %s not defined", varName)
+			}
+			allowLoop, err := strconv.ParseBool(val.Value)
+			if err != nil {
+				return errors.Wrapf(err, varName+"should be type of boolean")
+			}
+			gq.RecurseArgs.AllowLoop = allowLoop
+		}
+
 	}
 	return nil
 }
@@ -766,6 +802,31 @@ L2:
 	return gq, nil
 }
 
+// parseVarName returns the variable name.
+func parseVarName(it *lex.ItemIterator) (string, error) {
+	val := "$"
+	var consumeAtLeast bool
+	for {
+		items, err := it.Peek(1)
+		if err != nil {
+			return val, err
+		}
+		if items[0].Typ != itemName {
+			if !consumeAtLeast {
+				return "", it.Errorf("Expected variable name after $")
+			}
+			break
+		}
+		consumeAtLeast = true
+		val += items[0].Val
+		// Consume the current item.
+		if !it.Next() {
+			break
+		}
+	}
+	return val, nil
+}
+
 func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	if ok := trySkipItemTyp(it, itemLeftRound); !ok {
 		// We don't have a (, we can return.
@@ -784,30 +845,59 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		if ok := trySkipItemTyp(it, itemColon); !ok {
 			return it.Errorf("Expected colon(:) after %s", key)
 		}
-
-		if item, ok = tryParseItemType(it, itemName); !ok {
-			return item.Errorf("Expected value inside @recurse() for key: %s", key)
+		if !it.Next() {
+			return it.Errorf("Expected argument")
 		}
-		val = item.Val
 
+		// Consume the next item.
+		item = it.Item()
+		val = item.Val
 		switch key {
 		case "depth":
-			depth, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				return err
+			// Check whether the argument is variable or value.
+			if item.Typ == itemDollar {
+				// Consume the variable name.
+				varName, err := parseVarName(it)
+				if err != nil {
+					return err
+				}
+				if gq.RecurseArgs.varMap == nil {
+					gq.RecurseArgs.varMap = make(map[string]string)
+				}
+				gq.RecurseArgs.varMap["depth"] = varName
+			} else {
+				if item.Typ != itemName {
+					return item.Errorf("Expected value inside @recurse() for key: %s", key)
+				}
+				depth, err := strconv.ParseUint(val, 0, 64)
+				if err != nil {
+					return errors.New("Value inside depth should be type of integer")
+				}
+				gq.RecurseArgs.Depth = depth
 			}
-			gq.RecurseArgs.Depth = depth
 		case "loop":
-			allowLoop, err := strconv.ParseBool(val)
-			if err != nil {
-				return err
+			if item.Typ == itemDollar {
+				// Consume the variable name.
+				varName, err := parseVarName(it)
+				if err != nil {
+					return err
+				}
+				if gq.RecurseArgs.varMap == nil {
+					gq.RecurseArgs.varMap = make(map[string]string)
+				}
+				gq.RecurseArgs.varMap["loop"] = varName
+			} else {
+				allowLoop, err := strconv.ParseBool(val)
+				if err != nil {
+					return errors.New("Value inside loop should be type of boolean")
+				}
+				gq.RecurseArgs.AllowLoop = allowLoop
 			}
-			gq.RecurseArgs.AllowLoop = allowLoop
 		default:
 			return item.Errorf("Unexpected key: [%s] inside @recurse block", key)
 		}
 
-		if _, ok := tryParseItemType(it, itemRightRound); ok {
+		if _, ok = tryParseItemType(it, itemRightRound); ok {
 			return nil
 		}
 
@@ -2276,8 +2366,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		valid = false
 	}
 	it.Next()
-	// No directive is allowed on pb.subgraph like expand all, value variables.
-	if !valid || curp == nil || curp.IsInternal {
+
+	isExpand := false
+	if curp != nil && len(curp.Expand) > 0 {
+		isExpand = true
+	}
+	// No directive is allowed on pb.subgraph like expand all (except type filters),
+	// value variables, etc.
+	if !valid || curp == nil || (curp.IsInternal && !isExpand) {
 		return item.Errorf("Invalid use of directive.")
 	}
 
@@ -2286,6 +2382,10 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return item.Errorf("Expected directive or language list")
+	}
+
+	if isExpand && item.Val != "filter" {
+		return item.Errorf(errExpandType)
 	}
 
 	switch {
@@ -2330,6 +2430,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
+			}
+			if isExpand && filter != nil && filter.Func != nil && filter.Func.Name != "type" {
+				return item.Errorf(errExpandType)
 			}
 			curp.Filter = filter
 		case "groupby":

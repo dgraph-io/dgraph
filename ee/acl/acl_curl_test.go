@@ -44,14 +44,15 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	// test fail open with the accessJwt
+	// No ACL rules are specified, so everything should fail.
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-H", "Content-Type: application/graphql+-",
 			"-d", query, curlQueryEndpoint}
 	}
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail: false,
+		ShouldFail:   true,
+		DgraphErrMsg: "PermissionDenied",
 	})
 
 	mutateArgs := func(jwt string) []string {
@@ -64,7 +65,8 @@ func TestCurlAuthorization(t *testing.T) {
 	}
 
 	testutil.VerifyCurlCmd(t, mutateArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail: false,
+		ShouldFail:   true,
+		DgraphErrMsg: "PermissionDenied",
 	})
 
 	alterArgs := func(jwt string) []string {
@@ -72,7 +74,8 @@ func TestCurlAuthorization(t *testing.T) {
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
 	}
 	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail: false,
+		ShouldFail:   true,
+		DgraphErrMsg: "PermissionDenied",
 	})
 
 	// sleep long enough (longer than 10s, the access JWT TTL defined in the docker-compose.yml
@@ -98,10 +101,6 @@ func TestCurlAuthorization(t *testing.T) {
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
-	// verify that the query works again with the new access jwt
-	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
-		ShouldFail: false,
-	})
 
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 6 seconds to ensure the new acl have reached all acl caches

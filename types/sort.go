@@ -30,19 +30,20 @@ import (
 type sortBase struct {
 	values [][]Val // Each uid could have multiple values which we need to sort it by.
 	desc   []bool  // Sort orders for different values.
-	ul     *pb.List
+	ul     *[]uint64
 	o      []*pb.Facets
 	cl     *collate.Collator // Compares Unicode strings according to the given collation order.
 }
 
 // Len returns size of vector.
+// skipcq: CRT-P0003
 func (s sortBase) Len() int { return len(s.values) }
 
 // Swap swaps two elements.
+// skipcq: CRT-P0003
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
-	data := s.ul.Uids
-	data[i], data[j] = data[j], data[i]
+	(*s.ul)[i], (*s.ul)[j] = (*s.ul)[j], (*s.ul)[i]
 	if s.o != nil {
 		s.o[i], s.o[j] = s.o[j], s.o[i]
 	}
@@ -51,6 +52,7 @@ func (s sortBase) Swap(i, j int) {
 type byValue struct{ sortBase }
 
 // Less compares two elements
+// skipcq: CRT-P0003
 func (s byValue) Less(i, j int) bool {
 	first, second := s.values[i], s.values[j]
 	if len(first) == 0 || len(second) == 0 {
@@ -84,7 +86,7 @@ func (s byValue) Less(i, j int) bool {
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
 // the proper ordering.
-func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang string) error {
+func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool, lang string) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
@@ -113,7 +115,7 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool, lang str
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *pb.List, desc []bool, lang string) error {
+func Sort(v [][]Val, ul *[]uint64, desc []bool, lang string) error {
 	return SortWithFacet(v, ul, nil, desc, lang)
 }
 
