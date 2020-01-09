@@ -319,7 +319,7 @@ ACL  : {name  7}
 ```
 
 8. Run ACL commands as another guardian (Member of `guardians` group)
-We can also run ACL commands with other users. Say we have a user `alice` which is member
+You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
 ```bash
 dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
