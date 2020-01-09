@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 BENCHMARKS_REPO="$(pwd)/benchmarks"
@@ -21,9 +20,12 @@ Info "cloning benchmarks repo"
 BENCHMARKS_URL=https://github.com/dgraph-io/benchmarks/blob/master/data
 rm -rf $BENCHMARKS_REPO
 mkdir -p $BENCHMARKS_REPO/data
-wget -O $BENCHMARKS_REPO/data/1million.schema $BENCHMARKS_URL/1million.schema?raw=true
-wget -O $BENCHMARKS_REPO/data/1million-noindex.schema $BENCHMARKS_URL/1million-noindex.schema?raw=true
-wget -O $BENCHMARKS_REPO/data/1million.rdf.gz $BENCHMARKS_URL/1million.rdf.gz?raw=true
+wget -O $NO_INDEX_SCHEMA_FILE $BENCHMARKS_URL/1million-noindex.schema?raw=true
+wget -O $SCHEMA_FILE $BENCHMARKS_URL/1million.schema?raw=true
+wget -O $DATA_FILE $BENCHMARKS_URL/1million.rdf.gz?raw=true
+
+Info "entering directory $SRCDIR"
+cd $SRCDIR
 
 Info "bringing down zero and alpha and data volumes"
 DockerCompose down -v
