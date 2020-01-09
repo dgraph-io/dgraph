@@ -130,7 +130,7 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
-	gid, err := groups().BelongsToReadOnly(attr)
+	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
@@ -809,7 +809,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// we get partitioned away from group zero as long as it's not removed.
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
-	knownGid, err := groups().BelongsToReadOnly(q.Attr)
+	knownGid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
@@ -1761,7 +1761,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &pb.Result{}, ctx.Err()
 	}
 
-	gid, err := groups().BelongsToReadOnly(q.Attr)
+	gid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
