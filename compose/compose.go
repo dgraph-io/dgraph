@@ -321,10 +321,6 @@ func addMetrics(cfg *composeConfig) {
 	}
 }
 
-func warning(str string) {
-	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
-}
-
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
 	os.Exit(1)
@@ -449,15 +445,15 @@ func main() {
 	yml, err := yaml.Marshal(cfg)
 	x.CheckfNoTrace(err)
 
-	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args[:])
+	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args)
 	if opts.UserOwnership {
 		doc += fmt.Sprint("# NOTE: Env var UID must be exported by the shell\n#\n")
 	}
 	doc += fmt.Sprintf("%s", yml)
 	if opts.OutFile == "-" {
-		_, _ = fmt.Printf("%s", doc)
+		x.Check2(fmt.Printf("%s", doc))
 	} else {
-		_, _ = fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile)
+		x.Check2(fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile))
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))

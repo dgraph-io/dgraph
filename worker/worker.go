@@ -37,10 +37,9 @@ import (
 )
 
 var (
-	pstore           *badger.DB
-	workerServer     *grpc.Server
-	raftServer       conn.RaftServer
-	pendingProposals chan struct{}
+	pstore       *badger.DB
+	workerServer *grpc.Server
+	raftServer   conn.RaftServer
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
@@ -55,7 +54,9 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	pendingProposals = make(chan struct{}, x.WorkerConfig.NumPendingProposals)
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
+	go limiter.bleed()
+
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),

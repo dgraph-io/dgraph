@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -189,6 +191,23 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate
+	}
+
+	// This loop ensures that we have seen the latest membership update following the move where
+	// this predicate now belongs to another group. Without this check, this group could end up
+	// serving transactions asking for this predicate, even after this tablet has been deleted. This
+	// issue is known to have caused Jepsen failures.
+	for in.ExpectedChecksum > 0 {
+		cur := atomic.LoadUint64(&groups().membershipChecksum)
+		if in.ExpectedChecksum == cur {
+			break
+		}
+		if ctx.Err() != nil {
+			return &emptyPayload, ctx.Err()
+		}
+		glog.Infof("Waiting for checksums to match. Expected: %d. Current: %d\n",
+			in.ExpectedChecksum, cur)
+		time.Sleep(time.Second)
 	}
 	if in.DestGid == 0 {
 		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
