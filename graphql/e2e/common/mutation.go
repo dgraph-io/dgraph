@@ -258,11 +258,6 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 
-	postSort := func(i, j int) bool {
-		return result.GetAuthor.Posts[i].Title < result.GetAuthor.Posts[j].Title
-	}
-	sort.Slice(result.GetAuthor.Posts, postSort)
-
 	if diff := cmp.Diff(expectedAuthor, result.GetAuthor, ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
@@ -280,7 +275,6 @@ func ignoreOpts() []cmp.Option {
 
 func deepMutations(t *testing.T) {
 	deepMutationsTest(t, postExecutor)
-	multipleDeepMutationsTest(t, postExecutor)
 }
 
 func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
@@ -304,7 +298,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		},
 	}
 
-	newAuth := addAuthorFromRef(t, auth, executeRequest)
+	newAuth := addMultipleAuthorFromRef(t, []*author{auth}, executeRequest)[0]
 	requireAuthor(t, newAuth.ID, newAuth, executeRequest)
 
 	anotherCountry := addCountry(t, executeRequest)
@@ -401,8 +395,8 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		[]*post{newAuth.Posts[0], newAuth.Posts[0], patchSet.Posts[0]})
 }
 
-func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
-	newCountry := addCountry(t, executeRequest)
+func testMultipleMutations(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
 
 	auth1 := &author{
 		Name:    "New Author1",
@@ -438,7 +432,8 @@ func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		},
 	}
 
-	newAuths := addMultipleAuthorFromRef(t, []*author{auth1, auth2}, executeRequest)
+	expectedAuthors := []*author{auth1, auth2}
+	newAuths := addMultipleAuthorFromRef(t, expectedAuthors, postExecutor)
 
 	for _, auth := range newAuths {
 		postSort := func(i, j int) bool {
@@ -447,26 +442,24 @@ func multipleDeepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		sort.Slice(auth.Posts, postSort)
 	}
 
-	expectedAuthor1 := &author{
-		Name:    "New Author1",
-		Country: newCountry,
-		Posts:   newAuths[0].Posts,
+	for i := range expectedAuthors {
+		for j := range expectedAuthors[i].Posts {
+			expectedAuthors[i].Posts[j].PostID = newAuths[i].Posts[j].PostID
+		}
 	}
-
-	expectedAuthor2 := &author{
-		Name:    "New Author2",
-		Country: newCountry,
-		Posts:   newAuths[1].Posts,
-	}
-
-	expectedAuthors := []*author{expectedAuthor1, expectedAuthor2}
 
 	for i := range newAuths {
-		requireAuthor(t, newAuths[i].ID, expectedAuthors[i], executeRequest)
+		requireAuthor(t, newAuths[i].ID, expectedAuthors[i], postExecutor)
 		require.Equal(t, len(newAuths[i].Posts), 2)
 		for j := range newAuths[i].Posts {
+			expectedAuthors[i].Posts[j].Author = &author{
+				ID:      newAuths[i].ID,
+				Name:    expectedAuthors[i].Name,
+				Dob:     expectedAuthors[i].Dob,
+				Country: expectedAuthors[i].Country,
+			}
 			requirePost(t, newAuths[i].Posts[j].PostID, expectedAuthors[i].Posts[j],
-				false, executeRequest)
+				true, postExecutor)
 		}
 	}
 
@@ -530,55 +523,6 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 
 	return result.AddAuthor.Author
 
-}
-
-func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExecutor) *author {
-	return addMultipleAuthorFromRef(t, []*author{newAuthor}, executeRequest)[0]
-}
-
-func testMultipleMutations(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-
-	auth1 := &author{
-		Name:       "New Author1",
-		Country:    newCountry,
-		Reputation: 7.75,
-		Posts:      []*post{},
-	}
-
-	auth2 := &author{
-		Name:       "New Author2",
-		Country:    newCountry,
-		Reputation: 7.25,
-		Posts:      []*post{},
-	}
-
-	newAuths := addMultipleAuthorFromRef(t, []*author{auth1, auth2}, postExecutor)
-
-	expectedAuthor1 := &author{
-		Name:       "New Author1",
-		Country:    newCountry,
-		Reputation: 7.75,
-		Posts:      []*post{},
-	}
-
-	expectedAuthor2 := &author{
-		Name:       "New Author2",
-		Country:    newCountry,
-		Reputation: 7.25,
-		Posts:      []*post{},
-	}
-
-	expectedAuthors := []*author{expectedAuthor1, expectedAuthor2}
-
-	for i, _ := range newAuths {
-		requireAuthor(t, newAuths[i].ID, expectedAuthors[i], postExecutor)
-	}
-
-	cleanUp(t,
-		[]*country{newCountry},
-		newAuths,
-		[]*post{})
 }
 
 func deepXIDMutations(t *testing.T) {
@@ -1988,15 +1932,8 @@ func addMutationWithXID(t *testing.T) {
 
 func addMultipleMutationWithOneError(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
+	newAuth := addAuthor(t, newCountry.ID, postExecutor)
 
-	auth := &author{
-		Name:       "New Author1",
-		Country:    newCountry,
-		Reputation: 7.75,
-		Posts:      []*post{},
-	}
-
-	newAuth := addAuthorFromRef(t, auth, postExecutor)
 	badAuth := &author{
 		ID: "0x0",
 	}
@@ -2017,25 +1954,45 @@ func addMultipleMutationWithOneError(t *testing.T) {
 		Author:      badAuth,
 	}
 
+	anotherGoodPost := &post{
+		Title:       "Another Test Post",
+		Text:        "This is just another post",
+		IsPublished: true,
+		NumLikes:    1000,
+		Author:      newAuth,
+	}
+
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($posts: [PostInput!]!) {
 			addPost(input: $posts) {
 			  post {
 				postID
 				title
+				author {
+					id
+				}
 			  }
 			}
 		}`,
-		Variables: map[string]interface{}{"posts": []*post{goodPost, badPost}},
+		Variables: map[string]interface{}{"posts": []*post{goodPost, badPost,
+			anotherGoodPost}},
 	}
 
 	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
 
-	addPostExpected := `{ "addPost": {
+	addPostExpected := fmt.Sprintf(`{ "addPost": {
 		"post": [{
-			"title": "Text Post"
+			"title": "Text Post",
+			"author": {
+				"id": "%s"
+			}
+		}, {
+			"title": "Another Test Post",
+			"author": {
+				"id": "%s"
+			}
 		}]
-	} }`
+	} }`, newAuth.ID, newAuth.ID)
 
 	var expected, result struct {
 		AddPost struct {
@@ -2050,5 +2007,5 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.Contains(t, gqlResponse.Errors[0].Error(),
 		`couldn't rewrite query for mutation addPost because ID "0x0" isn't a Author`)
 
-	cleanUp(t, []*country{newCountry}, []*author{newAuth}, []*post{result.AddPost.Post[0]})
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }

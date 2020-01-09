@@ -204,7 +204,7 @@ func (mrw *addRewriter) handleMultipleMutations(
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	counter := counter(0)
-	errs := make([]string, 0)
+	var errs error
 	mutationsAll := make([]*dgoapi.Mutation, 0)
 	queries := &gql.GraphQuery{}
 	mrw.frags = make([][]*mutationFragment, 0)
@@ -227,8 +227,8 @@ func (mrw *addRewriter) handleMultipleMutations(
 			})
 
 		if err != nil {
-			errs = append(errs, schema.GQLWrapf(err,
-				"failed to rewrite mutation payload").Error())
+			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+				"failed to rewrite mutation payload"))
 		}
 
 		mutationsAll = append(mutationsAll, mutations...)
@@ -242,11 +242,7 @@ func (mrw *addRewriter) handleMultipleMutations(
 		queries = nil
 	}
 
-	if len(errs) == 0 {
-		return queries, mutationsAll, nil
-	}
-
-	return queries, mutationsAll, fmt.Errorf(strings.Join(errs, "\n"))
+	return queries, mutationsAll, errs
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -255,48 +251,39 @@ func (mrw *addRewriter) FromMutationResult(
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
-	var errs x.GqlErrorList
+	var errs error
 
 	uids := make([]uint64, 0)
 
 	for _, frag := range mrw.frags {
 		err := checkResult(frag, result)
+		errs = schema.AppendGQLErrs(errs, err)
 		if err != nil {
-			errs = append(errs, schema.AsGQLErrors(err)...)
 			continue
 		}
 
-		for _, i := range frag {
-			node := strings.TrimPrefix(i.fragment.(map[string]interface{})["uid"].(string), "_:")
-			val, ok := assigned[node]
-			if !ok {
-				continue
-			}
-			uid, err := strconv.ParseUint(val, 0, 64)
-			if err != nil {
-				return nil, schema.GQLWrapf(err,
-					"received %s as an assigned uid from Dgraph, but couldn't parse it as uint64",
-					assigned[node])
-			}
-
-			uids = append(uids, uid)
+		node := strings.TrimPrefix(frag[0].
+			fragment.(map[string]interface{})["uid"].(string), "_:")
+		val, ok := assigned[node]
+		if !ok {
+			continue
 		}
+		uid, err := strconv.ParseUint(val, 0, 64)
+		if err != nil {
+			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+				"received %s as an assigned uid from Dgraph,"+
+					" but couldn't parse it as uint64",
+				assigned[node]))
+		}
+
+		uids = append(uids, uid)
 	}
 
-	if len(assigned) == 0 && len(errs) == 0 {
-		errs = append(errs, schema.AsGQLErrors(fmt.Errorf("No new node was created"))...)
+	if len(assigned) == 0 && errs == nil {
+		errs = schema.AsGQLErrors(fmt.Errorf("No new node was created"))
 	}
 
-	var err error
-	if len(errs) > 0 {
-		err = errs
-	}
-
-	if len(uids) == 0 {
-		return nil, err
-	}
-
-	return rewriteAsQueryByIds(mutation.QueryField(), uids), err
+	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
 }
 
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.

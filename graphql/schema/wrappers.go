@@ -445,15 +445,12 @@ func (f *field) ArgValue(name string) interface{} {
 }
 
 func (f *field) IsArgListType(name string) bool {
-	for _, i := range f.field.Arguments {
-		if i.Name != name {
-			continue
-		}
-
-		return i.Value.ExpectedType.Elem != nil
+	arg := f.field.Arguments.ForName(name)
+	if arg == nil {
+		return false
 	}
 
-	return false
+	return arg.Value.ExpectedType.Elem != nil
 }
 
 func (f *field) Skip() bool {
