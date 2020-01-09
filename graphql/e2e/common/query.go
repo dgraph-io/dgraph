@@ -217,7 +217,8 @@ func multipleSearchIndexes(t *testing.T) {
 
 	testCases := []interface{}{
 		map[string]interface{}{"title": map[string]interface{}{"anyofterms": "Introducing"}},
-		map[string]interface{}{"title": map[string]interface{}{"alloftext": "Introducing GraphQL in Dgraph"}},
+		map[string]interface{}{"title": map[string]interface {
+		}{"alloftext": "Introducing GraphQL in Dgraph"}},
 	}
 	for _, filter := range testCases {
 		getCountryParams := &GraphQLParams{
@@ -1303,7 +1304,8 @@ func queryStateByXidRegex(t *testing.T) {
 
 	gqlResponse := getStateParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
-	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`, string(gqlResponse.Data))
+	testutil.CompareJSON(t, `{"queryState":[{"name":"Nusa"},{"name": "NSW"}]}`,
+		string(gqlResponse.Data))
 }
 
 func multipleOperations(t *testing.T) {

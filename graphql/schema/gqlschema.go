@@ -285,13 +285,8 @@ func expandSchema(doc *ast.SchemaDocument) {
 		}
 	}
 
-	for _, defn := range docExtras.Definitions {
-		doc.Definitions = append(doc.Definitions, defn)
-	}
-
-	for _, dir := range docExtras.Directives {
-		doc.Directives = append(doc.Directives, dir)
-	}
+	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
+	doc.Directives = append(doc.Directives, docExtras.Directives...)
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
@@ -1234,13 +1229,6 @@ func generateObjectString(typ *ast.Definition) string {
 	return fmt.Sprintf("%stype %s%s {\n%s}\n",
 		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
 		genFieldsString(typ.Fields))
-}
-
-func generateScalarString(typ *ast.Definition) string {
-	var sch strings.Builder
-
-	sch.WriteString(fmt.Sprintf("scalar %s\n", typ.Name))
-	return sch.String()
 }
 
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
