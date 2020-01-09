@@ -460,7 +460,10 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operation) error {
+func authorizePreds(userId string, groupIds, preds []string,
+	aclOp *acl.Operation) map[string]struct{} {
+
+	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
 			logAccess(&accessEntry{
@@ -471,25 +474,15 @@ func authorizePreds(userId string, groupIds, preds []string, aclOp *acl.Operatio
 				allowed:   false,
 			})
 
-			var op string
-			switch aclOp.Name {
-			case acl.OpModify:
-				op = "alter"
-			case acl.OpWrite:
-				op = "mutate"
-			case acl.OpRead:
-				op = "query"
-			}
-
-			return status.Errorf(codes.PermissionDenied,
-				"unauthorized to %s the predicate: %v", op, err)
+			blockedPreds[pred] = struct{}{}
 		}
 	}
-	return nil
+	return blockedPreds
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
-// using the aclCachePtr
+// using the aclCachePtr. It will return error if any one of the predicates specified in alter
+// are not authorized.
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -521,30 +514,36 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined, per the
-			// fail open approach
-		case err != nil:
+		if err != nil {
+			// We don't follow fail open approach anymore.
 			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userId = userData[0]
-			groupIds = userData[1:]
-
-			if x.IsGuardian(groupIds) {
-				// Members of guardian group are allowed to alter anything.
-				return nil
-			}
 		}
 
-		// if we get here, we know the user is not Groot.
+		userId = userData[0]
+		groupIds = userData[1:]
+
+		if x.IsGuardian(groupIds) {
+			// Members of guardian group are allowed to alter anything.
+			return nil
+		}
+
+		// if we get here, we know the user is not a guardian.
 		if isDropAll(op) || op.DropOp == api.Operation_DATA {
 			return errors.Errorf(
-				"only Groot is allowed to drop all data, but the current user is %s", userId)
+				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		if len(blockedPreds) > 0 {
+			var msg strings.Builder
+			for key := range blockedPreds {
+				x.Check2(msg.WriteString(key))
+				x.Check2(msg.WriteString(" "))
+			}
+			return status.Errorf(codes.PermissionDenied,
+				"unauthorized to alter following predicates: %s\n", msg.String())
+		}
+		return nil
 	}
 
 	err := doAuthorizeAlter()
@@ -603,7 +602,8 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 	return false
 }
 
-// authorizeMutation authorizes the mutation using the aclCachePtr
+// authorizeMutation authorizes the mutation using the aclCachePtr. It will return permission
+// denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -621,33 +621,42 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			// treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined
-		case err != nil:
+		if err != nil {
+			// We don't follow fail open approach anymore.
 			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userId = userData[0]
-			groupIds = userData[1:]
-
-			if x.IsGuardian(groupIds) {
-				// Members of guardians group are allowed to mutate anything
-				// (including delete) except the permission of the acl predicates.
-				switch {
-				case isAclPredMutation(gmu.Set):
-					return errors.Errorf("the permission of ACL predicates can not be changed")
-				case isAclPredMutation(gmu.Del):
-					return errors.Errorf("ACL predicates can't be deleted")
-				}
-				return nil
-			}
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Write)
+		userId = userData[0]
+		groupIds = userData[1:]
+
+		if x.IsGuardian(groupIds) {
+			// Members of guardians group are allowed to mutate anything
+			// (including delete) except the permission of the acl predicates.
+			switch {
+			case isAclPredMutation(gmu.Set):
+				return errors.Errorf("the permission of ACL predicates can not be changed")
+			case isAclPredMutation(gmu.Del):
+				return errors.Errorf("ACL predicates can't be deleted")
+			}
+			return nil
+		}
+
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		if len(blockedPreds) > 0 {
+			var msg strings.Builder
+			for key := range blockedPreds {
+				x.Check2(msg.WriteString(key))
+				x.Check2(msg.WriteString(" "))
+			}
+			return status.Errorf(codes.PermissionDenied,
+				"unauthorized to mutate following predicates: %s\n", msg.String())
+		}
+
+		return nil
 	}
 
 	err := doAuthorizeMutation()
+
 	span := otrace.FromContext(ctx)
 	if span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -665,23 +674,42 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	predsMap := make(map[string]struct{})
 	for _, gq := range gqls {
-
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-
 		if len(gq.Attr) > 0 {
 			predsMap[gq.Attr] = struct{}{}
 		}
-
+		for _, ord := range gq.Order {
+			predsMap[ord.Attr] = struct{}{}
+		}
+		for _, gbAttr := range gq.GroupbyAttrs {
+			predsMap[gbAttr.Attr] = struct{}{}
+		}
+		for _, pred := range parsePredsFromFilter(gq.Filter) {
+			predsMap[pred] = struct{}{}
+		}
 		for _, childPred := range parsePredsFromQuery(gq.Children) {
 			predsMap[childPred] = struct{}{}
 		}
 	}
-
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
 		preds = append(preds, pred)
+	}
+	return preds
+}
+
+func parsePredsFromFilter(f *gql.FilterTree) []string {
+	var preds []string
+	if f == nil {
+		return preds
+	}
+	if f.Func != nil && len(f.Func.Attr) > 0 {
+		preds = append(preds, f.Func.Attr)
+	}
+	for _, ch := range f.Child {
+		preds = append(preds, parsePredsFromFilter(ch)...)
 	}
 	return preds
 }
@@ -704,7 +732,8 @@ func logAccess(log *accessEntry) {
 	glog.V(1).Infof(log.String())
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr
+//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+// unauthorized predicates from query.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -714,35 +743,26 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
-	isSchemaQuery := parsedReq != nil && parsedReq.Schema != nil
 
-	doAuthorizeQuery := func() error {
+	doAuthorizeQuery := func() (map[string]struct{}, error) {
 		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			// Do not allow schema queries unless the user has logged in.
-			if isSchemaQuery {
-				return status.Error(codes.Unauthenticated, err.Error())
-			}
-
-			// Treat the user as an anonymous guest who has not joined any group yet
-			// such a user can still get access to predicates that have no ACL rule defined.
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userId = userData[0]
-			groupIds = userData[1:]
-
-			if x.IsGuardian(groupIds) {
-				// Members of guardian groups are allowed to query anything.
-				return nil
-			}
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Read)
+		userId = userData[0]
+		groupIds = userData[1:]
+
+		if x.IsGuardian(groupIds) {
+			// Members of guardian groups are allowed to query anything.
+			return nil, nil
+		}
+
+		return authorizePreds(userId, groupIds, preds, acl.Read), nil
 	}
 
-	err := doAuthorizeQuery()
+	blockedPreds, err := doAuthorizeQuery()
+
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
@@ -753,7 +773,15 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 		}).String())
 	}
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	if len(blockedPreds) != 0 {
+		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+	}
+
+	return nil
 }
 
 // authorizeState authorizes the State operation
@@ -784,4 +812,75 @@ func authorizeState(ctx context.Context) error {
 	}
 
 	return doAuthorizeState()
+}
+
+func removePredsFromQuery(gqs []*gql.GraphQuery,
+	blockedPreds map[string]struct{}) []*gql.GraphQuery {
+
+	filteredGQs := gqs[:0]
+	for _, gq := range gqs {
+		if gq.Func != nil && len(gq.Func.Attr) > 0 {
+			if _, ok := blockedPreds[gq.Func.Attr]; ok {
+				continue
+			}
+		}
+		if len(gq.Attr) > 0 {
+			if _, ok := blockedPreds[gq.Attr]; ok {
+				continue
+			}
+		}
+
+		order := gq.Order[:0]
+		for _, ord := range gq.Order {
+			if _, ok := blockedPreds[ord.Attr]; ok {
+				continue
+			}
+			order = append(order, ord)
+		}
+
+		gq.Order = order
+		gq.Filter = removeFilters(gq.Filter, blockedPreds)
+		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
+		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
+		filteredGQs = append(filteredGQs, gq)
+	}
+
+	return filteredGQs
+}
+
+func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
+	if f == nil {
+		return nil
+	}
+	if f.Func != nil && len(f.Func.Attr) > 0 {
+		if _, ok := blockedPreds[f.Func.Attr]; ok {
+			return nil
+		}
+	}
+
+	filteredChildren := f.Child[:0]
+	for _, ch := range f.Child {
+		child := removeFilters(ch, blockedPreds)
+		if child != nil {
+			filteredChildren = append(filteredChildren, child)
+		}
+	}
+	if len(filteredChildren) != len(f.Child) && (f.Op == "AND" || f.Op == "NOT") {
+		return nil
+	}
+	f.Child = filteredChildren
+	return f
+}
+
+func removeGroupBy(gbAttrs []gql.GroupByAttr,
+	blockedPreds map[string]struct{}) []gql.GroupByAttr {
+
+	filteredGbAttrs := gbAttrs[:0]
+	for _, gbAttr := range gbAttrs {
+		if _, ok := blockedPreds[gbAttr.Attr]; ok {
+			continue
+		}
+		filteredGbAttrs = append(filteredGbAttrs, gbAttr)
+	}
+	return filteredGbAttrs
 }
