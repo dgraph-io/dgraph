@@ -551,7 +551,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// could be replaced with WriteBatch in the code
 	// Todo(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
-	// could be replaced with WriteBatch in the code. 
+	// could be replaced with WriteBatch in the code.
 	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
