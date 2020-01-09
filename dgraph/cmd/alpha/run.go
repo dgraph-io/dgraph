@@ -302,67 +302,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// type jsonHealth struct {
-		// 	Addr     string        `json:"addr"`
-		// 	Instance string        `json:"instance"`
-		// 	Version  string        `json:"version"`
-		// 	Uptime   time.Duration `json:"uptime"`
-		// }
-
-		// var jsonAll []jsonHealth
-
-		// ms := worker.GetMembershipState()
-		// for _, vg := range ms.Groups {
-		// 	for _, vm := range vg.Members {
-		// 		conn.GetPools().Connect(vm.GetAddr())
-		// 		time.Sleep(time.Second)
-		// 		p, err := conn.GetPools().Get(vm.GetAddr())
-
-		// 		data := jsonHealth{
-		// 			Addr:     vm.GetAddr(),
-		// 			Instance: "alpha",
-		// 			Version:  "unavailable",
-		// 			Uptime:   0,
-		// 		}
-
-		// 		if err != nil {
-		// 			glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
-		// 		} else {
-		// 			if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
-		// 				glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
-		// 			}
-		// 		}
-		// 		jsonAll = append(jsonAll, data)
-		// 	}
-		// }
-
-		// for _, vz := range ms.Zeros {
-		// 	_ = conn.GetPools().Connect(vz.GetAddr())
-		// 	time.Sleep(time.Second)
-		// 	p, err := conn.GetPools().Get(vz.GetAddr())
-
-		// 	data := jsonHealth{
-		// 		Addr:     vz.GetAddr(),
-		// 		Instance: "zero",
-		// 		Version:  "unavailable",
-		// 		Uptime:   0,
-		// 	}
-
-		// 	if err != nil {
-		// 		glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
-		// 	} else {
-		// 		if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
-		// 			glog.Infof("Unable to Unmarshal. err %v\n", vz.GetAddr(), err)
-		// 		}
-		// 	}
-		// 	jsonAll = append(jsonAll, data)
-		// }
-
-		// if jsonOut, err := json.Marshal(jsonAll); err != nil {
-		// 	glog.Infof("Unable to Marshal. Err %v", err)
-		// } else {
-		// 	_, _ = w.Write(jsonOut)
-		// }
 		return
 	}
 
