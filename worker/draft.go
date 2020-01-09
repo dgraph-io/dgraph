@@ -420,7 +420,7 @@ func (n *node) processRollups() {
 			if readTs <= last {
 				break // Break out of the select case.
 			}
-			if err := n.rollupLists(readTs); err != nil {
+			if err := n.calcTabletSizes(readTs); err != nil {
 				// If we encounter error here, we don't need to do anything about
 				// it. Just let the user know.
 				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
@@ -1008,13 +1008,11 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 	return &bpb.KVList{Kv: []*bpb.KV{kv}}
 }
 
-// rollupLists would consolidate all the deltas that constitute one posting
-// list, and write back a complete posting list.
-func (n *node) rollupLists(readTs uint64) error {
+// calcTabletSizes updates the tablet sizes for the keys.
+func (n *node) calcTabletSizes(readTs uint64) error {
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
 
-	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	if !n.AmLeader() {
 		// Only leader needs to calculate the tablet sizes.
 		return nil
@@ -1051,7 +1049,7 @@ func (n *node) rollupLists(readTs uint64) error {
 			return false
 		}
 	}
-	var numKeys uint64
+
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		return nil, nil // no-op
 	}
@@ -1061,9 +1059,6 @@ func (n *node) rollupLists(readTs uint64) error {
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
-
-	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
 
 	// Only leader sends the tablet size updates to Zero. No one else does.
 	// doSendMembership is also being concurrently called from another goroutine.
