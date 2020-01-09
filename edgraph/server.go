@@ -651,7 +651,7 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 					glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
 				} else {
 					if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
-						glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
+						glog.Infof("Unable to Unmarshal healthinfo for %v. err %v\n", vm.GetAddr(), err)
 						continue
 					}
 				}
@@ -674,7 +674,7 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 			glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
 		} else {
 			if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
-				glog.Infof("Unable to Unmarshal. err %v\n", vz.GetAddr(), err)
+				glog.Infof("Unable to Unmarshal healthinfo for %v. err %v\n", vz.GetAddr(), err)
 				continue
 			}
 		}
@@ -683,7 +683,6 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 
 	var jsonOut []byte
 	if jsonOut, err = json.Marshal(healthAll); err != nil {
-		glog.Infof("Unable to Marshal. Err %v", err)
 		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
 	}
 
