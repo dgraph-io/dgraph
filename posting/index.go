@@ -511,32 +511,32 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// All the temp indexes go into the following directory. We delete the whole
 	// directory after the indexing step is complete. This deletes any other temp
 	// indexes that may have been left around in case defer wasn't executed.
-	tmpDir := "dgraph_index"
+	tmpParentDir := "dgraph_index"
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	if err := os.Mkdir(tmpDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(tmpParentDir, os.ModePerm); err != nil {
 		return errors.Wrap(err, "error creating in temp dir for reindexing")
 	}
-	indexDir, err := ioutil.TempDir(tmpDir, "")
+	tmpIndexDir, err := ioutil.TempDir(tmpParentDir, "")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
-	defer os.RemoveAll(tmpDir)
-	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", indexDir)
+	defer os.RemoveAll(tmpParentDir)
+	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", tmpIndexDir)
 
-	dbOpts := badger.DefaultOptions(indexDir).
+	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
-		WithCompression(options.Snappy).
+		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50)
-	indexDB, err := badger.OpenManaged(dbOpts)
+	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}
-	defer indexDB.Close()
+	defer tmpDB.Close()
 
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
@@ -546,7 +546,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	indexWriter := NewTxnWriter(indexDB)
+	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
 	stream.Prefix = r.prefix
@@ -577,18 +577,25 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		txn.Update()
 
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
+		kvs := make([]*bpb.KV, 0, len(txn.cache.deltas))
 		for key, data := range txn.cache.deltas {
 			version := atomic.AddUint64(&counter, 1)
-			if err := indexWriter.SetAt([]byte(key), data, BitDeltaPosting, version); err != nil {
-				return nil, errors.Wrap(err, "error setting entries in temp badger")
+			kv := bpb.KV{
+				Key:      []byte(key),
+				Value:    data,
+				UserMeta: []byte{BitDeltaPosting},
+				Version:  version,
 			}
+			kvs = append(kvs, &kv)
 		}
 
-		return nil, nil
+		return &bpb.KVList{Kv: kvs}, nil
 	}
-	stream.Send = func(*bpb.KVList) error {
-		// The work of adding the index edges to the transaction is done by r.fn
-		// so this function doesn't have any work to do.
+	stream.Send = func(kvList *bpb.KVList) error {
+		if err := tmpWriter.Write(kvList); err != nil {
+			return errors.Wrap(err, "error setting entries in temp badger")
+		}
+
 		return nil
 	}
 
@@ -596,7 +603,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if err := indexWriter.Flush(); err != nil {
+	if err := tmpWriter.Flush(); err != nil {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
@@ -610,17 +617,13 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
-	// We choose to write the PL at r.startTs, so it won't be read by txns,
-	// which occurred before this schema mutation.
-	wb := pstore.NewWriteBatchAt(r.startTs)
-	defer wb.Cancel()
-
-	indexStream := indexDB.NewStreamAt(counter)
-	indexStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
-	indexStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+	writer := NewTxnWriter(pstore)
+	tmpStream := tmpDB.NewStreamAt(counter)
+	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s:", r.attr)
+	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := ReadPostingList(key, itr)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "error in reading posting list from pstore")
 		}
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
@@ -629,32 +632,29 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		for _, kv := range kvs {
+
+		return &bpb.KVList{Kv: kvs}, nil
+	}
+	tmpStream.Send = func(kvList *bpb.KVList) error {
+		for _, kv := range kvList.Kv {
 			if len(kv.Value) == 0 {
 				continue
 			}
 
-			entry := &badger.Entry{
-				Key:      kv.Key,
-				Value:    kv.Value,
-				UserMeta: BitCompletePosting,
-			}
-			if err := wb.SetEntry(entry); err != nil {
-				return nil, err
+			// We choose to write the PL at r.startTs, so it won't be read by txns,
+			// which occurred before this schema mutation.
+			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+				return errors.Wrap(err, "error in writing index to pstore")
 			}
 		}
 
-		return nil, nil
-	}
-	indexStream.Send = func(*bpb.KVList) error {
 		return nil
 	}
-
-	if err := indexStream.Orchestrate(ctx); err != nil {
+	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
-	return wb.Flush()
+	return writer.Flush()
 }
 
 // IndexRebuild holds the info needed to initiate a rebuilt of the indices.
