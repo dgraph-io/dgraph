@@ -35,12 +35,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-// IncRollupi is used to batch keys for rollup incrementally.
-type IncRollupi struct {
+// incrRollupi is used to batch keys for rollup incrementally.
+type incrRollupi struct {
 	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
-	keysCh chan *[][]byte
+	keysCh chan [][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
-	keysPool sync.Pool
+	keysPool *sync.Pool
 }
 
 var (
@@ -48,9 +48,9 @@ var (
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
 
 	// IncrRollup is used to batch keys for rollup incrementally.
-	IncrRollup = IncRollupi{
-		keysCh: make(chan *[][]byte),
-		keysPool: sync.Pool{
+	IncrRollup = &incrRollupi{
+		keysCh: make(chan [][]byte),
+		keysPool: &sync.Pool{
 			New: func() interface{} {
 				return new([][]byte)
 			},
@@ -59,7 +59,7 @@ var (
 )
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *IncRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	l, err := GetNoStore(key)
 	if err != nil {
 		return err
@@ -73,10 +73,10 @@ func (ir *IncRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
-func (ir *IncRollupi) addKeyToBatch(key []byte) {
-	batch := ir.keysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
-	if len(*batch) < 64 {
+func (ir *incrRollupi) addKeyToBatch(key []byte) {
+	batch := ir.keysPool.Get().([][]byte)
+	batch = append(batch, key)
+	if len(batch) < 64 {
 		ir.keysPool.Put(batch)
 		return
 	}
@@ -85,34 +85,33 @@ func (ir *IncRollupi) addKeyToBatch(key []byte) {
 	case ir.keysCh <- batch:
 	default:
 		// Drop keys and build the batch again. Lossy behavior.
-		*batch = (*batch)[:0]
+		batch = (batch)[:0]
 		ir.keysPool.Put(batch)
 	}
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *IncRollupi) Process() {
+func (ir *incrRollupi) Process() {
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
 	limiter := time.NewTicker(100 * time.Millisecond)
 	writer := NewTxnWriter(pstore)
 
 	for batch := range ir.keysCh {
 		currTs := time.Now().Unix()
-		for _, key := range *batch {
+		for _, key := range batch {
 			hash := z.MemHash(key)
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				err := ir.rollUpKey(writer, key)
-				if err != nil {
+				if err := ir.rollUpKey(writer, key); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 					continue
 				}
 			}
 		}
 		// clear the batch and put it back in Sync keysPool
-		*batch = (*batch)[:0]
+		batch = (batch)[:0]
 		ir.keysPool.Put(batch)
 
 		// throttle to 1 batch = 64 rollups per 100 ms.

@@ -1015,8 +1015,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	pstore.SetDiscardTs(readTs)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
-	amLeader := n.AmLeader()
-	if !amLeader {
+	if !n.AmLeader() {
 		// Only leader needs to calculate the tablet sizes.
 		return nil
 	}
@@ -1048,6 +1047,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		case x.ByteUnused:
 			return false
 		default:
+			// not doing rollups anymore.
 			return false
 		}
 	}
