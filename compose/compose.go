@@ -321,10 +321,6 @@ func addMetrics(cfg *composeConfig) {
 	}
 }
 
-func warning(str string) {
-	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
-}
-
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
 	os.Exit(1)
@@ -449,7 +445,7 @@ func main() {
 	yml, err := yaml.Marshal(cfg)
 	x.CheckfNoTrace(err)
 
-	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args[:])
+	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args)
 	if opts.UserOwnership {
 		doc += fmt.Sprint("# NOTE: Env var UID must be exported by the shell\n#\n")
 	}
