@@ -458,16 +458,17 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 				})
 
 			delFldName := fld.Type().DgraphPredicate(invField.Name())
+			del := map[string]interface{}{"uid": mutationQueryVarUID}
 			if invField.Type().ListType() == nil {
 				deletes = append(deletes,
 					map[string]interface{}{
 						"uid":      fmt.Sprintf("uid(%s)", varName),
-						delFldName: map[string]interface{}{"uid": mutationQueryVarUID}})
+						delFldName: del})
 			} else {
 				deletes = append(deletes,
 					map[string]interface{}{
 						"uid":      fmt.Sprintf("uid(%s)", varName),
-						delFldName: []interface{}{map[string]interface{}{"uid": mutationQueryVarUID}}})
+						delFldName: []interface{}{del}})
 			}
 		}
 	}
@@ -595,7 +596,8 @@ func rewriteObject(
 	if id != nil {
 		if idVal, ok := obj[id.Name()]; ok {
 			if idVal != nil {
-				return []*mutationFragment{asIDReference(idVal, srcField, srcUID, variable, withAdditionalDeletes, varGen)}
+				return []*mutationFragment{
+					asIDReference(idVal, srcField, srcUID, variable, withAdditionalDeletes, varGen)}
 			}
 			delete(obj, id.Name())
 		}
@@ -617,8 +619,8 @@ func rewriteObject(
 
 	if !atTopLevel { // top level is never a reference - it's adding/updating
 		if xid != nil && xidString != "" {
-			xidFrag =
-				asXIDReference(srcField, srcUID, typ, xid.Name(), xidString, variable, withAdditionalDeletes, varGen)
+			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
+				variable, withAdditionalDeletes, varGen)
 		}
 	}
 
@@ -687,7 +689,8 @@ func rewriteObject(
 			// or giving the data to create the object as part of a deep mutation
 			// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 			//          like here ^^
-			frags = rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
+			frags =
+				rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
 		case []interface{}:
 			// This field is either:
 			// 1) A list of objects: e.g. if the schema said `categories: [Categories]`
@@ -700,7 +703,8 @@ func rewriteObject(
 			// 2) Or a list of scalars - e.g. if schema said `scores: [Float]`
 			//   { "title": "...", "scores": [10.5, 9.3, ... ]
 			//            like here ^^
-			frags = rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
+			frags =
+				rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
 		default:
 			// This field is either:
 			// 1) a scalar value: e.g.
@@ -732,7 +736,8 @@ func invalidObjectFragment(
 		xidFrag.check =
 			checkQueryResult(variable,
 				nil,
-				schema.GQLWrapf(err, "xid \"%s\" doesn't exist and input object not well formed", xidString))
+				schema.GQLWrapf(err,
+					"xid \"%s\" doesn't exist and input object not well formed", xidString))
 
 		return []*mutationFragment{xidFrag}
 	}
@@ -945,16 +950,17 @@ func addDelete(frag *mutationFragment,
 
 	frag.queries = append(frag.queries, qry)
 
+	del := fmt.Sprintf("uid(%s)", qryVar)
 	if delFld.Type().ListType() == nil {
 		frag.deletes = append(frag.deletes,
 			map[string]interface{}{
 				"uid":      fmt.Sprintf("uid(%s)", targetVar),
-				delFldName: map[string]interface{}{"uid": fmt.Sprintf("uid(%s)", qryVar)}})
+				delFldName: map[string]interface{}{"uid": del}})
 	} else {
 		frag.deletes = append(frag.deletes,
 			map[string]interface{}{
 				"uid":      fmt.Sprintf("uid(%s)", targetVar),
-				delFldName: []interface{}{map[string]interface{}{"uid": fmt.Sprintf("uid(%s)", qryVar)}}})
+				delFldName: []interface{}{map[string]interface{}{"uid": del}}})
 	}
 
 }

@@ -100,7 +100,7 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
 			if i != 0 {
 				b.WriteString(", ")
 			}
-			b.WriteString(fmt.Sprintf("%s", arg.Value))
+			b.WriteString(arg.Value)
 		}
 	}
 	b.WriteString(")")
