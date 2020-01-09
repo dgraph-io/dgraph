@@ -123,7 +123,7 @@ func NewDecoder(pack *pb.UidPack) *Decoder {
 	return decoder
 }
 
-func (d *Decoder) unpackBlock() []uint64 {
+func (d *Decoder) UnpackBlock() []uint64 {
 	if len(d.uids) > 0 {
 		// We were previously preallocating the d.uids slice to block size. This caused slowdown
 		// because many blocks are small and only contain a few ints, causing wastage while still
@@ -185,7 +185,7 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	}
 	d.blockIdx = 0
 	if uid == 0 {
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 
 	pack := d.Pack
@@ -203,19 +203,19 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	idx := sort.Search(len(pack.Blocks), blocksFunc())
 	// The first block.Base >= uid.
 	if idx == 0 {
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 	// The uid is the first entry in the block.
 	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
 		d.blockIdx = idx
-		return d.unpackBlock()
+		return d.UnpackBlock()
 	}
 
 	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
 	// we found the first block index whose base is greater than uid. In these cases, go to the
 	// previous block and search there.
 	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	d.unpackBlock()      // And get all their uids.
+	d.UnpackBlock()      // And get all their uids.
 
 	uidsFunc := func() searchFunc {
 		var f searchFunc
@@ -258,7 +258,7 @@ func (d *Decoder) LinearSeek(seek uint64) []uint64 {
 		d.blockIdx++
 	}
 
-	return d.unpackBlock()
+	return d.UnpackBlock()
 }
 
 // PeekNextBase returns the base of the next block without advancing the decoder.
@@ -278,7 +278,7 @@ func (d *Decoder) Valid() bool {
 // Next moves the decoder on to the next block.
 func (d *Decoder) Next() []uint64 {
 	d.blockIdx++
-	return d.unpackBlock()
+	return d.UnpackBlock()
 }
 
 // BlockIdx returns the index of the block that is currently being decoded.

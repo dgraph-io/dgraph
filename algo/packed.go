@@ -18,6 +18,7 @@ package algo
 
 import (
 	"container/heap"
+	"log"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -103,6 +104,7 @@ func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 	return result.Done()
 }
 
+// listInfoPacked stores the packed list in a format that allows lists to be sorted by size.
 type listInfoPacked struct {
 	l      *pb.UidPack
 	length int
@@ -132,6 +134,7 @@ func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		return codec.CopyUidPack(ls[0].l)
 	}
 
+	// TODO(martinmr): Add the rest of the algorithms.
 	out := IntersectWithLinPacked(ls[0].l, ls[1].l)
 	// Intersect from smallest to largest.
 	for i := 2; i < len(ls); i++ {
@@ -157,19 +160,24 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 		return nil
 	}
 
-	encoder := codec.Encoder{BlockSize: int(u.BlockSize)}
+	result := codec.Encoder{BlockSize: int(u.BlockSize)}
 
 	uDec := codec.NewDecoder(u)
-	uUids := uDec.Uids()
+	uuids := uDec.Uids()
 	vDec := codec.NewDecoder(v)
-	vUids := vDec.Uids()
+	vuids := vDec.Uids()
 	uIdx, vIdx := 0, 0
 
 	for {
+		// Break if the end of a list has been reached.
+		if len(uuids) == 0 || len(vuids) == 0 {
+			break
+		}
+
 		// Load the next block of the encoded lists if necessary.
-		if len(uUids) == 0 || uIdx == len(uUids) {
+		if uIdx == len(uuids) {
 			if uDec.Valid() {
-				uUids = uDec.Next()
+				uuids = uDec.Next()
 				uIdx = 0
 			} else {
 				break
@@ -177,26 +185,26 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 
 		}
 
-		if len(vUids) == 0 || vIdx == len(vUids) {
+		if vIdx == len(vuids) {
 			if vDec.Valid() {
-				vUids = vDec.Next()
+				vuids = vDec.Next()
 				vIdx = 0
 			} else {
 				break
 			}
 		}
 
-		uLen := len(uUids)
-		vLen := len(vUids)
+		uLen := len(uuids)
+		vLen := len(vuids)
 
 		for uIdx < uLen && vIdx < vLen {
-			uid := uUids[uIdx]
-			vid := vUids[vIdx]
+			uid := uuids[uIdx]
+			vid := vuids[vIdx]
 
 			switch {
 			case uid < vid:
-				for uIdx < uLen && uUids[uIdx] < vid {
-					encoder.Add(uUids[uIdx])
+				for uIdx < uLen && uuids[uIdx] < vid {
+					result.Add(uuids[uIdx])
 					uIdx++
 				}
 			case uid == vid:
@@ -205,7 +213,7 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 			default:
 				vIdx++
 				for {
-					if !(vIdx < vLen && vUids[vIdx] < uid) {
+					if !(vIdx < vLen && vuids[vIdx] < uid) {
 						break
 					}
 					vIdx++
@@ -214,12 +222,12 @@ func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
 		}
 
 		for uIdx < uLen && vIdx >= vLen {
-			encoder.Add(uUids[uIdx])
+			result.Add(uuids[uIdx])
 			uIdx++
 		}
 	}
 
-	return encoder.Done()
+	return result.Done()
 }
 
 // MergeSortedPacked merges already sorted UidPack objects into a single UidPack.
@@ -241,11 +249,9 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		if l == nil {
 			continue
 		}
-
 		if blockSize == 0 {
 			blockSize = int(l.BlockSize)
 		}
-
 		decoders[i] = codec.NewDecoder(lists[i])
 		if len(decoders[i].Uids()) == 0 {
 			continue
@@ -307,30 +313,28 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 	if u == nil {
 		return -1
 	}
+
+	index := 0
 	decoder := codec.Decoder{Pack: u}
-	decoder.Seek(0, codec.SeekStart)
+	decoder.Seek(uid, codec.SeekStart)
+	// Need to re-unpack this block since Seek might make Uids return an array with missing
+	// elements in this block. We need them to make the correct calculation.
+	decoder.UnpackBlock()
 
-	for {
-		if !decoder.Valid() {
-			break
-		}
+	for i := 0; i < decoder.BlockIdx(); i++ {
+		index += int(u.Blocks[i].GetNumUids())
+	}
 
-		if decoder.PeekNextBase() < uid {
-			decoder.Next()
-			continue
-		}
-
-		uids := decoder.Uids()
-		if len(uids) == 0 {
-			break
-		}
-
-		i := sort.Search(len(uids), func(i int) bool { return uids[i] >= uid })
-		if i < len(uids) && uids[i] == uid {
-			return i + int(u.BlockSize)*decoder.BlockIdx()
-		}
-
-		decoder.Next()
+	uids := decoder.Uids()
+	if len(uids) == 0 {
+		return -1
+	}
+	searchFunc := func(i int) bool { return uids[i] >= uid }
+	uidx := sort.Search(len(uids), searchFunc)
+	log.Printf("uidx %d", uidx)
+	log.Printf("uids %v", uids)
+	if uids[uidx] == uid {
+		return index + uidx
 	}
 
 	return -1
