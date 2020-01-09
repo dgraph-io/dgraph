@@ -176,8 +176,8 @@ func newMapIterator(mePool chan *pb.MapEntry, filename string) *mapIterator {
 	return &mapIterator{mePool: mePool, fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
 }
 
-func (r *reducer) encodeAndWrite(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, recycleCh chan []*pb.MapEntry, closer *y.Closer) {
+func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb.MapEntry,
+	recycleCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
 	var listSize int
@@ -240,7 +240,7 @@ func (r *reducer) encodeAndWrite(
 		}
 	}
 	kvb.finish = true
-	listSize += r.toList(nil, list, kvb)
+	r.toList(nil, list, kvb)
 	if len(list.Kv) > 0 {
 		for _, kv := range list.Kv {
 			setStreamId(kv)
