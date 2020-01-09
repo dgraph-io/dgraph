@@ -563,8 +563,9 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	testutil.DropAll(t, dg)
 	op := api.Operation{Schema: `
-		name: string @index(exact) .
-		age: int .
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -582,6 +583,10 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		SetNquads: []byte(`
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
 		`),
 		CommitNow: true,
 	}
@@ -599,28 +604,88 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
-	query := `
-	{
-		me(func: has(name)) {
-			name
-			age
-		}
-	}
-	`
-	resp, err := userClient.NewTxn().Query(ctx, query)
-	require.NoError(t, err)
-	require.Equal(t, []byte("{\"me\":[{\"name\":\"RandomGuy\"}]}"), resp.Json)
 
-	query = `
-	{
-		me(func: has(age)) {
-			name
-			age
-		}
+	tests := []struct {
+		input       string
+		output      string
+		description string
+		err         error
+	}{
+		{
+			`
+			{
+				me(func: has(name)) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			"alice doesn't have access to <age>",
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(age)) {
+					name
+					age
+				}
+			}
+			`,
+			`{}`,
+			`alice doesn't have access to <age> so "has(age)" is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me1(func: has(name), orderdesc: age) {
+					name
+					age
+				}
+				me2(func: has(name), orderasc: age) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"me2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`me1, me2 will have same resul, can't order by <age> since it is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(name)) @groupby(age) {
+					count(name)
+				}
+			}
+			`,
+			`{}`,
+			`can't groupby <age> since <age> is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(name)) @filter(eq(nickname, "RG")) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`filter won't work because <nickname> is unauthorized`,
+			nil,
+		},
 	}
-	`
-	resp, err = userClient.NewTxn().Query(ctx, query)
-	require.NoError(t, err)
-	// alice doesn't have read access of <age>
-	require.Equal(t, []byte("{}"), resp.Json)
+
+	t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.True(t, (string(resp.Json) == tc.output && err == tc.err))
+		})
+	}
 }

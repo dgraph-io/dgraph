@@ -481,7 +481,8 @@ func authorizePreds(userId string, groupIds, preds []string,
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
-// using the aclCachePtr
+// using the aclCachePtr. It will return error if any one of the predicates specified in alter
+// are not authorized.
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -601,7 +602,8 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 	return false
 }
 
-// authorizeMutation authorizes the mutation using the aclCachePtr
+// authorizeMutation authorizes the mutation using the aclCachePtr. It will return permission
+// denied error if any one of the predicates in mutation(set or delete) is unauthorized.
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -700,7 +702,6 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 
 func parsePredsFromFilter(f *gql.FilterTree) []string {
 	preds := make([]string, 0)
-
 	if f == nil {
 		return preds
 	}
@@ -731,7 +732,8 @@ func logAccess(log *accessEntry) {
 	glog.V(1).Infof(log.String())
 }
 
-//authorizeQuery authorizes the query using the aclCachePtr
+//authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
+// unauthorized predicates from query.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
