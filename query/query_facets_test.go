@@ -1130,3 +1130,173 @@ func TestTypeExpandFacets(t *testing.T) {
 		{"name": "Car", "make":"Toyota","model":"Prius", "model@jp":"プリウス",
 			"model|type":"Electric", "year":2009, "owner": [{"uid": "0xcb"}]}]}}`, js)
 }
+
+func TestFacetsCascadeScalarPredicate(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(1, 23)) @cascade {
+			name @facets
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Michonne"
+				},
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Rick Grimes"
+				}
+			]
+		}
+	}
+	`, js)
+}
+
+func TestFacetsCascadeUIDPredicate(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(1, 23)) @cascade {
+			name @facets
+			friend {
+				name @facets
+			}
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Michonne",
+					"friend": [
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Rick Grimes"
+						},
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Glenn Rhee"
+						},
+						{
+							"name": "Daryl Dixon"
+						},
+						{
+							"name": "Andrea"
+						}
+					]
+				},
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Rick Grimes",
+					"friend": [
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Michonne"
+						}
+					]
+				}
+			]
+		}
+	}
+	`, js)
+}
+
+func TestFacetsNestedCascade(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(1, 23)) @cascade {
+			name @facets
+			friend @cascade {
+				name @facets
+			}
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Michonne",
+					"friend": [
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Rick Grimes"
+						},
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Glenn Rhee"
+						},
+						{
+							"name": "Daryl Dixon"
+						},
+						{
+							"name": "Andrea"
+						}
+					]
+				},
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Rick Grimes",
+					"friend": [
+						{
+							"name|dummy": true,
+							"name|origin": "french",
+							"name": "Michonne"
+						}
+					]
+				}
+			]
+		}
+	}
+	`, js)
+}
+
+func TestFacetsCascadeWithFilter(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(1, 23)) @filter(eq(name, "Michonne")) @cascade {
+			name @facets
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	// fmt.Println(js)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name|dummy": true,
+					"name|origin": "french",
+					"name": "Michonne"
+				}
+			]
+		}
+	}`, js)
+}

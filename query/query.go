@@ -1295,7 +1295,10 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
-		child.updateUidMatrix()
+		// TODO: add explanation, explore other places where it can be put.
+		if len(child.Children) > 0 {
+			child.updateUidMatrix()
+		}
 	}
 
 	if !sg.Params.Cascade {
