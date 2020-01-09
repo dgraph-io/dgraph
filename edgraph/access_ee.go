@@ -815,7 +815,7 @@ func authorizeState(ctx context.Context) error {
 func removePredsFromQuery(gqls []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
-	filter := gqls[:0]
+	filteredQuery := gqls[:0]
 	for _, gq := range gqls {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
@@ -828,18 +828,22 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 			}
 		}
 
+		order := gq.Order[:0]
 		for _, ord := range gq.Order {
 			if _, ok := blockedPreds[ord.Attr]; ok {
 				continue
 			}
+			order = append(order, ord)
 		}
+
+		gq.Order = order
 		gq.Filter = removeFilters(gq.Filter, blockedPreds)
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
-		filter = append(filter, gq)
+		filteredQuery = append(filteredQuery, gq)
 	}
 
-	return filter
+	return filteredQuery
 }
 
 func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
