@@ -34,10 +34,6 @@ import (
 	otrace "go.opencensus.io/trace"
 )
 
-var (
-	beginTime = time.Now()
-)
-
 type sendmsg struct {
 	to   uint64
 	data []byte
@@ -285,13 +281,13 @@ func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) 
 		Uptime  time.Duration `json:"uptime"`
 	}{
 		Version: x.Version(),
-		Uptime:  time.Since(beginTime),
+		Uptime:  time.Since(x.WorkerConfig.BeginTime),
 	}
 
 	ctx := stream.Context()
 
 	for {
-		info.Uptime = time.Since(beginTime)
+		info.Uptime = time.Since(x.WorkerConfig.BeginTime)
 		data, _ := json.Marshal(info)
 		out := &api.Payload{Data: data}
 		select {
