@@ -86,6 +86,7 @@ const (
  scalar DateTime
 
  directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+ directive @id on FIELD_DEFINITION
 
  type SchemaDiff {
 	types: [TypeDiff!]
@@ -137,13 +138,120 @@ const (
 	date
  }
 
+ type User {
+ 	name: String! @id
+ 	groups: [Group]
+ }
+ 
+ type Group {
+     name: String! @id 
+     users: [User]
+     rules: [Rule]
+ }
+ 
+ # again this is different to how we store the rules, but the user sees it 
+ # as adding and removing individual rules - same is true for current cmd line.
+ type Rule {
+     value: String!
+     match: Match!
+     perm: Permission!
+ }
+ 
+ enum Match {
+     Exact
+     Prefix
+ }
+ 
+ enum Permission {
+     NOTHING     # (000)
+     ALTER       # (001)
+     WRITE       # (010)
+     READ        # (100)
+     READWRITE   # (110)
+     ALL         # (111)
+ }
+ 
  type Query {
-	querySchema(filter: SchemaFilter, order: SchemaOrder, first: Int, offset: Int): [Schema]
-	health: Health
+     getUser(username: String!): User
+     getGroup(name: String!): Group
+
+     getCurrentUser: User
+
+     queryUser(filter: UserFilter): User
+     queryGroup(filter: GroupFilter): Group
+
+     querySchema(filter: SchemaFilter, order: SchemaOrder, first: Int, offset: Int): [Schema]
+     health: Health
+ }
+ 
+ type Mutation {
+     addUser(input: UserInput): AddUserPayload
+     addGroup(input: GroupInput): AddGroupPayload
+     
+     addGroups(username: String, groups: [GroupRef]): AddGroupPayload
+     addRules(name: String, rules: [RuleInput]): AddRulePayload
+     changePassword(username: String!, password: String!): ChangePasswordPayload
+
+     deleteGroup(name: String): DeleteGroupPayload
+     deleteUser(name: String): DeleteUserPayload
+
+     addSchema(input: SchemaInput!) : AddSchemaPayload
  }
 
- type Mutation {
-	addSchema(input: SchemaInput!) : AddSchemaPayload
+ input RuleInput {
+ 	value: String!
+	match: Match!
+	perm: Permission!
+ }
+
+ input UserFilter {
+ 	ids: [ID!]
+ }
+
+ input GroupFilter {
+  	ids: [ID!]
+ }
+
+ type AddUserPayload {
+     user: User
+ }
+
+ type AddGroupPayload {
+     group: Group
+ }
+
+ type AddGroupsPayload {
+     groups: [Group]
+ }
+
+ type AddRulePayload {
+     rule: Rule
+ }
+
+ type ChangePasswordPayload {
+     user: User 
+ }
+
+ type DeleteGroupPayload {
+     msg: String
+ 
+ }
+
+ type DeleteUserPayload {
+     msg: String
+ }
+ 
+ input UserInput {
+     userName: String!
+     password: String!
+ }
+ 
+ input GroupInput {
+     name: String!
+ }
+ 
+ input GroupRef {
+     name: String
  }
  `
 )
