@@ -538,7 +538,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			var msg strings.Builder
 			for key := range blockedPreds {
 				x.Check2(msg.WriteString(key))
-				x.Check2(msg.WriteString(""))
+				x.Check2(msg.WriteString(" "))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to alter following predicates: %s\n", msg.String())
@@ -683,8 +683,8 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		for _, ord := range gq.Order {
 			predsMap[ord.Attr] = struct{}{}
 		}
-		for _, spec := range gq.GroupbyAttrs {
-			predsMap[spec.Attr] = struct{}{}
+		for _, gbAttr := range gq.GroupbyAttrs {
+			predsMap[gbAttr.Attr] = struct{}{}
 		}
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
 			predsMap[pred] = struct{}{}
@@ -701,7 +701,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 }
 
 func parsePredsFromFilter(f *gql.FilterTree) []string {
-	preds := make([]string, 0)
+	var preds []string
 	if f == nil {
 		return preds
 	}
@@ -814,11 +814,11 @@ func authorizeState(ctx context.Context) error {
 	return doAuthorizeState()
 }
 
-func removePredsFromQuery(gqls []*gql.GraphQuery,
+func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
-	filteredQuery := gqls[:0]
-	for _, gq := range gqls {
+	filteredGQs := gqs[:0]
+	for _, gq := range gqs {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
 				continue
@@ -842,10 +842,10 @@ func removePredsFromQuery(gqls []*gql.GraphQuery,
 		gq.Filter = removeFilters(gq.Filter, blockedPreds)
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
-		filteredQuery = append(filteredQuery, gq)
+		filteredGQs = append(filteredGQs, gq)
 	}
 
-	return filteredQuery
+	return filteredGQs
 }
 
 func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.FilterTree {
@@ -872,15 +872,15 @@ func removeFilters(f *gql.FilterTree, blockedPreds map[string]struct{}) *gql.Fil
 	return f
 }
 
-func removeGroupBy(groupAttrs []gql.GroupByAttr,
+func removeGroupBy(gbAttrs []gql.GroupByAttr,
 	blockedPreds map[string]struct{}) []gql.GroupByAttr {
 
-	filteredAttrs := groupAttrs[:0]
-	for _, gAttr := range groupAttrs {
-		if _, ok := blockedPreds[gAttr.Attr]; ok {
+	filteredGbAttrs := gbAttrs[:0]
+	for _, gbAttr := range gbAttrs {
+		if _, ok := blockedPreds[gbAttr.Attr]; ok {
 			continue
 		}
-		filteredAttrs = append(filteredAttrs, gAttr)
+		filteredGbAttrs = append(filteredGbAttrs, gbAttr)
 	}
-	return filteredAttrs
+	return filteredGbAttrs
 }

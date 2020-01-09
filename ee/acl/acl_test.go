@@ -651,7 +651,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			}
 			`,
 			`{"me1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"me2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
-			`me1, me2 will have same resul, can't order by <age> since it is unauthorized`,
+			`me1, me2 will have same results, can't order by <age> since it is unauthorized`,
 			nil,
 		},
 		{
