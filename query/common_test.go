@@ -286,6 +286,10 @@ boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
 noconflict_pred                : string @noconflict .
+noindex_age                    : int .
+noindex_dob                    : datetime .
+noindex_alive                  : bool .
+noindex_salary                 : float .
 `
 
 func populateCluster() {
@@ -387,6 +391,29 @@ func populateCluster() {
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
+		<2> <noindex_name> "King Lear's name not indexed" .
+		<3> <noindex_name> "Margaret's name not indexed" .
+		<4> <noindex_name> "Leonard's name not indexed" .
+
+		<1> <noindex_age> "21" .
+		<2> <noindex_age> "22" .
+		<3> <noindex_age> "23" .
+		<4> <noindex_age> "24" .
+
+		<1> <noindex_dob> "1810-11-01" .
+		<2> <noindex_dob> "1710-11-01" .
+		<3> <noindex_dob> "1610-11-01" .
+		<4> <noindex_dob> "1510-11-01" .
+
+		<1> <noindex_alive> "true" .
+		<2> <noindex_alive> "false" .
+		<3> <noindex_alive> "false" .
+		<4> <noindex_alive> "true" .
+
+		<1> <noindex_salary> "501.23" .
+		<2> <noindex_salary> "589.04" .
+		<3> <noindex_salary> "459.47" .
+		<4> <noindex_salary> "967.68" .
 
 		<1> <friend> <23> .
 		<1> <friend> <24> .

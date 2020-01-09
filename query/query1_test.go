@@ -81,24 +81,6 @@ func TestSchemaBlock5(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"name","type":"string","index":true,"tokenizer":["term","exact","trigram"],"count":true,"lang":true}]}}`, js)
 }
 
-func TestFilterNonIndexedPredicateFail(t *testing.T) {
-
-	// filtering on non indexing predicate fails
-	query := `
-		{
-			me(func: uid(0x01)) {
-				friend @filter(le(survival_rate, 30)) {
-					uid
-					name
-					age
-				}
-			}
-		}
-	`
-	_, err := processQuery(context.Background(), t, query)
-	require.Error(t, err)
-}
-
 func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 
 	// name is asked for two times..
