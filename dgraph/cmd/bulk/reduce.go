@@ -42,6 +42,13 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+type kvBuilder struct {
+	currentKey []byte
+	uids       []uint64
+	pl         *pb.PostingList
+	finish     bool
+}
+
 type reducer struct {
 	*state
 	streamId uint32
@@ -60,10 +67,18 @@ func (r *reducer) run() error {
 		go func(shardId int, db *badger.DB) {
 			defer thr.Done(nil)
 
+			//Use a chan as mapEntries pool for mapIterator to read mapoutput. Fixed size is ok because mapEntries will
+			// be reused. Not use sync.Pool because it's slower.
+			const poolSize = 2e6
+			mePool := make(chan *pb.MapEntry, poolSize)
+			for i := 0; i < poolSize; i++ {
+				mePool <- new(pb.MapEntry)
+			}
+
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
 			for _, mapFile := range mapFiles {
-				itr := newMapIterator(mapFile)
+				itr := newMapIterator(mePool, mapFile)
 				mapItrs = append(mapItrs, itr)
 			}
 
@@ -73,7 +88,7 @@ func (r *reducer) run() error {
 			}
 
 			ci := &countIndexer{reducer: r, writer: writer}
-			r.reduce(mapItrs, ci)
+			r.reduce(mapItrs, ci, mePool)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -118,6 +133,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 type mapIterator struct {
+	mePool chan *pb.MapEntry
 	fd     *os.File
 	reader *bufio.Reader
 	tmpBuf []byte
@@ -145,22 +161,23 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 	}
 	x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
 
-	me := new(pb.MapEntry)
+	//me := new(pb.MapEntry)
+	me := <-mi.mePool
 	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 	return me
 }
 
-func newMapIterator(filename string) *mapIterator {
+func newMapIterator(mePool chan *pb.MapEntry, filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
 	x.Check(err)
 
-	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
+	return &mapIterator{mePool: mePool, fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
 }
 
 func (r *reducer) encodeAndWrite(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
+	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, recycleCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
 	var listSize int
@@ -194,11 +211,19 @@ func (r *reducer) encodeAndWrite(
 			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
 		}
 	}
-
+	//Since a batch doesn't always include all mapEntries that have the same key. kvBuilder is needed
+	//to save in building kv.
+	kvb := &kvBuilder{
+		currentKey: nil,
+		uids:       nil,
+		pl:         new(pb.PostingList),
+		finish:     false,
+	}
 	var doneStreams []uint32
 	var prevSID uint32
 	for batch := range entryCh {
-		listSize += r.toList(batch, list)
+		listSize += r.toList(batch, list, kvb)
+		recycleCh <- batch
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
@@ -214,6 +239,8 @@ func (r *reducer) encodeAndWrite(
 			listSize = 0
 		}
 	}
+	kvb.finish = true
+	listSize += r.toList(nil, list, kvb)
 	if len(list.Kv) > 0 {
 		for _, kv := range list.Kv {
 			setStreamId(kv)
@@ -222,10 +249,20 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer, mePool chan *pb.MapEntry) {
 	entryCh := make(chan []*pb.MapEntry, 100)
+	recycleCh := make(chan []*pb.MapEntry, 100)
+
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
+
+	go func() {
+		for entries := range recycleCh {
+			for _, entry := range entries {
+				mePool <- entry
+			}
+		}
+	}()
 
 	var ph postingHeap
 	for _, itr := range mapItrs {
@@ -238,7 +275,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	}
 
 	writer := ci.writer
-	go r.encodeAndWrite(writer, entryCh, closer)
+	go r.encodeAndWrite(writer, entryCh, recycleCh, closer)
 
 	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
@@ -265,7 +302,9 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 			plistLen = 0
 		}
 
-		if len(batch) >= batchSize && keyChanged {
+		//Don't wait keyChanged became true. In some case, key won't change for a long time.
+		// That causes a very large batch size. And the memory usage will grow rapaidly.
+		if len(batch) >= batchSize {
 			entryCh <- batch
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
 		}
@@ -313,10 +352,11 @@ func (h *postingHeap) Pop() interface{} {
 	return elem
 }
 
-func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
-	var currentKey []byte
-	var uids []uint64
-	pl := new(pb.PostingList)
+func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList, kvb *kvBuilder) int {
+	//kvBuilder replaces these vars.
+	//var currentKey []byte
+	//var uids []uint64
+	//pl := new(pb.PostingList)
 	var size int
 
 	appendToList := func() {
@@ -327,7 +367,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
-		if len(uids) == 0 {
+		if len(kvb.uids) == 0 {
 			return
 		}
 
@@ -335,11 +375,11 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		// list, we cannot enforce the constraint without losing data. Inform the user and
 		// force the schema to be a list so that all the data can be found when Dgraph is started.
 		// The user should fix their data once Dgraph is up.
-		parsedKey, err := x.Parse(currentKey)
+		parsedKey, err := x.Parse(kvb.currentKey)
 		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
-			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {
+			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(kvb.uids) > 1 {
 				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
 					"one UID has been found. Forcing the schema to be a list to avoid any "+
 					"data loss. Please fix the data to your specifications once Dgraph is up.\n",
@@ -348,41 +388,43 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 			}
 		}
 
-		pl.Pack = codec.Encode(uids, 256)
-		val, err := pl.Marshal()
+		kvb.pl.Pack = codec.Encode(kvb.uids, 256)
+		val, err := kvb.pl.Marshal()
 		x.Check(err)
 		kv := &bpb.KV{
-			Key:      y.Copy(currentKey),
+			Key:      y.Copy(kvb.currentKey),
 			Value:    val,
 			UserMeta: []byte{posting.BitCompletePosting},
 			Version:  r.state.writeTs,
 		}
 		size += kv.Size()
 		list.Kv = append(list.Kv, kv)
-		uids = uids[:0]
-		pl.Reset()
+		kvb.uids = kvb.uids[:0]
+		kvb.pl.Reset()
 	}
 
 	for _, mapEntry := range mapEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
-		if !bytes.Equal(mapEntry.Key, currentKey) && currentKey != nil {
+		if !bytes.Equal(mapEntry.Key, kvb.currentKey) && kvb.currentKey != nil {
 			appendToList()
 		}
-		currentKey = mapEntry.Key
+		kvb.currentKey = mapEntry.Key
 
 		uid := mapEntry.Uid
 		if mapEntry.Posting != nil {
 			uid = mapEntry.Posting.Uid
 		}
-		if len(uids) > 0 && uids[len(uids)-1] == uid {
+		if len(kvb.uids) > 0 && kvb.uids[len(kvb.uids)-1] == uid {
 			continue
 		}
-		uids = append(uids, uid)
+		kvb.uids = append(kvb.uids, uid)
 		if mapEntry.Posting != nil {
-			pl.Postings = append(pl.Postings, mapEntry.Posting)
+			kvb.pl.Postings = append(kvb.pl.Postings, mapEntry.Posting)
 		}
 	}
-	appendToList()
+	if kvb.finish {
+		appendToList()
+	}
 	return size
 }
