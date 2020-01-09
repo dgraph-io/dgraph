@@ -300,6 +300,13 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          }
+        ]
       cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
@@ -308,6 +315,11 @@
       }
       Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post2)) {
+        Author3 as Post.author @filter(NOT (uid(x))) {
+          uid
+        }
       }
     }
 
@@ -385,6 +397,13 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          }
+        ]
       cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
     - deletejson: |
         { "uid" : "uid(x)",
@@ -395,7 +414,7 @@
             }
           ]
         }
-      cond: "@if(eq(len(Post4), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Post5), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
@@ -404,7 +423,12 @@
       Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
         uid
       }
-      Post4 as Post4(func: uid(0x789)) @filter(type(Post)) {
+      var(func: uid(Post2)) {
+        Author3 as Post.author @filter(NOT (uid(x))) {
+          uid
+        }
+      }
+      Post5 as Post5(func: uid(0x789)) @filter(type(Post)) {
         uid
       }
     }
@@ -433,7 +457,7 @@
         }
       }
     }
-  explanation: "updateAuthor doesn't update posts"
+  explanation: "updateAuthor doesn't update posts except where references are removed"
   dgmutations:
     - setjson: |
         { "uid" : "uid(x)",
@@ -444,6 +468,13 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          }
+        ]
       cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
@@ -452,6 +483,11 @@
       }
       Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post2)) {
+        Author3 as Post.author @filter(NOT (uid(x))) {
+          uid
+        }
       }
     }
 
@@ -555,6 +591,13 @@
             } ]
           }
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country4)",
+            "Country.states": [{"uid": "uid(State3)"}]
+          }
+        ]
       cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
@@ -563,6 +606,11 @@
       }
       State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
+      }
+      var(func: uid(State3)) {
+        Country4 as State.country {
+          uid
+        }
       }
     }
 
@@ -607,6 +655,13 @@
             } ]
           }
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country4)",
+            "Country.states": [{"uid": "uid(State3)"}]
+          }
+        ]
       cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
@@ -615,5 +670,10 @@
       }
       State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
+      }
+      var(func: uid(State3)) {
+        Country4 as State.country {
+          uid
+        }
       }
     }
