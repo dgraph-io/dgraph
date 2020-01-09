@@ -116,6 +116,7 @@ type Query interface {
 // name from the definition of the type; IDField gets the ID field of the type.
 type Type interface {
 	Field(name string) FieldDefinition
+	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
 	Name() string
@@ -135,7 +136,7 @@ type FieldDefinition interface {
 	Name() string
 	Type() Type
 	IsID() bool
-	Inverse() (Type, FieldDefinition)
+	Inverse() FieldDefinition
 }
 
 type astType struct {
@@ -819,6 +820,21 @@ func (t *astType) Field(name string) FieldDefinition {
 	}
 }
 
+func (t *astType) Fields() []FieldDefinition {
+	var result []FieldDefinition
+
+	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+		result = append(result,
+			&fieldDefinition{
+				fieldDef:        fld,
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+	}
+
+	return result
+}
+
 func (fd *fieldDefinition) Name() string {
 	return fd.fieldDef.Name
 }
@@ -844,16 +860,16 @@ func (fd *fieldDefinition) Type() Type {
 	}
 }
 
-func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
+func (fd *fieldDefinition) Inverse() FieldDefinition {
 
 	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
 	if invDirective == nil {
-		return nil, nil
+		return nil
 	}
 
 	invFieldArg := invDirective.Arguments.ForName(inverseArg)
 	if invFieldArg == nil {
-		return nil, nil // really not possible
+		return nil // really not possible
 	}
 
 	// typ must exist if the schema passed GQL validation
@@ -862,7 +878,10 @@ func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
 
-	return fd.Type(), &fieldDefinition{fieldDef: fld, inSchema: fd.inSchema}
+	return &fieldDefinition{
+		fieldDef:        fld,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate}
 }
 
 func (t *astType) Name() string {
