@@ -235,7 +235,7 @@ as a demo, make sure to choose the correct IP and port for your environment:
 dgraph acl -a localhost:9080 mod -u groot --new_password
 ```
 Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
-`groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. We can add more users
+`groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users
 to this group if required.
 2. Create a regular user
 ```bash
@@ -283,7 +283,7 @@ predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to repres
 multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for
-a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operation.
+a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
 ```bash
 dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 ```
@@ -324,6 +324,7 @@ of `guardians` group and its password is `simple_alice`. We can run ACL commands
 ```bash
 dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
 ```
+Above command will show information about user `groot`.
 ### Access Data Using a Client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
