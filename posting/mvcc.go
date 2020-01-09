@@ -38,7 +38,7 @@ import (
 // incrRollupi is used to batch keys for rollup incrementally.
 type incrRollupi struct {
 	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
-	keysCh chan [][]byte
+	keysCh chan *[][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
 	keysPool *sync.Pool
 }
@@ -49,7 +49,7 @@ var (
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
-		keysCh: make(chan [][]byte),
+		keysCh: make(chan *[][]byte),
 		keysPool: &sync.Pool{
 			New: func() interface{} {
 				return new([][]byte)
@@ -74,9 +74,9 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 }
 
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
-	batch := ir.keysPool.Get().([][]byte)
-	batch = append(batch, key)
-	if len(batch) < 64 {
+	batch := ir.keysPool.Get().(*[][]byte)
+	*batch = append(*batch, key)
+	if len(*batch) < 64 {
 		ir.keysPool.Put(batch)
 		return
 	}
@@ -85,7 +85,7 @@ func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	case ir.keysCh <- batch:
 	default:
 		// Drop keys and build the batch again. Lossy behavior.
-		batch = (batch)[:0]
+		*batch = (*batch)[:0]
 		ir.keysPool.Put(batch)
 	}
 }
@@ -98,7 +98,7 @@ func (ir *incrRollupi) Process() {
 
 	for batch := range ir.keysCh {
 		currTs := time.Now().Unix()
-		for _, key := range batch {
+		for _, key := range *batch {
 			hash := z.MemHash(key)
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
@@ -111,7 +111,7 @@ func (ir *incrRollupi) Process() {
 			}
 		}
 		// clear the batch and put it back in Sync keysPool
-		batch = (batch)[:0]
+		*batch = (*batch)[:0]
 		ir.keysPool.Put(batch)
 
 		// throttle to 1 batch = 64 rollups per 100 ms.
