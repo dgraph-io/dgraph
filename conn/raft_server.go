@@ -281,13 +281,11 @@ func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) 
 	defer ticker.Stop()
 
 	info := struct {
-		Version  string        `json:"version"`
-		Instance string        `json:"instance"`
-		Uptime   time.Duration `json:"uptime"`
+		Version string        `json:"version"`
+		Uptime  time.Duration `json:"uptime"`
 	}{
-		Version:  x.Version(),
-		Instance: "alpha",
-		Uptime:   time.Since(beginTime),
+		Version: x.Version(),
+		Uptime:  time.Since(beginTime),
 	}
 
 	ctx := stream.Context()

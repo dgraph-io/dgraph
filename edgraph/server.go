@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -598,6 +599,98 @@ type queryContext struct {
 	span *trace.Span
 }
 
+// HealthAll handles health?all requests
+func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+	return s.doHealthAll(ctx, NeedAuthorize)
+}
+
+func (s *Server) doHealthAll(ctx context.Context, authorize int) (
+	*api.Response, error) {
+
+	var err error
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if authorize == NeedAuthorize {
+		if err := authorizeForGroot(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.Errorf("No membership state found")
+	}
+
+	type jsonHealth struct {
+		Addr     string        `json:"addr"`
+		Instance string        `json:"instance"`
+		Version  string        `json:"version"`
+		Uptime   time.Duration `json:"uptime"`
+	}
+
+	var jsonAll []jsonHealth
+
+	for _, vg := range ms.Groups {
+		for _, vm := range vg.Members {
+			conn.GetPools().Connect(vm.GetAddr())
+			time.Sleep(time.Second)
+			p, err := conn.GetPools().Get(vm.GetAddr())
+
+			data := jsonHealth{
+				Addr:     vm.GetAddr(),
+				Instance: "alpha",
+				Version:  "unavailable",
+				Uptime:   0,
+			}
+
+			if err != nil {
+				glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
+			} else {
+				if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+					glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
+					continue
+				}
+			}
+			jsonAll = append(jsonAll, data)
+		}
+	}
+
+	for _, vz := range ms.Zeros {
+		_ = conn.GetPools().Connect(vz.GetAddr())
+		time.Sleep(time.Second)
+		p, err := conn.GetPools().Get(vz.GetAddr())
+
+		data := jsonHealth{
+			Addr:     vz.GetAddr(),
+			Instance: "zero",
+			Version:  "unavailable",
+			Uptime:   0,
+		}
+
+		if err != nil {
+			glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
+		} else {
+			if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+				glog.Infof("Unable to Unmarshal. err %v\n", vz.GetAddr(), err)
+				continue
+			}
+		}
+		jsonAll = append(jsonAll, data)
+	}
+
+	var jsonOut []byte
+
+	if jsonOut, err = json.Marshal(jsonAll); err != nil {
+		glog.Infof("Unable to Marshal. Err %v", err)
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+
+	return &api.Response{Json: jsonOut}, nil
+}
+
 // State handles state requests
 func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	return s.doState(ctx, NeedAuthorize)
@@ -611,7 +704,7 @@ func (s *Server) doState(ctx context.Context, authorize int) (
 	}
 
 	if authorize == NeedAuthorize {
-		if err := authorizeState(ctx); err != nil {
+		if err := authorizeForGroot(ctx); err != nil {
 			return nil, err
 		}
 	}

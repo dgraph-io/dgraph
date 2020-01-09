@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -279,7 +278,95 @@ func grpcPort() int {
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 
-	_, ok := r.URL.Query()["live"]
+	_, ok := r.URL.Query()["all"]
+	if ok {
+		var err error
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		ctx := context.Background()
+		ctx = attachAccessJwt(ctx, r)
+
+		var aResp *api.Response
+		if aResp, err = (&edgraph.Server{}).HealthAll(ctx); err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+		if aResp == nil {
+			x.SetStatus(w, x.ErrorNoData, "No state information available.")
+			return
+		}
+
+		if _, err := w.Write(aResp.Json); err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+
+		// type jsonHealth struct {
+		// 	Addr     string        `json:"addr"`
+		// 	Instance string        `json:"instance"`
+		// 	Version  string        `json:"version"`
+		// 	Uptime   time.Duration `json:"uptime"`
+		// }
+
+		// var jsonAll []jsonHealth
+
+		// ms := worker.GetMembershipState()
+		// for _, vg := range ms.Groups {
+		// 	for _, vm := range vg.Members {
+		// 		conn.GetPools().Connect(vm.GetAddr())
+		// 		time.Sleep(time.Second)
+		// 		p, err := conn.GetPools().Get(vm.GetAddr())
+
+		// 		data := jsonHealth{
+		// 			Addr:     vm.GetAddr(),
+		// 			Instance: "alpha",
+		// 			Version:  "unavailable",
+		// 			Uptime:   0,
+		// 		}
+
+		// 		if err != nil {
+		// 			glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
+		// 		} else {
+		// 			if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+		// 				glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
+		// 			}
+		// 		}
+		// 		jsonAll = append(jsonAll, data)
+		// 	}
+		// }
+
+		// for _, vz := range ms.Zeros {
+		// 	_ = conn.GetPools().Connect(vz.GetAddr())
+		// 	time.Sleep(time.Second)
+		// 	p, err := conn.GetPools().Get(vz.GetAddr())
+
+		// 	data := jsonHealth{
+		// 		Addr:     vz.GetAddr(),
+		// 		Instance: "zero",
+		// 		Version:  "unavailable",
+		// 		Uptime:   0,
+		// 	}
+
+		// 	if err != nil {
+		// 		glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
+		// 	} else {
+		// 		if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+		// 			glog.Infof("Unable to Unmarshal. err %v\n", vz.GetAddr(), err)
+		// 		}
+		// 	}
+		// 	jsonAll = append(jsonAll, data)
+		// }
+
+		// if jsonOut, err := json.Marshal(jsonAll); err != nil {
+		// 	glog.Infof("Unable to Marshal. Err %v", err)
+		// } else {
+		// 	_, _ = w.Write(jsonOut)
+		// }
+		return
+	}
+
+	_, ok = r.URL.Query()["live"]
 	if !ok {
 		if err := x.HealthCheck(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -289,44 +376,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-	}
-
-	_, ok = r.URL.Query()["all"]
-	if ok {
-		glog.Infof("health?all called")
-		ms := worker.GetMembershipState()
-		for _, vg := range ms.Groups {
-			for _, vm := range vg.Members {
-				_ = conn.GetPools().Connect(vm.GetAddr())
-				time.Sleep(time.Second)
-				p, err := conn.GetPools().Get(vm.GetAddr())
-				if err != nil {
-					// this one is unhealthy.
-					glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
-				} else {
-					// health. Get health info
-					glog.Infof("%v is healthy. HealthInfo: %v\n", vm.GetAddr(), string(p.GetHealthInfo()))
-				}
-			}
-		}
-
-		for _, vz := range ms.Zeros {
-			_ = conn.GetPools().Connect(vz.GetAddr())
-			time.Sleep(time.Second)
-			p, err := conn.GetPools().Get(vz.GetAddr())
-			if err != nil {
-				// this one is unhealthy.
-				glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
-			} else {
-				// health. Get health info
-				glog.Infof("%v is healthy. HealthInfo: %v\n", vz.GetAddr(), string(p.GetHealthInfo()))
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/html")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Healthinfo for all\n"))
-		return
 	}
 
 	info := struct {
