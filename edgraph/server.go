@@ -635,10 +635,6 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 	// get health from each group member
 	for _, vg := range ms.Groups {
 		for _, vm := range vg.Members {
-			conn.GetPools().Connect(vm.GetAddr())
-			time.Sleep(time.Second)
-			p, err := conn.GetPools().Get(vm.GetAddr())
-
 			curr := health{
 				Addr:     vm.GetAddr(),
 				Instance: "alpha",
@@ -646,12 +642,18 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 				Uptime:   0,
 			}
 
-			if err != nil {
-				glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
+			if vm.GetAddr() == x.WorkerConfig.MyAddr {
+				curr.Version = x.Version()
+				curr.Uptime = time.Since(x.WorkerConfig.BeginTime)
 			} else {
-				if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
-					glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
-					continue
+				p, err := conn.GetPools().Get(vm.GetAddr())
+				if err != nil {
+					glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
+				} else {
+					if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
+						glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
+						continue
+					}
 				}
 			}
 			healthAll = append(healthAll, curr)
@@ -660,10 +662,6 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 
 	// get health from zeros.
 	for _, vz := range ms.Zeros {
-		_ = conn.GetPools().Connect(vz.GetAddr())
-		time.Sleep(time.Second)
-		p, err := conn.GetPools().Get(vz.GetAddr())
-
 		curr := health{
 			Addr:     vz.GetAddr(),
 			Instance: "zero",
@@ -671,6 +669,7 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 			Uptime:   0,
 		}
 
+		p, err := conn.GetPools().Get(vz.GetAddr())
 		if err != nil {
 			glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
 		} else {

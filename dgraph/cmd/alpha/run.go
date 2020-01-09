@@ -556,6 +556,7 @@ func run() {
 		AclEnabled:          secretFile != "",
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:      abortDur,
+		BeginTime:           beginTime,
 	}
 
 	setupCustomTokenizers()
