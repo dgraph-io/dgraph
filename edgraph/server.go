@@ -636,7 +636,7 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 	for _, vg := range ms.Groups {
 		for _, vm := range vg.Members {
 			conn.GetPools().Connect(vm.GetAddr())
-			time.Sleep(time.Millisecond * 200)
+			time.Sleep(time.Second)
 			p, err := conn.GetPools().Get(vm.GetAddr())
 
 			curr := health{
@@ -661,7 +661,7 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 	// get health from zeros.
 	for _, vz := range ms.Zeros {
 		_ = conn.GetPools().Connect(vz.GetAddr())
-		time.Sleep(time.Millisecond * 200)
+		time.Sleep(time.Second)
 		p, err := conn.GetPools().Get(vz.GetAddr())
 
 		curr := health{
