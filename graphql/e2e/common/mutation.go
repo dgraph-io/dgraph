@@ -246,7 +246,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 		Variables: map[string]interface{}{"id": authorID},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	require.Nil(t, gqlResponse.Errors)
+	requireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetAuthor *author
@@ -257,6 +257,41 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 	if diff := cmp.Diff(expectedAuthor, result.GetAuthor, ignoreOpts()...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func addCategory(t *testing.T, executeRequest requestExecutor) *category {
+	addCategoryParams := &GraphQLParams{
+		Query: `mutation addCategory($name: String!) {
+			addCategory(input: { name: $name }) {
+				category {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": "A Category"},
+	}
+	addCategoryExpected := `
+		{ "addCategory": { "category": { "id": "_UID_", "name": "A Category" } } }`
+
+	gqlResponse := executeRequest(t, graphqlURL, addCategoryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var expected, result struct {
+		AddCategory struct {
+			Category *category
+		}
+	}
+	err := json.Unmarshal([]byte(addCategoryExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(expected, result, ignoreOpts()...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddCategory.Category
 }
 
 func ignoreOpts() []cmp.Option {
@@ -765,7 +800,7 @@ func updateMutationByNameNoMatch(t *testing.T) {
 	cleanUp(t, []*country{newCountry, anotherCountry}, []*author{}, []*post{})
 }
 
-func updateDelete(t *testing.T) {
+func updateRemove(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
@@ -773,7 +808,7 @@ func updateDelete(t *testing.T) {
 	filter := map[string]interface{}{
 		"ids": []string{newPost.PostID},
 	}
-	delPatch := map[string]interface{}{
+	remPatch := map[string]interface{}{
 		"text":        "This post is just a test.",
 		"isPublished": nil,
 		"tags":        []string{"test", "notatag"},
@@ -781,8 +816,8 @@ func updateDelete(t *testing.T) {
 	}
 
 	updateParams := &GraphQLParams{
-		Query: `mutation updPost($filter: PostFilter!, $del: PatchPost!) {
-			updatePost(input: { filter: $filter, remove: $del }) {
+		Query: `mutation updPost($filter: PostFilter!, $rem: PatchPost!) {
+			updatePost(input: { filter: $filter, remove: $rem }) {
 				post {
 					text
 					isPublished
@@ -791,7 +826,7 @@ func updateDelete(t *testing.T) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"filter": filter, "del": delPatch},
+		Variables: map[string]interface{}{"filter": filter, "rem": remPatch},
 	}
 
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
@@ -997,6 +1032,333 @@ func deleteMutationByName(t *testing.T) {
 		requireCountry(t, anotherCountry.ID, anotherCountry, false, postExecutor)
 	})
 	cleanUp(t, []*country{anotherCountry}, nil, nil)
+}
+
+func addMutationReferences(t *testing.T) {
+	addMutationUpdatesRefs(t, postExecutor)
+	addMutationUpdatesRefsXID(t, postExecutor)
+}
+
+func addMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+	newAuthor := addAuthor(t, newCountry.ID, executeRequest)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+
+	// adding this author with a reference to the existing post changes both the
+	// post and the author it was originally linked to.
+	addAuthorParams := &GraphQLParams{
+		Query: `mutation addAuthor($author: AuthorInput!) {
+			addAuthor(input: $author) {
+			  	author { id }
+			}
+		}`,
+		Variables: map[string]interface{}{"author": map[string]interface{}{
+			"name":  "Test Author",
+			"posts": []interface{}{newPost},
+		}},
+	}
+	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddAuthor struct {
+			Author *author
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+
+	// The original author no longer has newPost in its list of posts
+	newAuthor.Posts = []*post{}
+	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
+
+	cleanUp(t,
+		[]*country{newCountry},
+		[]*author{newAuthor, addResult.AddAuthor.Author},
+		[]*post{newPost})
+}
+
+func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
+	newCountry := &country{
+		Name: "A Country",
+		States: []*state{
+			{Name: "Alphabet", Code: "ABC"},
+		},
+	}
+
+	// The addCountry2 mutation should also remove the state "ABC" from country1's states list
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: CountryInput!) {
+			addCountry1: addCountry(input: $input) {
+				country { id }
+			}
+			addCountry2: addCountry(input: $input) {
+				country {
+					id
+					states {
+						id
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountry},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddCountry1 struct {
+			Country *country
+		}
+		AddCountry2 struct {
+			Country *country
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+
+	// Country1 doesn't have "ABC" in it's states list
+	requireCountry(t, addResult.AddCountry1.Country.ID,
+		&country{Name: "A Country", States: []*state{}},
+		true, executeRequest)
+
+	// Country 2 has the state
+	requireCountry(t, addResult.AddCountry2.Country.ID,
+		&country{Name: "A Country", States: []*state{{Name: "Alphabet", Code: "ABC"}}},
+		true, executeRequest)
+
+	cleanUp(t, []*country{addResult.AddCountry1.Country, addResult.AddCountry2.Country}, nil, nil)
+}
+
+func updateMutationReferences(t *testing.T) {
+	updateMutationUpdatesRefs(t, postExecutor)
+	updateMutationUpdatesRefsXID(t, postExecutor)
+}
+
+func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+	newAuthor := addAuthor(t, newCountry.ID, executeRequest)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+	newAuthor2 := addAuthor(t, newCountry.ID, executeRequest)
+
+	// update author2 to steal newPost from author1 ... the post should get removed
+	// from author1's post list
+	updateAuthorParams := &GraphQLParams{
+		Query: `mutation updateAuthor($id: ID!, $set: PatchAuthor!) {
+			updateAuthor(
+				input: {
+					filter: {ids: [$id]}, 
+					set: $set
+				}
+			) {
+			  	author { id }
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id":  newAuthor2.ID,
+			"set": map[string]interface{}{"posts": []interface{}{newPost}},
+		},
+	}
+	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	// The original author no longer has newPost in its list of posts
+	newAuthor.Posts = []*post{}
+	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
+
+	// It's in author2
+	newAuthor2.Posts = []*post{{
+		PostID: newPost.PostID,
+		Title:  newPost.Title,
+		Text:   newPost.Text,
+	}}
+	requireAuthor(t, newAuthor2.ID, newAuthor2, executeRequest)
+
+	cleanUp(t,
+		[]*country{newCountry},
+		[]*author{newAuthor, newAuthor2},
+		[]*post{newPost})
+}
+
+func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
+
+	newCountry := &country{
+		Name: "Testland",
+		States: []*state{
+			{Name: "Alphabet", Code: "ABC"},
+		},
+	}
+
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: CountryInput!) {
+			addCountry(input: $input) {
+				country { id }
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountry},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddCountry struct {
+			Country *country
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+
+	newCountry2 := addCountry(t, executeRequest)
+
+	// newCountry has state ABC, now let's update newCountry2 to take it
+	// and check that it's gone from newCountry
+
+	updateCountryParams := &GraphQLParams{
+		Query: `mutation updateCountry($id: ID!, $set: PatchCountry!) {
+			updateCountry(			
+				input: {
+					filter: {ids: [$id]}, 
+					set: $set
+				}
+			) {
+				country { id }
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id":  newCountry2.ID,
+			"set": map[string]interface{}{"states": newCountry.States},
+		},
+	}
+
+	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	// newCountry doesn't have "ABC" in it's states list
+	requireCountry(t, addResult.AddCountry.Country.ID,
+		&country{Name: "Testland", States: []*state{}},
+		true, executeRequest)
+
+	// newCountry2 has the state
+	requireCountry(t, newCountry2.ID,
+		&country{Name: "Testland", States: []*state{{Name: "Alphabet", Code: "ABC"}}},
+		true, executeRequest)
+
+	cleanUp(t, []*country{addResult.AddCountry.Country, newCountry2}, nil, nil)
+}
+
+func deleteMutationReferences(t *testing.T) {
+	deleteMutationSingleReference(t, postExecutor)
+	deleteMutationMultipleReferences(t, postExecutor)
+}
+
+func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor) {
+
+	newCountry := &country{
+		Name: "A Country",
+		States: []*state{
+			{Name: "Alphabet", Code: "ABC"},
+		},
+	}
+
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: CountryInput!) {
+			addCountry(input: $input) {
+				country {
+					id
+					states {
+						id
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountry},
+	}
+
+	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddCountry struct {
+			Country *country
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+
+	filter := map[string]interface{}{"ids": []string{addResult.AddCountry.Country.ID}}
+	deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
+
+	// the state doesn't belong to a country
+	getCatParams := &GraphQLParams{
+		Query: `query getState($id: ID!) {
+			getState(id: $id) {
+				country { id }
+			}
+		}`,
+		Variables: map[string]interface{}{"id": addResult.AddCountry.Country.States[0].ID},
+	}
+	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, `{"getState":{"country":null}}`, string(gqlResponse.Data))
+}
+
+func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+	newAuthor := addAuthor(t, newCountry.ID, executeRequest)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+	newCategory := addCategory(t, executeRequest)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation updPost($filter: PostFilter!, $set: PatchPost!) {
+			updatePost(input: { filter: $filter, set: $set }) {
+				post { postID category { id } }
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{"ids": []string{newPost.PostID}},
+			"set":    map[string]interface{}{"category": newCategory}},
+	}
+
+	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	// show that this post is in the author's posts
+	newAuthor.Posts = []*post{{
+		PostID:   newPost.PostID,
+		Title:    newPost.Title,
+		Text:     newPost.Text,
+		Category: newCategory,
+	}}
+	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
+
+	deletePost(t, newPost.PostID, `{"deletePost" : { "msg": "Deleted" } }`, nil)
+
+	// the post isn't in the author's list of posts
+	newAuthor.Posts = []*post{}
+	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
+
+	// the category doesn't have any posts
+	getCatParams := &GraphQLParams{
+		Query: `query getCategory($id: ID!) {
+			getCategory(id: $id) {
+				posts { postID }
+			}
+		}`,
+		Variables: map[string]interface{}{"id": newCategory.ID},
+	}
+	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, `{"getCategory":{"posts":[]}}`, string(gqlResponse.Data))
+
+	// the post is already deleted
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, nil)
 }
 
 func deleteCountry(
