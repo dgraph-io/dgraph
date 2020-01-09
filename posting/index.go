@@ -650,6 +650,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return nil
 	}
+
 	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
