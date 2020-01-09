@@ -606,7 +606,6 @@ func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
 
 func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 	*api.Response, error) {
-
 	var err error
 
 	if ctx.Err() != nil {
@@ -624,22 +623,22 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	type jsonHealth struct {
+	type health struct {
 		Addr     string        `json:"addr"`
 		Instance string        `json:"instance"`
 		Version  string        `json:"version"`
 		Uptime   time.Duration `json:"uptime"`
 	}
 
-	var jsonAll []jsonHealth
+	var healthAll []health // health info for all group members and zeros.
 
+	// get health from each group member
 	for _, vg := range ms.Groups {
 		for _, vm := range vg.Members {
 			conn.GetPools().Connect(vm.GetAddr())
-			time.Sleep(time.Second)
 			p, err := conn.GetPools().Get(vm.GetAddr())
 
-			data := jsonHealth{
+			curr := health{
 				Addr:     vm.GetAddr(),
 				Instance: "alpha",
 				Version:  "unavailable",
@@ -649,21 +648,22 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 			if err != nil {
 				glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
 			} else {
-				if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+				if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
 					glog.Infof("Unable to Unmarshal. err %v\n", vm.GetAddr(), err)
 					continue
 				}
 			}
-			jsonAll = append(jsonAll, data)
+			healthAll = append(healthAll, curr)
 		}
 	}
 
+	// get health from zeros.
 	for _, vz := range ms.Zeros {
 		_ = conn.GetPools().Connect(vz.GetAddr())
 		time.Sleep(time.Second)
 		p, err := conn.GetPools().Get(vz.GetAddr())
 
-		data := jsonHealth{
+		curr := health{
 			Addr:     vz.GetAddr(),
 			Instance: "zero",
 			Version:  "unavailable",
@@ -673,17 +673,16 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 		if err != nil {
 			glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
 		} else {
-			if err = json.Unmarshal(p.GetHealthInfo(), &data); err != nil {
+			if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
 				glog.Infof("Unable to Unmarshal. err %v\n", vz.GetAddr(), err)
 				continue
 			}
 		}
-		jsonAll = append(jsonAll, data)
+		healthAll = append(healthAll, curr)
 	}
 
 	var jsonOut []byte
-
-	if jsonOut, err = json.Marshal(jsonAll); err != nil {
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
 		glog.Infof("Unable to Marshal. Err %v", err)
 		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
 	}

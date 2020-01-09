@@ -784,7 +784,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	return nil
 }
 
-// authorizeForGroot authorizes the State operation
+// authorizeForGroot authorizes the operation for Groot users.
 func authorizeForGroot(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
