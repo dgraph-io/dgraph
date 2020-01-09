@@ -179,7 +179,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	require.NoError(t, err)
 	calculatedSize := binary.BigEndian.Uint32(buf)
 	var pprofSize uint32
-	cmd := exec.Command("pprof", "-list", "PopulateList", "mem.out")
+	cmd := exec.Command("go", "tool", "pprof", "-list", "PopulateList", "mem.out")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
