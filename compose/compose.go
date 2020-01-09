@@ -455,9 +455,9 @@ func main() {
 	}
 	doc += fmt.Sprintf("%s", yml)
 	if opts.OutFile == "-" {
-		_, _ = fmt.Printf("%s", doc)
+		x.Check2(fmt.Printf("%s", doc))
 	} else {
-		_, _ = fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile)
+		x.Check2(fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile))
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
