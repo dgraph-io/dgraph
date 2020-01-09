@@ -67,8 +67,8 @@ func (r *reducer) run() error {
 		go func(shardId int, db *badger.DB) {
 			defer thr.Done(nil)
 
-			//Use a chan as mapEntries pool for mapIterator to read mapoutput. Fixed size is ok because mapEntries will
-			// be reused. Not use sync.Pool because it's slower.
+			//Use a chan as mapEntries pool for mapIterator to read mapoutput. Fixed size is ok,
+			// because mapEntries will be reused. Not use sync.Pool because it's slower.
 			const poolSize = 2e6
 			mePool := make(chan *pb.MapEntry, poolSize)
 			for i := 0; i < poolSize; i++ {
