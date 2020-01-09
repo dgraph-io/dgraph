@@ -66,7 +66,7 @@ if [[ ! -z "$TEAMCITY_VERSION" ]]; then
 fi
 
 Info "running regression queries"
-go test -v || FOUND_DIFFS=1
+go test -v -tags systest || FOUND_DIFFS=1
 
 Info "bringing down zero and alpha and data volumes"
 DockerCompose down -v
