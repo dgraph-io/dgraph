@@ -277,7 +277,7 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	emptyResult := true
 	var last uint64 // Last element added to sorted / final result.
 
-	for h.Len() > 0 { // While heap is not emptyResult.
+	for h.Len() > 0 { // While heap is not empty.
 		me := &(*h)[0] // Peek at the top element in heap.
 		if emptyResult || me.val != last {
 			result.Add(me.val) // Add if unique.
