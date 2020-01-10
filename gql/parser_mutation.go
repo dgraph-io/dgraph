@@ -64,7 +64,7 @@ func ParseMutation(mutation string) (req *api.Request, err error) {
 func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 	var req *api.Request
 	var queryText, condText string
-	var queryFound, condFound bool
+	var queryFound bool
 
 	// ===>upsert<=== {...}
 	if !it.Next() {
@@ -82,11 +82,12 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 		switch {
 		// upsert {... ===>}<===
 		case item.Typ == itemRightCurl:
-			if req == nil {
+			switch {
+			case req == nil:
 				return nil, it.Errorf("Empty mutation block")
-			} else if !queryFound {
+			case !queryFound:
 				return nil, it.Errorf("Query op not found in upsert block")
-			} else {
+			default:
 				req.Query = queryText
 				return req, nil
 			}
@@ -115,10 +116,6 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 			// upsert { mutation ===>@if(...)<=== {....} query{...}}
 			item = it.Item()
 			if item.Typ == itemUpsertBlockOpContent {
-				if condFound {
-					return nil, it.Errorf("Multiple @if directive inside upsert block")
-				}
-				condFound = true
 				condText = item.Val
 				if !it.Next() {
 					return nil, it.Errorf("Unexpected end of upsert block")
@@ -131,7 +128,11 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
 				return nil, err
 			}
 			mu.Cond = condText
-			req = &api.Request{Mutations: []*api.Mutation{mu}}
+			if req == nil {
+				req = &api.Request{Mutations: []*api.Mutation{mu}}
+			} else {
+				req.Mutations = append(req.Mutations, mu)
+			}
 
 		// upsert { mutation{...} ===>fragment<==={...}}
 		case item.Typ == itemUpsertBlockOp && item.Val == "fragment":
@@ -196,15 +197,17 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			if !parse {
 				return it.Errorf("Mutation syntax invalid.")
 			}
-			if op == "set" {
+
+			switch op {
+			case "set":
 				mu.SetNquads = []byte(item.Val)
-			} else if op == "delete" {
+			case "delete":
 				mu.DelNquads = []byte(item.Val)
-			} else if op == "schema" {
+			case "schema":
 				return it.Errorf("Altering schema not supported through http client.")
-			} else if op == "dropall" {
+			case "dropall":
 				return it.Errorf("Dropall not supported through http client.")
-			} else {
+			default:
 				return it.Errorf("Invalid mutation operation.")
 			}
 		}

@@ -27,6 +27,10 @@ enterprise features.
 
 ## Binary Backups
 
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
+
 Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
@@ -125,15 +129,16 @@ how to restore a backup series.
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
-created backup. Restore is intended to restore a backup to a new Dgraph cluster.
-During a restore, a new Dgraph Zero may be running to fully restore the backup
-state.
+created backup to a directory in the local filesystem. Restore is intended to
+restore a backup to a new Dgraph cluster not a currently live one. During a
+restore, a new Dgraph Zero may be running to fully restore the backup state.
 
 The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects.
 This URI supports all the schemes used for backup.
 
-The `--posting` (`-p`) flag sets the posting list parent directory to store the
-loaded backup files.
+The `--postings` (`-p`) flag sets the directory to which the restored posting
+directories will be saved. This directory will contain a posting directory for
+each group in the restored backup.
 
 The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
 start timestamp using the restored version. Otherwise, the timestamp must be
@@ -146,10 +151,17 @@ series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
 
 The restore feature will create a cluster with as many groups as the original
-cluster had at the time of the last backup. Restoring create a posting directory
-`p<N>` corresponding to the backup group ID. For example, a backup for Alpha
-group 2 would have the name ".../r32-g**2**.backup" and would be loaded to
-posting directory "p**2**".
+cluster had at the time of the last backup. For each group, `dgraph restore`
+creates a posting directory `p<N>` corresponding to the backup group ID. For
+example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
+and would be loaded to posting directory `p2`.
+
+After running the restore command, the directories inside the `postings`
+directory are copied over to the machines/containers running the alphas and
+`dgraph alpha` is started to load the copied data. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` is moved to the
+location of the first Alpha and `p2` is moved to the location of the second
+Alpha.
 
 #### Restore from Amazon S3
 ```sh
@@ -174,6 +186,10 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
 
 ## Access Control Lists
+
+{{% notice "note" %}}
+This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+{{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
 Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must
@@ -227,6 +243,8 @@ as a demo, make sure to choose the correct IP and port for your environment:
 dgraph acl -a localhost:9080 mod -u groot --new_password
 ```
 Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
+`groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users
+to this group if required.
 2. Create a regular user
 ```bash
 dgraph acl -a localhost:9080 add -u alice
@@ -272,7 +290,8 @@ represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to ch
 predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to represent
 multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and
 `MODIFY`. In order for the example in the next section to work, we also need to grant
-full permissions on another predicate `name` to the group `dev`
+full permissions on another predicate `name` to the group `dev`. If there are no rules for
+a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
 ```bash
 dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 ```
@@ -307,6 +326,13 @@ ACL  : {friend  7}
 ACL  : {name  7}
 ```
 
+8. Run ACL commands as another guardian (Member of `guardians` group)
+You can also run ACL commands with other users. Say we have a user `alice` which is member
+of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
+```bash
+dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
+```
+Above command will show information about user `groot`.
 ### Access Data Using a Client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
@@ -352,4 +378,54 @@ The refresh token can be used in the `/login` POST body to receive new access an
 $ curl -X POST localhost:8080/login -d '{
   "refresh_token": "<refreshJWT>"
 }'
+```
+
+## Encryption at Rest
+
+{{% notice "note" %}}
+This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
+For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
+[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
+preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
+{{% /notice %}}
+
+Encryption at rest refers to the encryption of data that is stored physically in any
+digital form. It ensures that sensitive data on disks is not readable by any user
+or application without a valid key that is required for decryption. Dgraph provides
+encryption at rest as an enterprise feature. If encryption is enabled, Dgraph uses
+[Advanced Encryption Standard (AES)](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
+algorithm to encrypt the data and secure it.
+
+### Set up Encryption
+
+To enable encryption, we need to pass a file that stores the data encryption key with the option
+`--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
+the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
+
+Here is an example encryption key file of size 16 bytes:
+
+*enc_key_file*
+
+```
+123456789012345
+```
+
+### Turn on Encryption
+
+Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
+
+```bash
+dgraph zero --my=localhost:5080 --replicas 1 --idx 1
+dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+```
+
+### Bulk loader with Encryption
+
+Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
+Later we can point the generated `p` directory to a new alpha server.
+
+Here's an example to run bulk loader with a key used to write encrypted data:
+
+```bash
+dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```

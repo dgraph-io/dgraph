@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,10 +37,9 @@ import (
 )
 
 var (
-	pstore           *badger.DB
-	workerServer     *grpc.Server
-	raftServer       conn.RaftServer
-	pendingProposals chan struct{}
+	pstore       *badger.DB
+	workerServer *grpc.Server
+	raftServer   conn.RaftServer
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
@@ -54,7 +54,9 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	pendingProposals = make(chan struct{}, x.WorkerConfig.NumPendingProposals)
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
+	go limiter.bleed()
+
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -65,6 +67,14 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+}
+
+func (w *grpcWorker) Subscribe(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
+	// Subscribe on given prefixes.
+	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+		return stream.Send(kvs)
+	}, req.GetPrefixes()...)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from

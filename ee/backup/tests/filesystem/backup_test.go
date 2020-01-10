@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,6 @@ import (
 )
 
 var (
-	backupDir     = "./data/backups"
 	copyBackupDir = "./data/backups_copy"
 	restoreDir    = "./data/restore"
 	testDirs      = []string{restoreDir}
@@ -57,10 +57,16 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
-	// Add initial data.
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
+
+	// Add schema and types.
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+		type Node {
+			movie
+		}`}))
+
+	// Add initial data.
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -244,15 +250,30 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
-	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
+	for i, pdir := range []string{"p1", "p2", "p3"} {
+		pdir = filepath.Join("./data/restore", pdir)
+		groupId, err := x.ReadGroupIdFile(pdir)
+		require.NoError(t, err)
+		require.Equal(t, uint32(i+1), groupId)
+	}
+
+	pdir := "./data/restore/p1"
+	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
+
+	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"dgraph.type", "movie"}, restoredPreds)
+
+	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
 
 	return restored
 }
@@ -262,7 +283,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)

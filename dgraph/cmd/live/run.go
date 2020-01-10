@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -62,10 +65,45 @@ type options struct {
 	newUids        bool
 	verbose        bool
 	httpAddr       string
+	bufferSize     int
+}
+
+type predicate struct {
+	Predicate  string   `json:"predicate,omitempty"`
+	Type       string   `json:"type,omitempty"`
+	Tokenizer  []string `json:"tokenizer,omitempty"`
+	Count      bool     `json:"count,omitempty"`
+	List       bool     `json:"list,omitempty"`
+	Lang       bool     `json:"lang,omitempty"`
+	Index      bool     `json:"index,omitempty"`
+	Upsert     bool     `json:"upsert,omitempty"`
+	Reverse    bool     `json:"reverse,omitempty"`
+	NoConflict bool     `json:"no_conflict,omitempty"`
+	ValueType  types.TypeID
+}
+
+type schema struct {
+	Predicates []*predicate `json:"schema,omitempty"`
+	preds      map[string]*predicate
+}
+
+type request struct {
+	*api.Mutation
+	conflicts []uint64
+}
+
+func (l *schema) init() {
+	l.preds = make(map[string]*predicate)
+	for _, i := range l.Predicates {
+		i.ValueType, _ = types.TypeForName(i.Type)
+		l.preds[i.Predicate] = i
+	}
 }
 
 var (
 	opt options
+	sch schema
+
 	// Live is the sub-command invoked when running "dgraph live".
 	Live x.SubCommand
 )
@@ -105,9 +143,27 @@ func init() {
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
+	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
+}
+
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(res.GetJson(), &sch)
+	if err != nil {
+		return nil, err
+	}
+	sch.init()
+	return &sch, nil
 }
 
 // processSchemaFile process schema for a given gz file.
@@ -186,6 +242,41 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	// Spin a goroutine to push NQuads to mutation channel.
 	go func() {
 		defer wg.Done()
+		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
+
+		drain := func() {
+			// We collect opt.bufferSize requests and preprocess them. For the requests
+			// to not confict between themself, we sort them on the basis of their predicates.
+			// Predicates with count index will conflict among themselves, so we keep them at
+			// end, making room for other predicates to load quickly.
+			sort.Slice(buffer, func(i, j int) bool {
+				iPred := sch.preds[buffer[i].Predicate]
+				jPred := sch.preds[buffer[j].Predicate]
+				t := func(a *predicate) int {
+					if a != nil && a.Count {
+						return 1
+					}
+					return 0
+				}
+
+				// Sorts the nquads on basis of their predicates, while keeping the
+				// predicates with count index later than those without it.
+				if t(iPred) != t(jPred) {
+					return t(iPred) < t(jPred)
+				}
+				return buffer[i].Predicate < buffer[j].Predicate
+			})
+			for len(buffer) > 0 {
+				sz := opt.batchSize
+				if len(buffer) < opt.batchSize {
+					sz = len(buffer)
+				}
+				mu := request{Mutation: &api.Mutation{Set: buffer[:sz]}}
+				l.reqs <- mu
+				buffer = buffer[sz:]
+			}
+		}
+
 		for nqs := range nqbuf.Ch() {
 			if len(nqs) == 0 {
 				continue
@@ -197,9 +288,14 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				}
 			}
 
-			mu := api.Mutation{Set: nqs}
-			l.reqs <- mu
+			buffer = append(buffer, nqs...)
+			if len(buffer) < opt.bufferSize*opt.batchSize {
+				continue
+			}
+
+			drain()
 		}
+		drain()
 	}()
 
 	for {
@@ -246,13 +342,14 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	alloc := xidmap.New(connzero, db)
 	l := &loader{
-		opts:     opts,
-		dc:       dc,
-		start:    time.Now(),
-		reqs:     make(chan api.Mutation, opts.Pending*2),
-		alloc:    alloc,
-		db:       db,
-		zeroconn: connzero,
+		opts:      opts,
+		dc:        dc,
+		start:     time.Now(),
+		reqs:      make(chan request, opts.Pending*2),
+		conflicts: make(map[uint64]struct{}),
+		alloc:     alloc,
+		db:        db,
+		zeroconn:  connzero,
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -279,6 +376,7 @@ func run() error {
 		newUids:        Live.Conf.GetBool("new_uids"),
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
+		bufferSize:     Live.Conf.GetInt("bufferSize"),
 	}
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
@@ -292,6 +390,7 @@ func run() error {
 		PrintCounters: true,
 		Ctx:           ctx,
 		MaxRetries:    math.MaxUint32,
+		bufferSize:    opt.bufferSize,
 	}
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
@@ -301,7 +400,8 @@ func run() error {
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		if err := processSchemaFile(ctx, opt.schemaFile, dg); err != nil {
+		err := processSchemaFile(ctx, opt.schemaFile, dg)
+		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil
@@ -310,6 +410,13 @@ func run() error {
 			return err
 		}
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
+	}
+
+	var err error
+	l.schema, err = getSchema(ctx, dg)
+	if err != nil {
+		fmt.Printf("Error while loading schema from alpha %s\n", err)
+		return err
 	}
 
 	if opt.dataFiles == "" {
@@ -366,8 +473,12 @@ func run() error {
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
 	if l.db != nil {
-		l.alloc.Flush()
-		l.db.Close()
+		if err := l.alloc.Flush(); err != nil {
+			return err
+		}
+		if err := l.db.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

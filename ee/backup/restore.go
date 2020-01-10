@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
@@ -34,6 +35,11 @@ import (
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
 func RunRestore(pdir, location, backupId string) (uint64, error) {
+	// Create the pdir if it doesn't exist.
+	if err := os.MkdirAll(pdir, 0700); err != nil {
+		return 0, err
+	}
+
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, backupId, func(r io.Reader, groupId int, preds predicateSet) error {
@@ -55,12 +61,17 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 		if err != nil {
 			return nil
 		}
-		return loadFromBackup(db, gzReader, preds)
+		if err := loadFromBackup(db, gzReader, preds); err != nil {
+			return err
+		}
+
+		return x.WriteGroupIdFile(dir, uint32(groupId))
 	})
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
-// and loads them to the given badger DB.
+// and loads them to the given badger DB. The set of predicates is used to avoid restoring
+// values from predicates no longer assigned to this group.
 func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)

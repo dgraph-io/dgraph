@@ -56,15 +56,18 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 		fields = s.Fields
 	} else {
 		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
-			"lang"}
+			"lang", "noconflict"}
 	}
 
+	myGid := groups().groupId()
 	for _, attr := range predicates {
 		// This can happen after a predicate is moved. We don't delete predicate from schema state
 		// immediately. So lets ignore this predicate.
-		if servesTablet, err := groups().ServesTabletReadOnly(attr); err != nil {
+		gid, err := groups().BelongsToReadOnly(attr, 0)
+		if err != nil {
 			return nil, err
-		} else if !servesTablet {
+		}
+		if myGid != gid {
 			continue
 		}
 
@@ -105,6 +108,8 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 			schemaNode.Upsert = schema.State().HasUpsert(attr)
 		case "lang":
 			schemaNode.Lang = schema.State().HasLang(attr)
+		case "noconflict":
+			schemaNode.NoConflict = schema.State().HasNoConflict(attr)
 		default:
 			//pass
 		}
@@ -116,7 +121,7 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid, err := groups().BelongsToReadOnly(attr)
+		gid, err := groups().BelongsToReadOnly(attr, 0)
 		if err != nil {
 			return err
 		}

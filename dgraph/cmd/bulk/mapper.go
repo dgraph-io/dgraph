@@ -135,11 +135,11 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
-	chunker := chunker.NewChunker(inputFormat, 1000)
-	nquads := chunker.NQuads()
+	chunk := chunker.NewChunker(inputFormat, 1000)
+	nquads := chunk.NQuads()
 	go func() {
 		for chunkBuf := range m.readerChunkCh {
-			if err := chunker.Parse(chunkBuf); err != nil {
+			if err := chunk.Parse(chunkBuf); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
@@ -249,7 +249,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	// Also, checked that sb goes on the stack whereas sb.String() goes on
 	// heap. Note that the calls to the strings.Builder.* are inlined.
 	sb := strings.Builder{}
-	sb.WriteString(xid)
+	x.Check2(sb.WriteString(xid))
 	uid, isNew := m.xids.AssignUid(sb.String())
 	if !m.opt.StoreXids || !isNew {
 		return uid
@@ -277,11 +277,13 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(nq.GetPredicate())
 	if nq.GetObjectValue() != nil {
-		if lang := de.GetLang(); len(lang) > 0 {
+		lang := de.GetLang()
+		switch {
+		case len(lang) > 0:
 			p.Uid = farm.Fingerprint64([]byte(lang))
-		} else if sch.List {
+		case sch.List:
 			p.Uid = farm.Fingerprint64(de.Value)
-		} else {
+		default:
 			p.Uid = math.MaxUint64
 		}
 	}

@@ -50,6 +50,7 @@ type jepsenTest struct {
 	timeLimit         int
 	concurrency       string
 	rebalanceInterval string
+	nemesisInterval   string
 	localBinary       string
 	nodes             string
 	skew              string
@@ -110,6 +111,8 @@ var (
 		"Number of concurrent workers per test. \"6n\" means 6 workers per node.")
 	rebalanceInterval = pflag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
+	nemesisInterval = pflag.String("nemesis-interval", "10",
+		"Roughly how long to wait (in seconds) between nemesis operations.")
 	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
 	nodes     = pflag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
@@ -224,6 +227,7 @@ func runJepsenTest(test *jepsenTest) int {
 		"--time-limit", strconv.Itoa(test.timeLimit),
 		"--concurrency", test.concurrency,
 		"--rebalance-interval", test.rebalanceInterval,
+		"--nemesis-interval", test.nemesisInterval,
 		"--local-binary", test.localBinary,
 		"--nodes", test.nodes,
 		"--test-count", strconv.Itoa(test.testCount),
@@ -232,8 +236,9 @@ func runJepsenTest(test *jepsenTest) int {
 		testCmd = append(testCmd, "--skew", test.skew)
 	}
 	if *jaeger != "" {
-		testCmd = append(testCmd, "--dgraph-jaeger-collector", *jaeger)
-		testCmd = append(testCmd, "--tracing", *jaeger+"/api/traces")
+		testCmd = append(testCmd,
+			"--dgraph-jaeger-collector", *jaeger,
+			"--tracing", *jaeger+"/api/traces")
 	}
 	dockerCmd = append(dockerCmd, strings.Join(testCmd, " "))
 
@@ -340,6 +345,9 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
+	if *doDown {
+		jepsenDown()
+	}
 	if *doUp {
 		jepsenUp()
 	}
@@ -366,6 +374,7 @@ func main() {
 				timeLimit:         *timeLimit,
 				concurrency:       *concurrency,
 				rebalanceInterval: *rebalanceInterval,
+				nemesisInterval:   *nemesisInterval,
 				localBinary:       *localBinary,
 				nodes:             *nodes,
 				skew:              *skew,
@@ -373,9 +382,5 @@ func main() {
 			})
 			tcEnd(status)
 		}
-	}
-
-	if *doDown {
-		jepsenDown()
 	}
 }

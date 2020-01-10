@@ -26,6 +26,7 @@ Meaning that the graph node identified by `subject` is linked to `object` with d
 For example, the triple
 ```
 <0x01> <name> "Alice" .
+<0x01> <dgraph.type> "Person" .
 ```
 Represents that graph node with ID `0x01` has a `name` with string value `"Alice"`.  While triple
 ```
@@ -46,10 +47,15 @@ Blank nodes in mutations, written `_:identifier`, identify nodes within a mutati
     _:class <student> _:x .
     _:class <student> _:y .
     _:class <name> "awesome class" .
+    _:class <dgraph.type> "Class" .
     _:x <name> "Alice" .
+    _:x <dgraph.type> "Person" .
+    _:x <dgraph.type> "Student" .
     _:x <planet> "Mars" .
     _:x <friend> _:y .
     _:y <name> "Bob" .
+    _:y <dgraph.type> "Person" .
+    _:y <dgraph.type> "Student" .
  }
 }
 ```
@@ -72,10 +78,15 @@ The graph has thus been updated as if it had stored the triples
 <0x6bc818dc89e78754> <student> <0xc3bcc578868b719d> .
 <0x6bc818dc89e78754> <student> <0xb294fb8464357b0a> .
 <0x6bc818dc89e78754> <name> "awesome class" .
+<0x6bc818dc89e78754> <dgraph.type> "Class" .
 <0xc3bcc578868b719d> <name> "Alice" .
+<0xc3bcc578868b719d> <dgraph.type> "Person" .
+<0xc3bcc578868b719d> <dgraph.type> "Student" .
 <0xc3bcc578868b719d> <planet> "Mars" .
 <0xc3bcc578868b719d> <friend> <0xb294fb8464357b0a> .
 <0xb294fb8464357b0a> <name> "Bob" .
+<0xb294fb8464357b0a> <dgraph.type> "Person" .
+<0xb294fb8464357b0a> <dgraph.type> "Student" .
 ```
 The blank node labels `_:class`, `_:x` and `_:y` do not identify the nodes after the mutation, and can be safely reused to identify new nodes in later mutations.
 
@@ -85,6 +96,8 @@ A later mutation can update the data for existing UIDs.  For example, the follow
  set {
     <0x6bc818dc89e78754> <student> _:x .
     _:x <name> "Chris" .
+    _:x <dgraph.type> "Person" .
+    _:x <dgraph.type> "Student" .
  }
 }
 ```
@@ -111,6 +124,7 @@ Dgraph's input language, RDF, also supports triples of the form `<a_fixed_identi
 
 ```
 _:userA <http://schema.org/type> <http://schema.org/Person> .
+_:userA <dgraph.type> "Person" .
 _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/type> <http://schema.org/Person> .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
@@ -120,6 +134,7 @@ As Dgraph doesn't natively support such external IDs as node identifiers.  Inste
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
+<0x123> <dgraph.type> "ExternalType" .
 ```
 
 While Robin Wright might get UID `0x321` and triples
@@ -128,6 +143,7 @@ While Robin Wright might get UID `0x321` and triples
 <0x321> <xid> "https://www.themoviedb.org/person/32-robin-wright" .
 <0x321> <http://schema.org/type> <0x123> .
 <0x321> <http://schema.org/name> "Robin Wright" .
+<0x321> <dgraph.type> "Person" .
 ```
 
 An appropriate schema might be as follows.
@@ -179,6 +195,7 @@ Set the type first of all.
 {
   set {
     _:blank <xid> "http://schema.org/Person" .
+    _:blank <dgraph.type> "ExternalType" .
   }
 }
 ```
@@ -199,6 +216,7 @@ Now you can create a new person and attach its type using the upsert block.
            uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
            uid(Person) <http://schema.org/type> uid(Type) .
            uid(Person) <http://schema.org/name> "Robin Wright" .
+           uid(Person) <dgraph.type> "Person" .
           }
       }
     }
@@ -221,6 +239,7 @@ You can also delete a person and detach the relation between Type and Person Nod
            uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
            uid(Person) <http://schema.org/type> uid(Type) .
            uid(Person) <http://schema.org/name> "Robin Wright" .
+           uid(Person) <dgraph.type> "Person" .
           }
       }
     }
@@ -248,6 +267,7 @@ RDF N-Quad allows specifying a language for string values and an RDF type.  Lang
 <0x01> <name> "Adelaide"@en .
 <0x01> <name> "Аделаида"@ru .
 <0x01> <name> "Adélaïde"@fr .
+<0x01> <dgraph.type> "Person" .
 ```
 See also [how language strings are handled in queries]({{< relref "query-language/index.md#language-support" >}}).
 
@@ -259,24 +279,27 @@ RDF types are attached to literals with the standard `^^` separator.  For exampl
 
 The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
 
-| Storage Type                                            | Dgraph type    |
-| -------------                                           | :------------: |
-| &#60;xs:string&#62;                                     | `string`         |
-| &#60;xs:dateTime&#62;                                   | `dateTime`       |
-| &#60;xs:date&#62;                                       | `datetime`       |
-| &#60;xs:int&#62;                                        | `int`            |
-| &#60;xs:boolean&#62;                                    | `bool`           |
-| &#60;xs:double&#62;                                     | `float`          |
-| &#60;xs:float&#62;                                      | `float`          |
-| &#60;geo:geojson&#62;                                   | `geo`            |
-| &#60;xs:password&#62;                                   | `password`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+| Storage Type                                                    | Dgraph type     |
+| -------------                                                   | :------------:   |
+| &#60;xs:string&#62;                                             | `string`         |
+| &#60;xs:dateTime&#62;                                           | `dateTime`       |
+| &#60;xs:date&#62;                                               | `datetime`       |
+| &#60;xs:int&#62;                                                | `int`            |
+| &#60;xs:integer&#62;                                            | `int`            |
+| &#60;xs:boolean&#62;                                            | `bool`           |
+| &#60;xs:double&#62;                                             | `float`          |
+| &#60;xs:float&#62;                                              | `float`          |
+| &#60;geo:geojson&#62;                                           | `geo`            |
+| &#60;xs:password&#62;                                           | `password`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;           | `string`         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62;         | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;             | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;              | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#positiveInteger&#62;  | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#integer&#62;          | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;          | `bool`           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;           | `float`          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;            | `float`          |
 
 
 See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
@@ -301,6 +324,7 @@ For example, if the store contained
 ```
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
+<0xf11168064b01135b> <dgraph.type> "Person" .
 ```
 
 Then delete mutation
@@ -374,6 +398,7 @@ curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=
 {
   set {
     _:alice <name> "Alice" .
+    _:alice <dgraph.type> "Person" .
   }
 }'
 ```
@@ -424,13 +449,15 @@ For example:
 ```json
 {
   "name": "diggy",
-  "food": "pizza"
+  "food": "pizza",
+  "dgraph.type": "Mascot"
 }
 ```
 Will be converted into the RDFs:
 ```
 _:blank-0 <name> "diggy" .
 _:blank-0 <food> "pizza" .
+_:blank-0 <dgraph.type> "Mascot" .
 ```
 
 The result of the mutation would also contain a map, which would have the uid assigned corresponding
@@ -440,7 +467,8 @@ to the key `blank-0`. You could specify your own key like
 {
   "uid": "_:diggy",
   "name": "diggy",
-  "food": "pizza"
+  "food": "pizza",
+  "dgraph.type": "Mascot"
 }
 ```
 
@@ -459,13 +487,15 @@ For example, the JSON mutation
   "rating@en": "tastes good",
   "rating@es": "sabe bien",
   "rating@fr": "c'est bon",
-  "rating@it": "è buono"
+  "rating@it": "è buono",
+  "dgraph.type": "Food"
 }
 ```
 
 is equivalent to the following RDF:
 ```
 _:blank-0 <food> "taco" .
+_:blank-0 <dgraph.type> "Food" .
 _:blank-0 <rating> "tastes good"@en .
 _:blank-0 <rating> "sabe bien"@es .
 _:blank-0 <rating> "c'est bon"@fr .
@@ -501,12 +531,14 @@ For example:
   "uid": "0x467ba0",
   "food": "taco",
   "rating": "tastes good",
+  "dgraph.type": "Food"
 }
 ```
 Will be converted into the RDFs:
 ```
 <0x467ba0> <food> "taco" .
 <0x467ba0> <rating> "tastes good" .
+<0x467ba0> <dgraph.type> "Food" .
 ```
 
 ### Edges between nodes
@@ -544,7 +576,9 @@ node.
   }
 }
 ```
+
 Will be converted to:
+
 ```
 _:alice <name> "Alice" .
 _:alice <friend> _:bob .
@@ -638,17 +672,21 @@ used to show facets in query results. E.g.
 {
   "name": "Carol",
   "name|initial": "C",
+  "dgraph.type": "Person",
   "friend": {
     "name": "Daryl",
-    "friend|close": "yes"
+    "friend|close": "yes",
+    "dgraph.type": "Person"
   }
 }
 ```
 Produces the following RDFs:
 ```
 _:blank-0 <name> "Carol" (initial=C) .
+_:blank-0 <dgraph.type> "Person" .
 _:blank-0 <friend> _:blank-1 (close=yes) .
 _:blank-1 <name> "Daryl" .
+_:blank-1 <dgraph.type> "Person" .
 ```
 
 ### Creating a list with JSON and interacting with
@@ -852,9 +890,8 @@ cat data.json | jq '{set: .}'
 ## Upsert Block
 
 The upsert block allows performing queries and mutations in a single request. The upsert
-block contains one query block and one mutation block. Variables defined in the query
-block can be used in the mutation block using the `uid` function.
-Support for `val` function is coming soon.
+block contains one query block and one or more than one mutation blocks. Variables defined
+in the query block can be used in the mutation blocks using the `uid` and `val` function.
 
 In general, the structure of the upsert block is as follows:
 
@@ -862,19 +899,34 @@ In general, the structure of the upsert block is as follows:
 upsert {
   query <query block>
   [fragment <fragment block>]
-  mutation <mutation block>
+  mutation <mutation block 1>
+  [mutation <mutation block 2>]
+  ...
 }
 ```
 
-The Mutation block currently only allows the `uid` function, which allows extracting UIDs
-from variables defined in the query block. There are two possible outcomes based on the
-results of executing the query block:
+Execution of an upsert block also returns the response of the query executed on the state
+of the database *before mutation was executed*. To get the latest result, we should commit
+the mutation and execute another query.
 
-* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+### `uid` Function
+
+The `uid` function allows extracting UIDs from variables defined in the query block.
+There are two possible outcomes based on the results of executing the query block:
+
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del` operation, it returns no UID, and thus the operation becomes a no-op and is silently ignored. A blank node gets the same UID across all the mutation blocks.
 * If the variable stores one or more than one UIDs, the `uid` function returns all the UIDs stored in the variable. In this case, the operation is performed on all the UIDs returned, one at a time.
 
+### `val` Function
 
-### Example
+The `val` function allows extracting values from value variables. Value variables store
+a mapping from UIDs to their corresponding values. Hence, `val(v)` is replaced by the value
+stored in the mapping for the UID (Subject) in the N-Quad. If the variable `v` has no value
+for a given UID, the mutation is silently ignored. The `val` function can be used with the
+result of aggregate variables as well, in which case, all the UIDs in the mutation would
+be updated with the aggregate value.
+
+### Example of `uid` Function
 
 Consider an example with the following schema:
 
@@ -882,8 +934,7 @@ Consider an example with the following schema:
 curl localhost:8080/alter -X POST -d $'
   name: string @index(term) .
   email: string @index(exact, trigram) @upsert .
-  age: int @index(int) .
-' | jq
+  age: int @index(int) .' | jq
 ```
 
 Now, let's say we want to create a new user with `email` and `name` information.
@@ -899,7 +950,10 @@ We can do this using the upsert block as follows:
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+      name
+    }
   }
 
   mutation {
@@ -908,8 +962,7 @@ upsert {
       uid(v) <email> "user@company1.io" .
     }
   }
-}
-' | jq
+}' | jq
 ```
 
 Result:
@@ -917,10 +970,11 @@ Result:
 ```json
 {
   "data": {
+    "q": [],
     "code": "Success",
     "message": "Done",
     "uids": {
-      "uid(v)": "0x2"
+      "uid(v)": "0x1"
     }
   },
   "extensions": {...}
@@ -934,11 +988,18 @@ the information is updated. If the user doesn't exist, `uid(v)` is treated
 as a blank node and a new user is created as explained above.
 
 If we run the same mutation again, the data would just be overwritten, and no new uid is
-created. Note that the `uids` map is empty in the response when the mutation is executed again:
+created. Note that the `uids` map is empty in the result when the mutation is executed
+again and the `data` map (key `q`) contains the uid that was created in the previous upsert.
 
 ```json
 {
   "data": {
+    "q": [
+      {
+        "uid": "0x1",
+        "name": "first last"
+      }
+    ],
     "code": "Success",
     "message": "Done",
     "uids": {}
@@ -952,14 +1013,13 @@ We can achieve the same result using `json` dataset as follows:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
+  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid\\n name} }",
   "set": {
     "uid": "uid(v)",
     "name": "first last",
     "email": "user@company1.io"
   }
-}
-' | jq
+}' | jq
 ```
 
 Now, we want to add the `age` information for the same user having the same email
@@ -969,7 +1029,9 @@ Now, we want to add the `age` information for the same user having the same emai
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 upsert {
   query {
-    v as var(func: eq(email, "user@company1.io"))
+    q(func: eq(email, "user@company1.io")) {
+      v as uid
+    }
   }
 
   mutation {
@@ -977,8 +1039,73 @@ upsert {
       uid(v) <age> "28" .
     }
   }
+}' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "q": [
+      {
+        "uid": "0x1"
+      }
+    ],
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
 }
-' | jq
+```
+
+Here, the query block queries for a user with `email` as `user@company1.io`. It stores
+the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user by extracting the uid from the variable `v` using `uid` function.
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'
+{
+  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid} }",
+  "set":{
+    "uid": "uid(v)",
+    "age": "28"
+  }
+}' | jq
+```
+
+If we want to execute the mutation only when the user exists, we could use
+[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+
+### Example of `val` Function
+
+Let's say we want to migrate the predicate `age` to `other`. We can do this using the
+following mutation:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    v as var(func: has(age)) {
+      a as age
+    }
+  }
+
+  mutation {
+    # we copy the values from the old predicate
+    set {
+      uid(v) <other> val(a) .
+    }
+
+    # and we delete the old predicate
+    delete {
+      uid(v) <age> * .
+    }
+  }
+}' | jq
 ```
 
 Result:
@@ -988,41 +1115,36 @@ Result:
   "data": {
     "code": "Success",
     "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
+    "uids": {}
   },
   "extensions": {...}
 }
 ```
 
-Here, the query block queries for a user with `email` as `user@company1.io`. It stores
-the `uid` of the user in variable `v`. The mutation block then updates the `age` of the
-user by extracting the uid from the variable `v` using `uid` function. We also get `uid(v)` as part
-of `vars` which has a list of uids that were used in the set mutation.
+Here, variable `a` will store a mapping from all the UIDs to their `age`. The mutation
+block then stores the corresponding value of `age` for each UID in the `other` predicate
+and deletes the `age` predicate.
 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
-{
-  "query": "{ v as var(func: eq(email, \"user@company1.io\")) }",
-  "set":{
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'{
+  "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
+  "delete": {
     "uid": "uid(v)",
-    "age": "28"
+    "age": null
+  },
+  "set": {
+    "uid": "uid(v)",
+    "other": "val(a)"
   }
-}
-' | jq
+}' | jq
 ```
-
-If we want to execute the mutation only when the user exists, we could use
-[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
 
 ### Bulk Delete Example
 
 Let's say we want to delete all the users of `company1` from the database. This can be
-achieved in just one query using the upsert block:
+achieved in just one query using the upsert block as follows:
 
 ```sh
 curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
@@ -1038,30 +1160,13 @@ upsert {
       uid(v) <age> * .
     }
   }
-}
-' | jq
-```
-
-Result:
-
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {},
-    "vars": {
-      "uid(v)": ["0x2"]
-    }
-  },
-  "extensions": {...}
-}
+}' | jq
 ```
 
 We can achieve the same result using `json` dataset as follows:
 
 ```sh
-curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d $'{
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
   "query": "{ v as var(func: regexp(email, /.*@company1.io$/)) }",
   "delete": {
     "uid": "uid(v)",
@@ -1069,13 +1174,12 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
     "email": null,
     "age": null
   }
-}
-' | jq
+}' | jq
 ```
 
 ## Conditional Upsert
 
-The upsert block also allows specifying a conditional mutation block using an `@if`
+The upsert block also allows specifying conditional mutation blocks using an `@if`
 directive. The mutation is executed only when the specified condition is true. If the
 condition is false, the mutation is silently ignored. The general structure of
 Conditional Upsert looks like as follows:
@@ -1084,21 +1188,23 @@ Conditional Upsert looks like as follows:
 upsert {
   query <query block>
   [fragment <fragment block>]
-  mutation @if(<condition>) <mutation block>
+  mutation [@if(<condition>)] <mutation block 1>
+  [mutation [@if(<condition>)] <mutation block 2>]
+  ...
 }
 ```
 
 The `@if` directive accepts a condition on variables defined in the query block and can be
 connected using `AND`, `OR` and `NOT`.
 
-### Example
+### Example of Conditional Upsert
 
 Let's say in our previous example, we know the `company1` has less than 100 employees.
 For safety, we want the mutation to execute only when the variable `v` stores less than
 100 but greater than 50 UIDs in it. This can be achieved as follows:
 
 ```sh
-curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
 upsert {
   query {
     v as var(func: regexp(email, /.*@company1.io$/))
@@ -1111,8 +1217,7 @@ upsert {
       uid(v) <age> * .
     }
   }
-}
-' | jq
+}' | jq
 ```
 
 We can achieve the same result using `json` dataset as follows:
@@ -1127,5 +1232,227 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
     "email": null,
     "age": null
   }
+}' | jq
+```
+
+### Example of Multiple Mutation Blocks
+
+Consider an example with the following schema:
+
+```sh
+curl localhost:8080/alter -X POST -d $'
+  name: string @index(term) .
+  email: [string] @index(exact) @upsert .' | jq
+```
+
+Let's say, we have many users stored in our database each having one or more than
+one email Addresses. Now, we get two email Addresses that belong to the same user.
+If the email Addresses belong to the different nodes in the database, we want to delete
+the existing nodes and create a new node with both the emails attached to this new node.
+Otherwise, we create/update the new/existing node with both the emails.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    # filter is needed to ensure that we do not get same UIDs in u1 and u2
+    q1(func: eq(email, "user_email1@company1.io")) @filter(not(eq(email, "user_email2@company1.io"))) {
+      u1 as uid
+    }
+
+    q2(func: eq(email, "user_email2@company1.io")) @filter(not(eq(email, "user_email1@company1.io"))) {
+      u2 as uid
+    }
+
+    q3(func: eq(email, "user_email1@company1.io")) @filter(eq(email, "user_email2@company1.io")) {
+      u3 as uid
+    }
+  }
+
+  # case when both emails do not exist
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <dgraph.type> "Person" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 exists but email2 does not
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0)) {
+    set {
+      uid(u1) <email> "user_email2@company1.io" .
+    }
+  }
+
+  # case when email1 does not exist but email2 exists
+  mutation @if(eq(len(u1), 0) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      uid(u2) <email> "user_email1@company1.io" .
+    }
+  }
+
+  # case when both emails exist and needs merging
+  mutation @if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0)) {
+    set {
+      _:user <name> "user" .
+      _:user <dgraph.type> "Person" .
+      _:user <email> "user_email1@company1.io" .
+      _:user <email> "user_email2@company1.io" .
+    }
+
+    delete {
+      uid(u1) <name> * .
+      uid(u1) <email> * .
+      uid(u2) <name> * .
+      uid(u2) <email> * .
+    }
+  }
+}' | jq
+```
+
+Result (when database is empty):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x1"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (both emails exist and are attached to different nodes):
+```json
+{
+  "data": {
+    "q1": [
+      {
+        "uid": "0x2"
+      }
+    ],
+    "q2": [
+      {
+        "uid": "0x3"
+      }
+    ],
+    "q3": [],
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "user": "0x4"
+    }
+  },
+  "extensions": {...}
+}
+```
+
+Result (when both emails exist and are already attached to the same node):
+
+```json
+{
+  "data": {
+    "q1": [],
+    "q2": [],
+    "q3": [
+      {
+        "uid": "0x4"
+      }
+    ],
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {...}
+}
+```
+
+We can achieve the same result using `json` dataset as follows:
+
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '{
+  "query": "{q1(func: eq(email, \"user_email1@company1.io\")) @filter(not(eq(email, \"user_email2@company1.io\"))) {u1 as uid} \n q2(func: eq(email, \"user_email2@company1.io\")) @filter(not(eq(email, \"user_email1@company1.io\"))) {u2 as uid} \n q3(func: eq(email, \"user_email1@company1.io\")) @filter(eq(email, \"user_email2@company1.io\")) {u3 as uid}}",
+  "mutations": [
+    {
+      "cond": "@if(eq(len(u1), 0) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user",
+          "dgraph.type": "Person"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u1)",
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 0) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "uid(u2)",
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
+        }
+      ]
+    },
+    {
+      "cond": "@if(eq(len(u1), 1) AND eq(len(u2), 1) AND eq(len(u3), 0))",
+      "set": [
+        {
+          "uid": "_:user",
+          "name": "user",
+          "dgraph.type": "Person"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email1@company1.io",
+          "dgraph.type": "Person"
+        },
+        {
+          "uid": "_:user",
+          "email": "user_email2@company1.io",
+          "dgraph.type": "Person"
+        }
+      ],
+      "delete": [
+        {
+          "uid": "uid(u1)",
+          "name": null,
+          "email": null
+        },
+        {
+          "uid": "uid(u2)",
+          "name": null,
+          "email": null
+        }
+      ]
+    }
+  ]
 }' | jq
 ```

@@ -297,7 +297,7 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 					failureConfig.DgraphErrMsg, errorEntry.Message))
 		}
 	} else {
-		require.True(t, len(output.Data) > 0,
+		require.True(t, output.Data != nil,
 			fmt.Sprintf("no data entry found in the output:%+v", output))
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/debuginfo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -73,7 +74,7 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &counter.Increment, &migrate.Migrate,
+	&debug.Debug, &counter.Increment, &migrate.Migrate, &debuginfo.DebugInfo,
 }
 
 func initCmds() {
@@ -127,11 +128,14 @@ func initCmds() {
 			x.CheckfNoTrace(os.Chdir(cwd))
 		}
 
-		cfg := rootConf.GetString("config")
-		if cfg == "" {
-			return
-		}
 		for _, sc := range subcommands {
+			// Set config file is provided for each subcommand, this is done
+			// for individual subcommand because each subcommand has its own config
+			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`.
+			cfg := sc.Conf.GetString("config")
+			if cfg == "" {
+				continue
+			}
 			sc.Conf.SetConfigFile(cfg)
 			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
 			setGlogFlags(sc.Conf)

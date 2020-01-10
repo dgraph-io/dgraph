@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,30 +44,31 @@ var (
 	restoreDir = "./data/restore"
 	testDirs   = []string{backupDir, restoreDir}
 
-	mc                *minio.Client
-	bucketName        = "dgraph-backup"
-	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
-
-	alphaContainers = []string{
-		"alpha1",
-		"alpha2",
-		"alpha3",
-	}
+	mc             *minio.Client
+	bucketName     = "dgraph-backup"
+	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
+	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
 )
 
 func TestBackupMinio(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	// Add schema and types.
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+		type Node {
+			movie
+		}`}))
+
 	// Add initial data.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -98,12 +100,16 @@ func TestBackupMinio(t *testing.T) {
 	}
 	require.True(t, moveOk)
 
+	// Setup environmental variables for use during restore.
+	os.Setenv("MINIO_ACCESS_KEY", "accesskey")
+	os.Setenv("MINIO_SECRET_KEY", "secretkey")
+
 	// Setup test directories.
 	dirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
-	restored := runRestore(t, backupDir, "", math.MaxUint64)
+	restored := runRestore(t, "", math.MaxUint64)
 
 	checks := []struct {
 		blank, expected string
@@ -131,7 +137,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
-	restored = runRestore(t, backupDir, "", incr1.Txn.CommitTs)
+	restored = runRestore(t, "", incr1.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -155,7 +161,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second incremental backup.
 	_ = runBackup(t, 9, 3)
-	restored = runRestore(t, backupDir, "", incr2.Txn.CommitTs)
+	restored = runRestore(t, "", incr2.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -179,7 +185,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second full backup.
 	dirs := runBackupInternal(t, true, 12, 4)
-	restored = runRestore(t, backupDir, "", incr3.Txn.CommitTs)
+	restored = runRestore(t, "", incr3.Txn.CommitTs)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -216,7 +222,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{backupDestination},
+		"destination": []string{backupDst},
 		"force_full":  []string{forceFullStr},
 	})
 	require.NoError(t, err)
@@ -246,17 +252,36 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	return dirs
 }
 
-func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
+func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string {
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
-	t.Logf("--- Restoring from: %q", backupLocation)
-	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
+	t.Logf("--- Restoring from: %q", localBackupDst)
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
 	require.NoError(t, err)
 
-	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
+	for i, pdir := range []string{"p1", "p2", "p3"} {
+		pdir = filepath.Join("./data/restore", pdir)
+		groupId, err := x.ReadGroupIdFile(pdir)
+		require.NoError(t, err)
+		require.Equal(t, uint32(i+1), groupId)
+	}
+	pdir := "./data/restore/p1"
+	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	require.NoError(t, err)
+
+	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"dgraph.type", "movie"}, restoredPreds)
+
+	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
+
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
@@ -268,7 +293,6 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)

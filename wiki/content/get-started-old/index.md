@@ -2,7 +2,7 @@
 title = "Get Started (Old)"
 +++
 
-{{% notice "note" %}}This is an older version of the Getting Started page. You can see the latest page [here](/get-started). {{% /notice %}}
+{{% notice "note" %}}This is an older version of the Getting Started page. You can see the latest page [here]({{< relref "get-started/index.md" >}}). {{% /notice %}}
 
 ## Dgraph
 
@@ -62,7 +62,7 @@ looking at its output, which includes the version number.
 If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v1.x.y.tar.gz` contains the dgraph binary.
 
 ## Step 2: Run Dgraph
-{{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy](/deploy). {{% /notice %}}
+{{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}
 
 ### Docker Compose
 
@@ -398,8 +398,8 @@ and queried that data back.
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help
