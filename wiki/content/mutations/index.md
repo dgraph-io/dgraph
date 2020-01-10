@@ -689,6 +689,40 @@ _:blank-1 <name> "Daryl" .
 _:blank-1 <dgraph.type> "Person" .
 ```
 
+### Deleting Facets
+
+The easiest way to delete a Facet is overwriting it. Automatically when you create a new mutation for the same entity without a facet, you are somewhat deleting its facet.
+
+e.g:
+
+```RDF
+<0x1> <name> "Carol" .
+<0x1> <friend> <0x2> .
+```
+
+Another way to do this is by using Upsert Block.
+
+> In this query below, we are deleting Facet in the Name and Friend predicate. To overwrite we need to collect the values ​​of the edges we are doing the procedure. And use the function "val(var)" to complete the overwriting.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    user as var(func: eq(name, "Carol")){
+      Name as name
+      Friends as friend
+    }
+ }
+
+  mutation {
+    set {
+      uid(user) <name> val(Name) .
+      uid(user) <friend> uid(Friends) .
+    }
+  }
+}' | jq
+```
+
 ### Creating a list with JSON and interacting with
 
 Schema:
