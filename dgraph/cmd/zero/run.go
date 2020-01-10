@@ -41,6 +41,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+
+	_ "net/http/pprof"
 )
 
 type options struct {
@@ -212,6 +214,7 @@ func run() {
 	// zero out from memory
 	kvOpt.EncryptionKey = nil
 
+	fmt.Printf("Here %#v\n", opts)
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
 	// Initialize the servers.
@@ -262,6 +265,10 @@ func run() {
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 		st.node.trySnapshot(0)
+	}()
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")
