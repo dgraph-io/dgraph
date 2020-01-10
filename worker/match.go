@@ -56,12 +56,6 @@ func levenshteinDistance(s, t string, max int) int {
 			column[y] = min(column[y]+1, column[y-1]+1, lastDiag+cost)
 			lastDiag = oldDiag
 		}
-		if minIdx < len(r1) && column[minIdx] > column[minIdx+1] {
-			minIdx++
-		}
-		if column[minIdx] > max {
-			return column[minIdx]
-		}
 	}
 	return column[len(r1)]
 }
