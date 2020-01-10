@@ -667,3 +667,62 @@
         Country4 as State.country
       }
     }
+
+-
+  name: "update two single edges"
+  gqlmutation: |
+    mutation updateOwner($patch: UpdateOwnerInput!) {
+      updateOwner(input: $patch) {
+        owner {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "ids": ["0x123"]
+        },
+        "set": {
+          "house": { 
+            "id": "0x456"
+          }
+        }
+      }
+    }
+  explanation: " Owner 0x123"
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Owner.house": {
+            "uid": "0x456",
+            "House.owner": { "uid": "uid(x)" } 
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Owner3)",
+            "Owner.house": {"uid": "uid(House2)"}
+          },
+          {
+            "uid": "uid(House4)",
+            "House.owner": {"uid": "uid(x)"}
+          }
+        ]
+      cond: "@if(eq(len(House2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateOwner(func: type(Owner)) @filter(uid(0x123)) {
+        uid
+      }
+      House2 as House2(func: uid(0x456)) @filter(type(House)) {
+        uid
+      }
+      var(func: uid(House2)) {
+        Owner3 as House.owner @filter(NOT (uid(x)))
+      }
+      var(func: uid(x)) {
+        House4 as Owner.house
+      }
+    }

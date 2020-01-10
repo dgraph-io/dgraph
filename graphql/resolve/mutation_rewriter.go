@@ -447,28 +447,29 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 	// (via @hasInverse) into this node.
 	for _, fld := range m.MutatedType().Fields() {
 		invField := fld.Inverse()
-		if invField != nil {
-			varName := varGen.next(fld.Type())
+		if invField == nil {
+			continue
+		}
+		varName := varGen.next(fld.Type())
 
-			qry.Children = append(qry.Children,
-				&gql.GraphQuery{
-					Var:  varName,
-					Attr: invField.Type().DgraphPredicate(fld.Name()),
-				})
+		qry.Children = append(qry.Children,
+			&gql.GraphQuery{
+				Var:  varName,
+				Attr: invField.Type().DgraphPredicate(fld.Name()),
+			})
 
-			delFldName := fld.Type().DgraphPredicate(invField.Name())
-			del := map[string]interface{}{"uid": mutationQueryVarUID}
-			if invField.Type().ListType() == nil {
-				deletes = append(deletes,
-					map[string]interface{}{
-						"uid":      fmt.Sprintf("uid(%s)", varName),
-						delFldName: del})
-			} else {
-				deletes = append(deletes,
-					map[string]interface{}{
-						"uid":      fmt.Sprintf("uid(%s)", varName),
-						delFldName: []interface{}{del}})
-			}
+		delFldName := fld.Type().DgraphPredicate(invField.Name())
+		del := map[string]interface{}{"uid": mutationQueryVarUID}
+		if invField.Type().ListType() == nil {
+			deletes = append(deletes,
+				map[string]interface{}{
+					"uid":      fmt.Sprintf("uid(%s)", varName),
+					delFldName: del})
+		} else {
+			deletes = append(deletes,
+				map[string]interface{}{
+					"uid":      fmt.Sprintf("uid(%s)", varName),
+					delFldName: []interface{}{del}})
 		}
 	}
 
@@ -892,20 +893,19 @@ func addAdditionalDeletes(
 		return
 	}
 
-	if invField.Type().ListType() == nil {
-		addDelete(frag, varGen, variable, srcUID, invField.Type(), invField, srcField)
-	}
-
-	if srcField.Type().ListType() == nil {
-		addDelete(frag, varGen, srcUID, variable, srcField.Type(), srcField, invField)
-	}
+	addDelete(frag, varGen, variable, srcUID, invField, srcField)
+	addDelete(frag, varGen, srcUID, variable, srcField, invField)
 }
 
 func addDelete(frag *mutationFragment,
 	varGen *variableGenerator,
 	qryVar, excludeVar string,
-	qryType schema.Type,
 	qryFld, delFld schema.FieldDefinition) {
+
+	// only add the delete for singular edges
+	if qryFld.Type().ListType() != nil {
+		return
+	}
 
 	if strings.HasPrefix(qryVar, "_:") {
 		return
@@ -915,7 +915,7 @@ func addDelete(frag *mutationFragment,
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.next(qryType)
+	targetVar := varGen.next(qryFld.Type())
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
