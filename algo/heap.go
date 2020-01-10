@@ -16,9 +16,20 @@
 
 package algo
 
+import (
+	"github.com/dgraph-io/dgraph/codec"
+)
+
 type elem struct {
 	val     uint64 // Value of this element.
 	listIdx int    // Which list this element comes from.
+
+	// The following fields are only used when merging pb.UidPack objects.
+	decoder  *codec.Decoder // pointer to the decoder for this pb.UidPack object.
+	packLen  int            // The exact length of the pb.UidPack object.
+	packIdx  int            // The current position in the entire pb.UidPack object.
+	blockIdx int            // The current position in the current pb.UidBlock object.
+	block    []uint64       // The current block.
 }
 
 type uint64Heap []elem

@@ -18,7 +18,6 @@ package algo
 
 import (
 	"container/heap"
-	"log"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -239,10 +238,6 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 	h := &uint64Heap{}
 	heap.Init(h)
 	maxSz := 0
-	// decoders stores the decoder for each corresponding, list.
-	decoders := make([]*codec.Decoder, len(lists))
-	// lenghts stores the length of each list so they are only computed once.
-	lenghts := make([]int, len(lists))
 	blockSize := 0
 
 	for i, l := range lists {
@@ -252,59 +247,66 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		if blockSize == 0 {
 			blockSize = int(l.BlockSize)
 		}
-		decoders[i] = codec.NewDecoder(lists[i])
-		if len(decoders[i].Uids()) == 0 {
+		decoder := codec.NewDecoder(lists[i])
+		block := decoder.Uids()
+		if len(block) == 0 {
 			continue
 		}
 
-		lenList := codec.ExactLen(lists[i])
-		lenghts[i] = lenList
-		if lenList > 0 {
+		listLen := codec.ExactLen(lists[i])
+		if listLen > 0 {
 			heap.Push(h, elem{
-				val:     decoders[i].Uids()[0],
-				listIdx: i,
+				val:      block[0],
+				listIdx:  i,
+				decoder:  decoder,
+				packLen:  listLen,
+				packIdx:  0,
+				blockIdx: 0,
+				block:    block,
 			})
-			if lenList > maxSz {
-				maxSz = lenList
+			if listLen > maxSz {
+				maxSz = listLen
 			}
 		}
 	}
 
-	// Our final output.
-	output := codec.Encoder{BlockSize: blockSize}
-	// empty is used to keep track of whether the encoder contains data since the
-	// encoder does not have an equivalent of len.
-	empty := true
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
-	// uidIdx is the element we are looking for within the smaller decoded array.
-	uidIdx := make([]int, len(lists))
-	var last uint64 // Last element added to sorted / final output.
+	// Our final result.
+	result := codec.Encoder{BlockSize: blockSize}
+	// emptyResult is used to keep track of whether the encoder contains data since the
+	// encoder storing the final result does not have an equivalent of len.
+	emptyResult := true
+	var last uint64 // Last element added to sorted / final result.
 
-	for h.Len() > 0 { // While heap is not empty.
-		me := (*h)[0] // Peek at the top element in heap.
-		if empty || me.val != last {
-			output.Add(me.val) // Add if unique.
+	for h.Len() > 0 { // While heap is not emptyResult.
+		me := &(*h)[0] // Peek at the top element in heap.
+		if emptyResult || me.val != last {
+			result.Add(me.val) // Add if unique.
 			last = me.val
-			empty = false
+			emptyResult = false
 		}
 
-		if idx[me.listIdx] >= lenghts[me.listIdx]-1 {
+		// Reached the end of this list. Remove it from the heap.
+		if me.packIdx >= me.packLen-1 {
 			heap.Pop(h)
-		} else {
-			idx[me.listIdx]++
-			uidIdx[me.listIdx]++
-			if uidIdx[me.listIdx] >= len(decoders[me.listIdx].Uids()) {
-				decoders[me.listIdx].Next()
-				uidIdx[me.listIdx] = 0
-			}
-
-			val := decoders[me.listIdx].Uids()[uidIdx[me.listIdx]]
-			(*h)[0].val = val
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
+			continue
 		}
+
+		// Increment counters.
+		me.packIdx++
+		me.blockIdx++
+		if me.blockIdx >= len(me.block) {
+			// Reached the end of the current block. Decode the next block
+			// and reset the block counter.
+			me.block = me.decoder.Next()
+			me.blockIdx = 0
+		}
+
+		// Update current value and re-heapify.
+		me.val = me.block[me.blockIdx]
+		heap.Fix(h, 0) // Faster than Pop() followed by Push().
 	}
-	return output.Done()
+
+	return result.Done()
 }
 
 // IndexOfPacked finds the index of the given uid in the UidPack. If it doesn't find it,
@@ -331,8 +333,6 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 	}
 	searchFunc := func(i int) bool { return uids[i] >= uid }
 	uidx := sort.Search(len(uids), searchFunc)
-	log.Printf("uidx %d", uidx)
-	log.Printf("uids %v", uids)
 	if uids[uidx] == uid {
 		return index + uidx
 	}
