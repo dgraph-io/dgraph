@@ -68,7 +68,8 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 		b.WriteRune(')')
 	}
 
-	if len(query.Children) > 0 {
+	switch {
+	case len(query.Children) > 0:
 		prefixAdd := ""
 		if query.Attr != "" {
 			b.WriteString(" {\n")
@@ -81,7 +82,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 			b.WriteString(prefix)
 			b.WriteString("}\n")
 		}
-	} else if query.Var != "" || query.Alias != "" || query.Attr != "" {
+	case query.Var != "" || query.Alias != "" || query.Attr != "":
 		b.WriteString("\n")
 	}
 }
@@ -106,12 +107,13 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 		return
 	}
 
-	if q.Func.Name == "uid" {
+	switch {
+	case q.Func.Name == "uid":
 		b.WriteString("(func: ")
 		writeUidFunc(b, q.Func.UID)
-	} else if q.Func.Name == "type" && len(q.Func.Args) == 1 {
+	case q.Func.Name == "type" && len(q.Func.Args) == 1:
 		b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value))
-	} else if q.Func.Name == "eq" && len(q.Func.Args) == 2 {
+	case q.Func.Name == "eq" && len(q.Func.Args) == 2:
 		b.WriteString(fmt.Sprintf("(func: eq(%s, %s)", q.Func.Args[0].Value, q.Func.Args[1].Value))
 	}
 	writeOrderAndPage(b, q, true)
@@ -123,11 +125,12 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		return
 	}
 
-	if f.Name == "uid" {
+	switch {
+	case f.Name == "uid":
 		writeUidFunc(b, f.UID)
-	} else if len(f.Args) == 1 {
+	case len(f.Args) == 1:
 		b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value))
-	} else if len(f.Args) == 2 {
+	case len(f.Args) == 2:
 		b.WriteString(fmt.Sprintf("%s(%s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value))
 	}
 }
