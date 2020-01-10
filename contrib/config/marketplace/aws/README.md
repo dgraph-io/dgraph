@@ -18,3 +18,11 @@ readonly s3_bucket_name="dgraph-marketplace-cf-template-${region}"
 
 $ ./deploy.sh <name-of-cloudformation-stack>
 ```
+
+### Note
+
+AWS ALBs configured with this template does not support GRPC load balancing, to get the best performance out of
+the dgraph cluster you can use an externally configured load balancer with GRPC capabilities like [HA Proxy](https://www.haproxy.com/blog/haproxy-1-9-2-adds-grpc-support/)
+or [Nginx](https://www.nginx.com/blog/nginx-1-13-10-grpc/)
+
+To know more about GRPC issues with AWS load balancer, give [this blog](https://rokt.com/engineering_blog/learnings-grpc-aws/) a read.
