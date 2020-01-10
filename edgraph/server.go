@@ -644,7 +644,6 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (*api.Response,
 			curr = p.GetHealthInfo()
 		}
 		health["healthy"] = append(health["healthy"], curr)
-		return
 	}
 
 	// get health from each group member
