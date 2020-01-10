@@ -1,6 +1,6 @@
 # Highly Available Dgraph on AWS using terraform
 
-[Terraform](https://terraform.io/) automates the process spinning up the EC2 instance, setting up and running Dgraph in it.
+[Terraform](https://terraform.io/) automates the process of spinning up the EC2 instance, setting up, and running Dgraph in it.
 This setup deploys terraform in HA mode in AWS.
 
 Here are the steps to follow:
@@ -27,6 +27,6 @@ Change the server URL in the dashboard to `<LB_DNS_NAME>:8080` and start playing
 
 ### Note
 
-* The terraform setup is only tested with AWS [m5](https://aws.amazon.com/ec2/instance-types/m5/) instances.
+* The terraform setup has been tested to work well with AWS [m5](https://aws.amazon.com/ec2/instance-types/m5/) instances.
 
-* AWS ALBs (Application Load Balancers) configured with this template do not support gRPC load balancing. To get the best performance out of the dgraph cluster, you can use an externally configured load balancer with gRPC capabilities like [HA Proxy](https://www.haproxy.com/blog/haproxy-1-9-2-adds-grpc-support/) or [Nginx](https://www.nginx.com/blog/nginx-1-13-10-grpc/).
+* AWS ALBs (Application Load Balancers) configured with this template do not support gRPC load balancing. To get the best performance out of the Dgraph cluster, you can use an externally configured load balancer with gRPC capabilities like [HA Proxy](https://www.haproxy.com/blog/haproxy-1-9-2-adds-grpc-support/) or [Nginx](https://www.nginx.com/blog/nginx-1-13-10-grpc/).
