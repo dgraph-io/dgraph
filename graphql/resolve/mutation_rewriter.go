@@ -452,9 +452,8 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 
 			qry.Children = append(qry.Children,
 				&gql.GraphQuery{
-					Var:      varName,
-					Attr:     invField.Type().DgraphPredicate(fld.Name()),
-					Children: []*gql.GraphQuery{{Attr: "uid"}},
+					Var:  varName,
+					Attr: invField.Type().DgraphPredicate(fld.Name()),
 				})
 
 			delFldName := fld.Type().DgraphPredicate(invField.Name())
@@ -926,9 +925,8 @@ func addDelete(frag *mutationFragment,
 			Args: []gql.Arg{{Value: qryVar}},
 		},
 		Children: []*gql.GraphQuery{{
-			Var:      targetVar,
-			Attr:     delFld.Type().DgraphPredicate(qryFld.Name()),
-			Children: []*gql.GraphQuery{{Attr: "uid"}},
+			Var:  targetVar,
+			Attr: delFld.Type().DgraphPredicate(qryFld.Name()),
 		}},
 	}
 
