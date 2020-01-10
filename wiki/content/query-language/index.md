@@ -1845,7 +1845,7 @@ Expand queries support filters on the type of the outgoing edge. For example,
 only include edges whose destination node is of type Person. Since only nodes of
 type `uid` can have a type, this query will filter out any scalar values.
 
-Please not that other type of filters and directives are not currently supported
+Please note that other type of filters and directives are not currently supported
 with the expand function. The filter needs to use the `type` function for the
 filter to be allowed. Logical `AND` and `OR` operations are allowed. For
 example, `expand(_all_) @filter(type(Person) OR type(Animal))` will only expand
