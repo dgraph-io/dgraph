@@ -29,7 +29,7 @@ import (
 var emptyAssignedIds pb.AssignedIds
 
 const (
-	leaseBandwidth = uint64(10000)
+	leaseBandwidth = uint64(1)
 )
 
 func (s *Server) updateLeases() {
@@ -127,6 +127,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 	// If we have less available than what we need, we need to renew our lease.
 	if available < num.Val+1 { // +1 for a potential readonly ts.
 		// Blocking propose to get more ids or timestamps.
+		// fmt.Println("Leasing uids.")
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}

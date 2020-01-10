@@ -18,6 +18,9 @@ package zero
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -34,4 +37,20 @@ func TestRemoveNode(t *testing.T) {
 	require.Error(t, err)
 	err = server.removeNode(context.TODO(), 1, 2)
 	require.Error(t, err)
+}
+
+func BenchmarkProposals(b *testing.B) {
+	fmt.Println(b.N)
+	client := &http.Client{}
+
+	for i := 0; i <= 10000; i++ {
+		req, err := http.NewRequest("GET", "http://127.0.0.1:6180/assign?what=uids&num=1", nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }
