@@ -32,7 +32,7 @@ import (
 // This implemention is optimized to use O(min(m,n)) space and is based on the
 // optimized C version found here:
 // http://en.wikibooks.org/wiki/Algorithm_implementation/Strings/Levenshtein_distance#C
-func levenshteinDistance(s, t string, max int) int {
+func levenshteinDistance(s, t string) int {
 	if len(s) > len(t) {
 		s, t = t, s
 	}
@@ -43,7 +43,6 @@ func levenshteinDistance(s, t string, max int) int {
 		column[y] = y
 	}
 
-	var minIdx int
 	for x := 1; x <= len(r2); x++ {
 		column[0] = x
 
@@ -75,7 +74,7 @@ func matchFuzzy(query, val string, max int) bool {
 	if val == "" {
 		return false
 	}
-	return levenshteinDistance(val, query, max) <= max
+	return levenshteinDistance(val, query) <= max
 }
 
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
