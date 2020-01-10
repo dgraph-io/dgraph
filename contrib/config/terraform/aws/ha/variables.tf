@@ -122,5 +122,5 @@ variable "public_key" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation."
-  default     = "1.1.0"
+  default     = "1.1.1"
 }
