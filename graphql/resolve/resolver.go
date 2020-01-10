@@ -432,13 +432,13 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 		res, err := cf(ctx, field, result, err)
 
 		var b bytes.Buffer
-		b.WriteString("\"")
-		b.WriteString(name)
-		b.WriteString(`": `)
+		x.Check2(b.WriteString("\""))
+		x.Check2(b.WriteString(name))
+		x.Check2(b.WriteString(`": `))
 		if len(res) > 0 {
-			b.Write(res)
+			x.Check2(b.Write(res))
 		} else {
-			b.WriteString("null")
+			x.Check2(b.WriteString("null"))
 		}
 
 		return b.Bytes(), err
@@ -557,9 +557,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 	nullResponse := func() []byte {
 		var buf bytes.Buffer
-		buf.WriteString(`{ "`)
-		buf.WriteString(field.ResponseName())
-		buf.WriteString(`": null }`)
+		x.Check2(buf.WriteString(`{ "`))
+		x.Check2(buf.WriteString(field.ResponseName()))
+		x.Check2(buf.WriteString(`": null }`))
 		return buf.Bytes()
 	}
 
@@ -712,7 +712,7 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
-	buf.WriteRune('{')
+	x.Check2(buf.WriteRune('{'))
 
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -734,10 +734,10 @@ func completeObject(
 			continue
 		}
 
-		buf.WriteString(comma)
-		buf.WriteRune('"')
-		buf.WriteString(f.ResponseName())
-		buf.WriteString(`": `)
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(f.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
 
 		val := res[f.ResponseName()]
 		if f.Name() == schema.Typename {
@@ -764,10 +764,10 @@ func completeObject(
 			}
 			completed = []byte(`null`)
 		}
-		buf.Write(completed)
+		x.Check2(buf.Write(completed))
 		comma = ", "
 	}
-	buf.WriteRune('}')
+	x.Check2(buf.WriteRune('}'))
 
 	return buf.Bytes(), errs
 }
@@ -873,11 +873,11 @@ func completeList(
 		return mismatched(path, field, values)
 	}
 
-	buf.WriteRune('[')
+	x.Check2(buf.WriteRune('['))
 	for i, b := range values {
 		r, err := completeValue(append(path, i), field, b)
 		errs = append(errs, err...)
-		buf.WriteString(comma)
+		x.Check2(buf.WriteString(comma))
 		if r == nil {
 			if !field.Type().ListType().Nullable() {
 				// Unlike the choice in completeValue() above, where we turn missing
@@ -896,13 +896,13 @@ func completeList(
 				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 				return nil, errs
 			}
-			buf.WriteString("null")
+			x.Check2(buf.WriteString("null"))
 		} else {
-			buf.Write(r)
+			x.Check2(buf.Write(r))
 		}
 		comma = ", "
 	}
-	buf.WriteRune(']')
+	x.Check2(buf.WriteRune(']'))
 
 	return buf.Bytes(), errs
 }
