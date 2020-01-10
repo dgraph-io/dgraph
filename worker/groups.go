@@ -586,8 +586,8 @@ func KnownGroups() []uint32 {
 	return groups().KnownGroups()
 }
 
-// GetGroupId returns the group to which this worker belongs to.
-func GetGroupId() uint32 {
+// GroupId returns the group to which this worker belongs to.
+func GroupId() uint32 {
 	return groups().groupId()
 }
 

@@ -618,10 +618,10 @@ func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
 		Instance: "alpha",
 		Addr:     x.WorkerConfig.MyAddr,
 		Status:   "healthy",
-		Group:    strconv.Itoa(int(worker.GetGroupId())),
+		Group:    strconv.Itoa(int(worker.GroupId())),
 		Version:  x.Version(),
 		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho: time.Now().UnixNano(),
+		LastEcho: time.Now().Unix(),
 	})
 
 	var err error
