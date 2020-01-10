@@ -317,9 +317,7 @@
         uid
       }
       var(func: uid(Post2)) {
-        Author3 as Post.author @filter(NOT (uid(x))) {
-          uid
-        }
+        Author3 as Post.author @filter(NOT (uid(x)))
       }
     }
 
@@ -424,9 +422,7 @@
         uid
       }
       var(func: uid(Post2)) {
-        Author3 as Post.author @filter(NOT (uid(x))) {
-          uid
-        }
+        Author3 as Post.author @filter(NOT (uid(x)))
       }
       Post5 as Post5(func: uid(0x789)) @filter(type(Post)) {
         uid
@@ -485,9 +481,7 @@
         uid
       }
       var(func: uid(Post2)) {
-        Author3 as Post.author @filter(NOT (uid(x))) {
-          uid
-        }
+        Author3 as Post.author @filter(NOT (uid(x)))
       }
     }
 
@@ -608,9 +602,7 @@
         uid
       }
       var(func: uid(State3)) {
-        Country4 as State.country {
-          uid
-        }
+        Country4 as State.country
       }
     }
 
@@ -672,8 +664,6 @@
         uid
       }
       var(func: uid(State3)) {
-        Country4 as State.country {
-          uid
-        }
+        Country4 as State.country
       }
     }

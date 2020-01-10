@@ -22,9 +22,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
         uid
-        Post1 as Author.posts {
-          uid
-        }
+        Post1 as Author.posts
       }
     }
 
@@ -55,9 +53,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
         uid
-        Post1 as Author.posts {
-          uid
-        }
+        Post1 as Author.posts
       }
     }
 
@@ -88,9 +84,7 @@
     query {
       x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
         uid
-        Post1 as Author.posts {
-          uid
-        }
+        Post1 as Author.posts
       }
     }
 
@@ -118,9 +112,7 @@
     query {
       x as deleteState(func: type(State)) @filter(eq(State.code, "abc")) {
         uid
-        Country1 as State.country {
-          uid
-        }
+        Country1 as State.country
       }
     }
 
@@ -152,11 +144,7 @@
     query {
       x as deletePost(func: uid(0x1, 0x2)) @filter(type(Post)) {
         uid
-        Author1 as Post.author {
-          uid
-        }
-        Category2 as Post.category {
-          uid
-        }
+        Author1 as Post.author
+        Category2 as Post.category
       }
     }

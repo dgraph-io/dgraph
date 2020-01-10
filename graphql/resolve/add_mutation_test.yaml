@@ -342,9 +342,7 @@
         uid
       }
       var(func: uid(Post3)) {
-        Author4 as Post.author {
-          uid
-        }
+        Author4 as Post.author
       }
     }
   dgmutations:
@@ -412,17 +410,13 @@
         uid
       }
       var(func: uid(Post2)) {
-        Author3 as Post.author {
-          uid
-        }
+        Author3 as Post.author
       }
       Post4 as Post4(func: uid(0x456)) @filter(type(Post)) {
         uid
       }
       var(func: uid(Post4)) {
-        Author5 as Post.author {
-          uid
-        }
+        Author5 as Post.author
       }
     }
   dgmutations:
@@ -580,9 +574,7 @@
         uid
       }
       var(func: uid(State2)) {
-        Country3 as State.country {
-          uid
-        }
+        Country3 as State.country
       }
     }
   dgmutations:
@@ -650,9 +642,7 @@
         uid
       }
       var(func: uid(State2)) {
-        Country3 as State.country {
-          uid
-        }
+        Country3 as State.country
       }
     }
   dgmutations:
