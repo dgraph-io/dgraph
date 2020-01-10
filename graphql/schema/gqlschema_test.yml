@@ -1,0 +1,672 @@
+invalid_schemas:
+  -
+    name: "More than 1 id field"
+    input: |
+      type P {
+        id1: ID!
+        id2: ID!
+        id3: ID!
+      }
+    errlist: [
+      {"message":"Fields id1, id2 and id3 are listed as IDs for type P, but a type can have only one ID field. Pick a single field as the ID for type P.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
+    ]
+
+  -
+    name: "UID as a field name"
+    input: |
+      type P {
+        uid: String
+      }
+    errlist: [
+      {"message":"Type P; Field uid: uid is a reserved keyword and you cannot declare a field with this name.", "locations": [{"line":2, "column": 3}]},
+    ]
+
+  -
+    name: "Query, Mutation in initial schema"
+    input: |
+      type Query {
+        getAuthro(id: ID): Author!
+      }
+      type Mutation {
+        getAuthro(id: ID): Author!
+      }
+    errlist: [
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":4, "column":6}]},
+    ]
+
+  -
+    name: "No ID list of any kind"
+    input: |
+      type A {
+        f: [ID]
+      }
+    errlist: [
+      {"message": "Type A; Field f: ID lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+
+  -
+    name: "No nested list of any kind"
+    input: |
+      type A {
+        f: [[String]]
+      }
+    errlist: [
+      {"message": "Type A; Field f: Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+  -
+    name: "There shoudnt be arguments on any field"
+    input: |
+      type T {
+        f(a: Int): String
+      }
+    errlist: [
+      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
+    ]
+
+  -
+    name: "Enum indexes clash trigram and regexp"
+    input: |
+      type T {
+        f: E @search(by: [trigram, regexp])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the argument to @search 'trigram' is the same as the index 'regexp' provided before and shouldn't be used together",
+      "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "Enum indexes clash hash and exact"
+    input: |
+      type T {
+        f: E @search(by: [hash, exact])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the arguments 'hash' and 'exact' can't be used together as arguments to @search.", "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "Reference type that is not in input schema"
+    input: |
+      type T {
+          f: Author
+      }
+    errlist: [
+      {"message": "Undefined type Author.", "locations": [{"line": 2, "column": 8}]}
+    ]
+
+  -
+    name: "Unsupported definitions in initial schema"
+    input: |
+      scalar Int
+      interface P {
+        t: T!
+      }
+      union Q = R | S | T
+      input U {
+        x: X!
+      }
+    errlist: [
+      {"message":"You can't add scalar definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      {"message":"You can't add input_object definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+    ]
+
+  -
+    name: "Typename is reserved word"
+    input: |
+      type String {
+        id: ID!
+      }
+    errlist: [
+      {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "More than 1 errors"
+    input: |
+      type X {
+        i1: ID!
+        i2: ID!
+        i3: ID!
+        l1: [X]!
+        l2: [ID]
+      }
+    errlist: [
+      {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
+      {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
+    ]
+
+  -
+    name: "Union type in schema"
+    input: |
+      union U = R | S | T
+    errlist: [
+      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
+    ]
+
+  -
+    name: "Non linking inverse directive with correct field type"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author
+      }
+      type Author {
+        posts: [Post!]! @hasInverse(field: likedBy)
+      }
+    errlist: [
+      {"message": "Type Post; Field author: @hasInverse should be consistant. Post.author is the inverse of Author.posts, but Author.posts is the inverse of Post.likedBy.", "locations": [{"line": 2, "column": 20}]}
+    ]
+
+  -
+    name: "Multiple hasInverse to one field"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
+      }
+    errlist: [
+      {"message": "Type Post; Field likedBy: @hasInverse should be consistant. Post.likedBy is the inverse of Author.posts, but Author.posts is the inverse of Post.author.", "locations": [{"line": 3, "column": 20}]}
+    ]
+
+  -
+    name: "Non linking inverse directives"
+    input: |
+      type X {
+        f1: P @hasInverse(field: "f1")
+        f2: String
+      }
+      type P {
+        f1: X @hasInverse(field: "f2")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse should be consistant. X.f1 is the inverse of P.f1, but P.f1 is the inverse of X.f2.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f1: @hasInverse is required to link the fields of same type, but the field f2 is of the type String instead of P. To link these make sure the fields are of the same type.", "locations":[{"line":6, "column":10}]},
+    ]
+
+  -
+    name: "Inverse Directive on non object field"
+    input: |
+      type X {
+        f1: String @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: Field f1 is of type String, but @hasInverse directive only applies to fields with object types.", "locations":[{"line":2, "column":3}]},
+    ]
+
+  -
+    name: "Inverse Directive doesn't have field argument"
+    input: |
+      type X {
+        f1: X @hasInverse
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse directive doesn't have field argument.", "locations":[{"line":2, "column":10}]},
+    ]
+
+  -
+    name: "hasInverse on non existing field"
+    input: |
+      type X {
+        f1: [P!]! @hasInverse(field: "f2")
+      }
+      type P  {
+        f1: String
+      }
+    errlist: [
+      {"message":"Type X; Field f1: inverse field f2 doesn't exist for type P.", "locations":[{"line":2, "column":14}]},
+    ]
+
+  -
+    name: "ID can't have the @search directive"
+    input: |
+      type X {
+        id: ID! @search
+      }
+      type Y {
+        id: ID! @search(by: [term])
+      }
+    errlist: [
+      {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
+      "locations":[{"line":2, "column":12}]},
+      {"message": "Type Y; Field id: has the @search directive but the argument term doesn't
+          apply to field type ID.  Search by term applies to fields of type String. Fields of type
+          ID can't have the @search directive.",
+      "locations":[{"line":5, "column":12}]}
+      ]
+
+  -
+    name: "Search will error on type that can't have the @search"
+    input: |
+      type X {
+        y: Y @search
+      }
+      type Y {
+        y: String
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but fields of type Y
+          can't have the @search directive.",
+      "locations":[{"line":2, "column":9}]}
+      ]
+
+  -
+    name: "Search (with arg) will error that can't have the @search"
+    input: |
+      type X {
+        y: Y @search(by: [term])
+      }
+      type Y {
+        y: String
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
+          apply to field type Y.  Search by term applies to fields of type String. Fields of
+          type Y can't have the @search directive.",
+      "locations":[{"line":2, "column":9}]}
+      ]
+
+  -
+    name: "Search with wrong arg with error on default search type"
+    input: |
+      type X {
+        y: Int @search(by: [term])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
+          apply to field type Int.  Search by term applies to fields of type String. Fields of
+          type Int are searchable by just @search.",
+      "locations":[{"line":2, "column":11}]}
+      ]
+
+  -
+    name: "Search with wrong arg with error on search type"
+    input: |
+      type X {
+        y: String @search(by: [day])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument day doesn't
+          apply to field type String.  Search by day applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with wrong arg for the index"
+    input: |
+      type X {
+        y: String @search(by: [hash, hour])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument hour doesn't
+          apply to field type String.  Search by hour applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search without []"
+    input: |
+      type X {
+        y: String @search(by: hash)
+      }
+    errlist: [
+      {"message": "Type X; Field y: the @search directive requires a list argument,
+          like @search(by: [hash])",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't allow hash and exact together"
+    input: |
+      type X {
+        y: String @search(by: [hash, exact])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the arguments 'hash' and 'exact' can't be
+          used together as arguments to @search.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with multiple datetime index"
+    input: |
+      type X {
+        y: DateTime @search(by: [hour, month])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the search directive on DateTime. DateTime
+           allows only one argument for @search.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Search doesn't allow trigram and regexp together"
+    input: |
+      type X {
+        y: String @search(by: [trigram, regexp])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search 'trigram' is the same as
+          the index 'regexp' provided before and shouldn't be used together",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't accept bogus args"
+    input: |
+      type X {
+        y: String @search(by: [bogus])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
+          String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Type implements an interface which wasn't defined"
+    input: |
+      type X implements Y {
+        y: String
+      }
+    errlist: [
+      {"message": Undefined type "Y".,
+      "locations":[{"line":1, "column":6}]}
+      ]
+
+  -
+    name: "Type implements an interface with the field definition repeated"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+        id: ID
+        y: String
+      }
+    errlist: [
+      {"message": "Field X.id can only be defined once.",
+      "locations":[{"line":5, "column":3}]}
+      ]
+
+  -
+    name: "Type implements an interface with the field name repeated but different type"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+        id: String
+        y: String
+      }
+    errlist: [
+      {"message": "Field X.id can only be defined once.",
+      "locations":[{"line":5, "column":3}]}
+      ]
+
+  -
+    name: "Type implements an interface with no field of its own"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+      }
+    errlist: [
+      {"message": "expected at least one definition, found }",
+      "locations":[{"line":5, "column":1}]}
+      ]
+
+  -
+    name: "Type implements from two interfaces where both have ID"
+    input: |
+      interface X {
+        id: ID
+      }
+      interface Y {
+        id: ID
+      }
+      type Z implements X & Y {
+        name: String
+      }
+    errlist: [
+      {"message": "Field Z.id can only be defined once.",
+      "locations":[{"line":2, "column":3}]}
+      ]
+
+  -
+    name: "List of Boolean is not allowed"
+    input: |
+      type X {
+        q: [Boolean]
+      }
+    errlist: [
+      {"message": "Type X; Field q: Boolean lists are invalid.",
+      "locations":[{"line":2, "column":3}]}
+      ]
+
+  -
+    name: "ID field can't have @dgraph directive"
+    input: |
+      type X {
+        id: ID @dgraph(pred: "X.id")
+        name: String
+      }
+    errlist: [
+      {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't
+          have the @dgraph directive.",
+      "locations":[{"line":2, "column":11}]}
+    ]
+
+  -
+    name: "Field with @id directive has wrong type"
+    input: |
+      type X {
+        f1: [String] @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, not [String]",
+      "locations":[{"line":2, "column":17}]}
+      ]
+
+  -
+    name: "Field with @id directive should be mandatory"
+    input: |
+      type X {
+        f1: String @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, not String",
+      "locations":[{"line":2, "column":15}]}
+      ]
+
+  -
+    name: "Field with multiple @id directives should not be allowed"
+    input: |
+      type X {
+        f1: String! @id
+        f2: String! @id
+      }
+    errlist: [
+      {"message": "Type X: fields f1 and f2 have the @id directive, but a type can
+        have only one field with @id. Pick a single field with @id for type X.",
+      "locations":[{"line":2, "column":3},{"line":3, "column":3}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(type: "f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with no argument on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument type on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(pred: 2)
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      of type String.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument on type produces an error"
+    input: |
+      type X @dgraph(pred: "X") {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should not be empty.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+  -
+    name: "Dgraph directive with no argument on type produces an error"
+    input: |
+      type X @dgraph {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should not be empty.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+  -
+    name: "Dgraph directive with wrong argument type on type produces an error"
+    input: |
+      type X @dgraph(type: 2) {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should of type String.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+
+valid_schemas:
+  -
+    name: "hasInverse directive on singleton"
+    input: |
+      type X {
+        f1: Y @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 1"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive from list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author!
+      }
+
+      type Author {
+        posts: [Post!]! @hasInverse(field: "author")
+      }
+  -
+    name: "hasInverse directive to list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author! @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
+      }
+
+  -
+    name: "hasInverse directive on list type 2"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @hasInverse(field: "f1")
+      }
+
+  -
+    name: "Correct search types"
+    input: |
+      type X {
+        int1: Int @search
+        int2: Int @search(by: [int])
+        int3: Int @search(by: [])
+        float1: Float @search
+        float2: Float @search(by: [float])
+        float3: Float @search(by: [])
+        bool1: Boolean @search
+        bool2: Boolean @search(by: [bool])
+        bool3: Boolean @search(by: [])
+        str: String @search
+        str2: String @search(by: [])
+        strHash: String @search(by: [hash])
+        strExact: String @search(by: [exact])
+        strTerm: String @search(by: [term])
+        strFulltext: String @search(by: [fulltext])
+        strTrigram: String @search(by: [trigram])
+        strRegexp: String @search(by: [regexp])
+        strRegexpFulltext: String @search(by: [regexp, fulltext])
+        strMultipleIndex: String @search(by: [trigram, hash, term, fulltext])
+        dt: DateTime @search
+        dt2: DateTime @search(by: [])
+        dtYear: DateTime @search(by: [year])
+        dtMonth: DateTime @search(by: [month])
+        dtDay: DateTime @search(by: [day])
+        dtHour: DateTime @search(by: [hour])
+        enumFld: E @search
+        req: String! @search(by: [term])
+        list: [Int] @search
+        reqList: [DateTime!]! @search
+      }
+      enum E {
+        A
+      }

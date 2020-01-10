@@ -1,0 +1,198 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	author(filter: AuthorFilter): Author! @hasInverse(field: "posts")
+}
+
+type Author {
+	id: ID!
+	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAuthorPayload {
+	author: Author
+}
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeleteAuthorPayload {
+	msg: String
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Enums
+#######################
+
+#######################
+# Generated Inputs
+#######################
+
+input AuthorFilter {
+	ids: [ID!]
+	not: AuthorFilter
+}
+
+input AuthorInput {
+	posts: [PostRef!]!
+}
+
+input AuthorRef {
+	id: ID
+	posts: [PostRef!]
+}
+
+input PatchAuthor {
+	posts: [PostRef!]
+}
+
+input PatchPost {
+	author: AuthorRef
+}
+
+input PostFilter {
+	ids: [ID!]
+	not: PostFilter
+}
+
+input PostInput {
+	author: AuthorRef!
+}
+
+input PostRef {
+	id: ID
+	author: AuthorRef
+}
+
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: PatchAuthor
+	remove: PatchAuthor
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PatchPost
+	remove: PatchPost
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, first: Int, offset: Int): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+}

@@ -1,0 +1,374 @@
+#######################
+# Input Schema
+#######################
+
+type Author {
+	id: ID!
+	name: String! @search(by: [hash])
+	questions(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question] @hasInverse(field: author)
+	answers(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer] @hasInverse(field: author)
+}
+
+interface Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author!
+}
+
+type Question implements Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: questions)
+	answered: Boolean
+}
+
+type Answer implements Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: answers)
+	markedUseful: Boolean
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAnswerPayload {
+	answer: Answer
+}
+
+type AddAuthorPayload {
+	author: Author
+}
+
+type AddQuestionPayload {
+	question: Question
+}
+
+type DeleteAnswerPayload {
+	msg: String
+}
+
+type DeleteAuthorPayload {
+	msg: String
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type DeleteQuestionPayload {
+	msg: String
+}
+
+type UpdateAnswerPayload {
+	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type UpdateQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum AnswerOrderable {
+	text
+	datePublished
+}
+
+enum AuthorOrderable {
+	name
+}
+
+enum PostOrderable {
+	text
+	datePublished
+}
+
+enum QuestionOrderable {
+	text
+	datePublished
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AnswerFilter {
+	ids: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	and: AnswerFilter
+	or: AnswerFilter
+	not: AnswerFilter
+}
+
+input AnswerInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	markedUseful: Boolean
+}
+
+input AnswerOrder {
+	asc: AnswerOrderable
+	desc: AnswerOrderable
+	then: AnswerOrder
+}
+
+input AnswerRef {
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
+}
+
+input AuthorFilter {
+	ids: [ID!]
+	name: StringHashFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
+}
+
+input AuthorInput {
+	name: String!
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
+}
+
+input AuthorRef {
+	id: ID
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input PatchAnswer {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
+}
+
+input PatchAuthor {
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input PatchPost {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+}
+
+input PatchQuestion {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
+}
+
+input PostFilter {
+	ids: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostRef {
+	id: ID!
+}
+
+input QuestionFilter {
+	ids: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	and: QuestionFilter
+	or: QuestionFilter
+	not: QuestionFilter
+}
+
+input QuestionInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	answered: Boolean
+}
+
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
+}
+
+input QuestionRef {
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
+}
+
+input UpdateAnswerInput {
+	filter: AnswerFilter!
+	set: PatchAnswer
+	remove: PatchAnswer
+}
+
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: PatchAuthor
+	remove: PatchAuthor
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PatchPost
+	remove: PatchPost
+}
+
+input UpdateQuestionInput {
+	filter: QuestionFilter!
+	set: PatchQuestion
+	remove: PatchQuestion
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getQuestion(id: ID!): Question
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	getAnswer(id: ID!): Answer
+	queryAnswer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addQuestion(input: QuestionInput!): AddQuestionPayload
+	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
+	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
+	addAnswer(input: AnswerInput!): AddAnswerPayload
+	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
+	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
+}
