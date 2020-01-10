@@ -1115,7 +1115,6 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 }
 
 func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) error {
-
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleCompareFunction")
 	defer stop()
@@ -1126,15 +1125,13 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	attr := arg.q.Attr
 	span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
 	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
-	// We might not get a tokenizer because we support filtering on non-indexed predicate.
 	if err != nil {
 		return err
 	}
 
-	// Only if the tokenizer that we used IsLossy or predicate is non-indexed,
+	// Only if the tokenizer that we used IsLossy
 	// then we need to fetch and compare the actual values.
 	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
-
 	if tokenizer.IsLossy() {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.State().TypeOf(attr)
@@ -1144,15 +1141,15 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 
 		x.AssertTrue(len(arg.out.UidMatrix) > 0)
 		rowsToFilter := 0
-		if arg.srcFn.fname == eq {
+		switch {
+		case arg.srcFn.fname == eq:
 			// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
 			rowsToFilter = len(arg.srcFn.tokens)
-		} else if arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken {
+		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
 			// If operation is not eq and ineqValueToken equals first token,
 			// then we need to filter first row.
 			rowsToFilter = 1
 		}
-
 		isList := schema.State().IsList(attr)
 		lang := langForFunc(arg.q.Langs)
 		for row := 0; row < rowsToFilter; row++ {
