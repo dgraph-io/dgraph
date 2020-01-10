@@ -384,13 +384,14 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addUpdatePayloadType(sch, defn)
 		addDeletePayloadType(sch, defn)
 
-		if defn.Kind == ast.Interface {
+		switch defn.Kind {
+		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
 			addUpdateMutation(sch, defn)
 			addDeleteMutation(sch, defn)
 
-		} else if defn.Kind == ast.Object {
+		case ast.Object:
 			// types and inputs needed for mutations
 			addInputType(sch, defn)
 			addAddPayloadType(sch, defn)
@@ -1251,11 +1252,12 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Interface {
+		switch typ.Kind {
+		case ast.Interface:
 			original.WriteString(generateInterfaceString(typ) + "\n")
-		} else if typ.Kind == ast.Object {
+		case ast.Object:
 			original.WriteString(generateObjectString(typ) + "\n")
-		} else if typ.Kind == ast.Enum {
+		case ast.Enum:
 			original.WriteString(generateEnumString(typ) + "\n")
 		}
 		printed[typName] = true
@@ -1292,11 +1294,12 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// types, inputs and enums
 	for _, typName := range typeNames {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Object {
+		switch typ.Kind {
+		case ast.Object:
 			object.WriteString(generateObjectString(typ) + "\n")
-		} else if typ.Kind == ast.InputObject {
+		case ast.InputObject:
 			input.WriteString(generateInputString(typ) + "\n")
-		} else if typ.Kind == ast.Enum {
+		case ast.Enum:
 			enum.WriteString(generateEnumString(typ) + "\n")
 		}
 	}
