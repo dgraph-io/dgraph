@@ -31,7 +31,7 @@ import (
 
 const (
 	mutationQueryVar        = "x"
-	deleteUIDVarMutation    = `{ "uid": "uid(x)" }`
+	mutationQueryVarUID     = "uid(x)"
 	updateMutationCondition = `gt(len(x), 0)`
 )
 
@@ -70,11 +70,13 @@ type mutationBuilder func(frag *mutationFragment) ([]byte, error)
 // result indicates that the upsert didn't succeed.
 type resultChecker func(map[string]interface{}) error
 
-type counter int
+// A variableGenerator generates unique variable names.
+type variableGenerator int
 
-func (c *counter) next() int {
+// next gets the next variable name for the given type.
+func (c *variableGenerator) next(typ schema.Type) string {
 	*c++
-	return int(*c)
+	return fmt.Sprintf("%s%v", typ.Name(), int(*c))
 }
 
 // NewAddRewriter returns new MutationRewriter for add & update mutations.
@@ -176,8 +178,8 @@ func (mrw *addRewriter) Rewrite(
 
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 
-	counter := counter(0)
-	mrw.frags = rewriteObject(mutatedType, nil, "", &counter, val)
+	varGen := variableGenerator(0)
+	mrw.frags = rewriteObject(mutatedType, nil, "", &varGen, true, val)
 	mutations, err := mutationsFromFragments(
 		mrw.frags,
 		func(frag *mutationFragment) ([]byte, error) {
@@ -259,15 +261,15 @@ func (urw *updateRewriter) Rewrite(
 	}
 
 	upsertQuery := rewriteUpsertQueryFromMutation(m)
-	srcUID := fmt.Sprintf("uid(%s)", mutationQueryVar)
+	srcUID := mutationQueryVarUID
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	counter := counter(0)
+	varGen := variableGenerator(0)
 
 	if setArg != nil {
 		urw.setFrags =
-			rewriteObject(mutatedType, nil, srcUID, &counter, setArg.(map[string]interface{}))
+			rewriteObject(mutatedType, nil, srcUID, &varGen, true, setArg.(map[string]interface{}))
 		addUpdateCondition(urw.setFrags)
 		mutSet, errSet = mutationsFromFragments(
 			urw.setFrags,
@@ -284,7 +286,7 @@ func (urw *updateRewriter) Rewrite(
 
 	if delArg != nil {
 		urw.delFrags =
-			rewriteObject(mutatedType, nil, srcUID, &counter, delArg.(map[string]interface{}))
+			rewriteObject(mutatedType, nil, srcUID, &varGen, false, delArg.(map[string]interface{}))
 		addUpdateCondition(urw.delFrags)
 		mutDel, errDel = mutationsFromFragments(
 			urw.delFrags,
@@ -432,17 +434,52 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 	*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	if m.MutationType() != schema.DeleteMutation {
-
 		return nil, nil, errors.Errorf(
 			"(internal error) call to build delete mutation for %s mutation type",
 			m.MutationType())
 	}
 
-	return rewriteUpsertQueryFromMutation(m),
+	varGen := variableGenerator(0)
+	qry := rewriteUpsertQueryFromMutation(m)
+	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
+
+	// we need to delete this node with ^^ and then any reference we know about
+	// (via @hasInverse) into this node.
+	for _, fld := range m.MutatedType().Fields() {
+		invField := fld.Inverse()
+		if invField == nil {
+			continue
+		}
+		varName := varGen.next(fld.Type())
+
+		qry.Children = append(qry.Children,
+			&gql.GraphQuery{
+				Var:  varName,
+				Attr: invField.Type().DgraphPredicate(fld.Name()),
+			})
+
+		delFldName := fld.Type().DgraphPredicate(invField.Name())
+		del := map[string]interface{}{"uid": mutationQueryVarUID}
+		if invField.Type().ListType() == nil {
+			deletes = append(deletes,
+				map[string]interface{}{
+					"uid":      fmt.Sprintf("uid(%s)", varName),
+					delFldName: del})
+		} else {
+			deletes = append(deletes,
+				map[string]interface{}{
+					"uid":      fmt.Sprintf("uid(%s)", varName),
+					delFldName: []interface{}{del}})
+		}
+	}
+
+	b, err := json.Marshal(deletes)
+
+	return qry,
 		[]*dgoapi.Mutation{{
-			DeleteJson: []byte(deleteUIDVarMutation),
+			DeleteJson: b,
 		}},
-		nil
+		err
 }
 
 func (drw *deleteRewriter) FromMutationResult(
@@ -546,19 +583,21 @@ func rewriteObject(
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
-	counter *counter,
+	varGen *variableGenerator,
+	withAdditionalDeletes bool,
 	obj map[string]interface{}) []*mutationFragment {
 
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := fmt.Sprintf("%s%v", typ.Name(), counter.next())
+	variable := varGen.next(typ)
 
 	id := typ.IDField()
 	if id != nil {
 		if idVal, ok := obj[id.Name()]; ok {
 			if idVal != nil {
-				return []*mutationFragment{asIDReference(idVal, srcField, srcUID, variable)}
+				return []*mutationFragment{
+					asIDReference(idVal, srcField, srcUID, variable, withAdditionalDeletes, varGen)}
 			}
 			delete(obj, id.Name())
 		}
@@ -580,16 +619,16 @@ func rewriteObject(
 
 	if !atTopLevel { // top level is never a reference - it's adding/updating
 		if xid != nil && xidString != "" {
-			xidFrag =
-				asXIDReference(srcField, srcUID, typ, xid.Name(), xidString, variable)
+			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
+				variable, withAdditionalDeletes, varGen)
 		}
 	}
 
 	if !atTopLevel { // top level mutations are fully checked by GraphQL validation
 		exclude := ""
 		if srcField != nil {
-			invType, invField := srcField.Inverse()
-			if invType != nil && invField != nil {
+			invField := srcField.Inverse()
+			if invField != nil {
 				exclude = invField.Name()
 			}
 		}
@@ -650,7 +689,8 @@ func rewriteObject(
 			// or giving the data to create the object as part of a deep mutation
 			// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 			//          like here ^^
-			frags = rewriteObject(fieldDef.Type(), fieldDef, myUID, counter, val)
+			frags =
+				rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
 		case []interface{}:
 			// This field is either:
 			// 1) A list of objects: e.g. if the schema said `categories: [Categories]`
@@ -663,7 +703,8 @@ func rewriteObject(
 			// 2) Or a list of scalars - e.g. if schema said `scores: [Float]`
 			//   { "title": "...", "scores": [10.5, 9.3, ... ]
 			//            like here ^^
-			frags = rewriteList(fieldDef.Type(), fieldDef, myUID, counter, val)
+			frags =
+				rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val)
 		default:
 			// This field is either:
 			// 1) a scalar value: e.g.
@@ -695,7 +736,8 @@ func invalidObjectFragment(
 		xidFrag.check =
 			checkQueryResult(variable,
 				nil,
-				schema.GQLWrapf(err, "xid \"%s\" doesn't exist and input object not well formed", xidString))
+				schema.GQLWrapf(err,
+					"xid \"%s\" doesn't exist and input object not well formed", xidString))
 
 		return []*mutationFragment{xidFrag}
 	}
@@ -735,7 +777,9 @@ func asIDReference(
 	val interface{},
 	srcField schema.FieldDefinition,
 	srcUID string,
-	variable string) *mutationFragment {
+	variable string,
+	withAdditionalDeletes bool,
+	varGen *variableGenerator) *mutationFragment {
 
 	result := make(map[string]interface{}, 2)
 	frag := newFragment(result)
@@ -766,35 +810,11 @@ func asIDReference(
 			nil,
 			errors.Errorf("ID \"%#x\" isn't a %s", uid, srcField.Type().Name()))
 
-	return frag
+	if withAdditionalDeletes {
+		addAdditionalDeletes(frag, varGen, srcField, srcUID, variable)
+	}
 
-	// FIXME: if this is an update we also need to add a query that checks if
-	// an author exists, and add a mutation to remove this post from that author
-	// query(func: uid(XYZ)) { a as author }
-	// +delete mutation
-	// { uid: uid(a), posts: [ uid: "XYZ"] }
-	// this can only occur at top level, not deep
-	//
-	// mutation was
-	// { "title": "...", "author": { "id": "0x123" }, ... }
-	//
-	// we'll build
-	// query XYZ = ...
-	// query is 123 an author
-	// query(func: uid(XYZ)) { a as author(and not 123) }
-	// { "uid": "XYZ", "title": "...",
-	//   "author": { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }, ... }
-	// also
-	// delete { uid: uid(a), posts: [ uid: uid(XYZ)] }
-	//
-	// ** only if author is single  - other wise it's always adding to existing edges. **
-	// ** only if update set mutation **
-	// ** Also in an add that links to an existing node **
-	// same sort of thing if it's xid, not id
-	//
-	// should go in some sort of deletes list
-	//
-	// Can tell by the type ???
+	return frag
 }
 
 // asXIDReference makes a mutation fragment that resolves a reference to an XID.  There's
@@ -819,7 +839,9 @@ func asXIDReference(
 	srcField schema.FieldDefinition,
 	srcUID string,
 	typ schema.Type,
-	xidFieldName, xidString, xidVariable string) *mutationFragment {
+	xidFieldName, xidString, xidVariable string,
+	withAdditionalDeletes bool,
+	varGen *variableGenerator) *mutationFragment {
 
 	result := make(map[string]interface{}, 2)
 	frag := newFragment(result)
@@ -834,20 +856,122 @@ func asXIDReference(
 		nil,
 		errors.Errorf("ID \"%s\" isn't a %s", xidString, srcField.Type().Name()))
 
-	// FIXME: and remove any existing
+	if withAdditionalDeletes {
+		addAdditionalDeletes(frag, varGen, srcField, srcUID, xidVariable)
+	}
 
 	return frag
 }
 
+// addAdditionalDeletes creates any additional deletes that are needed when a reference changes.
+// E.g. if we have
+// type Post { ... author: Author @hasInverse(field: posts) ... }
+// type Author { ... posts: [Post] ... }
+// then if edge
+// Post1 --- author --> Author1
+// exists, there must also be edge
+// Author1 --- posts --> Post1
+// So if we did an update that changes the author of Post1 to Author2, we need to
+// * add edge Post1 --- author --> Author2 (done by asIDReference/asXIDReference)
+// * add edge Author2 --- posts --> Post1 (done by addInverseLink)
+// * delete edge Author1 --- posts --> Post1 (done here by addAdditionalDeletes)
+//
+// This delete only needs to be done for singular edges - i.e. it doesn't need to be
+// done when we add a new post to an author; that just adds new edges and doesn't
+// leave an edge.
+func addAdditionalDeletes(
+	frag *mutationFragment,
+	varGen *variableGenerator,
+	srcField schema.FieldDefinition, srcUID, variable string) {
+
+	if srcField == nil {
+		return
+	}
+
+	invField := srcField.Inverse()
+	if invField == nil {
+		return
+	}
+
+	addDelete(frag, varGen, variable, srcUID, invField, srcField)
+	addDelete(frag, varGen, srcUID, variable, srcField, invField)
+}
+
+func addDelete(frag *mutationFragment,
+	varGen *variableGenerator,
+	qryVar, excludeVar string,
+	qryFld, delFld schema.FieldDefinition) {
+
+	// only add the delete for singular edges
+	if qryFld.Type().ListType() != nil {
+		return
+	}
+
+	if strings.HasPrefix(qryVar, "_:") {
+		return
+	}
+
+	if strings.HasPrefix(qryVar, "uid(") {
+		qryVar = qryVar[4 : len(qryVar)-1]
+	}
+
+	targetVar := varGen.next(qryFld.Type())
+	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
+
+	qry := &gql.GraphQuery{
+		Attr: "var",
+		Func: &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: qryVar}},
+		},
+		Children: []*gql.GraphQuery{{
+			Var:  targetVar,
+			Attr: delFld.Type().DgraphPredicate(qryFld.Name()),
+		}},
+	}
+
+	// We shouldn't do the delete if it ends up that the mutation is linking to the existing
+	// value for this edge in Dgraph - otherwise (because there's a non-deterministic order
+	// in executing set and delete) we might end up deleting the value in a set mutation.
+	//
+	// That can only happen at the top level of an update, where the variable is
+	// already uid(...)
+	if strings.HasPrefix(excludeVar, "uid(") {
+		qry.Children[0].Filter = &gql.FilterTree{
+			Op: "not",
+			Child: []*gql.FilterTree{{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: excludeVar[4 : len(excludeVar)-1]}}}}},
+		}
+	}
+
+	frag.queries = append(frag.queries, qry)
+
+	del := fmt.Sprintf("uid(%s)", qryVar)
+	if delFld.Type().ListType() == nil {
+		frag.deletes = append(frag.deletes,
+			map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", targetVar),
+				delFldName: map[string]interface{}{"uid": del}})
+	} else {
+		frag.deletes = append(frag.deletes,
+			map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", targetVar),
+				delFldName: []interface{}{map[string]interface{}{"uid": del}}})
+	}
+
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
-		invType, invField := srcField.Inverse()
-		if invType != nil && invField != nil {
+		invField := srcField.Inverse()
+		if invField != nil {
 			if invField.Type().ListType() != nil {
-				obj[invType.DgraphPredicate(invField.Name())] =
+				obj[srcField.Type().DgraphPredicate(invField.Name())] =
 					[]interface{}{map[string]interface{}{"uid": srcUID}}
 			} else {
-				obj[invType.DgraphPredicate(invField.Name())] =
+				obj[srcField.Type().DgraphPredicate(invField.Name())] =
 					map[string]interface{}{"uid": srcUID}
 			}
 		}
@@ -875,7 +999,8 @@ func rewriteList(
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
-	counter *counter,
+	varGen *variableGenerator,
+	withAdditionalDeletes bool,
 	objects []interface{}) []*mutationFragment {
 
 	frags := []*mutationFragment{newFragment(make([]interface{}, 0))}
@@ -884,7 +1009,7 @@ func rewriteList(
 		switch obj := obj.(type) {
 		case map[string]interface{}:
 			frags = squashFragments(squashIntoList, frags,
-				rewriteObject(typ, srcField, srcUID, counter, obj))
+				rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj))
 		default:
 			// All objects in the list must be of the same type.  GraphQL validation makes sure
 			// of that. So this must be a list of scalar values (lists of lists aren't allowed).
@@ -1005,14 +1130,21 @@ func squashFragments(
 	for _, l := range left {
 		for _, r := range right {
 			var conds []string
+			var deletes []interface{}
 
 			if len(l.conditions) > 0 {
 				conds = make([]string, len(l.conditions), len(l.conditions)+len(r.conditions))
 				copy(conds, l.conditions)
 			}
 
+			if len(l.deletes) > 0 {
+				deletes = make([]interface{}, len(l.deletes), len(l.deletes)+len(r.deletes))
+				copy(deletes, l.deletes)
+			}
+
 			result = append(result, &mutationFragment{
 				conditions: append(conds, r.conditions...),
+				deletes:    append(deletes, r.deletes...),
 				fragment:   combiner(l.fragment, r.fragment, len(right) > 1),
 				check: func(lcheck, rcheck resultChecker) resultChecker {
 					return func(m map[string]interface{}) error {
