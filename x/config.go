@@ -74,8 +74,8 @@ type WorkerOptions struct {
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32
-	// BeginTime is the start time of the alpha
-	BeginTime time.Time
+	// StartTime is the start time of the alpha
+	StartTime time.Time
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

@@ -58,7 +58,7 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	BeginTime   time.Time
+	StartTime   time.Time
 	Cfg         *raft.Config
 	MyAddr      string
 	Id          uint64
@@ -85,7 +85,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	x.Check(err)
 
 	n := &Node{
-		BeginTime: time.Now(),
+		StartTime: time.Now(),
 		Id:        rc.Id,
 		MyAddr:    rc.Addr,
 		Store:     store,

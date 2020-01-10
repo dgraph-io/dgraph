@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -83,6 +84,17 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
+}
+
+// GetAll returns all pool entries.
+func (p *Pools) GetAll() []*Pool {
+	p.RLock()
+	defer p.RUnlock()
+	var pool []*Pool
+	for _, v := range p.all {
+		pool = append(pool, v)
+	}
+	return pool
 }
 
 // RemoveInvalid removes invalid nodes from the list of pools.
@@ -197,7 +209,7 @@ func (p *Pool) listenToHeartbeat() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s, err := c.Heartbeat(ctx, &pb.HealthInfo{})
+	s, err := c.Heartbeat(ctx, &api.Payload{})
 	if err != nil {
 		return err
 	}
@@ -258,9 +270,14 @@ func (p *Pool) IsHealthy() bool {
 	return time.Since(p.lastEcho) < 4*echoDuration
 }
 
-// GetHealthInfo returns the healthinfo.
-func (p *Pool) GetHealthInfo() pb.HealthInfo {
+// HealthInfo returns the healthinfo.
+func (p *Pool) HealthInfo() pb.HealthInfo {
 	p.RLock()
 	defer p.RUnlock()
+	p.healthInfo.Status = "healthy"
+	if !p.IsHealthy() {
+		p.healthInfo.Status = "unhealthy"
+	}
+	p.healthInfo.LastEcho = p.lastEcho.Unix()
 	return p.healthInfo
 }

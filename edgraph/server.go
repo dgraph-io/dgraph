@@ -599,89 +599,47 @@ type queryContext struct {
 	span *trace.Span
 }
 
-// HealthAll handles health?all requests
+// HealthAll handles health?all requests.
 func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
-	return s.doHealthAll(ctx, NeedAuthorize)
-}
-
-func (s *Server) doHealthAll(ctx context.Context, authorize int) (*api.Response, error) {
-	var err error
-
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-
-	if authorize == NeedAuthorize {
-		if err := authorizeForGroot(ctx); err != nil {
-			return nil, err
-		}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
 	}
 
-	ms := worker.GetMembershipState()
-	if ms == nil {
-		return nil, errors.Errorf("No membership state found")
+	var healthAll []pb.HealthInfo
+	pool := conn.GetPools().GetAll()
+	for _, p := range pool {
+		healthAll = append(healthAll, p.HealthInfo())
 	}
+	// Append self.
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance: "alpha",
+		Addr:     x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Group:    strconv.Itoa(int(worker.GetGroupId())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().UnixNano(),
+	})
 
-	health := make(map[string][]pb.HealthInfo)
-
-	process := func(vm *pb.Member) {
-		curr := pb.HealthInfo{
-			Addr: vm.GetAddr(),
-		}
-
-		// get health locally if self.
-		if vm.GetAddr() == x.WorkerConfig.MyAddr {
-			curr.Instance = "alpha"
-			curr.Group = strconv.Itoa(int(vm.GroupId))
-			curr.Version = x.Version()
-			curr.Uptime = uint64(time.Since(x.WorkerConfig.BeginTime))
-		} else {
-			p, err := conn.GetPools().Get(vm.GetAddr())
-			if err != nil {
-				health["unhealthy"] = append(health["unhealthy"], curr)
-				return
-			}
-			curr = p.GetHealthInfo()
-		}
-		health["healthy"] = append(health["healthy"], curr)
-	}
-
-	// get health from each group member
-	for _, vg := range ms.Groups {
-		for _, vm := range vg.Members {
-			process(vm)
-		}
-	}
-
-	// get health from zeros.
-	for _, vz := range ms.Zeros {
-		process(vz)
-	}
-
+	var err error
 	var jsonOut []byte
-	if jsonOut, err = json.Marshal(health); err != nil {
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
 		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
 	}
-
 	return &api.Response{Json: jsonOut}, nil
 }
 
 // State handles state requests
 func (s *Server) State(ctx context.Context) (*api.Response, error) {
-	return s.doState(ctx, NeedAuthorize)
-}
-
-func (s *Server) doState(ctx context.Context, authorize int) (
-	*api.Response, error) {
-
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	if authorize == NeedAuthorize {
-		if err := authorizeForGroot(ctx); err != nil {
-			return nil, err
-		}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
 	}
 
 	ms := worker.GetMembershipState()
