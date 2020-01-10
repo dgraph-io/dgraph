@@ -256,13 +256,11 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		listLen := codec.ExactLen(lists[i])
 		if listLen > 0 {
 			heap.Push(h, elem{
-				val:      block[0],
-				listIdx:  i,
-				decoder:  decoder,
-				packLen:  listLen,
-				packIdx:  0,
-				blockIdx: 0,
-				block:    block,
+				val:       block[0],
+				listIdx:   i,
+				decoder:   decoder,
+				blockIdx:  0,
+				blockUids: block,
 			})
 			if listLen > maxSz {
 				maxSz = listLen
@@ -286,23 +284,23 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		}
 
 		// Reached the end of this list. Remove it from the heap.
-		if me.packIdx >= me.packLen-1 {
+		lastBlock := me.decoder.BlockIdx() == len(me.decoder.Pack.GetBlocks())-1
+		if me.blockIdx == len(me.blockUids)-1 && lastBlock {
 			heap.Pop(h)
 			continue
 		}
 
 		// Increment counters.
-		me.packIdx++
 		me.blockIdx++
-		if me.blockIdx >= len(me.block) {
+		if me.blockIdx >= len(me.blockUids) {
 			// Reached the end of the current block. Decode the next block
 			// and reset the block counter.
-			me.block = me.decoder.Next()
+			me.blockUids = me.decoder.Next()
 			me.blockIdx = 0
 		}
 
 		// Update current value and re-heapify.
-		me.val = me.block[me.blockIdx]
+		me.val = me.blockUids[me.blockIdx]
 		heap.Fix(h, 0) // Faster than Pop() followed by Push().
 	}
 
@@ -323,19 +321,21 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 	// elements in this block. We need them to make the correct calculation.
 	decoder.UnpackBlock()
 
-	for i := 0; i < decoder.BlockIdx(); i++ {
-		index += int(u.Blocks[i].GetNumUids())
-	}
-
 	uids := decoder.Uids()
 	if len(uids) == 0 {
 		return -1
 	}
+
 	searchFunc := func(i int) bool { return uids[i] >= uid }
 	uidx := sort.Search(len(uids), searchFunc)
-	if uids[uidx] == uid {
-		return index + uidx
+	if uids[uidx] != uid {
+		return -1
 	}
 
-	return -1
+	index += uidx
+	for i := 0; i < decoder.BlockIdx(); i++ {
+		index += int(u.Blocks[i].GetNumUids())
+	}
+
+	return index
 }
