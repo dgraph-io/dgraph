@@ -58,6 +58,7 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
+	BeginTime   time.Time
 	Cfg         *raft.Config
 	MyAddr      string
 	Id          uint64
@@ -84,9 +85,10 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	x.Check(err)
 
 	n := &Node{
-		Id:     rc.Id,
-		MyAddr: rc.Addr,
-		Store:  store,
+		BeginTime: time.Now(),
+		Id:        rc.Id,
+		MyAddr:    rc.Addr,
+		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
 			ElectionTick:             20, // 2s if we call Tick() every 100 ms.

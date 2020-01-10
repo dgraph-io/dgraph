@@ -181,6 +181,14 @@ message ConnectionState {
 	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
+message HealthInfo {
+	string Instance = 1;
+	string Group = 2;  // string so group = 0 can be printed in JSON. 
+	string Addr = 3;
+	string Version = 4;
+	uint64 Uptime = 5;
+}
+
 message Tablet {
 	uint32 group_id  = 1; // Served by which group.
 	string predicate = 2;
@@ -467,7 +475,7 @@ message RaftBatch {
 }
 
 service Raft {
-	rpc Heartbeat (api.Payload)        returns (stream api.Payload) {}
+	rpc Heartbeat (HealthInfo)        returns (stream HealthInfo) {}
 	rpc RaftMessage (stream RaftBatch) returns (api.Payload) {}
 	rpc JoinCluster (RaftContext)      returns (api.Payload) {}
 	rpc IsPeer (RaftContext)           returns (PeerResponse) {}

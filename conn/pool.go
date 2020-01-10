@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -51,7 +50,7 @@ type Pool struct {
 	lastEcho   time.Time
 	Addr       string
 	closer     *y.Closer
-	healthInfo []byte
+	healthInfo pb.HealthInfo
 }
 
 // Pools manages a concurrency-safe set of Pool.
@@ -80,7 +79,7 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	if !ok {
 		return nil, ErrNoConnection
 	}
-	if !pool.IsHealthy() || pool.healthInfo == nil {
+	if !pool.IsHealthy() {
 		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
@@ -198,7 +197,7 @@ func (p *Pool) listenToHeartbeat() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s, err := c.Heartbeat(ctx, &api.Payload{})
+	s, err := c.Heartbeat(ctx, &pb.HealthInfo{})
 	if err != nil {
 		return err
 	}
@@ -214,14 +213,14 @@ func (p *Pool) listenToHeartbeat() error {
 	// This loop can block indefinitely as long as it keeps on receiving pings back.
 	for {
 		res, err := s.Recv()
-		if err != nil {
+		if err != nil || res == nil {
 			return err
 		}
 
 		// We do this periodic stream receive based approach to defend against network partitions.
 		p.Lock()
 		p.lastEcho = time.Now()
-		p.healthInfo = res.Data
+		p.healthInfo = *res
 		p.Unlock()
 	}
 }
@@ -260,7 +259,7 @@ func (p *Pool) IsHealthy() bool {
 }
 
 // GetHealthInfo returns the healthinfo.
-func (p *Pool) GetHealthInfo() []byte {
+func (p *Pool) GetHealthInfo() pb.HealthInfo {
 	p.RLock()
 	defer p.RUnlock()
 	return p.healthInfo

@@ -295,10 +295,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 			x.SetStatus(w, x.ErrorNoData, "No state information available.")
 			return
 		}
-		if _, err := w.Write(aResp.Json); err != nil {
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}
+		_, _ = w.Write(aResp.Json)
 		return
 	}
 

@@ -19,8 +19,8 @@ package conn
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -272,29 +272,34 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 
 // Heartbeat rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) error {
+func (w *RaftServer) Heartbeat(in *pb.HealthInfo, stream pb.Raft_HeartbeatServer) error {
 	ticker := time.NewTicker(echoDuration)
 	defer ticker.Stop()
 
-	info := struct {
-		Version string        `json:"version"`
-		Uptime  time.Duration `json:"uptime"`
-	}{
-		Version: x.Version(),
-		Uptime:  time.Since(x.WorkerConfig.BeginTime),
+	node := w.GetNode()
+	if node == nil {
+		return ErrNoNode
+	}
+	info := pb.HealthInfo{
+		Instance: "alpha",
+		Group:    strconv.Itoa(int(node.RaftContext.GetGroup())),
+		Addr:     node.MyAddr,
+		Version:  x.Version(),
+		Uptime:   uint64(time.Since(node.BeginTime)),
+	}
+	if info.Group == "0" {
+		info.Instance = "zero"
 	}
 
 	ctx := stream.Context()
 
 	for {
-		info.Uptime = time.Since(x.WorkerConfig.BeginTime)
-		data, _ := json.Marshal(info)
-		out := &api.Payload{Data: data}
+		info.Uptime = uint64(time.Since(node.BeginTime))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := stream.Send(out); err != nil {
+			if err := stream.Send(&info); err != nil {
 				return err
 			}
 		}

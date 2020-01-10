@@ -74,7 +74,7 @@ type WorkerOptions struct {
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32
-	// BeginTime
+	// BeginTime is the start time of the alpha
 	BeginTime time.Time
 }
 

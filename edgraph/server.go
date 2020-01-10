@@ -604,8 +604,7 @@ func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
 	return s.doHealthAll(ctx, NeedAuthorize)
 }
 
-func (s *Server) doHealthAll(ctx context.Context, authorize int) (
-	*api.Response, error) {
+func (s *Server) doHealthAll(ctx context.Context, authorize int) (*api.Response, error) {
 	var err error
 
 	if ctx.Err() != nil {
@@ -623,66 +622,45 @@ func (s *Server) doHealthAll(ctx context.Context, authorize int) (
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	type health struct {
-		Addr     string        `json:"addr"`
-		Instance string        `json:"instance"`
-		Version  string        `json:"version"`
-		Uptime   time.Duration `json:"uptime"`
-	}
+	health := make(map[string][]pb.HealthInfo)
 
-	var healthAll []health // health info for all group members and zeros.
+	process := func(vm *pb.Member) {
+		curr := pb.HealthInfo{
+			Addr: vm.GetAddr(),
+		}
+
+		// get health locally if self.
+		if vm.GetAddr() == x.WorkerConfig.MyAddr {
+			curr.Instance = "alpha"
+			curr.Group = strconv.Itoa(int(vm.GroupId))
+			curr.Version = x.Version()
+			curr.Uptime = uint64(time.Since(x.WorkerConfig.BeginTime))
+		} else {
+			p, err := conn.GetPools().Get(vm.GetAddr())
+			if err != nil {
+				health["unhealthy"] = append(health["unhealthy"], curr)
+				return
+			}
+			curr = p.GetHealthInfo()
+		}
+		health["healthy"] = append(health["healthy"], curr)
+		return
+	}
 
 	// get health from each group member
 	for _, vg := range ms.Groups {
 		for _, vm := range vg.Members {
-			curr := health{
-				Addr:     vm.GetAddr(),
-				Instance: "alpha",
-				Version:  "unavailable",
-				Uptime:   0,
-			}
-
-			if vm.GetAddr() == x.WorkerConfig.MyAddr {
-				curr.Version = x.Version()
-				curr.Uptime = time.Since(x.WorkerConfig.BeginTime)
-			} else {
-				p, err := conn.GetPools().Get(vm.GetAddr())
-				if err != nil {
-					glog.Infof("%v is unhealthy. err %v\n", vm.GetAddr(), err)
-				} else {
-					if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
-						glog.Infof("Unable to Unmarshal healthinfo for %v. err %v\n", vm.GetAddr(), err)
-						continue
-					}
-				}
-			}
-			healthAll = append(healthAll, curr)
+			process(vm)
 		}
 	}
 
 	// get health from zeros.
 	for _, vz := range ms.Zeros {
-		curr := health{
-			Addr:     vz.GetAddr(),
-			Instance: "zero",
-			Version:  "unavailable",
-			Uptime:   0,
-		}
-
-		p, err := conn.GetPools().Get(vz.GetAddr())
-		if err != nil {
-			glog.Infof("%v is unhealthy. err %v\n", vz.GetAddr(), err)
-		} else {
-			if err = json.Unmarshal(p.GetHealthInfo(), &curr); err != nil {
-				glog.Infof("Unable to Unmarshal healthinfo for %v. err %v\n", vz.GetAddr(), err)
-				continue
-			}
-		}
-		healthAll = append(healthAll, curr)
+		process(vz)
 	}
 
 	var jsonOut []byte
-	if jsonOut, err = json.Marshal(healthAll); err != nil {
+	if jsonOut, err = json.Marshal(health); err != nil {
 		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
 	}
 
