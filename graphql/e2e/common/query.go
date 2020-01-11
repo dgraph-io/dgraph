@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -365,12 +366,12 @@ func manyQueries(t *testing.T) {
 	`
 
 	var bld strings.Builder
-	bld.WriteString("query {\n")
+	x.Check2(bld.WriteString("query {\n"))
 	for idx, p := range posts {
-		bld.WriteString(fmt.Sprintf("  query%v : ", idx))
-		bld.WriteString(fmt.Sprintf(getPattern, p.PostID))
+		x.Check2(bld.WriteString(fmt.Sprintf("  query%v : ", idx)))
+		x.Check2(bld.WriteString(fmt.Sprintf(getPattern, p.PostID)))
 	}
-	bld.WriteString("}")
+	x.Check2(bld.WriteString("}"))
 
 	queryParams := &GraphQLParams{
 		Query: bld.String(),
@@ -516,16 +517,16 @@ func queriesWithError(t *testing.T) {
 	shouldFail := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(posts))
 
 	var bld strings.Builder
-	bld.WriteString("query {\n")
+	x.Check2(bld.WriteString("query {\n"))
 	for idx, p := range posts {
-		bld.WriteString(fmt.Sprintf("  query%v : ", idx))
+		x.Check2(bld.WriteString(fmt.Sprintf("  query%v : ", idx)))
 		if idx == shouldFail {
-			bld.WriteString(fmt.Sprintf(getPattern, "Not_An_ID"))
+			x.Check2(bld.WriteString(fmt.Sprintf(getPattern, "Not_An_ID")))
 		} else {
-			bld.WriteString(fmt.Sprintf(getPattern, p.PostID))
+			x.Check2(bld.WriteString(fmt.Sprintf(getPattern, p.PostID)))
 		}
 	}
-	bld.WriteString("}")
+	x.Check2(bld.WriteString("}"))
 
 	queryParams := &GraphQLParams{
 		Query: bld.String(),
