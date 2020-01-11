@@ -1838,6 +1838,19 @@ For `string` predicates, `expand` only returns values not tagged with a language
 (see [language preference]({{< relref "#language-support" >}})).  So it's often 
 required to add `name@fr` or `name@.` as well to an expand query.
 
+### Filtering during expand.
+
+Expand queries support filters on the type of the outgoing edge. For example,
+`expand(_all_) @filter(type(Person))` will expand on all the predicates but will
+only include edges whose destination node is of type Person. Since only nodes of
+type `uid` can have a type, this query will filter out any scalar values.
+
+Please note that other type of filters and directives are not currently supported
+with the expand function. The filter needs to use the `type` function for the
+filter to be allowed. Logical `AND` and `OR` operations are allowed. For
+example, `expand(_all_) @filter(type(Person) OR type(Animal))` will only expand
+the edges that point to nodes of either type.
+
 ## Cascade Directive
 
 With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.
