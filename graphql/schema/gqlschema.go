@@ -1193,7 +1193,8 @@ func generateInputString(typ *ast.Definition) string {
 func generateEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	x.Check2(sch.WriteString(fmt.Sprintf("%senum %s {\n", generateDescription(typ.Description), typ.Name)))
+	x.Check2(sch.WriteString(fmt.Sprintf("%senum %s {\n", generateDescription(typ.Description),
+		typ.Name)))
 	for _, val := range typ.EnumValues {
 		if !strings.HasPrefix(val.Name, "__") {
 			if d := generateDescription(val.Description); d != "" {
