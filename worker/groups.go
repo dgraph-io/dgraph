@@ -587,6 +587,11 @@ func KnownGroups() []uint32 {
 	return groups().KnownGroups()
 }
 
+// GroupId returns the group to which this worker belongs to.
+func GroupId() uint32 {
+	return groups().groupId()
+}
+
 func (g *groupi) triggerMembershipSync() {
 	// It's ok if we miss the trigger, periodic membership sync runs every minute.
 	select {

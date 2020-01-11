@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -606,22 +607,47 @@ type queryContext struct {
 	graphql bool
 }
 
-// State handles state requests
-func (s *Server) State(ctx context.Context) (*api.Response, error) {
-	return s.doState(ctx, NeedAuthorize)
+// HealthAll handles health?all requests.
+func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
+	}
+
+	var healthAll []pb.HealthInfo
+	pool := conn.GetPools().GetAll()
+	for _, p := range pool {
+		healthAll = append(healthAll, p.HealthInfo())
+	}
+	// Append self.
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance: "alpha",
+		Addr:     x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Group:    strconv.Itoa(int(worker.GroupId())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
+	})
+
+	var err error
+	var jsonOut []byte
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+	return &api.Response{Json: jsonOut}, nil
 }
 
-func (s *Server) doState(ctx context.Context, authorize int) (
-	*api.Response, error) {
-
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	if authorize == NeedAuthorize {
-		if err := authorizeState(ctx); err != nil {
-			return nil, err
-		}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
 	}
 
 	ms := worker.GetMembershipState()
