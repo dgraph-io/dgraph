@@ -67,18 +67,10 @@ func (r *reducer) run() error {
 		go func(shardId int, db *badger.DB) {
 			defer thr.Done(nil)
 
-			//Use a chan as mapEntries pool for mapIterator to read mapoutput. Fixed size is ok,
-			// because mapEntries will be reused. Not use sync.Pool because it's slower.
-			const poolSize = 2e6
-			mePool := make(chan *pb.MapEntry, poolSize)
-			for i := 0; i < poolSize; i++ {
-				mePool <- new(pb.MapEntry)
-			}
-
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
 			for _, mapFile := range mapFiles {
-				itr := newMapIterator(mePool, mapFile)
+				itr := newMapIterator(mapFile)
 				mapItrs = append(mapItrs, itr)
 			}
 
@@ -88,7 +80,7 @@ func (r *reducer) run() error {
 			}
 
 			ci := &countIndexer{reducer: r, writer: writer}
-			r.reduce(mapItrs, ci, mePool)
+			r.reduce(mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -133,7 +125,6 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 type mapIterator struct {
-	mePool chan *pb.MapEntry
 	fd     *os.File
 	reader *bufio.Reader
 	tmpBuf []byte
@@ -161,23 +152,21 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 	}
 	x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
 
-	//me := new(pb.MapEntry)
-	me := <-mi.mePool
+	me := new(pb.MapEntry)
 	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 	return me
 }
 
-func newMapIterator(mePool chan *pb.MapEntry, filename string) *mapIterator {
+func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
 	x.Check(err)
 
-	return &mapIterator{mePool: mePool, fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
+	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
 }
 
-func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb.MapEntry,
-	recycleCh chan []*pb.MapEntry, closer *y.Closer) {
+func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
 	var listSize int
@@ -211,7 +200,7 @@ func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb
 			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
 		}
 	}
-	//Since a batch doesn't always include all mapEntries that have the same key. kvBuilder is needed
+	//Since a batch doesn't always include all mapEntries with the same key. kvBuilder is needed
 	//to save in building kv.
 	kvb := &kvBuilder{
 		currentKey: nil,
@@ -223,7 +212,6 @@ func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb
 	var prevSID uint32
 	for batch := range entryCh {
 		listSize += r.toList(batch, list, kvb)
-		recycleCh <- batch
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
@@ -249,20 +237,11 @@ func (r *reducer) encodeAndWrite(writer *badger.StreamWriter, entryCh chan []*pb
 	}
 }
 
-func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer, mePool chan *pb.MapEntry) {
+func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
-	recycleCh := make(chan []*pb.MapEntry, 100)
 
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
-
-	go func() {
-		for entries := range recycleCh {
-			for _, entry := range entries {
-				mePool <- entry
-			}
-		}
-	}()
 
 	var ph postingHeap
 	for _, itr := range mapItrs {
@@ -275,7 +254,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer, mePool chan *
 	}
 
 	writer := ci.writer
-	go r.encodeAndWrite(writer, entryCh, recycleCh, closer)
+	go r.encodeAndWrite(writer, entryCh, closer)
 
 	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
@@ -302,8 +281,9 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer, mePool chan *
 			plistLen = 0
 		}
 
-		//Don't wait keyChanged became true. In some case, key won't change for a long time.
-		// That causes a very large batch size. And the memory usage will grow rapaidly.
+		//Don't wait keyChanged became true. Sometimes, key doesn't change for a long time.
+		//That causes a very large batch size, therefore the memory usage will grow rapaidly.
+		//And the process will delay for a long time, therefore slow down average speed.
 		if len(batch) >= batchSize {
 			entryCh <- batch
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
