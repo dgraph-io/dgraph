@@ -1,0 +1,177 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	title: String!
+	text: String
+	postType: PostType!
+}
+
+enum PostType {
+	Statement
+	Question
+	Answer
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum PostOrderable {
+	title
+	text
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input PatchPost {
+	title: String
+	text: String
+	postType: PostType
+}
+
+input PostFilter {
+	ids: [ID!]
+	not: PostFilter
+}
+
+input PostInput {
+	title: String!
+	text: String
+	postType: PostType!
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostRef {
+	id: ID
+	title: String
+	text: String
+	postType: PostType
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PatchPost
+	remove: PatchPost
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+}

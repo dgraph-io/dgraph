@@ -1,0 +1,231 @@
+ADD_UPDATE_MUTATION:
+  -
+    name: "single level"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "with alias"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          result : post {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        result(func: uid(0x4)) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "with field alias"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            id : postID
+            postTitle : title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          id : uid
+          postTitle : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "deep"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+            author {
+              name
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          postID : uid
+          title : Post.title
+          author : Post.author {
+            name : Author.name
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "deep with alias"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+            postAuthor: author {
+              authorID: id
+              authorName: name
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          postID : uid
+          title : Post.title
+          postAuthor : Post.author {
+            authorID : uid
+            authorName : Author.name
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "can do deep filter"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID
+            title
+            author {
+              name
+              posts(filter: { title: { anyofterms: "GraphQL" } })
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          postID : uid
+          title : Post.title
+          author : Post.author {
+            name : Author.name
+            posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "can work with skip and filter"
+    variables:
+      skip: true
+      include: false
+    gqlquery: |
+      mutation ($skip: Boolean!, $include: Boolean!) {
+        ADD_UPDATE_MUTATION {
+          post {
+            postID @skip(if: $skip)
+            title
+            author @include(if: $include) {
+              name
+              posts(filter: { title: { anyofterms: "GraphQL" } })
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+UPDATE_MUTATION:
+  -
+    name: "filter update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(filter: { title: { anyofterms: "GraphQL" } }) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+  -
+    name: "order update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(order : {asc: title}) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4), orderasc: Post.title) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "order and pagination update result"
+    gqlquery: |
+      mutation {
+        UPDATE_MUTATION {
+          post(first: 0, offset: 10, order : {asc: title}) {
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }

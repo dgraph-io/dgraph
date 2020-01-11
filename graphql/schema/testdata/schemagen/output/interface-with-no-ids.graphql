@@ -1,0 +1,181 @@
+#######################
+# Input Schema
+#######################
+
+interface Message {
+	text: String
+}
+
+type Question implements Message {
+	text: String
+	askedBy: User
+}
+
+type User {
+	name: String
+	messages(order: MessageOrder, first: Int, offset: Int): [Message]
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddQuestionPayload {
+	question: Question
+}
+
+type AddUserPayload {
+	user: User
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum MessageOrderable {
+	text
+}
+
+enum QuestionOrderable {
+	text
+}
+
+enum UserOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input MessageOrder {
+	asc: MessageOrderable
+	desc: MessageOrderable
+	then: MessageOrder
+}
+
+input QuestionInput {
+	text: String
+	askedBy: UserRef
+}
+
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
+}
+
+input QuestionRef {
+	text: String
+	askedBy: UserRef
+}
+
+input UserInput {
+	name: String
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserRef {
+	name: String
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
+	queryQuestion(order: QuestionOrder, first: Int, offset: Int): [Question]
+	queryUser(order: UserOrder, first: Int, offset: Int): [User]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addQuestion(input: QuestionInput!): AddQuestionPayload
+	addUser(input: UserInput!): AddUserPayload
+}

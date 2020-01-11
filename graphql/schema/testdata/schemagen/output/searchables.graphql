@@ -1,0 +1,317 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	postID: ID!
+	title: String! @search(by: [term])
+	titleByEverything: String! @search(by: [term,fulltext,trigram,hash])
+	text: String @search(by: [fulltext])
+	tags: [String] @search(by: [trigram])
+	tagsHash: [String] @search(by: [hash])
+	tagsExact: [String] @search(by: [exact])
+	publishByYear: DateTime @search(by: [year])
+	publishByMonth: DateTime @search(by: [month])
+	publishByDay: DateTime @search(by: [day])
+	publishByHour: DateTime @search(by: [hour])
+	numLikes: Int @search
+	score: Float @search
+	isPublished: Boolean @search
+	postType: PostType @search
+	postTypeTrigram: PostType @search(by: [trigram])
+	postTypeRegexp: PostType @search(by: [regexp])
+	postTypeExact: PostType @search(by: [exact])
+	postTypeHash: PostType @search(by: [hash])
+	postTypeRegexpExact: PostType @search(by: [exact,regexp])
+	postTypeHashRegexp: PostType @search(by: [hash,regexp])
+	postTypeNone: PostType @search(by: [])
+}
+
+enum PostType {
+	Fact
+	Question
+	Opinion
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum PostOrderable {
+	title
+	titleByEverything
+	text
+	tags
+	tagsHash
+	tagsExact
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	numLikes
+	score
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input PatchPost {
+	title: String
+	titleByEverything: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
+}
+
+input PostFilter {
+	ids: [ID!]
+	title: StringTermFilter
+	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
+	text: StringFullTextFilter
+	tags: StringRegExpFilter
+	tagsHash: StringHashFilter
+	tagsExact: StringExactFilter
+	publishByYear: DateTimeFilter
+	publishByMonth: DateTimeFilter
+	publishByDay: DateTimeFilter
+	publishByHour: DateTimeFilter
+	numLikes: IntFilter
+	score: FloatFilter
+	isPublished: Boolean
+	postType: PostType_hash
+	postTypeTrigram: StringRegExpFilter
+	postTypeRegexp: StringRegExpFilter
+	postTypeExact: PostType_exact
+	postTypeHash: PostType_hash
+	postTypeRegexpExact: PostType_exact_StringRegExpFilter
+	postTypeHashRegexp: PostType_hash_StringRegExpFilter
+	postTypeNone: PostType_hash
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
+input PostInput {
+	title: String!
+	titleByEverything: String!
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostRef {
+	postID: ID
+	title: String
+	titleByEverything: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
+	postType: PostType
+	postTypeTrigram: PostType
+	postTypeRegexp: PostType
+	postTypeExact: PostType
+	postTypeHash: PostType
+	postTypeRegexpExact: PostType
+	postTypeHashRegexp: PostType
+	postTypeNone: PostType
+}
+
+input PostType_exact {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+}
+
+input PostType_exact_StringRegExpFilter {
+	eq: PostType
+	le: PostType
+	lt: PostType
+	ge: PostType
+	gt: PostType
+	regexp: String
+}
+
+input PostType_hash {
+	eq: PostType
+}
+
+input PostType_hash_StringRegExpFilter {
+	eq: PostType
+	regexp: String
+}
+
+input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
+	alloftext: String
+	anyoftext: String
+	eq: String
+	allofterms: String
+	anyofterms: String
+	regexp: String
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PatchPost
+	remove: PatchPost
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+}
