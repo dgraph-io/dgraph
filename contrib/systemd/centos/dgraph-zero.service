@@ -5,6 +5,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/var/run/dgraph
 ExecStart=/usr/local/bin/dgraph zero --wal /var/run/dgraph/zw
 StandardOutput=journal
 StandardError=journal
