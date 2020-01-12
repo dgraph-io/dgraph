@@ -89,12 +89,12 @@ type DirectedEdge struct {
   Entity      uint64
   Attr        string
   Value       []byte
-  ValueType   uint32
+  ValueType   Posting_ValType
   ValueId     uint64
   Label       string
   Lang 	      string
   Op          DirectedEdge_Op // Set or Delete
-  Facets      []*facetsp.Facet
+  Facets      []*api.Facet
 }
 ```
 
@@ -138,29 +138,28 @@ message Posting {
     INT = 2; // We treat it as int64.
     FLOAT = 3;
     BOOL = 4;
-    DATE = 5;
-    DATETIME = 6;
-    GEO = 7;
-    UID = 8;
-    PASSWORD = 9;
-    STRING = 10;
-
+    DATETIME = 5;
+    GEO = 6;
+    UID = 7;
+    PASSWORD = 8;
+    STRING = 9;
+    OBJECT = 10;
   }
   ValType val_type = 3;
   enum PostingType {
     REF=0;          // UID
     VALUE=1;        // simple, plain value
     VALUE_LANG=2;   // value with specified language
-        // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
   }
   PostingType posting_type = 4;
-  bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
+  bytes lang_tag = 5; // Only set for VALUE_LANG
   string label = 6;
-  uint64 commit = 7;  // More inclination towards smaller values.
-  repeated facetsp.Facet facets = 8;
+  repeated api.Facet facets = 9;
 
   // TODO: op is only used temporarily. See if we can remove it from here.
   uint32 op = 12;
+  uint64 start_ts = 13;   // Meant to use only inmemory
+  uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
 message PostingList {
@@ -216,7 +215,7 @@ sorting order, i.e. it would be split in a way where the lexicographically earli
 in one group, and the later in the second.
 
 ### Replication and Server Failure
-Each group should typically be served by atleast 3 servers, if available. In the case of a machine
+Each group should typically be served by at least 3 servers, if available. In the case of a machine
 failure, other servers serving the same group can still handle the load in that case.
 
 ### New Server and Discovery
@@ -357,7 +356,7 @@ This is how it would run in Dgraph:
 * Do multiple seeks for each of the friend uids, to generate a list of friends of friends uids. `result set 1`
 * Node Y contains posting list for predicate `posts_liked`.
 * Ship result set 1 to Node Y **(1 RPC)**, and do seeks to generate a list of all posts liked by
-result set 1. `reult set 2`
+result set 1. `result set 2`
 * Node Z contains posting list for predicate `author`.
 * Ship result set 2 to Node Z **(1 RPC)**. Seek to author X, and generate a list of posts authored
 by X. `result set 3`
@@ -480,6 +479,9 @@ and then add servers to the cluster one-by-one.{{% /notice %}}
 ### Log Compaction
 One of the ways to do this is snapshotting. As soon as the state machine is synced to disk, the
 logs can be discarded.
+
+Snapshots are taken by default after 10000 Raft entries. This number can be adjusted using the
+`dgraph alpha --snapshot_after` flag.
 
 ### Clients
 Clients must locate the cluster to interact with it. Various approaches can be used for discovery.
