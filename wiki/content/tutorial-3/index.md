@@ -377,7 +377,7 @@ Similarly, let's extend our previous query to fetch the tags of these blog posts
       title
       content
       dislikes
-      tags {
+      tagged {
         tag_name
       }
     }
