@@ -19,7 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
-	"math"
+	"log"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -59,8 +59,9 @@ var (
 )
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
-	l, err := GetNoStore(key)
+func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte, readTs uint64) error {
+	// TODO: Remove the maxuint64
+	l, err := GetNoStore(key, readTs)
 	if err != nil {
 		return err
 	}
@@ -68,6 +69,13 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	kvs, err := l.Rollup()
 	if err != nil {
 		return err
+	}
+	for _, kv := range kvs {
+		pk, err := x.Parse(kv.Key)
+		if err != nil {
+			log.Fatal(err)
+		}
+		glog.Infof("Rolling up: %+v @%d", pk, kv.Version)
 	}
 
 	return writer.Write(&bpb.KVList{Kv: kvs})
@@ -98,13 +106,14 @@ func (ir *incrRollupi) Process() {
 
 	for batch := range ir.keysCh {
 		currTs := time.Now().Unix()
+		readTs := Oracle().MaxAssigned()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
 			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				if err := ir.rollUpKey(writer, key); err != nil {
+				if err := ir.rollUpKey(writer, key, readTs); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 					continue
 				}
@@ -297,8 +306,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 // TODO: We should only create a posting list with a specific readTs.
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
 	// When we do rollups, an older version would go to the top of the LSM tree, which can cause

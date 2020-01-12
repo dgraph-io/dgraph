@@ -146,8 +146,8 @@ func Cleanup() {
 
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
 // It does not store the list in any cache.
-func GetNoStore(key []byte) (rlist *List, err error) {
-	return getNew(key, pstore)
+func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
+	return getNew(key, pstore, readTs)
 }
 
 // LocalCache stores a cache of posting lists and deltas.
@@ -204,8 +204,9 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
+	readTs := Oracle().MaxAssigned()
 	if lc == nil {
-		return getNew(key, pstore)
+		return getNew(key, pstore, readTs)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
@@ -215,7 +216,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	var pl *List
 	if readFromDisk {
 		var err error
-		pl, err = getNew(key, pstore)
+		pl, err = getNew(key, pstore, readTs)
 		if err != nil {
 			return nil, err
 		}

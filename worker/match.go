@@ -91,7 +91,7 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	opts := posting.ListOptions{ReadTs: arg.q.ReadTs}
 	uidsForNgram := func(ngram string) (*pb.List, error) {
 		key := x.IndexKey(attr, ngram)
-		pl, err := posting.GetNoStore(key)
+		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
 			return nil, err
 		}
