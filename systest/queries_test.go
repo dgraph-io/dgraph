@@ -597,7 +597,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		in, out, failure string
 	}{
 		{
-			in:  `{q(func:match(term, drive, 8)) {term}}`,
+			in:  `{q(func:match(term, drive, 0)) {term}}`,
 			out: `{"q":[{"term":"drive"}]}`,
 		},
 		{
@@ -658,12 +658,19 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		{
 			in: `{q(func:match(term, "carigeway", 8)) {term}}`,
 			out: `{"q":[
-        {"term": "dual carriageway"}
+        {"term": "highway"},
+        {"term": "motorway"},
+        {"term": "dual carriageway"},
+        {"term": "pathway"},
+        {"term": "parkway"}
       ]}`,
 		},
 		{
-			in:  `{q(func:match(term, "carigeway", 4)) {term}}`,
-			out: `{"q":[]}`,
+			in: `{q(func:match(term, "carigeway", 4)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "parkway"}
+      ]}`,
 		},
 		{
 			in: `{q(func:match(term, "dualway", 8)) {term}}`,
