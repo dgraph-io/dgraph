@@ -42,6 +42,7 @@ func populateClusterWithFacets() {
 		<33> <name> "Michale" .
 		<34> <name> "Roger" .
 		<320> <name> "Test facet"@en (type = "Test facet with lang") .
+		<14000> <name> "Andrew" (kind = "official") .
 
 		<31> <friend> <24> .
 
@@ -51,6 +52,12 @@ func populateClusterWithFacets() {
 		<23> <gender> "male" .
 
 		<202> <model> "Prius" (type = "Electric") .
+
+		<14000> <language> "english" (proficiency = "advanced") .
+		<14000> <language> "hindi" (proficiency = "intermediate") .
+		<14000> <language> "french" (proficiency = "novice") .
+
+		<14000> <dgraph.type> "Speaker" .
 	`
 
 	friendFacets1 := "(since = 2006-01-02T15:04:05)"
@@ -1708,4 +1715,40 @@ func TestFacetValueListPredicateSingleFacet(t *testing.T) {
 			}
 		}
 	`, js)
+}
+
+func TestFacetsWithExpand(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(14000)) {
+			dgraph.type
+			expand(_all_)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"dgraph.type": [
+						"Speaker"
+					],
+					"name|kind": "official",
+					"name": "Andrew",
+					"language|proficiency": {
+						"0": "novice",
+						"1": "intermediate",
+						"2": "advanced"
+					},
+					"language": [
+						"french",
+						"hindi",
+						"english"
+					]
+				}
+			]
+		}
+	}`, js)
 }
