@@ -26,7 +26,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -938,6 +937,21 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	return vals, err
 }
 
+// allUntaggedFacets returns facets for all untagged values. Since works well only for
+// fetching facets for list predicates as lang tag in not allowed for list predicates.
+func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+	l.AssertRLock()
+	var facets []*pb.Facets
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if len(p.LangTag) == 0 {
+			facets = append(facets, &pb.Facets{Facets: p.Facets})
+		}
+		return nil
+	})
+
+	return facets, err
+}
+
 // AllValues returns all the values in the posting list.
 func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
@@ -1117,15 +1131,30 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs []*api.Facet,
-	ferr error) {
+func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
+	listType bool) ([]*pb.Facets, error) {
+
 	l.RLock()
 	defer l.RUnlock()
+
+	var fcs []*pb.Facets
+	if listType {
+		fs, err := l.allUntaggedFacets(readTs)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, fcts := range fs {
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fcts.Facets, param)})
+		}
+		return fcs, nil
+	}
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})
+	return fcs, nil
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
