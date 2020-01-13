@@ -324,7 +324,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		Query: `mutation updateAuthor($id: ID!, $set: PatchAuthor!, $remove: PatchAuthor!) {
 			updateAuthor(
 				input: {
-					filter: {ids: [$id]},
+					filter: {id: [$id]},
 					set: $set,
 					remove: $remove
 				}
@@ -518,7 +518,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 			updateCountry(
 				input: {
-					filter: {ids: [$id]},
+					filter: {id: [$id]},
 					set: $set,
 					remove: $remove
 				}
@@ -700,7 +700,7 @@ func updateMutationByIds(t *testing.T) {
 
 	t.Run("update Country", func(t *testing.T) {
 		filter := map[string]interface{}{
-			"ids": []string{newCountry.ID, anotherCountry.ID},
+			"id": []string{newCountry.ID, anotherCountry.ID},
 		}
 		newName := "updated name"
 		updateCountry(t, filter, newName, true)
@@ -771,7 +771,7 @@ func updateDelete(t *testing.T) {
 	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
 
 	filter := map[string]interface{}{
-		"ids": []string{newPost.PostID},
+		"postID": []string{newPost.PostID},
 	}
 	delPatch := map[string]interface{}{
 		"text":        "This post is just a test.",
@@ -874,11 +874,11 @@ func filterInUpdate(t *testing.T) {
 					"eq": "Testland",
 				},
 				"and": map[string]interface{}{
-					"ids": []string{countries[0].ID, countries[1].ID},
+					"id": []string{countries[0].ID, countries[1].ID},
 				},
 			},
 			FilterCountries: map[string]interface{}{
-				"ids": []string{countries[1].ID},
+				"id": []string{countries[1].ID},
 			},
 			Expected:  1,
 			Countries: []*country{&countries[0], &countries[1]},
@@ -886,10 +886,10 @@ func filterInUpdate(t *testing.T) {
 
 		"ID Filter": {
 			Filter: map[string]interface{}{
-				"ids": []string{countries[2].ID},
+				"id": []string{countries[2].ID},
 			},
 			FilterCountries: map[string]interface{}{
-				"ids": []string{countries[2].ID, countries[3].ID},
+				"id": []string{countries[2].ID, countries[3].ID},
 			},
 			Expected:  1,
 			Countries: []*country{&countries[2], &countries[3]},
@@ -945,7 +945,7 @@ func deleteMutationWithMultipleIds(t *testing.T) {
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		filter := map[string]interface{}{"ids": []string{country.ID, anotherCountry.ID}}
+		filter := map[string]interface{}{"id": []string{country.ID, anotherCountry.ID}}
 		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
@@ -960,7 +960,7 @@ func deleteMutationWithSingleID(t *testing.T) {
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
 		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
-		filter := map[string]interface{}{"ids": []string{newCountry.ID}}
+		filter := map[string]interface{}{"id": []string{newCountry.ID}}
 		deleteCountry(t, filter, deleteCountryExpected, nil)
 	})
 
@@ -977,7 +977,7 @@ func deleteMutationByName(t *testing.T) {
 	anotherCountry := addCountry(t, postExecutor)
 	anotherCountry.Name = "New country"
 	filter := map[string]interface{}{
-		"ids": []string{anotherCountry.ID},
+		"id": []string{anotherCountry.ID},
 	}
 	updateCountry(t, filter, anotherCountry.Name, true)
 
@@ -1032,7 +1032,7 @@ func deleteAuthor(
 		}`,
 		Variables: map[string]interface{}{
 			"filter": map[string]interface{}{
-				"ids": []string{authorID},
+				"id": []string{authorID},
 			},
 		},
 	}
@@ -1057,7 +1057,7 @@ func deletePost(
 			deletePost(filter: $filter) { msg }
 		}`,
 		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"ids": []string{postID},
+			"postID": []string{postID},
 		}},
 	}
 
@@ -1086,7 +1086,7 @@ func deleteWrongID(t *testing.T) {
 		&x.GqlError{Message: `input: couldn't complete deleteCountry because ` +
 			fmt.Sprintf(`input: Node with id %s is not of type Country`, newAuthor.ID)}}
 
-	filter := map[string]interface{}{"ids": []string{newAuthor.ID}}
+	filter := map[string]interface{}{"id": []string{newAuthor.ID}}
 	deleteCountry(t, filter, expectedData, expectedErrors)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
@@ -1114,7 +1114,7 @@ func manyMutations(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{
 			"name1": "Testland1", "filter": map[string]interface{}{
-				"ids": []string{newCountry.ID}}, "name2": "Testland2"},
+				"id": []string{newCountry.ID}}, "name2": "Testland2"},
 	}
 	multiMutationExpected := `{
 		"add1": { "country": { "id": "_UID_", "name": "Testland1" } },
@@ -1337,7 +1337,7 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 		}
 
 		for _, country := range countries {
-			filter := map[string]interface{}{"ids": []string{country.ID}}
+			filter := map[string]interface{}{"id": []string{country.ID}}
 			deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
 		}
 	})
@@ -1477,7 +1477,7 @@ func updateCharacter(t *testing.T, id string) {
 		}`,
 		Variables: map[string]interface{}{"character": map[string]interface{}{
 			"filter": map[string]interface{}{
-				"ids": []string{id},
+				"id": []string{id},
 			},
 			"set": map[string]interface{}{
 				"name": "Han Solo",
@@ -1672,13 +1672,13 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	}`,
 		Variables: map[string]interface{}{
 			"starshipFilter": map[string]interface{}{
-				"ids": []string{starshipID},
+				"id": []string{starshipID},
 			},
 			"humanFilter": map[string]interface{}{
-				"ids": []string{humanID},
+				"id": []string{humanID},
 			},
 			"droidFilter": map[string]interface{}{
-				"ids": []string{droidID},
+				"id": []string{droidID},
 			},
 		},
 	}
