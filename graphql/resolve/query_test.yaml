@@ -1,0 +1,1096 @@
+-
+  name: "ID query"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "UID alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        id
+        uid: name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        id : uid
+        uid : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "UID alias without id"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        uid: name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        uid : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "ID query with query alias"
+  gqlquery: |
+    query {
+      author : getAuthor(id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      author(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "ID query with field alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        authName : name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        authName : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "ID field gets transformed to uid"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        id
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        id : uid
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "ID query with depth"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        posts {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        posts : Author.posts {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "ID query with depth and alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        allPosts : posts {
+          postTitle : title
+          postText : text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        allPosts : Author.posts {
+          postTitle : Post.title
+          postText : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "ID query deep"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        allPosts : posts {
+          title
+          text
+          author {
+            authorID : id
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        allPosts : Author.posts {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            authorID : uid
+            name : Author.name
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Query with no args is query for everything of that type"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter gets rewritten as @filter"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filters in same input object implies AND"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, dob: { le: "2001-01-01" }, reputation: { gt: 2.5 } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((le(Author.dob, "2001-01-01") AND eq(Author.name, "A. N. Author") AND gt(Author.reputation, 2.5))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with nested 'and'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { reputation: { gt: 2.5 } } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(((gt(Author.reputation, 2.5) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with 'or'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { dob: { le: "2001-01-01" } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR le(Author.dob, "2001-01-01"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "Filter with implied and as well as 'or'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, reputation: { gt: 2.5 }, or: { dob: { le: "2001-01-01" } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, 2.5)) OR le(Author.dob, "2001-01-01"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with implied and nested in 'or'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { reputation: { gt: 2.5 }, dob: { le: "2001-01-01" } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (le(Author.dob, "2001-01-01") AND gt(Author.reputation, 2.5)))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter nested 'or'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { reputation: { gt: 2.5 }, or: { dob: { le: "2001-01-01" } } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (gt(Author.reputation, 2.5) OR le(Author.dob, "2001-01-01")))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with 'not"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { not: { reputation: { gt: 2.5 } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(NOT (gt(Author.reputation, 2.5))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with first"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, first: 10) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), first: 10) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with first and offset"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, first: 10, offset: 10) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with order asc"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { asc: reputation }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderasc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with order desc"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderdesc: Author.reputation) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "Filter with nested order"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation, then: { asc: dob } }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderdesc: Author.reputation, orderasc: Author.dob) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with order, first and offset"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation }, first: 10, offset: 10) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderdesc: Author.reputation, first: 10, offset: 10) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep filter"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "Deep filter with first"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (first: 10) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep filter with order, first and offset"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }, order: { asc: numLikes }, first: 10, offset: 10) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, first: 10, offset: 10) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "All Float filters work"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { reputation: { gt: 1.1 }, or: { reputation: { ge: 1.1 }, or: { reputation: { lt: 1.1 }, or: { reputation: { le: 1.1 }, or: { reputation: { eq: 1.1 } } } } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, 1.1) OR (ge(Author.reputation, 1.1) OR (lt(Author.reputation, 1.1) OR (le(Author.reputation, 1.1) OR eq(Author.reputation, 1.1)))))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All DateTime filters work"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { dob: { gt: "2000-01-01" }, or: { dob: { ge: "2000-01-01" }, or: { dob: { lt: "2000-01-01" }, or: { dob: { le: "2000-01-01" }, or: { dob: { eq: "2000-01-01" } } } } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((gt(Author.dob, "2000-01-01") OR (ge(Author.dob, "2000-01-01") OR (lt(Author.dob, "2000-01-01") OR (le(Author.dob, "2000-01-01") OR eq(Author.dob, "2000-01-01")))))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All Int filters work"
+  gqlquery: |
+    query {
+      queryPost(filter: { numLikes: { gt: 10 }, or: { numLikes: { ge: 10 }, or: { numLikes: { lt: 10 }, or: { numLikes: { le: 10 }, or: { numLikes: { eq: 10 } } } } } } ) {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter((gt(Post.numLikes, 10) OR (ge(Post.numLikes, 10) OR (lt(Post.numLikes, 10) OR (le(Post.numLikes, 10) OR eq(Post.numLikes, 10)))))) {
+        title : Post.title
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String hash filters work"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String exact filters work"
+  gqlquery: |
+    query {
+      queryCountry(filter: { name: { gt: "AAA" }, or: { name: { ge: "AAA" }, or: { name: { lt: "AAA" }, or: { name: { le: "AAA" }, or: { name: { eq: "AAA" } } } } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR (ge(Country.name, "AAA") OR (lt(Country.name, "AAA") OR (le(Country.name, "AAA") OR eq(Country.name, "AAA")))))) {
+        name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String term filters work"
+  gqlquery: |
+    query {
+      queryPost(filter: { title: { anyofterms: "GraphQL"}, or: { title: { allofterms: "GraphQL" } } } ) {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter((anyofterms(Post.title, "GraphQL") OR allofterms(Post.title, "GraphQL"))) {
+        title : Post.title
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "All String fulltext filters work"
+  gqlquery: |
+    query {
+      queryPost(filter: { text: { anyoftext: "GraphQL"}, or: { text: { alloftext: "GraphQL" } } } ) {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter((anyoftext(Post.text, "GraphQL") OR alloftext(Post.text, "GraphQL"))) {
+        title : Post.title
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String regexp filters work"
+  gqlquery: |
+    query {
+      queryCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
+        name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Skip directive"
+  variables:
+    skipTrue: true
+    skipFalse: false
+  gqlquery: |
+    query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
+      getAuthor(id: "0x1") {
+        name @skip(if: $skipFalse)
+        posts @skip(if: $skipTrue) {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Include directive"
+  variables:
+    includeTrue: true
+    includeFalse: false
+  gqlquery: |
+    query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
+      queryAuthor {
+        name @include(if: $includeTrue)
+        posts(filter: { title: { anyofterms: "GraphQL" } }) @include(if: $includeFalse) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Include only fields for which skip is !false or include is true"
+  variables:
+    includeFalse: false
+    includeTrue: true
+    skipFalse: false
+    skipTrue: true
+  gqlquery: |
+    query ($includeFalse: Boolean!, $skipTrue: Boolean!, $includeTrue: Boolean!,
+      $skipFalse: Boolean!) {
+      queryAuthor {
+        dob @include(if: $includeFalse) @skip(if: $skipFalse)
+        reputation @include(if: $includeFalse) @skip(if: $skipTrue)
+        name @include(if: $includeTrue) @skip(if: $skipFalse)
+        posts(filter: { title: { anyofterms: "GraphQL" } }, first: 10) @include(if: $includeTrue)
+          @skip(if: $skipTrue) {
+          title
+          tags
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "getHuman which implements an interface"
+  gqlquery: |
+    query {
+      getHuman(id: "0x1") {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      getHuman(func: uid(0x1)) @filter(type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "queryHuman which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human)) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "filter with order for type which implements an interface"
+  gqlquery: |
+    query {
+      queryHuman (filter: { name: { anyofterms: "GraphQL" } }, order: { asc: ename }) {
+        id
+        name
+        ename
+        dob
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human), orderasc: Employee.ename) @filter(anyofterms(Character.name, "GraphQL")) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "queryCharacter with fragment for human"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Human {
+          female
+          ename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        dgraph.type
+        id : uid
+        name : Character.name
+        female : Human.female
+        ename : Employee.ename
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "queryCharacter with fragment on multiple types"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Human {
+          female
+          ename
+        }
+        ... on Director {
+          movies
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        dgraph.type
+        id : uid
+        name : Character.name
+        female : Human.female
+        ename : Employee.ename
+        movies : Director.movies
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with ids uses uid func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with ids inside and argument doesn't use uid func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((uid(0x1, 0x2) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with ids and not translates correctly.."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { not: { ids: ["0x1", "0x2"] }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(NOT (uid(0x1, 0x2))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep filter with ids"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { ids: ["0x1", "0x2"], and: { title: { anyofterms: "GraphQL" } }}) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((anyofterms(Post.title, "GraphQL") AND uid(0x1, 0x2))) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep filter with ids in not key"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" }, not: { ids: ["0x1", "0x2"] } }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((NOT (uid(0x1, 0x2)) AND anyofterms(Post.title, "GraphQL"))) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Pagination and Order at root node with UID."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}, first: 0, offset: 1 ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name, first: 0, offset: 1) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Order at root node with UID."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1, 0x2), orderasc: Author.name) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Order at root node without UID."
+  gqlquery: |
+    query {
+      queryAuthor(order: {asc: name}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderasc: Author.name) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Order and Pagination at root node without UID."
+  gqlquery: |
+    query {
+      queryAuthor(order: {asc: name}, first: 2, offset: 3) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author), orderasc: Author.name, first: 2, offset: 3) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "Filter with no valid ids construct the right query with type func at root."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid()) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with ids only includes valid ids in dgquery."
+  gqlquery: |
+    query {
+      queryAuthor(filter: { ids: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1)) @filter((eq(Author.name, "A. N. Author") AND type(Author))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Get editor without supplying anything"
+  gqlquery: |
+    query {
+      getEditor {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getEditor(func: uid(0x0)) @filter(type(Editor)) {
+        name : Editor.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Get editor using code"
+  gqlquery: |
+    query {
+      getEditor(code: "tolstoy") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getEditor(func: eq(Editor.code, "tolstoy")) @filter(type(Editor)) {
+        name : Editor.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Get editor using both code and id"
+  gqlquery: |
+    query {
+      getEditor(code: "tolstoy", id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getEditor(func: uid(0x1)) @filter((eq(Editor.code, "tolstoy") AND type(Editor))) {
+        name : Editor.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Query editor using code"
+  gqlquery: |
+    query {
+      queryEditor(filter: { code: { eq: "editor" }, and: { name: { eq: "A. N. Editor" }}}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryEditor(func: type(Editor)) @filter((eq(Editor.name, "A. N. Editor") AND eq(Editor.code, "editor"))) {
+        name : Editor.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Query editor using code and uid"
+  gqlquery: |
+    query {
+      queryEditor(filter: { ids: ["0x1"], and: { code: { eq: "editor"}}}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryEditor(func: uid(0x1)) @filter((eq(Editor.code, "editor") AND type(Editor))) {
+        name : Editor.name
+        dgraph.uid : uid
+      }
+    }
+

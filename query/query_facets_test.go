@@ -27,10 +27,10 @@ var (
 	facetSetupDone = false
 )
 
-func populateClusterWithFacets() {
+func populateClusterWithFacets() error {
 	// Return immediately if the setup has been performed already.
 	if facetSetupDone {
-		return
+		return nil
 	}
 
 	triples := `
@@ -89,10 +89,11 @@ func populateClusterWithFacets() {
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
 
-	addTriplesToCluster(triples)
+	err := addTriplesToCluster(triples)
 
 	// Mark the setup as done so that the next tests do not have to perform it.
 	facetSetupDone = true
+	return err
 }
 
 func TestFacetsVarAllofterms(t *testing.T) {
@@ -673,7 +674,8 @@ func TestFacetsMutation(t *testing.T) {
 	deleteTriplesInCluster("<1> <friend> <24> .")
 	friendFacets := "(since = 2001-11-10T00:00:00Z, close = false, family = false)"
 	// 101 is not close friend now.
-	addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets))
+	require.NoError(t,
+		addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets)))
 	// This test messes with the test setup, so set facetSetupDone to false so
 	// the next test redoes the setup.
 	facetSetupDone = false

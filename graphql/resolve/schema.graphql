@@ -1,0 +1,71 @@
+# Test schema that contains an example of everything that's useful to
+# test for query rewriting.
+
+type Country {
+        id: ID!
+        name: String! @search(by: [trigram])
+        states: [State] @hasInverse(field: country)
+}
+
+type State {
+        code: String! @id
+        country: Country
+        name: String!
+}
+
+type Author {
+        id: ID!
+        name: String! @search(by: [hash])
+        dob: DateTime @search
+        reputation: Float @search
+        country: Country
+        posts: [Post!] @hasInverse(field: author)
+}
+
+type Editor {
+        id: ID!
+        code: String! @id
+        name: String! @search(by: [hash])
+}
+
+type Post {
+        postID: ID!
+        title: String! @search(by: [term])
+        text: String @search(by: [fulltext])
+        tags: [String] @search(by: [exact])
+        numLikes: Int @search
+        isPublished: Boolean @search
+        postType: PostType @search
+        author: Author!
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
+}
+
+enum PostType {
+        Fact
+        Question
+        Opinion
+}
+
+interface Character {
+        id: ID!
+        name: String! @search
+}
+
+interface Employee {
+        ename: String!
+}
+
+type Director implements Character {
+        movies: [String!]
+}
+
+type Human implements Character & Employee {
+        dob: DateTime
+        female: Boolean
+}

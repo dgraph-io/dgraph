@@ -142,14 +142,17 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	var noTimeout bool
 
 	checkTablet := func(pred string) error {
-		if tablet, err := groups().Tablet(pred); err != nil {
+		tablet, err := groups().Tablet(pred)
+		switch {
+		case err != nil:
 			return err
-		} else if tablet == nil || tablet.GroupId == 0 {
+		case tablet == nil || tablet.GroupId == 0:
 			return errNonExistentTablet
-		} else if tablet.GroupId != groups().groupId() {
+		case tablet.GroupId != groups().groupId():
 			return errUnservedTablet
+		default:
+			return nil
 		}
-		return nil
 	}
 
 	// Do a type check here if schema is present

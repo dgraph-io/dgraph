@@ -1,0 +1,12 @@
+interface LibraryItem {
+    refID: String! @id
+}
+
+type Book implements LibraryItem {
+    title: String
+    author: String
+}
+
+type Library {
+    items: [LibraryItem]
+}
