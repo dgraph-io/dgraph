@@ -2327,41 +2327,64 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		return errors.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
-	orderby := sg.Params.FacetOrder[0]
+	orderby := sg.Params.FacetOrder
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
 		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
+		valMap := make(map[string]*api.Facet)
 		for j := 0; j < len(ul.Uids); j++ {
-			var facet *api.Facet
+			// var facet *api.Facet
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
+
 			for _, it := range f.Facets {
-				if it.Key == orderby {
-					facet = it
+				// if it.Key == orderby {
+				// 	facet = it
+				// 	break
+				// }
+				if _, ok := valMap[it.Key]; !ok {
+					valMap[it.Key] = it
+				}
+				if len(valMap) == len(orderby) {
 					break
 				}
 			}
-			if facet != nil {
-				fVal, err := facets.ValFor(facet)
-				if err != nil {
-					return err
-				}
 
-				values = append(values, []types.Val{fVal})
-			} else {
-				values = append(values, []types.Val{{Value: nil}})
+			for _, key := range orderby {
+				if fVal, ok := valMap[key]; ok && fVal != nil /*TODO: confirm this*/ {
+					fmt.Println("################## ", fVal)
+					fVal, err := facets.ValFor(fVal)
+					if err != nil {
+						return err
+					}
+					values = append(values, []types.Val{fVal})
+				} else {
+					values = append(values, []types.Val{{Value: nil}})
+				}
 			}
+			// if facet != nil {
+			// 	fVal, err := facets.ValFor(facet)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+
+			// 	values = append(values, []types.Val{fVal})
+			// } else {
+			// 	values = append(values, []types.Val{{Value: nil}})
+			// }
+			// TODO: optimize this.
+			// valMap = nil
 		}
 		if len(values) == 0 {
 			continue
 		}
 		if err := types.SortWithFacet(values, &uids, facetList,
-			[]bool{sg.Params.FacetOrderDesc[0]}, ""); err != nil {
+			sg.Params.FacetOrderDesc, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
