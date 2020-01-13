@@ -1140,7 +1140,6 @@ func TestFacetsCascadeScalarPredicate(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `
 	{
 		"data": {
@@ -1164,7 +1163,7 @@ func TestFacetsCascadeScalarPredicate(t *testing.T) {
 func TestFacetsCascadeUIDPredicate(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{
-		q(func: uid(1, 23)) @cascade {
+		q(func: uid(1, 23, 24)) @cascade {
 			name @facets
 			friend {
 				name @facets
@@ -1173,7 +1172,6 @@ func TestFacetsCascadeUIDPredicate(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `
 	{
 		"data": {
@@ -1222,7 +1220,7 @@ func TestFacetsCascadeUIDPredicate(t *testing.T) {
 func TestFacetsNestedCascade(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{
-		q(func: uid(1, 23)) @cascade {
+		q(func: uid(1, 23)) {
 			name @facets
 			friend @cascade {
 				name @facets
@@ -1231,7 +1229,6 @@ func TestFacetsNestedCascade(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `
 	{
 		"data": {
@@ -1286,7 +1283,6 @@ func TestFacetsCascadeWithFilter(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	// fmt.Println(js)
 	require.JSONEq(t, `
 	{
 		"data": {
