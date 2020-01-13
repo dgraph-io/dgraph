@@ -122,7 +122,7 @@
     }
   explanation: "A reference must be a valid UID"
   error:
-    { "message": 
+    { "message":
       "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
 
 -
@@ -131,7 +131,7 @@
     mutation addPost($post: PostInput!) {
       addPost(input: $post) {
         post {
-          postId
+          postID
         }
       }
     }
@@ -279,11 +279,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "New post",
             "text": "A really new post"
           }
@@ -320,11 +320,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "New post",
             "text": "A really new post"
           },
@@ -379,7 +379,7 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
@@ -388,7 +388,7 @@
             "title": "Old post",
             "text": "A really old post"
           },
-          { 
+          {
             "postID": "0x456"
           }
         ]
@@ -437,11 +437,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "postID": null,
             "title": "New post",
             "text": "A really new post"
@@ -479,11 +479,11 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "Exciting post",
             "text": "A really good post",
             "category": {
@@ -512,8 +512,8 @@
                 "uid": "_:Category3",
                 "dgraph.type": [ "Category" ],
                 "Category.name": "New Category",
-                "Category.posts": [ 
-                  { "uid": "_:Post2" } 
+                "Category.posts": [
+                  { "uid": "_:Post2" }
                 ]
               }
             }
@@ -549,7 +549,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -565,7 +565,7 @@
         }
       cond: "@if(eq(len(State2), 0))"
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -607,7 +607,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",

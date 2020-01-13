@@ -2,7 +2,9 @@
   name: "Only id filter"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
@@ -23,7 +25,9 @@
   name: "Multiple filters including id"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
@@ -47,7 +51,9 @@
   name: "Multiple non-id filters"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":

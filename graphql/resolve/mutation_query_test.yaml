@@ -125,7 +125,9 @@ ADD_UPDATE_MUTATION:
             title
             author {
               name
-              posts(filter: { title: { anyofterms: "GraphQL" } })
+              posts(filter: { title: { anyofterms: "GraphQL" } }) {
+                title
+              }
             }
           }
         }
@@ -137,7 +139,10 @@ ADD_UPDATE_MUTATION:
           title : Post.title
           author : Post.author {
             name : Author.name
-            posts : Author.posts @filter(anyofterms(Post.title, "GraphQL"))
+            posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
+              title : Post.title
+              dgraph.uid : uid
+            }
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -157,7 +162,9 @@ ADD_UPDATE_MUTATION:
             title
             author @include(if: $include) {
               name
-              posts(filter: { title: { anyofterms: "GraphQL" } })
+              posts(filter: { title: { anyofterms: "GraphQL" } }) {
+                title
+              }
             }
           }
         }

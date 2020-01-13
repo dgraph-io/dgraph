@@ -62,8 +62,6 @@ type QueryCase struct {
 }
 
 var testGQLSchema = `
-scalar DateTime
-
 type Author {
 	id: ID!
 	name: String!
@@ -79,45 +77,7 @@ type Post {
 	title: String!
 	text: String
 	author: Author!
-}
-
-type Query {
-	getAuthor(id: ID!): Author
-}
-
-input AuthorRef {
-    id: ID!
-}
-
-input PostInput {
-	title: String!
-	text: String
-	author: AuthorRef!
-}
-
-input UpdatePostInput {
-	id: ID!
-	patch: PatchPost!
-}
-
-input PatchPost {
-	title: String
-	text: String
-}
-
-type AddPostPayload {
-    post: Post
-}
-
-type UpdatePostPayload {
-    post: Post
-}
-
-type Mutation {
-	addPost(input: PostInput!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-}
-`
+}`
 
 func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ex.failQuery--
@@ -151,7 +111,7 @@ func TestResolver(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -213,7 +173,7 @@ func TestResponseOrder(t *testing.T) {
 				`{"title": "Another Title", "text": "More Text"}]}}`},
 	}
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -285,7 +245,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		},
 	}
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -304,7 +264,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 
 func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		updatePost(input: { filter: { ids: ["0x1"] }, patch: { text: "Some more text" } }) {
+		updatePost(input: { filter: { id: ["0x1"] }, set: { text: "Some more text" } }) {
 			post {
 				title
 				text
@@ -336,28 +296,28 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				"text": "Some text",
 				"author": { "name": "A.N. Author" } } ] }`,
 			expected: `{ "updatePost": { "post" :
-				{ "title": "A Post",
+				[{ "title": "A Post",
 				"text": "Some text",
-				"author": { "name": "A.N. Author", "dob": null } } } }`,
+				"author": { "name": "A.N. Author", "dob": null } }] } }`,
 		},
 		"Update Mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
-				"the author is squashed to null, but that's also non-nullable, so the " +
+				"the author is squashed to null, but that's also non-nullable, so the error " +
 				"propagates to the query root.",
 			queryResponse: `{ "post" : [ {
 				"title": "A Post",
 				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
-			expected: `{ "updatePost": { "post" : null } }`,
+			expected: `{ "updatePost": { "post" : [null] } }`,
 			errors: x.GqlErrorList{&x.GqlError{
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"updatePost", "post", "author", "name"}}},
+				Path:      []interface{}{"updatePost", "post", 0, "author", "name"}}},
 		},
 	}
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -453,7 +413,7 @@ func TestManyMutationsWithError(t *testing.T) {
 		},
 	}
 
-	gqlSchema := test.LoadSchema(t, testGQLSchema)
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
