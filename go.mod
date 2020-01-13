@@ -5,6 +5,7 @@ go 1.12
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
+	github.com/99designs/gqlgen v0.10.1
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.4 // indirect
@@ -17,7 +18,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-0.20191220102048-ab4352b00a17
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
-	github.com/dgraph-io/ristretto v0.0.1 // indirect
+	github.com/dgraph-io/ristretto v0.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
@@ -30,6 +31,7 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
+	github.com/google/go-cmp v0.3.1
 	github.com/google/uuid v1.0.0
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
@@ -48,6 +50,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
 	github.com/twpayne/go-geom v1.0.5
+	github.com/vektah/gqlparser v1.1.2
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0

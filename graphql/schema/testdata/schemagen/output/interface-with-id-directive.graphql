@@ -1,0 +1,221 @@
+#######################
+# Input Schema
+#######################
+
+interface LibraryItem {
+	refID: String! @id
+}
+
+type Book implements LibraryItem {
+	refID: String! @id
+	title: String
+	author: String
+}
+
+type Library {
+	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddBookPayload {
+	book: Book
+}
+
+type AddLibraryPayload {
+	library: Library
+}
+
+type DeleteBookPayload {
+	msg: String
+}
+
+type DeleteLibraryItemPayload {
+	msg: String
+}
+
+type UpdateBookPayload {
+	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum BookOrderable {
+	refID
+	title
+	author
+}
+
+enum LibraryItemOrderable {
+	refID
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input BookFilter {
+	refID: StringHashFilter
+	and: BookFilter
+	or: BookFilter
+	not: BookFilter
+}
+
+input BookInput {
+	refID: String!
+	title: String
+	author: String
+}
+
+input BookOrder {
+	asc: BookOrderable
+	desc: BookOrderable
+	then: BookOrder
+}
+
+input BookRef {
+	refID: String
+	title: String
+	author: String
+}
+
+input LibraryInput {
+	items: [LibraryItemRef]
+}
+
+input LibraryItemFilter {
+	refID: StringHashFilter
+	and: LibraryItemFilter
+	or: LibraryItemFilter
+	not: LibraryItemFilter
+}
+
+input LibraryItemOrder {
+	asc: LibraryItemOrderable
+	desc: LibraryItemOrderable
+	then: LibraryItemOrder
+}
+
+input LibraryItemRef {
+	refID: String! @id
+}
+
+input LibraryRef {
+	items: [LibraryItemRef]
+}
+
+input PatchBook {
+	title: String
+	author: String
+}
+
+input UpdateBookInput {
+	filter: BookFilter!
+	set: PatchBook
+	remove: PatchBook
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getLibraryItem(refID: String!): LibraryItem
+	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	getBook(refID: String!): Book
+	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	queryLibrary(first: Int, offset: Int): [Library]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
+	addBook(input: BookInput!): AddBookPayload
+	updateBook(input: UpdateBookInput!): UpdateBookPayload
+	deleteBook(filter: BookFilter!): DeleteBookPayload
+	addLibrary(input: LibraryInput!): AddLibraryPayload
+}

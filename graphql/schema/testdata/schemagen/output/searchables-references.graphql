@@ -1,0 +1,251 @@
+#######################
+# Input Schema
+#######################
+
+type Author {
+	id: ID!
+	name: String! @search(by: [hash])
+	dob: DateTime
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+type Post {
+	postID: ID!
+	title: String! @search(by: [term,fulltext])
+	text: String @search(by: [fulltext,term])
+	datePublished: DateTime
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAuthorPayload {
+	author: Author
+}
+
+type AddPostPayload {
+	post: Post
+}
+
+type DeleteAuthorPayload {
+	msg: String
+}
+
+type DeletePostPayload {
+	msg: String
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum AuthorOrderable {
+	name
+	dob
+}
+
+enum PostOrderable {
+	title
+	text
+	datePublished
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AuthorFilter {
+	ids: [ID!]
+	name: StringHashFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
+}
+
+input AuthorInput {
+	name: String!
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
+}
+
+input AuthorRef {
+	id: ID
+	name: String
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input PatchAuthor {
+	name: String
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input PatchPost {
+	title: String
+	text: String
+	datePublished: DateTime
+}
+
+input PostFilter {
+	ids: [ID!]
+	title: StringFullTextFilter_StringTermFilter
+	text: StringFullTextFilter_StringTermFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
+input PostInput {
+	title: String!
+	text: String
+	datePublished: DateTime
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostRef {
+	postID: ID
+	title: String
+	text: String
+	datePublished: DateTime
+}
+
+input StringFullTextFilter_StringTermFilter {
+	alloftext: String
+	anyoftext: String
+	allofterms: String
+	anyofterms: String
+}
+
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: PatchAuthor
+	remove: PatchAuthor
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PatchPost
+	remove: PatchPost
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addAuthor(input: AuthorInput!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+}
