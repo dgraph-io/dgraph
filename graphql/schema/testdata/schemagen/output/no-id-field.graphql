@@ -140,7 +140,7 @@ enum PostOrderable {
 #######################
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	not: AuthorFilter
 }
 
