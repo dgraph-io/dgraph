@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -192,6 +193,28 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
 	if _, err := out.WriteRune(':'); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
+	fList []*api.Facet, facetIdx int) error {
+
+	for _, f := range fList {
+		fName := facetName(fieldName, f)
+		fVal, err := facets.ValFor(f)
+		if err != nil {
+			return err
+		}
+
+		if !isList {
+			fj.AddValue(fName, fVal)
+		} else {
+			facetNode := &fastJsonNode{attr: fName}
+			facetNode.AddValue(strconv.Itoa(facetIdx), fVal)
+			fj.AddMapChild(fName, facetNode, false)
+		}
+	}
+
 	return nil
 }
 
@@ -722,6 +745,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
+			// noneEmptyUID will store indexes of non empty UIDs.
+			// This will be used for indexing facet response
+			var nonEmptyUID []int
 			for childIdx, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
@@ -741,22 +767,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 					return rerr
 				}
 
-				if pc.Params.Facet != nil && len(fcsList) > childIdx {
-					fs := fcsList[childIdx]
-					for _, f := range fs.Facets {
-						fVal, err := facets.ValFor(f)
-						if err != nil {
-							return err
-						}
-
-						uc.AddValue(facetName(fieldName, f), fVal)
-					}
-				}
-
 				if !uc.IsEmpty() {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
+					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
+
 					if pc.Params.Normalize {
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
@@ -807,6 +823,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 				}
 			}
 
+			// Now fill facets for non empty UIDs.
+			facetIdx := 0
+			for _, uidIdx := range nonEmptyUID {
+				if pc.Params.Facet != nil && len(fcsList) > uidIdx {
+					fs := fcsList[uidIdx]
+					err := dst.attachFacets(fieldName, pc.List, fs.Facets, facetIdx)
+					if err != nil {
+						return err
+					}
+					facetIdx++
+				}
+			}
+
 			// add value for count(uid) nodes if any.
 			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
 		default:
@@ -821,14 +850,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			}
 
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
-				// in case of Value we have only one Facets
-				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fVal, err := facets.ValFor(f)
-					if err != nil {
+				// In case of Value we have only one Facets.
+				for i, fcts := range pc.facetsMatrix[idx].FacetsList {
+					if err := dst.attachFacets(fieldName, pc.List, fcts.Facets, i); err != nil {
 						return err
 					}
-
-					dst.AddValue(facetName(fieldName, f), fVal)
 				}
 			}
 
