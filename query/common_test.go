@@ -254,7 +254,6 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
-noindex_name                   : string .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
@@ -286,6 +285,7 @@ boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
 noconflict_pred                : string @noconflict .
+noindex_name                   : string .
 noindex_age                    : int .
 noindex_dob                    : datetime .
 noindex_alive                  : bool .

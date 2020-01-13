@@ -2617,23 +2617,20 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 			`
 			{
 				me(func: uid(0x01)) {
-					friend @filter(ge(survival_rate, 30)) {
-						uid
+					friend @filter(ge(survival_rate, 1.6)) {
 						name
-						age
 						survival_rate
 					}
 				}
 			}
 			`,
-			`{"data":{"me":[]}}`,
+			`{"data":{"me":[{"friend":[{"name":"Rick Grimes","survival_rate":1.600000},{"name":"Glenn Rhee","survival_rate":1.600000},{"name":"Daryl Dixon","survival_rate":1.600000},{"name":"Andrea","survival_rate":1.600000}]}]}}`,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			js := processQueryNoErr(t, tc.query)
-			// fmt.Println(js)
 			require.JSONEq(t, js, tc.result)
 		})
 	}

@@ -1512,10 +1512,15 @@ func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
 }
 
 type functionContext struct {
-	tokens         []string
-	geoQuery       *types.GeoQueryData
-	intersectDest  bool
-	ineqValue      types.Val
+	tokens        []string
+	geoQuery      *types.GeoQueryData
+	intersectDest bool
+	ineqValue     types.Val
+	// eqTokens is used by compareAttr functions. It stores values corresponding to each
+	// function argument. There could be multiple arguments to `eq` function but only one for
+	// other compareAttr functions.
+	// TODO(@Animesh): change field names which could explain their uses better. Check if we
+	// really need all of ineqValue, eqTokens, tokens
 	eqTokens       []types.Val
 	ineqValueToken string
 	n              int
@@ -1564,6 +1569,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
+	isIndexedAttr := schema.State().IsIndexed(attr)
 	var err error
 
 	t, err := schema.State().TypeOf(attr)
@@ -1607,7 +1613,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 					q.SrcFunc)
 			}
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
-			if !schema.State().IsIndexed(attr) {
+			if !isIndexedAttr {
 				// In case of non-indexed predicate we won't have any tokens.
 				continue
 			}
@@ -1629,7 +1635,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		// We don't do this for eq because eq could have multiple arguments and we would have to
 		// compare the value with all of them. Also eq would usually have less arguments, hence we
 		// won't be fetching many index keys.
-		if q.UidList != nil && fc.tokens == nil {
+		if q.UidList != nil && !isIndexedAttr {
 			fc.n = len(q.UidList.Uids)
 		} else if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
 			fc.tokens = fc.tokens[:0]

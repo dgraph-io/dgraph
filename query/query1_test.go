@@ -81,6 +81,19 @@ func TestSchemaBlock5(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"name","type":"string","index":true,"tokenizer":["term","exact","trigram"],"count":true,"lang":true}]}}`, js)
 }
 
+func TestNonIndexedPredicateAtRoot(t *testing.T) {
+	query := `
+	{
+		me(func: ge(noindex_name, "Michonne")) {
+			noindex_name
+		}
+	}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate noindex_name is not indexed")
+}
+
 func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 
 	// name is asked for two times..
