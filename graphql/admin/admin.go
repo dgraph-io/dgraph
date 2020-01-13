@@ -46,20 +46,11 @@ const (
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
 	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
-	// FIXME: dgraphAdminSchema will change to this once we have @dgraph(pred: "...")
-	// dgraphAdminSchema = `
-	// type dgraph.graphql {
-	// 	dgraph.graphql.schema
-	// 	dgraph.graphql.date
-	// }
-	// dgraph.graphql.schema string .
-	// dgraph.graphql.date @index(day) .
-	// `
 	dgraphAdminSchema = `
 	type dgraph.graphql {
 		dgraph.graphql.schema
-		dgraph.graphql.date
 	}`
+
 	// GraphQL schema for /admin endpoint.
 	//
 	// Eventually we should generate this from just the types definition.
@@ -67,9 +58,10 @@ const (
 	// hand crafted to be one of our schemas so we can pass it into the
 	// pipeline.
 	graphqlAdminSchema = `
- type Schema @dgraph(type: "dgraph.graphql") {
-	schema: String!  # the input schema, not the expanded schema
-	date: DateTime!
+	type GQLSchema @dgraph(type: "dgraph.graphql") {
+		id: ID!
+		schema: String!  @dgraph(type: "dgraph.graphql.schema") 
+		generatedSchema: String!
  }
 
  type Health {
@@ -87,63 +79,25 @@ const (
 
  directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
- type SchemaDiff {
-	types: [TypeDiff!]
+	type UpdateGQLSchemaPayload {
+		gqlSchema: GQLSchema
  }
 
- type TypeDiff {
-	name: String!
-	new: Boolean
-	newFields: [String!]
-	missingFields: [String!]
+	input UpdateGQLSchemaInput {
+		set: GQLSchemaPatch!
  }
 
- type AddSchemaPayload {
-	schema: Schema
-	diff: SchemaDiff
- }
-
- type UpdateSchemaPayload {
-	schema: Schema
- }
-
- input DateTimeFilter {
-	eq: DateTime
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
- }
-
- input SchemaFilter {
-	date: DateTimeFilter
-	and: SchemaFilter
-	or: SchemaFilter
-	not: SchemaFilter
- }
-
- input SchemaInput {
+	input GQLSchemaPatch {
 	schema: String!
-	dateAdded: DateTime
- }
-
- input SchemaOrder {
-	asc: SchemaOrderable
-	desc: SchemaOrderable
-	then: SchemaOrder
- }
-
- enum SchemaOrderable {
-	date
  }
 
  type Query {
-	querySchema(filter: SchemaFilter, order: SchemaOrder, first: Int, offset: Int): [Schema]
+		getGQLSchema: GQLSchema
 	health: Health
  }
 
  type Mutation {
-	addSchema(input: SchemaInput!) : AddSchemaPayload
+		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
  }
  `
 )
