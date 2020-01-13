@@ -11,7 +11,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123", "0x124"]
+          "postID": ["0x123", "0x124"]
         },
         "set": {
           "text": "updated text"
@@ -45,7 +45,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123", "0x124"]
+          "postID": ["0x123", "0x124"]
         },
         "remove": {
           "text": "delete this text"
@@ -79,7 +79,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123", "0x124"]
+          "postID": ["0x123", "0x124"]
         },
         "remove": {
           "text": null
@@ -116,7 +116,7 @@
     { "patch":
       {
         "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": { "name": "Bob",
           "dob": "2000-01-01",
@@ -146,7 +146,7 @@
   name: "Update mutation for an interface"
   gqlmutation: |-
     mutation {
-      updateCharacter(input: {filter: { ids: ["0x123"] }, set: {name:"Bob"}}) {
+      updateCharacter(input: {filter: { id: ["0x123"] }, set: {name:"Bob"}}) {
         character {
           id
           name
@@ -249,7 +249,7 @@
     { "patch":
       { "filter": {
           "code": { "eq": "editor" },
-          "ids": [ "0x1", "0x2" ]
+          "id": [ "0x1", "0x2" ]
         },
         "set": {
           "name": "A.N. Editor"
@@ -283,7 +283,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
           "posts": [ { "postID": "0x456" } ]
@@ -293,10 +293,10 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(x)",
-          "Author.posts": [ 
-            { 
-              "uid": "0x456", 
-              "Post.author": { "uid": "uid(x)" } 
+          "Author.posts": [
+            {
+              "uid": "0x456",
+              "Post.author": { "uid": "uid(x)" }
             }
           ]
         }
@@ -324,7 +324,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "remove": {
           "posts": [ { "postID": "0x456" } ]
@@ -334,10 +334,10 @@
   dgmutations:
     - deletejson: |
         { "uid" : "uid(x)",
-          "Author.posts": [ 
-            { 
-              "uid": "0x456", 
-              "Post.author": { "uid": "uid(x)" } 
+          "Author.posts": [
+            {
+              "uid": "0x456",
+              "Post.author": { "uid": "uid(x)" }
             }
           ]
         }
@@ -365,7 +365,7 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
           "posts": [ { "postID": "0x456" } ]
@@ -378,20 +378,20 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(x)",
-          "Author.posts": [ 
-            { 
-              "uid": "0x456", 
-              "Post.author": { "uid": "uid(x)" } 
+          "Author.posts": [
+            {
+              "uid": "0x456",
+              "Post.author": { "uid": "uid(x)" }
             }
           ]
         }
       cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
     - deletejson: |
         { "uid" : "uid(x)",
-          "Author.posts": [ 
-            { 
-              "uid": "0x789", 
-              "Post.author": { "uid": "uid(x)" } 
+          "Author.posts": [
+            {
+              "uid": "0x789",
+              "Post.author": { "uid": "uid(x)" }
             }
           ]
         }
@@ -422,11 +422,11 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
-          "posts": [ { 
-            "postID": "0x456",  
+          "posts": [ {
+            "postID": "0x456",
             "title": "A new title",
             "text": "Some edited text"
           } ]
@@ -437,10 +437,10 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(x)",
-          "Author.posts": [ 
-            { 
-              "uid": "0x456", 
-              "Post.author": { "uid": "uid(x)" } 
+          "Author.posts": [
+            {
+              "uid": "0x456",
+              "Post.author": { "uid": "uid(x)" }
             }
           ]
         }
@@ -468,10 +468,10 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
-          "country": { 
+          "country": {
             "name": "New Country"
           }
         }
@@ -508,10 +508,10 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
-          "country": { 
+          "country": {
             "name": "New Country",
             "states": [ {
               "code": "dg",
@@ -579,10 +579,10 @@
   gqlvariables: |
     { "patch":
       { "filter": {
-          "ids": ["0x123"]
+          "id": ["0x123"]
         },
         "set": {
-          "country": { 
+          "country": {
             "name": "New Country",
             "states": [ {
               "code": "dg"

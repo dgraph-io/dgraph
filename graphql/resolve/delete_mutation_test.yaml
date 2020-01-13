@@ -6,7 +6,7 @@
     }
   gqlvariables: |
     { "filter":
-      { "ids": ["0x1", "0x2"] }
+      { "id": ["0x1", "0x2"] }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
   dgmutations:
@@ -28,7 +28,7 @@
   gqlvariables: |
     { "filter":
       {
-        "ids": ["0x1", "0x2"],
+        "id": ["0x1", "0x2"],
         "name": { "eq": "A.N. Author" }
       }
     }

@@ -115,7 +115,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 		},
 	}
 
-	if ids := idFilter(field); ids != nil {
+	if ids := idFilter(field, field.Type().IDField().Name()); ids != nil {
 		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
 
@@ -177,7 +177,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		Attr: field.ResponseName(),
 	}
 
-	if ids := idFilter(field); ids != nil {
+	if ids := idFilter(field, field.Type().IDField().Name()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, field.Type().DgraphName())
@@ -309,12 +309,13 @@ func convertIDs(idsSlice []interface{}) []uint64 {
 	return ids
 }
 
-func idFilter(field schema.Field) []uint64 {
+func idFilter(field schema.Field, idName string) []uint64 {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
 	if !ok {
 		return nil
 	}
-	idsFilter := filter["ids"]
+
+	idsFilter := filter[idName]
 	if idsFilter == nil {
 		return nil
 	}
@@ -332,11 +333,12 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	// function at root. Lets delete the ids key so that it isn't added in the filter.
 	// Also, we need to add a dgraph.type filter.
 	// 2. This could be a deep filter. In that case we don't need to do anything special.
-	_, hasIDsFilter := filter["ids"]
+	idName := typ.IDField().Name()
+	_, hasIDsFilter := filter[idName]
 	filterAtRoot := hasIDsFilter && q.Func != nil && q.Func.Name == "uid"
 	if filterAtRoot {
 		// If id was present as a filter,
-		delete(filter, "ids")
+		delete(filter, idName)
 	}
 	q.Filter = buildFilter(typ, filter)
 	if filterAtRoot {
