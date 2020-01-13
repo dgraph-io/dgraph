@@ -117,11 +117,17 @@ func setState() state {
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
 		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
-	kv, err := badger.Open(kvOpt)
-	x.Checkf(err, "Error while opening WAL store")
 
 	// zero out from memory
-	kvOpt.EncryptionKey = nil
+	//kvOpt.EncryptionKey = nil
+	//kvOpt.InMemory = true
+	//kvOpt.ValueDir = ""
+	//kvOpt.Dir = ""
+	//kvOpt.EventLogging = false
+	//kvOpt.Compression = 0
+
+	kv, err := badger.Open(kvOpt)
+	x.Checkf(err, "Error while opening WAL store")
 
 	fmt.Printf("Here %#v\n", opts)
 	store := raftwal.Init(kv, opts.nodeId, 0)

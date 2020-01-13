@@ -677,10 +677,14 @@ func (n *node) Run() {
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			timer.Record("disk")
 			if rd.MustSync {
-				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %v", err)
-				}
-				timer.Record("sync")
+				//d1 := []byte("hello\ngo\n")
+				//ioutil.WriteFile("/tmp/dat1", d1, 0644)
+				go func() {
+					if err := n.Store.Sync(); err != nil {
+						glog.Errorf("Error while calling Store.Sync: %v", err)
+					}
+					timer.Record("sync")
+				}()
 			}
 			span.Annotatef(nil, "Saved to storage")
 
