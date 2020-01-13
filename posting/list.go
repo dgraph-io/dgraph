@@ -1283,7 +1283,9 @@ func (out *rollupOutput) removeEmptySplits() {
 
 	if len(out.plist.Splits) == 1 {
 		// Only the first split remains. If it's also empty, remove it as well.
-		// This should mark the entire list for deletion.
+		// This should mark the entire list for deletion. Please note that the
+		// startUid of the first part is always one because a node can never have
+		// its uid set to zero.
 		if isPlistEmpty(out.parts[1]) {
 			out.plist.Splits = []uint64{}
 		}
