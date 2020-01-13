@@ -1233,8 +1233,8 @@ func (sg *SubGraph) updateFacetMatrix() {
 	}
 
 	for lidx, l := range sg.uidMatrix {
-		// For scalar predicate, uid list would be empty, we don't need to update facetMatrix.
-		// If its an uid predicate and uid list is empty then corresponding faceList
+		// For scalar predicates, uid list would be empty, we don't need to update facetsMatrix.
+		// If its an uid predicate and uid list is empty then corresponding facetsList
 		// should also be empty.
 		if len(l.Uids) == 0 {
 			continue
