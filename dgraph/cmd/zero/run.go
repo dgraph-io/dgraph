@@ -205,6 +205,8 @@ func run() {
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
 		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
+	kvOpt.Compression = 0
+	kvOpt.EventLogging = false
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
