@@ -2328,25 +2328,29 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
 	orderby := sg.Params.FacetOrder
+	fmt.Println("############# ", orderby, sg.Params.FacetOrderDesc)
+	valMap := make(map[string]*api.Facet)
+	var tempVal []types.Val
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
 		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
-		valMap := make(map[string]*api.Facet)
+
+		// Reset this at the start.
+		tempVal = tempVal[:0]
+
 		for j := 0; j < len(ul.Uids); j++ {
-			// var facet *api.Facet
+			for k := range valMap {
+				delete(valMap, k) // TODO: is this the best way to clean map??
+			}
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
 
 			for _, it := range f.Facets {
-				// if it.Key == orderby {
-				// 	facet = it
-				// 	break
-				// }
 				if _, ok := valMap[it.Key]; !ok {
 					valMap[it.Key] = it
 				}
@@ -2355,33 +2359,34 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 				}
 			}
 
+			x.AssertTrue(len(valMap) == 2)
+
 			for _, key := range orderby {
-				if fVal, ok := valMap[key]; ok && fVal != nil /*TODO: confirm this*/ {
-					fmt.Println("################## ", fVal)
-					fVal, err := facets.ValFor(fVal)
+				if f, ok := valMap[key]; ok && f != nil /*TODO: confirm this*/ {
+					fVal, err := facets.ValFor(f)
 					if err != nil {
 						return err
 					}
-					values = append(values, []types.Val{fVal})
+					fmt.Println("#####################")
+					tempVal = append(tempVal, fVal)
 				} else {
-					values = append(values, []types.Val{{Value: nil}})
+					tempVal = append(tempVal, types.Val{Value: nil})
 				}
 			}
-			// if facet != nil {
-			// 	fVal, err := facets.ValFor(facet)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-
-			// 	values = append(values, []types.Val{fVal})
-			// } else {
-			// 	values = append(values, []types.Val{{Value: nil}})
-			// }
-			// TODO: optimize this.
-			// valMap = nil
+			x.AssertTrue(len(tempVal) == 2)
+			values = append(values, tempVal)
 		}
 		if len(values) == 0 {
 			continue
+		}
+
+		fmt.Println("\n$$$$$$$$$$$ ", ul)
+		for _, vl := range values {
+			x.AssertTrue(len(vl) == 2)
+			for _, val := range vl {
+				fmt.Print(val.Value)
+			}
+			fmt.Println()
 		}
 		if err := types.SortWithFacet(values, &uids, facetList,
 			sg.Params.FacetOrderDesc, ""); err != nil {
