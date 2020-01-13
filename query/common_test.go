@@ -230,6 +230,11 @@ type Node {
 	name
 }
 
+type Speaker {
+	name
+	language
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang					   : string @lang .
 lang_type                      : string @index(exact) .
@@ -283,6 +288,7 @@ boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
 noconflict_pred                : string @noconflict .
+language                       : [string] .
 `
 
 func populateCluster() {

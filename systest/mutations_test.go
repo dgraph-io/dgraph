@@ -50,46 +50,46 @@ func TestSystem(t *testing.T) {
 		}
 	}
 
-	t.Run("n-quad mutation", wrap(NQuadMutationTest))
-	t.Run("list with languages", wrap(ListWithLanguagesTest))
-	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
-	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
-	t.Run("facets with order", wrap(FacetOrderTest))
-	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
-	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
-	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
-	t.Run("fulltext equal", wrap(FullTextEqual))
-	t.Run("json blank node", wrap(JSONBlankNode))
-	t.Run("scalar to list", wrap(ScalarToList))
-	t.Run("list to scalar", wrap(ListToScalar))
-	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
-	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
-	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
-	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
-	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
-	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
-	t.Run("has with dash", wrap(HasWithDash))
-	t.Run("list geo filter", wrap(ListGeoFilterTest))
-	t.Run("list regex filter", wrap(ListRegexFilterTest))
-	t.Run("regex query vars", wrap(RegexQueryWithVars))
-	t.Run("graphql var child", wrap(GraphQLVarChild))
-	t.Run("math ge", wrap(MathGe))
+	// t.Run("n-quad mutation", wrap(NQuadMutationTest))
+	// t.Run("list with languages", wrap(ListWithLanguagesTest))
+	// t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
+	// t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
+	// t.Run("facets with order", wrap(FacetOrderTest))
+	// t.Run("lang and sort bug", wrap(LangAndSortBugTest))
+	// t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
+	// t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
+	// t.Run("fulltext equal", wrap(FullTextEqual))
+	// t.Run("json blank node", wrap(JSONBlankNode))
+	// t.Run("scalar to list", wrap(ScalarToList))
+	// t.Run("list to scalar", wrap(ListToScalar))
+	// t.Run("set after delete for list", wrap(SetAfterDeletionListType))
+	// t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
+	// t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
+	// t.Run("delete with expand all", wrap(DeleteWithExpandAll))
+	// t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
+	// t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
+	// t.Run("has with dash", wrap(HasWithDash))
+	// t.Run("list geo filter", wrap(ListGeoFilterTest))
+	// t.Run("list regex filter", wrap(ListRegexFilterTest))
+	// t.Run("regex query vars", wrap(RegexQueryWithVars))
+	// t.Run("graphql var child", wrap(GraphQLVarChild))
+	// t.Run("math ge", wrap(MathGe))
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
-	t.Run("has should have reverse edges", wrap(HasReverseEdge))
-	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
-	t.Run("max predicate size", wrap(MaxPredicateSize))
-	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
-	t.Run("drop data", wrap(DropData))
-	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
-	t.Run("drop type", wrap(DropType))
-	t.Run("drop type without specified type", wrap(DropTypeNoValue))
-	t.Run("reverse count index", wrap(ReverseCountIndex))
-	t.Run("type predicate check", wrap(TypePredicateCheck))
-	t.Run("internal predicate check", wrap(InternalPredicateCheck))
-	t.Run("infer schema as list", wrap(InferSchemaAsList))
-	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
-	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
-	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
+	// t.Run("has should have reverse edges", wrap(HasReverseEdge))
+	// t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
+	// t.Run("max predicate size", wrap(MaxPredicateSize))
+	// t.Run("restore reserved preds", wrap(RestoreReservedPreds))
+	// t.Run("drop data", wrap(DropData))
+	// t.Run("drop data and drop all", wrap(DropDataAndDropAll))
+	// t.Run("drop type", wrap(DropType))
+	// t.Run("drop type without specified type", wrap(DropTypeNoValue))
+	// t.Run("reverse count index", wrap(ReverseCountIndex))
+	// t.Run("type predicate check", wrap(TypePredicateCheck))
+	// t.Run("internal predicate check", wrap(InternalPredicateCheck))
+	// t.Run("infer schema as list", wrap(InferSchemaAsList))
+	// t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
+	// t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
+	// t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -146,12 +146,18 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 
 	//var respUser User
 	testutil.CompareJSON(t, fmt.Sprintf(`
-{"direct":[
-  {
-    "uid":"%s",
-    "access.to":
-    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}}]}
-`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
+	{
+		"direct":[
+			{
+				"uid":"%s",
+				"access.to":{
+						"uid":"%s"
+				},
+				"access.to|inherit": false,
+				"access.to|permission": "WRITE"
+			}
+		]
+	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
@@ -402,33 +408,39 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
-		  "q": [
-		    {
-		      "friend": [
-		        {
-		          "friend|age": 15,
-		          "friend|car": "Tesla",
-		          "name": "Charlie"
-		        },
-		        {
-		          "name": "Bubble"
-		        },
-		        {
-		          "friend|age": 13,
-		          "friend|car": "Honda",
-		          "name": "Bob"
-		        },
-		        {
-		          "friend|age": 20,
-		          "friend|car": "Hyundai",
-		          "name": "Abc"
-		        }
-		      ],
-		      "name": "Alice"
-		    }
-		  ]
-		}`, string(resp.Json))
+	testutil.CompareJSON(t, `
+	{
+		"q":[
+			{
+				"friend":[
+					{
+						"name":"Charlie"
+					},
+					{
+						"name":"Bubble"
+					},
+					{
+						"name":"Bob"
+					},
+					{
+						"name":"Abc"
+					}
+				],
+				"friend|age":{
+					"0":15,
+					"2":13,
+					"3":20
+				},
+				"friend|car":{
+					"0":"Tesla",
+					"2":"Honda",
+					"3":"Hyundai"
+				},
+				"name":"Alice"
+			}
+		]
+	}
+	`, string(resp.Json))
 
 }
 
@@ -502,8 +514,29 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `
-	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
-		`, string(resp.Json))
+		{
+			"q":[
+				{
+					"name":"Michael",
+					"friend":[
+						{
+							"name":"Charlie"
+						},
+						{
+							"name":"Alice"
+						},
+						{
+							"name":"Sang Hyun"
+						}
+					],
+					"friend|since":{
+						"1":"2014-01-02T00:00:00Z",
+						"2":"2012-01-02T00:00:00Z"
+					}
+				}
+			]
+		}
+	`, string(resp.Json))
 }
 
 func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
@@ -929,7 +962,9 @@ func testTimeValue(t *testing.T, c *dgo.Dgraph, timeBytes []byte) {
 
 	q := `query test($id: string) {
 		  me(func: uid($id)) {
-			friend @facets
+			friend @facets {
+				uid
+			}
 		  }
 		}`
 
