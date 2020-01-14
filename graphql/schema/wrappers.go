@@ -470,6 +470,7 @@ func (f *field) XIDArg() string {
 }
 
 func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+	idField := f.Type().IDField()
 	xidArgName := ""
 	// This method is only called for Get queries. These queries can accept one of the
 	// combinations as input.
@@ -478,7 +479,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	// 3. ID and XID fields
 	// Therefore, the non ID field is an XID field.
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName {
+		if arg.Name != idField.Name() {
 			xidArgName = arg.Name
 		}
 	}
@@ -493,12 +494,12 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 		xid = &xidArgVal
 	}
 
-	idArg := f.ArgValue(IDArgName)
-	if idArg == nil && xid == nil {
+	if idField == nil && xid == nil {
 		// This means that both were optional and were not supplied, lets return here.
 		return
 	}
 
+	idArg := f.ArgValue(idField.Name())
 	if idArg != nil {
 		id, ok := idArg.(string)
 		var ierr error
