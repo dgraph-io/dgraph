@@ -1963,7 +1963,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	}
 
 	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($posts: [PostInput!]!) {
+		Query: `mutation addPost($posts: [AddPostInput!]!) {
 			addPost(input: $posts) {
 			  post {
 				postID
