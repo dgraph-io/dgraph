@@ -120,15 +120,15 @@ input StringHashFilter {
 #######################
 
 type AddDroidPayload {
-	droid: Droid
+	droid: [Droid]
 }
 
 type AddHumanPayload {
-	human: Human
+	human: [Human]
 }
 
 type AddStarshipPayload {
-	starship: Starship
+	starship: [Starship]
 }
 
 type DeleteCharacterPayload {
@@ -211,7 +211,7 @@ input AddStarshipInput {
 }
 
 input CharacterFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: CharacterFilter
@@ -236,7 +236,7 @@ input CharacterRef {
 }
 
 input DroidFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: DroidFilter
@@ -270,7 +270,7 @@ input Episode_hash {
 }
 
 input HumanFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: HumanFilter
@@ -302,7 +302,7 @@ input HumanRef {
 }
 
 input StarshipFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringTermFilter
 	and: StarshipFilter
 	or: StarshipFilter
@@ -372,13 +372,13 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: AddHumanInput!): AddHumanPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	addDroid(input: AddDroidInput!): AddDroidPayload
+	addDroid(input: [AddDroidInput!]!): AddDroidPayload
 	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
 	deleteDroid(filter: DroidFilter!): DeleteDroidPayload
-	addStarship(input: AddStarshipInput!): AddStarshipPayload
+	addStarship(input: [AddStarshipInput!]!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }

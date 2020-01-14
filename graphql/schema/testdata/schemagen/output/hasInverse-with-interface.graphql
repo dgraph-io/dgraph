@@ -114,15 +114,15 @@ input StringHashFilter {
 #######################
 
 type AddAnswerPayload {
-	answer: Answer
+	answer: [Answer]
 }
 
 type AddAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type AddQuestionPayload {
-	question: Question
+	question: [Question]
 }
 
 type DeleteAnswerPayload {
@@ -205,7 +205,7 @@ input AddQuestionInput {
 }
 
 input AnswerFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: AnswerFilter
@@ -235,7 +235,7 @@ input AnswerRef {
 }
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -262,7 +262,7 @@ input AuthorRef {
 }
 
 input PostFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: PostFilter
@@ -287,7 +287,7 @@ input PostRef {
 }
 
 input QuestionFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: QuestionFilter
@@ -360,15 +360,15 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: AddAuthorInput!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addQuestion(input: AddQuestionInput!): AddQuestionPayload
+	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
-	addAnswer(input: AddAnswerInput!): AddAnswerPayload
+	addAnswer(input: [AddAnswerInput!]!): AddAnswerPayload
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
 }

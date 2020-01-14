@@ -3,7 +3,7 @@
 #######################
 
 type Post {
-	id: ID
+	postID: ID
 	content: String!
 	author(filter: AuthorFilter): Author!
 	genre(filter: GenreFilter): Genre
@@ -102,15 +102,15 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type AddGenrePayload {
-	genre: Genre
+	genre: [Genre]
 }
 
 type AddPostPayload {
-	post: Post
+	post: [Post]
 }
 
 type DeleteAuthorPayload {
@@ -171,7 +171,7 @@ input AddPostInput {
 }
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter_StringRegExpFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -214,7 +214,7 @@ input GenreRef {
 }
 
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	not: PostFilter
 }
 
@@ -231,7 +231,7 @@ input PostPatch {
 }
 
 input PostRef {
-	id: ID
+	postID: ID
 	content: String
 	author: AuthorRef
 	genre: GenreRef
@@ -259,7 +259,7 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
+	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID, name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
@@ -272,12 +272,12 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: AddPostInput!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addAuthor(input: AddAuthorInput!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addGenre(input: AddGenreInput!): AddGenrePayload
+	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }

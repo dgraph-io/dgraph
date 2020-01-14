@@ -91,7 +91,7 @@ input StringHashFilter {
 #######################
 
 type AddMessagePayload {
-	message: Message
+	message: [Message]
 }
 
 type DeleteMessagePayload {
@@ -123,7 +123,7 @@ input AddMessageInput {
 }
 
 input MessageFilter {
-	ids: [ID!]
+	id: [ID!]
 	not: MessageFilter
 }
 
@@ -166,7 +166,7 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: AddMessageInput!): AddMessagePayload
+	addMessage(input: [AddMessageInput!]!): AddMessagePayload
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }

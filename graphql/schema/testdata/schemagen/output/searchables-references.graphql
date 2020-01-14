@@ -98,11 +98,11 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type AddPostPayload {
-	post: Post
+	post: [Post]
 }
 
 type DeleteAuthorPayload {
@@ -153,7 +153,7 @@ input AddPostInput {
 }
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -180,7 +180,7 @@ input AuthorRef {
 }
 
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
 	and: PostFilter
@@ -233,7 +233,7 @@ input UpdatePostInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	getPost(id: ID!): Post
+	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
@@ -242,10 +242,10 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: AddAuthorInput!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addPost(input: AddPostInput!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

@@ -269,9 +269,17 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 	}
 }
 
-func needsIndex(fnType FuncType) bool {
+func needsIndex(fnType FuncType, uidList *pb.List) bool {
 	switch fnType {
-	case compareAttrFn, geoFn, fullTextSearchFn, standardFn, matchFn:
+	case compareAttrFn:
+		if uidList != nil {
+			// UidList is not nil means this is a filter. Filter predicate is not indexed, so
+			// instead of fetching values by index key, we will fetch value by data key
+			// (from uid and predicate) and apply filter on values.
+			return false
+		}
+		return true
+	case geoFn, fullTextSearchFn, standardFn, matchFn:
 		return true
 	}
 	return false
@@ -852,7 +860,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
 
-	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
+	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(q.Attr) {
 		return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
@@ -913,21 +921,21 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 
 	if srcFn.fnType == compareScalarFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleCompareScalarFunction")
-		if err := qs.handleCompareScalarFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleCompareScalarFunction(args); err != nil {
 			return nil, err
 		}
 	}
 
 	if srcFn.fnType == regexFn {
 		span.Annotate(nil, "handleRegexFunction")
-		if err := qs.handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleRegexFunction(ctx, args); err != nil {
 			return nil, err
 		}
 	}
 
 	if srcFn.fnType == matchFn {
 		span.Annotate(nil, "handleMatchFunction")
-		if err := qs.handleMatchFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleMatchFunction(ctx, args); err != nil {
 			return nil, err
 		}
 	}
@@ -936,7 +944,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == compareAttrFn && len(srcFn.tokens) > 0 {
 		span.Annotate(nil, "handleCompareFunction")
-		if err := qs.handleCompareFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleCompareFunction(ctx, args); err != nil {
 			return nil, err
 		}
 	}
@@ -944,7 +952,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		if err := qs.filterGeoFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.filterGeoFunction(ctx, args); err != nil {
 			return nil, err
 		}
 	}
@@ -953,7 +961,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	// for hasFn as filtering for it has already been done in handleHasFunction.
 	if srcFn.fnType != hasFn && needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
-		if err := qs.filterStringFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.filterStringFunction(args); err != nil {
 			return nil, err
 		}
 	}
@@ -1122,8 +1130,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		return err
 	}
 
-	// Only if the tokenizer that we used IsLossy, then we need to fetch
-	// and compare the actual values.
+	// Only if the tokenizer that we used IsLossy
+	// then we need to fetch and compare the actual values.
 	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
 	if tokenizer.IsLossy() {
 		// Need to evaluate inequality for entries in the first bucket.
@@ -1136,12 +1144,11 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		rowsToFilter := 0
 		switch {
 		case arg.srcFn.fname == eq:
-			// If fn is eq, we could have multiple arguments and hence multiple rows
-			// to filter.
+			// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
 			rowsToFilter = len(arg.srcFn.tokens)
 		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
 			// If operation is not eq and ineqValueToken equals first token,
-			// then we need to filter first row..
+			// then we need to filter first row.
 			rowsToFilter = 1
 		}
 		isList := schema.State().IsList(attr)
@@ -1506,10 +1513,15 @@ func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
 }
 
 type functionContext struct {
-	tokens         []string
-	geoQuery       *types.GeoQueryData
-	intersectDest  bool
-	ineqValue      types.Val
+	tokens        []string
+	geoQuery      *types.GeoQueryData
+	intersectDest bool
+	ineqValue     types.Val
+	// eqTokens is used by compareAttr functions. It stores values corresponding to each
+	// function argument. There could be multiple arguments to `eq` function but only one for
+	// other compareAttr functions.
+	// TODO(@Animesh): change field names which could explain their uses better. Check if we
+	// really need all of ineqValue, eqTokens, tokens
 	eqTokens       []types.Val
 	ineqValueToken string
 	n              int
@@ -1558,6 +1570,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
+	isIndexedAttr := schema.State().IsIndexed(attr)
 	var err error
 
 	t, err := schema.State().TypeOf(attr)
@@ -1600,6 +1613,11 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 				return nil, errors.Errorf("Got error: %v while running: %v", err,
 					q.SrcFunc)
 			}
+			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
+			if !isIndexedAttr {
+				// In case of non-indexed predicate we won't have any tokens.
+				continue
+			}
 			// Get tokens ge / le ineqValueToken.
 			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f,
 				fc.ineqValue); err != nil {
@@ -1609,15 +1627,18 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 				continue
 			}
 			fc.tokens = append(fc.tokens, tokens...)
-			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
 		}
 
-		// Number of index keys is more than no. of uids to filter, so its better to fetch data keys
-		// directly and compare. Lets make tokens empty.
+		// In case of non-indexed predicate, there won't be any tokens. We will fetch value
+		// from data keys.
+		// If number of index keys is more than no. of uids to filter, so its better to fetch values
+		// from data keys directly and compare. Lets make tokens empty.
 		// We don't do this for eq because eq could have multiple arguments and we would have to
 		// compare the value with all of them. Also eq would usually have less arguments, hence we
 		// won't be fetching many index keys.
-		if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
+		if q.UidList != nil && !isIndexedAttr {
+			fc.n = len(q.UidList.Uids)
+		} else if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
 		} else {

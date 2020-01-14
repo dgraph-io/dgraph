@@ -637,7 +637,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		if isID(fld) {
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
-					Name: "ids",
+					Name: fld.Name,
 					Type: ast.ListType(&ast.Type{
 						NamedType: IDType,
 						NonNull:   true,
@@ -663,7 +663,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
 	// if the filter has more than one field or if it has one non-id field.
-	if (len(filter.Fields) == 1 && filter.Fields[0].Name != "ids") || len(filter.Fields) > 1 {
+	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
 			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
@@ -823,9 +823,9 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Fields: []*ast.FieldDefinition{
 			{
 				Name: strings.ToLower(defn.Name),
-				Type: &ast.Type{
+				Type: ast.ListType(&ast.Type{
 					NamedType: defn.Name,
-				},
+				}, nil),
 			},
 		},
 	}
@@ -901,8 +901,9 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
+		fields := getIDField(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: "id",
+			Name: fields[0].Name,
 			Type: &ast.Type{
 				NamedType: idTypeFor(defn),
 				NonNull:   !hasXIDField,
@@ -953,7 +954,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: "input",
 				Type: &ast.Type{
-					NamedType: "Add" + defn.Name + "Input",
+					NamedType: "[Add" + defn.Name + "Input!]",
 					NonNull:   true,
 				},
 			},

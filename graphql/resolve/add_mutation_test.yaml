@@ -2,7 +2,7 @@
   name: "Add mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
-      addAuthor(input: $auth) {
+      addAuthor(input: [$auth]) {
         author {
           name
         }
@@ -25,12 +25,43 @@
           "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
+-
+  name: "Add multiple mutation with variables"
+  gqlmutation: |
+    mutation addAuthor($auth: [AddAuthorInput!]!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": [
+      { "name": "A.N. Author"
+      },
+      { "name": "Different Author"
+      }
+      ]
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author"
+        }
+    - setjson: |
+        { "uid":"_:Author2",
+          "dgraph.type":["Author"],
+          "Author.name":"Different Author"
+        }
 
 -
   name: "Add Mutation with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: { name: "A.N. Author", posts: []}) {
+      addAuthor(input: [{ name: "A.N. Author", posts: []}]) {
         author {
           name
         }
@@ -50,7 +81,7 @@
   name: "Add Mutation with mixed vars and embedded value"
   gqlmutation: |
     mutation addAuthor($name: String!) {
-      addAuthor(input: { name: $name, posts: []}) {
+      addAuthor(input: [{ name: $name, posts: []}]) {
         author {
           name
         }
@@ -69,10 +100,36 @@
         }
 
 -
+  name: "Add Multiple Mutations with embedded value"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: [{ name: "A.N. Author", posts: []}, {name: "Different Author", posts: []}]) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input should be used for the mutation, with a uid and type getting
+    injected and all data transformed to underlying Dgraph edge names"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author",
+          "Author.posts":[]
+        }
+    - setjson: |
+        { "uid":"_:Author2",
+          "dgraph.type":["Author"],
+          "Author.name":"Different Author",
+          "Author.posts":[]
+        }
+
+-
   name: "Add mutation with reference"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
-      addAuthor(input: $auth) {
+      addAuthor(input: [$auth]) {
         author {
           name
         }
@@ -107,7 +164,7 @@
   name: "Add mutation with invalid reference"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
-      addAuthor(input: $auth) {
+      addAuthor(input: [$auth]) {
         author {
           name
         }
@@ -122,16 +179,16 @@
     }
   explanation: "A reference must be a valid UID"
   error:
-    { "message": 
+    { "message":
       "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
 
 -
   name: "Add mutation with inverse reference"
   gqlmutation: |
     mutation addPost($post: AddPostInput!) {
-      addPost(input: $post) {
+      addPost(input: [$post]) {
         post {
-          postId
+          postID
         }
       }
     }
@@ -167,7 +224,7 @@
   name: "Add mutation for a type that implements an interface"
   gqlmutation: |
     mutation addHuman($human: AddHumanInput!) {
-      addHuman(input: $human) {
+      addHuman(input: [$human]) {
         human {
           name
           dob
@@ -198,7 +255,7 @@
   name: "Add mutation using xid code"
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
-      addState(input: $input) {
+      addState(input: [$input]) {
         state {
           name
         }
@@ -239,7 +296,7 @@
   name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation addEditor($input: AddEditorInput!) {
-      addEditor(input: $input) {
+      addEditor(input: [$input]) {
         editor {
           name
         }
@@ -272,18 +329,18 @@
   name: "Deep add mutation"
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
-      addAuthor(input: $author) {
+      addAuthor(input: [$author]) {
         author {
           id
         }
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "New post",
             "text": "A really new post"
           }
@@ -310,9 +367,9 @@
         }
 
 -
-  name: "Deep add with existing"
+  name: "Deep add multiple mutation"
   gqlmutation: |
-    mutation addAuthor($author: AddAuthorInput!) {
+    mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
         author {
           id
@@ -320,11 +377,78 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author": [
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New New post",
+            "text": "A wonderful post"
+          }
+        ]
+      }]
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:Author1",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New post",
+              "Post.text" : "A really new post",
+              "Post.author": {
+                "uid" : "_:Author1"
+              }
+            }
+          ]
+        }
+    - setjson: |
+        { "uid" : "_:Author3",
+          "dgraph.type" : [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post4",
+              "dgraph.type" : [ "Post" ],
+              "Post.title" : "New New post",
+              "Post.text" : "A wonderful post",
+              "Post.author": {
+                "uid" : "_:Author3"
+              }
+            }
+          ]
+        }
+
+-
+  name: "Deep add with existing"
+  gqlmutation: |
+    mutation addAuthor($author: AddAuthorInput!) {
+      addAuthor(input: [$author]) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author":
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
             "title": "New post",
             "text": "A really new post"
           },
@@ -369,9 +493,9 @@
       cond: "@if(eq(len(Post3), 1))"
 
 -
-  name: "Deep add with two existing"
+  name: "Deep add multiple with existing"
   gqlmutation: |
-    mutation addAuthor($author: AddAuthorInput!) {
+    mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
         author {
           id
@@ -379,7 +503,107 @@
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author": [
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New post",
+            "text": "A really new post"
+          },
+          {
+            "postID": "0x123",
+            "title": "Old post",
+            "text": "A really old post"
+          }
+        ]
+      },
+      { "name": "Different Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "title": "New new post",
+            "text": "A wonderful post"
+          },
+          {
+            "postID": "0x124",
+            "title": "Another Old post",
+            "text": "Another old post text"
+          }
+        ]
+      }]
+    }
+  dgquery: |-
+    query {
+      Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
+        uid
+      }
+      Post6 as Post6(func: uid(0x124)) @filter(type(Post)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Author1",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post2",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New post",
+              "Post.text": "A really new post",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            },
+            {
+              "uid": "0x123",
+              "Post.author": {
+                "uid": "_:Author1"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post3), 1))"
+    - setjson: |
+        { "uid": "_:Author4",
+          "dgraph.type": [ "Author" ],
+          "Author.name": "Different Author",
+          "Author.dob": "2000-01-01",
+          "Author.posts": [
+            {
+              "uid": "_:Post5",
+              "dgraph.type": [ "Post" ],
+              "Post.title": "New new post",
+              "Post.text": "A wonderful post",
+              "Post.author": {
+                "uid": "_:Author4"
+              }
+            },
+            {
+              "uid": "0x124",
+              "Post.author": {
+                "uid": "_:Author4"
+              }
+            }
+          ]
+        }
+      cond: "@if(eq(len(Post6), 1))"
+
+-
+  name: "Deep add with two existing"
+  gqlmutation: |
+    mutation addAuthor($author: AddAuthorInput!) {
+      addAuthor(input: [$author]) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
@@ -388,7 +612,7 @@
             "title": "Old post",
             "text": "A really old post"
           },
-          { 
+          {
             "postID": "0x456"
           }
         ]
@@ -430,18 +654,18 @@
   name: "Deep add with null"
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
-      addAuthor(input: $author) {
+      addAuthor(input: [$author]) {
         author {
           id
         }
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "postID": null,
             "title": "New post",
             "text": "A really new post"
@@ -472,18 +696,18 @@
   name: "Add three deep"
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
-      addAuthor(input: $author) {
+      addAuthor(input: [$author]) {
         author {
           id
         }
       }
     }
   gqlvariables: |
-    { "author": 
+    { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
         "posts": [
-          { 
+          {
             "title": "Exciting post",
             "text": "A really good post",
             "category": {
@@ -512,8 +736,8 @@
                 "uid": "_:Category3",
                 "dgraph.type": [ "Category" ],
                 "Category.name": "New Category",
-                "Category.posts": [ 
-                  { "uid": "_:Post2" } 
+                "Category.posts": [
+                  { "uid": "_:Post2" }
                 ]
               }
             }
@@ -524,7 +748,7 @@
   name: "Add mutation with deep xid choices"
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
-      addCountry(input: $input) {
+      addCountry(input: [$input]) {
         country {
           name
         }
@@ -549,7 +773,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -565,7 +789,7 @@
         }
       cond: "@if(eq(len(State2), 0))"
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -582,7 +806,7 @@
   name: "Add mutation with deep xid that must be reference"
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
-      addCountry(input: $input) {
+      addCountry(input: [$input]) {
         country {
           name
         }
@@ -607,7 +831,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",

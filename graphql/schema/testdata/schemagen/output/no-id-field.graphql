@@ -100,15 +100,15 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: Author
+	author: [Author]
 }
 
 type AddGenrePayload {
-	genre: Genre
+	genre: [Genre]
 }
 
 type AddPostPayload {
-	post: Post
+	post: [Post]
 }
 
 type DeleteAuthorPayload {
@@ -155,7 +155,7 @@ input AddPostInput {
 }
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	not: AuthorFilter
 }
 
@@ -220,9 +220,9 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: AddPostInput!): AddPostPayload
-	addAuthor(input: AddAuthorInput!): AddAuthorPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addGenre(input: AddGenreInput!): AddGenrePayload
+	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 }
