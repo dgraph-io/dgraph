@@ -154,18 +154,18 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]struct {
 		mut      string
-		rewriter MutationRewriter
+		rewriter func() MutationRewriter
 		assigned map[string]string
 		result   map[string]interface{}
 	}{
 		"Add Post ": {
 			mut:      `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
-			rewriter: NewAddRewriter(),
+			rewriter: NewAddRewriter,
 			assigned: map[string]string{"Post1": "0x4"},
 		},
 		"Update Post ": {
 			mut:      `updatePost(input: {filter: {ids:  ["0x4"]}, set: {text: "Updated text"} }) `,
-			rewriter: NewUpdateRewriter(),
+			rewriter: NewUpdateRewriter,
 			result: map[string]interface{}{
 				"updatePost": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 		},
@@ -190,6 +190,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 			tt := testTypes[name]
 			for _, tcase := range tests[testType] {
 				t.Run(name+testType+tcase.Name, func(t *testing.T) {
+					rewriter := tt.rewriter()
 					// -- Arrange --
 					gqlMutationStr := strings.Replace(tcase.GQLQuery, testType, tt.mut, 1)
 					op, err := gqlSchema.Operation(
@@ -199,11 +200,11 @@ func TestMutationQueryRewriting(t *testing.T) {
 						})
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
-					_, _, err = tt.rewriter.Rewrite(gqlMutation)
+					_, _, err = rewriter.Rewrite(gqlMutation)
 					require.Nil(t, err)
 
 					// -- Act --
-					dgQuery, err := tt.rewriter.FromMutationResult(
+					dgQuery, err := rewriter.FromMutationResult(
 						gqlMutation, tt.assigned, tt.result)
 
 					// -- Assert --
