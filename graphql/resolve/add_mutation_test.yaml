@@ -1,7 +1,7 @@
 -
   name: "Add mutation with variables"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: $auth) {
         author {
           name
@@ -71,7 +71,7 @@
 -
   name: "Add mutation with reference"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: $auth) {
         author {
           name
@@ -106,7 +106,7 @@
 -
   name: "Add mutation with invalid reference"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: $auth) {
         author {
           name
@@ -128,7 +128,7 @@
 -
   name: "Add mutation with inverse reference"
   gqlmutation: |
-    mutation addPost($post: PostInput!) {
+    mutation addPost($post: AddPostInput!) {
       addPost(input: $post) {
         post {
           postId
@@ -166,7 +166,7 @@
 -
   name: "Add mutation for a type that implements an interface"
   gqlmutation: |
-    mutation addHuman($human: HumanInput!) {
+    mutation addHuman($human: AddHumanInput!) {
       addHuman(input: $human) {
         human {
           name
@@ -197,7 +197,7 @@
 -
   name: "Add mutation using xid code"
   gqlmutation: |
-    mutation addState($input: StateInput!) {
+    mutation addState($input: AddStateInput!) {
       addState(input: $input) {
         state {
           name
@@ -238,7 +238,7 @@
 -
   name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
-    mutation addEditor($input: EditorInput!) {
+    mutation addEditor($input: AddEditorInput!) {
       addEditor(input: $input) {
         editor {
           name
@@ -271,7 +271,7 @@
 -
   name: "Deep add mutation"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: $author) {
         author {
           id
@@ -312,7 +312,7 @@
 -
   name: "Deep add with existing"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: $author) {
         author {
           id
@@ -371,7 +371,7 @@
 -
   name: "Deep add with two existing"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: $author) {
         author {
           id
@@ -429,7 +429,7 @@
 -
   name: "Deep add with null"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: $author) {
         author {
           id
@@ -471,7 +471,7 @@
 -
   name: "Add three deep"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: $author) {
         author {
           id
@@ -523,7 +523,7 @@
 -
   name: "Add mutation with deep xid choices"
   gqlmutation: |
-    mutation addCountry($input: CountryInput!) {
+    mutation addCountry($input: AddCountryInput!) {
       addCountry(input: $input) {
         country {
           name
@@ -581,7 +581,7 @@
 -
   name: "Add mutation with deep xid that must be reference"
   gqlmutation: |
-    mutation addCountry($input: CountryInput!) {
+    mutation addCountry($input: AddCountryInput!) {
       addCountry(input: $input) {
         country {
           name
