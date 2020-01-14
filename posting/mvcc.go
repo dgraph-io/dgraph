@@ -176,16 +176,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-
-			splits := l.plist.GetSplits()
-			if len(splits) == 0 {
-				lastKey, err := x.GetSplitKey(key, splits[len(splits)-1])
-				if err != nil {
-					return nil, errors.Wrapf(err, "while advancing to end of multi-part list")
-				}
-				it.Seek(lastKey)
-			}
-
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
