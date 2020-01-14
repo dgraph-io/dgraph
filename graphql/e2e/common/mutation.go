@@ -748,7 +748,7 @@ func requirePost(
 
 	params := &GraphQLParams{
 		Query: `query getPost($id: ID!, $getAuthor: Boolean!)  {
-			getPost(id: $id) {
+			getPost(postID: $id) {
 				postID
 				title
 				text

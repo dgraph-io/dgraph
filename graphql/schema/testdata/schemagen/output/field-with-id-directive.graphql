@@ -259,7 +259,7 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
+	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID, name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
