@@ -24,6 +24,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -489,6 +490,7 @@ func TestMillion(t *testing.T) {
 }
 
 const N int = 20000
+
 func TestParallelMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
 	maxListSize = math.MaxInt32
@@ -499,7 +501,7 @@ func TestParallelMillion(t *testing.T) {
 	go mutate(t, key, commit)
 
 	ticker1 := time.NewTicker(100 * time.Millisecond)
-    done1 := make(chan bool)
+	done1 := make(chan bool)
 	go rolluplocal(t, key, ticker1, done1)
 
 	// ticker2 := time.NewTicker(100 * time.Millisecond)
@@ -507,21 +509,19 @@ func TestParallelMillion(t *testing.T) {
 	// go readpl(t, key, done2, ticker2)
 
 	commits := <-commit
-	done1<-true
+	done1 <- true
 	// done2<-true
 
-
 	ol, err := getNew(key, ps)
-	require.NoError(t, err)	
+	require.NoError(t, err)
 	t.Logf("Rolling up posting list last time. minTs= %v\n", ol.minTs)
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 
-
 	ol, err = getNew(key, ps)
-	require.NoError(t, err)	
-	t.Logf("Completed a %v writes. Commits = %v. minTs = %v\n",N,  commits, ol.minTs)
+	require.NoError(t, err)
+	t.Logf("Completed a %v writes. Commits = %v. minTs = %v\n", N, commits, ol.minTs)
 
 	opt := ListOptions{ReadTs: uint64(N + 1)}
 	l, err := ol.Uids(opt)
@@ -532,23 +532,24 @@ func TestParallelMillion(t *testing.T) {
 	}
 }
 
-func mutate(t *testing.T,key []byte, commitCh chan int) {
+func mutate(t *testing.T, key []byte, commitCh chan int) {
 	var commits int
 	for i := 2; i <= N; i += 2 {
-		j := uint64(i)
-		addEdgeToUID(t, "bal", 1331, j, j, j+1)
+		startTs := atomic.AddUint64(&ts, 2)
+		addEdgeToUID(t, "bal", 1331, valnum, startTs-1, startTs)
 		commits++
 
-		if i % 10 == 0 {
+		if i%10 == 0 {
 			t.Logf("mutation at i = %v", i)
 		}
-	
+
 	}
 	commitCh <- commits
 	return
 }
 
 func rolluplocal(t *testing.T, key []byte, ticker *time.Ticker, done chan bool) {
+	writer := NewTxnWriter(pstore)
 	for {
 		select {
 		case <-ticker.C:
@@ -557,17 +558,32 @@ func rolluplocal(t *testing.T, key []byte, ticker *time.Ticker, done chan bool) 
 			t.Logf("Rolling up posting list. minTs = %v\n", ol.minTs)
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
-			require.NoError(t, writePostingListToDisk(kvs))
+			// writer.Write the keys
+			// Check the error.
+			// for _, kv := range kvs {
+			// 	if err := writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version); err != nil {
+			// 		return err
+			// 	}
+			// }
+			//
+			// require.NoError(t, writePostingListToDisk(kvs))
 		case <-done:
+			writer.Flush()
 			return
 		}
-	}	
+	}
 }
 
 func readpl(t *testing.T, key []byte, done chan bool, ticker *time.Ticker) {
 	for {
 		select {
 		case <-ticker.C:
+			ol, err := getNew(key, ps)
+			require.NoError(t, err)
+			readTs := atomic.LoadUint64(&ts)
+			val, err := ol.Value(readTs)
+			// Handle error
+			// Check that the value is not nil. And that val is >= last one read.
 			t.Logf("readpl\n")
 		case <-done:
 			return
