@@ -115,7 +115,7 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post: [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type DeletePostPayload {

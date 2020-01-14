@@ -60,6 +60,26 @@ ADD_UPDATE_MUTATION:
       }
 
   -
+    name: "selection set in result"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post (first: 0, offset: 10, order : {asc: title}, filter: { title: { anyofterms: "GraphQL" } }){
+            postID
+            title
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) @filter(anyofterms(Post.title, "GraphQL")) {
+          postID : uid
+          title : Post.title
+          dgraph.uid : uid
+        }
+      }
+
+  -
     name: "deep"
     gqlquery: |
       mutation {

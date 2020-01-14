@@ -240,6 +240,7 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation by name no match", updateMutationByNameNoMatch)
 	t.Run("update delete", updateDelete)
 	t.Run("filter in update", filterInUpdate)
+	t.Run("selection in add object", testSelectionInAddObject)
 	t.Run("delete mutation with multiple ids", deleteMutationWithMultipleIds)
 	t.Run("delete mutation with single id", deleteMutationWithSingleID)
 	t.Run("delete mutation by name", deleteMutationByName)

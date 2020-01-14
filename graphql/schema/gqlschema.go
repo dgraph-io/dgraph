@@ -817,17 +817,21 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
+		Name: strings.ToLower(defn.Name),
+		Type: ast.ListType(&ast.Type{
+			NamedType: defn.Name,
+		}, nil),
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: strings.ToLower(defn.Name),
-				Type: ast.ListType(&ast.Type{
-					NamedType: defn.Name,
-				}, nil),
-			},
-		},
+		Kind:   ast.Object,
+		Name:   "Add" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{qry},
 	}
 }
 

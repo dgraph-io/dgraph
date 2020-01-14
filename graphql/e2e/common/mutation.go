@@ -1244,6 +1244,97 @@ func manyMutations(t *testing.T) {
 	cleanUp(t, append(result.Add1.Country, result.Add2.Country...), []*author{}, []*post{})
 }
 
+func testSelectionInAddObject(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuth := addAuthor(t, newCountry.ID, postExecutor)
+
+	post1 := &post{
+		Title:  "Test1",
+		Author: newAuth,
+	}
+
+	post2 := &post{
+		Title:  "Test2",
+		Author: newAuth,
+	}
+
+	cases := map[string]struct {
+		Filter   map[string]interface{}
+		First    int
+		Offset   int
+		Sort     map[string]interface{}
+		Expected []*post
+	}{
+		"Pagination": {
+			First:  1,
+			Offset: 1,
+			Sort: map[string]interface{}{
+				"desc": "title",
+			},
+			Expected: []*post{post1},
+		},
+		"Filter": {
+			Filter: map[string]interface{}{
+				"title": map[string]interface{}{
+					"anyoftext": "Test1",
+				},
+			},
+			Expected: []*post{post1},
+		},
+		"Sort": {
+			Sort: map[string]interface{}{
+				"desc": "title",
+			},
+			Expected: []*post{post2, post1},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			addPostParams := &GraphQLParams{
+				Query: `mutation addPost($posts: [PostInput!]!, $filter:
+					PostFilter, $first: Int, $offset: Int, $sort: PostOrder) {
+				addPost(input: $posts) {
+				  post (first:$first, offset:$offset, filter:$filter, order:$sort){
+					postID
+					title
+				  }
+				}
+			}`,
+				Variables: map[string]interface{}{
+					"posts":  []*post{post1, post2},
+					"first":  test.First,
+					"offset": test.Offset,
+					"sort":   test.Sort,
+					"filter": test.Filter,
+				},
+			}
+
+			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+			requireNoGQLErrors(t, gqlResponse)
+			var result struct {
+				AddPost struct {
+					Post []*post
+				}
+			}
+
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
+			if diff := cmp.Diff(test.Expected, result.AddPost.Post, opt); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+
+			cleanUp(t, []*country{}, []*author{}, result.AddPost.Post)
+		})
+
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, []*post{})
+
+}
+
 // After a successful mutation, the following query is executed.  That query can
 // contain any depth or filtering that makes sense for the schema.
 //

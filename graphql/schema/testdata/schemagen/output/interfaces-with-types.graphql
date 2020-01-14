@@ -120,15 +120,15 @@ input StringHashFilter {
 #######################
 
 type AddDroidPayload {
-	droid: [Droid]
+	droid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
 }
 
 type AddHumanPayload {
-	human: [Human]
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 }
 
 type AddStarshipPayload {
-	starship: [Starship]
+	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 }
 
 type DeleteCharacterPayload {
