@@ -183,7 +183,7 @@ func newAdminResolver(
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
 		if err != nil {
-			glog.Errorf("Unable to unmarshal the psoting list for graphql schema update %s", err)
+			glog.Errorf("Unable to unmarshal the posting list for graphql schema update %s", err)
 			return
 		}
 
