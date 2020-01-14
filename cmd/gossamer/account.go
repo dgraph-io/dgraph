@@ -44,12 +44,12 @@ func handleAccounts(ctx *cli.Context) error {
 	}
 
 	// check if we want to generate a new keypair
-	// can specify key type using --ed25519 or --sr25519
+	// can specify key type using --ed25519, --sr25519, --secp256k1
 	// otherwise defaults to sr25519
 	if keygen := ctx.Bool(utils.GenerateFlag.Name); keygen {
 		log.Info("generating keypair...")
 
-		// check if --ed25519 or --sr25519 is set
+		// check if --ed25519, --sr25519, --secp256k1 is set
 		keytype := crypto.Sr25519Type
 		if flagtype := ctx.Bool(utils.Sr25519Flag.Name); flagtype {
 			keytype = crypto.Sr25519Type

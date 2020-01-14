@@ -55,7 +55,7 @@ var (
 		utils.GenerateFlag,
 		utils.Sr25519Flag,
 		utils.Ed25519Flag,
-		//utils.Secp256k1Flag,
+		utils.Secp256k1Flag,
 		utils.ImportFlag,
 		utils.ListFlag,
 		utils.PasswordFlag,
@@ -95,6 +95,7 @@ var (
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
 			"\tTo generate a new ed25519 account: gossamer account --generate --ed25519\n" +
+			"\tTo generate a new secp256k1 account: gossamer account --generate --secp256k1\n" +
 			"\tTo import a keystore file: gossamer account --import=path/to/file\n" +
 			"\tTo list keys: gossamer account --list",
 	}
