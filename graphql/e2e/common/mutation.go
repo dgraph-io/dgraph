@@ -1244,7 +1244,109 @@ func manyMutations(t *testing.T) {
 	cleanUp(t, append(result.Add1.Country, result.Add2.Country...), []*author{}, []*post{})
 }
 
+func testSelectionInAddObject(t *testing.T) {
+	sortInAddObject(t)
+	filterInAddObject(t)
+	paginationInAddObject(t)
+}
+
+func paginationInAddObject(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuth := addAuthor(t, newCountry.ID, postExecutor)
+
+	post1 := &post{
+		Title:  "Test1",
+		Author: newAuth,
+	}
+
+	post2 := &post{
+		Title:  "Test2",
+		Author: newAuth,
+	}
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($posts: [PostInput!]!) {
+			addPost(input: $posts) {
+			  post (first:1, offset:1, order:{
+			  	desc: title
+			  }){
+				postID
+				title
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+	requireNoGQLErrors(t, gqlResponse)
+	var result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
+	if diff := cmp.Diff([]*post{post1}, result.AddPost.Post, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
+}
+
 func filterInAddObject(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuth := addAuthor(t, newCountry.ID, postExecutor)
+
+	post1 := &post{
+		Title:  "Test1",
+		Author: newAuth,
+	}
+
+	post2 := &post{
+		Title:  "Test2",
+		Author: newAuth,
+	}
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($posts: [PostInput!]!) {
+			addPost(input: $posts) {
+			  post (filter: {
+			        title: {
+			              anyoftext: "Test1"
+				}
+			  }){
+				postID
+				title
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+	requireNoGQLErrors(t, gqlResponse)
+	var result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
+	if diff := cmp.Diff([]*post{post1}, result.AddPost.Post, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
+}
+
+func sortInAddObject(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	newAuth := addAuthor(t, newCountry.ID, postExecutor)
 
