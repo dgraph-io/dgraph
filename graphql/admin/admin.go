@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	errMsgServerNotReady = "Unavailable: Server has not yet connected to Dgraph."
+	errMsgServerNotReady = "Unavailable: Server not ready."
 
 	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
 		"Use the /admin API to add a GraphQL schema"
@@ -62,49 +63,50 @@ const (
 		id: ID!
 		schema: String!  @dgraph(type: "dgraph.graphql.schema") 
 		generatedSchema: String!
- }
+	}
 
- type Health {
-	message: String!
-	status: HealthStatus!
- }
+	type Health {
+		message: String!
+		status: HealthStatus!
+	}
 
- enum HealthStatus {
-	ErrNoConnection
-	NoGraphQLSchema
-	Healthy
- }
+	enum HealthStatus {
+		ErrNoConnection
+		NoGraphQLSchema
+		Healthy
+	}
 
- scalar DateTime
+	scalar DateTime
 
- directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
 	type UpdateGQLSchemaPayload {
 		gqlSchema: GQLSchema
- }
+	}
 
 	input UpdateGQLSchemaInput {
 		set: GQLSchemaPatch!
- }
+	}
 
 	input GQLSchemaPatch {
-	schema: String!
- }
+		schema: String!
+	}
 
- type Query {
+	type Query {
 		getGQLSchema: GQLSchema
-	health: Health
- }
+		health: Health
+	}
 
- type Mutation {
+	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
- }
+	}
  `
 )
 
-type schemaDef struct {
-	Schema string    `json:"schema,omitempty"`
-	Date   time.Time `json:"date,omitempty"`
+type gqlSchema struct {
+	ID              string `json:"id,omitempty"`
+	Schema          string `json:"schema,omitempty"`
+	GeneratedSchema string
 }
 
 type adminServer struct {
@@ -117,6 +119,8 @@ type adminServer struct {
 
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
+
+	schema gqlSchema
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
@@ -193,27 +197,31 @@ func newAdminResolver(
 				len(pl.Postings))
 			return
 		}
-		graphqlSchema := string(pl.Postings[0].Value)
-		glog.Info("Updating graphql schema")
 
-		schHandler, err := schema.NewHandler(graphqlSchema)
+		newSchema := gqlSchema{
+			ID:     fmt.Sprintf("%#x", pl.Postings[0].Uid),
+			Schema: string(pl.Postings[0].Value),
+		}
+
+		schHandler, err := schema.NewHandler(newSchema.Schema)
 		if err != nil {
-			glog.Errorf("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 			return
 		}
 
-		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
+		newSchema.GeneratedSchema = schHandler.GQLSchema()
+		gqlSchema, err := schema.FromString(newSchema.GeneratedSchema)
 		if err != nil {
-			glog.Errorf("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 			return
 		}
 
-		glog.Infof("Successfully updated GraphQL schema.  Now serving GraphQL API.")
+		glog.Infof("Successfully updated GraphQL schema.")
 
 		server.mux.Lock()
 		defer server.mux.Unlock()
+
+		// server.schema = newSchema
 		server.status = healthy
 		server.resetSchema(gqlSchema)
 	}, 1)
@@ -236,13 +244,13 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 					health,
 					resolve.StdQueryCompletion())
 			}).
-		WithMutationResolver("addSchema", func(m schema.Mutation) resolve.MutationResolver {
+		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}, false
 				})
 		}).
-		WithQueryResolver("querySchema", func(q schema.Query) resolve.QueryResolver {
+		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
@@ -296,17 +304,19 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		gqlSchema, err := schema.FromString(schHandler.GQLSchema())
+		sch.GeneratedSchema = schHandler.GQLSchema()
+		generatedSchema, err := schema.FromString(sch.GeneratedSchema)
 		if err != nil {
 			glog.Infof("Error processing GraphQL schema: %s.  "+
 				"Admin server is connected, but no GraphQL schema is being served.", err)
 			break
 		}
 
-		glog.Infof("Successfully loaded GraphQL schema.  Now serving GraphQL API.")
+		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
+		as.schema = *sch
 		as.status = healthy
-		as.resetSchema(gqlSchema)
+		as.resetSchema(generatedSchema)
 
 		break
 	}
@@ -325,7 +335,8 @@ func checkAdminSchemaExists() error {
 func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
-	mutRw := resolve.NewAddRewriter()
+	addRw := resolve.NewAddRewriter()
+	updRw := resolve.NewUpdateRewriter()
 	qryExec := resolve.DgraphAsQueryExecutor()
 	mutExec := resolve.DgraphAsMutationExecutor()
 
@@ -343,51 +354,51 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				health,
 				resolve.StdQueryCompletion())
 		}).
-		WithMutationResolver("addSchema",
+		WithMutationResolver("updateGQLSchema",
 			func(m schema.Mutation) resolve.MutationResolver {
-				addResolver := &addSchemaResolver{
+				updResolver := &updateSchemaResolver{
 					admin:                as,
-					baseMutationRewriter: mutRw,
-					baseMutationExecutor: mutExec}
+					baseAddRewriter:      addRw,
+					baseMutationRewriter: updRw,
+					baseMutationExecutor: mutExec,
+				}
 
 				return resolve.NewMutationResolver(
-					addResolver,
-					qryExec,
-					addResolver,
+					updResolver,
+					updResolver,
+					updResolver,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
-		WithQueryResolver("querySchema",
+		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
+				getResolver := &getSchemaResolver{
+					admin:        as,
+					baseRewriter: qryRw,
+					baseExecutor: qryExec,
+				}
+
 				return resolve.NewQueryResolver(
-					qryRw,
-					qryExec,
+					getResolver,
+					getResolver,
 					resolve.StdQueryCompletion())
 			})
 }
 
-func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*schemaDef, error) {
+func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 	req := &schema.Request{
-		Query: `query { querySchema(order: { desc: date }, first: 1) { schema date } }`}
+		Query: `query { getGQLSchema { id schema } }`}
 	resp := r.Resolve(context.Background(), req)
-	if len(resp.Errors) > 0 {
+	if len(resp.Errors) > 0 || resp.Data.Len() == 0 {
 		return nil, resp.Errors
 	}
 
 	var result struct {
-		QuerySchema []*schemaDef
+		GetGQLSchema *gqlSchema
 	}
 
-	if resp.Data.Len() > 0 {
-		err := json.Unmarshal(resp.Data.Bytes(), &result)
-		if err != nil {
-			return nil, err
-		}
-	}
+	err := json.Unmarshal(resp.Data.Bytes(), &result)
 
-	if len(result.QuerySchema) == 0 {
-		return nil, nil
-	}
-	return result.QuerySchema[0], nil
+	return result.GetGQLSchema, err
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
