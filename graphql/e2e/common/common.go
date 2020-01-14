@@ -650,9 +650,9 @@ func checkGraphQLHealth(url string, status []string) error {
 
 func addSchema(url string, schema string) error {
 	add := &GraphQLParams{
-		Query: `mutation addSchema($sch: String!) {
-			addSchema(input: { schema: $sch }) {
-				schema {
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
 					schema
 				}
 			}
@@ -671,8 +671,8 @@ func addSchema(url string, schema string) error {
 
 	var addResult struct {
 		Data struct {
-			AddSchema struct {
-				Schema struct {
+			UpdateGQLSchema struct {
+				GQLSchema struct {
 					Schema string
 				}
 			}
@@ -684,7 +684,7 @@ func addSchema(url string, schema string) error {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
 	}
 
-	if addResult.Data.AddSchema.Schema.Schema == "" {
+	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
 		return errors.New("GraphQL schema mutation failed")
 	}
 

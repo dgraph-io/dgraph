@@ -32,14 +32,6 @@ const (
 	initSchema = `{
     "schema": [
         {
-            "predicate": "dgraph.graphql.date",
-            "type": "datetime",
-            "index": true,
-            "tokenizer": [
-                "day"
-            ]
-        },
-        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -58,9 +50,6 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.date"
                 }
             ],
             "name": "dgraph.graphql"
@@ -77,14 +66,6 @@ const (
         {
             "predicate": "A.b",
             "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.date",
-            "type": "datetime",
-            "index": true,
-            "tokenizer": [
-                "day"
-            ]
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -113,9 +94,6 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.date"
                 }
             ],
             "name": "dgraph.graphql"
@@ -149,14 +127,6 @@ const (
             "type": "int"
         },
         {
-            "predicate": "dgraph.graphql.date",
-            "type": "datetime",
-            "index": true,
-            "tokenizer": [
-                "day"
-            ]
-        },
-        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -186,9 +156,6 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.date"
                 }
             ],
             "name": "dgraph.graphql"

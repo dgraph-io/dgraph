@@ -41,8 +41,8 @@ func TestSchemaSubscribe(t *testing.T) {
 		name: String!
 	}`
 	add := &common.GraphQLParams{
-		Query: `mutation addSchema($sch: String!) {
-			addSchema(input: { schema: $sch }) {
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { schema: $sch }) {
 				schema {
 					schema
 				}
