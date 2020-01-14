@@ -432,7 +432,7 @@ func TestEncodeBlockAnnounceMessage(t *testing.T) {
 	//	Digest: []byte
 
 	//                                        mtparenthash                                                      bnstateroot                                                       extrinsicsroot                                                  di
-	expected, err := common.HexToBytes("0x03454545454545454545454545454545454545454545454545454545454545454504b3266de137d20a5d0ff3a6401eb57127525fd9b2693701f0bf5a8a853fa3ebe003170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c11131400")
+	expected, err := common.HexToBytes("0x03454545454545454545454545454545454545454545454545454545454545454504b3266de137d20a5d0ff3a6401eb57127525fd9b2693701f0bf5a8a853fa3ebe003170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c1113140400")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestEncodeBlockAnnounceMessage(t *testing.T) {
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
 		ExtrinsicsRoot: extrinsicsRoot,
-		Digest:         []byte{},
+		Digest:         [][]byte{{}},
 	}
 	encMsg, err := bhm.Encode()
 	if err != nil {
@@ -498,7 +498,7 @@ func TestDecodeBlockAnnounceMessage(t *testing.T) {
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
 		ExtrinsicsRoot: extrinsicsRoot,
-		Digest:         []byte{},
+		Digest:         nil,
 	}
 
 	if !reflect.DeepEqual(bhm, expected) {

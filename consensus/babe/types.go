@@ -17,6 +17,8 @@
 package babe
 
 import (
+	"encoding/binary"
+
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
@@ -45,10 +47,27 @@ type AuthorityData struct {
 
 // BabeHeader as defined in Polkadot RE Spec, definition 5.10 in section 5.1.4
 type BabeHeader struct {
-	VRFOutput          [32]byte
-	VRFProof           [32]byte
+	VrfOutput          [32]byte
+	VrfProof           [64]byte
 	BlockProducerIndex uint64
-	Slot               uint64
+	SlotNumber         uint64
+}
+
+func (bh *BabeHeader) Encode() []byte {
+	enc := []byte{}
+	enc = append(enc, bh.VrfOutput[:]...)
+	enc = append(enc, bh.VrfProof[:]...)
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, bh.BlockProducerIndex)
+	enc = append(enc, buf...)
+	binary.LittleEndian.PutUint64(buf, bh.SlotNumber)
+	enc = append(enc, buf...)
+	return enc
+}
+
+type VrfOutputAndProof struct {
+	output [32]byte
+	proof  [64]byte
 }
 
 // Slot represents a BABE slot

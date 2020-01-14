@@ -50,12 +50,12 @@ type BlockHeader struct {
 	Number         *big.Int    `json:"number"`
 	StateRoot      common.Hash `json:"stateRoot"`
 	ExtrinsicsRoot common.Hash `json:"extrinsicsRoot"`
-	Digest         []byte      `json:"digest"` // any additional block info eg. logs, seal
+	Digest         [][]byte    `json:"digest"`
 	hash           common.Hash
 }
 
 // NewBlockHeader creates a new block header and sets its hash field
-func NewBlockHeader(parentHash common.Hash, number *big.Int, stateRoot common.Hash, extrinsicsRoot common.Hash, digest []byte) (*BlockHeader, error) {
+func NewBlockHeader(parentHash common.Hash, number *big.Int, stateRoot common.Hash, extrinsicsRoot common.Hash, digest [][]byte) (*BlockHeader, error) {
 	if number == nil {
 		// Hash() will panic if number is nil
 		return nil, errors.New("cannot have nil block number")
@@ -92,6 +92,10 @@ func (bh *BlockHeader) Hash() common.Hash {
 	}
 
 	return bh.hash
+}
+
+func (bh *BlockHeader) Encode() ([]byte, error) {
+	return scale.Encode(bh)
 }
 
 // BlockBody is the extrinsics inside a state block

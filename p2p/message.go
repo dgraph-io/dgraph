@@ -258,7 +258,7 @@ type BlockAnnounceMessage struct {
 	Number         *big.Int
 	StateRoot      common.Hash
 	ExtrinsicsRoot common.Hash
-	Digest         []byte // any additional block info eg. logs, seal
+	Digest         [][]byte // any additional block info eg. logs, seal
 }
 
 func (bm *BlockAnnounceMessage) GetType() int {

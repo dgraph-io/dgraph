@@ -16,7 +16,7 @@ func setup(t *testing.T) (polkadb.Database, *types.BlockHeader) {
 		Number:         big.NewInt(2),
 		StateRoot:      common.BytesToHash([]byte("state_root_test")),
 		ExtrinsicsRoot: common.BytesToHash([]byte("extrinsics_test")),
-		Digest:         []byte("digest_test"),
+		Digest:         [][]byte{{}},
 	}
 	h.Hash()
 	return polkadb.NewMemDatabase(), h
