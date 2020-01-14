@@ -146,7 +146,7 @@ input PatchT {
 }
 
 input TFilter {
-	ids: [ID!]
+	id: [ID!]
 	not: TFilter
 }
 

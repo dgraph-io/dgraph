@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/stretchr/testify/require"
+	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 
@@ -60,7 +61,6 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			dgQuery, err := testRewriter.Rewrite(gqlQuery)
-
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})

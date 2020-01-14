@@ -3,7 +3,7 @@
 #######################
 
 type Post {
-	id: ID
+	postID: ID
 	content: String!
 	author(filter: AuthorFilter): Author!
 	genre(filter: GenreFilter): Genre
@@ -155,7 +155,7 @@ enum PostOrderable {
 #######################
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter_StringRegExpFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -214,7 +214,7 @@ input PatchPost {
 }
 
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	not: PostFilter
 }
 
@@ -231,7 +231,7 @@ input PostOrder {
 }
 
 input PostRef {
-	id: ID
+	postID: ID
 	content: String
 	author: AuthorRef
 	genre: GenreRef

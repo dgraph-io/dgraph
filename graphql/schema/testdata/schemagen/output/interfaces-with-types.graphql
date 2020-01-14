@@ -191,7 +191,7 @@ enum StarshipOrderable {
 #######################
 
 input CharacterFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: CharacterFilter
@@ -210,7 +210,7 @@ input CharacterRef {
 }
 
 input DroidFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: DroidFilter
@@ -244,7 +244,7 @@ input Episode_hash {
 }
 
 input HumanFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	and: HumanFilter
@@ -302,7 +302,7 @@ input PatchStarship {
 }
 
 input StarshipFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringTermFilter
 	and: StarshipFilter
 	or: StarshipFilter

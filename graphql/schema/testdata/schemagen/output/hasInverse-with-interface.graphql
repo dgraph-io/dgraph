@@ -185,7 +185,7 @@ enum QuestionOrderable {
 #######################
 
 input AnswerFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: AnswerFilter
@@ -215,7 +215,7 @@ input AnswerRef {
 }
 
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -268,7 +268,7 @@ input PatchQuestion {
 }
 
 input PostFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: PostFilter
@@ -287,7 +287,7 @@ input PostRef {
 }
 
 input QuestionFilter {
-	ids: [ID!]
+	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	and: QuestionFilter
