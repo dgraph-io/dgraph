@@ -1292,7 +1292,7 @@ func testSelectionInAddObject(t *testing.T) {
 	for name, test := range cases {
 		t.Run(name, func(t *testing.T) {
 			addPostParams := &GraphQLParams{
-				Query: `mutation addPost($posts: [PostInput!]!, $filter:
+				Query: `mutation addPost($posts: [AddPostInput!]!, $filter:
 					PostFilter, $first: Int, $offset: Int, $sort: PostOrder) {
 				addPost(input: $posts) {
 				  post (first:$first, offset:$offset, filter:$filter, order:$sort){
