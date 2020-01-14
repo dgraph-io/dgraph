@@ -707,6 +707,17 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
+
+	// Make sure we only rollup multi-part lists from the main list, which has
+	// knowledge of all the parts of the list.
+	pk, err := x.Parse(l.key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while parsing key [%v] during rollup", l.key)
+	}
+	if pk.StartUid != 0 {
+		return nil, errors.Errorf("cannot rollup a single part of a multi-part list")
+	}
+
 	out, err := l.rollup(math.MaxUint64)
 	if err != nil {
 		return nil, err

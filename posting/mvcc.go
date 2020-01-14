@@ -141,6 +141,17 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.StartUid != 0 {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read once using the canonical list (with startUid equal to zero).
+		return nil, errors.Errorf(
+			"cannot read multi-part posting list using the key for a single part")
+	}
+
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
@@ -166,6 +177,14 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
+			// Skip over any of the parts in case this is a multi-part list.
+			pk.StartUid = math.MaxUint64
+			maxKey, err := pk.ToKey()
+			if err != nil {
+				return nil, errors.Wrapf(err,
+					"while skipping over parts of a multi-part list for key [%v]", key)
+			}
+			it.Seek(maxKey)
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil

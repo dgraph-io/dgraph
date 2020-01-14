@@ -391,6 +391,36 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	return &key
 }
 
+// ToKey converts the parsed key back to a byte array.
+func (p ParsedKey) ToKey() ([]byte, error) {
+	var key []byte
+	switch {
+	case p.IsData():
+		key = DataKey(p.Attr, p.Uid)
+	case p.IsIndex():
+		key = IndexKey(p.Attr, p.Term)
+	case p.IsReverse():
+		key = ReverseKey(p.Attr, p.Uid)
+	case p.IsCount():
+		key = CountKey(p.Attr, p.Count, false)
+	case p.IsCountRev():
+		key = CountKey(p.Attr, p.Count, true)
+	case p.IsSchema():
+		key = SchemaKey(p.Attr)
+	case p.IsType():
+		key = TypeKey(p.Attr)
+	}
+
+	if p.StartUid > 0 {
+		var err error
+		key, err = GetSplitKey(key, p.StartUid)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return key, nil
+}
+
 // FromBackupKey takes a key in the format used for backups and converts it to a key.
 func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	if backupKey == nil {
