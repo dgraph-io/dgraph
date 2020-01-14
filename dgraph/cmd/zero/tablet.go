@@ -62,11 +62,12 @@ This would trigger G1 to get latest state. Wait for it.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(opts.rebalanceInterval)
 	for range ticker.C {
-		predicate, srcGroup, dstGroup := s.chooseTablet()
-		if len(predicate) == 0 {
+		tablet, srcGroup, dstGroup := s.chooseTablet()
+
+		if tablet == nil {
 			continue
 		}
-		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+		if err := s.movePredicate(tablet.Predicate, tablet.Namespace, srcGroup, dstGroup); err != nil {
 			glog.Errorln(err)
 		}
 	}
@@ -75,7 +76,7 @@ func (s *Server) rebalanceTablets() {
 // movePredicate is the main entry point for move predicate logic. This Zero must remain the leader
 // for the entire duration of predicate move. If this Zero stops being the leader, the final
 // proposal of reassigning the tablet to the destination would fail automatically.
-func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+func (s *Server) movePredicate(predicate, namespace string, srcGroup, dstGroup uint32) error {
 	s.moveOngoing <- struct{}{}
 	defer func() {
 		<-s.moveOngoing
@@ -99,7 +100,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if !s.Node.AmLeader() {
 		return errors.Errorf("I am not the Zero leader")
 	}
-	tab := s.ServingTablet(predicate)
+	tab := s.ServingTablet(predicate, namespace)
 	if tab == nil {
 		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
@@ -170,7 +171,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	return nil
 }
 
-func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uint32) {
+func (s *Server) chooseTablet() (tablet *pb.Tablet, srcGroup uint32, dstGroup uint32) {
 	s.RLock()
 	defer s.RUnlock()
 	if s.state == nil {
@@ -227,11 +228,11 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
 			if tab.Space <= sizeDiff/2 && tab.Space > size {
-				predicate = tab.Predicate
+				tablet = tab
 				size = tab.Space
 			}
 		}
-		if len(predicate) > 0 {
+		if tablet != nil {
 			return
 		}
 	}

@@ -217,6 +217,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 	}
 
+	// TODO: User can have multiple namespace. So, user sends namspaace which they want to query.
+	// If there is no namespace, we get all the namespaces from the ACL and check how many namespaces
+	// user belongs to. If one, we just that namespace. If not, we'll thorwn an error.
 	req := api.Request{
 		Vars:      params.Variables,
 		Query:     params.Query,

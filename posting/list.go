@@ -349,7 +349,7 @@ func TypeID(edge *pb.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
-func fingerprintEdge(t *pb.DirectedEdge) uint64 {
+func fingerprintEdge(t *pb.DirectedEdge, namespace string) uint64 {
 	// There could be a collision if the user gives us a value with Lang = "en" and later gives
 	// us a value = "en" for the same predicate. We would end up overwritting his older lang
 	// value.
@@ -362,7 +362,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	switch {
 	case len(t.Lang) > 0:
 		id = farm.Fingerprint64([]byte(t.Lang))
-	case schema.State().IsList(t.Attr):
+	case schema.State().IsList(t.Attr, namespace):
 		// TODO - When values are deleted for list type, then we should only delete the UID from
 		// index if no other values produces that index token.
 		// Value for list type.
@@ -371,13 +371,13 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	return id
 }
 
-func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+func (l *List) addMutation(ctx context.Context, namespace string, txn *Txn, t *pb.DirectedEdge) error {
 	l.Lock()
 	defer l.Unlock()
-	return l.addMutationInternal(ctx, txn, t)
+	return l.addMutationInternal(ctx, namespace, txn, t)
 }
 
-func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+func (l *List) addMutationInternal(ctx context.Context, namespace string, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
 	if txn.ShouldAbort() {
@@ -394,7 +394,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	mpost := NewPosting(t)
 	mpost.StartTs = txn.StartTs
 	if mpost.PostingType != pb.Posting_REF {
-		t.ValueId = fingerprintEdge(t)
+		t.ValueId = fingerprintEdge(t, namespace)
 		mpost.Uid = t.ValueId
 	}
 	l.updateMutationLayer(mpost)
@@ -408,9 +408,9 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return err
 	}
 	switch {
-	case schema.State().HasNoConflict(t.Attr):
+	case schema.State().HasNoConflict(t.Attr, pk.Namespace):
 		break
-	case schema.State().HasUpsert(t.Attr):
+	case schema.State().HasUpsert(t.Attr, pk.Namespace):
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
@@ -420,7 +420,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		// that two users don't set the same email id.
 		conflictKey = getKey(l.key, 0)
 
-	case pk.IsData() && schema.State().IsList(t.Attr):
+	case pk.IsData() && schema.State().IsList(t.Attr, pk.Namespace):
 		// Data keys, irrespective of whether they are UID or values, should be judged based on
 		// whether they are lists or not. For UID, t.ValueId = UID. For value, t.ValueId =
 		// fingerprint(value) or could be fingerprint(lang) or something else.

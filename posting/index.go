@@ -45,6 +45,7 @@ type indexMutationInfo struct {
 	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
 	val        types.Val
 	op         pb.DirectedEdge_Op
+	namespace  string
 }
 
 // indexTokensforTokenizers return tokens, without the predicate prefix and
@@ -53,12 +54,12 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 	attr := info.edge.Attr
 	lang := info.edge.GetLang()
 
-	schemaType, err := schema.State().TypeOf(attr)
+	schemaType, err := schema.State().TypeOf(attr, info.namespace)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(attr, info.namespace) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 	sv, err := types.Convert(info.val, schemaType)
@@ -82,7 +83,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 // TODO - See if we need to pass op as argument as t should already have Op.
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
 	if info.tokenizers == nil {
-		info.tokenizers = schema.State().Tokenizer(info.edge.Attr)
+		info.tokenizers = schema.State().Tokenizer(info.edge.Attr, info.namespace)
 	}
 
 	attr := info.edge.Attr
@@ -103,16 +104,16 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	}
 
 	for _, token := range tokens {
-		if err := txn.addIndexMutation(ctx, edge, token); err != nil {
+		if err := txn.addIndexMutation(ctx, info.namespace, edge, token); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
+func (txn *Txn) addIndexMutation(ctx context.Context, namespace string, edge *pb.DirectedEdge,
 	token string) error {
-	key := x.IndexKey(edge.Attr, token)
+	key := x.IndexKey(edge.Attr, namespace, token)
 
 	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
@@ -120,7 +121,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
+	if err = plist.addMutation(ctx, namespace, txn, edge); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -138,7 +139,7 @@ type countParams struct {
 	reverse     bool
 }
 
-func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
+func (txn *Txn) addReverseMutationHelper(ctx context.Context, namespace string, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 
@@ -148,7 +149,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			return emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
+	if err := plist.addMutation(ctx, namespace, txn, edge); err != nil {
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -167,9 +168,9 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	return emptyCountParams, nil
 }
 
-func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
-	key := x.ReverseKey(t.Attr, t.ValueId)
-	hasCountIndex := schema.State().HasCount(t.Attr)
+func (txn *Txn) addReverseMutation(ctx context.Context, namespace string, t *pb.DirectedEdge) error {
+	key := x.ReverseKey(t.Attr, namespace, t.ValueId)
+	hasCountIndex := schema.State().HasCount(t.Attr, namespace)
 
 	var getFn func(key []byte) (*List, error)
 	if hasCountIndex {
@@ -195,25 +196,25 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Facets:  t.Facets,
 	}
 
-	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
+	cp, err := txn.addReverseMutationHelper(ctx, namespace, plist, hasCountIndex, edge)
 	if err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 
 	if hasCountIndex && cp.countAfter != cp.countBefore {
-		if err := txn.updateCount(ctx, cp); err != nil {
+		if err := txn.updateCount(ctx, namespace, cp); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
+func (l *List) handleDeleteAll(ctx context.Context, namespace string, edge *pb.DirectedEdge,
 	txn *Txn) error {
-	isReversed := schema.State().IsReversed(edge.Attr)
-	isIndexed := schema.State().IsIndexed(edge.Attr)
-	hasCount := schema.State().HasCount(edge.Attr)
+	isReversed := schema.State().IsReversed(edge.Attr, namespace)
+	isIndexed := schema.State().IsIndexed(edge.Attr, namespace)
+	hasCount := schema.State().HasCount(edge.Attr, namespace)
 	delEdge := &pb.DirectedEdge{
 		Attr:   edge.Attr,
 		Op:     edge.Op,
@@ -227,7 +228,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		case isReversed:
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			return txn.addReverseMutation(ctx, delEdge)
+			return txn.addReverseMutation(ctx, namespace, delEdge)
 		case isIndexed:
 			// Delete index edge of each posting.
 			val := types.Val{
@@ -235,7 +236,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 				Value: p.Value,
 			}
 			return txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(edge.Attr),
+				tokenizers: schema.State().Tokenizer(edge.Attr, namespace),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
@@ -250,7 +251,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 	if hasCount {
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
 		// above.
-		if err := txn.updateCount(ctx, countParams{
+		if err := txn.updateCount(ctx, namespace, countParams{
 			attr:        edge.Attr,
 			countBefore: plen,
 			countAfter:  0,
@@ -260,12 +261,12 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		}
 	}
 
-	return l.addMutation(ctx, txn, edge)
+	return l.addMutation(ctx, namespace, txn, edge)
 }
 
-func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
+func (txn *Txn) addCountMutation(ctx context.Context, namespace string, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
-	key := x.CountKey(t.Attr, count, reverse)
+	key := x.CountKey(t.Attr, namespace, count, reverse)
 	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
@@ -273,7 +274,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
+	if err = plist.addMutation(ctx, namespace, txn, t); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -281,20 +282,20 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 }
 
-func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
+func (txn *Txn) updateCount(ctx context.Context, namespace string, params countParams) error {
 	edge := pb.DirectedEdge{
 		ValueId: params.entity,
 		Attr:    params.attr,
 		Op:      pb.DirectedEdge_DEL,
 	}
-	if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
+	if err := txn.addCountMutation(ctx, namespace, &edge, uint32(params.countBefore),
 		params.reverse); err != nil {
 		return err
 	}
 
 	if params.countAfter > 0 {
 		edge.Op = pb.DirectedEdge_SET
-		if err := txn.addCountMutation(ctx, &edge, uint32(params.countAfter),
+		if err := txn.addCountMutation(ctx, namespace, &edge, uint32(params.countAfter),
 			params.reverse); err != nil {
 			return err
 		}
@@ -302,7 +303,7 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
-func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
+func (txn *Txn) addMutationHelper(ctx context.Context, namespace string, l *List, doUpdateIndex bool,
 	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
 	var val types.Val
 	var found bool
@@ -320,7 +321,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if doUpdateIndex {
 		// Check original value BEFORE any mutation actually happens.
-		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
+		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t, namespace))
 		if err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -328,9 +329,9 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
-	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
+	if !schema.State().IsList(t.Attr, namespace) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
 		newPost := NewPosting(t)
-		pFound, currPost, err := l.findPosting(txn.StartTs, fingerprintEdge(t))
+		pFound, currPost, err := l.findPosting(txn.StartTs, fingerprintEdge(t, namespace))
 		if err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -354,7 +355,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err = l.addMutationInternal(ctx, txn, t); err != nil {
+	if err = l.addMutationInternal(ctx, namespace, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -374,7 +375,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 // AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
+func (l *List) AddMutationWithIndex(ctx context.Context, namespace string, edge *pb.DirectedEdge,
 	txn *Txn) error {
 	if len(edge.Attr) == 0 {
 		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
@@ -382,18 +383,18 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	}
 
 	if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
-		return l.handleDeleteAll(ctx, edge, txn)
+		return l.handleDeleteAll(ctx, namespace, edge, txn)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(edge.Attr)
-	hasCountIndex := schema.State().HasCount(edge.Attr)
-	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(edge.Attr, namespace)
+	hasCountIndex := schema.State().HasCount(edge.Attr, namespace)
+	val, found, cp, err := txn.addMutationHelper(ctx, namespace, l, doUpdateIndex, hasCountIndex, edge)
 	if err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
-		if err := txn.updateCount(ctx, cp); err != nil {
+		if err := txn.updateCount(ctx, namespace, cp); err != nil {
 			return err
 		}
 	}
@@ -401,10 +402,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 		// Exact matches.
 		if found && val.Value != nil {
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(edge.Attr),
+				tokenizers: schema.State().Tokenizer(edge.Attr, namespace),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
+				namespace:  namespace,
 			}); err != nil {
 				return err
 			}
@@ -415,10 +417,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 				Value: edge.Value,
 			}
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(edge.Attr),
+				tokenizers: schema.State().Tokenizer(edge.Attr, namespace),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_SET,
+				namespace:  namespace,
 			}); err != nil {
 				return err
 			}
@@ -426,8 +429,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(edge.Attr) {
-		if err := txn.addReverseMutation(ctx, edge); err != nil {
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(edge.Attr, namespace) {
+		if err := txn.addReverseMutation(ctx, namespace, edge); err != nil {
 			return err
 		}
 	}
@@ -587,6 +590,7 @@ type IndexRebuild struct {
 	StartTs       uint64
 	OldSchema     *pb.SchemaUpdate
 	CurrentSchema *pb.SchemaUpdate
+	Namespace     string
 }
 
 type indexOp int
@@ -727,7 +731,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
+	pk := x.ParsedKey{Attr: rb.Attr, Namespace: rb.Namespace}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
@@ -812,7 +816,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 			return nil
 		}
 		for {
-			err := txn.addCountMutation(ctx, t, uint32(sz), reverse)
+			err := txn.addCountMutation(ctx, rb.Namespace, t, uint32(sz), reverse)
 			switch err {
 			case ErrRetry:
 				time.Sleep(10 * time.Millisecond)
@@ -884,7 +888,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
-	pk := x.ParsedKey{Attr: rb.Attr}
+	pk := x.ParsedKey{Attr: rb.Attr, Namespace: rb.Namespace}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
@@ -897,7 +901,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 			edge.Label = pp.Label
 
 			for {
-				err := txn.addReverseMutation(ctx, &edge)
+				err := txn.addReverseMutation(ctx, rb.Namespace, &edge)
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
@@ -936,7 +940,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
+	pk := x.ParsedKey{Attr: rb.Attr, Namespace: rb.Namespace}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
@@ -964,7 +968,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
 		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
-		if err := pl.addMutation(ctx, txn, t); err != nil {
+		if err := pl.addMutation(ctx, rb.Namespace, txn, t); err != nil {
 			return err
 		}
 		// Add the new edge with the fingerprinted value id.
@@ -976,7 +980,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
-		return pl.addMutation(ctx, txn, newEdge)
+		return pl.addMutation(ctx, rb.Namespace, txn, newEdge)
 	}
 	return builder.Run(ctx)
 }
@@ -992,12 +996,12 @@ func DeleteData() error {
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string) error {
+func DeletePredicate(ctx context.Context, attr, namespace string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	prefix := x.PredicatePrefix(attr)
+	prefix := x.PredicatePrefix(attr, namespace)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
 
-	return schema.State().Delete(attr)
+	return schema.State().Delete(attr, namespace)
 }

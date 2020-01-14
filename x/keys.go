@@ -52,27 +52,32 @@ const (
 	ByteUnused = byte(0xff)
 )
 
-func writeAttr(buf []byte, attr string) []byte {
+func writeAttr(buf []byte, attr, namespace string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))
 
 	rest := buf[2:]
 	AssertTrue(len(attr) == copy(rest, attr))
+	rest = rest[len(attr):]
 
-	return rest[len(attr):]
+	binary.BigEndian.PutUint16(rest[:2], uint16(len(namespace)))
+	rest = rest[2:]
+	AssertTrue(len(namespace) == copy(rest, namespace))
+
+	return rest[len(namespace):]
 }
 
 // genKey creates the key and writes the initial bytes (type byte, length of attribute,
 // and the attribute itself). It leaves the rest of the key empty for further processing
 // if necessary.
-func generateKey(typeByte byte, attr string, totalLen int) []byte {
+func generateKey(typeByte byte, attr, namespace string, totalLen int) []byte {
 	AssertTrue(totalLen >= 1+2+len(attr))
 
 	buf := make([]byte, totalLen)
 	buf[0] = typeByte
 	rest := buf[1:]
 
-	writeAttr(rest, attr)
+	writeAttr(rest, attr, namespace)
 	return buf
 }
 
@@ -83,8 +88,8 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 // byte 0: key type prefix (set to byteSchema)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
-func SchemaKey(attr string) []byte {
-	return generateKey(byteSchema, attr, 1+2+len(attr))
+func SchemaKey(attr, namespace string) []byte {
+	return generateKey(byteSchema, attr, namespace, 1+2+len(attr)+2+len(namespace))
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
@@ -94,8 +99,10 @@ func SchemaKey(attr string) []byte {
 // byte 0: key type prefix (set to byteType)
 // byte 1-2: length of typeName
 // next len(attr) bytes: value of attr (the type name)
-func TypeKey(attr string) []byte {
-	return generateKey(byteType, attr, 1+2+len(attr))
+// next two byte: length of namespace
+// next len(namespace) bytes: value of namespace
+func TypeKey(attr, namespace string) []byte {
+	return generateKey(byteType, attr, namespace, 1+2+len(attr)+2+len(namespace))
 }
 
 // DataKey generates a data key with the given attribute and UID.
@@ -104,16 +111,18 @@ func TypeKey(attr string) []byte {
 // byte 0: key type prefix (set to DefaultPrefix)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
+// next two byte: length of namespace
+// next len(namespace) bytes: value of namespace
 // next byte: data type prefix (set to ByteData)
 // next byte: byte to determine if this key corresponds to a list that has been split
 //   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
-func DataKey(attr string, uid uint64) []byte {
-	prefixLen := 1 + 2 + len(attr)
+func DataKey(attr, namespace string, uid uint64) []byte {
+	prefixLen := 1 + 2 + len(attr) + 2 + len(namespace)
 	totalLen := prefixLen + 1 + 1 + 8
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+	buf := generateKey(DefaultPrefix, attr, namespace, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteData
@@ -133,16 +142,18 @@ func DataKey(attr string, uid uint64) []byte {
 // byte 0: key type prefix (set to DefaultPrefix)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
+// next two byte: length of namespace
+// next len(namespace) bytes: value of namespace
 // next byte: data type prefix (set to ByteReverse)
 // next byte: byte to determine if this key corresponds to a list that has been split
 //   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
-func ReverseKey(attr string, uid uint64) []byte {
-	prefixLen := 1 + 2 + len(attr)
+func ReverseKey(attr, namespace string, uid uint64) []byte {
+	prefixLen := 1 + 2 + len(attr) + 2 + len(namespace)
 	totalLen := prefixLen + 1 + 1 + 8
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+	buf := generateKey(DefaultPrefix, attr, namespace, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteReverse
@@ -162,16 +173,18 @@ func ReverseKey(attr string, uid uint64) []byte {
 // byte 0: key type prefix (set to DefaultPrefix)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
+// next two byte: length of namespace
+// next len(namespace) bytes: value of namespace
 // next byte: data type prefix (set to ByteIndex)
 // next byte: byte to determine if this key corresponds to a list that has been split
 //   into multiple parts
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
-func IndexKey(attr, term string) []byte {
-	prefixLen := 1 + 2 + len(attr)
+func IndexKey(attr, term, namespace string) []byte {
+	prefixLen := 1 + 2 + len(attr) + 2 + len(namespace)
 	totalLen := prefixLen + 1 + 1 + len(term)
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+	buf := generateKey(DefaultPrefix, attr, namespace, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteIndex
@@ -191,15 +204,17 @@ func IndexKey(attr, term string) []byte {
 // byte 0: key type prefix (set to DefaultPrefix)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
+// next two byte: length of namespace
+// next len(namespace) bytes: value of namespace
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
 // next byte: byte to determine if this key corresponds to a list that has been split
 //   into multiple parts. Since count indexes only store one number, this value will
 //   always be zero.
 // next four bytes: value of count.
-func CountKey(attr string, count uint32, reverse bool) []byte {
-	prefixLen := 1 + 2 + len(attr)
+func CountKey(attr, namespace string, count uint32, reverse bool) []byte {
+	prefixLen := 1 + 2 + len(attr) + 2 + len(namespace)
 	totalLen := prefixLen + 1 + 1 + 4
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+	buf := generateKey(DefaultPrefix, attr, namespace, totalLen)
 
 	rest := buf[prefixLen:]
 	if reverse {
@@ -221,6 +236,7 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 type ParsedKey struct {
 	byteType    byte
 	Attr        string
+	Namespace   string
 	Uid         uint64
 	HasStartUid bool
 	StartUid    uint64
@@ -288,10 +304,10 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 // SkipPredicate returns the first key after the keys corresponding to the predicate
 // of this key. Useful when iterating in the reverse order.
 func (p ParsedKey) SkipPredicate() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 1+2+len(p.Attr)+2+len(p.Namespace)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	k := writeAttr(rest, p.Attr, p.Namespace)
 	AssertTrue(len(k) == 1)
 	k[0] = 0xFF
 	return buf
@@ -313,10 +329,10 @@ func (p ParsedKey) SkipType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+2+len(p.Namespace)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	k := writeAttr(rest, p.Attr, p.Namespace)
 	AssertTrue(len(k) == 2)
 	k[0] = ByteData
 	k[1] = 0
@@ -325,10 +341,10 @@ func (p ParsedKey) DataPrefix() []byte {
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+2+len(p.Namespace)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	k := writeAttr(rest, p.Attr, p.Namespace)
 	AssertTrue(len(k) == 2)
 	k[0] = ByteIndex
 	k[1] = 0
@@ -337,10 +353,10 @@ func (p ParsedKey) IndexPrefix() []byte {
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+2+len(p.Namespace)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	k := writeAttr(rest, p.Attr, p.Namespace)
 	AssertTrue(len(k) == 2)
 	k[0] = ByteReverse
 	k[1] = 0
@@ -349,10 +365,10 @@ func (p ParsedKey) ReversePrefix() []byte {
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+2+len(p.Namespace)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	k := writeAttr(rest, p.Attr, p.Namespace)
 	AssertTrue(len(k) == 2)
 	if reverse {
 		k[0] = ByteCountRev
@@ -371,6 +387,7 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	key.StartUid = p.StartUid
 	key.Term = p.Term
 	key.Count = p.Count
+	key.Namespace = p.Namespace
 
 	switch {
 	case p.IsData():
@@ -400,19 +417,19 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	var key []byte
 	switch backupKey.Type {
 	case pb.BackupKey_DATA:
-		key = DataKey(backupKey.Attr, backupKey.Uid)
+		key = DataKey(backupKey.Attr, backupKey.Namespace, backupKey.Uid)
 	case pb.BackupKey_INDEX:
-		key = IndexKey(backupKey.Attr, backupKey.Term)
+		key = IndexKey(backupKey.Attr, backupKey.Namespace, backupKey.Term)
 	case pb.BackupKey_REVERSE:
-		key = ReverseKey(backupKey.Attr, backupKey.Uid)
+		key = ReverseKey(backupKey.Attr, backupKey.Namespace, backupKey.Uid)
 	case pb.BackupKey_COUNT:
-		key = CountKey(backupKey.Attr, backupKey.Count, false)
+		key = CountKey(backupKey.Attr, backupKey.Namespace, backupKey.Count, false)
 	case pb.BackupKey_COUNT_REV:
-		key = CountKey(backupKey.Attr, backupKey.Count, true)
+		key = CountKey(backupKey.Attr, backupKey.Namespace, backupKey.Count, true)
 	case pb.BackupKey_SCHEMA:
-		key = SchemaKey(backupKey.Attr)
+		key = SchemaKey(backupKey.Attr, backupKey.Namespace)
 	case pb.BackupKey_TYPE:
-		key = TypeKey(backupKey.Attr)
+		key = TypeKey(backupKey.Attr, backupKey.Namespace)
 	}
 
 	if backupKey.StartUid > 0 {
@@ -438,10 +455,10 @@ func TypePrefix() []byte {
 }
 
 // PredicatePrefix returns the prefix for all keys belonging to this predicate except schema key.
-func PredicatePrefix(predicate string) []byte {
-	buf := make([]byte, 1+2+len(predicate))
+func PredicatePrefix(predicate, namespace string) []byte {
+	buf := make([]byte, 1+2+len(predicate)+2+len(namespace))
 	buf[0] = DefaultPrefix
-	k := writeAttr(buf[1:], predicate)
+	k := writeAttr(buf[1:], predicate, namespace)
 	AssertTrue(len(k) == 0)
 	return buf
 }
@@ -480,6 +497,12 @@ func Parse(key []byte) (ParsedKey, error) {
 	k := key[3:]
 
 	p.Attr = string(k[:sz])
+	k = k[sz:]
+
+	sz = int(binary.BigEndian.Uint16(k[:2]))
+	k = k[2:]
+
+	p.Namespace = string(k[:sz])
 	k = k[sz:]
 
 	switch p.bytePrefix {

@@ -118,7 +118,7 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid, err := groups().BelongsToReadOnly(attr)
+		gid, err := groups().BelongsToReadOnly(attr, schema.Namespace)
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 
 		s := schemaMap[gid]
 		if s == nil {
-			s = &pb.SchemaRequest{GroupId: gid}
+			s = &pb.SchemaRequest{GroupId: gid, Namespace: schema.Namespace}
 			s.Fields = schema.Fields
 			schemaMap[gid] = s
 		}

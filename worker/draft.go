@@ -230,7 +230,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
-			return posting.DeletePredicate(ctx, edge.Attr)
+			return posting.DeletePredicate(ctx, edge.Attr, proposal.Mutations.Namespace)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
@@ -255,12 +255,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// these predicates in the current schema state, add them to the schema state. Note that the
 	// schema deduction is done by RDF/JSON chunker.
 	for attr, storageType := range schemaMap {
-		if _, err := schema.State().TypeOf(attr); err != nil {
+		if _, err := schema.State().TypeOf(attr, proposal.Mutations.Namespace); err != nil {
 			hint := pb.Metadata_DEFAULT
 			if mutHint, ok := proposal.Mutations.Metadata.PredHints[attr]; ok {
 				hint = mutHint
 			}
-			if err := createSchema(attr, storageType, hint); err != nil {
+			if err := createSchema(attr,
+				proposal.Mutations.Namespace, storageType, hint); err != nil {
 				return err
 			}
 		}
@@ -294,7 +295,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		var retries int
 		for _, edge := range edges {
 			for {
-				err := runMutation(ctx, edge, txn)
+				err := runMutation(ctx, proposal.Mutations.Namespace, edge, txn)
 				if err == nil {
 					break
 				}

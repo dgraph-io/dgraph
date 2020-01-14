@@ -40,7 +40,7 @@ var (
 )
 
 func (s *state) init() {
-	s.predicate = make(map[string]*pb.SchemaUpdate)
+	s.predicate = make(map[string]map[string]*pb.SchemaUpdate)
 	s.types = make(map[string]*pb.TypeUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
 }
@@ -48,7 +48,7 @@ func (s *state) init() {
 type state struct {
 	sync.RWMutex
 	// Map containing predicate to type information.
-	predicate map[string]*pb.SchemaUpdate
+	predicate map[string]map[string]*pb.SchemaUpdate
 	types     map[string]*pb.TypeUpdate
 	elog      trace.EventLog
 }
@@ -72,13 +72,13 @@ func (s *state) DeleteAll() {
 }
 
 // Delete updates the schema in memory and disk
-func (s *state) Delete(attr string) error {
+func (s *state) Delete(attr, namespace string) error {
 	s.Lock()
 	defer s.Unlock()
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
 	txn := pstore.NewTransactionAt(1, true)
-	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
+	if err := txn.Delete(x.SchemaKey(attr, namespace)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
@@ -86,7 +86,11 @@ func (s *state) Delete(attr string) error {
 		return err
 	}
 
-	delete(s.predicate, attr)
+	predicates, ok := s.predicate[namespace]
+	if !ok {
+		return nil
+	}
+	delete(predicates, attr)
 	return nil
 }
 
@@ -97,7 +101,7 @@ func (s *state) DeleteType(typeName string) error {
 
 	glog.Infof("Deleting type definition for type: [%s]", typeName)
 	txn := pstore.NewTransactionAt(1, true)
-	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
+	if err := txn.Delete(x.TypeKey(typeName, "default")); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
@@ -128,14 +132,17 @@ func logTypeUpdate(typ pb.TypeUpdate, typeName string) string {
 
 // Set sets the schema for the given predicate in memory.
 // Schema mutations must flow through the update function, which are synced to the db.
-func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
+func (s *state) Set(pred, namespace string, schema *pb.SchemaUpdate) {
 	if schema == nil {
 		return
 	}
 
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[pred] = schema
+	if s.predicate[namespace] == nil {
+		s.predicate[namespace] = make(map[string]*pb.SchemaUpdate)
+	}
+	s.predicate[namespace][pred] = schema
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
@@ -149,10 +156,14 @@ func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
 }
 
 // Get gets the schema for the given predicate.
-func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
+func (s *state) Get(pred, namespace string) (pb.SchemaUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
-	schema, has := s.predicate[pred]
+	predicates, has := s.predicate[namespace]
+	if !has {
+		return pb.SchemaUpdate{}, false
+	}
+	schema, has := predicates[pred]
 	if !has {
 		return pb.SchemaUpdate{}, false
 	}
@@ -171,31 +182,39 @@ func (s *state) GetType(typeName string) (pb.TypeUpdate, bool) {
 }
 
 // TypeOf returns the schema type of predicate
-func (s *state) TypeOf(pred string) (types.TypeID, error) {
+func (s *state) TypeOf(pred, namespace string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return types.TypeID(schema.ValueType), nil
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return types.TypeID(schema.ValueType), nil
+		}
 	}
 	return types.UndefinedID, errors.Errorf("Schema not defined for predicate: %v.", pred)
 }
 
 // IsIndexed returns whether the predicate is indexed or not
-func (s *state) IsIndexed(pred string) bool {
+func (s *state) IsIndexed(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return len(schema.Tokenizer) > 0
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return len(schema.Tokenizer) > 0
+		}
 	}
 	return false
 }
 
 // IndexedFields returns the list of indexed fields
-func (s *state) IndexedFields() []string {
+func (s *state) IndexedFields(namespace string) []string {
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
-	for k, v := range s.predicate {
+	predicates, has := s.predicate[namespace]
+	if !has {
+		return out
+	}
+	for k, v := range predicates {
 		if len(v.Tokenizer) > 0 {
 			out = append(out, k)
 		}
@@ -203,13 +222,24 @@ func (s *state) IndexedFields() []string {
 	return out
 }
 
+// Predicate holds the predicate name and namespace it belongs to.
+type Predicate struct {
+	Namespace string
+	Name      string
+}
+
 // Predicates returns the list of predicates for given group
-func (s *state) Predicates() []string {
+func (s *state) Predicates() []Predicate {
 	s.RLock()
 	defer s.RUnlock()
-	var out []string
-	for k := range s.predicate {
-		out = append(out, k)
+	var out []Predicate
+	for namespace, predicates := range s.predicate {
+		for predicate := range predicates {
+			out = append(out, Predicate{
+				Namespace: namespace,
+				Name:      predicate,
+			})
+		}
 	}
 	return out
 }
@@ -226,10 +256,12 @@ func (s *state) Types() []string {
 }
 
 // Tokenizer returns the tokenizer for given predicate
-func (s *state) Tokenizer(pred string) []tok.Tokenizer {
+func (s *state) Tokenizer(pred, namespace string) []tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
-	schema, ok := s.predicate[pred]
+	predicates, ok := s.predicate[namespace]
+	x.AssertTruef(ok, "namestate state not found for the namespace %s", namespace)
+	schema, ok := predicates[pred]
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []tok.Tokenizer
 	for _, it := range schema.Tokenizer {
@@ -241,9 +273,9 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 }
 
 // TokenizerNames returns the tokenizer names for given predicate
-func (s *state) TokenizerNames(pred string) []string {
+func (s *state) TokenizerNames(pred, namespace string) []string {
 	var names []string
-	tokenizers := s.Tokenizer(pred)
+	tokenizers := s.Tokenizer(pred, namespace)
 	for _, t := range tokenizers {
 		names = append(names, t.Name())
 	}
@@ -252,8 +284,8 @@ func (s *state) TokenizerNames(pred string) []string {
 
 // HasTokenizer is a convenience func that checks if a given tokenizer is found in pred.
 // Returns true if found, else false.
-func (s *state) HasTokenizer(id byte, pred string) bool {
-	for _, t := range s.Tokenizer(pred) {
+func (s *state) HasTokenizer(id byte, pred, namespace string) bool {
+	for _, t := range s.Tokenizer(pred, namespace) {
 		if t.Identifier() == id {
 			return true
 		}
@@ -262,57 +294,67 @@ func (s *state) HasTokenizer(id byte, pred string) bool {
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
-func (s *state) IsReversed(pred string) bool {
+func (s *state) IsReversed(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.Directive == pb.SchemaUpdate_REVERSE
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return schema.Directive == pb.SchemaUpdate_REVERSE
+		}
 	}
 	return false
 }
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
-func (s *state) HasCount(pred string) bool {
+func (s *state) HasCount(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.Count
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return schema.Count
+		}
 	}
 	return false
 }
 
 // IsList returns whether the predicate is of list type.
-func (s *state) IsList(pred string) bool {
+func (s *state) IsList(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.List
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return schema.List
+		}
 	}
 	return false
 }
 
-func (s *state) HasUpsert(pred string) bool {
+func (s *state) HasUpsert(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.Upsert
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return schema.Upsert
+		}
 	}
 	return false
 }
 
-func (s *state) HasLang(pred string) bool {
+func (s *state) HasLang(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if schema, ok := s.predicate[pred]; ok {
-		return schema.Lang
+	if predicates, ok := s.predicate[namespace]; ok {
+		if schema, ok := predicates[pred]; ok {
+			return schema.Lang
+		}
 	}
 	return false
 }
 
-func (s *state) HasNoConflict(pred string) bool {
+func (s *state) HasNoConflict(pred, namespace string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	return s.predicate[pred].GetNoConflict()
+	return s.predicate[namespace][pred].GetNoConflict()
 }
 
 // Init resets the schema state, setting the underlying DB to the given pointer.
@@ -322,11 +364,11 @@ func Init(ps *badger.DB) {
 }
 
 // Load reads the schema for the given predicate from the DB.
-func Load(predicate string) error {
+func Load(predicate, namespace string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
-	key := x.SchemaKey(predicate)
+	key := x.SchemaKey(predicate, namespace)
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
@@ -344,7 +386,7 @@ func Load(predicate string) error {
 	if err != nil {
 		return err
 	}
-	State().Set(predicate, &s)
+	State().Set(predicate, namespace, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
@@ -384,7 +426,7 @@ func LoadSchemaFromDb() error {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-			State().Set(attr, &s)
+			State().Set(attr, pk.Namespace, &s)
 			return nil
 		})
 		if err != nil {
@@ -455,6 +497,7 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 		List:      true,
+		Namespace: "default",
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -466,20 +509,24 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
+				Namespace: "default",
 			},
 			{
 				Predicate: "dgraph.password",
 				ValueType: pb.Posting_PASSWORD,
+				Namespace: "default",
 			},
 			{
 				Predicate: "dgraph.user.group",
 				Directive: pb.SchemaUpdate_REVERSE,
 				ValueType: pb.Posting_UID,
 				List:      true,
+				Namespace: "default",
 			},
 			{
 				Predicate: "dgraph.group.acl",
 				ValueType: pb.Posting_STRING,
+				Namespace: "default",
 			}}...)
 	}
 

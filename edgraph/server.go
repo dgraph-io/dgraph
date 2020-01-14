@@ -209,11 +209,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
+
+		// Set the namespace to the schema update according to the request.
+		update.Namespace = op.Namespace
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
-	// Convert schema for the given namespace.
-	convertSchemaForNamespace(op.Namespace, result)
 
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
@@ -221,15 +222,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Namespace = op.Namespace
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
-}
-
-// convertSchemaForNamespace will convert the predicate name for the given namespace.
-func convertSchemaForNamespace(namespace string, s *schema.ParsedSchema) {
-	for _, pred := range s.Preds {
-		// No need to check for reserved predicate. Because, Alter will reject if there any reserved
-		// predicate.
-		pred.Predicate = x.PredicateKeyForNamespace(pred.Predicate, namespace)
-	}
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -1032,7 +1024,7 @@ func parseMutationObject(mu *api.Mutation, namespace string) (*gql.Mutation, err
 	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
-		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads, namespace)
+		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
 			return nil, err
 		}
@@ -1041,14 +1033,14 @@ func parseMutationObject(mu *api.Mutation, namespace string) (*gql.Mutation, err
 	}
 	if len(mu.DeleteJson) > 0 {
 		// The metadata is not currently needed for delete operations so it can be safely ignored.
-		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads, namespace)
+		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, md, err := chunker.ParseRDFs(mu.SetNquads, namespace)
+		nqs, md, err := chunker.ParseRDFs(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
@@ -1056,7 +1048,7 @@ func parseMutationObject(mu *api.Mutation, namespace string) (*gql.Mutation, err
 		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, _, err := chunker.ParseRDFs(mu.DelNquads, namespace)
+		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}

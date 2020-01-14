@@ -54,11 +54,11 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 }
 
 // runMutation goes through all the edges and applies them.
-func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
+func runMutation(ctx context.Context, namespace string, edge *pb.DirectedEdge, txn *posting.Txn) error {
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 
-	su, ok := schema.State().Get(edge.Attr)
+	su, ok := schema.State().Get(edge.Attr, namespace)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
@@ -75,7 +75,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		return err
 	}
 
-	key := x.DataKey(edge.Attr, edge.Entity)
+	key := x.DataKey(edge.Attr, namespace, edge.Entity)
 	// The following is a performance optimization which allows us to not read a posting list from
 	// disk. We calculate this based on how AddMutationWithIndex works. The general idea is that if
 	// we're not using the read posting list, we don't need to retrieve it. We need the posting list
@@ -112,7 +112,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if err != nil {
 		return err
 	}
-	return plist.AddMutationWithIndex(ctx, edge, txn)
+	return plist.AddMutationWithIndex(ctx, namespace, edge, txn)
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
@@ -135,7 +135,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if tablet, err := groups().Tablet(update.Predicate); err != nil {
+	if tablet, err := groups().Tablet(update.Predicate, update.Namespace); err != nil {
 		return err
 	} else if tablet.GetGroupId() != groups().groupId() {
 		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
@@ -166,6 +166,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		StartTs:       startTs,
 		OldSchema:     &old,
 		CurrentSchema: update,
+		Namespace:     update.Namespace,
 	}
 	return rebuild.Run(ctx)
 }
@@ -179,7 +180,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	data, err := s.Marshal()
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
-		Key:      x.SchemaKey(s.Predicate),
+		Key:      x.SchemaKey(s.Predicate, s.Namespace),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
 	})
@@ -189,14 +190,14 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
+func createSchema(attr, namespace string, typ types.TypeID, hint pb.Metadata_HintType) error {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
-		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
+		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr, Namespace: namespace}
 		// For type UidID, set List to true. This is done because previously
 		// all predicates of type UidID were implicitly considered lists.
 		if typ == types.UidID {

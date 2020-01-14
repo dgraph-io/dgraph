@@ -235,15 +235,13 @@ type NQuadBuffer struct {
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
 	predHints map[string]pb.Metadata_HintType
-	namespace string
 }
 
 // NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
-func NewNQuadBuffer(batchSize int, namespace string) *NQuadBuffer {
+func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	buf := &NQuadBuffer{
 		batchSize: batchSize,
 		nqCh:      make(chan []*api.NQuad, 10),
-		namespace: namespace,
 	}
 	if buf.batchSize > 0 {
 		buf.nquads = make([]*api.NQuad, 0, batchSize)
@@ -260,11 +258,6 @@ func (buf *NQuadBuffer) Ch() <-chan []*api.NQuad {
 // Push can be passed one or more NQuad pointers, which get pushed to the buffer.
 func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	for _, nq := range nqs {
-		if nq.Predicate != x.Star {
-			// Parse the predicate for the given namespace.
-			nq.Predicate = x.PredicateKeyForNamespace(nq.Predicate, buf.namespace)
-		}
-
 		buf.nquads = append(buf.nquads, nq)
 		if buf.batchSize > 0 && len(buf.nquads) >= buf.batchSize {
 			buf.nqCh <- buf.nquads
@@ -540,8 +533,8 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
-func ParseJSON(b []byte, op int, namespace string) ([]*api.NQuad, *pb.Metadata, error) {
-	buf := NewNQuadBuffer(-1, namespace)
+func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
+	buf := NewNQuadBuffer(-1)
 	err := buf.ParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err

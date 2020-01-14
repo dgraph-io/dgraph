@@ -133,8 +133,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// timeout.
 	var noTimeout bool
 
-	checkTablet := func(pred string) error {
-		if tablet, err := groups().Tablet(pred); err != nil {
+	checkTablet := func(pred, namespace string) error {
+		if tablet, err := groups().Tablet(pred, namespace); err != nil {
 			return err
 		} else if tablet == nil || tablet.GroupId == 0 {
 			return errNonExistentTablet
@@ -149,7 +149,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if err := checkTablet(edge.Attr); err != nil {
+			if err := checkTablet(edge.Attr, proposal.Mutations.Namespace); err != nil {
 				return err
 			}
 			su, ok := schema.State().Get(edge.Attr)
@@ -161,7 +161,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		}
 
 		for _, schema := range proposal.Mutations.Schema {
-			if err := checkTablet(schema.Predicate); err != nil {
+			if err := checkTablet(schema.Predicate, schema.Namespace); err != nil {
 				return err
 			}
 			if err := checkSchema(schema); err != nil {

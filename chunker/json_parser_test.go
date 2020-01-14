@@ -71,7 +71,7 @@ type Person struct {
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
-	nqs := NewNQuadBuffer(1000, "default")
+	nqs := NewNQuadBuffer(1000)
 	err := nqs.ParseJSON(b, op)
 	return nqs.nquads, err
 }
@@ -131,18 +131,18 @@ func TestNquadsFromJson1(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-age
-married
-address 
-}}`,
+ name
+ age
+ married
+ address 
+ }}`,
 		expected: `{"alice": [
-{"name": "Alice",
-"age": 26,
-"married": true,
-"address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
-`}
+ {"name": "Alice",
+ "age": 26,
+ "married": true,
+ "address": {"coordinates": [2,1.1], "type": "Point"}}
+ ]}								
+ `}
 	exp.verify()
 }
 
@@ -171,18 +171,18 @@ func TestNquadsFromJson2(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-friend {
-  name
-  married
-}}}`,
+ name
+ friend {
+   name
+   married
+ }}}`,
 		expected: `{"alice":[{
-"name":"Alice",
-"friend": [
-{"name":"Charlie", "married":false},
-{"name":"Bob"}
-]
-}]}`,
+ "name":"Alice",
+ "friend": [
+ {"name":"Charlie", "married":false},
+ {"name":"Bob"}
+ ]
+ }]}`,
 	}
 	exp.verify()
 }
@@ -204,13 +204,13 @@ func TestNquadsFromJson3(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-school {name}
-}}`,
+ name
+ school {name}
+ }}`,
 		expected: `{"alice":[{
-"name":"Alice",
-"school": [{"name":"Wellington Public School"}]
-}]}`,
+ "name":"Alice",
+ "school": [{"name":"Wellington Public School"}]
+ }]}`,
 	}
 	exp.verify()
 }
@@ -225,12 +225,12 @@ func TestNquadsFromJson4(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-mobile
-car
-age
-weight
-}}`,
+ name
+ mobile
+ car
+ age
+ weight
+ }}`,
 		expected: fmt.Sprintf(`{"alice":%s}`, json),
 	}
 	exp.verify()
@@ -238,10 +238,10 @@ weight
 
 func TestNquadsFromJsonMap(t *testing.T) {
 	json := `{"name":"Alice",
-"age": 25,
-"friends": [{
-"name": "Bob"
-}]}`
+ "age": 25,
+ "friends": [{
+ "name": "Bob"
+ }]}`
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
@@ -250,10 +250,10 @@ func TestNquadsFromJsonMap(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{people(func: eq(name, "Alice")) {
-age
-name
-friends {name}
-}}`,
+ age
+ name
+ friends {name}
+ }}`,
 		expected: fmt.Sprintf(`{"people":[%s]}`, json),
 	}
 	exp.verify()
@@ -261,65 +261,65 @@ friends {name}
 
 func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 	json := `
-[
-  {
-    "name": "A",
-    "age": 25,
-    "friends": [
-      {
-        "name": "A1",
-        "friends": [
-          {
-            "name": "A11"
-          },
-          {
-            "name": "A12"
-          }
-        ]
-      },
-     {
-        "name": "A2",
-        "friends": [
-          {
-            "name": "A21"
-          },
-          {
-            "name": "A22"
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "name": "B",
-    "age": 26,
-    "friends": [
-      {
-        "name": "B1",
-        "friends": [
-          {
-            "name": "B11"
-          },
-          {
-            "name": "B12"
-          }
-        ]
-      },
-     {
-        "name": "B2",
-        "friends": [
-          {
-            "name": "B21"
-          },
-          {
-            "name": "B22"
-          }
-        ]
-      }
-    ]
-  }
-]
-`
+ [
+   {
+	 "name": "A",
+	 "age": 25,
+	 "friends": [
+	   {
+		 "name": "A1",
+		 "friends": [
+		   {
+			 "name": "A11"
+		   },
+		   {
+			 "name": "A12"
+		   }
+		 ]
+	   },
+	  {
+		 "name": "A2",
+		 "friends": [
+		   {
+			 "name": "A21"
+		   },
+		   {
+			 "name": "A22"
+		   }
+		 ]
+	   }
+	 ]
+   },
+   {
+	 "name": "B",
+	 "age": 26,
+	 "friends": [
+	   {
+		 "name": "B1",
+		 "friends": [
+		   {
+			 "name": "B11"
+		   },
+		   {
+			 "name": "B12"
+		   }
+		 ]
+	   },
+	  {
+		 "name": "B2",
+		 "friends": [
+		   {
+			 "name": "B21"
+		   },
+		   {
+			 "name": "B22"
+		   }
+		 ]
+	   }
+	 ]
+   }
+ ]
+ `
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
@@ -328,10 +328,10 @@ func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{people(func: has(age), orderasc: name) @recurse {
-name
-age
-friends
-}}`,
+ name
+ age
+ friends
+ }}`,
 		expected: fmt.Sprintf(`{"people":%s}`, json),
 	}
 	exp.verify()
@@ -355,7 +355,7 @@ func TestJsonNumberParsing(t *testing.T) {
 		nqs, err := Parse([]byte(test.in), SetNquads)
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
-			require.Equal(t, makeNquad("1", "defaultkey", test.out), nqs[0])
+			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
 		} else {
 			require.Error(t, err)
 		}
@@ -378,7 +378,7 @@ func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 
 func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	json := `{"uid":"","name":"Alice","following":[{"name":"Bob"}],"school":[{"uid":"",
-"name":"Crown Public School"}]}`
+ "name":"Crown Public School"}]}`
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
@@ -387,12 +387,12 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-following { name}
-school { name}
-}}`,
+ name
+ following { name}
+ school { name}
+ }}`,
 		expected: `{"alice":[{"name":"Alice","following":[{"name":"Bob"}],"school":[{
-"name":"Crown Public School"}]}]}`,
+ "name":"Crown Public School"}]}]}`,
 	}
 	exp.verify()
 }
@@ -408,12 +408,12 @@ func TestNquadsFromJson_BlankNodes(t *testing.T) {
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
-name
-following { name}
-school { name}
-}}`,
+ name
+ following { name}
+ school { name}
+ }}`,
 		expected: `{"alice":[{"name":"Alice","following":[{"name":"Bob"}],"school":[{
-"name":"Crown Public School"}]}]}`,
+ "name":"Crown Public School"}]}]}`,
 	}
 	exp.verify()
 }
@@ -488,11 +488,11 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	json := fmt.Sprintf(`[{"name":"Alice","mobile":"040123456","car":"MA0123",`+
 		`"mobile|operation": "%s",
-         "car|first":true,
-         "car|age": %d,
-         "car|price": %f,
-         "car|since": "%s"
-}]`, operation, carAge, carPrice, timeStr)
+		  "car|first":true,
+		  "car|age": %d,
+		  "car|price": %f,
+		  "car|since": "%s"
+ }]`, operation, carAge, carPrice, timeStr)
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
@@ -575,7 +575,7 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 
 	nq, err := Parse([]byte(json), DeleteNquads)
 	require.NoError(t, err)
-	require.Equal(t, nq[0], makeNquadEdge("1000", "defaultfriend", "1001"))
+	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
 }
 
 func TestNquadsFromJsonDeleteStar(t *testing.T) {
@@ -585,7 +585,7 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "defaultname",
+		Predicate: "name",
 		ObjectValue: &api.Value{
 			Val: &api.Value_DefaultVal{
 				DefaultVal: "_STAR_ALL",
@@ -601,7 +601,7 @@ func TestValInUpsert(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "defaultname",
+		Predicate: "name",
 		ObjectId:  "val(name)",
 	}
 	require.Equal(t, expected, nq[0])
@@ -614,7 +614,7 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
-		Predicate: "defaultname",
+		Predicate: "name",
 		ObjectValue: &api.Value{
 			Val: &api.Value_DefaultVal{
 				DefaultVal: "_STAR_ALL",

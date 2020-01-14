@@ -358,7 +358,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := strings.Join(splits[1:], "-")
-			tablet := s.ServingTablet(pred)
+			tablet := s.ServingTablet(pred, src.Namespace)
 			if tablet == nil {
 				return errors.Errorf("Tablet for %s is nil", pred)
 			}

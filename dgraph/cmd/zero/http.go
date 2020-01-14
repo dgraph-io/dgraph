@@ -156,6 +156,11 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
@@ -179,7 +184,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tab := st.zero.ServingTablet(tablet)
+	tab := st.zero.ServingTablet(tablet, namespace)
 	if tab == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
@@ -194,7 +199,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
+	if err := st.zero.movePredicate(tablet, namespace, srcGroup, dstGroup); err != nil {
 		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
 			tablet, srcGroup, dstGroup, err)
 		w.WriteHeader(http.StatusInternalServerError)

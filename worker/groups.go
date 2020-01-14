@@ -48,7 +48,7 @@ type groupi struct {
 	state        *pb.MembershipState
 	Node         *node
 	gid          uint32
-	tablets      map[string]*pb.Tablet
+	tablets      map[string]map[string]*pb.Tablet
 	triggerCh    chan struct{} // Used to trigger membership sync
 	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *y.Closer
@@ -72,7 +72,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
 		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
+		tablets:      make(map[string]map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -172,7 +172,7 @@ func (g *groupi) informZeroAboutTablets() {
 		failed := false
 		preds := schema.State().Predicates()
 		for _, pred := range preds {
-			if tablet, err := g.Tablet(pred); err != nil {
+			if tablet, err := g.Tablet(pred.Name, pred.Namespace); err != nil {
 				failed = true
 				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
 			} else if tablet == nil {
@@ -292,7 +292,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	var foundSelf bool
-	g.tablets = make(map[string]*pb.Tablet)
+	g.tablets = make(map[string]map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if x.WorkerConfig.RaftId == member.Id {
@@ -304,7 +304,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			}
 		}
 		for _, tablet := range group.Tablets {
-			g.tablets[tablet.Predicate] = tablet
+			tabs, ok := g.tablets[tablet.Namespace]
+			if !ok {
+				tabs = make(map[string]*pb.Tablet)
+			}
+			tabs[tablet.Predicate] = tablet
+			g.tablets[tablet.Namespace] = tabs
 		}
 		if gid == g.groupId() {
 			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
@@ -386,12 +391,16 @@ func (g *groupi) BelongsTo(key string) (uint32, error) {
 
 // BelongsToReadOnly acts like BelongsTo except it does not ask zero to serve
 // the tablet for key if no group is currently serving it.
-func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
+func (g *groupi) BelongsToReadOnly(key string, namespace string) (uint32, error) {
 	g.RLock()
-	tablet := g.tablets[key]
+	tablets := g.tablets[namespace]
 	g.RUnlock()
-	if tablet != nil {
-		return tablet.GetGroupId(), nil
+
+	if tablets != nil {
+		tablet := tablets[key]
+		if tablet != nil {
+			return tablet.GetGroupId(), nil
+		}
 	}
 
 	// We don't know about this tablet. Talk to dgraphzero to find out who is
@@ -399,9 +408,10 @@ func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
-	tablet = &pb.Tablet{
+	tablet := &pb.Tablet{
 		Predicate: key,
 		ReadOnly:  true,
+		Namespace: namespace,
 	}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
@@ -414,7 +424,12 @@ func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
 
 	g.Lock()
 	defer g.Unlock()
-	g.tablets[key] = out
+	tablets = g.tablets[out.Namespace]
+	if tablets == nil {
+		tablets = make(map[string]*pb.Tablet)
+	}
+	tablets[out.Predicate] = out
+	g.tablets[out.Namespace] = tablets
 	return out.GetGroupId(), nil
 }
 
@@ -438,15 +453,18 @@ func (g *groupi) ServesTabletReadOnly(key string) (bool, error) {
 }
 
 // Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
+func (g *groupi) Tablet(key, namespace string) (*pb.Tablet, error) {
 	emptyTablet := pb.Tablet{}
 
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
-	tablet, ok := g.tablets[key]
+	tablets, ok := g.tablets[namespace]
 	g.RUnlock()
 	if ok {
-		return tablet, nil
+		tablet, ok := tablets[key]
+		if ok {
+			return tablet, nil
+		}
 	}
 
 	// We don't know about this tablet.
@@ -454,7 +472,7 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
-	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet := &pb.Tablet{GroupId: g.groupId(), Predicate: key, Namespace: namespace}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
@@ -465,7 +483,12 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	// predicates that do no exist.
 	if out.GroupId > 0 {
 		g.Lock()
-		g.tablets[key] = out
+		tablets, ok := g.tablets[namespace]
+		if !ok {
+			tablets = make(map[string]*pb.Tablet)
+		}
+		tablets[key] = out
+		g.tablets[namespace] = tablets
 		g.Unlock()
 	}
 

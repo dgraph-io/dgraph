@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -188,6 +188,7 @@ message Tablet {
 	int64 space      = 7;
 	bool remove      = 8;
   bool read_only   = 9; // If true, do not ask zero to serve any tablets.
+  string namespace = 10;
 }
 
 message DirectedEdge {
@@ -260,6 +261,7 @@ message Proposal {
 	OracleDelta delta      = 8;
 	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
 	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
+	string namespace       = 11;
 }
 
 message KVS {
@@ -367,6 +369,7 @@ message SchemaRequest {
 	repeated string fields = 3;
 
   repeated string types = 4;
+  string namespace = 5;
 }
 
 message SchemaNode {
@@ -415,6 +418,8 @@ message SchemaUpdate {
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
+
+	string namespace = 14;
 }
 
 message TypeUpdate {
@@ -568,6 +573,7 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
+  string namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.

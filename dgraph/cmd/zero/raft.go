@@ -276,7 +276,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	// There's a edge case that we're handling.
 	// Two servers ask to serve the same tablet, then we need to ensure that
 	// only the first one succeeds.
-	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
+	if prev := n.server.servingTablet(tablet.Predicate, tablet.Namespace); prev != nil {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)

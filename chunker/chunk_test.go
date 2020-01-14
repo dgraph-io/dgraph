@@ -45,7 +45,7 @@ func TestJSONLoadStart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat, 1000, "default")
+		chunker := NewChunker(JsonFormat, 1000)
 		_, err := chunker.Chunk(bufioReader(test.json))
 		require.True(t, err != nil && err != io.EOF, test.desc)
 	}
@@ -64,7 +64,7 @@ func TestChunkJSONMapAndArray(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat, 1000, "default")
+		chunker := NewChunker(JsonFormat, 1000)
 		r := bufioReader(test.json)
 		var chunks []string
 		for {
@@ -96,7 +96,7 @@ func TestJSONLoadReadNext(t *testing.T) {
 		{"[{}", "malformed array"},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat, 1000, "default")
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
 		chunkBuf, err := chunker.Chunk(reader)
 		if err == nil {
@@ -146,7 +146,7 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat, 1000, "default")
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
 		json, err := chunker.Chunk(reader)
 		if err == io.EOF {
@@ -162,52 +162,52 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 // Test that loading all chunks succeeds. No need to test that loaded chunk is valid.
 func TestJSONLoadSuccessAll(t *testing.T) {
 	var testDoc = `
-[
-	{},
-	{
-		"closingDelimeter" : "}"
-	},
-	{
-		"company" : "dgraph",
-		"age": 3
-	},
-	{
-		"professor" : "Alastor \"Mad-Eye\" Moody",
-		"height"    : "6'0\""
-	},
-	{
-		"house" : {
-			"Hermione" : "Gryffindor",
-			"Cedric"   : "Hufflepuff",
-			"Luna"     : "Ravenclaw",
-			"Draco"    : "Slytherin"
-		}
-	}
-]`
+ [
+	 {},
+	 {
+		 "closingDelimeter" : "}"
+	 },
+	 {
+		 "company" : "dgraph",
+		 "age": 3
+	 },
+	 {
+		 "professor" : "Alastor \"Mad-Eye\" Moody",
+		 "height"    : "6'0\""
+	 },
+	 {
+		 "house" : {
+			 "Hermione" : "Gryffindor",
+			 "Cedric"   : "Hufflepuff",
+			 "Luna"     : "Ravenclaw",
+			 "Draco"    : "Slytherin"
+		 }
+	 }
+ ]`
 	var testChunks = []string{
 		`{}`,
 		`{
-		"closingDelimeter" : "}"
-	}`,
+		 "closingDelimeter" : "}"
+	 }`,
 		`{
-		"company" : "dgraph",
-		"age": 3
-	}`,
+		 "company" : "dgraph",
+		 "age": 3
+	 }`,
 		`{
-		"professor" : "Alastor \"Mad-Eye\" Moody",
-		"height"    : "6'0\""
-	}`,
+		 "professor" : "Alastor \"Mad-Eye\" Moody",
+		 "height"    : "6'0\""
+	 }`,
 		`{
-		"house" : {
-			"Hermione" : "Gryffindor",
-			"Cedric"   : "Hufflepuff",
-			"Luna"     : "Ravenclaw",
-			"Draco"    : "Slytherin"
-		}
-	}`,
+		 "house" : {
+			 "Hermione" : "Gryffindor",
+			 "Cedric"   : "Hufflepuff",
+			 "Luna"     : "Ravenclaw",
+			 "Draco"    : "Slytherin"
+		 }
+	 }`,
 	}
 
-	chunker := NewChunker(JsonFormat, 1000, "default")
+	chunker := NewChunker(JsonFormat, 1000)
 	reader := bufioReader(testDoc)
 
 	var json *bytes.Buffer

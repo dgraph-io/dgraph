@@ -55,7 +55,7 @@ func sane(s string) bool {
 
 // ParseRDFs is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So, be careful using this.
-func ParseRDFs(b []byte, namespace string) ([]*api.NQuad, *pb.Metadata, error) {
+func ParseRDFs(b []byte) ([]*api.NQuad, *pb.Metadata, error) {
 	var nqs []*api.NQuad
 	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -65,10 +65,6 @@ func ParseRDFs(b []byte, namespace string) ([]*api.NQuad, *pb.Metadata, error) {
 		}
 		if err != nil {
 			return nil, nil, err
-		}
-		if nq.Predicate != x.Star {
-			// Parse the predicate name for the given namespace.
-			nq.Predicate = x.PredicateKeyForNamespace(nq.Predicate, namespace)
 		}
 		nqs = append(nqs, &nq)
 	}

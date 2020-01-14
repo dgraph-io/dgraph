@@ -72,16 +72,16 @@ const (
 )
 
 // NewChunker returns a new chunker for the specified format.
-func NewChunker(inputFormat InputFormat, batchSize int, namespace string) Chunker {
+func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 	switch inputFormat {
 	case RdfFormat:
 		return &rdfChunker{
-			nqs:   NewNQuadBuffer(batchSize, namespace),
+			nqs:   NewNQuadBuffer(batchSize),
 			lexer: &lex.Lexer{},
 		}
 	case JsonFormat:
 		return &jsonChunker{
-			nqs: NewNQuadBuffer(batchSize, namespace),
+			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
 		panic("unknown input format")

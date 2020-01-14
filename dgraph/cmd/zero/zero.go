@@ -41,6 +41,10 @@ var (
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 
+const (
+	defaultNamespace = "default"
+)
+
 type license struct {
 	User     string    `json:"user"`
 	MaxNodes uint64    `json:"max_nodes"`
@@ -285,13 +289,13 @@ func (s *Server) removeZero(nodeId uint64) {
 }
 
 // ServingTablet returns the Tablet called tablet.
-func (s *Server) ServingTablet(tablet string) *pb.Tablet {
+func (s *Server) ServingTablet(tablet, namespace string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 
 	for _, group := range s.state.Groups {
 		for key, tab := range group.Tablets {
-			if key == tablet {
+			if key == tablet && tab.Namespace == namespace {
 				return tab
 			}
 		}
@@ -311,12 +315,12 @@ func (s *Server) isBlocked(pred string) bool {
 	return blocked
 }
 
-func (s *Server) servingTablet(tablet string) *pb.Tablet {
+func (s *Server) servingTablet(tablet, namespace string) *pb.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
 		for key, tab := range group.Tablets {
-			if key == tablet {
+			if key == tablet && tab.Namespace == namespace {
 				return tab
 			}
 		}
@@ -574,7 +578,7 @@ func (s *Server) ShouldServe(
 	}
 
 	// Check who is serving this tablet.
-	tab := s.ServingTablet(tablet.Predicate)
+	tab := s.ServingTablet(tablet.Predicate, tablet.Namespace)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
 	if tab != nil {
 		// Someone is serving this tablet. Could be the caller as well.
@@ -607,7 +611,7 @@ func (s *Server) ShouldServe(
 		span.Annotatef(nil, "While proposing tablet: %v", err)
 		return tablet, err
 	}
-	tab = s.ServingTablet(tablet.Predicate)
+	tab = s.ServingTablet(tablet.Predicate, tablet.Namespace)
 	x.AssertTrue(tab != nil)
 	span.Annotatef(nil, "Now serving tablet for %s: %+v", tablet.Predicate, tab)
 	return tab, nil
