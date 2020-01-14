@@ -901,8 +901,9 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
+		fields := getIDField(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: "id",
+			Name: fields[0].Name,
 			Type: &ast.Type{
 				NamedType: idTypeFor(defn),
 				NonNull:   !hasXIDField,

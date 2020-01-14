@@ -354,7 +354,7 @@ func deepFilter(t *testing.T) {
 func manyQueries(t *testing.T) {
 	posts := allPosts(t)
 
-	getPattern := `getPost(id: "%s") {
+	getPattern := `getPost(postID: "%s") {
 		postID
 		title
 		text
@@ -502,7 +502,7 @@ func queryOrderAtRoot(t *testing.T) {
 func queriesWithError(t *testing.T) {
 	posts := allPosts(t)
 
-	getPattern := `getPost(id: "%s") {
+	getPattern := `getPost(postID: "%s") {
 		postID
 		title
 		text
