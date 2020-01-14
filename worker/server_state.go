@@ -97,6 +97,8 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
+	// TODO(ibrahim): Remove this once badger is updated in dgraph.
+	opt.ZSTDCompressionLevel = 1
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -157,6 +159,9 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
+
+		// TODO(Ibrahim): Remove this once badger is updated.
+		opt.ZSTDCompressionLevel = 1
 
 		s.WALstore, err = badger.Open(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
