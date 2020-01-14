@@ -155,7 +155,7 @@ func addAuthor(t *testing.T, countryUID string,
 	executeRequest requestExecutor) *author {
 
 	addAuthorParams := &GraphQLParams{
-		Query: `mutation addAuthor($author: AuthorInput!) {
+		Query: `mutation addAuthor($author: AddAuthorInput!) {
 			addAuthor(input: $author) {
 			  	author {
 					id
@@ -321,7 +321,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	updateAuthorParams := &GraphQLParams{
-		Query: `mutation updateAuthor($id: ID!, $set: PatchAuthor!, $remove: PatchAuthor!) {
+		Query: `mutation updateAuthor($id: ID!, $set: AuthorPatch!, $remove: AuthorPatch!) {
 			updateAuthor(
 				input: {
 					filter: {ids: [$id]},
@@ -390,7 +390,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 func addAuthorFromRef(t *testing.T, newAuthor *author, executeRequest requestExecutor) *author {
 
 	addAuthorParams := &GraphQLParams{
-		Query: `mutation addAuthor($author: AuthorInput!) {
+		Query: `mutation addAuthor($author: AddAuthorInput!) {
 			addAuthor(input: $author) {
 			  	author {
 					id
@@ -450,7 +450,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	// mutations get run serially, each in their own transaction, so the addState
 	// sets up the "XZY" xid that's used by the following mutation.
 	addCountryParams := &GraphQLParams{
-		Query: `mutation addCountry($input: CountryInput!) {
+		Query: `mutation addCountry($input: AddCountryInput!) {
 			addState(input: { xcode: "XYZ", name: "A State" }) {
 				state { id xcode name }
 			}
@@ -511,7 +511,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	updateCountryParams := &GraphQLParams{
-		Query: `mutation updateCountry($id: ID!, $set: PatchCountry!, $remove: PatchCountry!) {
+		Query: `mutation updateCountry($id: ID!, $set: CountryPatch!, $remove: CountryPatch!) {
 			addState(input: { xcode: "DEF", name: "Definitely A State" }) {
 				state { id }
 			}
@@ -576,7 +576,7 @@ func addPost(t *testing.T, authorID, countryID string,
 	executeRequest requestExecutor) *post {
 
 	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($post: PostInput!) {
+		Query: `mutation addPost($post: AddPostInput!) {
 			addPost(input: $post) {
 			  post {
 				postID
@@ -781,7 +781,7 @@ func updateDelete(t *testing.T) {
 	}
 
 	updateParams := &GraphQLParams{
-		Query: `mutation updPost($filter: PostFilter!, $del: PatchPost!) {
+		Query: `mutation updPost($filter: PostFilter!, $del: PostPatch!) {
 			updatePost(input: { filter: $filter, remove: $del }) {
 				post {
 					text
@@ -1168,7 +1168,7 @@ func mutationWithDeepFilter(t *testing.T) {
 	newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
 
 	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($post: PostInput!) {
+		Query: `mutation addPost($post: AddPostInput!) {
 			addPost(input: $post) {
 			  post {
 				postID
@@ -1351,7 +1351,7 @@ type starship struct {
 
 func addStarship(t *testing.T) *starship {
 	addStarshipParams := &GraphQLParams{
-		Query: `mutation addStarship($starship: StarshipInput!) {
+		Query: `mutation addStarship($starship: AddStarshipInput!) {
 			addStarship(input: $starship) {
 				starship {
 					id
@@ -1398,7 +1398,7 @@ func addStarship(t *testing.T) *starship {
 
 func addHuman(t *testing.T, starshipID string) string {
 	addHumanParams := &GraphQLParams{
-		Query: `mutation addHuman($human: HumanInput!) {
+		Query: `mutation addHuman($human: AddHumanInput!) {
 			addHuman(input: $human) {
 				human {
 					id
@@ -1435,7 +1435,7 @@ func addHuman(t *testing.T, starshipID string) string {
 
 func addDroid(t *testing.T) string {
 	addDroidParams := &GraphQLParams{
-		Query: `mutation addDroid($droid: DroidInput!) {
+		Query: `mutation addDroid($droid: AddDroidInput!) {
 			addDroid(input: $droid) {
 				droid {
 					id
