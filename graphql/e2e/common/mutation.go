@@ -1245,12 +1245,6 @@ func manyMutations(t *testing.T) {
 }
 
 func testSelectionInAddObject(t *testing.T) {
-	sortInAddObject(t)
-	filterInAddObject(t)
-	paginationInAddObject(t)
-}
-
-func paginationInAddObject(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	newAuth := addAuthor(t, newCountry.ID, postExecutor)
 
@@ -1264,133 +1258,81 @@ func paginationInAddObject(t *testing.T) {
 		Author: newAuth,
 	}
 
-	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($posts: [PostInput!]!) {
-			addPost(input: $posts) {
-			  post (first:1, offset:1, order:{
-			  	desc: title
-			  }){
-				postID
-				title
-			  }
-			}
-		}`,
-		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
+	cases := map[string]struct {
+		Filter   map[string]interface{}
+		First    int
+		Offset   int
+		Sort     map[string]interface{}
+		Expected []*post
+	}{
+		"Pagination": {
+			First:  1,
+			Offset: 1,
+			Sort: map[string]interface{}{
+				"desc": "title",
+			},
+			Expected: []*post{post1},
+		},
+		"Filter": {
+			Filter: map[string]interface{}{
+				"title": map[string]interface{}{
+					"anyoftext": "Test1",
+				},
+			},
+			Expected: []*post{post1},
+		},
+		"Sort": {
+			Sort: map[string]interface{}{
+				"desc": "title",
+			},
+			Expected: []*post{post2, post1},
+		},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
-	requireNoGQLErrors(t, gqlResponse)
-	var result struct {
-		AddPost struct {
-			Post []*post
-		}
-	}
-
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
-	if diff := cmp.Diff([]*post{post1}, result.AddPost.Post, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-
-	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
-}
-
-func filterInAddObject(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-	newAuth := addAuthor(t, newCountry.ID, postExecutor)
-
-	post1 := &post{
-		Title:  "Test1",
-		Author: newAuth,
-	}
-
-	post2 := &post{
-		Title:  "Test2",
-		Author: newAuth,
-	}
-
-	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($posts: [PostInput!]!) {
-			addPost(input: $posts) {
-			  post (filter: {
-			        title: {
-			              anyoftext: "Test1"
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			addPostParams := &GraphQLParams{
+				Query: `mutation addPost($posts: [PostInput!]!, $filter:
+					PostFilter, $first: Int, $offset: Int, $sort: PostOrder) {
+				addPost(input: $posts) {
+				  post (first:$first, offset:$offset, filter:$filter, order:$sort){
+					postID
+					title
+				  }
 				}
-			  }){
-				postID
-				title
-			  }
+			}`,
+				Variables: map[string]interface{}{
+					"posts":  []*post{post1, post2},
+					"first":  test.First,
+					"offset": test.Offset,
+					"sort":   test.Sort,
+					"filter": test.Filter,
+				},
 			}
-		}`,
-		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
-	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
-	requireNoGQLErrors(t, gqlResponse)
-	var result struct {
-		AddPost struct {
-			Post []*post
-		}
-	}
-
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
-	if diff := cmp.Diff([]*post{post1}, result.AddPost.Post, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-
-	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
-}
-
-func sortInAddObject(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-	newAuth := addAuthor(t, newCountry.ID, postExecutor)
-
-	post1 := &post{
-		Title:  "Test Post 1",
-		Author: newAuth,
-	}
-
-	post2 := &post{
-		Title:  "Test Post 2",
-		Author: newAuth,
-	}
-
-	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($posts: [PostInput!]!) {
-			addPost(input: $posts) {
-			  post (order: {
-	                        desc: title
-			  }){
-				postID
-				title
-			  }
+			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+			requireNoGQLErrors(t, gqlResponse)
+			var result struct {
+				AddPost struct {
+					Post []*post
+				}
 			}
-		}`,
-		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
+
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.NoError(t, err)
+
+			opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
+			if diff := cmp.Diff(test.Expected, result.AddPost.Post, opt); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+
+			cleanUp(t, []*country{}, []*author{}, result.AddPost.Post)
+		})
+
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
-	require.Nil(t, gqlResponse.Errors)
-	var result struct {
-		AddPost struct {
-			Post []*post
-		}
-	}
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, []*post{})
 
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
-	if diff := cmp.Diff([]*post{post2, post1}, result.AddPost.Post, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-
-	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
 
 // After a successful mutation, the following query is executed.  That query can
