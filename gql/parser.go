@@ -459,6 +459,10 @@ func regExpVariableFilter(f *Function, idx int) error {
 }
 
 func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
+	if f == nil {
+		return nil
+	}
+
 	if f.Func != nil {
 		if err := substituteVar(f.Func.Attr, &f.Func.Attr, vmap); err != nil {
 			return err

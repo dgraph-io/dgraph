@@ -110,7 +110,7 @@ func GQLWrapLocationf(err error, loc x.Location, format string, args ...interfac
 		return wrapped.WithLocations(loc)
 	case x.GqlErrorList:
 		for _, e := range wrapped {
-			e.WithLocations(loc)
+			_ = e.WithLocations(loc)
 		}
 	}
 	return wrapped

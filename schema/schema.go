@@ -455,6 +455,14 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 		List:      true,
+	}, &pb.SchemaUpdate{
+		Predicate: "dgraph.graphql.schema",
+		ValueType: pb.Posting_STRING,
+	}, &pb.SchemaUpdate{
+		Predicate: "dgraph.graphql.date",
+		ValueType: pb.Posting_DATETIME,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"day"},
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -479,10 +487,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			},
 			{
 				Predicate: "dgraph.group.acl",
-				ValueType: pb.Posting_STRING,
-			},
-			{
-				Predicate: "dgraph.graphql.schema",
 				ValueType: pb.Posting_STRING,
 			},
 		}...)

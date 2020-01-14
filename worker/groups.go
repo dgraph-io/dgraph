@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -189,7 +190,7 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
-		if gid, err := g.BelongsToReadOnly(s.Predicate); err != nil {
+		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
 			g.upsertSchema(s)
@@ -386,11 +387,18 @@ func (g *groupi) BelongsTo(key string) (uint32, error) {
 
 // BelongsToReadOnly acts like BelongsTo except it does not ask zero to serve
 // the tablet for key if no group is currently serving it.
-func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
+// The ts passed should be the start ts of the query, so this method can compare that against a
+// tablet move timestamp. If the tablet was moved to this group after the start ts of the query, we
+// should reject that query.
+func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	g.RLock()
 	tablet := g.tablets[key]
 	g.RUnlock()
 	if tablet != nil {
+		if ts > 0 && ts < tablet.MoveTs {
+			return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
+				ts, tablet.MoveTs, key)
+		}
 		return tablet.GetGroupId(), nil
 	}
 
@@ -415,6 +423,10 @@ func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
 	g.Lock()
 	defer g.Unlock()
 	g.tablets[key] = out
+	if out != nil && ts > 0 && ts < out.MoveTs {
+		return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
+			ts, out.MoveTs, key)
+	}
 	return out.GetGroupId(), nil
 }
 
@@ -425,16 +437,6 @@ func (g *groupi) ServesTablet(key string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
-}
-
-// ServesTabletReadOnly acts like ServesTablet except it does not ask zero to
-// serve the tablet for key if no group is currently serving it.
-func (g *groupi) ServesTabletReadOnly(key string) (bool, error) {
-	gid, err := g.BelongsToReadOnly(key)
-	if err != nil {
-		return false, err
-	}
-	return gid == groups().groupId(), nil
 }
 
 // Do not modify the returned Tablet
@@ -583,6 +585,11 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 // KnownGroups returns the known groups using the global groupi instance.
 func KnownGroups() []uint32 {
 	return groups().KnownGroups()
+}
+
+// GroupId returns the group to which this worker belongs to.
+func GroupId() uint32 {
+	return groups().groupId()
 }
 
 func (g *groupi) triggerMembershipSync() {
@@ -1032,4 +1039,37 @@ func askZeroForEE() bool {
 		time.Sleep(time.Second)
 	}
 	return connState.GetState().GetLicense().GetEnabled()
+}
+
+// SubscribeForUpdates will listen for updates for the given group.
+func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32) {
+	for {
+		// Connect to any of the group 1 nodes.
+		members := groups().AnyTwoServers(group)
+		// There may be a lag while starting so keep retrying.
+		if len(members) == 0 {
+			continue
+		}
+		pool := conn.GetPools().Connect(members[0])
+		client := pb.NewWorkerClient(pool.Get())
+
+		// Get Subscriber stream.
+		stream, err := client.Subscribe(context.Background(), &pb.SubscriptionRequest{
+			Prefixes: prefixes,
+		})
+		if err != nil {
+			glog.Errorf("Error from alpha client subscribe: %v", err)
+			continue
+		}
+	receiver:
+		for {
+			// Listen for updates.
+			kvs, err := stream.Recv()
+			if err != nil {
+				glog.Errorf("Error from worker subscribe stream: %v", err)
+				break receiver
+			}
+			cb(kvs)
+		}
+	}
 }

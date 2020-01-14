@@ -311,7 +311,9 @@ func validateSearchArg(searchArg string,
 	dir *ast.Directive) *gqlerror.Error {
 
 	isEnum := sch.Types[field.Type.Name()].Kind == ast.Enum
-	if search, ok := supportedSearches[searchArg]; !ok {
+	search, ok := supportedSearches[searchArg]
+	switch {
+	case !ok:
 		// This check can be removed once gqlparser bug
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
@@ -320,7 +322,7 @@ func validateSearchArg(searchArg string,
 				"Fields of type %s %s.",
 			typ.Name, field.Name, searchArg, field.Type.Name(), searchMessage(sch, field))
 
-	} else if search.gqlType != field.Type.Name() && !isEnum {
+	case search.gqlType != field.Type.Name() && !isEnum:
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
@@ -328,7 +330,8 @@ func validateSearchArg(searchArg string,
 				"Fields of type %[4]s %[6]s.",
 			typ.Name, field.Name, searchArg, field.Type.Name(),
 			supportedSearches[searchArg].gqlType, searchMessage(sch, field))
-	} else if isEnum && !enumDirectives[searchArg] {
+
+	case isEnum && !enumDirectives[searchArg]:
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has the @search directive but the argument %s "+
@@ -465,17 +468,18 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 		}
 	}
 
-	if len(possibleSearchArgs) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum {
+	switch {
+	case len(possibleSearchArgs) == 1 || sch.Types[field.Type.Name()].Kind == ast.Enum:
 		return "are searchable by just @search"
-	} else if len(possibleSearchArgs) == 0 {
+	case len(possibleSearchArgs) == 0:
 		return "can't have the @search directive"
+	default:
+		sort.Strings(possibleSearchArgs)
+		return fmt.Sprintf(
+			"can have @search by %s and %s",
+			strings.Join(possibleSearchArgs[:len(possibleSearchArgs)-1], ", "),
+			possibleSearchArgs[len(possibleSearchArgs)-1])
 	}
-
-	sort.Strings(possibleSearchArgs)
-	return fmt.Sprintf(
-		"can have @search by %s and %s",
-		strings.Join(possibleSearchArgs[:len(possibleSearchArgs)-1], ", "),
-		possibleSearchArgs[len(possibleSearchArgs)-1])
 }
 
 func isScalar(s string) bool {

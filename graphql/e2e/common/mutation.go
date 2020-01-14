@@ -331,7 +331,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		Query: `mutation updateAuthor($id: ID!, $set: PatchAuthor!, $remove: PatchAuthor!) {
 			updateAuthor(
 				input: {
-					filter: {ids: [$id]}, 
+					filter: {ids: [$id]},
 					set: $set,
 					remove: $remove
 				}
@@ -607,9 +607,9 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 				state { id }
 			}
 
-			updateCountry(			
+			updateCountry(
 				input: {
-					filter: {ids: [$id]}, 
+					filter: {ids: [$id]},
 					set: $set,
 					remove: $remove
 				}

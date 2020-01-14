@@ -8,6 +8,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
 )
 
@@ -69,41 +70,41 @@ type executionContext struct {
 }
 
 func (ec *executionContext) writeKey(k string) {
-	ec.b.WriteRune('"')
-	ec.b.WriteString(k)
-	ec.b.WriteRune('"')
-	ec.b.WriteRune(':')
+	x.Check2(ec.b.WriteRune('"'))
+	x.Check2(ec.b.WriteString(k))
+	x.Check2(ec.b.WriteRune('"'))
+	x.Check2(ec.b.WriteRune(':'))
 }
 
 func (ec *executionContext) writeBoolValue(val bool) {
 	if val {
-		ec.b.WriteString("true")
+		x.Check2(ec.b.WriteString("true"))
 	} else {
-		ec.b.WriteString("false")
+		x.Check2(ec.b.WriteString("false"))
 	}
 }
 
 func (ec *executionContext) writeStringValue(val string) {
-	ec.b.WriteString(strconv.Quote(val))
+	x.Check2(ec.b.WriteString(strconv.Quote(val)))
 }
 
 func (ec *executionContext) writeOptionalStringValue(val *string) {
 	if val == nil {
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 	} else {
 		ec.writeStringValue(*val)
 	}
 }
 
 func (ec *executionContext) writeStringSlice(v []string) {
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeStringValue(v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 // collectFields is our wrapper around graphql.CollectFields which is able to build a tree (after
@@ -156,16 +157,16 @@ func (ec *executionContext) handleTypeEnumValues(field graphql.CollectedField,
 func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 	fields := collectFields(ec.requestContext, ast.SelectionSet{sel}, []string{"Query"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		// TODO - Add tests for __typename.
 		case Typename:
-			ec.b.WriteString(`"Query"`)
+			x.Check2(ec.b.WriteString(`"Query"`))
 		case "__type":
 			ec.queryType(field)
 		case "__schema":
@@ -173,22 +174,22 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 	return ec.b.Bytes()
 }
 
 func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspection.Directive) {
 	fields := collectFields(ec.requestContext, sel, []string{"__Directive"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
-			ec.b.WriteString(`"__Directive"`)
+			x.Check2(ec.b.WriteString(`"__Directive"`))
 		case "name":
 			ec.writeStringValue(obj.Name)
 		case "description":
@@ -200,16 +201,16 @@ func (ec *executionContext) handleDirective(sel ast.SelectionSet, obj *introspec
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspection.EnumValue) {
 	fields := collectFields(ec.requestContext, sel, []string{"__EnumValue"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Name)
 		switch field.Name {
@@ -226,16 +227,16 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspec
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection.Field) {
 	fields := collectFields(ec.requestContext, sel, []string{"__Field"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
@@ -256,16 +257,16 @@ func (ec *executionContext) handleField(sel ast.SelectionSet, obj *introspection
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspection.InputValue) {
 	fields := collectFields(ec.requestContext, sel, []string{"__InputValue"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
@@ -282,16 +283,16 @@ func (ec *executionContext) handleInputValue(sel ast.SelectionSet, obj *introspe
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspection.Schema) {
 	fields := collectFields(ec.requestContext, sel, []string{"__Schema"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Name)
 		switch field.Name {
@@ -310,21 +311,21 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.Type) {
 	fields := collectFields(ec.requestContext, sel, []string{"__Type"})
 
-	ec.b.WriteRune('{')
+	x.Check2(ec.b.WriteRune('{'))
 	for i, field := range fields {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
-			ec.b.WriteString(`"__Type`)
+			x.Check2(ec.b.WriteString(`"__Type`))
 		case "kind":
 			ec.writeStringValue(obj.Kind())
 		case "name":
@@ -346,49 +347,49 @@ func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.
 		default:
 		}
 	}
-	ec.b.WriteRune('}')
+	x.Check2(ec.b.WriteRune('}'))
 }
 
 func (ec *executionContext) marshalDirectiveSlice(sel ast.SelectionSet,
 	v []introspection.Directive) {
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleDirective(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalInputValueSlice(sel ast.SelectionSet,
 	v []introspection.InputValue) {
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleInputValue(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalIntrospectionTypeSlice(sel ast.SelectionSet,
 	v []introspection.Type) {
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleType(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalIntrospectionType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
 		// TODO - This should be an error as this field is mandatory.
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 		return
 	}
 	ec.handleType(sel, v)
@@ -397,71 +398,71 @@ func (ec *executionContext) marshalIntrospectionType(sel ast.SelectionSet, v *in
 func (ec *executionContext) marshalOptionalEnumValueSlice(sel ast.SelectionSet,
 	v []introspection.EnumValue) {
 	if v == nil {
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 		return
 	}
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleEnumValue(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalIntrospectionFieldSlice(sel ast.SelectionSet,
 	v []introspection.Field) {
 	if v == nil {
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 		return
 	}
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleField(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalOptionalInputValueSlice(sel ast.SelectionSet,
 	v []introspection.InputValue) {
 	if v == nil {
-		ec.b.WriteString(`null`)
+		x.Check2(ec.b.WriteString(`null`))
 		return
 	}
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleInputValue(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalOptionalItypeSlice(sel ast.SelectionSet,
 	v []introspection.Type) {
 	if v == nil {
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 		return
 	}
 
-	ec.b.WriteRune('[')
+	x.Check2(ec.b.WriteRune('['))
 	for i := range v {
 		if i != 0 {
-			ec.b.WriteRune(',')
+			x.Check2(ec.b.WriteRune(','))
 		}
 		ec.handleType(sel, &v[i])
 	}
-	ec.b.WriteRune(']')
+	x.Check2(ec.b.WriteRune(']'))
 }
 
 func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
-		ec.b.WriteString("null")
+		x.Check2(ec.b.WriteString("null"))
 		return
 	}
 	ec.handleType(sel, v)

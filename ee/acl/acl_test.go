@@ -135,9 +135,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	// initially the query, mutate and alter operations should all fail
-	// when there are no rules defined on the predicates
-	queryPredicateWithUserAccount(t, dg, true)
+	// initially the query should return empty result, mutate and alter
+	// operations should all fail when there are no rules defined on the predicates
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
@@ -145,8 +145,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
 
-	// now all these operations should fail since there are rules defined on the unusedGroup
-	queryPredicateWithUserAccount(t, dg, true)
+	// now all these operations except query should fail since
+	// there are rules defined on the unusedGroup
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	// create the dev group and add the user to it
@@ -219,7 +220,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	ctx := context.Background()
 	txn := dg.NewTxn()
 	_, err := txn.Query(ctx, query)
-
 	if shouldFail {
 		require.Error(t, err, "the query should have failed")
 	} else {
@@ -380,8 +380,9 @@ func TestPredicatePermission(t *testing.T) {
 	// Schema query is allowed to all logged in users.
 	querySchemaWithUserAccount(t, dg, false)
 
-	// The operations should be blocked when no rule is defined.
-	queryPredicateWithUserAccount(t, dg, true)
+	// The query should return emptry response, alter and mutation
+	// should be blocked when no rule is defined.
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
@@ -389,9 +390,9 @@ func TestPredicatePermission(t *testing.T) {
 	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	// The operations should all fail when there is a rule defined, but the current user
-	// is not allowed.
-	queryPredicateWithUserAccount(t, dg, true)
+	// The operations except query should fail when there is a rule defined, but the
+	// current user is not allowed.
+	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	// Schema queries should still succeed since they are not tied to specific predicates.
@@ -415,6 +416,66 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 
 	// Schema queries should fail if the user has not logged in.
 	querySchemaWithUserAccount(t, dg, true)
+}
+
+func TestUnauthorizedDeletion(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	unAuthPred := "unauthorizedPredicate"
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	op = api.Operation{
+		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
+	}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
+		"-g", devGroup, "-x", "password")
+	require.NoError(t, createDevGroup.Run())
+
+	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
+		"-l", devGroup, "-x", "password")
+	require.NoError(t, addUserToDev.Run())
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID, ok := resp.Uids["a"]
+	require.True(t, ok)
+
+	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
+	require.NoError(t, setPermissionCmd.Run())
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	txn = userClient.NewTxn()
+	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
+	mutation = &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "PermissionDenied")
 }
 
 func TestGuardianAccess(t *testing.T) {
@@ -494,21 +555,18 @@ func removeUserFromGroups(userName string) error {
 	return removeUser.Run()
 }
 
-func TestUnauthorizedDeletion(t *testing.T) {
+func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
-	unAuthPred := "unauthorizedPredicate"
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
-	op := api.Operation{
-		DropAll: true,
-	}
-	require.NoError(t, dg.Alter(ctx, &op))
-
-	op = api.Operation{
-		Schema: fmt.Sprintf("%s: string @index(exact) .", unAuthPred),
-	}
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
@@ -522,17 +580,22 @@ func TestUnauthorizedDeletion(t *testing.T) {
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
-		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"testdata\" .", unAuthPred)),
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+		`),
 		CommitNow: true,
 	}
-	resp, err := txn.Mutate(ctx, mutation)
+	_, err = txn.Mutate(ctx, mutation)
 	require.NoError(t, err)
 
-	nodeUID, ok := resp.Uids["a"]
-	require.True(t, ok)
-
+	// give read access of <name> to alice
 	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
-		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
+		devGroup, "-p", "name", "-m", "4", "-x", "password")
 	require.NoError(t, setPermissionCmd.Run())
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
@@ -542,14 +605,87 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
-	txn = userClient.NewTxn()
-	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
-	mutation = &api.Mutation{
-		DelNquads: []byte(mutString),
-		CommitNow: true,
+	tests := []struct {
+		input       string
+		output      string
+		description string
+		err         error
+	}{
+		{
+			`
+			{
+				me(func: has(name)) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			"alice doesn't have access to <age>",
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(age)) {
+					name
+					age
+				}
+			}
+			`,
+			`{}`,
+			`alice doesn't have access to <age> so "has(age)" is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me1(func: has(name), orderdesc: age) {
+					name
+					age
+				}
+				me2(func: has(name), orderasc: age) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"me2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`me1, me2 will have same results, can't order by <age> since it is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(name)) @groupby(age) {
+					count(name)
+				}
+			}
+			`,
+			`{}`,
+			`can't groupby <age> since <age> is unauthorized`,
+			nil,
+		},
+		{
+			`
+			{
+				me(func: has(name)) @filter(eq(nickname, "RG")) {
+					name
+					age
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`filter won't work because <nickname> is unauthorized`,
+			nil,
+		},
 	}
-	_, err = txn.Mutate(ctx, mutation)
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "PermissionDenied")
+	t.Parallel()
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.True(t, (string(resp.Json) == tc.output && err == tc.err))
+		})
+	}
 }

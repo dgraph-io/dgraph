@@ -926,19 +926,19 @@ func (t *astType) String() string {
 	sb.Grow(len(t.Name()) + 4)
 
 	if t.ListType() == nil {
-		sb.WriteString(t.Name())
+		x.Check2(sb.WriteString(t.Name()))
 	} else {
 		// There's no lists of lists, so this needn't be recursive
-		sb.WriteRune('[')
-		sb.WriteString(t.Name())
+		x.Check2(sb.WriteRune('['))
+		x.Check2(sb.WriteString(t.Name()))
 		if !t.ListType().Nullable() {
-			sb.WriteRune('!')
+			x.Check2(sb.WriteRune('!'))
 		}
-		sb.WriteRune(']')
+		x.Check2(sb.WriteRune(']'))
 	}
 
 	if !t.Nullable() {
-		sb.WriteRune('!')
+		x.Check2(sb.WriteRune('!'))
 	}
 
 	return sb.String()

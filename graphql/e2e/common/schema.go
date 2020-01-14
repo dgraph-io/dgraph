@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -109,7 +110,7 @@ func SchemaTest(t *testing.T, expectedDgraphSchema string) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
 
-	require.JSONEq(t, expectedDgraphSchema, string(resp.GetJson()))
+	testutil.CompareJSON(t, expectedDgraphSchema, string(resp.GetJson()))
 }
 
 func graphQLDescriptions(t *testing.T) {

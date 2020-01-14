@@ -137,12 +137,12 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["exact"]
 		}, {
-			"predicate": "Schema.date",
+			"predicate": "dgraph.graphql.date",
 			"type": "datetime",
 			"index": true,
 			"tokenizer": ["day"]
 		}, {
-			"predicate": "Schema.schema",
+			"predicate": "dgraph.graphql.schema",
 			"type": "string"
 		}, {
 			"predicate": "Starship.length",
@@ -255,11 +255,11 @@ func TestSchema_Normal(t *testing.T) {
 			"name": "Post"
 		}, {
 			"fields": [{
-				"name": "Schema.schema"
+				"name": "dgraph.graphql.schema"
 			}, {
-				"name": "Schema.date"
+				"name": "dgraph.graphql.date"
 			}],
-			"name": "Schema"
+			"name": "dgraph.graphql"
 		}, {
 			"fields": [{
 				"name": "Starship.name"
