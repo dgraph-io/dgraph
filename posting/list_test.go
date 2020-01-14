@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
@@ -484,6 +485,94 @@ func TestMillion(t *testing.T) {
 	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
 		require.Equal(t, uint64(i+1)*2, uid)
+	}
+}
+
+const N int = 20000
+func TestParallelMillion(t *testing.T) {
+	// Ensure list is stored in a single part.
+	maxListSize = math.MaxInt32
+
+	key := x.DataKey("bal", 1331)
+
+	commit := make(chan int)
+	go mutate(t, key, commit)
+
+	ticker1 := time.NewTicker(100 * time.Millisecond)
+    done1 := make(chan bool)
+	go rolluplocal(t, key, ticker1, done1)
+
+	// ticker2 := time.NewTicker(100 * time.Millisecond)
+	// done2 := make (chan bool)
+	// go readpl(t, key, done2, ticker2)
+
+	commits := <-commit
+	done1<-true
+	// done2<-true
+
+
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)	
+	t.Logf("Rolling up posting list last time. minTs= %v\n", ol.minTs)
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+
+
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)	
+	t.Logf("Completed a %v writes. Commits = %v. minTs = %v\n",N,  commits, ol.minTs)
+
+	opt := ListOptions{ReadTs: uint64(N + 1)}
+	l, err := ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1)*2, uid)
+	}
+}
+
+func mutate(t *testing.T,key []byte, commitCh chan int) {
+	var commits int
+	for i := 2; i <= N; i += 2 {
+		j := uint64(i)
+		addEdgeToUID(t, "bal", 1331, j, j, j+1)
+		commits++
+
+		if i % 10 == 0 {
+			t.Logf("mutation at i = %v", i)
+		}
+	
+	}
+	commitCh <- commits
+	return
+}
+
+func rolluplocal(t *testing.T, key []byte, ticker *time.Ticker, done chan bool) {
+	for {
+		select {
+		case <-ticker.C:
+			ol, err := getNew(key, ps)
+			require.NoError(t, err)
+			t.Logf("Rolling up posting list. minTs = %v\n", ol.minTs)
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+		case <-done:
+			return
+		}
+	}	
+}
+
+func readpl(t *testing.T, key []byte, done chan bool, ticker *time.Ticker) {
+	for {
+		select {
+		case <-ticker.C:
+			t.Logf("readpl\n")
+		case <-done:
+			return
+
+		}
 	}
 }
 
