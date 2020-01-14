@@ -1921,3 +1921,11 @@ func TestFacetsWithExpand(t *testing.T) {
 		}
 	}`, js)
 }
+
+// Tests for multiple facets sorting.
+
+// orderby more than once should be error on same facet.
+
+// orderby on non sortable facet should be error.
+
+// orderby should include facet in the result.
