@@ -190,7 +190,7 @@ func TestResponseOrder(t *testing.T) {
 // to delete the call to completeDgraphResult before adding to the response.
 func TestAddMutationUsesErrorPropagation(t *testing.T) {
 	mutation := `mutation {
-		addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
+		addPost(input: [{title: "A Post", text: "Some text", author: {id: "0x1"}}]) {
 			post {
 				title
 				text
@@ -221,9 +221,9 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				"text": "Some text",
 				"author": { "name": "A.N. Author" } } ] }`,
 			expected: `{ "addPost": { "post" :
-				{ "title": "A Post",
+				[{ "title": "A Post",
 				"text": "Some text",
-				"author": { "name": "A.N. Author", "dob": null } } } }`,
+				"author": { "name": "A.N. Author", "dob": null } }] } }`,
 		},
 		"Add mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
@@ -236,12 +236,12 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				{ "title": "A Post",
 				"text": "Some text",
 				"author": { "dob": "2000-01-01" } } ] }`,
-			expected: `{ "addPost": { "post" : null } }`,
+			expected: `{ "addPost": { "post" : [null] } }`,
 			errors: x.GqlErrorList{&x.GqlError{
 				Message: `Non-nullable field 'name' (type String!) ` +
 					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
 				Locations: []x.Location{{Column: 6, Line: 7}},
-				Path:      []interface{}{"addPost", "post", "author", "name"}}},
+				Path:      []interface{}{"addPost", "post", 0, "author", "name"}}},
 		},
 	}
 
@@ -351,15 +351,15 @@ func TestManyMutationsWithError(t *testing.T) {
 	// add2 - should fail
 	// add3 - is never executed
 	multiMutation := `mutation multipleMutations($id: ID!) {
-			add1: addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
+			add1: addPost(input: [{title: "A Post", text: "Some text", author: {id: "0x1"}}]) {
 				post { title }
 			}
 
-			add2: addPost(input: {title: "A Post", text: "Some text", author: {id: $id}}) {
+			add2: addPost(input: [{title: "A Post", text: "Some text", author: {id: $id}}]) {
 				post { title }
 			}
 
-			add3: addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
+			add3: addPost(input: [{title: "A Post", text: "Some text", author: {id: "0x1"}}]) {
 				post { title }
 			}
 		}`
@@ -381,7 +381,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
-				"add1": { "post": { "title": "A Post" } },
+				"add1": { "post": [{ "title": "A Post" }] },
 				"add2" : null
 			}`,
 			errors: x.GqlErrorList{
@@ -400,7 +400,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
-				"add1": { "post": { "title": "A Post" } },
+				"add1": { "post": [{ "title": "A Post" }] },
 				"add2" : null
 			}`,
 			errors: x.GqlErrorList{

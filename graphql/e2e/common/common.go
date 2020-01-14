@@ -250,7 +250,9 @@ func RunAll(t *testing.T) {
 	t.Run("query interface after add mutation", queryInterfaceAfterAddMutation)
 	t.Run("add mutation with xid", addMutationWithXID)
 	t.Run("deep mutations", deepMutations)
+	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
+	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

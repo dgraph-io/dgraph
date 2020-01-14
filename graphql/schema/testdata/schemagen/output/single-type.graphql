@@ -91,7 +91,7 @@ input StringHashFilter {
 #######################
 
 type AddMessagePayload {
-	message: Message
+	message: [Message]
 }
 
 type DeleteMessagePayload {
@@ -166,7 +166,7 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: MessageInput!): AddMessagePayload
+	addMessage(input: [MessageInput!]!): AddMessagePayload
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }

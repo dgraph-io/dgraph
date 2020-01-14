@@ -80,6 +80,7 @@ type Field interface {
 	Alias() string
 	ResponseName() string
 	ArgValue(name string) interface{}
+	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
 	XIDArg() string
 	SetArgTo(arg string, val interface{})
@@ -443,6 +444,15 @@ func (f *field) ArgValue(name string) interface{} {
 	return f.arguments[name]
 }
 
+func (f *field) IsArgListType(name string) bool {
+	arg := f.field.Arguments.ForName(name)
+	if arg == nil {
+		return false
+	}
+
+	return arg.Value.ExpectedType.Elem != nil
+}
+
 func (f *field) Skip() bool {
 	dir := f.field.Directives.ForName("skip")
 	if dir == nil {
@@ -626,6 +636,10 @@ func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
 
+func (q *query) IsArgListType(name string) bool {
+	return (*field)(q).IsArgListType(name)
+}
+
 func (q *query) Skip() bool {
 	return false
 }
@@ -709,6 +723,10 @@ func (m *mutation) Alias() string {
 
 func (m *mutation) SetArgTo(arg string, val interface{}) {
 	(*field)(m).SetArgTo(arg, val)
+}
+
+func (m *mutation) IsArgListType(name string) bool {
+	return (*field)(m).IsArgListType(name)
 }
 
 func (m *mutation) ArgValue(name string) interface{} {

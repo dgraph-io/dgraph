@@ -1,0 +1,69 @@
+-
+  name: "Add mutation with object instead of an array"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "country": { "id": "HI!" },
+        "posts": []
+      }
+    }
+  explanation: "Add mutation expects an array instead of an object"
+  validationerror:
+    { "message":
+            "input:2: Variable type provided AuthorInput! is incompatible with expected
+            type [AuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AuthorInput!\"
+            used in position expecting type \"[AuthorInput!]!\".\n" }
+
+
+-
+  name: "Add mutation with invalid object"
+  gqlmutation: |
+    mutation addAuthor($auth: AuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "posts": []
+      }
+    }
+  explanation: "Name is a required field here and all the elements provided
+       should have one"
+  validationerror:
+    { "message":
+      "input: variable.auth.name must be defined" }
+
+-
+  name: "Add multiple mutation with invalid object"
+  gqlmutation: |
+    mutation addAuthor($auth: [AuthorInput!]!) {
+      addAuthor(input: $auth) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth": [
+      { "name": "A.N. Author",
+        "posts": []
+      },
+      { "posts": []
+      }]
+    }
+  explanation: "Name is a required field and all the elements provided
+      should have one"
+  validationerror:
+    { "message":
+      "input: variable.auth[1].name must be defined" }
