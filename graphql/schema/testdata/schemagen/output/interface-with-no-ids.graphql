@@ -125,15 +125,19 @@ enum UserOrderable {
 # Generated Inputs
 #######################
 
+input AddQuestionInput {
+	text: String
+	askedBy: UserRef
+}
+
+input AddUserInput {
+	name: String
+}
+
 input MessageOrder {
 	asc: MessageOrderable
 	desc: MessageOrderable
 	then: MessageOrder
-}
-
-input QuestionInput {
-	text: String
-	askedBy: UserRef
 }
 
 input QuestionOrder {
@@ -145,10 +149,6 @@ input QuestionOrder {
 input QuestionRef {
 	text: String
 	askedBy: UserRef
-}
-
-input UserInput {
-	name: String
 }
 
 input UserOrder {
@@ -176,6 +176,6 @@ type Query {
 #######################
 
 type Mutation {
-	addQuestion(input: QuestionInput!): AddQuestionPayload
-	addUser(input: UserInput!): AddUserPayload
+	addQuestion(input: AddQuestionInput!): AddQuestionPayload
+	addUser(input: AddUserInput!): AddUserPayload
 }

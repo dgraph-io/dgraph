@@ -125,13 +125,21 @@ type UpdatePostPayload {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	posts: [PostRef!]!
+}
+
+input AddPostInput {
+	author: AuthorRef!
+}
+
 input AuthorFilter {
 	ids: [ID!]
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	posts: [PostRef!]!
+input AuthorPatch {
+	posts: [PostRef!]
 }
 
 input AuthorRef {
@@ -139,21 +147,13 @@ input AuthorRef {
 	posts: [PostRef!]
 }
 
-input PatchAuthor {
-	posts: [PostRef!]
-}
-
-input PatchPost {
-	author: AuthorRef
-}
-
 input PostFilter {
 	ids: [ID!]
 	not: PostFilter
 }
 
-input PostInput {
-	author: AuthorRef!
+input PostPatch {
+	author: AuthorRef
 }
 
 input PostRef {
@@ -163,14 +163,14 @@ input PostRef {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -189,10 +189,10 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: AddPostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addAuthor(input: AuthorInput!): AddAuthorPayload
+	addAuthor(input: AddAuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 }

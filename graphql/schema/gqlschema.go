@@ -408,9 +408,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types[defn.Name+"Input"] = &ast.Definition{
+	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   defn.Name + "Input",
+		Name:   "Add" + defn.Name + "Input",
 		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
@@ -445,7 +445,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
 		return
 	}
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -463,13 +463,13 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 			&ast.FieldDefinition{
 				Name: "set",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			},
 			&ast.FieldDefinition{
 				Name: "remove",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			}),
 	}
@@ -490,10 +490,10 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   "Patch" + defn.Name,
+		Name:   defn.Name + "Patch",
 		Fields: nonIDFields,
 	}
-	schema.Types["Patch"+defn.Name] = patchDefn
+	schema.Types[defn.Name+"Patch"] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
@@ -839,7 +839,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	// This covers the case where the Type only had one field (which had @id directive).
 	// Since we don't allow updating the field with @id directive we don't need to generate any
 	// update payload.
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -953,7 +953,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: "input",
 				Type: &ast.Type{
-					NamedType: defn.Name + "Input",
+					NamedType: "Add" + defn.Name + "Input",
 					NonNull:   true,
 				},
 			},
@@ -967,7 +967,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 

@@ -149,9 +149,9 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
-input PatchPost {
-	title: String
-	titleByEverything: String
+input AddPostInput {
+	title: String!
+	titleByEverything: String!
 	text: String
 	tags: [String]
 	tagsHash: [String]
@@ -201,9 +201,15 @@ input PostFilter {
 	not: PostFilter
 }
 
-input PostInput {
-	title: String!
-	titleByEverything: String!
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostPatch {
+	title: String
+	titleByEverything: String
 	text: String
 	tags: [String]
 	tagsHash: [String]
@@ -223,12 +229,6 @@ input PostInput {
 	postTypeRegexpExact: PostType
 	postTypeHashRegexp: PostType
 	postTypeNone: PostType
-}
-
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
 }
 
 input PostRef {
@@ -293,8 +293,8 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -311,7 +311,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: AddPostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

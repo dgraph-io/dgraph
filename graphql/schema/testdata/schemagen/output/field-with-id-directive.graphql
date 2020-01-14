@@ -154,6 +154,22 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	name: String!
+	pen_name: String
+	posts: [PostRef]
+}
+
+input AddGenreInput {
+	name: String!
+}
+
+input AddPostInput {
+	content: String!
+	author: AuthorRef!
+	genre: GenreRef
+}
+
 input AuthorFilter {
 	ids: [ID!]
 	name: StringHashFilter_StringRegExpFilter
@@ -162,16 +178,15 @@ input AuthorFilter {
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	name: String!
-	pen_name: String
-	posts: [PostRef]
-}
-
 input AuthorOrder {
 	asc: AuthorOrderable
 	desc: AuthorOrderable
 	then: AuthorOrder
+}
+
+input AuthorPatch {
+	pen_name: String
+	posts: [PostRef]
 }
 
 input AuthorRef {
@@ -188,10 +203,6 @@ input GenreFilter {
 	not: GenreFilter
 }
 
-input GenreInput {
-	name: String!
-}
-
 input GenreOrder {
 	asc: GenreOrderable
 	desc: GenreOrderable
@@ -202,32 +213,21 @@ input GenreRef {
 	name: String!
 }
 
-input PatchAuthor {
-	pen_name: String
-	posts: [PostRef]
-}
-
-input PatchPost {
-	content: String
-	author: AuthorRef
-	genre: GenreRef
-}
-
 input PostFilter {
 	ids: [ID!]
 	not: PostFilter
-}
-
-input PostInput {
-	content: String!
-	author: AuthorRef!
-	genre: GenreRef
 }
 
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	content: String
+	author: AuthorRef
+	genre: GenreRef
 }
 
 input PostRef {
@@ -244,14 +244,14 @@ input StringHashFilter_StringRegExpFilter {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -272,12 +272,12 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: AddPostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addAuthor(input: AuthorInput!): AddAuthorPayload
+	addAuthor(input: AddAuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addGenre(input: GenreInput!): AddGenrePayload
+	addGenre(input: AddGenreInput!): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
