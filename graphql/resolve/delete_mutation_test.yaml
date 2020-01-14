@@ -2,11 +2,13 @@
   name: "Only id filter"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
-      { "ids": ["0x1", "0x2"] }
+      { "id": ["0x1", "0x2"] }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
   dgmutations:
@@ -23,12 +25,14 @@
   name: "Multiple filters including id"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
       {
-        "ids": ["0x1", "0x2"],
+        "id": ["0x1", "0x2"],
         "name": { "eq": "A.N. Author" }
       }
     }
@@ -47,7 +51,9 @@
   name: "Multiple non-id filters"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":

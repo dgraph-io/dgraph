@@ -188,7 +188,7 @@
     mutation addPost($post: PostInput!) {
       addPost(input: [$post]) {
         post {
-          postId
+          postID
         }
       }
     }
@@ -773,7 +773,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -789,7 +789,7 @@
         }
       cond: "@if(eq(len(State2), 0))"
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
@@ -831,7 +831,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",

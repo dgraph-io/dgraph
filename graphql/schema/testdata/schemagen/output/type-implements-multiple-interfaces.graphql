@@ -148,7 +148,7 @@ enum HumanOrderable {
 #######################
 
 input CharacterFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	and: CharacterFilter
 	or: CharacterFilter
@@ -172,7 +172,7 @@ input EmployeeOrder {
 }
 
 input HumanFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	and: HumanFilter
 	or: HumanFilter

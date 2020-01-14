@@ -164,7 +164,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 			assigned: map[string]string{"Post1": "0x4"},
 		},
 		"Update Post ": {
-			mut:      `updatePost(input: {filter: {ids:  ["0x4"]}, set: {text: "Updated text"} }) `,
+			mut: `updatePost(input: {filter: {postID
+				:  ["0x4"]}, set: {text: "Updated text"} }) `,
 			rewriter: NewUpdateRewriter,
 			result: map[string]interface{}{
 				"updatePost": []interface{}{map[string]interface{}{"uid": "0x4"}}},

@@ -637,7 +637,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		if isID(fld) {
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
-					Name: "ids",
+					Name: fld.Name,
 					Type: ast.ListType(&ast.Type{
 						NamedType: IDType,
 						NonNull:   true,
@@ -663,7 +663,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
 	// if the filter has more than one field or if it has one non-id field.
-	if (len(filter.Fields) == 1 && filter.Fields[0].Name != "ids") || len(filter.Fields) > 1 {
+	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
 			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},

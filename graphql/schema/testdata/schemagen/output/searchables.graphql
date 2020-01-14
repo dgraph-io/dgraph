@@ -174,7 +174,7 @@ input PatchPost {
 }
 
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	title: StringTermFilter
 	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
 	text: StringFullTextFilter

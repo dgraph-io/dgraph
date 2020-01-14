@@ -19,7 +19,8 @@
   validationerror:
     { "message":
             "input:2: Variable type provided AuthorInput! is incompatible with expected
-            type [AuthorInput!]!\n" }
+            type [AuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AuthorInput!\"
+            used in position expecting type \"[AuthorInput!]!\".\n" }
 
 
 -

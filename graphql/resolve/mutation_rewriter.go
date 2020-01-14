@@ -478,7 +478,8 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 		Attr: "uid",
 	})
 
-	if ids := idFilter(m); ids != nil {
+	// TODO - Cache this instead of this being a loop to find the IDField.
+	if ids := idFilter(m, m.MutatedType().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
