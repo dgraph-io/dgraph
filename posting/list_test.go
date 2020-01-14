@@ -500,11 +500,9 @@ func TestParallelMillion(t *testing.T) {
 	commit := make(chan int)
 	go mutate(t, key, commit)
 
-	ticker1 := time.NewTicker(100 * time.Millisecond)
 	done1 := make(chan bool)
-	go rolluplocal(t, key, ticker1, done1)
-
-	// ticker2 := time.NewTicker(100 * time.Millisecond)
+	go rolluplocal(t, key, done1)
+	
 	// done2 := make (chan bool)
 	// go readpl(t, key, done2, ticker2)
 
@@ -548,29 +546,24 @@ func mutate(t *testing.T, key []byte, commitCh chan int) {
 	return
 }
 
-func rolluplocal(t *testing.T, key []byte, ticker *time.Ticker, done chan bool) {
+func rolluplocal(t *testing.T, key []byte, done chan bool) {
 	writer := NewTxnWriter(pstore)
 	for {
+		ol, err := getNew(key, ps)
+		require.NoError(t, err)
+		t.Logf("Rolling up posting list. minTs = %v\n", ol.minTs)
+		kvs, err := ol.Rollup()
+		require.NoError(t, err)
+		// writer.Write the keys
+		for _, kv := range kvs {
+			require.NoError(t,writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version))
+		}
 		select {
-		case <-ticker.C:
-			ol, err := getNew(key, ps)
-			require.NoError(t, err)
-			t.Logf("Rolling up posting list. minTs = %v\n", ol.minTs)
-			kvs, err := ol.Rollup()
-			require.NoError(t, err)
-			// writer.Write the keys
-			// Check the error.
-			// for _, kv := range kvs {
-			// 	if err := writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version); err != nil {
-			// 		return err
-			// 	}
-			// }
-			//
-			// require.NoError(t, writePostingListToDisk(kvs))
 		case <-done:
 			writer.Flush()
 			return
 		}
+		time.Sleep(time.Millisecond * 10)
 	}
 }
 
