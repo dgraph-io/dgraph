@@ -1244,6 +1244,53 @@ func manyMutations(t *testing.T) {
 	cleanUp(t, append(result.Add1.Country, result.Add2.Country...), []*author{}, []*post{})
 }
 
+func filterInAddObject(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuth := addAuthor(t, newCountry.ID, postExecutor)
+
+	post1 := &post{
+		Title:  "Test Post 1",
+		Author: newAuth,
+	}
+
+	post2 := &post{
+		Title:  "Test Post 2",
+		Author: newAuth,
+	}
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($posts: [PostInput!]!) {
+			addPost(input: $posts) {
+			  post (order: {
+	                        desc: title
+			  }){
+				postID
+				title
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"posts": []*post{post1, post2}},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+	require.Nil(t, gqlResponse.Errors)
+	var result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID", "Author")
+	if diff := cmp.Diff([]*post{post2, post1}, result.AddPost.Post, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
+}
+
 // After a successful mutation, the following query is executed.  That query can
 // contain any depth or filtering that makes sense for the schema.
 //
