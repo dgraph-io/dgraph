@@ -104,7 +104,7 @@ input StringHashFilter {
 #######################
 
 type AddHumanPayload {
-	human: [Human]
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 }
 
 type DeleteCharacterPayload {

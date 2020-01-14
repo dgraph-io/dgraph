@@ -91,7 +91,7 @@ input StringHashFilter {
 #######################
 
 type AddMessagePayload {
-	message: [Message]
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 }
 
 type DeleteMessagePayload {
