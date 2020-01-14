@@ -532,6 +532,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
+
+	// TODO(Ibrahim): Remove this once badger is updated.
+	dbOpts.ZSTDCompressionLevel = 1
+
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
