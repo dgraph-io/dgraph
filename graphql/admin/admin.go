@@ -198,8 +198,14 @@ func newAdminResolver(
 			return
 		}
 
+		pk, err := x.Parse(kv.GetKey())
+		if err != nil {
+			glog.Errorf("Unable to find uid of updated schema %s", err)
+			return
+		}
+
 		newSchema := gqlSchema{
-			ID:     fmt.Sprintf("%#x", pl.Postings[0].Uid),
+			ID:     fmt.Sprintf("%#x", pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
 
@@ -221,7 +227,7 @@ func newAdminResolver(
 		server.mux.Lock()
 		defer server.mux.Unlock()
 
-		// server.schema = newSchema
+		server.schema = newSchema
 		server.status = healthy
 		server.resetSchema(gqlSchema)
 	}, 1)
