@@ -824,10 +824,10 @@
     }
 
 -
-  name: "Filter with ids uses uid func at root."
+  name: "Filter with id uses uid func at root."
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
+      queryAuthor(filter: { id: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
         name
       }
     }
@@ -840,10 +840,10 @@
     }
 
 -
-  name: "Filter with ids inside and argument doesn't use uid func at root."
+  name: "Filter with id inside and argument doesn't use uid func at root."
   gqlquery: |
     query {
-      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { ids: ["0x1", "0x2"] }}) {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { id: ["0x1", "0x2"] }}) {
         name
       }
     }
@@ -856,10 +856,10 @@
     }
 
 -
-  name: "Filter with ids and not translates correctly.."
+  name: "Filter with id and not translates correctly.."
   gqlquery: |
     query {
-      queryAuthor(filter: { not: { ids: ["0x1", "0x2"] }}) {
+      queryAuthor(filter: { not: { id: ["0x1", "0x2"] }}) {
         name
       }
     }
@@ -872,12 +872,12 @@
     }
 
 -
-  name: "Deep filter with ids"
+  name: "Deep filter with id"
   gqlquery: |
     query {
       queryAuthor {
         name
-        posts(filter: { ids: ["0x1", "0x2"], and: { title: { anyofterms: "GraphQL" } }}) {
+        posts(filter: { postID: ["0x1", "0x2"], and: { title: { anyofterms: "GraphQL" } }}) {
           title
         }
       }
@@ -895,12 +895,12 @@
     }
 
 -
-  name: "Deep filter with ids in not key"
+  name: "Deep filter with id in not key"
   gqlquery: |
     query {
       queryAuthor {
         name
-        posts(filter: { title: { anyofterms: "GraphQL" }, not: { ids: ["0x1", "0x2"] } }) {
+        posts(filter: { title: { anyofterms: "GraphQL" }, not: { postID: ["0x1", "0x2"] } }) {
           title
         }
       }
@@ -921,7 +921,7 @@
   name: "Pagination and Order at root node with UID."
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}, first: 0, offset: 1 ) {
+      queryAuthor(filter: { id: ["0x1", "0x2"] }, order: {asc: name}, first: 0, offset: 1 ) {
         name
       }
     }
@@ -937,7 +937,7 @@
   name: "Order at root node with UID."
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["0x1", "0x2"] }, order: {asc: name}) {
+      queryAuthor(filter: { id: ["0x1", "0x2"] }, order: {asc: name}) {
         name
       }
     }
@@ -983,10 +983,10 @@
 
 
 -
-  name: "Filter with no valid ids construct the right query with type func at root."
+  name: "Filter with no valid id construct the right query with type func at root."
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+      queryAuthor(filter: { id: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
         name
       }
     }
@@ -999,10 +999,10 @@
     }
 
 -
-  name: "Filter with ids only includes valid ids in dgquery."
+  name: "Filter with id only includes valid id in dgquery."
   gqlquery: |
     query {
-      queryAuthor(filter: { ids: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
+      queryAuthor(filter: { id: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
         name
       }
     }
@@ -1082,7 +1082,7 @@
   name: "Query editor using code and uid"
   gqlquery: |
     query {
-      queryEditor(filter: { ids: ["0x1"], and: { code: { eq: "editor"}}}) {
+      queryEditor(filter: { id: ["0x1"], and: { code: { eq: "editor"}}}) {
         name
       }
     }

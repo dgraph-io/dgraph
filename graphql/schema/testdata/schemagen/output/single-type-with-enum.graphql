@@ -97,7 +97,7 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post: Post
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type DeletePostPayload {
@@ -128,7 +128,7 @@ input PatchPost {
 }
 
 input PostFilter {
-	ids: [ID!]
+	id: [ID!]
 	not: PostFilter
 }
 
@@ -171,7 +171,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: [PostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

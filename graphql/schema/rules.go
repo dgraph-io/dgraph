@@ -23,6 +23,7 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/validator"
 )
 
 func init() {
@@ -31,6 +32,10 @@ func init() {
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
+
+	validator.AddRule("Check variable type is correct", variableTypeCheck)
+	validator.AddRule("Check for list type value", listTypeCheck)
+
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {

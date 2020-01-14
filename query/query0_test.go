@@ -2674,6 +2674,270 @@ func TestCountUidWithAlias(t *testing.T) {
 		js)
 }
 
+func TestFilterNonIndexedPredicate(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test ge filter on non-indexed string`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(ge(noindex_name, "Leonard's name not indexed")) {
+					noindex_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_name":"Michonne's name not indexed"},{"noindex_name":"Margaret's name not indexed"},{"noindex_name":"Leonard's name not indexed"}]}}`,
+		},
+		{
+			`Test gt filter on non-indexed string`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(gt(noindex_name, "Leonard's name not indexed")) {
+					noindex_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_name":"Michonne's name not indexed"},{"noindex_name":"Margaret's name not indexed"}]}}`,
+		},
+		{
+			`Test le filter on non-indexed string`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(le(noindex_name, "Leonard's name not indexed")) {
+					noindex_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_name":"King Lear's name not indexed"},{"noindex_name":"Leonard's name not indexed"}]}}`,
+		},
+		{
+			`Test lt filter on non-indexed string`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(lt(noindex_name, "Leonard's name not indexed")){
+					noindex_name
+				}
+			},
+			`,
+			`{"data":{"me":[{"noindex_name":"King Lear's name not indexed"}]}}`,
+		},
+		{
+			`Test eq filter on non-indexed string`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(eq(noindex_name, "King Lear's name not indexed")) {
+					noindex_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_name":"King Lear's name not indexed"}]}}`,
+		},
+		{
+			`Test ge filter on non-indexed int`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(ge(noindex_age, "22")) {
+					noindex_age
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_age":22},{"noindex_age":23},{"noindex_age":24}]}}`,
+		},
+		{
+			`Test gt filter on non-indexed int`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(gt(noindex_age, "22")) {
+					noindex_age
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_age":23},{"noindex_age":24}]}}`,
+		},
+		{
+			`Test le filter on non-indexed int`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(le(noindex_age, "22")) {
+					noindex_age
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_age":21},{"noindex_age":22}]}}`,
+		},
+		{
+			`Test lt filter on non-indexed int`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(lt(noindex_age, "22")){
+					noindex_age
+				}
+			},
+			`,
+			`{"data":{"me":[{"noindex_age":21}]}}`,
+		},
+		{
+			`Test eq filter on non-indexed int`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(eq(noindex_age, "22")) {
+					noindex_age
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_age":22}]}}`,
+		},
+		{
+			`Test ge filter on non-indexed datetime`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(ge(noindex_dob, "1610-11-01")) {
+					noindex_dob
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_dob":"1810-11-01T00:00:00Z"},{"noindex_dob":"1710-11-01T00:00:00Z"},{"noindex_dob":"1610-11-01T00:00:00Z"}]}}`,
+		},
+		{
+			`Test gt filter on non-indexed datetime`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(gt(noindex_dob, "1610-11-01")) {
+					noindex_dob
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_dob":"1810-11-01T00:00:00Z"},{"noindex_dob":"1710-11-01T00:00:00Z"}]}}`,
+		},
+		{
+			`Test le filter on non-indexed datetime`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(le(noindex_dob, "1610-11-01")) {
+					noindex_dob
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_dob":"1610-11-01T00:00:00Z"},{"noindex_dob":"1510-11-01T00:00:00Z"}]}}`,
+		},
+		{
+			`Test lt filter on non-indexed datetime`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(lt(noindex_dob, "1610-11-01")){
+					noindex_dob
+				}
+			},
+			`,
+			`{"data":{"me":[{"noindex_dob":"1510-11-01T00:00:00Z"}]}}`,
+		},
+		{
+			`Test eq filter on non-indexed datetime`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(eq(noindex_dob, "1610-11-01")) {
+					noindex_dob
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_dob":"1610-11-01T00:00:00Z"}]}}`,
+		},
+		{
+			`Test ge filter on non-indexed float`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(ge(noindex_salary, "589.04")) {
+					noindex_salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_salary":589.040000},{"noindex_salary":967.680000}]}}`,
+		},
+		{
+			`Test gt filter on non-indexed float`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(gt(noindex_salary, "589.04")) {
+					noindex_salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_salary":967.680000}]}}`,
+		},
+		{
+			`Test le filter on non-indexed float`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(le(noindex_salary, "589.04")) {
+					noindex_salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_salary":501.230000},{"noindex_salary":589.040000},{"noindex_salary":459.470000}]}}`,
+		},
+		{
+			`Test lt filter on non-indexed float`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(lt(noindex_salary, "589.04")){
+					noindex_salary
+				}
+			},
+			`,
+			`{"data":{"me":[{"noindex_salary":501.230000},{"noindex_salary":459.470000}]}}`,
+		},
+		{
+			`Test eq filter on non-indexed float`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(eq(noindex_salary, "589.04")) {
+					noindex_salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"noindex_salary":589.040000}]}}`,
+		},
+		{
+			`Test eq filter on non-indexed bool`,
+			`
+			{
+				me(func: uid(1, 2, 3, 4)) @filter(eq(noindex_alive, true)) {
+					uid
+					noindex_name
+					noindex_alive
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x1","noindex_name":"Michonne's name not indexed","noindex_alive":true},{"uid":"0x4","noindex_name":"Leonard's name not indexed","noindex_alive":true}]}}`,
+		},
+		{
+			`Test filtering of non indexed predicate inside query`,
+			`
+			{
+				me(func: uid(0x01)) {
+					friend @filter(ge(survival_rate, 1.6)) {
+						name
+						survival_rate
+					}
+				}
+			}
+			`,
+			`{"data":{"me":[{"friend":[{"name":"Rick Grimes","survival_rate":1.600000},{"name":"Glenn Rhee","survival_rate":1.600000},{"name":"Daryl Dixon","survival_rate":1.600000},{"name":"Andrea","survival_rate":1.600000}]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {

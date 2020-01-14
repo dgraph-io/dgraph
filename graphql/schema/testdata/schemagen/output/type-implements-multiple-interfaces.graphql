@@ -104,7 +104,7 @@ input StringHashFilter {
 #######################
 
 type AddHumanPayload {
-	human: Human
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 }
 
 type DeleteCharacterPayload {
@@ -148,7 +148,7 @@ enum HumanOrderable {
 #######################
 
 input CharacterFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	and: CharacterFilter
 	or: CharacterFilter
@@ -172,7 +172,7 @@ input EmployeeOrder {
 }
 
 input HumanFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringExactFilter
 	and: HumanFilter
 	or: HumanFilter
@@ -246,7 +246,7 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: HumanInput!): AddHumanPayload
+	addHuman(input: [HumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }

@@ -354,7 +354,7 @@ func deepFilter(t *testing.T) {
 func manyQueries(t *testing.T) {
 	posts := allPosts(t)
 
-	getPattern := `getPost(id: "%s") {
+	getPattern := `getPost(postID: "%s") {
 		postID
 		title
 		text
@@ -405,7 +405,7 @@ func queryOrderAtRoot(t *testing.T) {
 	}
 
 	filter := map[string]interface{}{
-		"ids": []string{answers[0].PostID, answers[1].PostID},
+		"postID": []string{answers[0].PostID, answers[1].PostID},
 	}
 
 	orderLikesDesc := map[string]interface{}{
@@ -502,7 +502,7 @@ func queryOrderAtRoot(t *testing.T) {
 func queriesWithError(t *testing.T) {
 	posts := allPosts(t)
 
-	getPattern := `getPost(id: "%s") {
+	getPattern := `getPost(postID: "%s") {
 		postID
 		title
 		text
@@ -946,7 +946,7 @@ func queryByMultipleIds(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"ids": ids,
+			"postID": ids,
 		}},
 	}
 
@@ -1127,7 +1127,7 @@ func typenameForInterface(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: EMPIRE
+						eq: [EMPIRE]
 					}
 				}) {
 					name
@@ -1176,7 +1176,7 @@ func defaultEnumFilter(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: EMPIRE
+						eq: [EMPIRE]
 					}
 				}) {
 					name
@@ -1220,7 +1220,7 @@ func queryByMultipleInvalidIds(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"ids": []string{"foo", "bar"},
+			"postID": []string{"foo", "bar"},
 		}},
 	}
 	// Since the ids are invalid and can't be converted to uint64, the query sent to Dgraph should

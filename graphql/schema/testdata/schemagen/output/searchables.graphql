@@ -115,7 +115,7 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post: Post
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type DeletePostPayload {
@@ -174,7 +174,7 @@ input PatchPost {
 }
 
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	title: StringTermFilter
 	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
 	text: StringFullTextFilter
@@ -302,7 +302,7 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
+	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
@@ -311,7 +311,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: [PostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
