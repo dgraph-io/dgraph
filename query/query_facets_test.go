@@ -338,6 +338,21 @@ func TestOrderdescFacetsWithFilters(t *testing.T) {
 	`, js)
 }
 
+// func TestFacetsMultipleOrderby(t *testing.T) {
+// 	populateClusterWithFacets()
+// 	query := `
+// 		{
+// 			me(func: uid(1)) @cascade {
+// 				friend @facets(orderdesc: since) {
+// 					name
+// 				}
+// 			}
+// 		}
+// 	`
+// 	js := processQueryNoErr(t, query)
+// 	fmt.Println(js)
+// }
+
 func TestRetrieveFacetsAsVars(t *testing.T) {
 	populateClusterWithFacets()
 	// to see how friend @facets are positioned in output.
@@ -1924,8 +1939,10 @@ func TestFacetsWithExpand(t *testing.T) {
 
 // Tests for multiple facets sorting.
 
-// orderby more than once should be error on same facet.
+// orderby more than once should be error on same facet.(Done in parser_test.go)
 
 // orderby on non sortable facet should be error.
 
 // orderby should include facet in the result.
+
+// add tests for different types(float, string, int, datetime, bool)

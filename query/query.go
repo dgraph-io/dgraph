@@ -126,12 +126,9 @@ type params struct {
 
 	// Facet tells us about the requested facets and their aliases.
 	Facet *pb.FacetParams
-	// FacetOrder has the name of the facet by which the results should be sorted.
-	// FacetOrder []string
-	// FacetOrderDesc is true if the facets should be order in descending order. If it's
-	// false, the facets will be ordered in ascending order.
-	// FacetOrderDesc []bool
-	FacetOrder []*gql.FacetOrder
+	// FacetsOrders keeps ordering for facets. Each entry stores name of the facet key and
+	// OrderDesc(will be true if results should be ordered by desc order of key) information for it.
+	FacetsOrder []*gql.FacetOrder
 
 	// Var is the name of the variable defined in this SubGraph
 	// (e.g. in "x as name", this would be x).
@@ -515,12 +512,11 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		attrsSeen[key] = struct{}{}
 
 		args := params{
-			Alias:   gchild.Alias,
-			Cascade: gchild.Cascade || sg.Params.Cascade,
-			Expand:  gchild.Expand,
-			Facet:   gchild.Facets,
-			// FacetOrder:     gchild.FacetOrder,
-			// FacetOrderDesc: gchild.FacetDesc,
+			Alias:        gchild.Alias,
+			Cascade:      gchild.Cascade || sg.Params.Cascade,
+			Expand:       gchild.Expand,
+			Facet:        gchild.Facets,
+			FacetsOrder:  gchild.FacetsOrder,
 			FacetVar:     gchild.FacetVar,
 			GetUid:       sg.Params.GetUid,
 			IgnoreReflex: sg.Params.IgnoreReflex,
@@ -533,12 +529,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
 		}
-
-		// if len(gchild.FacetOrder) > 0 {
-		// args.FacetOrder = gchild.FacetOrder
-		// args.FacetOrderDesc = gchild.FacetDesc
-		// }
-		args.FacetOrder = gchild.FacetOrder
 
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -556,7 +546,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			return err
 		}
 
-		if len(args.Order) != 0 && len(args.FacetOrder) != 0 {
+		if len(args.Order) != 0 && len(args.FacetsOrder) != 0 {
 			return errors.Errorf("Cannot specify order at both args and facets")
 		}
 
@@ -1266,7 +1256,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
-		if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
+		if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
@@ -2108,7 +2098,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
 			rch <- err
@@ -2242,14 +2232,14 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		return nil
 	}
 
 	sg.updateUidMatrix()
 
 	// See if we need to apply order based on facet.
-	if len(sg.Params.FacetOrder) != 0 {
+	if len(sg.Params.FacetsOrder) != 0 {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
 
@@ -2330,14 +2320,14 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
 
-	orderbyKeysMap := make(map[string]struct{})
+	orderbyKeys := make(map[string]struct{})
 	var orderDesc []bool
-	for _, order := range sg.Params.FacetOrder {
-		orderbyKeysMap[order.Key] = struct{}{}
+	for _, order := range sg.Params.FacetsOrder {
+		orderbyKeys[order.Key] = struct{}{}
 		orderDesc = append(orderDesc, order.OrderDesc)
 	}
 
-	valMap := make(map[string]*api.Facet)
+	facetsMap := make(map[string]*api.Facet)
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
@@ -2351,25 +2341,26 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
 
-			for k := range valMap {
-				delete(valMap, k) // TODO: is this the best way to clean map??
+			// TODO: is this the best way to clean map??
+			for k := range facetsMap {
+				delete(facetsMap, k)
 			}
 			var facetsVal []types.Val
 
 			for _, it := range f.Facets {
-				if _, ok := orderbyKeysMap[it.Key]; !ok {
+				if _, ok := orderbyKeys[it.Key]; !ok {
 					continue
 				}
-				if _, ok := valMap[it.Key]; !ok {
-					valMap[it.Key] = it
+				if _, ok := facetsMap[it.Key]; !ok {
+					facetsMap[it.Key] = it
 				}
-				if len(valMap) == len(orderbyKeysMap) {
+				if len(facetsMap) == len(orderbyKeys) {
 					break
 				}
 			}
 
-			for _, order := range sg.Params.FacetOrder {
-				if f, ok := valMap[order.Key]; ok && f != nil /*TODO: confirm this*/ {
+			for _, fo := range sg.Params.FacetsOrder {
+				if f, ok := facetsMap[fo.Key]; ok && f != nil /*TODO: confirm this*/ {
 					fVal, err := facets.ValFor(f)
 					if err != nil {
 						return err
