@@ -51,6 +51,15 @@ transactions conflict when both transactions:
 
 When a transaction is aborted, all its changes are discarded.  Transactions can be manually aborted.
 
+## C\#
+
+The official C# client [can be found here](https://github.com/dgraph-io/Dgraph-dotnet),
+and it fully supports Dgraph v1.1.x. Follow the instructions in the
+[README](https://github.com/dgraph-io/Dgraph-dotnet#readme) to get it up and running.
+
+We also have [example](https://github.com/dgraph-io/Dgraph-dotnet/tree/master/source/Dgraph-dotnet.examples)
+projects, which contains an working examples of how to use the C# client.
+
 ## Go
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgo?status.svg)](https://godoc.org/github.com/dgraph-io/dgo)
@@ -441,7 +450,7 @@ fmt.Println(string(resp.Json))
 ## Java
 
 The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j)
-and it fully supports Dgraph v1.0.x. Follow the instructions in the
+and it fully supports Dgraph v1.1.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph4j#readme)
 to get it up and running.
 
@@ -453,7 +462,7 @@ working example of how to use the Java client.
 ## JavaScript
 
 The official JavaScript client [can be found here](https://github.com/dgraph-io/dgraph-js)
-and it fully supports Dgraph v1.0.x. Follow the instructions in the
+and it fully supports Dgraph v1.1.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
@@ -463,9 +472,8 @@ for Node.js >= v6.
 ## Python
 
 The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
-and it fully supports Dgraph v1.0.x and Python versions >= 2.7 and >= 3.5. Follow the
-instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
-up and running.
+and it fully supports Dgraph v1.1.x and Python version >= 3.5. Follow the instructions
+in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/pydgraph/tree/master/examples/simple)
 project, which contains an end-to-end working example of how to use the Python client.
@@ -479,7 +487,6 @@ These third-party clients are contributed by the community and are not officiall
 ### C\#
 
 - https://github.com/AlexandreDaSilva/DgraphNet
-- https://github.com/MichaelJCompton/Dgraph-dotnet
 
 ### Dart
 
