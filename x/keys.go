@@ -551,7 +551,6 @@ func Parse(key []byte) (ParsedKey, error) {
 var reservedPredicateMap = map[string]struct{}{
 	"dgraph.type":           {},
 	"dgraph.graphql.schema": {},
-	"dgraph.graphql.date":   {},
 }
 
 var aclPredicateMap = map[string]struct{}{

@@ -110,6 +110,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	Rename(newName string)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -433,6 +434,9 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
+	if f.arguments == nil {
+		f.arguments = make(map[string]interface{})
+	}
 	f.arguments[arg] = val
 }
 
@@ -619,6 +623,10 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 
 	}
 	return false
+}
+
+func (q *query) Rename(newName string) {
+	q.field.Name = newName
 }
 
 func (q *query) Name() string {

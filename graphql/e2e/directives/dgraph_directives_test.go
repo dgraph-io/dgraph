@@ -57,14 +57,6 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 				"list": true
 			},
 			{
-				"predicate": "dgraph.graphql.date",
-				"type": "datetime",
-				"index": true,
-				"tokenizer": [
-					"day"
-				]
-			},
-			{
 				"predicate": "dgraph.graphql.schema",
 				"type": "string"
 			},
@@ -290,9 +282,6 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 				"fields": [
 					{
 						"name": "dgraph.graphql.schema"
-					},
-					{
-						"name": "dgraph.graphql.date"
 					}
 				],
 				"name": "dgraph.graphql"
