@@ -269,9 +269,17 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 	}
 }
 
-func needsIndex(fnType FuncType) bool {
+func needsIndex(fnType FuncType, uidList *pb.List) bool {
 	switch fnType {
-	case compareAttrFn, geoFn, fullTextSearchFn, standardFn, matchFn:
+	case compareAttrFn:
+		if uidList != nil {
+			// UidList is not nil means this is a filter. Filter predicate is not indexed, so
+			// instead of fetching values by index key, we will fetch value by data key
+			// (from uid and predicate) and apply filter on values.
+			return false
+		}
+		return true
+	case geoFn, fullTextSearchFn, standardFn, matchFn:
 		return true
 	}
 	return false
@@ -853,14 +861,8 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
 
-	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
-		if q.UidList != nil && srcFn.fnType == compareAttrFn {
-			// UidList is not nil means this is a filter. Filter predicate is not indexed, so
-			// instead of fetching values by index key, we will fetch value by data key
-			// (from uid and predicate) and apply filter on values.
-		} else {
-			return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
-		}
+	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(q.Attr) {
+		return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
 	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
