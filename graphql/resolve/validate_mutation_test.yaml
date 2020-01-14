@@ -1,7 +1,7 @@
 -
   name: "Add mutation with object instead of an array"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: $auth) {
         author {
           name
@@ -18,15 +18,15 @@
   explanation: "Add mutation expects an array instead of an object"
   validationerror:
     { "message":
-            "input:2: Variable type provided AuthorInput! is incompatible with expected
-            type [AuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AuthorInput!\"
-            used in position expecting type \"[AuthorInput!]!\".\n" }
+            "input:2: Variable type provided AddAuthorInput! is incompatible with expected
+            type [AddAuthorInput!]!\ninput:2: Variable \"$auth\" of type \"AddAuthorInput!\"
+            used in position expecting type \"[AddAuthorInput!]!\".\n" }
 
 
 -
   name: "Add mutation with invalid object"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
         author {
           name
@@ -47,7 +47,7 @@
 -
   name: "Add multiple mutation with invalid object"
   gqlmutation: |
-    mutation addAuthor($auth: [AuthorInput!]!) {
+    mutation addAuthor($auth: [AddAuthorInput!]!) {
       addAuthor(input: $auth) {
         author {
           name

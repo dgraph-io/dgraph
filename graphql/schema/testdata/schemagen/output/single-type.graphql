@@ -116,21 +116,27 @@ enum MessageOrderable {
 # Generated Inputs
 #######################
 
-input MessageFilter {
-	id: [ID!]
-	not: MessageFilter
-}
-
-input MessageInput {
+input AddMessageInput {
 	content: String!
 	author: String
 	datePosted: DateTime
+}
+
+input MessageFilter {
+	id: [ID!]
+	not: MessageFilter
 }
 
 input MessageOrder {
 	asc: MessageOrderable
 	desc: MessageOrderable
 	then: MessageOrder
+}
+
+input MessagePatch {
+	content: String
+	author: String
+	datePosted: DateTime
 }
 
 input MessageRef {
@@ -140,16 +146,10 @@ input MessageRef {
 	datePosted: DateTime
 }
 
-input PatchMessage {
-	content: String
-	author: String
-	datePosted: DateTime
-}
-
 input UpdateMessageInput {
 	filter: MessageFilter!
-	set: PatchMessage
-	remove: PatchMessage
+	set: MessagePatch
+	remove: MessagePatch
 }
 
 #######################
@@ -166,7 +166,7 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: [MessageInput!]!): AddMessagePayload
+	addMessage(input: [AddMessageInput!]!): AddMessagePayload
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }
