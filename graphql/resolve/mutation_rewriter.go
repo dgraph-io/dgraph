@@ -205,9 +205,8 @@ func (mrw *addRewriter) handleMultipleMutations(
 
 	counter := counter(0)
 	var errs error
-	mutationsAll := make([]*dgoapi.Mutation, 0)
+	var mutationsAll []*dgoapi.Mutation
 	queries := &gql.GraphQuery{}
-	mrw.frags = make([][]*mutationFragment, 0)
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
@@ -226,10 +225,8 @@ func (mrw *addRewriter) handleMultipleMutations(
 				return nil, nil
 			})
 
-		if err != nil {
-			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-				"failed to rewrite mutation payload"))
-		}
+		errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+			"failed to rewrite mutation payload"))
 
 		mutationsAll = append(mutationsAll, mutations...)
 		qry := queryFromFragments(frag)
