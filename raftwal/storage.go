@@ -522,7 +522,13 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rer
 			})
 		}
 
+		// We are opening badger in LSM only mode. In that mode the values are
+		// colocated with the keys. Hence, there is no need to prefetch values.
+		// Also, if Prefetch is set to true, then it causes latency issue with
+		// random spikes inbetween.
+
 		iopt := badger.DefaultIteratorOptions
+		iopt.PrefetchValues = false
 		iopt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(iopt)
 		defer itr.Close()

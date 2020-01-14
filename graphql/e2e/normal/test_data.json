@@ -1,0 +1,103 @@
+[
+    {
+        "uid": "_:bangladesh",
+        "dgraph.type": "Country",
+        "Country.name": "Bangladesh"
+    },
+    {
+        "uid": "_:mozambique",
+        "dgraph.type": "Country",
+        "Country.name": "Mozambique"
+    },
+    {
+        "uid": "_:angola",
+        "dgraph.type": "Country",
+        "Country.name": "Angola"
+    },
+    {
+        "uid": "_:author1",
+        "dgraph.type": "Author",
+        "Author.name": "Ann Author",
+        "Author.dob": "2000-01-01",
+        "Author.reputation": 6.6,
+        "Author.country": { "uid": "_:bangladesh" },
+        "Author.posts": [{ "uid": "_:post1" }, { "uid": "_:post3" }]
+    },
+    {
+        "uid": "_:author2",
+        "dgraph.type": "Author",
+        "Author.name": "Ann Other Author",
+        "Author.dob": "1988-01-01",
+        "Author.reputation": 8.9,
+        "Author.country": { "uid": "_:angola" },
+        "Author.posts": [{ "uid": "_:post2" }, { "uid": "_:post4" }]
+    },
+    {
+        "uid": "_:author3",
+        "dgraph.type": "Author",
+        "Author.name": "Three Author",
+        "Author.dob": "2001-01-01",
+        "Author.reputation": 9.1,
+        "Author.country": { "uid": "_:bangladesh" }
+    },
+    {
+        "uid": "_:post1",
+        "dgraph.type": "Post",
+        "Post.title": "Introducing GraphQL in Dgraph",
+        "Post.text": "The worlds best graph database, now with the best GraphQL support",
+        "Post.tags": ["GraphQL", "Dgraph", "Database"],
+        "Post.topic": "GraphQL",
+        "Post.numLikes": 100,
+        "Post.isPublished": true,
+        "Post.postType": "Fact",
+        "Post.author": { "uid": "_:author1" }
+    },
+    {
+        "uid": "_:post2",
+        "dgraph.type": "Post",
+        "Post.title": "Learning GraphQL in Dgraph",
+        "Post.text": "Where do I learn more about GraphQL support in Dgraph?",
+        "Post.tags": ["GraphQL", "Dgraph"],
+        "Post.topic": "Learn",
+        "Post.numLikes": 87,
+        "Post.isPublished": true,
+        "Post.postType": "Question",
+        "Post.author": { "uid": "_:author2" }
+    },
+    {
+        "uid": "_:post3",
+        "dgraph.type": "Post",
+        "Post.title": "GraphQL doco",
+        "Post.text": "I think the best place to learn GraphQL support in Dgraph is the excellent docs!",
+        "Post.tags": ["GraphQL", "Dgraph"],
+        "Post.topic": "Docs",
+        "Post.numLikes": 77,
+        "Post.isPublished": true,
+        "Post.postType": "Opinion",
+        "Post.author": { "uid": "_:author1" }
+    },
+    {
+        "uid": "_:post4",
+        "dgraph.type": "Post",
+        "Post.title": "Random post",
+        "Post.text": "this post is not worth publishing",
+        "Post.tags": ["Random"],
+        "Post.topic": "Random",
+        "Post.numLikes": 0,
+        "Post.isPublished": false,
+        "Post.postType": "Fact",
+        "Post.author": { "uid": "_:author2" }
+    },
+    {
+        "uid": "_:nsw",
+        "dgraph.type": "State",
+        "State.name": "NSW",
+        "State.xcode": "nsw"
+    },
+    {
+        "uid": "_:nusa",
+        "dgraph.type": "State",
+        "State.name": "Nusa",
+        "State.xcode": "nusa"
+    }
+]

@@ -334,7 +334,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	js := `
   {
-    "schema": [` + x.AclPredicates + `,
+    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
       {
         "predicate": "dgraph.type",
         "type": "string",
@@ -394,6 +394,12 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       },
       {
         "predicate": "dgraph.group.acl"
+	  },
+	  {
+        "predicate": "dgraph.graphql.schema"
+	  },
+	  {
+        "predicate": "dgraph.graphql.date"
       },
       {
         "predicate": "dgraph.user.group"
@@ -537,7 +543,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	js := `
   {
-    "schema": [` + x.AclPredicates + `,
+    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
       {
         "index": true,
         "predicate": "dgraph.type",

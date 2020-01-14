@@ -146,12 +146,18 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 
 	//var respUser User
 	testutil.CompareJSON(t, fmt.Sprintf(`
-{"direct":[
-  {
-    "uid":"%s",
-    "access.to":
-    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}}]}
-`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
+	{
+		"direct":[
+			{
+				"uid":"%s",
+				"access.to":{
+						"uid":"%s"
+				},
+				"access.to|inherit": false,
+				"access.to|permission": "WRITE"
+			}
+		]
+	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
@@ -402,33 +408,39 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
-		  "q": [
-		    {
-		      "friend": [
-		        {
-		          "friend|age": 15,
-		          "friend|car": "Tesla",
-		          "name": "Charlie"
-		        },
-		        {
-		          "name": "Bubble"
-		        },
-		        {
-		          "friend|age": 13,
-		          "friend|car": "Honda",
-		          "name": "Bob"
-		        },
-		        {
-		          "friend|age": 20,
-		          "friend|car": "Hyundai",
-		          "name": "Abc"
-		        }
-		      ],
-		      "name": "Alice"
-		    }
-		  ]
-		}`, string(resp.Json))
+	testutil.CompareJSON(t, `
+	{
+		"q":[
+			{
+				"friend":[
+					{
+						"name":"Charlie"
+					},
+					{
+						"name":"Bubble"
+					},
+					{
+						"name":"Bob"
+					},
+					{
+						"name":"Abc"
+					}
+				],
+				"friend|age":{
+					"0":15,
+					"2":13,
+					"3":20
+				},
+				"friend|car":{
+					"0":"Tesla",
+					"2":"Honda",
+					"3":"Hyundai"
+				},
+				"name":"Alice"
+			}
+		]
+	}
+	`, string(resp.Json))
 
 }
 
@@ -502,8 +514,29 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `
-	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
-		`, string(resp.Json))
+		{
+			"q":[
+				{
+					"name":"Michael",
+					"friend":[
+						{
+							"name":"Charlie"
+						},
+						{
+							"name":"Alice"
+						},
+						{
+							"name":"Sang Hyun"
+						}
+					],
+					"friend|since":{
+						"1":"2014-01-02T00:00:00Z",
+						"2":"2012-01-02T00:00:00Z"
+					}
+				}
+			]
+		}
+	`, string(resp.Json))
 }
 
 func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
@@ -525,7 +558,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
@@ -548,6 +581,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, asJson(`[`+
 		x.AclPredicates+","+
+		x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
@@ -928,7 +962,9 @@ func testTimeValue(t *testing.T, c *dgo.Dgraph, timeBytes []byte) {
 
 	q := `query test($id: string) {
 		  me(func: uid($id)) {
-			friend @facets
+			friend @facets {
+				uid
+			}
 		  }
 		}`
 

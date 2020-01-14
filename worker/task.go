@@ -130,7 +130,7 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
-	gid, err := groups().BelongsToReadOnly(attr)
+	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
@@ -436,8 +436,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			out.ValueMatrix = append(out.ValueMatrix, &vl)
 
 			// Add facets to result.
-			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fcs}}})
+			out.FacetMatrix = append(out.FacetMatrix, fcs)
 
 			switch {
 			case q.DoCount:
@@ -504,11 +503,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 }
 
 func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
-	[]types.Val, []*api.Facet, error) {
+	[]types.Val, *pb.FacetsList, error) {
 	q := args.q
 	var err error
 	var vals []types.Val
-	var fcs []*api.Facet
+	var fcs []*pb.Facets
 
 	// Retrieve values when facet filtering is not being requested.
 	if q.FacetsFilter == nil {
@@ -529,13 +528,13 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 
 		// Retrieve facets.
 		if q.FacetParam != nil {
-			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs, listType)
 		}
 		if err != nil {
 			return nil, nil, err
 		}
 
-		return vals, fcs, nil
+		return vals, &pb.FacetsList{FacetsList: fcs}, nil
 	}
 
 	// Retrieve values when facet filtering is being requested.
@@ -572,7 +571,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 				Value: p.Value,
 			})
 			if q.FacetParam != nil {
-				fcs = append(fcs, facets.CopyFacets(p.Facets, q.FacetParam)...)
+				fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
 		}
 		return nil // continue iteration.
@@ -581,7 +580,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 		return nil, nil, err
 	}
 
-	return vals, fcs, nil
+	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
@@ -817,7 +816,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// we get partitioned away from group zero as long as it's not removed.
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
-	knownGid, err := groups().BelongsToReadOnly(q.Attr)
+	knownGid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err
@@ -1782,7 +1781,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &pb.Result{}, ctx.Err()
 	}
 
-	gid, err := groups().BelongsToReadOnly(q.Attr)
+	gid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
 		return &pb.Result{}, err

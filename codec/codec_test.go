@@ -290,3 +290,17 @@ func TestEncoding(t *testing.T) {
 		require.Equal(t, ints, decodedInts)
 	}
 }
+
+func newUidPack(data []uint64) *pb.UidPack {
+	encoder := Encoder{BlockSize: 10}
+	for _, uid := range data {
+		encoder.Add(uid)
+	}
+	return encoder.Done()
+}
+
+func TestCopyUidPack(t *testing.T) {
+	pack := newUidPack([]uint64{1, 2, 3, 4, 5})
+	copy := CopyUidPack(pack)
+	require.Equal(t, Decode(pack, 0), Decode(copy, 0))
+}
