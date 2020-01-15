@@ -57,10 +57,9 @@ type jepsenTest struct {
 	testCount         int
 }
 
-const (
-	testPass = iota
-	testFail
-	testIncomplete
+var (
+	errTestFail       = errors.New("Test Failed")
+	errTestIncomplete = errors.New("Test Incomplete")
 )
 
 var (
@@ -139,6 +138,7 @@ var (
 	testAll = pflag.Bool("test-all", false,
 		"Run the following workload and nemesis combinations: "+
 			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
+	exitOnFailure = pflag.BoolP("exit-on-failure", "e", false, "Don't run any more tests after a failure.")
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -211,7 +211,7 @@ func openJepsenBrowser() {
 	browser.Open(jepsenUrl)
 }
 
-func runJepsenTest(test *jepsenTest) int {
+func runJepsenTest(test *jepsenTest) error {
 	dockerCmd := []string{
 		"docker", "exec", "jepsen-control",
 		"/bin/bash", "-c",
@@ -266,34 +266,34 @@ func runJepsenTest(test *jepsenTest) int {
 		// TODO The exit code could probably be checked instead of checking the output.
 		// Check jepsen source to be sure.
 		if strings.Contains(out.String(), "Analysis invalid") {
-			return testFail
+			return errTestFail
 		}
-		return testIncomplete
+		return errTestIncomplete
 	}
 	if strings.Contains(out.String(), "Everything looks good!") {
-		return testPass
+		return nil
 	}
-	return testIncomplete
+	return errTestIncomplete
 }
 
 func inCi() bool {
 	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
-func tcStart(testName string) func(pass int) {
+func tcStart(testName string) func(err error) {
 	if !inCi() {
-		return func(int) {}
+		return func(error) {}
 	}
 	now := time.Now()
 	fmt.Printf("##teamcity[testStarted name='%v']\n", testName)
-	return func(pass int) {
+	return func(err error) {
 		durMs := time.Since(now).Nanoseconds() / 1e6
-		switch pass {
-		case testPass:
+		switch err {
+		case nil:
 			fmt.Printf("##teamcity[testFinished name='%v' duration='%v']\n", testName, durMs)
-		case testFail:
+		case errTestFail:
 			fmt.Printf("##teamcity[testFailed='%v' duration='%v']\n", testName, durMs)
-		case testIncomplete:
+		case errTestIncomplete:
 			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n",
 				testName, durMs)
 		}
@@ -313,7 +313,6 @@ func main() {
 		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
 	}
 	pflag.Parse()
-
 	if *jepsenRoot == "" {
 		log.Fatal("--jepsen-root must be set.")
 	}
@@ -368,7 +367,7 @@ func main() {
 	for _, n := range nemeses {
 		for _, w := range workloads {
 			tcEnd := tcStart(fmt.Sprintf("Workload:%v,Nemeses:%v", w, n))
-			status := runJepsenTest(&jepsenTest{
+			err := runJepsenTest(&jepsenTest{
 				workload:          w,
 				nemesis:           n,
 				timeLimit:         *timeLimit,
@@ -380,7 +379,15 @@ func main() {
 				skew:              *skew,
 				testCount:         *testCount,
 			})
-			tcEnd(status)
+			if err != nil {
+				if err == errTestFail {
+					defer os.Exit(1)
+					if *exitOnFailure {
+						os.Exit(1)
+					}
+				}
+			}
+			tcEnd(err)
 		}
 	}
 }
