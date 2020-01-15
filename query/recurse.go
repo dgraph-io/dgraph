@@ -137,7 +137,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 					})
 				}
 			}
-			// TODO(Ashish): verify change here.
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.
 				sg.updateDestUids()

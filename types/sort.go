@@ -92,8 +92,9 @@ func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool, lang st
 	}
 
 	// TODO(Ashish): can we move this check to place where v is formed??
-	// TODO(Ashish): Here we can checking type for values in v[0] only. This might not return result
-	// as v[0] might have DefaultID type for some val while some v[x] can have some nonsortable type.
+	// TODO(Ashish): Here we are checking type for values in v[0] only. This might not return
+	// correct result as v[0] might have DefaultID type for some val while some v[x]
+	// can have some nonsortable type.
 	for _, val := range v[0] {
 		switch val.Tid {
 		case DateTimeID, IntID, FloatID, StringID, DefaultID:

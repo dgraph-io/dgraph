@@ -126,7 +126,7 @@ type params struct {
 
 	// Facet tells us about the requested facets and their aliases.
 	Facet *pb.FacetParams
-	// FacetsOrders keeps ordering for facets. Each entry stores name of the facet key and
+	// FacetsOrder keeps ordering for facets. Each entry stores name of the facet key and
 	// OrderDesc(will be true if results should be ordered by desc order of key) information for it.
 	FacetsOrder []*gql.FacetOrder
 
@@ -2360,7 +2360,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			}
 
 			for _, fo := range sg.Params.FacetsOrder {
-				if f, ok := facetsMap[fo.Key]; ok && f != nil /*TODO: confirm this*/ {
+				if f, ok := facetsMap[fo.Key]; ok && f != nil {
 					fVal, err := facets.ValFor(f)
 					if err != nil {
 						return err
