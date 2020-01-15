@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"time"
 
-	schnorrkel "github.com/ChainSafe/go-schnorrkel"
 	scale "github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
@@ -128,8 +127,7 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 		return nil, err
 	}
 
-	outbytes := output.Encode()
-	outputInt := big.NewInt(0).SetBytes(outbytes[:])
+	outputInt := big.NewInt(0).SetBytes(output[:])
 	if b.epochThreshold == nil {
 		err = b.setEpochThreshold()
 		if err != nil {
@@ -138,9 +136,10 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	}
 
 	if outputInt.Cmp(b.epochThreshold) > 0 {
-		proofslice := proof.Encode()
-		proofbytes := [64]byte{}
-		copy(proofbytes[:], proofslice)
+		outbytes := [sr25519.VrfOutputLength]byte{}
+		copy(outbytes[:], output)
+		proofbytes := [sr25519.VrfProofLength]byte{}
+		copy(proofbytes[:], proof)
 		return &VrfOutputAndProof{
 			output: outbytes,
 			proof:  proofbytes,
@@ -150,7 +149,7 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	return nil, nil
 }
 
-func (b *Session) vrfSign(input []byte) (*schnorrkel.VrfOutput, *schnorrkel.VrfProof, error) {
+func (b *Session) vrfSign(input []byte) (out []byte, proof []byte, err error) {
 	return b.keypair.VrfSign(input)
 }
 

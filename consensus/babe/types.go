@@ -35,7 +35,7 @@ type BabeConfiguration struct {
 }
 
 type AuthorityDataRaw struct {
-	Id     [32]byte
+	Id     [sr25519.PublicKeyLength]byte
 	Weight uint64
 }
 
@@ -47,8 +47,8 @@ type AuthorityData struct {
 
 // BabeHeader as defined in Polkadot RE Spec, definition 5.10 in section 5.1.4
 type BabeHeader struct {
-	VrfOutput          [32]byte
-	VrfProof           [64]byte
+	VrfOutput          [sr25519.VrfOutputLength]byte
+	VrfProof           [sr25519.VrfProofLength]byte
 	BlockProducerIndex uint64
 	SlotNumber         uint64
 }

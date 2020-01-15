@@ -17,6 +17,10 @@ github.com/ChainSafe/go-schnorrkel v0.0.0-20191230215310-1119ae47b282 h1:0flBsYi
 github.com/ChainSafe/go-schnorrkel v0.0.0-20191230215310-1119ae47b282/go.mod h1:+cafF2OKta2sUnPSHcPjZ0MDgwpxFspKAlP2sstJ0eQ=
 github.com/ChainSafe/go-schnorrkel v0.0.0-20191230221737-ebc1c03bedc6 h1:wRqSCQ7Ehfh8DhGIwx7rSu2ck+Ut7erUAMrkloqpKGI=
 github.com/ChainSafe/go-schnorrkel v0.0.0-20191230221737-ebc1c03bedc6/go.mod h1:+cafF2OKta2sUnPSHcPjZ0MDgwpxFspKAlP2sstJ0eQ=
+github.com/ChainSafe/go-schnorrkel v0.0.0-20200112161733-2da46759149c h1:aLrUSSnL2fBV9gSZkprOyek4tn5l3Fh5Ggmu5vDOnEw=
+github.com/ChainSafe/go-schnorrkel v0.0.0-20200112161733-2da46759149c/go.mod h1:URdX5+vg25ts3aCh8H5IFZybJYKWhJHYMTnf+ULtoC4=
+github.com/ChainSafe/go-schnorrkel v0.0.0-20200115165343-aa45d48b5ed6 h1:wfM1NefWZdwihyFmcpWjBSP2lMEIWj+WHpbjNi+jIQo=
+github.com/ChainSafe/go-schnorrkel v0.0.0-20200115165343-aa45d48b5ed6/go.mod h1:URdX5+vg25ts3aCh8H5IFZybJYKWhJHYMTnf+ULtoC4=
 github.com/ChainSafe/log15 v1.0.0 h1:vRDVtWtVwIH5uSCBvgTTZh6FA58UBJ6+QiiypaZfBf8=
 github.com/ChainSafe/log15 v1.0.0/go.mod h1:5v1+ALHtdW0NfAeeoYyKmzCAMcAeqkdhIg4uxXWIgOg=
 github.com/DataDog/zstd v1.4.1 h1:3oxKN3wbHibqx897utPC2LTQU4J+IHWWJO+glkAkpFM=

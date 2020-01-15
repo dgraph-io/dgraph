@@ -13,6 +13,8 @@ const PublicKeyLength int = 32
 const SeedLength int = 32
 const PrivateKeyLength int = 32
 const SignatureLength int = 64
+const VrfOutputLength int = 32
+const VrfProofLength int = 64
 
 // SigningContext is the context for signatures used or created with substrate
 var SigningContext = []byte("substrate")
@@ -124,7 +126,7 @@ func (kp *Keypair) Private() crypto.PrivateKey {
 }
 
 // VrfSign creates a VRF output and proof from a message and private key
-func (kp *Keypair) VrfSign(msg []byte) (*sr25519.VrfOutput, *sr25519.VrfProof, error) {
+func (kp *Keypair) VrfSign(msg []byte) ([]byte, []byte, error) {
 	return kp.private.VrfSign(msg)
 }
 
@@ -143,14 +145,15 @@ func (k *PrivateKey) Sign(msg []byte) ([]byte, error) {
 }
 
 // VrfSign creates a VRF output and proof from a message and private key
-func (k *PrivateKey) VrfSign(msg []byte) (*sr25519.VrfOutput, *sr25519.VrfProof, error) {
+func (k *PrivateKey) VrfSign(msg []byte) ([]byte, []byte, error) {
 	t := sr25519.NewSigningContext(SigningContext, msg)
 	inout, proof, err := k.key.VrfSign(t)
 	if err != nil {
 		return nil, nil, err
 	}
-	out := inout.Output()
-	return out, proof, nil
+	out := inout.Output().Encode()
+	proofb := proof.Encode()
+	return out[:], proofb[:], nil
 }
 
 // Public returns the public key corresponding to this private key
@@ -212,10 +215,35 @@ func (k *PublicKey) Verify(msg, sig []byte) (bool, error) {
 }
 
 // VrfVerify confirms that the output and proof are valid given a message and public key
-func (k *PublicKey) VrfVerify(msg []byte, out *sr25519.VrfOutput, proof *sr25519.VrfProof) (bool, error) {
+func (k *PublicKey) VrfVerify(msg []byte, out []byte, proof []byte) (bool, error) {
+	if len(out) != VrfOutputLength {
+		return false, errors.New("invalid output length")
+	}
+
+	if len(proof) != VrfProofLength {
+		return false, errors.New("invalid proof length")
+	}
+
+	outb := [32]byte{}
+	copy(outb[:], out)
+	proofb := [64]byte{}
+	copy(proofb[:], proof)
+
 	t := sr25519.NewSigningContext(SigningContext, msg)
-	inout := out.AttachInput(k.key, t)
-	return k.key.VrfVerify(t, inout, proof)
+	o := new(sr25519.VrfOutput)
+	err := o.Decode(outb)
+	if err != nil {
+		return false, err
+	}
+
+	p := new(sr25519.VrfProof)
+	err = p.Decode(proofb)
+	if err != nil {
+		return false, err
+	}
+
+	inout := o.AttachInput(k.key, t)
+	return k.key.VrfVerify(t, inout, p)
 }
 
 // Encode returns the 32-byte encoding of the public key
