@@ -17,6 +17,7 @@
 package query
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -88,6 +89,13 @@ func populateClusterWithFacets() error {
 
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
+
+	friendFacets7 := "(since=2006-01-02T15:04:05, fastfriend=true, score=100)"
+	friendFacets8 := "(since=2007-01-02T15:04:05, fastfriend=false, score=100)"
+	friendFacets9 := "(since=2008-01-02T15:04:05, fastfriend=true, score=200)"
+	triples += fmt.Sprintf("<33> <friend> <25> %s .\n", friendFacets7)
+	triples += fmt.Sprintf("<33> <friend> <31> %s .\n", friendFacets8)
+	triples += fmt.Sprintf("<33> <friend> <34> %s .\n", friendFacets9)
 
 	err := addTriplesToCluster(triples)
 
@@ -338,20 +346,120 @@ func TestOrderdescFacetsWithFilters(t *testing.T) {
 	`, js)
 }
 
-// func TestFacetsMultipleOrderby(t *testing.T) {
-// 	populateClusterWithFacets()
-// 	query := `
-// 		{
-// 			me(func: uid(1)) @cascade {
-// 				friend @facets(orderdesc: since) {
-// 					name
-// 				}
-// 			}
-// 		}
-// 	`
-// 	js := processQueryNoErr(t, query)
-// 	fmt.Println(js)
-// }
+func TestFacetsMultipleOrderby(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:score, orderdesc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Andrea"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Roger"
+							}
+						],
+						"friend|score": {
+							"0": 100,
+							"1": 100,
+							"2": 200
+						},
+						"friend|since": {
+							"0": "2007-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2008-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderbyNonsortableFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:score, orderasc:fastfriend) {
+					name
+				}
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Contains(t, err.Error(), "Value of type: bool isn't sortable")
+}
+
+func TestFacetsMultipleOrderbyAllFacets(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(fastfriend, orderdesc:score, orderasc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|fastfriend": {
+							"0": true,
+							"1": true,
+							"2": false
+						},
+						"friend|score": {
+							"0": 200,
+							"1": 100,
+							"2": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2007-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
 
 func TestRetrieveFacetsAsVars(t *testing.T) {
 	populateClusterWithFacets()
@@ -1936,13 +2044,3 @@ func TestFacetsWithExpand(t *testing.T) {
 		}
 	}`, js)
 }
-
-// Tests for multiple facets sorting.
-
-// orderby more than once should be error on same facet.(Done in parser_test.go)
-
-// orderby on non sortable facet should be error.
-
-// orderby should include facet in the result.
-
-// add tests for different types(float, string, int, datetime, bool)
