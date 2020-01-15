@@ -1383,7 +1383,7 @@ func sortSplits(splits []uint64) {
 // Otherwise, it returns an array containing the start UID of each part.
 func (l *List) PartSplits() []uint64 {
 	if l == nil {
-		return ErrNilList
+		return nil
 	}
 
 	splits := make([]uint64, len(l.plist.Splits))
