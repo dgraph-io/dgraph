@@ -642,14 +642,21 @@ func run() {
 
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)
+
+	var workerSetupWaiter sync.WaitGroup
+	workerSetupWaiter.Add(1)
+
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl()
+		workerSetupWaiter.Done()
 		edgraph.RefreshAcls(aclCloser)
 	}()
 
+	// Wait for the worker to initialize before setting up the server.
+	workerSetupWaiter.Wait()
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
