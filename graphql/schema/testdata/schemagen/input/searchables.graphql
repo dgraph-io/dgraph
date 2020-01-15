@@ -1,0 +1,34 @@
+type Post {
+	postID: ID!
+	title: String! @search(by: [term])
+	titleByEverything: String! @search(by: [term, fulltext, trigram, hash])
+	text: String @search(by: [fulltext])
+
+	tags: [String] @search(by: [trigram])
+	tagsHash: [String] @search(by: [hash])
+	tagsExact: [String] @search(by: [exact])
+
+	publishByYear: DateTime @search(by: [year])
+	publishByMonth: DateTime @search(by: [month])
+	publishByDay: DateTime @search(by: [day])
+	publishByHour: DateTime @search(by: [hour])
+
+	numLikes: Int @search
+	score: Float @search
+	isPublished: Boolean @search
+
+	postType: PostType @search
+        postTypeTrigram: PostType @search(by: [trigram])
+        postTypeRegexp: PostType @search(by: [regexp])
+        postTypeExact: PostType @search(by: [exact])
+        postTypeHash: PostType @search(by: [hash])
+        postTypeRegexpExact: PostType @search(by: [exact, regexp])
+        postTypeHashRegexp: PostType @search(by: [hash, regexp])
+        postTypeNone: PostType @search(by: [])
+}
+
+enum PostType {
+	Fact
+	Question
+	Opinion
+}

@@ -48,9 +48,10 @@ type Pool struct {
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
-	lastEcho time.Time
-	Addr     string
-	closer   *y.Closer
+	lastEcho   time.Time
+	Addr       string
+	closer     *y.Closer
+	healthInfo pb.HealthInfo
 }
 
 // Pools manages a concurrency-safe set of Pool.
@@ -83,6 +84,17 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
+}
+
+// GetAll returns all pool entries.
+func (p *Pools) GetAll() []*Pool {
+	p.RLock()
+	defer p.RUnlock()
+	var pool []*Pool
+	for _, v := range p.all {
+		pool = append(pool, v)
+	}
+	return pool
 }
 
 // RemoveInvalid removes invalid nodes from the list of pools.
@@ -178,7 +190,9 @@ func (p *Pool) Get() *grpc.ClientConn {
 func (p *Pool) shutdown() {
 	glog.Warningf("Shutting down extra connection to %s", p.Addr)
 	p.closer.SignalAndWait()
-	p.conn.Close()
+	if err := p.conn.Close(); err != nil {
+		glog.Warningf("Could not close pool connection with error: %s", err)
+	}
 }
 
 // SetUnhealthy marks a pool as unhealthy.
@@ -210,13 +224,15 @@ func (p *Pool) listenToHeartbeat() error {
 
 	// This loop can block indefinitely as long as it keeps on receiving pings back.
 	for {
-		_, err := s.Recv()
-		if err != nil {
+		res, err := s.Recv()
+		if err != nil || res == nil {
 			return err
 		}
+
 		// We do this periodic stream receive based approach to defend against network partitions.
 		p.Lock()
 		p.lastEcho = time.Now()
+		p.healthInfo = *res
 		p.Unlock()
 	}
 }
@@ -233,7 +249,7 @@ func (p *Pool) MonitorHealth() {
 		default:
 			err := p.listenToHeartbeat()
 			if lastErr != nil && err == nil {
-				glog.Infof("Connection established with %v\n", p.Addr)
+				glog.Infof("Connection re-established with %v\n", p.Addr)
 			} else if err != nil && lastErr == nil {
 				glog.Warningf("Connection lost with %v. Error: %v\n", p.Addr, err)
 			}
@@ -252,4 +268,16 @@ func (p *Pool) IsHealthy() bool {
 	p.RLock()
 	defer p.RUnlock()
 	return time.Since(p.lastEcho) < 4*echoDuration
+}
+
+// HealthInfo returns the healthinfo.
+func (p *Pool) HealthInfo() pb.HealthInfo {
+	p.RLock()
+	defer p.RUnlock()
+	p.healthInfo.Status = "healthy"
+	if !p.IsHealthy() {
+		p.healthInfo.Status = "unhealthy"
+	}
+	p.healthInfo.LastEcho = p.lastEcho.Unix()
+	return p.healthInfo
 }

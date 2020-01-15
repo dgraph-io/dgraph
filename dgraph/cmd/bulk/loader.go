@@ -24,6 +24,7 @@ import (
 	"hash/adler32"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -48,6 +49,7 @@ type options struct {
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
+	BadgerKeyFile    string // used only in enterprise build. nil otherwise.
 	NumGoroutines    int
 	MapBufSize       uint64
 	SkipMapPhase     bool
@@ -68,7 +70,7 @@ type options struct {
 }
 
 type state struct {
-	opt           options
+	opt           *options
 	prog          *progress
 	xids          *xidmap.XidMap
 	schema        *schemaStore
@@ -85,7 +87,11 @@ type loader struct {
 	zero    *grpc.ClientConn
 }
 
-func newLoader(opt options) *loader {
+func newLoader(opt *options) *loader {
+	if opt == nil {
+		log.Fatalf("Cannot create loader with nil options.")
+	}
+
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -189,9 +195,9 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType, 1000)
+			chunk := chunker.NewChunker(loadType, 1000)
 			for {
-				chunkBuf, err := chunker.Chunk(r)
+				chunkBuf, err := chunk.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}

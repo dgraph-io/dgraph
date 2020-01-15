@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package edgraph
+package worker
 
 import (
 	"fmt"
@@ -44,6 +44,8 @@ type Options struct {
 	BadgerTables string
 	// BadgerVlog is the name of the mode used to load the badger value log.
 	BadgerVlog string
+	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
+	BadgerKeyFile string
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
@@ -68,8 +70,11 @@ var Config Options
 
 // String will generate the string output an Options struct without including
 // the HmacSecret field, which prevents revealing the secret during logging
-func (opt Options) String() string {
-	//return fmt.Sprintf()
+func (opt *Options) String() string {
+	if opt == nil {
+		return ""
+	}
+
 	return fmt.Sprintf("{PostingDir:%s BadgerTables:%s BadgerVlog:%s WALDir:%s MutationsMode:%d "+
 		"AuthToken:%s AllottedMemory:%.1fMB AccessJwtTtl:%v RefreshJwtTtl:%v "+
 		"AclRefreshInterval:%v}", opt.PostingDir, opt.BadgerTables, opt.BadgerVlog, opt.WALDir,
@@ -78,20 +83,23 @@ func (opt Options) String() string {
 }
 
 // SetConfiguration sets the server configuration to the given config.
-func SetConfiguration(newConfig Options) {
+func SetConfiguration(newConfig *Options) {
+	if newConfig == nil {
+		return
+	}
 	newConfig.validate()
-	Config = newConfig
+	Config = *newConfig
 
 	posting.Config.Mu.Lock()
+	defer posting.Config.Mu.Unlock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
-	posting.Config.Mu.Unlock()
 }
 
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
 const MinAllottedMemory = 1024.0
 
-// availableMemory is the total size of the memory we were able to identify.
-var availableMemory int64
+// AvailableMemory is the total size of the memory we were able to identify.
+var AvailableMemory int64
 
 func (opt *Options) validate() {
 	pd, err := filepath.Abs(opt.PostingDir)
@@ -100,13 +108,13 @@ func (opt *Options) validate() {
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
 	if opt.AllottedMemory < 0 {
-		if allottedMemory := 0.25 * float64(availableMemory); allottedMemory > MinAllottedMemory {
+		if allottedMemory := 0.25 * float64(AvailableMemory); allottedMemory > MinAllottedMemory {
 			opt.AllottedMemory = allottedMemory
 			glog.Infof(
 				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
 					"For more information on --lru_mb please read "+
 					"https://docs.dgraph.io/deploy/#config\n",
-				opt.AllottedMemory, availableMemory)
+				opt.AllottedMemory, AvailableMemory)
 		}
 	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,

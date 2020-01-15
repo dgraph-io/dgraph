@@ -58,17 +58,17 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	ctx.StartTs = txn.StartTs
+
 	for key := range txn.conflicts {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
 		fps := strconv.FormatUint(key, 36)
-		if !x.HasString(ctx.Keys, fps) {
-			ctx.Keys = append(ctx.Keys, fps)
-		}
+		ctx.Keys = append(ctx.Keys, fps)
 	}
-	txn.Unlock()
+	ctx.Keys = x.Unique(ctx.Keys)
 
+	txn.Unlock()
 	txn.Update()
 	txn.cache.fillPreds(ctx, gid)
 }
@@ -143,7 +143,6 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
@@ -179,6 +178,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
 					mpost.CommitTs = item.Version()
+				}
+				if l.mutationMap == nil {
+					l.mutationMap = make(map[uint64]*pb.PostingList)
 				}
 				l.mutationMap[pl.CommitTs] = pl
 				return nil

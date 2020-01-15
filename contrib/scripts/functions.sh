@@ -31,11 +31,14 @@ function restartCluster {
 }
 
 function stopCluster {
-  basedir=$(dirname "${BASH_SOURCE[0]}")/../..
-  pushd $basedir/dgraph >/dev/null
   docker ps --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker stop | sed 's/^/Stopped /'
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker rm | sed 's/^/Removed /'
-  popd >/dev/null
+}
+
+function loginWithGroot() {
+  curl -s -XPOST localhost:8180/login -d '{"userid": "groot","password": "password"}' \
+   | python -c \
+   "import json; resp = raw_input(); data = json.loads(resp); print data['data']['accessJWT']"
 }

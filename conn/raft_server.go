@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -271,18 +272,34 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 
 // Heartbeat rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) error {
+func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) error {
 	ticker := time.NewTicker(echoDuration)
 	defer ticker.Stop()
 
+	node := w.GetNode()
+	if node == nil {
+		return ErrNoNode
+	}
+	info := pb.HealthInfo{
+		Instance: "alpha",
+		Addr:     node.MyAddr,
+		Group:    strconv.Itoa(int(node.RaftContext.GetGroup())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(node.StartTime) / time.Second),
+	}
+	if info.Group == "0" {
+		info.Instance = "zero"
+	}
+
 	ctx := stream.Context()
-	out := &api.Payload{Data: []byte("beat")}
+
 	for {
+		info.Uptime = int64(time.Since(node.StartTime) / time.Second)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := stream.Send(out); err != nil {
+			if err := stream.Send(&info); err != nil {
 				return err
 			}
 		}

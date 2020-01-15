@@ -12,7 +12,7 @@ The above command will  install the latest available dgraph docker image. In ord
 $ helm install --name my-release ./ --set image.tag=XXX
 ```
 
-By default zero and alpha services are exposed only within the kubernetes cluster as kubernets service type "ClusterIP". In order to expose the alpha service to internet you can use kubernetes service type "LoadBalancer":
+By default zero and alpha services are exposed only within the kubernetes cluster as kubernetes service type "ClusterIP". In order to expose the alpha service publicly you can use kubernetes service type "LoadBalancer":
 
 ```bash
 $ helm install --name my-release ./ --set alpha.service.type="LoadBalancer"
@@ -42,10 +42,12 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `image.tag`                          | Container image tag                                                 | `v1.0.13`                                           |
 | `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
 | `zero.name`                          | Zero component name                                                 | `zero`                                              |
-| `zero.updateStrategy`                | Stratergy for upgrading zero nodes                                  | `RollingUpdate`                                     |
+| `zero.updateStrategy`                | Strategy for upgrading zero nodes                                   | `RollingUpdate`                                     |
+| `zero.monitor_label`                 | Monitor label for zero, used by prometheus.                         | `zero-dgraph-io`                                    |
 | `zero.rollingUpdatePartition`        | Partition update strategy                                           | `nil`                                               |
 | `zero.podManagementPolicy`           | Pod management policy for zero nodes                                | `OrderedReady`                                      |
 | `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
+| `zero.shardReplicaCount`             | Max number of replicas per data shard                               | `5`                                                 |
 | `zero.terminationGracePeriodSeconds` | Zero server pod termination grace period                            | `60`                                                |
 | `zero.antiAffinity`                  | Zero anti-affinity policy                                           | `soft`                                              |
 | `zero.podAntiAffinitytopologyKey`    | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
@@ -64,7 +66,8 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `zero.livenessProbe`                 | Zero liveness probes                                                | `See values.yaml for defaults`                      |
 | `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
 | `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
-| `alpha.updateStrategy`               | Stratergy for upgrading alpha nodes                                 | `RollingUpdate`                                     |
+| `alpha.updateStrategy`               | Strategy for upgrading alpha nodes                                  | `RollingUpdate`                                     |
+| `alpha.monitor_label`                | Monitor label for alpha, used by prometheus.                        | `alpha-dgraph-io`                                   |
 | `alpha.rollingUpdatePartition`       | Partition update strategy                                           | `nil`                                               |
 | `alpha.podManagementPolicy`          | Pod management policy for alpha nodes                               | `OrderedReady`                                      |
 | `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |
@@ -93,3 +96,72 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `ratel.securityContext.runAsUser`    | User ID for the ratel container                                     | `1001`                                              |
 | `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
 | `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
+
+## Monitoring
+
+Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
+
+Follow the below mentioned steps to setup prometheus monitoring for your cluster:
+
+* Install Prometheus operator:
+
+```sh
+$ kubectl apply -f https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
+```
+
+* Ensure that the instance of `prometheus-operator` has started before continuing.
+
+```sh
+$ kubectl get deployments prometheus-operator
+NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+prometheus-operator   1         1         1            1           3m
+```
+
+* Apply prometheus manifest present [here](/contrib/config/monitoring/prometheus/prometheus.yaml).
+
+```sh
+$ kubectl apply -f prometheus.yaml
+
+serviceaccount/prometheus-dgraph-io created
+clusterrole.rbac.authorization.k8s.io/prometheus-dgraph-io created
+clusterrolebinding.rbac.authorization.k8s.io/prometheus-dgraph-io created
+servicemonitor.monitoring.coreos.com/alpha.dgraph-io created
+servicemonitor.monitoring.coreos.com/zero-dgraph-io created
+prometheus.monitoring.coreos.com/dgraph-io created
+```
+
+To view prometheus UI locally run:
+
+```sh
+$ kubectl port-forward prometheus-dgraph-io-0 9090:9090
+```
+
+The UI is accessible at port 9090. Open http://localhost:9090 in your browser to play around.
+
+To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
+
+* Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
+with the required reciever configuration including the slack webhook credential and create the secret.
+
+You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
+
+```sh
+$ kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+
+$ kubectl get secrets
+NAME                                            TYPE                 DATA   AGE
+alertmanager-alertmanager-dgraph-io             Opaque               1      87m
+```
+
+* Apply the [alertmanager](/contrib/config/monitoring/prometheus/alertmanager.yaml) along with [alert-rules](/contrib/config/monitoring/prometheus/alert-rules.yaml) manifest
+to use the default configured alert configuration. You can also add custom rules based on the metrics exposed by dgraph cluster similar to [alert-rules](/contrib/config/monitoring/prometheus/alert-rules.yaml)
+manifest. 
+
+```sh
+$ kubectl apply -f alertmanager.yaml
+alertmanager.monitoring.coreos.com/alertmanager-dgraph-io created
+service/alertmanager-dgraph-io created
+
+$ kubectl apply -f alert-rules.yaml
+prometheusrule.monitoring.coreos.com/prometheus-rules-dgraph-io created
+```

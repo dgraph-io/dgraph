@@ -23,7 +23,7 @@ SUBDIRS = dgraph
 
 ###############
 
-.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help
+.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help image
 all: $(SUBDIRS)
 
 $(SUBDIRS):
@@ -57,6 +57,14 @@ uninstall:
 test:
 	@echo Running ./test.sh
 	./test.sh
+
+image: dgraph
+	@mkdir linux
+	@mv ./dgraph/dgraph ./linux/dgraph
+	@cp ./contrib/Dockerfile .
+	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
+	@rm -r linux
+	@rm Dockerfile
 
 help:
 	@echo

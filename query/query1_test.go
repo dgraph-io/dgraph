@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -80,22 +81,17 @@ func TestSchemaBlock5(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"name","type":"string","index":true,"tokenizer":["term","exact","trigram"],"count":true,"lang":true}]}}`, js)
 }
 
-func TestFilterNonIndexedPredicateFail(t *testing.T) {
-
-	// filtering on non indexing predicate fails
+func TestNonIndexedPredicateAtRoot(t *testing.T) {
 	query := `
-		{
-			me(func: uid(0x01)) {
-				friend @filter(le(survival_rate, 30)) {
-					uid
-					name
-					age
-				}
-			}
+	{
+		me(func: ge(noindex_name, "Michonne")) {
+			noindex_name
 		}
+	}
 	`
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate noindex_name is not indexed")
 }
 
 func TestMultipleSamePredicateInBlockFail(t *testing.T) {
@@ -331,6 +327,49 @@ func TestJSONQueryVariables(t *testing.T) {
 	js, err := processQueryWithVars(t, q, map[string]string{"$a": "2"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}}`, js)
+}
+
+func TestGraphQLVarsInUpsert(t *testing.T) {
+	req := &api.Request{
+		Query: `query test ($a: int = 1) {
+			me(func: uid(0x01)) {
+				v as uid
+				name
+				gender
+				friend(first: $a) {
+					name
+				}
+			}
+		}`,
+		Vars: map[string]string{"$a": "2"},
+		Mutations: []*api.Mutation{
+			&api.Mutation{
+				SetNquads: []byte(`_:user <pred> "value" .`),
+				Cond:      `@if(eq(len(v), 0))`,
+			},
+		},
+		CommitNow: true,
+	}
+	resp, err := client.NewTxn().Do(context.Background(), req)
+	require.NoError(t, err)
+	js := string(resp.GetJson())
+	require.JSONEq(t, `{
+		"me": [
+		  {
+			"friend": [
+			  {
+				"name": "Rick Grimes"
+			  },
+			  {
+				"name": "Glenn Rhee"
+			  }
+			],
+			"uid": "0x1",
+			"gender": "female",
+			"name": "Michonne"
+		  }
+		]
+	  }`, js)
 }
 
 func TestOrderDescFilterCount(t *testing.T) {

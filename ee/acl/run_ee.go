@@ -27,7 +27,8 @@ var (
 	CmdAcl x.SubCommand
 )
 
-const gPassword = "gpassword"
+const gName = "guardian_name"
+const gPassword = "guardian_password"
 const defaultGroupList = "dgraph-unused-group"
 
 func init() {
@@ -38,7 +39,8 @@ func init() {
 
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
+	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")
+	flag.StringP(gPassword, "x", "", "Guardian password to authorize this operation")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -111,8 +113,6 @@ func initSubcommands() []*x.SubCommand {
 		"The list of groups to be set for the user")
 	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
 	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
-	modFlags.StringP("pred_regex", "P", "", "The regular expression specifying predicates"+
-		" whose acls are to be changed")
 	modFlags.IntP("perm", "m", 0, "The acl represented using "+
 		"an integer: 4 for read, 2 for write, and 1 for modify. Use a negative value to remove a "+
 		"predicate from the group")

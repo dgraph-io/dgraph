@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+# Currently we are downloading dgraph binary manually, later we can create an AMI with dgraph pre-installed
+# and maintain that on AWS.
+wget https://github.com/dgraph-io/dgraph/releases/download/v${dgraph_version}/dgraph-linux-amd64.tar.gz
+tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz
+
+groupadd --system dgraph
+useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph
+
+mkdir -p /var/log/dgraph/
+mkdir -p /var/run/dgraph/
+
+chown -R dgraph:dgraph /var/run/dgraph
+chown -R dgraph:dgraph /var/log/dgraph
+
+echo "${systemd_service}" > /etc/systemd/system/${service_name}.service
+chmod +x /etc/systemd/system/dgraph*
+
+systemctl daemon-reload
+systemctl enable --now ${service_name}

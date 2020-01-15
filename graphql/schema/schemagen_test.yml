@@ -1,0 +1,370 @@
+schemas:
+  -
+    name: "Object data type"
+    input: |
+      type A {
+        id: ID!
+        p: P
+      }
+      type P {
+        id: ID!
+      }
+    output: |
+      type A {
+        A.p: uid
+      }
+      A.p: uid .
+      type P {
+      }
+
+  -
+    name: "Scalar list"
+    input: |
+      type X {
+        id: ID!
+        names: [String!]
+      }
+    output: |
+      type X {
+        X.names: [string]
+      }
+      X.names: [string] .
+
+  -
+    name: "Object list"
+    input: |
+      type X {
+        p: [P!]!
+      }
+      type P {
+        id: ID!
+      }
+    output: |
+      type X {
+        X.p: [uid]
+      }
+      X.p: [uid] .
+      type P {
+      }
+
+  -
+    name: "Scalar types"
+    input: |
+      type X {
+        p: Int
+        pList: [Int]
+        q: Boolean
+        r: String
+        rList: [String]
+        s: DateTime
+        sList: [DateTime]
+        t: Float
+        tList: [Float]
+        u: ID
+      }
+    output: |
+      type X {
+        X.p: int
+        X.pList: [int]
+        X.q: bool
+        X.r: string
+        X.rList: [string]
+        X.s: dateTime
+        X.sList: [dateTime]
+        X.t: float
+        X.tList: [float]
+      }
+      X.p: int .
+      X.pList: [int] .
+      X.q: bool .
+      X.r: string .
+      X.rList: [string] .
+      X.s: dateTime .
+      X.sList: [dateTime] .
+      X.t: float .
+      X.tList: [float] .
+
+  -
+    name: "enum - always gets an index"
+    input: |
+      type X {
+        e: E
+        f: [E]
+      }
+      enum E { A }
+    output: |
+      type X {
+        X.e: string
+        X.f: [string]
+      }
+      X.e: string @index(hash) .
+      X.f: [string] @index(hash) .
+
+
+  -
+    name: "Search indexes are correct"
+    input: |
+      type X {
+        i1: Int @search
+        i2: Int @search(by: [int])
+        f1: Float @search
+        f2: Float @search(by: [float])
+        b1: Boolean @search
+        b2: Boolean @search(by: [bool])
+        s1: String @search
+        s2: String @search(by: [hash])
+        s3: String @search(by: [exact])
+        s4: String @search(by: [term])
+        s5: String @search(by: [fulltext])
+        s6: String @search(by: [trigram])
+        s7: String @search(by: [regexp])
+        s8: String @search(by: [exact, fulltext, term, trigram])
+        dt1: DateTime @search
+        dt2: DateTime @search(by: [year])
+        dt3: DateTime @search(by: [month])
+        dt4: DateTime @search(by: [day])
+        dt5: DateTime @search(by: [hour])
+        e: E @search
+        e1: E @search(by: [hash])
+        e2: E @search(by: [exact])
+        e3: E @search(by: [trigram])
+        e4: E @search(by: [regexp])
+        e5: E @search(by: [hash, regexp])
+        e6: E @search(by: [hash, trigram])
+        e7: E @search(by: [exact, regexp])
+      }
+      enum E { A }
+    output: |
+      type X {
+        X.i1: int
+        X.i2: int
+        X.f1: float
+        X.f2: float
+        X.b1: bool
+        X.b2: bool
+        X.s1: string
+        X.s2: string
+        X.s3: string
+        X.s4: string
+        X.s5: string
+        X.s6: string
+        X.s7: string
+        X.s8: string
+        X.dt1: dateTime
+        X.dt2: dateTime
+        X.dt3: dateTime
+        X.dt4: dateTime
+        X.dt5: dateTime
+        X.e: string
+        X.e1: string
+        X.e2: string
+        X.e3: string
+        X.e4: string
+        X.e5: string
+        X.e6: string
+        X.e7: string
+      }
+      X.i1: int @index(int) .
+      X.i2: int @index(int) .
+      X.f1: float @index(float) .
+      X.f2: float @index(float) .
+      X.b1: bool @index(bool) .
+      X.b2: bool @index(bool) .
+      X.s1: string @index(term) .
+      X.s2: string @index(hash) .
+      X.s3: string @index(exact) .
+      X.s4: string @index(term) .
+      X.s5: string @index(fulltext) .
+      X.s6: string @index(trigram) .
+      X.s7: string @index(trigram) .
+      X.s8: string @index(exact, fulltext, term, trigram) .
+      X.dt1: dateTime @index(year) .
+      X.dt2: dateTime @index(year) .
+      X.dt3: dateTime @index(month) .
+      X.dt4: dateTime @index(day) .
+      X.dt5: dateTime @index(hour) .
+      X.e: string @index(hash) .
+      X.e1: string @index(hash) .
+      X.e2: string @index(exact) .
+      X.e3: string @index(trigram) .
+      X.e4: string @index(trigram) .
+      X.e5: string @index(hash, trigram) .
+      X.e6: string @index(hash, trigram) .
+      X.e7: string @index(exact, trigram) .
+
+  -
+    name: "interface and types interact properly"
+    input: |
+      interface A {
+        id: ID!
+        name: String! @search(by: [exact])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+      type C implements A {
+        dob: DateTime!
+      }
+    output: |
+      type A {
+        A.name: string
+      }
+      A.name: string @index(exact) .
+      type B {
+        A.name: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+      type C {
+        A.name: string
+        C.dob: dateTime
+      }
+      C.dob: dateTime .
+
+  -
+    name: "Schema with @dgraph directive."
+    input: |
+      type A @dgraph(type: "dgraph.type.A") {
+        id: ID!
+        p: Int
+        pList: [Int] @dgraph(pred: "pList")
+        q: Boolean
+        r: String @dgraph(pred: "dgraph.r")
+        rList: [String]
+        s: DateTime @dgraph(pred: "s")
+        t: Float
+        tList: [Float] @dgraph(pred: "dgraph.tList")
+      }
+
+      interface B @dgraph(type: "dgraph.interface.B") {
+        id: ID!
+        name: String! @search(by: [exact]) @dgraph(pred: "dgraph.abc.name")
+        age: Int
+      }
+
+      type C implements B @dgraph(type: "type.C") {
+        correct: Boolean @search @dgraph(pred: "dgraph.correct")
+        incorrect: Boolean
+      }
+
+      type X @dgraph(type: "dgraph.type.X") {
+        e: E @dgraph(pred: "dgraph.x.e")
+        f: [E] @dgraph(pred: "dgraph.x.eList")
+      }
+      enum E { A }
+
+      type Y {
+        p: Int
+        q: String
+        pList: [Int] @dgraph(pred: "dgraph.pList")
+        f: Float @dgraph(pred: "f")
+      }
+    output: |
+      type dgraph.type.A {
+        dgraph.type.A.p: int
+        pList: [int]
+        dgraph.type.A.q: bool
+        dgraph.r: string
+        dgraph.type.A.rList: [string]
+        s: dateTime
+        dgraph.type.A.t: float
+        dgraph.tList: [float]
+      }
+      dgraph.type.A.p: int .
+      pList: [int] .
+      dgraph.type.A.q: bool .
+      dgraph.r: string .
+      dgraph.type.A.rList: [string] .
+      s: dateTime .
+      dgraph.type.A.t: float .
+      dgraph.tList: [float] .
+      type dgraph.interface.B {
+        dgraph.abc.name: string
+        dgraph.interface.B.age: int
+      }
+      dgraph.abc.name: string @index(exact) .
+      dgraph.interface.B.age: int .
+      type type.C {
+        dgraph.abc.name: string
+        dgraph.interface.B.age: int
+        dgraph.correct: bool
+        type.C.incorrect: bool
+      }
+      dgraph.correct: bool @index(bool) .
+      type.C.incorrect: bool .
+      type dgraph.type.X {
+        dgraph.x.e: string
+        dgraph.x.eList: [string]
+      }
+      dgraph.x.e: string @index(hash) .
+      dgraph.x.eList: [string] @index(hash) .
+      type Y {
+        Y.p: int
+        Y.q: string
+        dgraph.pList: [int]
+        f: float
+      }
+      Y.p: int .
+      Y.q: string .
+      dgraph.pList: [int] .
+      f: float .
+
+  -
+    name: "Field with @id directive but no search directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive gets hash index."
+    input: |
+      interface A {
+        id: String! @id @search(by: [trigram])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(trigram, hash) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .
+
+  -
+    name: "Field with @id directive and a hash arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [hash, term])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id: string
+      }
+      A.id: string @index(hash, term) @upsert .
+      type B {
+        A.id: string
+        B.correct: bool
+      }
+      B.correct: bool @index(bool) .

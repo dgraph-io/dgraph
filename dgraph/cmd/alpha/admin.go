@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,8 +32,8 @@ import (
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
-	if r.Method != method {
+func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[string]bool) bool {
+	if _, ok := allowedMethods[r.Method]; !ok {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -71,7 +70,9 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodGet: true,
+	}) {
 		return
 	}
 
@@ -81,7 +82,9 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodGet: true,
+	}) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -132,9 +135,9 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if memoryMB < edgraph.MinAllottedMemory {
+	if memoryMB < worker.MinAllottedMemory {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", edgraph.MinAllottedMemory)
+		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", worker.MinAllottedMemory)
 		return
 	}
 

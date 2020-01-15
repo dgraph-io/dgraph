@@ -17,23 +17,20 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
-	"io/ioutil"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -63,21 +61,6 @@ const (
 	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
-
-// ServerState holds the state of the Dgraph server.
-type ServerState struct {
-	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh chan struct{} // channel to signal shutdown.
-
-	Pstore   *badger.DB
-	WALstore *badger.DB
-
-	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
-	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
-
-	needTs chan tsReq
-}
-
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
 	NeedAuthorize = iota
@@ -86,218 +69,15 @@ const (
 	NoAuthorize
 )
 
-// State is the instance of ServerState used by the current server.
-var State ServerState
+type key int
 
-// InitServerState initializes this server's state.
-func InitServerState() {
-	Config.validate()
-
-	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
-	State.needTs = make(chan tsReq, 100)
-
-	State.initStorage()
-	go State.fillTimestampRequests()
-
-	contents, err := ioutil.ReadFile(filepath.Join(Config.PostingDir, groupFile))
-	if err != nil {
-		return
-	}
-
-	glog.Infof("Found group_id file inside posting directory %s. Will attempt to read.",
-		Config.PostingDir)
-	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
-	if err != nil {
-		glog.Warningf("Could not read %s file inside posting directory %s.",
-			groupFile, Config.PostingDir)
-	}
-	x.WorkerConfig.ProposedGroupId = uint32(groupId)
-}
-
-func (s *ServerState) runVlogGC(store *badger.DB) {
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
-
-	runGC := func() {
-		var err error
-		for err == nil {
-			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.7)
-		}
-		_, lastVlogSize = store.Size()
-	}
-
-	for {
-		select {
-		case <-s.vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-s.mandatoryVlogTicker.C:
-			runGC()
-		}
-	}
-}
-
-func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
-
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch Config.BadgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
-
-	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch Config.BadgerVlog {
-	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
-	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
-	return opt
-}
-
-func (s *ServerState) initStorage() {
-	var err error
-	{
-		// Write Ahead Log directory
-		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
-
-		// We should always force load LSM tables to memory, disregarding user settings, because
-		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
-		// down way too much, causing cluster membership issues. Because of prefix compression and
-		// value separation provided by Badger, this is still better than using the memory based WAL
-		// storage provided by the Raft library.
-		opt.TableLoadingMode = options.LoadToRAM
-
-		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		s.WALstore, err = badger.Open(opt)
-		x.Checkf(err, "Error while creating badger KV WAL store")
-	}
-	{
-		// Postings directory
-		// All the writes to posting store should be synchronous. We use batched writers
-		// for posting lists, so the cost of sync writes is amortized.
-		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
-		opt = setBadgerOptions(opt)
-
-		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
-		s.Pstore, err = badger.OpenManaged(opt)
-		x.Checkf(err, "Error while creating badger KV posting store")
-	}
-
-	s.vlogTicker = time.NewTicker(1 * time.Minute)
-	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
-	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
-}
-
-// Dispose stops and closes all the resources inside the server state.
-func (s *ServerState) Dispose() {
-	if err := s.Pstore.Close(); err != nil {
-		glog.Errorf("Error while closing postings store: %v", err)
-	}
-	if err := s.WALstore.Close(); err != nil {
-		glog.Errorf("Error while closing WAL store: %v", err)
-	}
-	s.vlogTicker.Stop()
-	s.mandatoryVlogTicker.Stop()
-}
+const (
+	// isGraphQL is used to indicate that the request is made by the graphql admin or not.
+	isGraphQL key = iota
+)
 
 // Server implements protos.DgraphServer
 type Server struct{}
-
-func (s *ServerState) fillTimestampRequests() {
-	const (
-		initDelay = 10 * time.Millisecond
-		maxDelay  = time.Second
-	)
-
-	var reqs []tsReq
-	for {
-		// Reset variables.
-		reqs = reqs[:0]
-		delay := initDelay
-
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
-			}
-		}
-
-		// Generate the request.
-		num := &pb.Num{}
-		for _, r := range reqs {
-			if r.readOnly {
-				num.ReadOnly = true
-			} else {
-				num.Val++
-			}
-		}
-
-		// Execute the request with infinite retries.
-	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ts, err := worker.Timestamps(ctx, num)
-		cancel()
-		if err != nil {
-			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
-				" Will retry...\n", err, delay)
-			time.Sleep(delay)
-			delay *= 2
-			if delay > maxDelay {
-				delay = maxDelay
-			}
-			goto retry
-		}
-		var offset uint64
-		for _, req := range reqs {
-			if req.readOnly {
-				req.ch <- ts.ReadOnly
-			} else {
-				req.ch <- ts.StartId + offset
-				offset++
-			}
-		}
-		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
-	}
-}
-
-type tsReq struct {
-	readOnly bool
-	// A one-shot chan which we can send a txn timestamp upon.
-	ch chan uint64
-}
-
-func (s *ServerState) getTimestamp(readOnly bool) uint64 {
-	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
-	s.needTs <- tr
-	return <-tr.ch
-}
 
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
@@ -340,7 +120,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
@@ -480,7 +260,23 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	m := &pb.Mutations{Edges: edges, StartTs: qc.req.StartTs}
+	predHints := make(map[string]pb.Metadata_HintType)
+	for _, gmu := range qc.gmuList {
+		for pred, hint := range gmu.Metadata.GetPredHints() {
+			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
+				continue
+			}
+			predHints[pred] = hint
+		}
+	}
+	m := &pb.Mutations{
+		Edges:   edges,
+		StartTs: qc.req.StartTs,
+		Metadata: &pb.Metadata{
+			PredHints: predHints,
+		},
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
@@ -807,11 +603,75 @@ type queryContext struct {
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
 	span *trace.Span
+	// graphql indicates whether the given request is from graphql admin or not.
+	graphql bool
+}
+
+// HealthAll handles health?all requests.
+func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
+	}
+
+	var healthAll []pb.HealthInfo
+	pool := conn.GetPools().GetAll()
+	for _, p := range pool {
+		healthAll = append(healthAll, p.HealthInfo())
+	}
+	// Append self.
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance: "alpha",
+		Addr:     x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Group:    strconv.Itoa(int(worker.GroupId())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
+	})
+
+	var err error
+	var jsonOut []byte
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+	return &api.Response{Json: jsonOut}, nil
+}
+
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
+	}
+
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.Errorf("No membership state found")
+	}
+
+	m := jsonpb.Marshaler{}
+	var jsonState bytes.Buffer
+	if err := m.Marshal(&jsonState, ms); err != nil {
+		return nil, errors.Errorf("Error marshalling state information to JSON")
+	}
+
+	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	return s.doQuery(ctx, req, NeedAuthorize)
+}
+
+// QueryForGraphql handles queries or mutations
+func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
@@ -867,7 +727,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span}
+	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
+
+	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -877,14 +739,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 			return
 		}
 	}
-
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		req.StartTs = State.getTimestamp(false)
+		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
@@ -944,7 +805,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		qc.req.StartTs = State.getTimestamp(qc.req.ReadOnly)
+		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
@@ -987,18 +848,30 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// If a variable doesn't have any UID, we generate one ourselves later.
 	for name := range qc.uidRes {
 		v := qr.Vars[name]
-		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
+
+		// If the list of UIDs is empty but the map of values is not,
+		// we need to get the UIDs from the keys in the map.
+		var uidList []uint64
+		if v.Uids != nil && len(v.Uids.Uids) > 0 {
+			uidList = v.Uids.Uids
+		} else {
+			uidList = make([]uint64, 0, len(v.Vals))
+			for uid := range v.Vals {
+				uidList = append(uidList, uid)
+			}
+		}
+		if len(uidList) == 0 {
 			continue
 		}
 
 		// We support maximum 1 million UIDs per variable to ensure that we
 		// don't do bad things to alpha and mutation doesn't become too big.
-		if len(v.Uids.Uids) > 1e6 {
+		if len(uidList) > 1e6 {
 			return resp, errors.Errorf("var [%v] has over million UIDs", name)
 		}
 
-		uids := make([]string, len(v.Uids.Uids))
-		for i, u := range v.Uids.Uids {
+		uids := make([]string, len(uidList))
+		for i, u := range uidList {
 			// We use base 10 here because the RDF mutations expect the uid to be in base 10.
 			uids[i] = strconv.FormatUint(u, 10)
 		}
@@ -1031,7 +904,7 @@ func parseRequest(qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu)
+			gmu, err := parseMutationObject(mu, qc)
 			if err != nil {
 				return err
 			}
@@ -1102,6 +975,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
+		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
+		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		if tc.Aborted {
+			return tctx, nil
+		}
+
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
@@ -1125,7 +1004,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if Config.MutationsMode != DisallowMutations {
+	if worker.Config.MutationsMode != worker.DisallowMutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)
@@ -1142,7 +1021,7 @@ func isAlterAllowed(ctx context.Context) error {
 	if ok {
 		glog.Infof("Got Alter request from %q\n", p.Addr)
 	}
-	if len(Config.AuthToken) == 0 {
+	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -1153,7 +1032,7 @@ func isAlterAllowed(ctx context.Context) error {
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
-	if tokens[0] != Config.AuthToken {
+	if tokens[0] != worker.Config.AuthToken {
 		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
 	}
 	return nil
@@ -1164,32 +1043,35 @@ func isAlterAllowed(ctx context.Context) error {
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
+func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
+		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
+		// The metadata is not currently needed for delete operations so it can be safely ignored.
+		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.SetNquads)
+		nqs, md, err := chunker.ParseRDFs(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.DelNquads)
+		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}
@@ -1205,7 +1087,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del); err != nil {
+	if err := validateNQuads(res.Set, res.Del, qc); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -1232,7 +1114,17 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad) error {
+// validateForGraphql validate nquads for graphql
+func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
+	// Check whether the incoming predicate is graphql reserved predicate or not.
+	if !isGraphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
+		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+	}
+	return nil
+}
+
+func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
+
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -1247,6 +1139,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
+			return err
+		}
 	}
 	for _, nq := range del {
 		if err := validatePredName(nq.Predicate); err != nil {
@@ -1258,6 +1153,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
+			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
 		// with bad predicate forms. ex: foo@bar ~something
@@ -1297,11 +1195,6 @@ func validateKeys(nq *api.NQuad) error {
 // are longer than the limit (2^16).
 func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		// These are used in the response of a mutation in HTTP API.
-		if a := strings.ToLower(q.Alias); a == "code" || a == "message" || a == "uids" {
-			return errors.Errorf("query alias [%v] not allowed", a)
-		}
-
 		if err := validatePredName(q.Attr); err != nil {
 			return err
 		}
@@ -1324,9 +1217,9 @@ func validatePredName(name string) error {
 
 // formatTypes takes a list of TypeUpdates and converts them in to a list of
 // maps in a format that is human-readable to be marshaled into JSON.
-func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+func formatTypes(typeList []*pb.TypeUpdate) []map[string]interface{} {
 	var res []map[string]interface{}
-	for _, typ := range types {
+	for _, typ := range typeList {
 		typeMap := make(map[string]interface{})
 		typeMap["name"] = typ.TypeName
 		fields := make([]map[string]string, len(typ.Fields))

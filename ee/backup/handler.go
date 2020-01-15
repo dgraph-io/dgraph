@@ -94,6 +94,20 @@ type Credentials struct {
 	anonymous    bool
 }
 
+func (creds *Credentials) hasCredentials() bool {
+	if creds == nil {
+		return false
+	}
+	return creds.accessKey != "" && creds.secretKey != ""
+}
+
+func (creds *Credentials) isAnonymous() bool {
+	if creds == nil {
+		return false
+	}
+	return creds.anonymous
+}
+
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{

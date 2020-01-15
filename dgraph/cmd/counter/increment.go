@@ -92,11 +92,12 @@ func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, erro
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		return counter, err
 	}
-	if len(m["q"]) == 0 {
+	switch len(m["q"]) {
+	case 0:
 		// Do nothing.
-	} else if len(m["q"]) == 1 {
+	case 1:
 		counter = m["q"][0]
-	} else {
+	default:
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
 	span.Annotatef(nil, "Found counter: %+v", counter)

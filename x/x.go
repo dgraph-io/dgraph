@@ -101,6 +101,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
+	// GuardiansId is the ID of the admin group for ACLs.
+	GuardiansId = "guardians"
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
@@ -109,6 +111,14 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
 `
+	// GroupIdFileName is the name of the file storing the ID of the group to which
+	// the data in a postings directory belongs. This ID is used to join the proper
+	// group the first time an Alpha comes up with data from a restored backup or a
+	// bulk load.
+	GroupIdFileName = "group_id"
+
+	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
+	GraphqlPredicates = `{"predicate":"dgraph.graphql.schema", "type": "string"}`
 )
 
 var (
@@ -159,8 +169,74 @@ type Location struct {
 	Column int `json:"column,omitempty"`
 }
 
+// GqlErrorList is a list of GraphQL errors as would be found in a response.
+type GqlErrorList []*GqlError
+
 type queryRes struct {
-	Errors []GqlError `json:"errors"`
+	Errors GqlErrorList `json:"errors"`
+}
+
+func (gqlErr *GqlError) Error() string {
+	var buf bytes.Buffer
+	if gqlErr == nil {
+		return ""
+	}
+
+	buf.WriteString(gqlErr.Message)
+
+	if len(gqlErr.Locations) > 0 {
+		buf.WriteString(" (Locations: [")
+		for i, loc := range gqlErr.Locations {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(fmt.Sprintf("{Line: %v, Column: %v}", loc.Line, loc.Column))
+		}
+		buf.WriteString("])")
+	}
+
+	return buf.String()
+}
+
+func (errList GqlErrorList) Error() string {
+	var buf bytes.Buffer
+	for i, gqlErr := range errList {
+		if i > 0 {
+			buf.WriteByte('\n')
+		}
+		buf.WriteString(gqlErr.Error())
+	}
+	return buf.String()
+}
+
+// GqlErrorf returns a new GqlError with the message and args Sprintf'ed as the
+// GqlError's Message.
+func GqlErrorf(message string, args ...interface{}) *GqlError {
+	return &GqlError{
+		Message: fmt.Sprintf(message, args...),
+	}
+}
+
+// WithLocations adds a list of locations to a GqlError and returns the same
+// GqlError (fluent style).
+func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
+	if gqlErr == nil {
+		return nil
+	}
+
+	gqlErr.Locations = append(gqlErr.Locations, locs...)
+	return gqlErr
+}
+
+// WithPath adds a path to a GqlError and returns the same
+// GqlError (fluent style).
+func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
+	if gqlErr == nil {
+		return nil
+	}
+
+	gqlErr.Path = path
+	return gqlErr
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
@@ -169,7 +245,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
-	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
+	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
@@ -199,8 +275,8 @@ func AddCorsHeaders(w http.ResponseWriter) {
 
 // QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
-	Errors []GqlError `json:"errors"`
-	Data   *string    `json:"data"`
+	Errors GqlErrorList `json:"errors"`
+	Data   *string      `json:"data"`
 }
 
 // SetStatusWithData sets the errors in the response and ensures that the data key
@@ -211,7 +287,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr QueryResWithData
 	ext := make(map[string]interface{})
 	ext["code"] = code
-	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
+	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
@@ -284,6 +360,24 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
+// Unique takes an array and returns it with no duplicate entries.
+func Unique(a []string) []string {
+	if len(a) < 2 {
+		return a
+	}
+
+	sort.Strings(a)
+	idx := 1
+	for _, val := range a {
+		if a[idx-1] == val {
+			continue
+		}
+		a[idx] = val
+		idx++
+	}
+	return a[:idx]
+}
+
 // ReadLine reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
 // method for loading long lines which could be longer than the buffer
@@ -299,7 +393,9 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
 		if err == nil {
-			buf.Write(line)
+			if _, err := buf.Write(line); err != nil {
+				return err
+			}
 		}
 	}
 	return err
@@ -653,7 +749,9 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 	closeFunc := func() {
 		for _, c := range conns {
-			c.Close()
+			if err := c.Close(); err != nil {
+				glog.Warningf("Error closing connection to Dgraph client: %v", err)
+			}
 		}
 	}
 	return dg, closeFunc
@@ -706,4 +804,14 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
 	return nil
+}
+
+func IsGuardian(groups []string) bool {
+	for _, group := range groups {
+		if group == GuardiansId {
+			return true
+		}
+	}
+
+	return false
 }

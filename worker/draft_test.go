@@ -65,11 +65,8 @@ func TestCalculateSnapshot(t *testing.T) {
 	// Txn: 1 -> 5 // 5 should be the ReadTs.
 	// Txn: 2 // Should correspond to the index. Subtract 1 from the index.
 	// Txn: 3 -> 4
-	entries = append(entries, getEntryForMutation(1, 1))
-	entries = append(entries, getEntryForMutation(2, 3))
-	entries = append(entries, getEntryForMutation(3, 2))  // Start ts can be jumbled.
-	entries = append(entries, getEntryForCommit(4, 3, 4)) // But commit ts would be serial.
-	entries = append(entries, getEntryForCommit(5, 1, 5))
+	entries = append(entries, getEntryForMutation(1, 1), getEntryForMutation(2, 3),
+		getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
 	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
 	posting.Oracle().RegisterStartTs(2)
@@ -95,9 +92,8 @@ func TestCalculateSnapshot(t *testing.T) {
 	// Txn: 7 -> 8
 	// Txn: 2 -> 9
 	entries = entries[:0]
-	entries = append(entries, getEntryForMutation(6, 7))
-	entries = append(entries, getEntryForCommit(7, 7, 8))
-	entries = append(entries, getEntryForCommit(8, 2, 9))
+	entries = append(entries, getEntryForMutation(6, 7), getEntryForCommit(7, 7, 8),
+		getEntryForCommit(8, 2, 9))
 	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
 	posting.Oracle().ResetTxns()

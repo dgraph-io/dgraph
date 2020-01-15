@@ -162,11 +162,11 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
-	restored1, err := testutil.GetPValues("./data/restore/p1", "name1", commitTs)
+	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)
 	require.NoError(t, err)
-	restored2, err := testutil.GetPValues("./data/restore/p2", "name2", commitTs)
+	restored2, err := testutil.GetPredicateValues("./data/restore/p2", "name2", commitTs)
 	require.NoError(t, err)
-	restored3, err := testutil.GetPValues("./data/restore/p3", "name3", commitTs)
+	restored3, err := testutil.GetPredicateValues("./data/restore/p3", "name3", commitTs)
 	require.NoError(t, err)
 
 	restored := make(map[string]string)

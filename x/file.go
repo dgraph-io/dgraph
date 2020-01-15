@@ -18,8 +18,10 @@ package x
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
@@ -148,4 +150,53 @@ func IsMissingOrEmptyDir(path string) (err error) {
 
 	err = ErrMissingDir
 	return
+}
+
+// WriteGroupIdFile writes the given group ID to the group_id file inside the given
+// postings directory.
+func WriteGroupIdFile(pdir string, group_id uint32) error {
+	if group_id == 0 {
+		return errors.Errorf("ID written to group_id file must be a positive number")
+	}
+
+	groupFile := filepath.Join(pdir, GroupIdFileName)
+	f, err := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil
+	}
+	if _, err := f.WriteString(strconv.Itoa(int(group_id))); err != nil {
+		return err
+	}
+	if _, err := f.WriteString("\n"); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ReadGroupIdFile reads the file at the given path and attempts to retrieve the
+// group ID stored in it.
+func ReadGroupIdFile(pdir string) (uint32, error) {
+	path := filepath.Join(pdir, GroupIdFileName)
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if info.IsDir() {
+		return 0, errors.Errorf("Group ID file at %s is a directory", path)
+	}
+
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(groupId), nil
 }

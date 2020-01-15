@@ -4,13 +4,18 @@ title = "Get Started with Dgraph - Multi-language strings"
 
 **Welcome to the fourth tutorial of getting started with Dgraph.**
 
-In the [previous tutorial](/tutorial-3/), we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
+In the [previous tutorial]({{< relref "tutorial-3/index.md" >}}), we learned about Datatypes, Indexing, Filtering, and Reverse traversals in Dgraph.
 
 In this tutorial, we'll learn about using multi-language strings and operations on them using the language tags.
 
-The accompanying video of the tutorial will be out shortly, so stay tuned to [our YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w).
+You can see the accompanying video below.
 
-#### Strings and languages
+{{< youtube _lDE9QXHZC0 >}}
+
+---
+
+## Strings and languages
+
 Strings values in Dgraph are of UTF-8 format.
 Dgraph also supports values for string predicate types in multiple languages.
 The multi-lingual capability is particularly useful to build features, which requires you to store the same information in multiple languages.
@@ -20,7 +25,7 @@ Let's learn more about them!
 Let's start with building a simple food review Graph.
 Here's the Graph model.
 
-![model](/images/tutorials/4/a-graph-model.jpg)
+{{% load-img "/images/tutorials/4/a-graph-model.jpg" "model" %}}
 
 The above Graph has three entities: Food, Comment, and Country.
 
@@ -113,11 +118,11 @@ Let's go, amigos!
   ]
 }
 ```
-_Note: If this mutation syntax is new to you, refer to the [first tutorial](/tutorial-1/) to learn basics of mutation in Dgraph._
+_Note: If this mutation syntax is new to you, refer to the [first tutorial]({{< relref "tutorial-1/index.md">}}) to learn basics of mutation in Dgraph._
 
 Here's our Graph!
 
-![full graph](/images/tutorials/4/a-full-graph.png)
+{{% load-img "/images/tutorials/4/a-full-graph.png" "full graph" %}}
 
 Our Graph has:
 
@@ -128,9 +133,9 @@ Our Graph has:
 You can also see that Dgraph has auto-detected the data types of the predicates.
 You can check that out from the schema tab.
 
-![full graph](/images/tutorials/4/c-schema.png)
+{{% load-img "/images/tutorials/4/c-schema.png" "full graph" %}}
 
-_Note: Check out the [previous tutorial](/tutorial-3/) to know more about data types in Dgraph._
+_Note: Check out the [previous tutorial]({{< relref "tutorial-3/index.md">}}) to know more about data types in Dgraph._
 
 Let's write a query to fetch all the food items, their reviews, and their country of origin.
 
@@ -150,7 +155,7 @@ Go to the query tab, paste the query, and click Run.
 }
 ```
 
-_Note: Check the [second tutorial](/tutorial-2/) if you want to learn more about traversal queries like the above one_
+_Note: Check the [second tutorial]({{< relref "tutorial-2/index.md">}}) if you want to learn more about traversal queries like the above one_
 
 Now, Let's fetch only the food items and their reviews,
 
@@ -167,7 +172,7 @@ Now, Let's fetch only the food items and their reviews,
 
 As expected, these comments are in different languages.
 
-![full graph](/images/tutorials/4/b-comments.png)
+{{% load-img "/images/tutorials/4/b-comments.png" "full graph" %}}
 
 But can we fetch the reviews based on their language?
 Can we write a query which says: _Hey Dgraph, can you give me only the reviews written in Chinese?_
@@ -219,13 +224,13 @@ In the above mutation:
 
 In the mutation above, Dgraph creates a new node for the reviews, and stores `comment`, `comment@ru`, and `comment@jp` in different predicates inside the same node.
 
-_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial](/tutorial-1/)._
+_Note: If you're not clear about basic terminology like `predicates`, do read the [first tutorial]({{< relref "tutorial-1/index.md">}})._
 
 Let's run the above mutation.
 
 Go to the mutate tab, paste the mutation, and click Run.
 
-![lang error](/images/tutorials/4/d-lang-error.png)
+{{% load-img "/images/tutorials/4/d-lang-error.png" "lang error" %}}
 
 We got an error! Using the language tag requires you to add the `@lang` directive to the schema.
 
@@ -236,11 +241,11 @@ Follow the instructions below to add the `@lang` directive to the `comment` pred
 - Tick mark the `lang` directive.
 - Click on the `Update` button.
 
-![lang error](/images/tutorials/4/e-update-lang.png)
+{{% load-img "/images/tutorials/4/e-update-lang.png" "lang error" %}}
 
 Let's re-run the mutation.
 
-![lang error](/images/tutorials/4/f-mutation-success.png)
+{{% load-img "/images/tutorials/4/f-mutation-success.png" "lang error" %}}
 
 Success!
 
@@ -273,14 +278,15 @@ By following the standard, you eliminate the need to communicate the tags to you
 
 In our next section, let's make use of the language tags in our queries.
 
-#### Querying using language tags.
+## Querying using language tags.
+
 Let's obtain the review comments only for `Sushi`.
 
-In the [previous article](/tutorial-3/), we learned about using the `eq` operator and the `hash` index to query for string predicate values.
+In the [previous article]({{< relref "tutorial-3/index.md">}}), we learned about using the `eq` operator and the `hash` index to query for string predicate values.
 
 Using that knowledge, let's first add the `hash` index for the `food_name` predicate.
 
-![hash index](/images/tutorials/4/g-hash.png)
+{{% load-img "/images/tutorials/4/g-hash.png" "hash index" %}}
 
 Now, go to the query tab, paste the query in the text area, and click Run.
 
@@ -295,7 +301,7 @@ Now, go to the query tab, paste the query in the text area, and click Run.
 }
 ```
 
-![hash index](/images/tutorials/4/h-comment.png)
+{{% load-img "/images/tutorials/4/h-comment.png" "hash index" %}}
 
 By default, the query only returns the untagged comment.
 
@@ -313,7 +319,7 @@ Let's query for a review for `Sushi` in Japanese.
 }
 ```
 
-![Japanese](/images/tutorials/4/i-japanese.png)
+{{% load-img "/images/tutorials/4/i-japanese.png" "Japanese" %}}
 
 Now, let's query for a review for `Sushi` in Russian.
 
@@ -328,7 +334,7 @@ Now, let's query for a review for `Sushi` in Russian.
 }
 ```
 
-![Russian](/images/tutorials/4/j-russian.png)
+{{% load-img "/images/tutorials/4/j-russian.png" "Russian" %}}
 
 You can also fetch all the comments for `Sushi` written in any language.
 
@@ -343,7 +349,7 @@ You can also fetch all the comments for `Sushi` written in any language.
 }
 ```
 
-![Russian](/images/tutorials/4/k-star.png)
+{{% load-img "/images/tutorials/4/k-star.png" "Russian" %}}
 
 Here is the table with the syntax for various ways of making use of language tags while querying.
 
@@ -360,7 +366,7 @@ Here is the table with the syntax for various ways of making use of language tag
 
 If you remember, we had initially added a Russian dish `Borscht` with its review in `Russian`.
 
-![Russian](/images/tutorials/4/l-russian.png)
+{{% load-img "/images/tutorials/4/l-russian.png" "Russian" %}}
 
 If you notice, we haven't used the language tag `@ru` for the review written in Russian.
 
@@ -368,13 +374,14 @@ Hence, if we query for all the reviews written in `Russian`, the review for `Bor
 
 Only the review for `Sushi,` written in `Russian`, makes it to the list.
 
-![Russian](/images/tutorials/4/m-sushi.png)
+{{% load-img "/images/tutorials/4/m-sushi.png" "Russian" %}}
 
 So, here's the lesson of the day!
 
 > If you are representing the same information in different languages, don't forget to add your language tags!
 
-#### Summary
+## Summary
+
 In this tutorial, we learned about using multi-language string and operations on them using the language tags.
 
 The usage of tags is not just restricted to multi-lingual strings.
@@ -385,18 +392,39 @@ We'll explore the string type indices in detail.
 
 Sounds interesting?
 
-See you all soon in the next tutorial. Till then, happy Graphing!
-
-## What's Next?
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
-with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language](/query-language) reference.
-- See [Deploy](/deploy) if you wish to run Dgraph
-  in a cluster.
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-5/index.md" >}}).
 
 ## Need Help
 
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
 * You can also join our [Slack channel](http://slack.dgraph.io).
+
+<style>
+  /* blockquote styling */
+  blockquote {
+    font-size: 1;
+    font-style: italic;
+    margin: 0 3rem 1rem 3rem;
+    text-align: justify;
+  }
+  blockquote p:last-child, blockquote ul:last-child, blockquote ol:last-child {
+    margin-bottom: 0;
+  }
+  blockquote cite {
+    font-size: 15px;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    font-style: normal;
+    color: #555;
+  }
+  blockquote footer, blockquote small {
+    font-size: 18px;
+    font-size: 1.125rem;
+    display: block;
+    line-height: 1.42857143;
+  }
+  blockquote footer:before, blockquote small:before {
+    content: "\2014 \00A0";
+  }
+</style>

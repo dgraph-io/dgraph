@@ -232,7 +232,7 @@ func TestDeletePredicate(t *testing.T) {
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
-		x.AclPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
 			"list":true}]}}`, output)
 
@@ -388,41 +388,7 @@ func TestMutationSingleUid(t *testing.T) {
 		}
 	}
 	`
-	require.Error(t, runMutation(m))
-}
-
-// Verify multiple uids are allowed after mutation.
-func TestSchemaMutationUid(t *testing.T) {
-	// reset Schema
-	require.NoError(t, schema.ParseBytes([]byte(""), 1))
-
-	var s1 = `
-            friend: uid .
-	`
-	require.NoError(t, alterSchema(s1))
-	var m1 = `
-	{
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-		}
-	}
-	`
-	require.Error(t, runMutation(m1))
-
-	var s2 = `
-            friend: [uid] .
-	`
-	require.NoError(t, alterSchema(s2))
-	var m2 = `
-	{
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-		}
-	}
-	`
-	require.NoError(t, runMutation(m2))
+	require.NoError(t, runMutation(m))
 }
 
 // Verify a list uid predicate cannot be converted to a single-element predicate.
@@ -1096,7 +1062,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
-		x.AclPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
 			"list":true}]}}`, res)
@@ -1344,7 +1310,7 @@ func TestDropAll(t *testing.T) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t,
 		`{"data":{"schema":[`+
-			x.AclPredicates+","+
+			x.AclPredicates+","+x.GraphqlPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
 				"list":true}]}}`, output)
 
