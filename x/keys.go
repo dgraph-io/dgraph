@@ -50,7 +50,27 @@ const (
 	ByteSplit = byte(0x01)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
+	//NamespaceSeperator is a constant used as seperator between namespace and attr name.
+	NamespaceSeperator = byte(30)
 )
+
+// GenerateAttr is used to generate attr from namespace.
+func GenerateAttr(namespace, attr string) string {
+	if namespace != "" {
+		return namespace + string(NamespaceSeperator) + attr
+	}
+	return attr
+}
+
+// NamespaceForAttr returns the namespace from the given attr
+func NamespaceForAttr(attr string) string {
+	splits := strings.Split(attr, string(NamespaceSeperator))
+	AssertTrue(len(splits) < 3)
+	if len(splits) == 1 {
+		return ""
+	}
+	return splits[1]
+}
 
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)

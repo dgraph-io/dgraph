@@ -202,6 +202,8 @@ type params struct {
 	ExpandAll bool
 	// Shortest is true when the subgraph holds the results of a shortest paths query.
 	Shortest bool
+	// Namespace of the given subgraph
+	Namespace string
 }
 
 type pathMetadata struct {
@@ -418,7 +420,7 @@ func mathCopy(dst *mathTree, src *gql.MathTree) error {
 	return nil
 }
 
-func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
+func filterCopy(namespace string, sg *SubGraph, ft *gql.FilterTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	if len(ft.Op) > 0 {
 		sg.FilterOp = ft.Op
@@ -441,9 +443,11 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 		}
 	}
+	// Set namespace for the given filter.
+	sg.Params.Namespace = namespace
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
-		if err := filterCopy(child, ftc); err != nil {
+		if err := filterCopy(namespace, child, ftc); err != nil {
 			return err
 		}
 		sg.Filters = append(sg.Filters, child)
@@ -531,6 +535,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs:   gchild.GroupbyAttrs,
 			IsGroupBy:      gchild.IsGroupby,
 			IsInternal:     gchild.IsInternal,
+			Namespace:      sg.Params.Namespace,
 		}
 
 		if gchild.IsCount {
@@ -587,7 +592,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
-			if err := filterCopy(dstf, gchild.Filter); err != nil {
+			if err := filterCopy(sg.Params.Namespace, dstf, gchild.Filter); err != nil {
 				return err
 			}
 			dst.Filters = append(dst.Filters, dstf)
@@ -684,8 +689,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the pb.SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, gq)
+func ToSubGraph(ctx context.Context, namespace string, gq *gql.GraphQuery) (*SubGraph, error) {
+	sg, err := newGraph(ctx, namespace, gq)
 	if err != nil {
 		return nil, err
 	}
@@ -732,7 +737,7 @@ func (sg *SubGraph) populate(uids []uint64) error {
 }
 
 // newGraph returns the SubGraph and its task query.
-func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func newGraph(ctx context.Context, namespace string, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 
@@ -755,6 +760,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:              gq.Var,
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
+		Namespace:        namespace,
 	}
 
 	for argk := range gq.Args {
@@ -794,7 +800,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
-		if err := filterCopy(sgf, gq.Filter); err != nil {
+		if err := filterCopy(namespace, sgf, gq.Filter); err != nil {
 			return nil, errors.Wrapf(err, "while copying filter")
 		}
 		sg.Filters = append(sg.Filters, sgf)
@@ -869,7 +875,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         attr,
+		Attr:         x.GenerateAttr(sg.Params.Namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -2263,7 +2269,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
 	sortMsg := &pb.SortMessage{
-		Order:     sg.Params.Order,
+		Order:     sg.createOrderForTask(),
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2295,6 +2301,20 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// while sorting.
 	sg.updateDestUids()
 	return nil
+}
+
+// createOrderForTask creates namespaced aware order for the task.
+func (sg *SubGraph) createOrderForTask() []*pb.Order {
+	out := []*pb.Order{}
+	for _, o := range sg.Params.Order {
+		oc := &pb.Order{
+			Attr:  x.GenerateAttr(sg.Params.Namespace, o.Attr),
+			Desc:  o.Desc,
+			Langs: o.Langs,
+		}
+		out = append(out, oc)
+	}
+	return out
 }
 
 func (sg *SubGraph) updateDestUids() {
@@ -2534,7 +2554,8 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	Vars map[string]varValue
+	Vars      map[string]varValue
+	Namespace string // Namespace of the current request.
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2558,7 +2579,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			return errors.Errorf("Invalid query. No function used at root and no aggregation" +
 				" or math variables found in the body.")
 		}
-		sg, err := ToSubGraph(ctx, gq)
+		sg, err := ToSubGraph(ctx, req.Namespace, gq)
 		if err != nil {
 			return errors.Wrapf(err, "while converting to subgraph")
 		}
@@ -2718,9 +2739,25 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+	// Filter the schema nodes for the given namespace.
+	er.SchemaNode = filterSchemaNodeForNamespace(req.Namespace, er.SchemaNode)
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
+}
+
+// filterSchemaNodeForNamespace filters schema nodes for the given namespace.
+func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*pb.SchemaNode {
+	out := []*pb.SchemaNode{}
+
+	for _, node := range nodes {
+		nodeNamespace := x.NamespaceForAttr(node.Predicate)
+		if nodeNamespace != namespace {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
 }
 
 // StripBlankNode returns a copy of the map where all the keys have the blank node prefix removed.

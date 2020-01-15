@@ -169,7 +169,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
+func ToDirectedEdges(namespace string, gmuList []*gql.Mutation, newUids map[string]uint64) (
 	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
@@ -182,7 +182,7 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 		}
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
-		edge, err = wnq.ToEdgeUsing(newUids)
+		edge, err = wnq.ToEdgeUsing(namespace, newUids)
 		if err != nil {
 			return errors.Wrap(err, "")
 		}

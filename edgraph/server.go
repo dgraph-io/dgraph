@@ -210,6 +210,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
+
+		// Set the schema name according to the namespace.
+		update.Predicate = x.GenerateAttr(op.Namespace, update.Predicate)
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
@@ -255,7 +258,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// 2. For a uid variable that is part of an upsert query,
 	//    like uid(foo), the key would be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
+	edges, err := query.ToDirectedEdges(qc.namespace, qc.gmuList, newUids)
 	if err != nil {
 		return err
 	}
@@ -605,6 +608,8 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
+	// namespace of the given request.
+	namespace string
 }
 
 // HealthAll handles health?all requests.
@@ -729,7 +734,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 
 	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
 
-	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
+	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL, namespace: req.Namespace}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -776,8 +781,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	qr := query.Request{
-		Latency:  qc.latency,
-		GqlQuery: &qc.gqlRes,
+		Latency:   qc.latency,
+		GqlQuery:  &qc.gqlRes,
+		Namespace: qc.namespace,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
