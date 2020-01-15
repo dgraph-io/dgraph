@@ -680,7 +680,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
-			require.Equal(t, tc.output, string(resp.Json))
+			testutil.CompareJSON(t, tc.output, string(resp.Json))
 		})
 	}
 }
