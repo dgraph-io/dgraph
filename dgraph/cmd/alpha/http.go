@@ -582,6 +582,8 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
+	op.Namespace = r.Header.Get("X-Dgraph-Namespace")
+
 	md := metadata.New(nil)
 	// Pass in an auth token, if present.
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
