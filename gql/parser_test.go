@@ -3427,7 +3427,7 @@ func TestParseOrderbyMultipleFacets(t *testing.T) {
 	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, len(res.Query[0].Children[0].FacetsOrder), 2)
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
 	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
 	require.True(t, res.Query[0].Children[0].FacetsOrder[0].OrderDesc)
 	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
