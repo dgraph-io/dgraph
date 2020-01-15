@@ -33,6 +33,9 @@ import (
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
+	// ErrInvalidKey is returned when trying to read a posting list using
+	// an invalid key (e.g the key to a single part of a larger multi-part list).
+	ErrInvalidKey = errors.Errorf("cannot read posting list from this key")
 )
 
 // ShouldAbort returns whether the transaction should be aborted.
@@ -148,7 +151,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	if pk.HasStartUid {
 		// Trying to read a single part of a multi part list. This type of list
 		// should be read once using the canonical list (with startUid equal to zero).
-		return nil, nil
+		return nil, ErrInvalidKey
 	}
 
 	l := new(List)
