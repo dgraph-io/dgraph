@@ -489,7 +489,9 @@ func TestMillion(t *testing.T) {
 	}
 }
 
-const N int = 20000
+const N int = 100000
+
+var ts uint64
 
 func TestParallelMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
@@ -502,24 +504,24 @@ func TestParallelMillion(t *testing.T) {
 
 	done1 := make(chan bool)
 	go rolluplocal(t, key, done1)
-	
-	// done2 := make (chan bool)
-	// go readpl(t, key, done2, ticker2)
+
+	done2 := make(chan bool)
+	go readpl(t, key, done2)
 
 	commits := <-commit
 	done1 <- true
-	// done2<-true
+	done2 <- true
 
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	t.Logf("Rolling up posting list last time. minTs= %v\n", ol.minTs)
+	t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
-	t.Logf("Completed a %v writes. Commits = %v. minTs = %v\n", N, commits, ol.minTs)
+	t.Logf("Completed a %v writes. Commits = %v. minTs = %v, ts = %v\n", N, commits, ol.minTs, atomic.LoadUint64(&ts))
 
 	opt := ListOptions{ReadTs: uint64(N + 1)}
 	l, err := ol.Uids(opt)
@@ -534,13 +536,13 @@ func mutate(t *testing.T, key []byte, commitCh chan int) {
 	var commits int
 	for i := 2; i <= N; i += 2 {
 		startTs := atomic.AddUint64(&ts, 2)
-		addEdgeToUID(t, "bal", 1331, valnum, startTs-1, startTs)
+		j := uint64(i)
+		addEdgeToUID(t, "bal", 1331, j, startTs-1, startTs)
 		commits++
 
 		if i%10 == 0 {
 			t.Logf("mutation at i = %v", i)
 		}
-
 	}
 	commitCh <- commits
 	return
@@ -556,32 +558,52 @@ func rolluplocal(t *testing.T, key []byte, done chan bool) {
 		require.NoError(t, err)
 		// writer.Write the keys
 		for _, kv := range kvs {
-			require.NoError(t,writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version))
+			require.NoError(t, writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version))
 		}
+		writer.Flush()
 		select {
 		case <-done:
 			writer.Flush()
 			return
+		default:
 		}
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 100)
 	}
 }
 
-func readpl(t *testing.T, key []byte, done chan bool, ticker *time.Ticker) {
+func readpl(t *testing.T, key []byte, done chan bool) {
+	lastUID := uint64(0)
 	for {
+
+		// ol, err := getNew(key, ps)
+		// require.NoError(t, err)
+		// readTs := atomic.LoadUint64(&ts)
+
+		// val, err := ol.Value(readTs)
+		// Handle error
+		// Check that the value is not nil. And that val is >= last one read.
+
+		ol, err := getNew(key, ps)
+		require.NoError(t, err)
+
+		readTs := atomic.LoadUint64(&ts)
+		t.Logf("Reading at ts = %v", readTs)
+		opt := ListOptions{ReadTs: readTs}
+		l, err := ol.Uids(opt)
+		require.NoError(t, err)
+
+		if len(l.Uids) > 0 {
+			newUID := l.Uids[len(l.Uids)-1]
+			require.GreaterOrEqual(t, newUID, lastUID)
+			lastUID = newUID
+		}
+
 		select {
-		case <-ticker.C:
-			ol, err := getNew(key, ps)
-			require.NoError(t, err)
-			readTs := atomic.LoadUint64(&ts)
-			val, err := ol.Value(readTs)
-			// Handle error
-			// Check that the value is not nil. And that val is >= last one read.
-			t.Logf("readpl\n")
 		case <-done:
 			return
-
+		default:
 		}
+		time.Sleep(time.Millisecond * 25)
 	}
 }
 
