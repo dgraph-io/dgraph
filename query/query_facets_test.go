@@ -90,9 +90,9 @@ func populateClusterWithFacets() error {
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
 
-	friendFacets7 := "(since=2006-01-02T15:04:05, fastfriend=true, score=100)"
+	friendFacets7 := "(since=2006-01-02T15:04:05, fastfriend=true, score=100, from=\"delhi\")"
 	friendFacets8 := "(since=2007-01-02T15:04:05, fastfriend=false, score=100)"
-	friendFacets9 := "(since=2008-01-02T15:04:05, fastfriend=true, score=200)"
+	friendFacets9 := "(since=2008-01-02T15:04:05, fastfriend=true, score=200, from=\"bengaluru\")"
 	triples += fmt.Sprintf("<33> <friend> <25> %s .\n", friendFacets7)
 	triples += fmt.Sprintf("<33> <friend> <31> %s .\n", friendFacets8)
 	triples += fmt.Sprintf("<33> <friend> <34> %s .\n", friendFacets9)
@@ -415,7 +415,7 @@ func TestFacetsMultipleOrderbyAllFacets(t *testing.T) {
 		{
 			me(func: uid(33)) {
 				name
-				friend @facets(fastfriend, orderdesc:score, orderasc:since) {
+				friend @facets(fastfriend, from, orderdesc:score, orderasc:since) {
 					name
 				}
 			}
@@ -444,10 +444,61 @@ func TestFacetsMultipleOrderbyAllFacets(t *testing.T) {
 							"1": true,
 							"2": false
 						},
+						"friend|from": {
+							"0": "bengaluru",
+							"1": "delhi"
+						},
 						"friend|score": {
 							"0": 200,
 							"1": 100,
 							"2": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2007-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+// This test tests multiple order by on facets where some facets in not present in all records.
+func TestFacetsMultipleOrderbyMissingFacets(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:from, orderdesc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|from": {
+							"0": "bengaluru",
+							"1": "delhi"
 						},
 						"friend|since": {
 							"0": "2008-01-02T15:04:05Z",

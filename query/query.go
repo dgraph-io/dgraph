@@ -30,7 +30,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -2320,20 +2319,23 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
 
-	orderbyKeys := make(map[string]struct{})
+	orderbyKeys := make(map[string]int)
 	var orderDesc []bool
-	for _, order := range sg.Params.FacetsOrder {
-		orderbyKeys[order.Key] = struct{}{}
+	for i, order := range sg.Params.FacetsOrder {
+		orderbyKeys[order.Key] = i
 		orderDesc = append(orderDesc, order.OrderDesc)
 	}
 
-	facetsMap := make(map[string]*api.Facet)
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
-		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
+
+		values := make([][]types.Val, len(ul.Uids))
+		for i := 0; i < len(values); i++ {
+			values[i] = make([]types.Val, len(sg.Params.FacetsOrder))
+		}
 
 		for j := 0; j < len(ul.Uids); j++ {
 			uid := ul.Uids[j]
@@ -2341,36 +2343,25 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
 
-			// TODO: is this the best way to clean map??
-			for k := range facetsMap {
-				delete(facetsMap, k)
-			}
-			var facetsVal []types.Val
-
+			// Since any facet can come only once in f.Facets, we can have counter
+			// to check if we have populated all facets or not.
+			remainingFacets := len(orderbyKeys)
 			for _, it := range f.Facets {
-				if _, ok := orderbyKeys[it.Key]; !ok {
+				idx, ok := orderbyKeys[it.Key]
+				if !ok {
 					continue
 				}
-				if _, ok := facetsMap[it.Key]; !ok {
-					facetsMap[it.Key] = it
+
+				fVal, err := facets.ValFor(it)
+				if err != nil {
+					return err
 				}
-				if len(facetsMap) == len(orderbyKeys) {
+				values[j][idx] = fVal
+				remainingFacets--
+				if remainingFacets == 0 {
 					break
 				}
 			}
-
-			for _, fo := range sg.Params.FacetsOrder {
-				if f, ok := facetsMap[fo.Key]; ok && f != nil {
-					fVal, err := facets.ValFor(f)
-					if err != nil {
-						return err
-					}
-					facetsVal = append(facetsVal, fVal)
-				} else {
-					facetsVal = append(facetsVal, types.Val{Value: nil})
-				}
-			}
-			values = append(values, facetsVal)
 		}
 		if len(values) == 0 {
 			continue
