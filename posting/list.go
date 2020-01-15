@@ -45,8 +45,10 @@ var (
 	ErrNoValue = errors.New("No value found")
 	// ErrStopIteration is returned when an iteration is terminated early.
 	ErrStopIteration = errors.New("Stop iteration")
-	emptyPosting     = &pb.Posting{}
-	maxListSize      = mb / 2
+	// ErrNilList is returned when trying to perform an invalid operation on a nil list.
+	ErrNilList   = errors.New("cannot perform this operation on a nil list")
+	emptyPosting = &pb.Posting{}
+	maxListSize  = mb / 2
 )
 
 const (
@@ -888,7 +890,7 @@ func (l *List) ApproxLen() int {
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if l == nil {
-		return &pb.List{}, nil
+		return nil, ErrNilList
 	}
 
 	// Pre-assign length to make it faster.
@@ -929,7 +931,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 // UIDs in the opt ListOptions.
 func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 	if l == nil {
-		return nil
+		return ErrNilList
 	}
 
 	l.RLock()
@@ -946,7 +948,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 // AllUntaggedValues returns all the values in the posting list with no language tag.
 func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	if l == nil {
-		return nil, nil
+		return nil, ErrNilList
 	}
 
 	l.RLock()
@@ -983,7 +985,7 @@ func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
 // AllValues returns all the values in the posting list.
 func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	if l == nil {
-		return nil, nil
+		return nil, ErrNilList
 	}
 
 	l.RLock()
@@ -1003,7 +1005,7 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 // GetLangTags finds the language tags of each posting in the list.
 func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	if l == nil {
-		return nil, nil
+		return nil, ErrNilList
 	}
 
 	l.RLock()
@@ -1021,7 +1023,7 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 // defined as the value without a language tag.
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	if l == nil {
-		return rval, nil
+		return rval, ErrNilList
 	}
 
 	l.RLock()
@@ -1043,7 +1045,7 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 // If no language from the list matches the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
 	if l == nil {
-		return rval, nil
+		return rval, ErrNilList
 	}
 
 	l.RLock() // All public methods should acquire locks, while private ones should assert them.
@@ -1058,7 +1060,7 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 // PostingFor returns the posting according to the preferred language list.
 func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
 	if l == nil {
-		return nil, nil
+		return nil, ErrNilList
 	}
 
 	l.RLock()
@@ -1074,7 +1076,7 @@ func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr er
 // ValueForTag returns the value in the posting list with the given language tag.
 func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr error) {
 	if l == nil {
-		return rval, nil
+		return rval, ErrNilList
 	}
 
 	l.RLock()
@@ -1186,7 +1188,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	listType bool) ([]*pb.Facets, error) {
 	if l == nil {
-		return nil, nil
+		return nil, ErrNilList
 	}
 
 	l.RLock()
@@ -1381,7 +1383,7 @@ func sortSplits(splits []uint64) {
 // Otherwise, it returns an array containing the start UID of each part.
 func (l *List) PartSplits() []uint64 {
 	if l == nil {
-		return nil
+		return ErrNilList
 	}
 
 	splits := make([]uint64, len(l.plist.Splits))
