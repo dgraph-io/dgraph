@@ -31,7 +31,7 @@ type ROBlockApi interface {
 	GetBlockData(hash common.Hash) (types.BlockData, error)
 	GetLatestBlock() types.BlockHeader
 	GetBlockByHash(hash common.Hash) (types.Block, error)
-	GetBlockByNumber(n *big.Int) types.Block
+	GetBlockByNumber(n *big.Int) (types.Block, error)
 }
 
 type BlockApi interface {
