@@ -789,7 +789,7 @@ To create a List-type you need to create it by inserting multiple nodes. You can
 }
 ```
 
-Above you see that we have three values ​​to enter the list. They are separated into three blocks in the mutation. They are related to each other in an abstract node via blank-node `"uid": "_:Julian",`.
+Above you see that we have three values ​​to enter the list. They are separated into three blocks in the mutation. They are related to each other via the blank-node `"uid": "_:Julian",`.
 
 You can run this query to check the list with facets:
 
