@@ -3408,7 +3408,7 @@ func TestParseFacets(t *testing.T) {
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
-	require.True(t, res.Query[0].Children[0].FacetsOrder[0].OrderDesc)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
 }
 
 func TestParseOrderbyMultipleFacets(t *testing.T) {
@@ -3429,9 +3429,41 @@ func TestParseOrderbyMultipleFacets(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
 	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
-	require.True(t, res.Query[0].Children[0].FacetsOrder[0].OrderDesc)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
 	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
-	require.False(t, res.Query[0].Children[0].FacetsOrder[1].OrderDesc)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+}
+
+func TestParseOrderbyMultipleFacetsWithAlias(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: since, score, location:from) {
+				name
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+	require.Equal(t, 4, len(res.Query[0].Children[0].Facets.Param))
+	require.Nil(t, res.Query[0].Children[0].FacetsFilter)
+	require.Empty(t, res.Query[0].Children[0].FacetVar)
+	for _, param := range res.Query[0].Children[0].Facets.Param {
+		if param.Key == "from" {
+			require.Equal(t, "location", param.Alias)
+			break
+		}
+	}
 }
 
 func TestParseOrderbySameFacetsMultipleTimes(t *testing.T) {

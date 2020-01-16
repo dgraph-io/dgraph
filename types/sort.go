@@ -84,6 +84,16 @@ func (s byValue) Less(i, j int) bool {
 	return false
 }
 
+// IsSortable returns true, if tid is sortable. Otherwise it returns false.
+func IsSortable(tid TypeID) bool {
+	switch tid {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		return true
+	}
+
+	return false
+}
+
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate
 // the proper ordering.
 func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool, lang string) error {
@@ -91,15 +101,8 @@ func SortWithFacet(v [][]Val, ul *[]uint64, l []*pb.Facets, desc []bool, lang st
 		return nil
 	}
 
-	// TODO(Ashish): can we move this check to place where v is formed??
-	// TODO(Ashish): Here we are checking type for values in v[0] only. This might not return
-	// correct result as v[0] might have DefaultID type for some val while some v[x]
-	// can have some nonsortable type.
 	for _, val := range v[0] {
-		switch val.Tid {
-		case DateTimeID, IntID, FloatID, StringID, DefaultID:
-			// Don't do anything, we can sort values of this type.
-		default:
+		if !IsSortable(val.Tid) {
 			return errors.Errorf("Value of type: %s isn't sortable", val.Tid.Name())
 		}
 	}

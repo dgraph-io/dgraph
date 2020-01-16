@@ -97,6 +97,9 @@ func populateClusterWithFacets() error {
 	triples += fmt.Sprintf("<33> <friend> <31> %s .\n", friendFacets8)
 	triples += fmt.Sprintf("<33> <friend> <34> %s .\n", friendFacets9)
 
+	triples += fmt.Sprintf("<34> <friend> <31> %s .\n", friendFacets8)
+	triples += fmt.Sprintf("<34> <friend> <25> %s .\n", friendFacets9)
+
 	err := addTriplesToCluster(triples)
 
 	// Mark the setup as done so that the next tests do not have to perform it.
@@ -385,6 +388,73 @@ func TestFacetsMultipleOrderby(t *testing.T) {
 							"0": "2007-01-02T15:04:05Z",
 							"1": "2006-01-02T15:04:05Z",
 							"2": "2008-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderbyMultipleUIDs(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33, 34)) {
+				name
+				friend @facets(orderdesc:since, orderasc:score) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Andrea"
+							},
+							{
+								"name": "Daryl Dixon"
+							}
+						],
+						"friend|score": {
+							"0": 200,
+							"1": 100,
+							"2": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2007-01-02T15:04:05Z",
+							"2": "2006-01-02T15:04:05Z"
+						}
+					},
+					{
+						"name": "Roger",
+						"friend": [
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|score": {
+							"0": 200,
+							"1": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2007-01-02T15:04:05Z"
 						}
 					}
 				]

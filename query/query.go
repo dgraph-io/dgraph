@@ -2323,7 +2323,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	var orderDesc []bool
 	for i, order := range sg.Params.FacetsOrder {
 		orderbyKeys[order.Key] = i
-		orderDesc = append(orderDesc, order.OrderDesc)
+		orderDesc = append(orderDesc, order.Desc)
 	}
 
 	for i := 0; i < len(sg.uidMatrix); i++ {
@@ -2343,9 +2343,11 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
 
-			// Since any facet can come only once in f.Facets, we can have counter
-			// to check if we have populated all facets or not.
+			// Since any facet can come only once in f.Facets, we can have counter to check if we
+			// have populated all facets or not. Once we are done populating all facets
+			// we can break out of below loop.
 			remainingFacets := len(orderbyKeys)
+			// TODO: We are searching sequentially, explore if binary search is useful here.
 			for _, it := range f.Facets {
 				idx, ok := orderbyKeys[it.Key]
 				if !ok {
@@ -2356,6 +2358,10 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
+				if !types.IsSortable(fVal.Tid) {
+					return errors.Errorf("Value of type: %s isn't sortable", fVal.Tid.Name())
+				}
+
 				values[j][idx] = fVal
 				remainingFacets--
 				if remainingFacets == 0 {

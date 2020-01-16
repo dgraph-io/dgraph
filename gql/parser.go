@@ -111,8 +111,8 @@ type GroupByAttr struct {
 
 // FacetOrder stores ordering for single facet key.
 type FacetOrder struct {
-	Key       string
-	OrderDesc bool
+	Key  string
+	Desc bool // true if ordering should be decending by this facet.
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -2051,7 +2051,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				}
 				facetsOrderKeys[facetItem.name] = struct{}{}
 				facetsOrder = append(facetsOrder,
-					&FacetOrder{Key: facetItem.name, OrderDesc: facetItem.orderdesc})
+					&FacetOrder{Key: facetItem.name, Desc: facetItem.orderdesc})
 			}
 		}
 
