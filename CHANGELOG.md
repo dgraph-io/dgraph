@@ -4,6 +4,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## Unreleased
+
+### Changed
+
+- Allow overwriting values of predicates of type uid. ([#4411][]) Fixes ([#4136][])
+- Algorithms to handle UidPack. ([#4321][])
+- Improved latency in live loader using conflict resolution at client level. ([#4362][])
+- Set ZSTD CompressionLevel to 1. ([#4572][])
+
+Enterprise features:
+
+- **Breaking changes**
+  - Change default behavior to block operations in ACL. ([#4390][])
+- Remove unauthorized predicates from query. ([#4479][])
+
+### Added
+
+- Add GraphQL API for Dgraph accessible via the `/graphql` and `/admin` HTTP endpoints on Dgraph Alpha. ([#933][])
+- Agent: add debuginfo agent command to dgraph. ([#4464][])
+- Support filtering on nonindexed predicate. ([#4531][]) Fixes ([#4305][])	
+- add support for variables in recurse. ([#4385][])	Fixes ([#3301][])
+- Adds @noconflict directive to prevent conflict detection. ([#4454][]) Fixes	([#4079][])
+- Implement the state http endpoint on Alpha. Login required if ACL enabled.	([#4435][])
+- Implement heath?all endpoint on Alpha nodes. ([#4535][])	
+- Add /health endpoint to Dgraph Zero. ([#4405][])	
+
+- **Breaking changes**
+  -Support for fetching facets from value edge list. ([#4267][]) Fixes ([#4081][])
+
+Enterprise features:
+- Add guardians group with full authorization. ([#4447][])
+
+ ### Fixed
+ 
+- Infer type of schema from JSON and RDF mutations. ([#4328][])	Fixes ([#3788][])
+- Fix retrieval of facets with cascade. ([#4530][]) Fixes	([#4310][])
+- Do not use type keys during tablet size calculation. ([#4517[])	Fixes ([#4473][])
+- Fix Levenshtein distance calculation with match function. ([#4545][])	Fixes ([#4494][])
+- Add <xs:integer> RDF type for int schema type. ([#4465][])
+- Allow @filter directive to be used with expand queries. ([#4404][])	Fixes ([#3904][])
+
+Enterprise features:
+
+- Backup types. ([#4514][])	Fixes ([#4507][])
+
+[#4530]: https://github.com/dgraph-io/dgraph/issues/4530
+[#4310]: https://github.com/dgraph-io/dgraph/issues/4310
+[#4517]: https://github.com/dgraph-io/dgraph/issues/4517
+[#4473]: https://github.com/dgraph-io/dgraph/issues/4473
+[#4545]: https://github.com/dgraph-io/dgraph/issues/4545
+[#4494]: https://github.com/dgraph-io/dgraph/issues/4494
+[#4465]: https://github.com/dgraph-io/dgraph/issues/4465
+[#4404]: https://github.com/dgraph-io/dgraph/issues/4404
+[#3904]: https://github.com/dgraph-io/dgraph/issues/3904
+[#4514]: https://github.com/dgraph-io/dgraph/issues/4514
+[#4507]: https://github.com/dgraph-io/dgraph/issues/4507
+[#4328]: https://github.com/dgraph-io/dgraph/issues/4328
+[#3788]: https://github.com/dgraph-io/dgraph/issues/3788
+[#4447]: https://github.com/dgraph-io/dgraph/issues/4447
+[#4411]: https://github.com/dgraph-io/dgraph/issues/4411
+[#4321]: https://github.com/dgraph-io/dgraph/issues/4321
+[#4362]: https://github.com/dgraph-io/dgraph/issues/4362
+[#4572]: https://github.com/dgraph-io/dgraph/issues/4572
+[#4390]: https://github.com/dgraph-io/dgraph/issues/4390
+[#4479]: https://github.com/dgraph-io/dgraph/issues/4479
+[#4136]: https://github.com/dgraph-io/dgraph/issues/4136
+[#4411]: https://github.com/dgraph-io/dgraph/issues/4411
+[#933]: https://github.com/dgraph-io/dgraph/issues/933
+[#4464]: https://github.com/dgraph-io/dgraph/issues/4464
+[#4531]: https://github.com/dgraph-io/dgraph/issues/4531
+[#4305]: https://github.com/dgraph-io/dgraph/issues/4305
+[#4454]: https://github.com/dgraph-io/dgraph/issues/4454
+[#4079]: https://github.com/dgraph-io/dgraph/issues/4079
+[#4405]: https://github.com/dgraph-io/dgraph/issues/4405
+[#4267]: https://github.com/dgraph-io/dgraph/issues/4267
+[#4081]: https://github.com/dgraph-io/dgraph/issues/4081
+[#4447]: https://github.com/dgraph-io/dgraph/issues/4447
+[#4535]: https://github.com/dgraph-io/dgraph/issues/4535
+[#4385]: https://github.com/dgraph-io/dgraph/issues/4385
+[#3301]: https://github.com/dgraph-io/dgraph/issues/3301
+[#4435]: https://github.com/dgraph-io/dgraph/issues/4435
+
 ## [1.1.1] - 2019-12-16
 [1.1.1]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...v1.1.1
 
