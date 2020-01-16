@@ -493,7 +493,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	// 3. ID and XID fields
 	// Therefore, the non ID field is an XID field.
 	for _, arg := range f.field.Arguments {
-		if arg.Name != idField.Name() {
+		if idField == nil || arg.Name != idField.Name() {
 			xidArgName = arg.Name
 		}
 	}
@@ -508,8 +508,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 		xid = &xidArgVal
 	}
 
-	if idField == nil && xid == nil {
-		// This means that both were optional and were not supplied, lets return here.
+	if idField == nil {
 		return
 	}
 
