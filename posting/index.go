@@ -531,6 +531,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
+		WithLogger(&x.ToGlog{}).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
 
 	// TODO(Ibrahim): Remove this once badger is updated.
