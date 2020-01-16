@@ -98,11 +98,11 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author: Author
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 }
 
 type AddPostPayload {
-	post: Post
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type DeleteAuthorPayload {
@@ -140,24 +140,36 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	name: String!
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input AddPostInput {
+	title: String!
+	text: String
+	datePublished: DateTime
+}
+
 input AuthorFilter {
-	ids: [ID!]
+	id: [ID!]
 	name: StringHashFilter
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	name: String!
-	dob: DateTime
-	posts: [PostRef]
-}
-
 input AuthorOrder {
 	asc: AuthorOrderable
 	desc: AuthorOrderable
 	then: AuthorOrder
+}
+
+input AuthorPatch {
+	name: String
+	dob: DateTime
+	posts: [PostRef]
 }
 
 input AuthorRef {
@@ -167,20 +179,8 @@ input AuthorRef {
 	posts: [PostRef]
 }
 
-input PatchAuthor {
-	name: String
-	dob: DateTime
-	posts: [PostRef]
-}
-
-input PatchPost {
-	title: String
-	text: String
-	datePublished: DateTime
-}
-
 input PostFilter {
-	ids: [ID!]
+	postID: [ID!]
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
 	and: PostFilter
@@ -188,16 +188,16 @@ input PostFilter {
 	not: PostFilter
 }
 
-input PostInput {
-	title: String!
-	text: String
-	datePublished: DateTime
-}
-
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	title: String
+	text: String
+	datePublished: DateTime
 }
 
 input PostRef {
@@ -216,14 +216,14 @@ input StringFullTextFilter_StringTermFilter {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -233,7 +233,7 @@ input UpdatePostInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	getPost(id: ID!): Post
+	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
@@ -242,10 +242,10 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: AuthorInput!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

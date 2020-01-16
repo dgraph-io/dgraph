@@ -2,18 +2,20 @@
   name: "Only id filter"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
-      { "ids": ["0x1", "0x2"] }
+      { "id": ["0x1", "0x2"] }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
   dgmutations:
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid": "uid(Post1)",
             "Post.author": { "uid": "uid(x)" }
           }
@@ -30,12 +32,14 @@
   name: "Multiple filters including id"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
       {
-        "ids": ["0x1", "0x2"],
+        "id": ["0x1", "0x2"],
         "name": { "eq": "A.N. Author" }
       }
     }
@@ -44,7 +48,7 @@
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid": "uid(Post1)",
             "Post.author": { "uid": "uid(x)" }
           }
@@ -61,7 +65,9 @@
   name: "Multiple non-id filters"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
-      deleteAuthor(filter: $filter)
+      deleteAuthor(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
@@ -75,7 +81,7 @@
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid": "uid(Post1)",
             "Post.author": { "uid": "uid(x)" }
           }
@@ -92,7 +98,9 @@
   name: "With list inverse"
   gqlmutation: |
     mutation deleteState($filter: StateFilter!) {
-      deleteState(filter: $filter)
+      deleteState(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
@@ -103,7 +111,7 @@
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid": "uid(Country1)",
             "Country.states": [{ "uid": "uid(x)" }]
           }
@@ -120,22 +128,24 @@
   name: "With multiple inverses"
   gqlmutation: |
     mutation deletePost($filter: PostFilter!) {
-      deletePost(filter: $filter)
+      deletePost(filter: $filter) {
+        msg
+      }
     }
   gqlvariables: |
     { "filter":
-      { "ids": ["0x1", "0x2"] }
+      { "postID": ["0x1", "0x2"] }
     }
   explanation: "The correct mutation and query should be built using variable and filters."
   dgmutations:
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid": "uid(Author1)",
             "Author.posts": [{ "uid": "uid(x)" }]
           },
-          { 
+          {
             "uid": "uid(Category2)",
             "Category.posts": [{ "uid": "uid(x)" }]
           }

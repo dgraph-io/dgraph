@@ -784,8 +784,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	return nil
 }
 
-// authorizeState authorizes the State operation
-func authorizeState(ctx context.Context) error {
+// authorizeGroot authorizes the operation for Groot users.
+func authorizeGroot(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -793,7 +793,7 @@ func authorizeState(ctx context.Context) error {
 
 	var userID string
 	// doAuthorizeState checks if the user is authorized to perform this API request
-	doAuthorizeState := func() error {
+	doAuthorizeGroot := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		switch {
 		case err == errNoJwt:
@@ -811,7 +811,7 @@ func authorizeState(ctx context.Context) error {
 		}
 	}
 
-	return doAuthorizeState()
+	return doAuthorizeGroot()
 }
 
 func removePredsFromQuery(gqs []*gql.GraphQuery,

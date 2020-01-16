@@ -148,8 +148,8 @@ func deepMutationErrors(t *testing.T) {
 	for name, tcase := range tcases {
 		t.Run(name, func(t *testing.T) {
 			updateCountryParams := &GraphQLParams{
-				Query: `mutation updateCountry($id: ID!, $set: PatchCountry!) {
-					updateCountry(input: {filter: {ids: [$id]}, set: $set}) {
+				Query: `mutation updateCountry($id: ID!, $set: CountryPatch!) {
+					updateCountry(input: {filter: {id: [$id]}, set: $set}) {
 						country { id }
 					}
 				}`,
@@ -216,7 +216,7 @@ func panicCatcher(t *testing.T) {
 		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
 		"mutation": &GraphQLParams{
 			Query: `mutation {
-						addCountry(input: { name: "A Country" }) { country { id } }
+						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
 		},
 	}

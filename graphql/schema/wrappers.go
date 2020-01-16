@@ -80,6 +80,7 @@ type Field interface {
 	Alias() string
 	ResponseName() string
 	ArgValue(name string) interface{}
+	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
 	XIDArg() string
 	SetArgTo(arg string, val interface{})
@@ -109,6 +110,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	Rename(newName string)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -433,6 +435,9 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
+	if f.arguments == nil {
+		f.arguments = make(map[string]interface{})
+	}
 	f.arguments[arg] = val
 }
 
@@ -442,6 +447,15 @@ func (f *field) ArgValue(name string) interface{} {
 		f.arguments = f.field.ArgumentMap(f.op.vars)
 	}
 	return f.arguments[name]
+}
+
+func (f *field) IsArgListType(name string) bool {
+	arg := f.field.Arguments.ForName(name)
+	if arg == nil {
+		return false
+	}
+
+	return arg.Value.ExpectedType.Elem != nil
 }
 
 func (f *field) Skip() bool {
@@ -471,6 +485,7 @@ func (f *field) XIDArg() string {
 }
 
 func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+	idField := f.Type().IDField()
 	xidArgName := ""
 	// This method is only called for Get queries. These queries can accept one of the
 	// combinations as input.
@@ -479,7 +494,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	// 3. ID and XID fields
 	// Therefore, the non ID field is an XID field.
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName {
+		if arg.Name != idField.Name() {
 			xidArgName = arg.Name
 		}
 	}
@@ -494,12 +509,12 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 		xid = &xidArgVal
 	}
 
-	idArg := f.ArgValue(IDArgName)
-	if idArg == nil && xid == nil {
+	if idField == nil && xid == nil {
 		// This means that both were optional and were not supplied, lets return here.
 		return
 	}
 
+	idArg := f.ArgValue(idField.Name())
 	if idArg != nil {
 		id, ok := idArg.(string)
 		var ierr error
@@ -611,6 +626,10 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
+func (q *query) Rename(newName string) {
+	q.field.Name = newName
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -625,6 +644,10 @@ func (q *query) SetArgTo(arg string, val interface{}) {
 
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
+}
+
+func (q *query) IsArgListType(name string) bool {
+	return (*field)(q).IsArgListType(name)
 }
 
 func (q *query) Skip() bool {
@@ -710,6 +733,10 @@ func (m *mutation) Alias() string {
 
 func (m *mutation) SetArgTo(arg string, val interface{}) {
 	(*field)(m).SetArgTo(arg, val)
+}
+
+func (m *mutation) IsArgListType(name string) bool {
+	return (*field)(m).IsArgListType(name)
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
@@ -927,19 +954,19 @@ func (t *astType) String() string {
 	sb.Grow(len(t.Name()) + 4)
 
 	if t.ListType() == nil {
-		sb.WriteString(t.Name())
+		x.Check2(sb.WriteString(t.Name()))
 	} else {
 		// There's no lists of lists, so this needn't be recursive
-		sb.WriteRune('[')
-		sb.WriteString(t.Name())
+		x.Check2(sb.WriteRune('['))
+		x.Check2(sb.WriteString(t.Name()))
 		if !t.ListType().Nullable() {
-			sb.WriteRune('!')
+			x.Check2(sb.WriteRune('!'))
 		}
-		sb.WriteRune(']')
+		x.Check2(sb.WriteRune(']'))
 	}
 
 	if !t.Nullable() {
-		sb.WriteRune('!')
+		x.Check2(sb.WriteRune('!'))
 	}
 
 	return sb.String()

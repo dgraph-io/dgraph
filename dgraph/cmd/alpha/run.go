@@ -71,7 +71,7 @@ var (
 	bindall bool
 
 	// used for computing uptime
-	beginTime = time.Now()
+	startTime = time.Now()
 
 	// Alpha is the sub-command invoked when running "dgraph alpha".
 	Alpha x.SubCommand
@@ -284,6 +284,25 @@ func grpcPort() int {
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 
+	if _, ok := r.URL.Query()["all"]; ok {
+		var err error
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		ctx := attachAccessJwt(context.Background(), r)
+		var resp *api.Response
+		if resp, err = (&edgraph.Server{}).HealthAll(ctx); err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+		if resp == nil {
+			x.SetStatus(w, x.ErrorNoData, "No state information available.")
+			return
+		}
+		_, _ = w.Write(resp.Json)
+		return
+	}
+
 	_, ok := r.URL.Query()["live"]
 	if !ok {
 		if err := x.HealthCheck(); err != nil {
@@ -303,7 +322,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}{
 		Version:  x.Version(),
 		Instance: "alpha",
-		Uptime:   time.Since(beginTime),
+		Uptime:   time.Since(startTime) / time.Second,
 	}
 	data, _ := json.Marshal(info)
 
@@ -559,6 +578,7 @@ func run() {
 		AclEnabled:          secretFile != "",
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:      abortDur,
+		StartTime:           startTime,
 	}
 
 	setupCustomTokenizers()

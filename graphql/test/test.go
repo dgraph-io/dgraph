@@ -53,7 +53,11 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 	gql, err := ioutil.ReadFile(gqlFile)
 	require.NoError(t, err, "Unable to read schema file")
 
-	handler, err := schema.NewHandler(string(gql))
+	return LoadSchemaFromString(t, string(gql))
+}
+
+func LoadSchemaFromString(t *testing.T, sch string) schema.Schema {
+	handler, err := schema.NewHandler(string(sch))
 	require.NoError(t, err, "input schema contained errors")
 
 	return LoadSchema(t, handler.GQLSchema())

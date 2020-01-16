@@ -1023,6 +1023,12 @@ func (n *node) rollupLists(readTs uint64) error {
 			return
 		}
 		pk, err := x.Parse(key)
+
+		// Type keys should not count for tablet size calculations.
+		if pk.IsType() {
+			return
+		}
+
 		if err != nil {
 			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			return

@@ -253,6 +253,9 @@ if [[ :${TEST_SET}: == *:systest:* ]]; then
 
     Info "Running large load test"
     RunCmd ./systest/21million/test-21million.sh || TestFailed
+
+    Info "Running rebuilding index test"
+    RunCmd ./systest/1million/test-reindex.sh || TestFailed
 fi
 
 Info "Stopping cluster"

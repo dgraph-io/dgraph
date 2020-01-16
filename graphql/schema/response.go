@@ -74,15 +74,15 @@ func (r *Response) AddData(p []byte) {
 	if r.Data.Len() > 0 {
 		// The end of the buffer is always the closing `}`
 		r.Data.Truncate(r.Data.Len() - 1)
-		r.Data.WriteRune(',')
+		x.Check2(r.Data.WriteRune(','))
 	}
 
 	if r.Data.Len() == 0 {
-		r.Data.WriteRune('{')
+		x.Check2(r.Data.WriteRune('{'))
 	}
 
-	r.Data.Write(p)
-	r.Data.WriteRune('}')
+	x.Check2(r.Data.Write(p))
+	x.Check2(r.Data.WriteRune('}'))
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w

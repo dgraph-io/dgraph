@@ -1,0 +1,1603 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Dgraph free deployment.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcClassB",
+                        "KeyName",
+                        "SSHLocationCIDR",
+                        "AllowSSH"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Dgraph deployment Configuration"
+                    },
+                    "Parameters": [
+                        "DgraphVersion",
+                        "DgraphReplicaCount",
+                        "AlphaInstanceCount",
+                        "AlphaInstanceType",
+                        "AlphaDiskSize",
+                        "AlphaDiskIops",
+                        "ZeroInstanceCount",
+                        "ZeroInstanceType",
+                        "ZeroDiskSize",
+                        "ZeroDiskIops",
+                        "RatelInstanceCount",
+                        "RatelInstanceType",
+                        "RatelDiskSize",
+                        "RatelDiskIops",
+                        "Tag"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "KeyName": {
+                    "default": "SSH Key Name to associate with the instances"
+                },
+                "SSHLocationCIDR": {
+                    "default": "IP CIDR to allow ssh from into the instances, defaults to 0.0.0.0/0"
+                },
+                "AllowSSH": {
+                    "default": "Allow ssh on all the instances, from the specified CIDR in SSHLocationCIDR."
+                },
+                "DgraphReplicaCount": {
+                    "default": "Replication factor for each group in Dgraph."
+                },
+                "AlphaInstanceCount": {
+                    "default": "Number of EC2 instances to launch as dgraph alpha nodes."
+                },
+                "AlphaInstanceType": {
+                    "default": "AWS instance types to use for dgraph alpha nodes"
+                },
+                "AlphaDiskSize": {
+                    "default": "Disk size to use for dgraph alpha nodes."
+                },
+                "AlphaDiskIops": {
+                    "default": "Alpha node Disk IOPS"
+                },
+                "ZeroInstanceCount": {
+                    "default": "Number of EC2 instances to launch as dgraph zero nodes."
+                },
+                "ZeroInstanceType": {
+                    "default": "AWS instance types to use for dgraph Zero nodes."
+                },
+                "ZeroDiskSize": {
+                    "default": "Disk size to use for dgraph Zero nodes."
+                },
+                "ZeroDiskIops": {
+                    "default": "Zero node Disk IOPS"
+                },
+                "RatelInstanceCount": {
+                    "default": "Number of EC2 instances to launch as dgraph ratel nodes."
+                },
+                "RatelInstanceType": {
+                    "default": "AWS instance types to use for dgraph Ratel nodes"
+                },
+                "RatelDiskSize": {
+                    "default": "Disk size to use for dgraph Ratel nodes."
+                },
+                "RatelDiskIops": {
+                    "default": "Ratel node Disk IOPS"
+                },
+                "DgraphVersion": {
+                    "default": "Dgraph version to deploy."
+                },
+                "Tag": {
+                    "default": "Common tag for all the deployed resources by template"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "VpcClassB": {
+            "Type": "Number",
+            "Description": "Class B of Virtual Private Cloud's (VPC) CIDR, e.g. 10.XXX.0.0/16",
+            "Default": 0,
+            "ConstraintDescription": "Allowed values are 0 through 255",
+            "MinValue": 0,
+            "MaxValue": 255
+        },
+        "AllowPublicAccess": {
+            "Description": "Allow public access for dgraph ratel and dgraph alpha HTTP endpoints. *Avoid this in production environment*.",
+            "Type": "String",
+            "Default": "false"
+        },
+        "SSHLocationCIDR": {
+            "Description": "The IP address range that can be used to SSH to the EC2 instances",
+            "Type": "String",
+            "Default": "0.0.0.0/0",
+            "MinLength": "9",
+            "MaxLength": "18",
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "AllowSSH": {
+            "Description": "Allow ssh on all the instances, from the specified CIDR in SSHLocationCIDR.",
+            "Type": "String",
+            "Default": "false"
+        },
+        "DgraphReplicaCount": {
+            "Description": "Replication factor for each group in dgraph.",
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 1,
+            "MaxValue": 5
+        },
+        "AlphaMinInstanceCount": {
+            "Description": "Min alpha nodes to have.",
+            "Type": "Number",
+            "Default": 1
+        },
+        "AlphaMaxInstanceCount": {
+            "Description": "Maximum alpha nodes to have.",
+            "Type": "Number",
+            "Default": 5
+        },
+        "AlphaInstanceCount": {
+            "Description": "Number of EC2 instances to launch as dgraph alpha nodes.",
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 3,
+            "MaxValue": 5
+        },
+        "AlphaInstanceType": {
+            "Description": "Instance type for dgraph alpha nodes",
+            "Type": "String",
+            "Default": "m5a.large",
+            "AllowedValues": [
+                "m5a.large",
+                "m5a.4xlarge",
+                "m4a.4xlarge",
+                "r5a.4xlarge",
+                "r4a.4xlarge",
+                "c5a.4xlarge",
+                "c4a.4xlarge"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type which supports autoscaling groups."
+        },
+        "AlphaDiskSize": {
+            "Description": "Size in GB of the EBS io1 volume on each alpha node",
+            "Type": "Number",
+            "Default": 100,
+            "MinValue": 50
+        },
+        "AlphaDiskIops": {
+            "Description": "IOPS of the EBS io1 volume on each alpha node",
+            "Type": "Number",
+            "Default": 1000
+        },
+        "ZeroMinInstanceCount": {
+            "Description": "Min zero nodes to have.",
+            "Type": "Number",
+            "Default": 1
+        },
+        "ZeroMaxInstanceCount": {
+            "Description": "Maximum zero nodes to have.",
+            "Type": "Number",
+            "Default": 5
+        },
+        "ZeroInstanceCount": {
+            "Description": "Number of EC2 instances to launch as dgraph zero nodes.",
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 3,
+            "MaxValue": 5
+        },
+        "ZeroInstanceType": {
+            "Description": "Instance type for dgraph Zero nodes",
+            "Type": "String",
+            "Default": "m5a.large",
+            "AllowedValues": [
+                "m5a.large",
+                "m4a.large",
+                "r5a.large",
+                "r4a.large",
+                "c5a.large",
+                "c4a.large"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type."
+        },
+        "ZeroDiskSize": {
+            "Description": "Size in GB of the EBS io1 volume on each Zero node",
+            "Type": "Number",
+            "Default": 50,
+            "MinValue": 50
+        },
+        "ZeroDiskIops": {
+            "Description": "IOPS of the EBS io1 volume on each Zero node",
+            "Type": "Number",
+            "Default": 1000
+        },
+        "RatelMinInstanceCount": {
+            "Description": "Min alpha nodes to have.",
+            "Type": "Number",
+            "Default": 0
+        },
+        "RatelMaxInstanceCount": {
+            "Description": "Maximum alpha nodes to have.",
+            "Type": "Number",
+            "Default": 3
+        },
+        "RatelInstanceCount": {
+            "Description": "Number of EC2 instances to launch as dgraph ratel nodes.",
+            "Type": "Number",
+            "Default": 1,
+            "MinValue": 1,
+            "MaxValue": 3
+        },
+        "RatelInstanceType": {
+            "Description": "Instance type for dgraph Ratel nodes",
+            "Type": "String",
+            "Default": "m5a.large",
+            "AllowedValues": [
+                "m5a.large",
+                "m4a.large",
+                "r5a.large",
+                "r4a.large",
+                "c5a.large",
+                "c4a.large"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type."
+        },
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+        },
+        "DgraphVersion": {
+            "Description": "Dgraph version to deploy.",
+            "Type": "String",
+            "Default": "v1.1.1"
+        },
+        "Tag": {
+            "Description": "Common tag to use for all the deployments.",
+            "Type": "String",
+            "Default": "dgraph.io"
+        },
+        "InstanceAMI": {
+            "Description": "AWS AMI to use for the instance.",
+            "Default": "ami-0c55b159cbfafe1f0",
+            "Type": "String"
+        }
+    },
+    "Conditions": {
+        "AllowSSHToInstances": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AllowSSH"
+                },
+                "true"
+            ]
+        },
+        "AllowPublicAccess": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AllowPublicAccess"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::Sub": "10.${VpcClassB}.0.0/16"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "InstanceTenancy": "default",
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "RouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "Route": {
+            "DependsOn": "VPCGatewayAttachment",
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "SubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Sub": "10.${VpcClassB}.0.0/20"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        "0",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "SubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "SubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                }
+            }
+        },
+        "SubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Sub": "10.${VpcClassB}.16.0/20"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        "1",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "SubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "SubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                }
+            }
+        },
+        "SubnetC": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Sub": "10.${VpcClassB}.32.0/20"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        "2",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "SubnetCRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "SubnetC"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                }
+            }
+        },
+        "DgraphLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "DgraphALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "SubnetA"
+                    },
+                    {
+                        "Ref": "SubnetB"
+                    },
+                    {
+                        "Ref": "SubnetC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphRatelLoadBalancerListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "RatelTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "DgraphLoadBalancer"
+                },
+                "Port": 8000,
+                "Protocol": "HTTP"
+            }
+        },
+        "DgraphAlphaHTTPLoadBalancerListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "AlphaTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "DgraphLoadBalancer"
+                },
+                "Port": 8080,
+                "Protocol": "HTTP"
+            }
+        },
+        "DgraphAlphaGRPCLoadBalancerListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "AlphaTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "DgraphLoadBalancer"
+                },
+                "Port": 9080,
+                "Protocol": "HTTP"
+            }
+        },
+        "RatelTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckPort": "8000",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 10,
+                "HealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Port": 8000,
+                "Protocol": "HTTP",
+                "UnhealthyThresholdCount": 3,
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "AlphaTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/health",
+                "HealthCheckPort": "8080",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 10,
+                "HealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Port": 8080,
+                "Protocol": "HTTP",
+                "UnhealthyThresholdCount": 3,
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "DgraphClientSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for the client to connect to the dgraph cluster.",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "client.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow traffic from public internet to go to port 8080 on Dgraph alpha nodes",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphALBAlphaSGIngressHTTP": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8080,
+                "ToPort": 8080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphClientSecurityGroup"
+                }
+            }
+        },
+        "DgraphALBAlphaPublicSGIngressHTTP": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "AllowPublicAccess",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8080,
+                "ToPort": 8080,
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "DgraphALBAlphaSGIngressGRPC": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 9080,
+                "ToPort": 9080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphClientSecurityGroup"
+                }
+            }
+        },
+        "DgraphALBRatelSGIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8000,
+                "ToPort": 8000,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphClientSecurityGroup"
+                }
+            }
+        },
+        "DgraphALBRatelPublicSGIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "AllowPublicAccess",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8000,
+                "ToPort": 8000,
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "DgraphALBSGEgress": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 0,
+                "ToPort": 65535,
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "DgraphAlphaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow traffic from ALB to go to port 8080 on Dgraph alpha nodes",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "alpha.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphAlphaSGIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphAlphaSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8080,
+                "ToPort": 8080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                }
+            }
+        },
+        "DgraphRatelSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow traffic from ALB to go to port 8000 on Dgraph Ratel nodes",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "ratel.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphRatelSGIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphRatelSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8000,
+                "ToPort": 8000,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphALBSecurityGroup"
+                }
+            }
+        },
+        "DgraphSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow all traffic between Dgraph instances, on required ports.",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Ref": "Tag"
+                        }
+                    }
+                ]
+            }
+        },
+        "DgraphSecurityGroupSSH": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "AllowSSHToInstances",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "CidrIp": {
+                    "Ref": "SSHLocationCIDR"
+                }
+            }
+        },
+        "DgraphSGZeroInternalGRPCIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 5080,
+                "ToPort": 5080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGZeroExternalGRPCIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 6080,
+                "ToPort": 6080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGAlphaInternalGRPCIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 7080,
+                "ToPort": 7080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGRatelExternalIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8000,
+                "ToPort": 8000,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGAlphaExternalHTTPIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 8080,
+                "ToPort": 8080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGAlphaExternalGRPCIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 9080,
+                "ToPort": 9080,
+                "SourceSecurityGroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                }
+            }
+        },
+        "DgraphSGEgress": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DgraphSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 0,
+                "ToPort": 65535,
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "DgraphHealthyZero": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "InstanceAMI"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": "20"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/sdk",
+                        "Ebs": {
+                            "VolumeType": "io1",
+                            "Iops": {
+                                "Ref": "ZeroDiskIops"
+                            },
+                            "DeleteOnTermination": "false",
+                            "VolumeSize": {
+                                "Ref": "ZeroDiskSize"
+                            }
+                        }
+                    }
+                ],
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "true",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": "0",
+                        "SubnetId": {
+                            "Ref": "SubnetA"
+                        },
+                        "GroupSet": [
+                            {
+                                "Ref": "DgraphSecurityGroup"
+                            }
+                        ]
+                    }
+                ],
+                "DisableApiTermination": "false",
+                "InstanceType": {
+                    "Ref": "ZeroInstanceType"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/usr/bin/env bash\n\n",
+                                "set -euxo pipefail\n\n",
+                                "groupadd --system dgraph\n",
+                                "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
+                                "dev_name=\"/dev/$(lsblk | grep ",
+                                {
+                                    "Ref": "ZeroDiskSize"
+                                },
+                                "G | tr -s ' ' | cut -d ' ' -f 1)\"\n",
+                                "until [ -b $(readlink -f $dev_name) ]; do sleep 1; done\n",
+                                "if [[ \"$(lsblk -no FSTYPE $dev_name)\" != \"ext4\" ]]; then\n",
+                                "    mkfs -t ext4 $dev_name\n",
+                                "    sleep 5\n",
+                                "fi\n",
+                                "\n\n",
+                                "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
+                                "mount $dev_name /var/run/dgraph\n",
+                                "resize2fs $dev_name\n",
+                                "chown -R dgraph:dgraph /var/run/dgraph\n",
+                                "chown -R dgraph:dgraph /var/log/dgraph\n",
+                                "DEVICE_UUID=\"$(blkid -s UUID -o value $dev_name)\"\n",
+                                "if grep -q \"$DEVICE_UUID\" /etc/fstab; then\n",
+                                "   echo \"fstab already set\"\n",
+                                "else\n",
+                                "   cp /etc/fstab /etc/fstab.original\n",
+                                "   echo -e \"UUID=$DEVICE_UUID\t/dgraph\text4\tdefaults,nofail\t0\t2\" >> /etc/fstab\n",
+                                "fi\n",
+                                "\n\n",
+                                "cat <<EOT > /etc/systemd/system/dgraph-zero.service\n",
+                                "[Unit]\n",
+                                "Description=dgraph.io data server\n",
+                                "Wants=network.target\n",
+                                "After=network.target\n",
+                                "[Service]\n",
+                                "Type=simple\n",
+                                "ExecStart=/usr/local/bin/dgraph zero --my=$(hostname).",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ".compute.internal:5080 -w /var/run/dgraph/w --idx=1\n",
+                                "StandardOutput=journal\n",
+                                "StandardError=journal\n",
+                                "User=dgraph\n",
+                                "Group=dgraph\n",
+                                "[Install]\n",
+                                "WantedBy=multi-user.target\n",
+                                "EOT\n",
+                                "\n\n",
+                                "chmod +x /etc/systemd/system/dgraph-zero.service\n",
+                                "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                {
+                                    "Ref": "DgraphVersion"
+                                },
+                                "/dgraph-linux-amd64.tar.gz\n",
+                                "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                "systemctl daemon-reload\n",
+                                "systemctl enable --now dgraph-zero.service\n"
+                            ]
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "zero.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ZeroLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateData": {
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/sda1",
+                            "Ebs": {
+                                "VolumeSize": "20"
+                            }
+                        },
+                        {
+                            "DeviceName": "/dev/sdk",
+                            "Ebs": {
+                                "VolumeType": "io1",
+                                "DeleteOnTermination": "false",
+                                "Iops": {
+                                    "Ref": "ZeroDiskIops"
+                                },
+                                "VolumeSize": {
+                                    "Ref": "ZeroDiskSize"
+                                }
+                            }
+                        }
+                    ],
+                    "DisableApiTermination": "false",
+                    "ImageId": {
+                        "Ref": "InstanceAMI"
+                    },
+                    "InstanceType": {
+                        "Ref": "ZeroInstanceType"
+                    },
+                    "KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "NetworkInterfaces": [
+                        {
+                            "AssociatePublicIpAddress": "true",
+                            "DeviceIndex": "0",
+                            "DeleteOnTermination": "true",
+                            "SubnetId": {
+                                "Ref": "SubnetA"
+                            },
+                            "Groups": [
+                                {
+                                    "Ref": "DgraphSecurityGroup"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "#!/usr/bin/env bash",
+                                    "\n\n",
+                                    "set -euxo pipefail",
+                                    "\n\n",
+                                    "groupadd --system dgraph\n",
+                                    "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
+                                    "dev_name=\"/dev/$(lsblk | grep ",
+                                    {
+                                        "Ref": "ZeroDiskSize"
+                                    },
+                                    "G | tr -s ' ' | cut -d ' ' -f 1)\"\n",
+                                    "until [ -b $(readlink -f $dev_name) ]; do sleep 1; done\n",
+                                    "if [[ \"$(lsblk -no FSTYPE $dev_name)\" != \"ext4\" ]]; then\n",
+                                    "    mkfs -t ext4 $dev_name\n",
+                                    "    sleep 5\n",
+                                    "fi\n",
+                                    "\n\n",
+                                    "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
+                                    "mount $dev_name /var/run/dgraph\n",
+                                    "resize2fs $dev_name\n",
+                                    "chown -R dgraph:dgraph /var/run/dgraph\n",
+                                    "chown -R dgraph:dgraph /var/log/dgraph\n",
+                                    "DEVICE_UUID=\"$(blkid -s UUID -o value $dev_name)\"\n",
+                                    "if grep -q \"$DEVICE_UUID\" /etc/fstab; then\n",
+                                    "   echo \"fstab already set\"\n",
+                                    "else\n",
+                                    "   cp /etc/fstab /etc/fstab.original\n",
+                                    "   echo -e \"UUID=$DEVICE_UUID\t/dgraph\text4\tdefaults,nofail\t0\t2\" >> /etc/fstab\n",
+                                    "fi\n",
+                                    "\n\n",
+                                    "cat <<EOT > /etc/systemd/system/dgraph-zero.service\n",
+                                    "[Unit]\n",
+                                    "Description=dgraph.io data server\n",
+                                    "Wants=network.target\n",
+                                    "After=network.target\n",
+                                    "[Service]\n",
+                                    "Type=simple\n",
+                                    "ExecStart=/usr/local/bin/dgraph zero --my=$(hostname).",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ".compute.internal:5080 --peer ",
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DgraphHealthyZero",
+                                            "PrivateDnsName"
+                                        ]
+                                    },
+                                    ":5080 --replicas ",
+                                    {
+                                        "Ref": "DgraphReplicaCount"
+                                    },
+                                    " -w /var/run/dgraph/w\n",
+                                    "StandardOutput=journal\n",
+                                    "StandardError=journal\n",
+                                    "User=dgraph\n",
+                                    "Group=dgraph\n",
+                                    "[Install]\n",
+                                    "WantedBy=multi-user.target\n",
+                                    "EOT\n",
+                                    "\n\n",
+                                    "chmod +x /etc/systemd/system/dgraph-zero.service\n",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    {
+                                        "Ref": "DgraphVersion"
+                                    },
+                                    "/dgraph-linux-amd64.tar.gz\n",
+                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    "systemctl daemon-reload\n",
+                                    "systemctl enable --now dgraph-zero.service"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "LaunchTemplateName": "zero.dgraph.io"
+            }
+        },
+        "ZeroAutoscalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "SubnetA"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "ZeroLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "ZeroLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "DesiredCapacity": {
+                    "Ref": "ZeroInstanceCount"
+                },
+                "MinSize": {
+                    "Ref": "ZeroMinInstanceCount"
+                },
+                "MaxSize": {
+                    "Ref": "ZeroMaxInstanceCount"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "zero.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        },
+                        "PropagateAtLaunch": "true"
+                    }
+                ]
+            }
+        },
+        "AlphaLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateData": {
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/sda1",
+                            "Ebs": {
+                                "VolumeSize": "20"
+                            }
+                        },
+                        {
+                            "DeviceName": "/dev/sdk",
+                            "Ebs": {
+                                "VolumeType": "io1",
+                                "DeleteOnTermination": "false",
+                                "Iops": {
+                                    "Ref": "AlphaDiskIops"
+                                },
+                                "VolumeSize": {
+                                    "Ref": "AlphaDiskSize"
+                                }
+                            }
+                        }
+                    ],
+                    "DisableApiTermination": "false",
+                    "ImageId": {
+                        "Ref": "InstanceAMI"
+                    },
+                    "InstanceType": {
+                        "Ref": "AlphaInstanceType"
+                    },
+                    "KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "NetworkInterfaces": [
+                        {
+                            "AssociatePublicIpAddress": "true",
+                            "DeviceIndex": "0",
+                            "DeleteOnTermination": "true",
+                            "SubnetId": {
+                                "Ref": "SubnetA"
+                            },
+                            "Groups": [
+                                {
+                                    "Ref": "DgraphSecurityGroup"
+                                },
+                                {
+                                    "Ref": "DgraphAlphaSecurityGroup"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "#!/usr/bin/env bash",
+                                    "\n\n",
+                                    "set -euxo pipefail",
+                                    "\n\n",
+                                    "groupadd --system dgraph\n",
+                                    "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
+                                    "dev_name=\"/dev/$(lsblk | grep ",
+                                    {
+                                        "Ref": "AlphaDiskSize"
+                                    },
+                                    "G | tr -s ' ' | cut -d ' ' -f 1)\"\n",
+                                    "until [ -b $(readlink -f $dev_name) ]; do sleep 1; done\n",
+                                    "if [[ \"$(lsblk -no FSTYPE $dev_name)\" != \"ext4\" ]]; then\n",
+                                    "    mkfs -t ext4 $dev_name\n",
+                                    "    sleep 5\n",
+                                    "fi\n",
+                                    "\n\n",
+                                    "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
+                                    "mount $dev_name /var/run/dgraph\n",
+                                    "resize2fs $dev_name\n",
+                                    "chown -R dgraph:dgraph /var/run/dgraph\n",
+                                    "chown -R dgraph:dgraph /var/log/dgraph\n",
+                                    "DEVICE_UUID=\"$(blkid -s UUID -o value $dev_name)\"\n",
+                                    "if grep -q \"$DEVICE_UUID\" /etc/fstab; then\n",
+                                    "   echo \"fstab already set\"\n",
+                                    "else\n",
+                                    "   cp /etc/fstab /etc/fstab.original\n",
+                                    "   echo -e \"UUID=$DEVICE_UUID\t/dgraph\text4\tdefaults,nofail\t0\t2\" >> /etc/fstab\n",
+                                    "fi\n",
+                                    "\n\n",
+                                    "cat <<EOT > /etc/systemd/system/dgraph-alpha.service\n",
+                                    "[Unit]\n",
+                                    "Description=dgraph.io alpha server\n",
+                                    "Wants=network.target\n",
+                                    "After=network.target\n",
+                                    "[Service]\n",
+                                    "Type=simple\n",
+                                    "ExecStart=/usr/local/bin/dgraph alpha --my=$(hostname).",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ".compute.internal:7080 --lru_mb 2048 --zero ",
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DgraphHealthyZero",
+                                            "PrivateDnsName"
+                                        ]
+                                    },
+                                    ":5080 -p /var/run/dgraph/p -w /var/run/dgraph/w\n",
+                                    "StandardOutput=journal\n",
+                                    "StandardError=journal\n",
+                                    "User=dgraph\n",
+                                    "Group=dgraph\n",
+                                    "[Install]\n",
+                                    "WantedBy=multi-user.target\n",
+                                    "EOT\n",
+                                    "\n\n",
+                                    "chmod +x /etc/systemd/system/dgraph-alpha.service\n",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    {
+                                        "Ref": "DgraphVersion"
+                                    },
+                                    "/dgraph-linux-amd64.tar.gz\n",
+                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    "systemctl daemon-reload\n",
+                                    "systemctl enable --now dgraph-alpha.service"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "LaunchTemplateName": "alpha.dgraph.io"
+            }
+        },
+        "AlphaAutoscalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "ZeroAutoscalingGroup"
+            ],
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "SubnetA"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "AlphaLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "AlphaLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "DesiredCapacity": {
+                    "Ref": "AlphaInstanceCount"
+                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "AlphaTargetGroup"
+                    }
+                ],
+                "MinSize": {
+                    "Ref": "AlphaMinInstanceCount"
+                },
+                "MaxSize": {
+                    "Ref": "AlphaMaxInstanceCount"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "alpha.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        },
+                        "PropagateAtLaunch": "true"
+                    }
+                ]
+            }
+        },
+        "RatelLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateData": {
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/sda1",
+                            "Ebs": {
+                                "VolumeSize": "20"
+                            }
+                        }
+                    ],
+                    "DisableApiTermination": "false",
+                    "ImageId": {
+                        "Ref": "InstanceAMI"
+                    },
+                    "InstanceType": {
+                        "Ref": "RatelInstanceType"
+                    },
+                    "KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "NetworkInterfaces": [
+                        {
+                            "AssociatePublicIpAddress": "true",
+                            "DeleteOnTermination": "true",
+                            "DeviceIndex": "0",
+                            "SubnetId": {
+                                "Ref": "SubnetA"
+                            },
+                            "Groups": [
+                                {
+                                    "Ref": "DgraphSecurityGroup"
+                                },
+                                {
+                                    "Ref": "DgraphRatelSecurityGroup"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "#!/usr/bin/env bash",
+                                    "\n\n",
+                                    "set -euxo pipefail",
+                                    "\n\n",
+                                    "groupadd --system dgraph\n",
+                                    "useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph\n",
+                                    "mkdir -p /var/log/dgraph/ && mkdir -p /var/run/dgraph/\n",
+                                    "chown -R dgraph:dgraph /var/run/dgraph\n",
+                                    "chown -R dgraph:dgraph /var/log/dgraph\n",
+                                    "\n\n",
+                                    "cat <<EOT > /etc/systemd/system/dgraph-ratel.service\n",
+                                    "[Unit]\n",
+                                    "Description=dgraph.io UI server\n",
+                                    "Wants=network.target\n",
+                                    "After=network.target\n",
+                                    "[Service]\n",
+                                    "Type=simple\n",
+                                    "ExecStart=/usr/local/bin/dgraph-ratel\n",
+                                    "StandardOutput=journal\n",
+                                    "StandardError=journal\n",
+                                    "User=dgraph\n",
+                                    "Group=dgraph\n",
+                                    "[Install]\n",
+                                    "WantedBy=multi-user.target\n",
+                                    "EOT\n",
+                                    "\n\n",
+                                    "chmod +x /etc/systemd/system/dgraph-ratel.service\n",
+                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    {
+                                        "Ref": "DgraphVersion"
+                                    },
+                                    "/dgraph-linux-amd64.tar.gz\n",
+                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    "systemctl daemon-reload\n",
+                                    "systemctl enable --now dgraph-ratel.service"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "LaunchTemplateName": "ratel.dgraph.io"
+            }
+        },
+        "RatelAutoscalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "AlphaAutoscalingGroup"
+            ],
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "SubnetA"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "RatelLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "RatelLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "DesiredCapacity": {
+                    "Ref": "RatelInstanceCount"
+                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "RatelTargetGroup"
+                    }
+                ],
+                "MinSize": {
+                    "Ref": "RatelMinInstanceCount"
+                },
+                "MaxSize": {
+                    "Ref": "RatelMaxInstanceCount"
+                },
+                "Tags": [
+                    {
+                        "Key": "context",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "ratel.",
+                                    {
+                                        "Ref": "Tag"
+                                    }
+                                ]
+                            ]
+                        },
+                        "PropagateAtLaunch": "true"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VpcCidr": {
+            "Description": "VPC CIDR block created for the dgraph cluster deployment.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VPC",
+                    "CidrBlock"
+                ]
+            }
+        },
+        "ClientSecurityGroupId": {
+            "Description": "Client security group Id for access to dgraph endpoints via created ALB.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DgraphClientSecurityGroup",
+                    "GroupId"
+                ]
+            }
+        },
+        "LBPublicDNS": {
+            "Description": "DNS entry corresponding to the ALB associated with the dgraph cluster.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DgraphLoadBalancer",
+                    "DNSName"
+                ]
+            }
+        }
+    }
+}

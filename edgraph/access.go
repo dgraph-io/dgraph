@@ -65,7 +65,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	return nil
 }
 
-func authorizeState(ctx context.Context) error {
+func authorizeGroot(ctx context.Context) error {
 	// always allow access
 	return nil
 }

@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
@@ -384,13 +385,14 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addUpdatePayloadType(sch, defn)
 		addDeletePayloadType(sch, defn)
 
-		if defn.Kind == ast.Interface {
+		switch defn.Kind {
+		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
 			addUpdateMutation(sch, defn)
 			addDeleteMutation(sch, defn)
 
-		} else if defn.Kind == ast.Object {
+		case ast.Object:
 			// types and inputs needed for mutations
 			addInputType(sch, defn)
 			addAddPayloadType(sch, defn)
@@ -406,9 +408,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types[defn.Name+"Input"] = &ast.Definition{
+	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   defn.Name + "Input",
+		Name:   "Add" + defn.Name + "Input",
 		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
@@ -443,7 +445,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
 		return
 	}
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -461,13 +463,13 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 			&ast.FieldDefinition{
 				Name: "set",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			},
 			&ast.FieldDefinition{
 				Name: "remove",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			}),
 	}
@@ -488,10 +490,10 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   "Patch" + defn.Name,
+		Name:   defn.Name + "Patch",
 		Fields: nonIDFields,
 	}
-	schema.Types["Patch"+defn.Name] = patchDefn
+	schema.Types[defn.Name+"Patch"] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
@@ -635,7 +637,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		if isID(fld) {
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
-					Name: "ids",
+					Name: fld.Name,
 					Type: ast.ListType(&ast.Type{
 						NamedType: IDType,
 						NonNull:   true,
@@ -661,7 +663,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
 	// if the filter has more than one field or if it has one non-id field.
-	if (len(filter.Fields) == 1 && filter.Fields[0].Name != "ids") || len(filter.Fields) > 1 {
+	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
 			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
@@ -815,17 +817,21 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
+		Name: strings.ToLower(defn.Name),
+		Type: ast.ListType(&ast.Type{
+			NamedType: defn.Name,
+		}, nil),
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: strings.ToLower(defn.Name),
-				Type: &ast.Type{
-					NamedType: defn.Name,
-				},
-			},
-		},
+		Kind:   ast.Object,
+		Name:   "Add" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{qry},
 	}
 }
 
@@ -837,7 +843,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	// This covers the case where the Type only had one field (which had @id directive).
 	// Since we don't allow updating the field with @id directive we don't need to generate any
 	// update payload.
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -899,8 +905,9 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
+		fields := getIDField(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: "id",
+			Name: fields[0].Name,
 			Type: &ast.Type{
 				NamedType: idTypeFor(defn),
 				NonNull:   !hasXIDField,
@@ -951,7 +958,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: "input",
 				Type: &ast.Type{
-					NamedType: defn.Name + "Input",
+					NamedType: "[Add" + defn.Name + "Input!]",
 					NonNull:   true,
 				},
 			},
@@ -965,7 +972,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -1161,9 +1168,9 @@ func genFieldsString(flds ast.FieldList) string {
 		// Some extra types are generated by gqlparser for internal purpose.
 		if !strings.HasPrefix(fld.Name, "__") {
 			if d := generateDescription(fld.Description); d != "" {
-				sch.WriteString(fmt.Sprintf("\t%s", d))
+				x.Check2(sch.WriteString(fmt.Sprintf("\t%s", d)))
 			}
-			sch.WriteString(genFieldString(fld))
+			x.Check2(sch.WriteString(genFieldString(fld)))
 		}
 	}
 
@@ -1191,16 +1198,17 @@ func generateInputString(typ *ast.Definition) string {
 func generateEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	sch.WriteString(fmt.Sprintf("%senum %s {\n", generateDescription(typ.Description), typ.Name))
+	x.Check2(sch.WriteString(fmt.Sprintf("%senum %s {\n", generateDescription(typ.Description),
+		typ.Name)))
 	for _, val := range typ.EnumValues {
 		if !strings.HasPrefix(val.Name, "__") {
 			if d := generateDescription(val.Description); d != "" {
-				sch.WriteString(fmt.Sprintf("\t%s", d))
+				x.Check2(sch.WriteString(fmt.Sprintf("\t%s", d)))
 			}
-			sch.WriteString(fmt.Sprintf("\t%s\n", val.Name))
+			x.Check2(sch.WriteString(fmt.Sprintf("\t%s\n", val.Name)))
 		}
 	}
-	sch.WriteString("}\n")
+	x.Check2(sch.WriteString("}\n"))
 
 	return sch.String()
 }
@@ -1251,12 +1259,13 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Interface {
-			original.WriteString(generateInterfaceString(typ) + "\n")
-		} else if typ.Kind == ast.Object {
-			original.WriteString(generateObjectString(typ) + "\n")
-		} else if typ.Kind == ast.Enum {
-			original.WriteString(generateEnumString(typ) + "\n")
+		switch typ.Kind {
+		case ast.Interface:
+			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
+		case ast.Object:
+			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
+		case ast.Enum:
+			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
 		}
 		printed[typName] = true
 	}
@@ -1292,30 +1301,38 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// types, inputs and enums
 	for _, typName := range typeNames {
 		typ := schema.Types[typName]
-		if typ.Kind == ast.Object {
-			object.WriteString(generateObjectString(typ) + "\n")
-		} else if typ.Kind == ast.InputObject {
-			input.WriteString(generateInputString(typ) + "\n")
-		} else if typ.Kind == ast.Enum {
-			enum.WriteString(generateEnumString(typ) + "\n")
+		switch typ.Kind {
+		case ast.Object:
+			x.Check2(object.WriteString(generateObjectString(typ) + "\n"))
+		case ast.InputObject:
+			x.Check2(input.WriteString(generateInputString(typ) + "\n"))
+		case ast.Enum:
+			x.Check2(enum.WriteString(generateEnumString(typ) + "\n"))
 		}
 	}
 
-	sch.WriteString("#######################\n# Input Schema\n#######################\n\n")
-	sch.WriteString(original.String())
-	sch.WriteString("#######################\n# Extended Definitions\n#######################\n")
-	sch.WriteString(schemaExtras)
-	sch.WriteString("\n")
-	sch.WriteString("#######################\n# Generated Types\n#######################\n\n")
-	sch.WriteString(object.String())
-	sch.WriteString("#######################\n# Generated Enums\n#######################\n\n")
-	sch.WriteString(enum.String())
-	sch.WriteString("#######################\n# Generated Inputs\n#######################\n\n")
-	sch.WriteString(input.String())
-	sch.WriteString("#######################\n# Generated Query\n#######################\n\n")
-	sch.WriteString(generateObjectString(schema.Query) + "\n")
-	sch.WriteString("#######################\n# Generated Mutations\n#######################\n\n")
-	sch.WriteString(generateObjectString(schema.Mutation))
+	x.Check2(sch.WriteString(
+		"#######################\n# Input Schema\n#######################\n\n"))
+	x.Check2(sch.WriteString(original.String()))
+	x.Check2(sch.WriteString(
+		"#######################\n# Extended Definitions\n#######################\n"))
+	x.Check2(sch.WriteString(schemaExtras))
+	x.Check2(sch.WriteString("\n"))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Types\n#######################\n\n"))
+	x.Check2(sch.WriteString(object.String()))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Enums\n#######################\n\n"))
+	x.Check2(sch.WriteString(enum.String()))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Inputs\n#######################\n\n"))
+	x.Check2(sch.WriteString(input.String()))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Query\n#######################\n\n"))
+	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Mutations\n#######################\n\n"))
+	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
 
 	return sch.String()
 }

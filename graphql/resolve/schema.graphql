@@ -3,7 +3,7 @@
 
 type Country {
         id: ID!
-        name: String! @search(by: [trigram])
+        name: String! @search(by: [trigram, exact])
         states: [State] @hasInverse(field: country)
 }
 

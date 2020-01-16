@@ -1,0 +1,78 @@
+# Auto-generated with: [./compose -a 3 -z 1 -r 1 -d data -w]
+#
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8180:8180
+    - 9180:9180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - data:/data
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha2:
+    image: dgraph/dgraph:latest
+    container_name: alpha2
+    working_dir: /data/alpha2
+    depends_on:
+    - alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8182:8182
+    - 9182:9182
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - data:/data
+    command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha3:
+    image: dgraph/dgraph:latest
+    container_name: alpha3
+    working_dir: /data/alpha3
+    depends_on:
+    - alpha2
+    labels:
+      cluster: test
+    ports:
+    - 8183:8183
+    - 9183:9183
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - data:/data
+    command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=3 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5180:5180
+    - 6180:6180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - data:/data
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=1 --logtostderr
+      -v=2 --bindall
+volumes:
+  data:
