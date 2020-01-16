@@ -414,7 +414,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	}
 }
 
-func setupServer() {
+func setupServer(closer *y.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -455,7 +455,7 @@ func setupServer() {
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
-	mainServer, adminServer := admin.NewServers(introspection)
+	mainServer, adminServer := admin.NewServers(introspection, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 
 	whitelist := func(h http.Handler) http.Handler {
@@ -650,10 +650,13 @@ func run() {
 		edgraph.RefreshAcls(aclCloser)
 	}()
 
-	setupServer()
+	adminCloser := y.NewCloser(1)
+
+	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
+	adminCloser.SignalAndWait()
 	glog.Info("Disposing server state.")
 	worker.State.Dispose()
 	glog.Infoln("Server shutdown. Bye!")
