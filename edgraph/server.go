@@ -218,6 +218,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Got schema: %+v\n", result)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
+
+	for _, schemaType := range result.Types {
+		// Convert the type name according to the current tenant.
+		schemaType.TypeName = x.GenerateAttr(op.Namespace, schemaType.TypeName)
+
+		for _, field := range schemaType.Fields {
+			// Convert the type field according to the current tenant.
+			field.Predicate = x.GenerateAttr(op.Namespace, field.Predicate)
+		}
+	}
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err

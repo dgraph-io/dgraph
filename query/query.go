@@ -1872,9 +1872,13 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		for _, pred := range preds {
+			// Convert attribute name for the given namespace.
+			typeNamespace, attr := x.GetNamespaceAndAttr(pred)
+			x.AssertTrue(typeNamespace == child.Params.Namespace)
+
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
-				Attr:   pred,
+				Attr:   attr,
 			}
 			temp.Params = child.Params
 			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
@@ -2741,9 +2745,35 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	}
 	// Filter the schema nodes for the given namespace.
 	er.SchemaNode = filterSchemaNodeForNamespace(req.Namespace, er.SchemaNode)
+	// Filter the types for the given namespace.
+	er.Types = filterTypesForNamespace(req.Namespace, er.Types)
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
+}
+
+// filterTypesForNamespace filters types for the given namespace.
+func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
+	out := []*pb.TypeUpdate{}
+
+	for _, update := range types {
+		typeNamespace, typeName := x.GetNamespaceAndAttr(update.TypeName)
+		if typeNamespace != namespace {
+			continue
+		}
+		update.TypeName = typeName
+		fields := []*pb.SchemaUpdate{}
+		// Convert field name for the current namespace.
+		for _, field := range update.Fields {
+			fieldNamespace, fieldName := x.GetNamespaceAndAttr(field.Predicate)
+			x.AssertTrue(fieldNamespace == namespace)
+			field.Predicate = fieldName
+			fields = append(fields, field)
+		}
+		update.Fields = fields
+		out = append(out, update)
+	}
+	return out
 }
 
 // filterSchemaNodeForNamespace filters schema nodes for the given namespace.
@@ -2751,10 +2781,11 @@ func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*p
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
-		nodeNamespace := x.NamespaceForAttr(node.Predicate)
+		nodeNamespace, attrName := x.GetNamespaceAndAttr(node.Predicate)
 		if nodeNamespace != namespace {
 			continue
 		}
+		node.Predicate = attrName
 		out = append(out, node)
 	}
 	return out

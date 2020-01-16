@@ -62,14 +62,14 @@ func GenerateAttr(namespace, attr string) string {
 	return attr
 }
 
-// NamespaceForAttr returns the namespace from the given attr
-func NamespaceForAttr(attr string) string {
+// GetNamespaceAndAttr returns the namespace and attr from the given value.
+func GetNamespaceAndAttr(attr string) (string, string) {
 	splits := strings.Split(attr, string(NamespaceSeperator))
 	AssertTrue(len(splits) < 3)
 	if len(splits) == 1 {
-		return ""
+		return "", attr
 	}
-	return splits[1]
+	return splits[0], splits[1]
 }
 
 func writeAttr(buf []byte, attr string) []byte {
