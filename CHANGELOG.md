@@ -8,46 +8,40 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
-- Allow overwriting values of predicates of type uid. ([#4411][]) Fixes ([#4136][])
+- Allow overwriting values of predicates of type uid. Fixes [#4136][]. ([#4411][])
 - Algorithms to handle UidPack. ([#4321][])
 - Improved latency in live loader using conflict resolution at client level. ([#4362][])
 - Set ZSTD CompressionLevel to 1. ([#4572][])
-
-Enterprise features:
-
-- **Breaking changes**
-  - Change default behavior to block operations in ACL. ([#4390][])
-- Remove unauthorized predicates from query. ([#4479][])
+- Enterprise features
+  - **Breaking changes**
+    - Change default behavior to block operations with ACLs enabled. ([#4390][])
+  - Remove unauthorized predicates from query instead of rejecting the query entirely. ([#4479][])
 
 ### Added
 
 - Add GraphQL API for Dgraph accessible via the `/graphql` and `/admin` HTTP endpoints on Dgraph Alpha. ([#933][])
-- Agent: add debuginfo agent command to dgraph. ([#4464][])
-- Support filtering on nonindexed predicate. ([#4531][]) Fixes ([#4305][])	
-- add support for variables in recurse. ([#4385][])	Fixes ([#3301][])
-- Adds @noconflict directive to prevent conflict detection. ([#4454][]) Fixes	([#4079][])
-- Implement the state http endpoint on Alpha. Login required if ACL enabled.	([#4435][])
-- Implement heath?all endpoint on Alpha nodes. ([#4535][])	
-- Add /health endpoint to Dgraph Zero. ([#4405][])	
-
+- Add `debuginfo` subcommand to dgraph. ([#4464][])
+- Support filtering on non-indexed predicate. Fixes [#4305][]. ([#4531][])
+- Add support for variables in recurse. Fixes [#3301][]. ([#4385][]).
+- Adds `@noconflict` schema directive to prevent conflict detection. This is an experimental feature. This is not a recommended directive, but exists to help avoid conflicts for predicates which don't have high correctness requirements. Fixes [#4079][]. ([#4454][])
+- Implement the state HTTP endpoint on Alpha. Login is required if ACL is enabled. ([#4435][]).
+- Implement `/health?all` endpoint on Alpha nodes. ([#4535][])
+- Add `/health` endpoint to Zero. ([#4405][])
 - **Breaking changes**
-  -Support for fetching facets from value edge list. ([#4267][]) Fixes ([#4081][])
-
-Enterprise features:
-- Add guardians group with full authorization. ([#4447][])
+  - Support for fetching facets from value edge list. The query response format is backwards-incompatible. Fixes [#4081][]. ([#4267][])
+- Enterprise features
+  - Add guardians group with full authorization. ([#4447][])
 
  ### Fixed
  
-- Infer type of schema from JSON and RDF mutations. ([#4328][])	Fixes ([#3788][])
-- Fix retrieval of facets with cascade. ([#4530][]) Fixes	([#4310][])
-- Do not use type keys during tablet size calculation. ([#4517[])	Fixes ([#4473][])
-- Fix Levenshtein distance calculation with match function. ([#4545][])	Fixes ([#4494][])
-- Add <xs:integer> RDF type for int schema type. ([#4465][])
-- Allow @filter directive to be used with expand queries. ([#4404][])	Fixes ([#3904][])
-
-Enterprise features:
-
-- Backup types. ([#4514][])	Fixes ([#4507][])
+- Infer type of schema from JSON and RDF mutations.	Fixes [#3788][]. ([#4328][])
+- Fix retrieval of facets with cascade. Fixes	[#4310][]. ([#4530][])
+- Do not use type keys during tablet size calculation.	Fixes [#4473][]. ([#4517][])
+- Fix Levenshtein distance calculation with match function.	Fixes [#4494][]. ([#4545][])
+- Add `<xs:integer>` RDF type for int schema type. Fixes [#4460][]. ([#4465][])
+- Allow `@filter` directive with expand queries. Fixes [#3904][]. ([#4404][]).
+- Enterprise features
+  - Backup types. Fixes [#4507][]. ([#4514][])
 
 [#4530]: https://github.com/dgraph-io/dgraph/issues/4530
 [#4310]: https://github.com/dgraph-io/dgraph/issues/4310
@@ -55,6 +49,7 @@ Enterprise features:
 [#4473]: https://github.com/dgraph-io/dgraph/issues/4473
 [#4545]: https://github.com/dgraph-io/dgraph/issues/4545
 [#4494]: https://github.com/dgraph-io/dgraph/issues/4494
+[#4460]: https://github.com/dgraph-io/dgraph/issues/4460
 [#4465]: https://github.com/dgraph-io/dgraph/issues/4465
 [#4404]: https://github.com/dgraph-io/dgraph/issues/4404
 [#3904]: https://github.com/dgraph-io/dgraph/issues/3904
@@ -186,7 +181,7 @@ Enterprise features:
 - Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][])
 - Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
 - Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
-- Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
+- Fix `has` pagination when predicate is queried with `@lang`. Fixes [#4282][]. ([#4331][])
 - Make uid function work with value variables in upsert blocks. Fixes [#4424][]. ([#4425][])
 
 Enterprise features:
