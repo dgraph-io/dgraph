@@ -1,7 +1,7 @@
 -
   name: "Add mutation with variables"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
         author {
           name
@@ -28,7 +28,7 @@
 -
   name: "Add multiple mutation with variables"
   gqlmutation: |
-    mutation addAuthor($auth: [AuthorInput!]!) {
+    mutation addAuthor($auth: [AddAuthorInput!]!) {
       addAuthor(input: $auth) {
         author {
           name
@@ -128,7 +128,7 @@
 -
   name: "Add mutation with reference"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
         author {
           name
@@ -163,7 +163,7 @@
 -
   name: "Add mutation with invalid reference"
   gqlmutation: |
-    mutation addAuthor($auth: AuthorInput!) {
+    mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
         author {
           name
@@ -185,7 +185,7 @@
 -
   name: "Add mutation with inverse reference"
   gqlmutation: |
-    mutation addPost($post: PostInput!) {
+    mutation addPost($post: AddPostInput!) {
       addPost(input: [$post]) {
         post {
           postID
@@ -223,7 +223,7 @@
 -
   name: "Add mutation for a type that implements an interface"
   gqlmutation: |
-    mutation addHuman($human: HumanInput!) {
+    mutation addHuman($human: AddHumanInput!) {
       addHuman(input: [$human]) {
         human {
           name
@@ -254,7 +254,7 @@
 -
   name: "Add mutation using xid code"
   gqlmutation: |
-    mutation addState($input: StateInput!) {
+    mutation addState($input: AddStateInput!) {
       addState(input: [$input]) {
         state {
           name
@@ -295,7 +295,7 @@
 -
   name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
-    mutation addEditor($input: EditorInput!) {
+    mutation addEditor($input: AddEditorInput!) {
       addEditor(input: [$input]) {
         editor {
           name
@@ -328,7 +328,7 @@
 -
   name: "Deep add mutation"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
         author {
           id
@@ -369,7 +369,7 @@
 -
   name: "Deep add multiple mutation"
   gqlmutation: |
-    mutation addAuthor($author: [AuthorInput!]!) {
+    mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
         author {
           id
@@ -436,7 +436,7 @@
 -
   name: "Deep add with existing"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
         author {
           id
@@ -465,6 +465,9 @@
       Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
+      var(func: uid(Post3)) {
+        Author4 as Post.author
+      }
     }
   dgmutations:
     - setjson: |
@@ -490,12 +493,19 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author4)",
+            "Author.posts": [{"uid": "uid(Post3)"}]
+          }
+        ]
       cond: "@if(eq(len(Post3), 1))"
 
 -
   name: "Deep add multiple with existing"
   gqlmutation: |
-    mutation addAuthor($author: [AuthorInput!]!) {
+    mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
         author {
           id
@@ -538,8 +548,14 @@
       Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
-      Post6 as Post6(func: uid(0x124)) @filter(type(Post)) {
+      var(func: uid(Post3)) {
+        Author4 as Post.author
+      }
+      Post7 as Post7(func: uid(0x124)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post7)) {
+        Author8 as Post.author
       }
     }
   dgmutations:
@@ -566,36 +582,58 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author4)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post3)"
+              }
+            ]
+          }
+        ]
       cond: "@if(eq(len(Post3), 1))"
     - setjson: |
-        { "uid": "_:Author4",
+        { "uid": "_:Author5",
           "dgraph.type": [ "Author" ],
           "Author.name": "Different Author",
           "Author.dob": "2000-01-01",
           "Author.posts": [
             {
-              "uid": "_:Post5",
+              "uid": "_:Post6",
               "dgraph.type": [ "Post" ],
               "Post.title": "New new post",
               "Post.text": "A wonderful post",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             },
             {
               "uid": "0x124",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             }
           ]
         }
-      cond: "@if(eq(len(Post6), 1))"
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author8)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post7)"
+              }
+            ]
+          }
+        ]
+      cond: "@if(eq(len(Post7), 1))"
 
 -
   name: "Deep add with two existing"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
         author {
           id
@@ -623,8 +661,14 @@
       Post2 as Post2(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
-      Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
+      var(func: uid(Post2)) {
+        Author3 as Post.author
+      }
+      Post4 as Post4(func: uid(0x456)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post4)) {
+        Author5 as Post.author
       }
     }
   dgmutations:
@@ -648,12 +692,23 @@
             }
           ]
         }
-      cond: "@if(eq(len(Post2), 1) AND eq(len(Post3), 1))"
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          },
+          {
+            "uid": "uid(Author5)",
+            "Author.posts": [{"uid": "uid(Post4)"}]
+          }
+        ]
+      cond: "@if(eq(len(Post2), 1) AND eq(len(Post4), 1))"
 
 -
   name: "Deep add with null"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
         author {
           id
@@ -695,7 +750,7 @@
 -
   name: "Add three deep"
   gqlmutation: |
-    mutation addAuthor($author: AuthorInput!) {
+    mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
         author {
           id
@@ -747,7 +802,7 @@
 -
   name: "Add mutation with deep xid choices"
   gqlmutation: |
-    mutation addCountry($input: CountryInput!) {
+    mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
         country {
           name
@@ -769,6 +824,9 @@
     query {
       State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
+      }
+      var(func: uid(State2)) {
+        Country3 as State.country
       }
     }
   dgmutations:
@@ -800,12 +858,19 @@
             }
           } ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country3)",
+            "Country.states": [{"uid": "uid(State2)"}]
+          }
+        ]
       cond: "@if(eq(len(State2), 1))"
 
 -
   name: "Add mutation with deep xid that must be reference"
   gqlmutation: |
-    mutation addCountry($input: CountryInput!) {
+    mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
         country {
           name
@@ -828,6 +893,9 @@
       State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
+      var(func: uid(State2)) {
+        Country3 as State.country
+      }
     }
   dgmutations:
     - setjson: |
@@ -842,4 +910,11 @@
             }
           } ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country3)",
+            "Country.states": [{"uid": "uid(State2)"}]
+          }
+        ]
       cond: "@if(eq(len(State2), 1))"

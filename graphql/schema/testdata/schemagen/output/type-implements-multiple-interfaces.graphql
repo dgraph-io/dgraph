@@ -147,6 +147,14 @@ enum HumanOrderable {
 # Generated Inputs
 #######################
 
+input AddHumanInput {
+	employeeId: String!
+	title: String!
+	name: String!
+	friends: [CharacterRef]
+	totalCredits: Int
+}
+
 input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
@@ -159,6 +167,11 @@ input CharacterOrder {
 	asc: CharacterOrderable
 	desc: CharacterOrderable
 	then: CharacterOrder
+}
+
+input CharacterPatch {
+	name: String
+	friends: [CharacterRef]
 }
 
 input CharacterRef {
@@ -179,18 +192,18 @@ input HumanFilter {
 	not: HumanFilter
 }
 
-input HumanInput {
-	employeeId: String!
-	title: String!
-	name: String!
-	friends: [CharacterRef]
-	totalCredits: Int
-}
-
 input HumanOrder {
 	asc: HumanOrderable
 	desc: HumanOrderable
 	then: HumanOrder
+}
+
+input HumanPatch {
+	employeeId: String
+	title: String
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
 }
 
 input HumanRef {
@@ -202,29 +215,16 @@ input HumanRef {
 	totalCredits: Int
 }
 
-input PatchCharacter {
-	name: String
-	friends: [CharacterRef]
-}
-
-input PatchHuman {
-	employeeId: String
-	title: String
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-}
-
 input UpdateCharacterInput {
 	filter: CharacterFilter!
-	set: PatchCharacter
-	remove: PatchCharacter
+	set: CharacterPatch
+	remove: CharacterPatch
 }
 
 input UpdateHumanInput {
 	filter: HumanFilter!
-	set: PatchHuman
-	remove: PatchHuman
+	set: HumanPatch
+	remove: HumanPatch
 }
 
 #######################
@@ -246,7 +246,7 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [HumanInput!]!): AddHumanPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }

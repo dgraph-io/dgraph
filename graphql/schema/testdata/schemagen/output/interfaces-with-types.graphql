@@ -190,6 +190,26 @@ enum StarshipOrderable {
 # Generated Inputs
 #######################
 
+input AddDroidInput {
+	name: String!
+	friends: [CharacterRef]
+	appearsIn: [Episode!]!
+	primaryFunction: String
+}
+
+input AddHumanInput {
+	name: String!
+	friends: [CharacterRef]
+	appearsIn: [Episode!]!
+	starships: [StarshipRef]
+	totalCredits: Int
+}
+
+input AddStarshipInput {
+	name: String!
+	length: Float
+}
+
 input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
@@ -205,6 +225,12 @@ input CharacterOrder {
 	then: CharacterOrder
 }
 
+input CharacterPatch {
+	name: String
+	friends: [CharacterRef]
+	appearsIn: [Episode!]
+}
+
 input CharacterRef {
 	id: ID!
 }
@@ -218,17 +244,17 @@ input DroidFilter {
 	not: DroidFilter
 }
 
-input DroidInput {
-	name: String!
-	friends: [CharacterRef]
-	appearsIn: [Episode!]!
-	primaryFunction: String
-}
-
 input DroidOrder {
 	asc: DroidOrderable
 	desc: DroidOrderable
 	then: DroidOrder
+}
+
+input DroidPatch {
+	name: String
+	friends: [CharacterRef]
+	appearsIn: [Episode!]
+	primaryFunction: String
 }
 
 input DroidRef {
@@ -252,18 +278,18 @@ input HumanFilter {
 	not: HumanFilter
 }
 
-input HumanInput {
-	name: String!
-	friends: [CharacterRef]
-	appearsIn: [Episode!]!
-	starships: [StarshipRef]
-	totalCredits: Int
-}
-
 input HumanOrder {
 	asc: HumanOrderable
 	desc: HumanOrderable
 	then: HumanOrder
+}
+
+input HumanPatch {
+	name: String
+	friends: [CharacterRef]
+	appearsIn: [Episode!]
+	starships: [StarshipRef]
+	totalCredits: Int
 }
 
 input HumanRef {
@@ -275,32 +301,6 @@ input HumanRef {
 	totalCredits: Int
 }
 
-input PatchCharacter {
-	name: String
-	friends: [CharacterRef]
-	appearsIn: [Episode!]
-}
-
-input PatchDroid {
-	name: String
-	friends: [CharacterRef]
-	appearsIn: [Episode!]
-	primaryFunction: String
-}
-
-input PatchHuman {
-	name: String
-	friends: [CharacterRef]
-	appearsIn: [Episode!]
-	starships: [StarshipRef]
-	totalCredits: Int
-}
-
-input PatchStarship {
-	name: String
-	length: Float
-}
-
 input StarshipFilter {
 	id: [ID!]
 	name: StringTermFilter
@@ -309,15 +309,15 @@ input StarshipFilter {
 	not: StarshipFilter
 }
 
-input StarshipInput {
-	name: String!
-	length: Float
-}
-
 input StarshipOrder {
 	asc: StarshipOrderable
 	desc: StarshipOrderable
 	then: StarshipOrder
+}
+
+input StarshipPatch {
+	name: String
+	length: Float
 }
 
 input StarshipRef {
@@ -328,26 +328,26 @@ input StarshipRef {
 
 input UpdateCharacterInput {
 	filter: CharacterFilter!
-	set: PatchCharacter
-	remove: PatchCharacter
+	set: CharacterPatch
+	remove: CharacterPatch
 }
 
 input UpdateDroidInput {
 	filter: DroidFilter!
-	set: PatchDroid
-	remove: PatchDroid
+	set: DroidPatch
+	remove: DroidPatch
 }
 
 input UpdateHumanInput {
 	filter: HumanFilter!
-	set: PatchHuman
-	remove: PatchHuman
+	set: HumanPatch
+	remove: HumanPatch
 }
 
 input UpdateStarshipInput {
 	filter: StarshipFilter!
-	set: PatchStarship
-	remove: PatchStarship
+	set: StarshipPatch
+	remove: StarshipPatch
 }
 
 #######################
@@ -372,13 +372,13 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [HumanInput!]!): AddHumanPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	addDroid(input: [DroidInput!]!): AddDroidPayload
+	addDroid(input: [AddDroidInput!]!): AddDroidPayload
 	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
 	deleteDroid(filter: DroidFilter!): DeleteDroidPayload
-	addStarship(input: [StarshipInput!]!): AddStarshipPayload
+	addStarship(input: [AddStarshipInput!]!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }

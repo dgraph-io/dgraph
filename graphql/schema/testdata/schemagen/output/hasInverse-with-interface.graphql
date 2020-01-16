@@ -184,6 +184,26 @@ enum QuestionOrderable {
 # Generated Inputs
 #######################
 
+input AddAnswerInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	markedUseful: Boolean
+}
+
+input AddAuthorInput {
+	name: String!
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input AddQuestionInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	answered: Boolean
+}
+
 input AnswerFilter {
 	id: [ID!]
 	text: StringFullTextFilter
@@ -193,17 +213,17 @@ input AnswerFilter {
 	not: AnswerFilter
 }
 
-input AnswerInput {
-	text: String
-	datePublished: DateTime
-	author: AuthorRef!
-	markedUseful: Boolean
-}
-
 input AnswerOrder {
 	asc: AnswerOrderable
 	desc: AnswerOrderable
 	then: AnswerOrder
+}
+
+input AnswerPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
 }
 
 input AnswerRef {
@@ -222,16 +242,16 @@ input AuthorFilter {
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	name: String!
-	questions: [QuestionRef]
-	answers: [AnswerRef]
-}
-
 input AuthorOrder {
 	asc: AuthorOrderable
 	desc: AuthorOrderable
 	then: AuthorOrder
+}
+
+input AuthorPatch {
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
 }
 
 input AuthorRef {
@@ -239,32 +259,6 @@ input AuthorRef {
 	name: String
 	questions: [QuestionRef]
 	answers: [AnswerRef]
-}
-
-input PatchAnswer {
-	text: String
-	datePublished: DateTime
-	author: AuthorRef
-	markedUseful: Boolean
-}
-
-input PatchAuthor {
-	name: String
-	questions: [QuestionRef]
-	answers: [AnswerRef]
-}
-
-input PatchPost {
-	text: String
-	datePublished: DateTime
-	author: AuthorRef
-}
-
-input PatchQuestion {
-	text: String
-	datePublished: DateTime
-	author: AuthorRef
-	answered: Boolean
 }
 
 input PostFilter {
@@ -282,6 +276,12 @@ input PostOrder {
 	then: PostOrder
 }
 
+input PostPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+}
+
 input PostRef {
 	id: ID!
 }
@@ -295,17 +295,17 @@ input QuestionFilter {
 	not: QuestionFilter
 }
 
-input QuestionInput {
-	text: String
-	datePublished: DateTime
-	author: AuthorRef!
-	answered: Boolean
-}
-
 input QuestionOrder {
 	asc: QuestionOrderable
 	desc: QuestionOrderable
 	then: QuestionOrder
+}
+
+input QuestionPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
 }
 
 input QuestionRef {
@@ -318,26 +318,26 @@ input QuestionRef {
 
 input UpdateAnswerInput {
 	filter: AnswerFilter!
-	set: PatchAnswer
-	remove: PatchAnswer
+	set: AnswerPatch
+	remove: AnswerPatch
 }
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 input UpdateQuestionInput {
 	filter: QuestionFilter!
-	set: PatchQuestion
-	remove: PatchQuestion
+	set: QuestionPatch
+	remove: QuestionPatch
 }
 
 #######################
@@ -360,15 +360,15 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AuthorInput!]!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addQuestion(input: [QuestionInput!]!): AddQuestionPayload
+	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
-	addAnswer(input: [AnswerInput!]!): AddAnswerPayload
+	addAnswer(input: [AddAnswerInput!]!): AddAnswerPayload
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
 }

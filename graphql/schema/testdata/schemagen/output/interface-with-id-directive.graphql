@@ -135,17 +135,21 @@ enum LibraryItemOrderable {
 # Generated Inputs
 #######################
 
+input AddBookInput {
+	refID: String!
+	title: String
+	author: String
+}
+
+input AddLibraryInput {
+	items: [LibraryItemRef]
+}
+
 input BookFilter {
 	refID: StringHashFilter
 	and: BookFilter
 	or: BookFilter
 	not: BookFilter
-}
-
-input BookInput {
-	refID: String!
-	title: String
-	author: String
 }
 
 input BookOrder {
@@ -154,14 +158,15 @@ input BookOrder {
 	then: BookOrder
 }
 
-input BookRef {
-	refID: String
+input BookPatch {
 	title: String
 	author: String
 }
 
-input LibraryInput {
-	items: [LibraryItemRef]
+input BookRef {
+	refID: String
+	title: String
+	author: String
 }
 
 input LibraryItemFilter {
@@ -185,15 +190,10 @@ input LibraryRef {
 	items: [LibraryItemRef]
 }
 
-input PatchBook {
-	title: String
-	author: String
-}
-
 input UpdateBookInput {
 	filter: BookFilter!
-	set: PatchBook
-	remove: PatchBook
+	set: BookPatch
+	remove: BookPatch
 }
 
 #######################
@@ -214,8 +214,8 @@ type Query {
 
 type Mutation {
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [BookInput!]!): AddBookPayload
+	addBook(input: [AddBookInput!]!): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [LibraryInput!]!): AddLibraryPayload
+	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 }

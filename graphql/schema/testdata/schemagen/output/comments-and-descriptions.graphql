@@ -133,16 +133,16 @@ enum TOrderable {
 # Generated Inputs
 #######################
 
+input AddTInput {
+	s: String!
+	"""Desc"""
+	i: Int
+}
+
 input IOrder {
 	asc: IOrderable
 	desc: IOrderable
 	then: IOrder
-}
-
-input PatchT {
-	s: String
-	"""Desc"""
-	i: Int
 }
 
 input TFilter {
@@ -150,16 +150,16 @@ input TFilter {
 	not: TFilter
 }
 
-input TInput {
-	s: String!
-	"""Desc"""
-	i: Int
-}
-
 input TOrder {
 	asc: TOrderable
 	desc: TOrderable
 	then: TOrder
+}
+
+input TPatch {
+	s: String
+	"""Desc"""
+	i: Int
 }
 
 input TRef {
@@ -171,8 +171,8 @@ input TRef {
 
 input UpdateTInput {
 	filter: TFilter!
-	set: PatchT
-	remove: PatchT
+	set: TPatch
+	remove: TPatch
 }
 
 #######################
@@ -190,7 +190,7 @@ type Query {
 #######################
 
 type Mutation {
-	addT(input: [TInput!]!): AddTPayload
+	addT(input: [AddTInput!]!): AddTPayload
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 }

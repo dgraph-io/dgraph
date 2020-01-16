@@ -238,12 +238,15 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation by ids", updateMutationByIds)
 	t.Run("update mutation by name", updateMutationByName)
 	t.Run("update mutation by name no match", updateMutationByNameNoMatch)
-	t.Run("update delete", updateDelete)
+	t.Run("update delete", updateRemove)
 	t.Run("filter in update", filterInUpdate)
 	t.Run("selection in add object", testSelectionInAddObject)
 	t.Run("delete mutation with multiple ids", deleteMutationWithMultipleIds)
 	t.Run("delete mutation with single id", deleteMutationWithSingleID)
 	t.Run("delete mutation by name", deleteMutationByName)
+	t.Run("delete mutation removes references", deleteMutationReferences)
+	t.Run("add mutation updates references", addMutationReferences)
+	t.Run("update set mutation updates references", updateMutationReferences)
 	t.Run("delete wrong id", deleteWrongID)
 	t.Run("many mutations", manyMutations)
 	t.Run("mutations with deep filter", mutationWithDeepFilter)
@@ -653,9 +656,9 @@ func checkGraphQLHealth(url string, status []string) error {
 
 func addSchema(url string, schema string) error {
 	add := &GraphQLParams{
-		Query: `mutation addSchema($sch: String!) {
-			addSchema(input: { schema: $sch }) {
-				schema {
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
 					schema
 				}
 			}
@@ -674,8 +677,8 @@ func addSchema(url string, schema string) error {
 
 	var addResult struct {
 		Data struct {
-			AddSchema struct {
-				Schema struct {
+			UpdateGQLSchema struct {
+				GQLSchema struct {
 					Schema string
 				}
 			}
@@ -687,7 +690,7 @@ func addSchema(url string, schema string) error {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
 	}
 
-	if addResult.Data.AddSchema.Schema.Schema == "" {
+	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
 		return errors.New("GraphQL schema mutation failed")
 	}
 

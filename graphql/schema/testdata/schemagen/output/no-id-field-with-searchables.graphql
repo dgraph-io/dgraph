@@ -111,8 +111,8 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
-input PatchPost {
-	content: String
+input AddPostInput {
+	content: String!
 }
 
 input PostFilter {
@@ -122,14 +122,14 @@ input PostFilter {
 	not: PostFilter
 }
 
-input PostInput {
-	content: String!
-}
-
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	content: String
 }
 
 input PostRef {
@@ -138,8 +138,8 @@ input PostRef {
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -155,7 +155,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [PostInput!]!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

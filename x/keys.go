@@ -505,8 +505,8 @@ func Parse(key []byte) (ParsedKey, error) {
 			break
 		}
 
-		if len(k) < 16 {
-			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
+		if len(k) != 16 {
+			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[8:]
@@ -535,8 +535,8 @@ func Parse(key []byte) (ParsedKey, error) {
 			break
 		}
 
-		if len(k) < 12 {
-			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
+		if len(k) != 12 {
+			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[4:]

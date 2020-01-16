@@ -140,6 +140,18 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	name: String!
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input AddPostInput {
+	title: String!
+	text: String
+	datePublished: DateTime
+}
+
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
@@ -148,16 +160,16 @@ input AuthorFilter {
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	name: String!
-	dob: DateTime
-	posts: [PostRef]
-}
-
 input AuthorOrder {
 	asc: AuthorOrderable
 	desc: AuthorOrderable
 	then: AuthorOrder
+}
+
+input AuthorPatch {
+	name: String
+	dob: DateTime
+	posts: [PostRef]
 }
 
 input AuthorRef {
@@ -165,18 +177,6 @@ input AuthorRef {
 	name: String
 	dob: DateTime
 	posts: [PostRef]
-}
-
-input PatchAuthor {
-	name: String
-	dob: DateTime
-	posts: [PostRef]
-}
-
-input PatchPost {
-	title: String
-	text: String
-	datePublished: DateTime
 }
 
 input PostFilter {
@@ -188,16 +188,16 @@ input PostFilter {
 	not: PostFilter
 }
 
-input PostInput {
-	title: String!
-	text: String
-	datePublished: DateTime
-}
-
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	title: String
+	text: String
+	datePublished: DateTime
 }
 
 input PostRef {
@@ -216,14 +216,14 @@ input StringFullTextFilter_StringTermFilter {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -242,10 +242,10 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AuthorInput!]!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addPost(input: [PostInput!]!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
