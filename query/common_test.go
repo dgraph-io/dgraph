@@ -97,7 +97,7 @@ func processQueryWithVars(t *testing.T, query string,
 	return string(jsonResponse), err
 }
 
-func addTriplesToCluster(triples string) {
+func addTriplesToCluster(triples string) error {
 	txn := client.NewTxn()
 	ctx := context.Background()
 	defer txn.Discard(ctx)
@@ -106,10 +106,7 @@ func addTriplesToCluster(triples string) {
 		SetNquads: []byte(triples),
 		CommitNow: true,
 	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not add triples. Got error %v", err.Error()))
-	}
-
+	return err
 }
 
 func deleteTriplesInCluster(triples string) {
@@ -126,14 +123,14 @@ func deleteTriplesInCluster(triples string) {
 	}
 }
 
-func addGeoPointToCluster(uid uint64, pred string, point []float64) {
+func addGeoPointToCluster(uid uint64, pred string, point []float64) error {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Point', 'coordinates':[%v, %v]}"^^<geo:geojson> .`,
 		uid, pred, point[0], point[1])
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
-func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) {
+func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) error {
 	coordinates := "["
 	for i, ring := range polygon {
 		coordinates += "["
@@ -155,10 +152,10 @@ func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Polygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, pred, coordinates)
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
-func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
+func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 	coordinates := "["
 	for i, polygon := range polygons {
 		coordinates += "["
@@ -188,7 +185,7 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 	triple := fmt.Sprintf(
 		`<%d> <geometry> "{'type':'MultiPolygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, coordinates)
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
 const testSchema = `
@@ -233,6 +230,11 @@ type Node {
 	name
 }
 
+type Speaker {
+	name
+	language
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 name_lang					   : string @lang .
 lang_type                      : string @index(exact) .
@@ -254,7 +256,6 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
-noindex_name                   : string .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
@@ -285,6 +286,13 @@ newage                         : int .
 boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
+noconflict_pred                : string @noconflict .
+noindex_name                   : string .
+noindex_age                    : int .
+noindex_dob                    : datetime .
+noindex_alive                  : bool .
+noindex_salary                 : float .
+language                       : [string] .
 `
 
 func populateCluster() {
@@ -296,7 +304,7 @@ func populateCluster() {
 	setSchema(testSchema)
 	testutil.AssignUids(100000)
 
-	addTriplesToCluster(`
+	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
@@ -386,6 +394,29 @@ func populateCluster() {
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
+		<2> <noindex_name> "King Lear's name not indexed" .
+		<3> <noindex_name> "Margaret's name not indexed" .
+		<4> <noindex_name> "Leonard's name not indexed" .
+
+		<1> <noindex_age> "21" .
+		<2> <noindex_age> "22" .
+		<3> <noindex_age> "23" .
+		<4> <noindex_age> "24" .
+
+		<1> <noindex_dob> "1810-11-01" .
+		<2> <noindex_dob> "1710-11-01" .
+		<3> <noindex_dob> "1610-11-01" .
+		<4> <noindex_dob> "1510-11-01" .
+
+		<1> <noindex_alive> "true" .
+		<2> <noindex_alive> "false" .
+		<3> <noindex_alive> "false" .
+		<4> <noindex_alive> "true" .
+
+		<1> <noindex_salary> "501.23" .
+		<2> <noindex_salary> "589.04" .
+		<3> <noindex_salary> "459.47" .
+		<4> <noindex_salary> "967.68" .
 
 		<1> <friend> <23> .
 		<1> <friend> <24> .
@@ -667,31 +698,68 @@ func populateCluster() {
 		<58> <connects> <59> (weight=1) .
 		<59> <connects> <60> (weight=1) .
 	`)
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+	}
 
-	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
-	addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
-	addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
-	addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
+	err = addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
 
-	addGeoPolygonToCluster(23, "loc", [][][]float64{
+	err = addGeoPolygonToCluster(23, "loc", [][][]float64{
 		{{0.0, 0.0}, {2.0, 0.0}, {2.0, 2.0}, {0.0, 2.0}, {0.0, 0.0}},
 	})
-	addGeoPolygonToCluster(5104, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5104, "geometry", [][][]float64{
 		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
 			{-121.6, 37.1}},
 	})
-	addGeoPolygonToCluster(5105, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5105, "geometry", [][][]float64{
 		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
 			{-122.04, 37.43}, {-122.06, 37.37}},
 	})
-	addGeoPolygonToCluster(5106, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5106, "geometry", [][][]float64{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
 			{-122.25, 37.49}},
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
 
-	addGeoMultiPolygonToCluster(5107, [][][][]float64{
+	err = addGeoMultiPolygonToCluster(5107, [][][][]float64{
 		{{{-74.29504394531249, 40.19146303804063}, {-74.59716796875, 40.39258071969131},
 			{-74.6466064453125, 40.20824570152502}, {-74.454345703125, 40.06125658140474},
 			{-74.28955078125, 40.17467622056341}, {-74.29504394531249, 40.19146303804063}}},
@@ -699,6 +767,10 @@ func populateCluster() {
 			{-74.0478515625, 40.66813955408042}, {-73.98193359375, 40.772221877329024},
 			{-74.102783203125, 40.8595252289932}}},
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add multi polygon to the cluster. Got error %v",
+			err.Error()))
+	}
 
 	// Add data for regex tests.
 	nextId := uint64(0x2000)
@@ -713,12 +785,16 @@ func populateCluster() {
 			<%d> <value> "%s" .
 			<0x1234> <pattern> <%d> .
 		`, nextId, p, nextId)
-		addTriplesToCluster(triples)
+		err = addTriplesToCluster(triples)
+		if err != nil {
+			panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+		}
+
 		nextId++
 	}
 
 	// Add data for datetime tests
-	addTriplesToCluster(`
+	err = addTriplesToCluster(`
 		<301> <created_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28T14:41:57+30:00) .
 		<302> <created_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
 		<303> <created_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-29) .
@@ -735,4 +811,8 @@ func populateCluster() {
 		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
 	`)
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+	}
+
 }

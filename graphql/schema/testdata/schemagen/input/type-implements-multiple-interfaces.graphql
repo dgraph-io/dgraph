@@ -1,0 +1,14 @@
+interface Character {
+    id: ID!
+    name: String! @search(by: [exact])
+    friends: [Character]
+}
+
+interface Employee {
+    employeeId: String!
+    title: String!
+}
+
+type Human implements Character & Employee {
+    totalCredits: Int
+}

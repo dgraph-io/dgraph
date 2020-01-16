@@ -123,6 +123,13 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 		if err != nil {
 			return false
 		}
+
+		// Backup type keys in every group.
+		if parsedKey.IsType() {
+			return true
+		}
+
+		// Only backup schema and data keys for the requested predicates.
 		_, ok := predMap[parsedKey.Attr]
 		return ok
 	}

@@ -36,3 +36,9 @@ function stopCluster {
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker rm | sed 's/^/Removed /'
 }
+
+function loginWithGroot() {
+  curl -s -XPOST localhost:8180/login -d '{"userid": "groot","password": "password"}' \
+   | python -c \
+   "import json; resp = raw_input(); data = json.loads(resp); print data['data']['accessJWT']"
+}

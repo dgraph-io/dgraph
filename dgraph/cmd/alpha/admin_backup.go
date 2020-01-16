@@ -39,7 +39,9 @@ func init() {
 
 // backupHandler handles backup requests coming from the HTTP endpoint.
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodPost) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodPost: true,
+	}) {
 		return
 	}
 	if !worker.EnterpriseEnabled() {

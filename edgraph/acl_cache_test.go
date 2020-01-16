@@ -28,8 +28,8 @@ func TestAclCache(t *testing.T) {
 	var emptyGroups []string
 	group := "dev"
 	predicate := "friend"
-	require.NoError(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
-		"the anonymous user should have access when the acl cache is empty")
+	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
+		"the anonymous user should not have access when the acl cache is empty")
 
 	acls := []acl.Acl{
 		{
@@ -54,6 +54,6 @@ func TestAclCache(t *testing.T) {
 	// update the cache with empty acl list in order to clear the cache
 	aclCachePtr.update([]acl.Group{})
 	// the anonymous user should have access again
-	require.NoError(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
-		"the anonymous user should have access when the acl cache is empty")
+	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
+		"the anonymous user should not have access when the acl cache is empty")
 }

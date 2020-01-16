@@ -43,6 +43,8 @@ func main() {
 	}
 	pc := api.NewDgraphClient(conn)
 	c := dgo.NewDgraphClient(pc)
+	err = c.Login(ctx, "groot", "password")
+	x.Check(err)
 
 	// Ingest
 	if *insert {

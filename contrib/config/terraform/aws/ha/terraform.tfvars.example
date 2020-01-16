@@ -1,0 +1,5 @@
+aws_access_key = "XXXXXXXXXXXXXXX"
+aws_secret_key = "XXXXXXXXXXXXXXX"
+
+public_key      = "ssh-rsa AAAXXXXXX"
+deployment_name = "dgraph-test"

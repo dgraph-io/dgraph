@@ -161,8 +161,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 			"--schema", schemaFile,
 			"--alpha", testutil.SockAddr,
 			"--zero", testutil.SockAddrZero,
-			"--user", "groot",
-			"--password", "password",
+			"-u", "groot", "-p", "password",
 		)
 		liveCmd.Dir = liveDir
 		if out, err := liveCmd.Output(); err != nil {

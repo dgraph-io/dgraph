@@ -43,9 +43,9 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool) {
 	var pr pb.Proposal
 	var zpr pb.ZeroProposal
 	if err := pr.Unmarshal(es.Data); err == nil {
-		printAlphaProposal(&buf, pr, pending)
+		printAlphaProposal(&buf, &pr, pending)
 	} else if err := zpr.Unmarshal(es.Data); err == nil {
-		printZeroProposal(&buf, zpr)
+		printZeroProposal(&buf, &zpr)
 	} else {
 		fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
 		return

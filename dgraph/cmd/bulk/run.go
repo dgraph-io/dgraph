@@ -217,10 +217,10 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
-	loader := newLoader(opt)
+	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
-		mergeMapShardsIntoReduceShards(opt)
+		mergeMapShardsIntoReduceShards(&opt)
 	}
 	loader.reduceStage()
 	loader.writeSchema()

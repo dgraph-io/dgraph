@@ -55,9 +55,9 @@ Enterprise features:
 - **Breaking change**: Remove `@type` directive from query language. To filter
   an edge by a type, use `@filter(type(TypeName))` instead of `@type(TypeName)`.
   ([#4016][])
-  
+
 Enterprise features:
-  
+
 - Remove regexp ACL rules. ([#4360][])
 
 ### Fixed
@@ -101,7 +101,7 @@ Enterprise features:
 - Close store after stoping worker. ([#4356][])
 - Don't pre allocate mutation map. ([#4343][])
 - Cmd: fix config file from env variable issue in subcommands. Fixes [#4311][]. ([#4344][])
-- Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][]) 
+- Fix segmentation fault in Alpha. Fixes [#4288][]. ([#4394][])
 - Fix handling of depth parameter for shortest path query for numpaths=1 case. Fixes [#4169][]. ([#4347][])
 - Do not return dgo.ErrAborted when client calls txn.Discard(). ([#4389][])
 - Fix `has` pagination when predicate is queried with @lang. Fixes [#4282][]. ([#4331][])
@@ -110,8 +110,8 @@ Enterprise features:
 Enterprise features:
 
 - Fix bug when overriding credentials in backup request. Fixes [#4044][]. ([#4047][])
-- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][]) 
-- Write group_id files to postings directories during restore. ([#4365][]) 
+- Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][])
+- Write group_id files to postings directories during restore. ([#4365][])
 
 [#4119]: https://github.com/dgraph-io/dgraph/issues/4119
 [#4171]: https://github.com/dgraph-io/dgraph/issues/4171

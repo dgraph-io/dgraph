@@ -205,6 +205,10 @@ func run() {
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
 		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
+
+	// TOOD(Ibrahim): Remove this once badger is updated.
+	kvOpt.ZSTDCompressionLevel = 1
+
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
@@ -219,6 +223,7 @@ func run() {
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
 
+	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)

@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -57,6 +58,8 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
+
+	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 )
 
 const (
@@ -68,7 +71,7 @@ var (
 	bindall bool
 
 	// used for computing uptime
-	beginTime = time.Now()
+	startTime = time.Now()
 
 	// Alpha is the sub-command invoked when running "dgraph alpha".
 	Alpha x.SubCommand
@@ -184,6 +187,9 @@ they form a Raft group and provide synchronous replication.
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
+
+	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+
 }
 
 func setupCustomTokenizers() {
@@ -250,11 +256,12 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 			// string is range like a.b.c.d:w.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
-			if rangeLo == nil {
+			switch {
+			case rangeLo == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[0])
-			} else if rangeHi == nil {
+			case rangeHi == nil:
 				return nil, errors.Errorf("invalid IP address: %s", tuple[1])
-			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
+			case bytes.Compare(rangeLo, rangeHi) > 0:
 				return nil, errors.Errorf("inverted IP address range: %s", s)
 			}
 			ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
@@ -276,13 +283,36 @@ func grpcPort() int {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if err := x.HealthCheck(); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, err = w.Write([]byte(err.Error()))
-		if err != nil {
-			glog.V(2).Infof("Error while writing health check response: %v", err)
+
+	if _, ok := r.URL.Query()["all"]; ok {
+		var err error
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		ctx := attachAccessJwt(context.Background(), r)
+		var resp *api.Response
+		if resp, err = (&edgraph.Server{}).HealthAll(ctx); err != nil {
+			x.SetStatus(w, x.Error, err.Error())
+			return
 		}
+		if resp == nil {
+			x.SetStatus(w, x.ErrorNoData, "No state information available.")
+			return
+		}
+		_, _ = w.Write(resp.Json)
 		return
+	}
+
+	_, ok := r.URL.Query()["live"]
+	if !ok {
+		if err := x.HealthCheck(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, err = w.Write([]byte(err.Error()))
+			if err != nil {
+				glog.V(2).Infof("Error while writing health check response: %v", err)
+			}
+			return
+		}
 	}
 
 	info := struct {
@@ -292,13 +322,37 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}{
 		Version:  x.Version(),
 		Instance: "alpha",
-		Uptime:   time.Since(beginTime),
+		Uptime:   time.Since(startTime) / time.Second,
 	}
 	data, _ := json.Marshal(info)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+func stateHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx := context.Background()
+	ctx = attachAccessJwt(ctx, r)
+
+	var aResp *api.Response
+	if aResp, err = (&edgraph.Server{}).State(ctx); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	if aResp == nil {
+		x.SetStatus(w, x.ErrorNoData, "No state information available.")
+		return
+	}
+
+	if _, err = w.Write(aResp.Json); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
 }
 
 // storeStatsHandler outputs some basic stats for data store.
@@ -390,6 +444,7 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
+	http.HandleFunc("/state", stateHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -398,6 +453,27 @@ func setupServer() {
 	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
+
+	introspection := Alpha.Conf.GetBool("graphql_introspection")
+	mainServer, adminServer := admin.NewServers(introspection)
+	http.Handle("/graphql", mainServer.HTTPHandler())
+
+	whitelist := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !handlerInit(w, r, map[string]bool{
+				http.MethodPost: true,
+				http.MethodGet:  true,
+			}) {
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
+	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+
+	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
+	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
+	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
 
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")
@@ -415,8 +491,12 @@ func setupServer() {
 		defer wg.Done()
 		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		grpcListener.Close()
-		httpListener.Close()
+		if err := grpcListener.Close(); err != nil {
+			glog.Warningf("Error while closing gRPC listener: %s", err)
+		}
+		if err := httpListener.Close(); err != nil {
+			glog.Warningf("Error while closing HTTP listener: %s", err)
+		}
 	}()
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
@@ -477,7 +557,7 @@ func run() {
 		os.Exit(1)
 	}
 
-	worker.SetConfiguration(opts)
+	worker.SetConfiguration(&opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
@@ -498,6 +578,7 @@ func run() {
 		AclEnabled:          secretFile != "",
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:      abortDur,
+		StartTime:           startTime,
 	}
 
 	setupCustomTokenizers()
@@ -510,7 +591,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("worker.Config: %s", worker.Config)
+	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
 

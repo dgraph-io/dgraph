@@ -1836,7 +1836,20 @@ veterinarian
 
 For `string` predicates, `expand` only returns values not tagged with a language
 (see [language preference]({{< relref "#language-support" >}})).  So it's often 
-required to add `name@fr` or `name@.` as well as expand to a query.
+required to add `name@fr` or `name@.` as well to an expand query.
+
+### Filtering during expand.
+
+Expand queries support filters on the type of the outgoing edge. For example,
+`expand(_all_) @filter(type(Person))` will expand on all the predicates but will
+only include edges whose destination node is of type Person. Since only nodes of
+type `uid` can have a type, this query will filter out any scalar values.
+
+Please note that other type of filters and directives are not currently supported
+with the expand function. The filter needs to use the `type` function for the
+filter to be allowed. Logical `AND` and `OR` operations are allowed. For
+example, `expand(_all_) @filter(type(Person) OR type(Animal))` will only expand
+the edges that point to nodes of either type.
 
 ## Cascade Directive
 
@@ -2460,9 +2473,23 @@ year: int .
 friends: [uid] .
 ```
 
-If a `uid` predicate contains a reverse index, both the predicate and the
-reverse predicate are part of any type definition which contain that predicate.
-Expand queries will follow that convention.
+Reverse predicates can also be included inside a type definition. For example, the type above
+could be expanded to include the parent of the student if there's a predicate `children` with
+a reverse edge (the brackets around the predicate name are needed to properly understand the
+special character `~`).
+
+```
+children: [uid] @reverse .
+
+type Student {
+  name
+  dob
+  home_address
+  year
+  friends
+  <~children>
+}
+```
 
 Edges can be used in multiple types: for example, `name` might be used for both
 a person and a pet. Sometimes, however, it's required to use a different

@@ -151,18 +151,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		return errors.Errorf("group %q already exists", groupId)
 	}
 
-	createGroupNQuads := []*api.NQuad{
-		{
-			Subject:     "_:newgroup",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
-		},
-		{
-			Subject:     "_:newgroup",
-			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
-		},
-	}
+	createGroupNQuads := CreateGroupNQuads(groupId)
 
 	mu := &api.Mutation{
 		CommitNow: true,

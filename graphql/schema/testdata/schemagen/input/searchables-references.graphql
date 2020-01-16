@@ -1,0 +1,13 @@
+type Author {
+	id: ID!
+	name: String! @search(by: [hash])
+	dob: DateTime  # Have something not search
+	posts: [Post]  # This should have arguments added for a filter on Post
+}
+
+type Post {
+	postID: ID!
+	title: String! @search(by: [term, fulltext])
+	text: String @search(by: [fulltext, term])
+	datePublished: DateTime   # Have something not search
+}

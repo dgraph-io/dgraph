@@ -70,8 +70,11 @@ var Config Options
 
 // String will generate the string output an Options struct without including
 // the HmacSecret field, which prevents revealing the secret during logging
-func (opt Options) String() string {
-	//return fmt.Sprintf()
+func (opt *Options) String() string {
+	if opt == nil {
+		return ""
+	}
+
 	return fmt.Sprintf("{PostingDir:%s BadgerTables:%s BadgerVlog:%s WALDir:%s MutationsMode:%d "+
 		"AuthToken:%s AllottedMemory:%.1fMB AccessJwtTtl:%v RefreshJwtTtl:%v "+
 		"AclRefreshInterval:%v}", opt.PostingDir, opt.BadgerTables, opt.BadgerVlog, opt.WALDir,
@@ -80,13 +83,16 @@ func (opt Options) String() string {
 }
 
 // SetConfiguration sets the server configuration to the given config.
-func SetConfiguration(newConfig Options) {
+func SetConfiguration(newConfig *Options) {
+	if newConfig == nil {
+		return
+	}
 	newConfig.validate()
-	Config = newConfig
+	Config = *newConfig
 
 	posting.Config.Mu.Lock()
+	defer posting.Config.Mu.Unlock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
-	posting.Config.Mu.Unlock()
 }
 
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.

@@ -17,6 +17,7 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -39,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -58,13 +61,19 @@ const (
 	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
-
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
 	NeedAuthorize = iota
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
+)
+
+type key int
+
+const (
+	// isGraphQL is used to indicate that the request is made by the graphql admin or not.
+	isGraphQL key = iota
 )
 
 // Server implements protos.DgraphServer
@@ -251,7 +260,23 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return err
 	}
 
-	m := &pb.Mutations{Edges: edges, StartTs: qc.req.StartTs}
+	predHints := make(map[string]pb.Metadata_HintType)
+	for _, gmu := range qc.gmuList {
+		for pred, hint := range gmu.Metadata.GetPredHints() {
+			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
+				continue
+			}
+			predHints[pred] = hint
+		}
+	}
+	m := &pb.Mutations{
+		Edges:   edges,
+		StartTs: qc.req.StartTs,
+		Metadata: &pb.Metadata{
+			PredHints: predHints,
+		},
+	}
+
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
@@ -578,11 +603,75 @@ type queryContext struct {
 	latency *query.Latency
 	// span stores a opencensus span used throughout the query processing
 	span *trace.Span
+	// graphql indicates whether the given request is from graphql admin or not.
+	graphql bool
+}
+
+// HealthAll handles health?all requests.
+func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
+	}
+
+	var healthAll []pb.HealthInfo
+	pool := conn.GetPools().GetAll()
+	for _, p := range pool {
+		healthAll = append(healthAll, p.HealthInfo())
+	}
+	// Append self.
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance: "alpha",
+		Addr:     x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Group:    strconv.Itoa(int(worker.GroupId())),
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
+	})
+
+	var err error
+	var jsonOut []byte
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
+		return nil, errors.Errorf("Unable to Marshal. Err %v", err)
+	}
+	return &api.Response{Json: jsonOut}, nil
+}
+
+// State handles state requests
+func (s *Server) State(ctx context.Context) (*api.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if err := authorizeGroot(ctx); err != nil {
+		return nil, err
+	}
+
+	ms := worker.GetMembershipState()
+	if ms == nil {
+		return nil, errors.Errorf("No membership state found")
+	}
+
+	m := jsonpb.Marshaler{}
+	var jsonState bytes.Buffer
+	if err := m.Marshal(&jsonState, ms); err != nil {
+		return nil, errors.Errorf("Error marshalling state information to JSON")
+	}
+
+	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	return s.doQuery(ctx, req, NeedAuthorize)
+}
+
+// QueryForGraphql handles queries or mutations
+func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
@@ -638,7 +727,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span}
+	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
+
+	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -648,7 +739,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 			return
 		}
 	}
-
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
@@ -814,7 +904,7 @@ func parseRequest(qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*gql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu)
+			gmu, err := parseMutationObject(mu, qc)
 			if err != nil {
 				return err
 			}
@@ -953,32 +1043,35 @@ func isAlterAllowed(ctx context.Context) error {
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
+func parseMutationObject(mu *api.Mutation, qc *queryContext) (*gql.Mutation, error) {
 	res := &gql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
+		nqs, md, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
+		// The metadata is not currently needed for delete operations so it can be safely ignored.
+		nqs, _, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.SetNquads)
+		nqs, md, err := chunker.ParseRDFs(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
+		res.Metadata = md
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := chunker.ParseRDFs(mu.DelNquads)
+		nqs, _, err := chunker.ParseRDFs(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}
@@ -994,7 +1087,7 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del); err != nil {
+	if err := validateNQuads(res.Set, res.Del, qc); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -1021,7 +1114,17 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad) error {
+// validateForGraphql validate nquads for graphql
+func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
+	// Check whether the incoming predicate is graphql reserved predicate or not.
+	if !isGraphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
+		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+	}
+	return nil
+}
+
+func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
+
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -1036,6 +1139,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
+			return err
+		}
 	}
 	for _, nq := range del {
 		if err := validatePredName(nq.Predicate); err != nil {
@@ -1047,6 +1153,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+		if err := validateForGraphql(nq, qc.graphql); err != nil {
+			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
 		// with bad predicate forms. ex: foo@bar ~something

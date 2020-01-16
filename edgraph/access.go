@@ -64,3 +64,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	// always allow access
 	return nil
 }
+
+func authorizeGroot(ctx context.Context) error {
+	// always allow access
+	return nil
+}

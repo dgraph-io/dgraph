@@ -26,7 +26,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -231,12 +230,15 @@ func (it *pIterator) valid() (bool, error) {
 		return true, nil
 	}
 
-	if err := it.moveToNextValidPart(); err != nil {
+	err := it.moveToNextValidPart()
+	switch {
+	case err != nil:
 		return false, err
-	} else if len(it.uids) > 0 {
+	case len(it.uids) > 0:
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (it *pIterator) posting() *pb.Posting {
@@ -267,20 +269,22 @@ type ListOptions struct {
 // NewPosting takes the given edge and returns its equivalent representation as a posting.
 func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	var op uint32
-	if t.Op == pb.DirectedEdge_SET {
+	switch t.Op {
+	case pb.DirectedEdge_SET:
 		op = Set
-	} else if t.Op == pb.DirectedEdge_DEL {
+	case pb.DirectedEdge_DEL:
 		op = Del
-	} else {
+	default:
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
 	var postingType pb.Posting_PostingType
-	if len(t.Lang) > 0 {
+	switch {
+	case len(t.Lang) > 0:
 		postingType = pb.Posting_VALUE_LANG
-	} else if t.ValueId == 0 {
+	case t.ValueId == 0:
 		postingType = pb.Posting_VALUE
-	} else {
+	default:
 		postingType = pb.Posting_REF
 	}
 
@@ -354,9 +358,10 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	var id uint64 = math.MaxUint64
 
 	// Value with a lang type.
-	if len(t.Lang) > 0 {
+	switch {
+	case len(t.Lang) > 0:
 		id = farm.Fingerprint64([]byte(t.Lang))
-	} else if schema.State().IsList(t.Attr) {
+	case schema.State().IsList(t.Attr):
 		// TODO - When values are deleted for list type, then we should only delete the UID from
 		// index if no other values produces that index token.
 		// Value for list type.
@@ -402,6 +407,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return err
 	}
 	switch {
+	case schema.State().HasNoConflict(t.Attr):
+		break
 	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
@@ -574,17 +581,22 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	if err != nil {
 		return err
 	}
+
+loop:
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
 			mp = emptyPosting
 		}
-		if valid, err := pitr.valid(); err != nil {
-			return err
-		} else if valid {
+
+		valid, err := pitr.valid()
+		switch {
+		case err != nil:
+			break loop
+		case valid:
 			pp = pitr.posting()
-		} else {
+		default:
 			pp = emptyPosting
 		}
 
@@ -599,23 +611,33 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
-			if err := pitr.next(); err != nil {
-				return err
+			if err != nil {
+				break loop
+			}
+
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
+				if err != nil {
+					break loop
+				}
 			}
 			prevUid = mp.Uid
-			if err := pitr.next(); err != nil {
-				return err
+			if err = pitr.next(); err != nil {
+				break loop
 			}
 			midx++
 		default:
@@ -915,6 +937,21 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	return vals, err
 }
 
+// allUntaggedFacets returns facets for all untagged values. Since works well only for
+// fetching facets for list predicates as lang tag in not allowed for list predicates.
+func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+	l.AssertRLock()
+	var facets []*pb.Facets
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if len(p.LangTag) == 0 {
+			facets = append(facets, &pb.Facets{Facets: p.Facets})
+		}
+		return nil
+	})
+
+	return facets, err
+}
+
 // AllValues returns all the values in the posting list.
 func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
@@ -1005,7 +1042,7 @@ func valueToTypesVal(p *pb.Posting) (rval types.Val) {
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, error) {
 	l.AssertRLock()
 
 	any := false
@@ -1015,22 +1052,25 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			any = true
 			break
 		}
-		pos, rerr = l.postingForTag(readTs, lang)
-		if rerr == nil {
+		pos, err := l.postingForTag(readTs, lang)
+		if err == nil {
 			return pos, nil
 		}
 	}
 
 	// look for value without language
 	if any || len(langs) == 0 {
-		if found, pos, err := l.findPosting(readTs, math.MaxUint64); err != nil {
+		found, pos, err := l.findPosting(readTs, math.MaxUint64)
+		switch {
+		case err != nil:
 			return nil, err
-		} else if found {
+		case found:
 			return pos, nil
 		}
 	}
 
 	var found bool
+	var pos *pb.Posting
 	// last resort - return value with smallest lang UID.
 	if any {
 		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
@@ -1091,15 +1131,30 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs []*api.Facet,
-	ferr error) {
+func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
+	listType bool) ([]*pb.Facets, error) {
+
 	l.RLock()
 	defer l.RUnlock()
+
+	var fcs []*pb.Facets
+	if listType {
+		fs, err := l.allUntaggedFacets(readTs)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, fcts := range fs {
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fcts.Facets, param)})
+		}
+		return fcs, nil
+	}
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})
+	return fcs, nil
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
@@ -1228,7 +1283,9 @@ func (out *rollupOutput) removeEmptySplits() {
 
 	if len(out.plist.Splits) == 1 {
 		// Only the first split remains. If it's also empty, remove it as well.
-		// This should mark the entire list for deletion.
+		// This should mark the entire list for deletion. Please note that the
+		// startUid of the first part is always one because a node can never have
+		// its uid set to zero.
 		if isPlistEmpty(out.parts[1]) {
 			out.plist.Splits = []uint64{}
 		}
