@@ -58,7 +58,7 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 	if err != nil {
 		return err
 	}
-	glog.V(2).Infof("Using file path: %q", path)
+	x.LogVXf(2, "Using file path: %q", path)
 	return nil
 }
 

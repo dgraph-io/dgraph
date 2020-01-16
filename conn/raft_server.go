@@ -251,7 +251,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			return err
 		}
 		if loop%1e6 == 0 {
-			glog.V(2).Infof("%d messages received by %#x from %#x", loop, node.Id, rc.GetId())
+			x.LogVXf(2, "%d messages received by %#x from %#x", loop, node.Id, rc.GetId())
 		}
 		if loop == 1 {
 			rc = batch.GetContext()

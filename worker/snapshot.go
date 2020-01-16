@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -85,7 +86,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		default:
 		}
 
-		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
+		x.LogVXf(1, "Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
 		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
 			return 0, err
 		}

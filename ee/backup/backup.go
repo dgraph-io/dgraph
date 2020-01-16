@@ -106,7 +106,7 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 		return &emptyRes, err
 	}
 
-	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
+	x.LogVXf(3, "Backup manifest version: %d", pr.Request.SinceTs)
 
 	predMap := make(map[string]struct{})
 	for _, pred := range pr.Request.Predicates {
@@ -152,7 +152,7 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 			maxVersion, pr.Request.ReadTs)
 	}
 
-	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
+	x.LogVXf(2, "Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
 	if err = gzWriter.Close(); err != nil {
 		glog.Errorf("While closing gzipped writer: %v", err)
 		return &emptyRes, err

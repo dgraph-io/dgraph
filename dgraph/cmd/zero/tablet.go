@@ -172,7 +172,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	} else {
 		msg = fmt.Sprintf("Deleted predicate %v in group %d", in.Predicate, in.SourceGid)
 		span.Annotate(nil, msg)
-		glog.V(1).Infof(msg)
+		x.LogVXf(1, msg)
 	}
 	return nil
 }

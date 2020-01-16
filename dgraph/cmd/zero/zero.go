@@ -94,7 +94,7 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	glog.V(2).Infof("Starting telemetry data collection...")
+	x.LogVXf(2, "Starting telemetry data collection...")
 	start := time.Now()
 
 	ticker := time.NewTicker(time.Minute)
@@ -114,10 +114,10 @@ func (s *Server) periodicallyPostTelemetry() {
 			continue
 		}
 		t.SinceHours = int(time.Since(start).Hours())
-		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+		x.LogVXf(2, "Posting Telemetry data: %+v", t)
 
 		err := t.post()
-		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		x.LogVXf(2, "Telemetry data posted with error: %v", err)
 		if err == nil {
 			lastPostedAt = time.Now()
 		}

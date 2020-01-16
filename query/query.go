@@ -1656,7 +1656,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 		default:
-			glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
+			x.LogVXf(3, "Warning: reached default case in fillVars for var: %v", v.Name)
 		}
 	}
 	if err := sg.replaceVarInFunc(); err != nil {

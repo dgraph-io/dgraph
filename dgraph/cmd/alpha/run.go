@@ -309,7 +309,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, err = w.Write([]byte(err.Error()))
 			if err != nil {
-				glog.V(2).Infof("Error while writing health check response: %v", err)
+				x.LogVXf(2, "Error while writing health check response: %v", err)
 			}
 			return
 		}

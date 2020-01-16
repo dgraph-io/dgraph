@@ -309,7 +309,7 @@ func RefreshAcls(closer *y.Closer) {
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
 	retrieveAcls := func() error {
-		glog.V(3).Infof("Refreshing ACLs")
+		x.LogVXf(3, "Refreshing ACLs")
 		queryRequest := api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
@@ -327,7 +327,7 @@ func RefreshAcls(closer *y.Closer) {
 		}
 
 		aclCachePtr.update(groups)
-		glog.V(3).Infof("Updated the ACL cache")
+		x.LogVXf(3, "Updated the ACL cache")
 		return nil
 	}
 
@@ -729,7 +729,7 @@ func (log *accessEntry) String() string {
 }
 
 func logAccess(log *accessEntry) {
-	glog.V(1).Infof(log.String())
+	x.LogVXf(1, log.String())
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all

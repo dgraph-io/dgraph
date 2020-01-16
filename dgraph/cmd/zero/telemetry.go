@@ -99,7 +99,7 @@ func (t *Telemetry) post() error {
 	if err != nil {
 		return err
 	}
-	glog.V(2).Infof("Telemetry response status: %v", resp.Status)
-	glog.V(2).Infof("Telemetry response body: %s", body)
+	x.LogVXf(2, "Telemetry response status: %v", resp.Status)
+	x.LogVXf(2, "Telemetry response body: %s", body)
 	return nil
 }

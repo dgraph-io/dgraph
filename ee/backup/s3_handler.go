@@ -63,7 +63,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		return nil, errors.Errorf("Invalid bucket: %q", uri.Path)
 	}
 
-	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
+	x.LogVXf(2, "Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	var creds credentials.Value
 	switch {
@@ -149,7 +149,7 @@ func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 	object := filepath.Join(h.objectPrefix, fmt.Sprintf(backupPathFmt, req.UnixTs),
 		objectName)
-	glog.V(2).Infof("Sending data to %s blob %q ...", uri.Scheme, object)
+	x.LogVXf(2, "Sending data to %s blob %q ...", uri.Scheme, object)
 
 	h.cerr = make(chan error, 1)
 	h.preader, h.pwriter = io.Pipe()
@@ -195,7 +195,7 @@ func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 //   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
 //   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
 func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
+	x.LogVXf(2, "S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
 	mc, err := h.setup(uri)
 	if err != nil {
@@ -209,7 +209,7 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 
 // CreateManifest finishes a backup by creating an object to store the manifest.
 func (h *s3Handler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
+	x.LogVXf(2, "S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
 	mc, err := h.setup(uri)
 	if err != nil {
@@ -386,7 +386,7 @@ func (h *s3Handler) Close() error {
 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
 		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}
-	glog.V(2).Infof("Backup waiting for upload to complete.")
+	x.LogVXf(2, "Backup waiting for upload to complete.")
 	return <-h.cerr
 }
 

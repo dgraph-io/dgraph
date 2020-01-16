@@ -258,7 +258,7 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	// Now look into Badger.
 	index, err := w.seekEntry(nil, 0, false)
 	if err == nil {
-		glog.V(2).Infof("Setting first index: %d", index+1)
+		x.LogVXf(2, "Setting first index: %d", index+1)
 		w.cache.Store(firstKey, index+1)
 	} else if glog.V(2) {
 		glog.Errorf("While seekEntry. Error: %v", err)
@@ -592,7 +592,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
-	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
+	x.LogVXf(2, "CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
 	if err != nil {
 		return err

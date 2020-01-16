@@ -815,3 +815,10 @@ func IsGuardian(groups []string) bool {
 
 	return false
 }
+
+// LogVXf prints formatted string if log level is x.
+func LogVXf(x int, format string, args ...interface{}) {
+	if glog.V(glog.Level(x)) {
+		glog.Infof(format, args...)
+	}
+}

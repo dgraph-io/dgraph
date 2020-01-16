@@ -663,7 +663,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx, rs.RequestCtx) {
-				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx)
+				x.LogVXf(3, "Read state: %x != requested %x", rs.RequestCtx, activeRctx)
 				goto again
 			}
 			return rs.Index, nil
@@ -698,7 +698,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			x.LogVXf(3, "Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {

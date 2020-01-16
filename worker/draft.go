@@ -416,7 +416,7 @@ func (n *node) processRollups() {
 			return
 		case readTs = <-n.rollupCh:
 		case <-tick.C:
-			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
+			x.LogVXf(3, "Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
 			if readTs <= last {
 				break // Break out of the select case.
 			}
@@ -586,18 +586,18 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// the Snapshot RaftContext, which contains the address of the leader.
 	var pool *conn.Pool
 	addr := snap.Context.GetAddr()
-	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
+	x.LogVXf(2, "Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
 		p, err := conn.GetPools().Get(addr)
 		if err != nil {
-			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
+			x.LogVXf(2, "conn.Get(%q) Error: %v", addr, err)
 		} else {
 			pool = p
-			glog.V(2).Infof("Leader connection picked from RaftContext")
+			x.LogVXf(2, "Leader connection picked from RaftContext")
 		}
 	}
 	if pool == nil {
-		glog.V(2).Infof("No leader conn from RaftContext. Using membership state.")
+		x.LogVXf(2, "No leader conn from RaftContext. Using membership state.")
 		p, err := n.leaderBlocking()
 		if err != nil {
 			return err
@@ -679,7 +679,7 @@ func (n *node) updateRaftProgress() error {
 	if err := n.Store.UpdateCheckpoint(snap); err != nil {
 		return err
 	}
-	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	x.LogVXf(2, "[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
 	return nil
 }
 
@@ -705,7 +705,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
 						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
-						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+						x.LogVXf(3, "Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
 							x.WorkerConfig.SnapshotAfter, calculate)
 					}
@@ -1253,7 +1253,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
-		glog.V(2).Infof("Num pending txns: %d", num)
+		x.LogVXf(2, "Num pending txns: %d", num)
 	}
 
 	// We can't rely upon the Raft entries to determine the minPendingStart,

@@ -122,7 +122,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
-			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
+			x.LogVXf(1, "Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
 				backoff = initBackoff
@@ -204,13 +204,13 @@ func (m *XidMap) BumpTo(uid uint64) {
 	}
 
 	for {
-		glog.V(1).Infof("Bumping up to %v", uid)
+		x.LogVXf(1, "Bumping up to %v", uid)
 		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
 		cancel()
 		if err == nil {
-			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
+			x.LogVXf(1, "Requested bump: %d. Got assigned: %v", uid, assigned)
 			m.updateMaxSeen(assigned.EndId)
 			return
 		}

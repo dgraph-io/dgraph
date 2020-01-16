@@ -18,7 +18,7 @@ package query
 
 import (
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/golang/glog"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -216,7 +216,7 @@ func evalMathTree(mNode *mathTree) error {
 	}
 	if mNode.Var != "" {
 		if len(mNode.Val) == 0 {
-			glog.V(2).Infof("Variable %v not yet populated or missing.", mNode.Var)
+			x.LogVXf(2, "Variable %v not yet populated or missing.", mNode.Var)
 		}
 		// This is a leaf node whose value is already populated. So return.
 		return nil

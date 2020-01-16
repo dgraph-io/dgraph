@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -25,7 +26,7 @@ import (
 
 // Backup handles a request coming from another node.
 func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
+	x.LogVXf(2, "Received backup request via Grpc: %+v", req)
 	return backupCurrentGroup(ctx, req)
 }
 
@@ -52,7 +53,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 
 // BackupGroup backs up the group specified in the backup request.
 func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) {
-	glog.V(2).Infof("Sending backup request: %+v\n", in)
+	x.LogVXf(2, "Sending backup request: %+v\n", in)
 	if groups().groupId() == in.GroupId {
 		return backupCurrentGroup(ctx, in)
 	}

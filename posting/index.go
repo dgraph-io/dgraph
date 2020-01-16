@@ -523,7 +523,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
 	defer os.RemoveAll(tmpParentDir)
-	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", tmpIndexDir)
+	x.LogVXf(1, "Rebuilding indexes using the temp folder %s\n", tmpIndexDir)
 
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
@@ -620,7 +620,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		r.attr, time.Since(start))
 
 	// Now we write all the created posting lists to disk.
-	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
+	x.LogVXf(1, "Rebuilding index for predicate %s: writing index to badger", r.attr)
 	start = time.Now()
 	defer func() {
 		glog.V(1).Infof("Rebuilding index for predicate %s: writing index took: %v\n",
@@ -664,7 +664,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
+	x.LogVXf(1, "Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
 	return writer.Flush()
 }
 

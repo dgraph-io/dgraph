@@ -181,7 +181,7 @@ func (g *groupi) informZeroAboutTablets() {
 			}
 		}
 		if !failed {
-			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
+			x.LogVXf(1, "Done informing Zero about the %d tablets I have", len(preds))
 			return
 		}
 	}
@@ -203,7 +203,7 @@ func (g *groupi) proposeInitialSchema() {
 			g.upsertSchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			x.LogVXf(1, "Skipping initial schema upsert for predicate %s", s.Predicate)
 			continue
 		}
 	}
@@ -308,7 +308,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			g.tablets[tablet.Predicate] = tablet
 		}
 		if gid == g.groupId() {
-			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
+			x.LogVXf(3, "group %d checksum: %d", g.groupId(), group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
@@ -608,7 +608,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	if pl != nil {
 		return pl
 	}
-	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
+	x.LogVXf(1, "No healthy Zero leader found. Trying to find a Zero leader...")
 
 	getLeaderConn := func(zc pb.ZeroClient) *conn.Pool {
 		ctx, cancel := context.WithTimeout(g.ctx, 10*time.Second)
@@ -616,7 +616,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 
 		connState, err := zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
 		if err != nil || connState == nil {
-			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			x.LogVXf(1, "While retrieving Zero leader info. Error: %v. Retrying...", err)
 			return nil
 		}
 		for _, mz := range connState.State.GetZeros() {
@@ -640,15 +640,15 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 			pl = conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
-			glog.V(1).Infof("No healthy Zero server found. Retrying...")
+			x.LogVXf(1, "No healthy Zero server found. Retrying...")
 			continue
 		}
 		zc := pb.NewZeroClient(pl.Get())
 		if pl := getLeaderConn(zc); pl != nil {
-			glog.V(1).Infof("Found connection to leader: %s", pl.Addr)
+			x.LogVXf(1, "Found connection to leader: %s", pl.Addr)
 			return pl
 		}
-		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")
+		x.LogVXf(1, "Unable to connect to a healthy Zero leader. Retrying...")
 	}
 }
 

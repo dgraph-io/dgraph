@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -99,7 +98,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 			}
 			if time.Now().After(deadline) {
 				err := errors.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
-				glog.V(2).Infof("verifyUid returned error: %v", err)
+				x.LogVXf(2, "verifyUid returned error: %v", err)
 				return err
 			}
 		case <-ctx.Done():
