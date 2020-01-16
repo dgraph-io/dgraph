@@ -1179,11 +1179,11 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 
 	// The addCountry2 mutation should also remove the state "ABC" from country1's states list
 	addCountryParams := &GraphQLParams{
-		Query: `mutation addCountry($input: [AddCountryInput!]!) {
-			addCountry1: addCountry(input: $input) {
+		Query: `mutation addCountry($input: AddCountryInput!) {
+			addCountry1: addCountry(input: [$input]) {
 				country { id }
 			}
-			addCountry2: addCountry(input: $input) {
+			addCountry2: addCountry(input: [$input]) {
 				country {
 					id
 					states {
@@ -1200,10 +1200,10 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 
 	var addResult struct {
 		AddCountry1 struct {
-			Country *country
+			Country []*country
 		}
 		AddCountry2 struct {
-			Country *country
+			Country []*country
 		}
 	}
 
@@ -1211,16 +1211,16 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 	require.NoError(t, err)
 
 	// Country1 doesn't have "ABC" in it's states list
-	requireCountry(t, addResult.AddCountry1.Country.ID,
+	requireCountry(t, addResult.AddCountry1.Country[0].ID,
 		&country{Name: "A Country", States: []*state{}},
 		true, executeRequest)
 
 	// Country 2 has the state
-	requireCountry(t, addResult.AddCountry2.Country.ID,
+	requireCountry(t, addResult.AddCountry2.Country[0].ID,
 		&country{Name: "A Country", States: []*state{{Name: "Alphabet", Code: "ABC"}}},
 		true, executeRequest)
 
-	cleanUp(t, []*country{addResult.AddCountry1.Country, addResult.AddCountry2.Country}, nil, nil)
+	cleanUp(t, []*country{addResult.AddCountry1.Country[0], addResult.AddCountry2.Country[0]}, nil, nil)
 }
 
 func updateMutationReferences(t *testing.T) {
@@ -1310,10 +1310,10 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 	// and check that it's gone from newCountry
 
 	updateCountryParams := &GraphQLParams{
-		Query: `mutation updateCountry($id: ID!, $set: PatchCountry!) {
+		Query: `mutation updateCountry($id: ID!, $set: CountryPatch!) {
 			updateCountry(
 				input: {
-					filter: {ids: [$id]},
+					filter: {id: [$id]},
 					set: $set
 				}
 			) {
