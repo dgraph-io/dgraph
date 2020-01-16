@@ -711,22 +711,134 @@ testList: [string] .
 
 Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 
+```graphql
+{
+  q(func: has(testList)) {
+    uid
+    testList
+  }
+}
+```
+
 ```JSON
 {
-   "uid": "0xd", #UID of the list.
-   "testList": "Apple"
+  "delete": {
+    "uid": "0x6", #UID of the list.
+    "testList": "Apple"
+  }
+}
+```
+
+Also you can delete multiple values
+
+```JSON
+{
+  "delete": {
+    "uid": "0x6",
+    "testList": [
+          "Strawberry",
+          "Banana",
+          "watermelon"
+        ]
+  }
 }
 ```
 
 {{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
 
-
 Add another fruit:
 
 ```JSON
 {
-   "uid": "0xd", #UID of the list.
+   "uid": "0x6", #UID of the list.
    "testList": "Pineapple"
+}
+```
+
+### Facets in List-type with JSON
+
+Schema:
+
+```RDF
+<name>: string .
+<nickname>: [string] .
+```
+
+To create a List-type you need to create it by inserting multiple nodes. You cannot create a single node with all values and facets in a single block all together. For each value in the list, you must create a new node using the blank-node reference created for this list. E.g.
+
+```JSON
+{
+  "set": [
+    {
+      "uid": "_:Julian",
+      "name": "Julian",
+      "nickname|kind": "first",
+      "nickname": "Jay-Jay"
+    },
+    {
+      "uid": "_:Julian",
+      "nickname|kind": "official",
+      "nickname": "Jules"
+    },
+    {
+      "uid": "_:Julian",
+      "nickname|kind": "CS-GO",
+      "nickname": "JB"
+    }
+  ]
+}
+```
+
+So, above you see that we have three values ​​to enter the list. And they are separated into three blocks in the mutation. They are related to each other in an abstract node via blank-node `"uid": "_:Julian",`.
+
+You can run this query to check the list with facets:
+
+```graphql
+{
+   q(func: has(nickname)) @filter(eq(name,"Julian")) {
+    uid
+    nickname @facets
+   }
+}
+```
+
+Later, If you wanna add more values ​​with facets. Just do the same procedure, but this time instead of using Blank-node you will use the actual node's UID.
+
+```JSON
+{
+  "set": [
+    {
+      "uid": "0x3",
+      "nickname|kind": "Internet",
+      "nickname": "@JJ"
+    }
+  ]
+}
+```
+
+And the final result is:
+
+```JSON
+{
+  "data": {
+    "q": [
+      {
+        "uid": "0x3",
+        "nickname|kind": {
+          "0": "first",
+          "1": "Internet",
+          "2": "official",
+          "3": "CS-GO"
+        },
+        "nickname": [
+          "Jay-Jay",
+          "@JJ",
+          "Jules",
+          "JB"
+        ]
+      }
+    ]
+  }
 }
 ```
 
