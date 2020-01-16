@@ -1220,7 +1220,8 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 		&country{Name: "A Country", States: []*state{{Name: "Alphabet", Code: "ABC"}}},
 		true, executeRequest)
 
-	cleanUp(t, []*country{addResult.AddCountry1.Country[0], addResult.AddCountry2.Country[0]}, nil, nil)
+	cleanUp(t, []*country{addResult.AddCountry1.Country[0], addResult.AddCountry2.Country[0]}, nil,
+		nil)
 }
 
 func updateMutationReferences(t *testing.T) {
