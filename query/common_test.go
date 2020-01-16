@@ -294,7 +294,9 @@ noindex_age                    : int .
 noindex_dob                    : datetime .
 noindex_alive                  : bool .
 noindex_salary                 : float .
-language                       : [string] .
+language                       : [string] .\
+name_lang_index                : string @index(exact) @lang .
+name_index                	   : string @index(exact) .
 `
 
 func populateCluster() {
@@ -307,6 +309,19 @@ func populateCluster() {
 	testutil.AssignUids(100000)
 
 	err = addTriplesToCluster(`
+
+	<10101> <name_lang_index> "zon"@sv .
+	<10101> <name_lang_index> "öffnen"@de .
+	<10102> <name_lang_index> "öppna"@sv .
+	<10102> <name_lang_index> "zumachen"@de .
+
+
+	<10103> <name_index> "zon" .
+	<10104> <name_index> "öffnen" .
+	<10105> <name_index> "öppna" .
+	<10106> <name_index> "zumachen" .
+
+
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
