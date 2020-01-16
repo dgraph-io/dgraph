@@ -212,9 +212,9 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 ## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates.{{% /notice %}}
-
 Functions allow filtering based on properties of nodes or variables.  Functions can be applied in the query root or in filters.
+
+{{% notice "note" %}}At query root, functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates. For applying comparision functions (`eq`, `ge`, `gt`, `le`, `lt`) at filter, predicates need not necessarily be indexed. But using filters on non-indexed predicate could potentially slow down your query. Other fucntions require predicates to be indexed even at filter.{{% /notice %}}
 
 For functions on string valued predicates, if no language preference is given, the function is applied to all languages and strings without a language tag; if a language preference is given, the function is applied only to strings of the given language.
 
@@ -468,7 +468,7 @@ Syntax Examples:
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
-Index Required: An index is required for the `eq(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index Required: An index is required for the `eq(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -530,7 +530,7 @@ With `IE` replaced by
 
 Schema Types: `int`, `float`, `string`, `dateTime`
 
-Index required: An index is required for the `IE(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index required: An index is required for the `IE(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
