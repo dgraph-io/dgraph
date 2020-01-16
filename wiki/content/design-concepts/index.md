@@ -28,7 +28,8 @@ them in a Raft group.
 - The transactions are cluster-wide (not key-only, or any other "crippled" version of them).
 - Transactions are lockless. They don't block/wait on seeing pending writes by uncommitted transactions. Zero would choose to commit or abort them depending on conflicts.
 - Transactions are based on Snapshot Isolation (not Serializable Snapshot Isolation), because conflicts are determined by writes (not reads).
-- Dgraph supports cluster-wide Linearizable Reads. Any commits at timestamp Tc are guaranteed to be seen by a following read at timestamp Tr (by any client), if Tr > Tc.
+- Dgraph hands out monotonically increasing timestamps (for transactions). Ergo, if any transaction Tx1 commits before Tx2 starts, then Ts_commit(Tx1) < Ts_start(Tx2).
+- Any commit at Tc are guaranteed to be seen by a read at timestamp Tr by any client, if Tr > Tc.
 - All reads are snapshots across the entire cluster, seeing all previously committed transactions in full.
 
 ---
