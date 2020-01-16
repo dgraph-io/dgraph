@@ -20,10 +20,25 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 )
 
-// ConsensusEngineId is a 4-character identifier of the consensus engine that produced the digest.
-type ConsensusEngineId [4]byte
+// ConsensusEngineID is a 4-character identifier of the consensus engine that produced the digest.
+type ConsensusEngineID [4]byte
 
-var BabeEngineId = ConsensusEngineId{'B', 'A', 'B', 'E'}
+// NewConsensusEngineID casts a byte array to ConsensusEngineID
+// if the input is longer than 4 bytes, it takes the first 4 bytes
+func NewConsensusEngineID(in []byte) (res ConsensusEngineID) {
+	res = [4]byte{}
+	copy(res[:], in)
+	return res
+}
+
+// ToBytes turns ConsensusEngineID to a byte array
+func (h ConsensusEngineID) ToBytes() []byte {
+	b := [4]byte(h)
+	return b[:]
+}
+
+// BabeEngineID is the hard-coded babe ID
+var BabeEngineID = ConsensusEngineID{'B', 'A', 'B', 'E'}
 
 var ChangesTrieRootDigestType = byte(0)
 var PreRuntimeDigestType = byte(1)
@@ -53,7 +68,7 @@ func (d *ChangesTrieRootDigest) Encode() []byte {
 
 // PreRuntimeDigest contains messages from the consensus engine to the runtime.
 type PreRuntimeDigest struct {
-	ConsensusEngineId ConsensusEngineId
+	ConsensusEngineID ConsensusEngineID
 	Data              []byte
 }
 
@@ -63,13 +78,13 @@ func (d *PreRuntimeDigest) Type() byte {
 
 func (d *PreRuntimeDigest) Encode() []byte {
 	enc := []byte{PreRuntimeDigestType}
-	enc = append(enc, d.ConsensusEngineId[:]...)
+	enc = append(enc, d.ConsensusEngineID[:]...)
 	return append(enc, d.Data...)
 }
 
 // ConsensusDigest contains messages from the runtime to the consensus engine.
 type ConsensusDigest struct {
-	ConsensusEngineId ConsensusEngineId
+	ConsensusEngineID ConsensusEngineID
 	Data              []byte
 }
 
@@ -79,13 +94,13 @@ func (d *ConsensusDigest) Type() byte {
 
 func (d *ConsensusDigest) Encode() []byte {
 	enc := []byte{ConsensusDigestType}
-	enc = append(enc, d.ConsensusEngineId[:]...)
+	enc = append(enc, d.ConsensusEngineID[:]...)
 	return append(enc, d.Data...)
 }
 
 // SealDigest contains the seal or signature. This is only used by native code.
 type SealDigest struct {
-	ConsensusEngineId ConsensusEngineId
+	ConsensusEngineID ConsensusEngineID
 	Data              []byte
 }
 
@@ -95,6 +110,6 @@ func (d *SealDigest) Type() byte {
 
 func (d *SealDigest) Encode() []byte {
 	enc := []byte{SealDigestType}
-	enc = append(enc, d.ConsensusEngineId[:]...)
+	enc = append(enc, d.ConsensusEngineID[:]...)
 	return append(enc, d.Data...)
 }

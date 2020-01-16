@@ -285,7 +285,7 @@ func (b *Session) buildBlockSeal(header *types.BlockHeader) (*types.SealDigest, 
 	}
 
 	return &types.SealDigest{
-		ConsensusEngineId: types.BabeEngineId,
+		ConsensusEngineID: types.BabeEngineID,
 		Data:              sig,
 	}, nil
 }
@@ -300,7 +300,7 @@ func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error
 	encBabeHeader := babeHeader.Encode()
 
 	return &types.PreRuntimeDigest{
-		ConsensusEngineId: types.BabeEngineId,
+		ConsensusEngineID: types.BabeEngineID,
 		Data:              encBabeHeader,
 	}, nil
 }
@@ -343,7 +343,7 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*tx.ValidTransaction, error
 			// remove invalid extrinsic from queue
 			b.txQueue.Pop()
 
-			// readd previously popped extrinsics back to queue
+			// re-add previously popped extrinsics back to queue
 			b.addToQueue(included)
 
 			return nil, errors.New("could not apply extrinsic")

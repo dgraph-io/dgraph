@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"bytes"
+	"encoding/hex"
 	"math/big"
 	"reflect"
 	"testing"
@@ -600,4 +601,52 @@ func TestDecodeTransactionMessageTwoExtrinsics(t *testing.T) {
 	if !reflect.DeepEqual(*decodedMessage, expected) {
 		t.Fatalf("Fail: got: %v expected %v", *decodedMessage, expected)
 	}
+}
+
+func TestDecodeConsensusMessage(t *testing.T) {
+	ConsensusEngineID := types.BabeEngineID
+
+	testID := hex.EncodeToString(types.BabeEngineID.ToBytes())
+	testData := "03100405"
+
+	msg := "0x" + testID + testData // 0x4241424503100405
+
+	encMsg, err := common.HexToBytes(msg)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf := &bytes.Buffer{}
+	buf.Write(encMsg)
+
+	m := new(ConsensusMessage)
+	err = m.Decode(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := hex.DecodeString(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &ConsensusMessage{
+		ConsensusEngineID: ConsensusEngineID,
+		Data:              out,
+	}
+
+	if !reflect.DeepEqual(m, expected) {
+		t.Fatalf("Fail: got %v expected %v", m, expected)
+	}
+
+	encodedMessage, err := expected.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(encodedMessage[1:], encMsg) {
+		t.Fatalf("Fail: got %v expected %v", encodedMessage[1:], encMsg)
+	}
+
 }
