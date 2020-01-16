@@ -89,7 +89,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 }
 
 func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
-	b.WriteString("uid(")
+	x.Check2(b.WriteString("uid("))
 	if len(uids) > 0 {
 		// uid function with uint64 - uid(0x123, 0x456, ...)
 		for i, uid := range uids {
