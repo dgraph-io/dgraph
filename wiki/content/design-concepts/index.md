@@ -20,8 +20,23 @@ transaction altogether despite it having been considered committed.
 Therefore, pre-writes do have to make it to disk. And if so, better to propose
 them in a Raft group.
 
+## Consistency Model
+
+[Update on Jan 15, 2020]
+
+- Dgraph supports MVCC, Read Snapshots and Distributed ACID transactions.
+- The transactions are cluster-wide (not key-only, or any other "crippled" version of them).
+- Transactions are lockless. They don't block/wait on seeing pending writes by uncommitted transactions. Zero would choose to commit or abort them depending on conflicts.
+- Transactions are based on Snapshot Isolation (not Serializable Snapshot Isolation), because conflicts are determined by writes (not reads).
+- Dgraph supports cluster-wide Linearizable Reads. Any commits at timestamp Tc are guaranteed to be seen by a following read at timestamp Tr (by any client), if Tr > Tc.
+- All reads are snapshots across the entire cluster, seeing all previously committed transactions in full.
+
+---
+
+{{% notice "outdated" %}}Sections below this one are outdated. You will find [Tour of Dgraph](https://tour.dgraph.io) a much helpful resource.{{% /notice %}}
+
 ## Consistency Models
-[Last updated: Mar 2018]
+[Last updated: Mar 2018. This is outdated and is not how we do things anymore]
 Basing it [on this
 article](https://aphyr.com/posts/313-strong-consistency-models) by aphyr.
 
@@ -61,10 +76,6 @@ it would be visible to all future readers, irrespective of client boundaries.
 
 - **Causal consistency:** Dgraph does not have a concept of dependencies among transactions. So, does NOT order based on dependencies.
 - **Serializable consistency:** Dgraph does NOT allow arbitrary reordering of transactions, but does provide a linear order per key.
-
----
-
-{{% notice "outdated" %}}Sections below this one are outdated. You will find [Tour of Dgraph](https://tour.dgraph.io) a much helpful resource.{{% /notice %}}
 
 ## Concepts
 
