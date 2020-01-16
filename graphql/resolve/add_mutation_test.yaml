@@ -548,8 +548,14 @@
       Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
-      Post6 as Post6(func: uid(0x124)) @filter(type(Post)) {
+      var(func: uid(Post3)) {
+        Author4 as Post.author
+      }
+      Post7 as Post7(func: uid(0x124)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post7)) {
+        Author8 as Post.author
       }
     }
   dgmutations:
@@ -576,31 +582,53 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author4)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post3)"
+              }
+            ]
+          }
+        ]
       cond: "@if(eq(len(Post3), 1))"
     - setjson: |
-        { "uid": "_:Author4",
+        { "uid": "_:Author5",
           "dgraph.type": [ "Author" ],
           "Author.name": "Different Author",
           "Author.dob": "2000-01-01",
           "Author.posts": [
             {
-              "uid": "_:Post5",
+              "uid": "_:Post6",
               "dgraph.type": [ "Post" ],
               "Post.title": "New new post",
               "Post.text": "A wonderful post",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             },
             {
               "uid": "0x124",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             }
           ]
         }
-      cond: "@if(eq(len(Post6), 1))"
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author8)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post7)"
+              }
+            ]
+          }
+        ]
+      cond: "@if(eq(len(Post7), 1))"
 
 -
   name: "Deep add with two existing"

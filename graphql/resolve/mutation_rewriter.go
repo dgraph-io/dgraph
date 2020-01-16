@@ -212,7 +212,6 @@ func (mrw *addRewriter) handleMultipleMutations(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fmt.Printf("obj: %+v\n", obj)
 		frag := rewriteObject(mutatedType, nil, "", &varGen, true, obj)
 		mrw.frags = append(mrw.frags, frag)
 
@@ -227,7 +226,6 @@ func (mrw *addRewriter) handleMultipleMutations(
 				}
 				return nil, nil
 			})
-		fmt.Printf("mutations: %+v\n", mutations)
 
 		errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 			"failed to rewrite mutation payload"))
@@ -477,6 +475,10 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 		Var:  mutationQueryVar,
 		Attr: m.ResponseName(),
 	}
+	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
+	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
+		Attr: "uid",
+	})
 
 	// TODO - Cache this instead of this being a loop to find the IDField.
 	if ids := idFilter(m, m.MutatedType().IDField()); ids != nil {
