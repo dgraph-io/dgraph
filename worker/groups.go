@@ -329,6 +329,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 
 		for _, member := range g.state.GetRemoved() {
+			// TODO: This leader check can be done once instead of repeatedly.
 			if member.GetGroupId() == g.Node.gid && g.Node.AmLeader() {
 				go func() {
 					// Don't try to remove a member if it's already marked as removed in
