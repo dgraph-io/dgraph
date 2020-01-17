@@ -57,8 +57,8 @@ The official C# client [can be found here](https://github.com/dgraph-io/Dgraph-d
 and it fully supports Dgraph v1.1.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/Dgraph-dotnet#readme) to get it up and running.
 
-We also have [example](https://github.com/dgraph-io/Dgraph-dotnet/tree/master/source/Dgraph-dotnet.examples)
-projects, which contains an working examples of how to use the C# client.
+The [example]([example](https://github.com/dgraph-io/Dgraph-dotnet/tree/master/source/Dgraph-dotnet.examples)
+page contains working examples of how to use this client.
 
 ## Go
 
