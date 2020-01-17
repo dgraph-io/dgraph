@@ -1849,7 +1849,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 
-			preds = getPredicatesFromTypes(typeNames)
+			preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
 		default:
 			if len(child.ExpandPreds) > 0 {
 				span.Annotate(nil, "expand default")
@@ -1857,7 +1857,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				preds = getPredsFromVals(child.ExpandPreds)
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
-				preds = getPredicatesFromTypes(typeNames)
+				preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
 			}
 		}
 		preds = uniquePreds(preds)
@@ -1917,6 +1917,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var suffix string
+	fmt.Println("%+v", sg)
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
 	}
@@ -2492,6 +2493,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 		SrcUIDs: sg.DestUIDs,
 		ReadTs:  sg.ReadTs,
 	}
+	temp.Params.Namespace = sg.Params.Namespace
 	taskQuery, err := createTaskQuery(temp)
 	if err != nil {
 		return nil, err
@@ -2504,11 +2506,11 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
-func getPredicatesFromTypes(typeNames []string) []string {
+func getPredicatesFromTypes(namespace string, typeNames []string) []string {
 	var preds []string
 
 	for _, typeName := range typeNames {
-		typeDef, ok := schema.State().GetType(typeName)
+		typeDef, ok := schema.State().GetType(x.GenerateAttr(namespace, typeName))
 		if !ok {
 			continue
 		}

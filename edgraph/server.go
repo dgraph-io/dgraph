@@ -79,6 +79,17 @@ const (
 // Server implements protos.DgraphServer
 type Server struct{}
 
+func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	schemas := schema.InitialSchema()
+	for _, schema := range schemas {
+		schema.Predicate = x.GenerateAttr(namespace, schema.Predicate)
+	}
+	m.Schema = schemas
+	_, err := query.ApplyMutations(ctx, namespace, m)
+	return err
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
@@ -127,7 +138,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, m)
+		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 
 		// recreate the admin account after a drop all operation
 		ResetAcl()
@@ -140,7 +151,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, m)
+		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 
 		// recreate the admin account after a drop data operation
 		ResetAcl()
@@ -178,7 +189,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, m)
+		_, err = query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}
 
@@ -189,7 +200,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
-		_, err := query.ApplyMutations(ctx, m)
+		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}
 
@@ -229,7 +240,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 	}
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, m)
+	_, err = query.ApplyMutations(ctx, op.Namespace, m)
 	return empty, err
 }
 
@@ -291,7 +302,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, m)
+	resp.Txn, err = query.ApplyMutations(ctx, qc.namespace, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 	if !qc.req.CommitNow {
 		if err == zero.ErrConflict {

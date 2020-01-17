@@ -21,8 +21,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -559,6 +561,22 @@ func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx
+}
+
+// namespaceHandler will helps to create namespace
+func namespaceHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["namespace"]
+
+	if !ok || len(keys[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
+		return
+	}
+	namespace := keys[0]
+	err := (&edgraph.Server{}).CreateNamespace(context.Background(), namespace)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintf(w, "Name = %s\n", "ok")
 }
 
 func alterHandler(w http.ResponseWriter, r *http.Request) {

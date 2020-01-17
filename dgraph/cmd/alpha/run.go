@@ -445,6 +445,7 @@ func setupServer() {
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/namespace", namespaceHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)

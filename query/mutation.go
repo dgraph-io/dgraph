@@ -35,8 +35,8 @@ import (
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
-func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	edges, err := expandEdges(ctx, m)
+func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
+	edges, err := expandEdges(ctx, namespace, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
@@ -51,7 +51,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
@@ -68,7 +68,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes(types)...)
+			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
 			preds = append(preds, x.ReservedPredicates()...)
 		}
 

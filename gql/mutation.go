@@ -196,6 +196,7 @@ func (nq NQuad) ToEdgeUsing(namespace string, newToUid map[string]uint64) (*pb.D
 		edge = nq.CreateUidEdge(namespace, sUid, oUid)
 	case x.ValuePlain, x.ValueMulti:
 		edge, err = nq.CreateValueEdge(namespace, sUid)
+
 	default:
 		return &emptyEdge, errors.Errorf("Unknown value type for nquad: %+v", nq)
 	}
