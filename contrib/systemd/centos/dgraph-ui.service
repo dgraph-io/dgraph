@@ -1,5 +1,5 @@
 [Unit]
-Description=dgraph.io UI server
+Description=dgraph.io Web UI
 Wants=network.target
 After=network.target
 
