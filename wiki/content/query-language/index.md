@@ -212,9 +212,19 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 ## Functions
 
-Functions allow filtering based on properties of nodes or variables.  Functions can be applied in the query root or in filters.
+Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
 
-{{% notice "note" %}}At query root, functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates. For applying comparision functions (`eq`, `ge`, `gt`, `le`, `lt`) at filter, predicates need not necessarily be indexed. But using filters on non-indexed predicate could potentially slow down your query. Other fucntions require predicates to be indexed even at filter.{{% /notice %}}
+{{% notice "note" %}}Support for filters on non-indexed predicates was added with Dgraph `v1.2.0`.
+{{% /notice %}}
+
+Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func:`) can only
+be applied on [indexed predicates]({{< relref "#indexing">}}). Since v1.2, comparison functions
+can now be used on [@filter]({{<relref "#applying-filters">}}) directives even on predicates
+that have not been indexed.
+Filtering on non-indexed predicates can be slow for large datasets, as they require
+iterating over all of the possible values at the level where the filter is being used.
+
+All other functions, in the query root or in the filter can only be applied to indexed predicates.
 
 For functions on string valued predicates, if no language preference is given, the function is applied to all languages and strings without a language tag; if a language preference is given, the function is applied only to strings of the given language.
 
