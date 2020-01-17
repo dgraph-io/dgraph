@@ -18,6 +18,8 @@ package posting
 
 import (
 	"context"
+	"fmt"
+	_ "fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -489,8 +491,7 @@ func TestMillion(t *testing.T) {
 	}
 }
 
-const N int = 100000
-
+const N int = 200000
 var ts uint64
 
 func TestParallelMillion(t *testing.T) {
@@ -508,43 +509,33 @@ func TestParallelMillion(t *testing.T) {
 	done2 := make(chan bool)
 	go readpl(t, key, done2)
 
-	commits := <-commit
+	//commits := <-commit
+	_ = <-commit
 	done1 <- true
 	done2 <- true
 
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
+	//t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
-	t.Logf("Completed a %v writes. Commits = %v. minTs = %v, ts = %v\n", N, commits, ol.minTs, atomic.LoadUint64(&ts))
-
-	opt := ListOptions{ReadTs: uint64(N + 1)}
-	l, err := ol.Uids(opt)
-	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
-		require.Equal(t, uint64(i+1)*2, uid)
-	}
+	val, err := ol.Value(uint64(2*N + 1))
+	fmt.Printf("Final Value = %v", val)
 }
 
 func mutate(t *testing.T, key []byte, commitCh chan int) {
-	var commits int
-	for i := 2; i <= N; i += 2 {
+	for i := 0; i < N; i++ {
 		startTs := atomic.AddUint64(&ts, 2)
-		j := uint64(i)
-		addEdgeToUID(t, "bal", 1331, j, startTs-1, startTs)
-		commits++
-
-		if i%10 == 0 {
-			t.Logf("mutation at i = %v", i)
+		addEdgeToValue(t, "bal", 1331, strconv.Itoa(i), startTs-1, startTs)
+		if i%10000 == 0 {
+			fmt.Printf("mutate at %v\n", i)
 		}
 	}
-	commitCh <- commits
+	commitCh <- 1
 	return
 }
 
@@ -553,10 +544,9 @@ func rolluplocal(t *testing.T, key []byte, done chan bool) {
 	for {
 		ol, err := getNew(key, ps)
 		require.NoError(t, err)
-		t.Logf("Rolling up posting list. minTs = %v\n", ol.minTs)
+		//fmt.Printf("Rolling up posting list\n")
 		kvs, err := ol.Rollup()
 		require.NoError(t, err)
-		// writer.Write the keys
 		for _, kv := range kvs {
 			require.NoError(t, writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version))
 		}
@@ -572,38 +562,37 @@ func rolluplocal(t *testing.T, key []byte, done chan bool) {
 }
 
 func readpl(t *testing.T, key []byte, done chan bool) {
-	lastUID := uint64(0)
+	var oldint int
 	for {
-
-		// ol, err := getNew(key, ps)
-		// require.NoError(t, err)
-		// readTs := atomic.LoadUint64(&ts)
-
-		// val, err := ol.Value(readTs)
-		// Handle error
-		// Check that the value is not nil. And that val is >= last one read.
+		time.Sleep(time.Millisecond * 25)
 
 		ol, err := getNew(key, ps)
 		require.NoError(t, err)
 
 		readTs := atomic.LoadUint64(&ts)
-		t.Logf("Reading at ts = %v", readTs)
-		opt := ListOptions{ReadTs: readTs}
-		l, err := ol.Uids(opt)
-		require.NoError(t, err)
-
-		if len(l.Uids) > 0 {
-			newUID := l.Uids[len(l.Uids)-1]
-			require.GreaterOrEqual(t, newUID, lastUID)
-			lastUID = newUID
+		//fmt.Printf("Reading at ts = %v\n", readTs)
+		newVal, err := ol.Value(readTs)
+		if err != nil {
+			continue
 		}
+		newint, _ := strconv.Atoi(string(newVal.Value.([]byte)))
+
+		if oldint != 0 {
+			//fmt.Printf("%v\n", newint)
+			if newint < oldint {
+				fmt.Printf("Value decreased, old val = %v, new val = %v", oldint, newint)
+				os.Exit(1)
+			}
+			//require.GreaterOrEqual(t, comp, 0)   <--- not working, code seems to hang.
+		}
+
+		oldint = newint
 
 		select {
 		case <-done:
 			return
 		default:
 		}
-		time.Sleep(time.Millisecond * 25)
 	}
 }
 
