@@ -63,7 +63,7 @@ journalctl -u dgraph-alpha.service -r
 journalctl -u dgraph-ui.service -r
 ```
 
-You can also let the terminal following the logs.
+You can also follow the logs using journalctl -f:
 
 ```Bash
 journalctl -f -u dgraph-zero.service
