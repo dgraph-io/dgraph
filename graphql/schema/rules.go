@@ -245,7 +245,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 		)
 	}
 
-	if errMsg := isInverse(typ.Name, field.Name, invTypeName, invField); errMsg != "" {
+	if errMsg := isInverse(sch, typ.Name, field.Name, invTypeName, invField); errMsg != "" {
 		return gqlerror.ErrorPosf(dir.Position, errMsg)
 	}
 
@@ -270,8 +270,16 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	return nil
 }
 
-func isInverse(expectedInvType, expectedInvField, typeName string,
+func isInverse(sch *ast.Schema, expectedInvType, expectedInvField, typeName string,
 	field *ast.FieldDefinition) string {
+
+	// We might have copied this directive in from an interface we are implementing.
+	// If so, make the check for that interface.
+	parentInt := parentInterface(sch, sch.Types[expectedInvType], expectedInvField)
+	if parentInt != nil &&
+		parentInt.Fields.ForName(expectedInvField).Directives.ForName(inverseDirective) != nil {
+		expectedInvType = parentInt.Name
+	}
 
 	invType := field.Type.Name()
 	if invType != expectedInvType {

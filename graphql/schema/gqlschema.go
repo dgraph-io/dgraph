@@ -233,9 +233,7 @@ var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gq
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
 	for _, d := range src.Directives {
-		if d.Name != inverseDirective {
-			dirs = append(dirs, d)
-		}
+		dirs = append(dirs, d)
 	}
 
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
