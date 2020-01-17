@@ -251,23 +251,49 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 
 	invDirective := invField.Directives.ForName(inverseDirective)
 	if invDirective == nil {
-		invField.Directives = append(invField.Directives, &ast.Directive{
-			Name: inverseDirective,
-			Arguments: []*ast.Argument{
-				{
-					Name: inverseArg,
-					Value: &ast.Value{
-						Raw:      field.Name,
-						Position: dir.Position,
-						Kind:     ast.EnumValue,
+		addDirective := func(fld *ast.FieldDefinition) {
+			fld.Directives = append(fld.Directives, &ast.Directive{
+				Name: inverseDirective,
+				Arguments: []*ast.Argument{
+					{
+						Name: inverseArg,
+						Value: &ast.Value{
+							Raw:      field.Name,
+							Position: dir.Position,
+							Kind:     ast.EnumValue,
+						},
 					},
 				},
-			},
-			Position: dir.Position,
-		})
+				Position: dir.Position,
+			})
+		}
+
+		addDirective(invField)
+
+		// If it was an interface, we also need to copy the @hasInverse directive
+		// to all implementing types
+		if invType.Kind == ast.Interface {
+			for _, t := range sch.Types {
+				if implements(t, invType) {
+					f := t.Fields.ForName(invFieldName)
+					if f != nil {
+						addDirective(f)
+					}
+				}
+			}
+		}
 	}
 
 	return nil
+}
+
+func implements(typ *ast.Definition, intfc *ast.Definition) bool {
+	for _, t := range typ.Interfaces {
+		if t == intfc.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func isInverse(sch *ast.Schema, expectedInvType, expectedInvField, typeName string,
