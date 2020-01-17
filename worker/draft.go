@@ -364,6 +364,22 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 	case len(proposal.CleanPredicate) > 0:
 		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
+		end := time.Now().Add(10 * time.Second)
+		for proposal.ExpectedChecksum > 0 && time.Now().Before(end) {
+			cur := atomic.LoadUint64(&groups().membershipChecksum)
+			if proposal.ExpectedChecksum == cur {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+			glog.Infof("Waiting for checksums to match. Expected: %d. Current: %d\n",
+				proposal.ExpectedChecksum, cur)
+		}
+		if time.Now().After(end) {
+			glog.Warningf(
+				"Giving up on predicate deletion: %q due to timeout. Wanted checksum: %d.",
+				proposal.CleanPredicate, proposal.ExpectedChecksum)
+			return nil
+		}
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	case proposal.Delta != nil:

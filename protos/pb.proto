@@ -270,6 +270,7 @@ message Proposal {
 	OracleDelta delta      = 8;
 	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
 	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
 }
 
 message KVS {
