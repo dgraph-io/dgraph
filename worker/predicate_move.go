@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"sync/atomic"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -193,25 +191,14 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errEmptyPredicate
 	}
 
-	// This loop ensures that we have seen the latest membership update following the move where
-	// this predicate now belongs to another group. Without this check, this group could end up
-	// serving transactions asking for this predicate, even after this tablet has been deleted. This
-	// issue is known to have caused Jepsen failures.
-	for in.ExpectedChecksum > 0 {
-		cur := atomic.LoadUint64(&groups().membershipChecksum)
-		if in.ExpectedChecksum == cur {
-			break
-		}
-		if ctx.Err() != nil {
-			return &emptyPayload, ctx.Err()
-		}
-		glog.Infof("Waiting for checksums to match. Expected: %d. Current: %d\n",
-			in.ExpectedChecksum, cur)
-		time.Sleep(time.Second)
-	}
 	if in.DestGid == 0 {
 		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
-		p := &pb.Proposal{CleanPredicate: in.Predicate}
+		// Expected Checksum ensures that all the members of this group would block until they get
+		// the latest membership status where this predicate now belongs to another group. So they
+		// know that they are no longer serving this predicate, before they delete it from their
+		// state. Without this checksum, the members could end up deleting the predicate and then
+		// serve a request asking for that predicate, causing Jepsen failures.
+		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
