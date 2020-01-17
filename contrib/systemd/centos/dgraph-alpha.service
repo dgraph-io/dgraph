@@ -15,4 +15,3 @@ Group=dgraph
 
 [Install]
 WantedBy=multi-user.target
-
