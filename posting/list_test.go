@@ -491,9 +491,8 @@ func TestMillion(t *testing.T) {
 	}
 }
 
-const N int = 200000
+const N int = 100000
 var ts uint64
-
 func TestParallelMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
 	maxListSize = math.MaxInt32
@@ -502,17 +501,12 @@ func TestParallelMillion(t *testing.T) {
 
 	commit := make(chan int)
 	go mutate(t, key, commit)
-
 	done1 := make(chan bool)
 	go rolluplocal(t, key, done1)
+	go readpl(t, key)
 
-	done2 := make(chan bool)
-	go readpl(t, key, done2)
-
-	//commits := <-commit
 	_ = <-commit
 	done1 <- true
-	done2 <- true
 
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
@@ -524,7 +518,7 @@ func TestParallelMillion(t *testing.T) {
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
 	val, err := ol.Value(uint64(2*N + 1))
-	fmt.Printf("Final Value = %v", val)
+	t.Logf("Final Value = %v", val)
 }
 
 func mutate(t *testing.T, key []byte, commitCh chan int) {
@@ -561,7 +555,7 @@ func rolluplocal(t *testing.T, key []byte, done chan bool) {
 	}
 }
 
-func readpl(t *testing.T, key []byte, done chan bool) {
+func readpl(t *testing.T, key []byte) {
 	var oldint int
 	for {
 		time.Sleep(time.Millisecond * 25)
@@ -576,23 +570,13 @@ func readpl(t *testing.T, key []byte, done chan bool) {
 			continue
 		}
 		newint, _ := strconv.Atoi(string(newVal.Value.([]byte)))
-
 		if oldint != 0 {
-			//fmt.Printf("%v\n", newint)
 			if newint < oldint {
-				fmt.Printf("Value decreased, old val = %v, new val = %v", oldint, newint)
-				os.Exit(1)
+				fmt.Printf("Value decreased, old val = %v, new val = %v\n", oldint, newint)
 			}
-			//require.GreaterOrEqual(t, comp, 0)   <--- not working, code seems to hang.
+			require.GreaterOrEqual(t, newint, oldint)
 		}
-
 		oldint = newint
-
-		select {
-		case <-done:
-			return
-		default:
-		}
 	}
 }
 
