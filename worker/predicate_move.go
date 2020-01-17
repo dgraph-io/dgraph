@@ -197,7 +197,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		// the latest membership status where this predicate now belongs to another group. So they
 		// know that they are no longer serving this predicate, before they delete it from their
 		// state. Without this checksum, the members could end up deleting the predicate and then
-		// serving a request asking for that predicate, causing Jepsen failures.
+		// serve a request asking for that predicate, causing Jepsen failures.
 		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
