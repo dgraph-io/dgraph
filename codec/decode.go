@@ -45,6 +45,18 @@ func Decode(in []byte, t interface{}) (interface{}, error) {
 	return output, err
 }
 
+func DecodePtr(in []byte, t interface{}) error {
+	buf := &bytes.Buffer{}
+	sd := Decoder{Reader: buf}
+	_, err := buf.Write(in)
+	if err != nil {
+		return err
+	}
+
+	err = sd.DecodePtr(t)
+	return err
+}
+
 // Decode is the high level function wrapping the specific type decoding functions
 func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	switch t.(type) {
@@ -267,6 +279,22 @@ func (sd *Decoder) DecodeByteArray() (o []byte, err error) {
 	}
 
 	return b, nil
+}
+
+// DecodePtrByteArray accepts a byte array representing a SCALE encoded byte array and performs SCALE decoding
+// of the byte array
+func (sd *Decoder) DecodePtrByteArray(output interface{}) error {
+	_, err := sd.DecodeInteger()
+	if err != nil {
+		return err
+	}
+
+	_, err = sd.Reader.Read(output.([]byte))
+	if err != nil {
+		return errors.New("could not decode invalid byte array: reached early EOF")
+	}
+
+	return nil
 }
 
 // DecodeBool accepts a byte array representing a SCALE encoded bool and performs SCALE decoding

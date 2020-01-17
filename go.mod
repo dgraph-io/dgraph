@@ -13,7 +13,6 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
-	github.com/heystraightedge/straightedge v0.0.0-20191221062532-299f5807bc89 // indirect
 	github.com/ipfs/go-datastore v0.1.1
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/libp2p/go-libp2p v0.4.1

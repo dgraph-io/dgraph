@@ -58,6 +58,28 @@ type decodeArrayTest struct {
 	output interface{}
 }
 
+var decodeFixedWidthIntTestsInt = []struct {
+	val    []byte
+	output int
+}{
+	{val: []byte{0x00}, output: int(0)},
+	{val: []byte{0x01}, output: int(1)},
+	{val: []byte{0x2a}, output: int(42)},
+	{val: []byte{0x40}, output: int(64)},
+	{val: []byte{0x45}, output: int(69)},
+}
+
+var decodeFixedWidthIntTestsUint = []struct {
+	val    []byte
+	output uint
+}{
+	{val: []byte{0x00}, output: uint(0)},
+	{val: []byte{0x01}, output: uint(1)},
+	{val: []byte{0x2a}, output: uint(42)},
+	{val: []byte{0x40}, output: uint(64)},
+	{val: []byte{0x45}, output: uint(69)},
+}
+
 var decodeFixedWidthIntTestsInt8 = []struct {
 	val    []byte
 	output int8
