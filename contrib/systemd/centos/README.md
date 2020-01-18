@@ -10,7 +10,7 @@ curl https://get.dgraph.io -sSf | bash
 
 Then create a system account for `dgraph` service:
 
-> **NOTE** If you are using Ubuntu or other distros, you must run these operations as root.
+> **NOTE** You must run these operations as root.
 
 ```Bash
 groupadd --system dgraph
