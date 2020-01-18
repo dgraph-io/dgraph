@@ -279,7 +279,7 @@ func (mrw *addRewriter) FromMutationResult(
 	}
 
 	if len(assigned) == 0 && errs == nil {
-		errs = schema.AsGQLErrors(fmt.Errorf("No new node was created"))
+		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
