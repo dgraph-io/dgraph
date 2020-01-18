@@ -2,14 +2,22 @@
 
 The following document describes how to manage `dgraph` with `systemd`.
 
-First, create a system account for `dgraph` service:
+First, you need to install Dgraph:
 
 ```Bash
-sudo groupadd --system dgraph
-sudo useradd --system -d /var/lib/dgraph -s /bin/false -g dgraph dgraph
-sudo mkdir -p /var/log/dgraph
-sudo mkdir -p /var/lib/dgraph/{p,w,zw}
-sudo chown -R dgraph:dgraph /var/{lib,log}/dgraph
+curl https://get.dgraph.io -sSf | bash
+```
+
+Then create a system account for `dgraph` service:
+
+> **NOTE** If you are using Ubuntu, you must use Sudo in all operations.
+
+```Bash
+groupadd --system dgraph
+useradd --system -d /var/lib/dgraph -s /bin/false -g dgraph dgraph
+mkdir -p /var/log/dgraph
+mkdir -p /var/lib/dgraph/{p,w,zw}
+chown -R dgraph:dgraph /var/{lib,log}/dgraph
 ```
 
 Next, copy the `systemd` unit files, i.e. `dgraph-alpha.service`, `dgraph-zero.service`,
@@ -18,9 +26,9 @@ and `dgraph-ui.service`, in this directory to `/usr/lib/systemd/system/`.
 > **NOTE** These unit files expect that Dgraph is installed as `/usr/local/bin/dgraph`.
 
 ```Bash
-sudo cp dgraph-alpha.service /etc/systemd/system/
-sudo cp dgraph-zero.service /etc/systemd/system/
-sudo cp dgraph-ui.service /etc/systemd/system/
+cp dgraph-alpha.service /etc/systemd/system/
+cp dgraph-zero.service /etc/systemd/system/
+cp dgraph-ui.service /etc/systemd/system/
 ```
 
 Next, enable and start the `dgraph-alpha` service. Systemd will also automatically start the
