@@ -21,7 +21,7 @@ chown -R dgraph:dgraph /var/{lib,log}/dgraph
 ```
 
 Next, copy the `systemd` unit files, i.e. `dgraph-alpha.service`, `dgraph-zero.service`,
-and `dgraph-ui.service`, in this directory to `/usr/lib/systemd/system/`.
+and `dgraph-ui.service`, in this directory to `/etc/systemd/system/`.
 
 > **NOTE** These unit files expect that Dgraph is installed as `/usr/local/bin/dgraph`.
 
