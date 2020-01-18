@@ -372,17 +372,43 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		}
 		return nil
 	}
-	if err := checkPreds(); err != nil {
-		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("abort", true)}, err.Error())
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
-	}
 
 	num := pb.Num{Val: 1}
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
 		return err
 	}
+
+	// We must check the predicate AFTER retrieving the commit timestamp. Otherwise, this is what
+	// might happen, during a predicate move.
+	// 1. We check that the predicate is unblocked via checkPreds. It returns nil.
+	// 2. Zero blocks the tablet from commits.
+	// 3. Zero retrieves a move timestamp (Tmove)
+	// 4. We retrieve a new commit timestamp, hence Tcommit > Tmove.
+	// 5. During the move, Alpha drops the commits at Tcommit.
+	//
+	// Doing the check after Tcommit guarantees that Tmove > Tcommit, or the
+	// checkPred returns error. Let's see that with a event based derivation.
+	//
+	// True in movePredicate => e(block) < e(GetTs_move)
+	// Change in this PR     => e(GetTs_commit) < e(checkPreds)
+	// Assume that Tmove < Tcommit
+	// => e(GetTs_move) < e(GetTs_commit), because timestamps are monotonically increasing.
+	// => e(block) < e(GetTs_move) < e(GetTs_commit) < e(checkPreds)
+	// => e(block) < e(checkPreds)
+	// Therefore, checkPreds would always return error for Tmove < Tcommit.
+	//
+	// Let's take an example, where Tcommit = 5.
+	// If Tmove = 4, then the block happened before 4, therefore checkPreds = error.
+	// If Tmove = 6, then if block happened before 4, then checkPreds = error.
+	// If Tmove = 6, and block happened after Tcommit, then this commit is valid and will get
+	// picked up during move.
+	if err := checkPreds(); err != nil {
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("abort", true)}, err.Error())
+		src.Aborted = true
+		return s.proposeTxn(ctx, src)
+	}
+
 	src.CommitTs = assigned.StartId
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
 	defer s.orc.doneUntil.Done(src.CommitTs)
