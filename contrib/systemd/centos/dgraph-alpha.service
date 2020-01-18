@@ -1,13 +1,13 @@
 [Unit]
-Description=dgraph.io data server
+Description=dgraph.io Alpha instance
 Wants=network.target
 After=network.target dgraph-zero.service
 Requires=dgraph-zero.service
 
 [Service]
 Type=simple
-WorkingDirectory=/var/run/dgraph
-ExecStart=/usr/local/bin/dgraph alpha --lru_mb 2048 -p /var/run/dgraph/p -w /var/run/dgraph/w
+WorkingDirectory=/var/lib/dgraph
+ExecStart=/usr/local/bin/dgraph alpha --lru_mb 2048 -p /var/lib/dgraph/p -w /var/lib/dgraph/w
 StandardOutput=journal
 StandardError=journal
 User=dgraph
