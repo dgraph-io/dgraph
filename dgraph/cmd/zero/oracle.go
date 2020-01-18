@@ -378,6 +378,8 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if err != nil {
 		return err
 	}
+	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	defer s.orc.doneUntil.Done(assigned.StartId)
 
 	// We must check the predicate AFTER retrieving the commit timestamp. Otherwise, this is what
 	// might happen, during a predicate move.
@@ -410,8 +412,6 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 
 	src.CommitTs = assigned.StartId
-	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	defer s.orc.doneUntil.Done(src.CommitTs)
 	span.Annotatef([]otrace.Attribute{otrace.Int64Attribute("commitTs", int64(src.CommitTs))},
 		"Node Id: %d. Proposing TxnContext: %+v", s.Node.Id, src)
 
