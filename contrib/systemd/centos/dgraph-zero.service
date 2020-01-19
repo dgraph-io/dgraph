@@ -6,7 +6,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/var/lib/dgraph
-ExecStart=/usr/local/bin/dgraph zero --wal /var/lib/dgraph/zw
+ExecStart=/usr/bin/bash -c 'dgraph zero --wal /var/lib/dgraph/zw'
 StandardOutput=journal
 StandardError=journal
 User=dgraph
