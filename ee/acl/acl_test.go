@@ -566,6 +566,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		type Person {
+			name
+			age
+			nickname
+		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -584,9 +589,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
+			_:a <dgraph.type> "Person" .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "Person" .
 		`),
 		CommitNow: true,
 	}
@@ -672,6 +679,17 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`,
 			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 			`filter won't work because <nickname> is unauthorized`,
+		},
+		{
+			`
+			{
+				me(func: has(name)) {
+					expand(_all_)
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`<age> and <nickname> won't appear in result becaue they are unauthorized`,
 		},
 	}
 
