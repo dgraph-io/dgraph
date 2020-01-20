@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -115,7 +114,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
-		userData, err := validateToken(request.RefreshToken)
+		userData, err := worker.ValidateToken(request.RefreshToken)
 		if err != nil {
 			return nil, errors.Wrapf(err, "unable to authenticate the refresh token %v",
 				request.RefreshToken)
@@ -152,55 +151,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
 	}
 	return user, nil
-}
-
-// validateToken verifies the signature and expiration of the jwt, and if validation passes,
-// returns a slice of strings, where the first element is the extracted userId
-// and the rest are groupIds encoded in the jwt.
-func validateToken(jwtStr string) ([]string, error) {
-	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return worker.Config.HmacSecret, nil
-	})
-
-	if err != nil {
-		return nil, errors.Errorf("unable to parse jwt token:%v", err)
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, errors.Errorf("claims in jwt token is not map claims")
-	}
-
-	// by default, the MapClaims.Valid will return true if the exp field is not set
-	// here we enforce the checking to make sure that the refresh token has not expired
-	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
-		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
-	}
-
-	userId, ok := claims["userid"].(string)
-	if !ok {
-		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
-	}
-
-	groups, ok := claims["groups"].([]interface{})
-	var groupIds []string
-	if ok {
-		groupIds = make([]string, 0, len(groups))
-		for _, group := range groups {
-			groupId, ok := group.(string)
-			if !ok {
-				// This shouldn't happen. So, no need to make the client try to refresh the tokens.
-				return nil, errors.Errorf("unable to convert group to string:%v", group)
-			}
-
-			groupIds = append(groupIds, groupId)
-		}
-	}
-	return append([]string{userId}, groupIds...), nil
 }
 
 // validateLoginRequest validates that the login request has either the refresh token or the
@@ -326,7 +276,7 @@ func RefreshAcls(closer *y.Closer) {
 			return err
 		}
 
-		aclCachePtr.update(groups)
+		worker.Update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -443,43 +393,6 @@ func ResetAcl() {
 	}
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
-// extract the userId, groupIds from the accessJwt in the context
-func extractUserAndGroups(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the list of groups
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, errNoJwt
-	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return nil, errNoJwt
-	}
-
-	return validateToken(accessJwt[0])
-}
-
-func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) map[string]struct{} {
-
-	blockedPreds := make(map[string]struct{})
-	for _, pred := range preds {
-		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
-			logAccess(&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: aclOp,
-				allowed:   false,
-			})
-
-			blockedPreds[pred] = struct{}{}
-		}
-	}
-	return blockedPreds
-}
-
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr. It will return error if any one of the predicates specified in alter
 // are not authorized.
@@ -513,7 +426,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
-		userData, err := extractUserAndGroups(ctx)
+		userData, err := worker.ExtractUserAndGroups(ctx)
 		if err != nil {
 			// We don't follow fail open approach anymore.
 			return status.Error(codes.Unauthenticated, err.Error())
@@ -533,7 +446,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -549,13 +462,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Modify,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Modify,
+			err == nil,
+		)).String())
 	}
 
 	return err
@@ -620,7 +533,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
-		userData, err := extractUserAndGroups(ctx)
+		userData, err := worker.ExtractUserAndGroups(ctx)
 		if err != nil {
 			// We don't follow fail open approach anymore.
 			return status.Error(codes.Unauthenticated, err.Error())
@@ -641,7 +554,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -659,13 +572,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Write,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Write,
+			err == nil,
+		)).String())
 	}
 
 	return err
@@ -674,6 +587,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	predsMap := make(map[string]struct{})
 	for _, gq := range gqls {
+		if len(gq.Expand) != 0 {
+			continue
+		}
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
@@ -714,24 +630,6 @@ func parsePredsFromFilter(f *gql.FilterTree) []string {
 	return preds
 }
 
-type accessEntry struct {
-	userId    string
-	groups    []string
-	preds     []string
-	operation *acl.Operation
-	allowed   bool
-}
-
-func (log *accessEntry) String() string {
-	return fmt.Sprintf("ACL-LOG Authorizing user %q with groups %q on predicates %q "+
-		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
-		strings.Join(log.preds, ","), log.operation.Name, log.allowed)
-}
-
-func logAccess(log *accessEntry) {
-	glog.V(1).Infof(log.String())
-}
-
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
@@ -745,7 +643,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
-		userData, err := extractUserAndGroups(ctx)
+		userData, err := worker.ExtractUserAndGroups(ctx)
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
@@ -758,19 +656,19 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			return nil, nil
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		return worker.AuthorizePreds(userId, groupIds, preds, acl.Read), nil
 	}
 
 	blockedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Read,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Read,
+			err == nil,
+		)).String())
 	}
 
 	if err != nil {
@@ -794,9 +692,9 @@ func authorizeGroot(ctx context.Context) error {
 	var userID string
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
+		userData, err := worker.ExtractUserAndGroups(ctx)
 		switch {
-		case err == errNoJwt:
+		case err == worker.ErrNoJwt:
 			return status.Error(codes.PermissionDenied, err.Error())
 		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())
