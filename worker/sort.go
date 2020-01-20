@@ -18,6 +18,7 @@ package worker
 
 import (
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -224,11 +225,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	}
 
 	var prefix []byte
-	if len(order.Langs) > 0 {
+	queryHasLang := len(order.Langs) > 0
+	if queryHasLang {
 		// Only one language is allowed.
 		lang := order.Langs[0]
 		tokenizer = tok.GetLangTokenizer(tokenizer, lang)
-		langTokenizer, ok := tokenizer.(tok.LangTokenizer)
+		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)
 		if !ok {
 			return resultWithError(errors.Errorf(
 				"Invalid tokenizer for language %s.", lang))
@@ -257,6 +259,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	itr := txn.NewIterator(iterOpt)
 	defer itr.Close()
 
+	predicateHasLang := schema.State().HasLang(order.Attr)
 	r := new(pb.SortResult)
 BUCKETS:
 	// Outermost loop is over index buckets.
@@ -275,6 +278,14 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
+			condition := token[1] == tok.IdentDelimiter
+			fmt.Println(condition)
+			fmt.Println(k)
+			if predicateHasLang && !queryHasLang && len(token) > 1 &&
+				token[1] == tok.IdentDelimiter {
+				continue
+			}
+
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
 			err = intersectBucket(ctx, ts, token, out)

@@ -67,7 +67,7 @@ func init() {
 		return port
 	}
 
-	grpcPort = getPort("TEST_PORT_ALPHA", 8180)
+	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 

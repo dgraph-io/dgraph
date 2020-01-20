@@ -193,7 +193,7 @@ func TestTokensTable(t *testing.T) {
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
 
-	key = x.IndexKey("name", "\x01david")
+	key = x.IndexKey("name_lang_index", "")
 	time.Sleep(10 * time.Millisecond)
 
 	txn := ps.NewTransactionAt(3, false)

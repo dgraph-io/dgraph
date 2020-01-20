@@ -294,7 +294,7 @@ noindex_age                    : int .
 noindex_dob                    : datetime .
 noindex_alive                  : bool .
 noindex_salary                 : float .
-language                       : [string] .\
+language                       : [string] .
 name_lang_index                : string @index(exact) @lang .
 name_index                	   : string @index(exact) .
 `
