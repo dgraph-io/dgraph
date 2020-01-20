@@ -89,9 +89,9 @@ func IsSortable(tid TypeID) bool {
 	switch tid {
 	case DateTimeID, IntID, FloatID, StringID, DefaultID:
 		return true
+	default:
+		return false
 	}
-
-	return false
 }
 
 // SortWithFacet sorts the given array in-place and considers the given facets to calculate

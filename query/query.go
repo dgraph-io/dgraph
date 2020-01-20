@@ -2358,11 +2358,11 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				if !types.IsSortable(fVal.Tid) {
-					return errors.Errorf("Value of type: %s isn't sortable", fVal.Tid.Name())
+				// If type is not sortable, we are ignoring it.
+				if types.IsSortable(fVal.Tid) {
+					values[j][idx] = fVal
 				}
 
-				values[j][idx] = fVal
 				remainingFacets--
 				if remainingFacets == 0 {
 					break

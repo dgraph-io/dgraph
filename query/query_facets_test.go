@@ -17,7 +17,6 @@
 package query
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -475,8 +474,42 @@ func TestFacetsMultipleOrderbyNonsortableFacet(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(context.Background(), t, query)
-	require.Contains(t, err.Error(), "Value of type: bool isn't sortable")
+
+	js := processQueryNoErr(t, query)
+	// Since fastfriend is of bool type, it is not sortable.
+	// Hence result should be sorted by score.
+	require.JSONEq(t, `
+		{
+			"data": {
+			"me": [
+				{
+				"name": "Michale",
+				"friend": [
+					{
+					"name": "Daryl Dixon"
+					},
+					{
+					"name": "Andrea"
+					},
+					{
+					"name": "Roger"
+					}
+				],
+				"friend|fastfriend": {
+					"0": true,
+					"1": false,
+					"2": true
+				},
+				"friend|score": {
+					"0": 100,
+					"1": 100,
+					"2": 200
+				}
+				}
+			]
+			}
+		}
+	`, js)
 }
 
 func TestFacetsMultipleOrderbyAllFacets(t *testing.T) {
