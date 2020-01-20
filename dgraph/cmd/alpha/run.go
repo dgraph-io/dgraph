@@ -650,6 +650,8 @@ func run() {
 		edgraph.RefreshAcls(aclCloser)
 	}()
 
+	// Graphql subscribes to alpha to get schema updates. We need to close that before we
+	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := y.NewCloser(1)
 
 	setupServer(adminCloser)
