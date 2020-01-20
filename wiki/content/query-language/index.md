@@ -1946,7 +1946,7 @@ You can also apply `@normalize` on nested query blocks. It will work similarly b
 {{< /runnable >}}
 
 
-## Ignorereflex directive
+## IgnoreReflex directive
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
@@ -2187,8 +2187,7 @@ email: string @index(exact) @upsert .
 
 ### Noconflict directive
 
-To use Noconflict directive on a predicate, specify the `@noconflict` directive in the schema.
-It prevents conflict detection at the predicate level. This is an experimental feature and not a
+The NoConflict directive prevents conflict detection at the predicate level. This is an experimental feature and not a
 recommended directive but exists to help avoid conflicts for predicates that don't have high
 correctness requirements. This can cause data loss, especially when used for predicates with count
 index.
