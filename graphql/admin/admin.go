@@ -28,8 +28,6 @@ import (
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -275,15 +273,6 @@ func (as *adminServer) initServer() {
 		<-time.After(waitFor)
 		waitFor = 10 * time.Second
 
-		err := checkAdminSchemaExists()
-		if err != nil {
-			if glog.V(3) {
-				glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
-					err, waitFor.Seconds())
-			}
-			continue
-		}
-
 		// Nothing else should be able to lock before here.  The admin resolvers aren't yet
 		// set up (they all just error), so we will obtain the lock here without contention.
 		// We then setup the admin resolvers and they must wait until we are done before the
@@ -328,15 +317,6 @@ func (as *adminServer) initServer() {
 
 		break
 	}
-}
-
-func checkAdminSchemaExists() error {
-	// We could query for existing schema and only alter if it's not there, but
-	// this has same effect.  We might eventually have to migrate old versions of the
-	// metadata here.
-	_, err := (&edgraph.Server{}).Alter(context.Background(),
-		&dgoapi.Operation{Schema: dgraphAdminSchema})
-	return err
 }
 
 // addConnectedAdminResolvers sets up the real resolvers

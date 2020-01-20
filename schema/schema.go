@@ -430,6 +430,25 @@ func LoadTypesFromDb() error {
 	return nil
 }
 
+func InitialTypes() []*pb.TypeUpdate {
+	return initialTypesInternal()
+}
+
+func initialTypesInternal() []*pb.TypeUpdate {
+	var initialTypes []*pb.TypeUpdate
+	initialTypes = append(initialTypes, &pb.TypeUpdate{
+		TypeName: "dgraph.graphql",
+		Fields: []*pb.SchemaUpdate{
+			&pb.SchemaUpdate{
+				Predicate: "dgraph.graphql.schema",
+				ValueType: pb.Posting_STRING,
+			},
+		},
+	})
+
+	return initialTypes
+}
+
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
