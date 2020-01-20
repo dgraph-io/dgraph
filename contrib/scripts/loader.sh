@@ -9,7 +9,7 @@ restartCluster
 
 # Create a temporary directory to use for running live loader.
 tmpdir=`mktemp --tmpdir -d loader.tmp-XXXXXX`
-trap "rm -rf $tmpdir" EXIT
+trap "rm -rf $tmpdir; stopCluster" EXIT
 pushd $tmpdir
 echo "Inside `pwd`"
 
@@ -38,5 +38,3 @@ rm -rf $tmpdir
 
 echo "Running queries"
 $basedir/contrib/scripts/goldendata-queries.sh
-
-stopCluster

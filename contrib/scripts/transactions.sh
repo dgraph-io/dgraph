@@ -3,6 +3,7 @@
 basedir=$(dirname "${BASH_SOURCE[0]}")/../..
 contrib=$basedir/contrib
 set -e
+trap stopCluster EXIT
 
 # go test -v $contrib/integration/testtxn/main_test.go
 
@@ -27,5 +28,3 @@ pushd $contrib/integration/mutates
 go build . && ./mutates --add --alpha=localhost:9180
 ./mutates --alpha=localhost:9180
 popd
-
-stopCluster
