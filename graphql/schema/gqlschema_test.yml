@@ -583,10 +583,13 @@ invalid_schemas:
     input: |
       type X {
         f1: String! @dgraph(pred:"~movie")
+        f2: String! @dgraph(pred:"<~movie>")
       }
     errlist: [
       {"message": "Type X; Field f1: reverse pred argument for @dgraph directive is not supported.",
-      "locations":[{"line":2, "column":16}]}
+      "locations":[{"line":2, "column":16}]},
+      {"message": "Type X; Field f2: reverse pred argument for @dgraph directive is not supported.",
+      "locations":[{"line":3, "column":16}]}
     ]
 
 

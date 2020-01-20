@@ -443,7 +443,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			typ.Name, field.Name,
 		)
 	}
-	if strings.HasPrefix(predArg.Value.Raw, "~") {
+	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: reverse pred argument for @dgraph directive is not supported.",
