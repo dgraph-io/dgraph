@@ -26,13 +26,19 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: /home/harshil/.zshrc
+        target: /secret/hmac
+        read_only: true
     ports:
       - 8180:8180
       - 9180:9180
     labels:
       cluster: test
       service: alpha1
-    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7180
+    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7180 --acl_secret_file=/secret/hmac --acl_access_ttl 3000s
+      --acl_cache_ttl 5s
+
 
   zeroAdmin:
     image: dgraph/dgraph:latest
@@ -60,10 +66,16 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: /home/harshil/.zshrc
+        target: /secret/hmac
+        read_only: true
     ports:
       - 8280:8280
       - 9280:9280
     labels:
       cluster: admintest
       service: alphaAdmin
-    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alphaAdmin:7280
+    command: /gobin/dgraph alpha --lru_mb=1024 --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alphaAdmin:7280 --acl_secret_file=/secret/hmac --acl_access_ttl 3s
+      --acl_cache_ttl 5s
+

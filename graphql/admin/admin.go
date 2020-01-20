@@ -45,12 +45,6 @@ const (
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
-	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
-	dgraphAdminSchema = `
-	type dgraph.graphql {
-		dgraph.graphql.schema
-	}`
-
 	// GraphQL schema for /admin endpoint.
 	//
 	// Eventually we should generate this from just the types definition.
@@ -362,7 +356,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				getResolver := &getSchemaResolver{
 					admin:        as,
 					baseRewriter: qryRw,
-					baseExecutor: qryExec,
+					baseExecutor: resolve.AdminQueryExecutor(),
 				}
 
 				return resolve.NewQueryResolver(

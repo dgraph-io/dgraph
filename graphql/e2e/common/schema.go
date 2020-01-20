@@ -20,11 +20,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -102,10 +101,13 @@ const (
 )
 
 func SchemaTest(t *testing.T, expectedDgraphSchema string) {
-	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
-	require.NoError(t, err)
+	conf := viper.New()
+	conf.Set("alpha", alphagRPC)
+	conf.Set("user", "groot")
+	conf.Set("password", "password")
 
-	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	client, closeFunc := x.GetDgraphClient(conf, true)
+	defer closeFunc()
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)

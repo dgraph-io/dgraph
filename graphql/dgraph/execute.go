@@ -19,6 +19,7 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/golang/glog"
@@ -52,6 +53,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	if val := ctx.Value("needAuthorize"); val != nil && !val.(bool) {
 		authorize = edgraph.NoAuthorize
 	}
+	fmt.Println(ctx)
 	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, authorize)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
