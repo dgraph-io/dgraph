@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -1855,6 +1856,32 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 		}
 		preds = uniquePreds(preds)
+
+		dropUnAuthorizedPreds := func() []string {
+			// ignoring error here because we have already done this check while
+			// authorizing query.
+			userData, _ := worker.ExtractUserAndGroups(ctx)
+			userId := userData[0]
+			groupIds := userData[1:]
+
+			if x.IsGuardian(groupIds) {
+				// Members of guardian groups are allowed to query anything.
+				return preds
+			}
+
+			blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Read)
+			filteredPreds := preds[:0]
+
+			for _, pred := range preds {
+				if _, ok := blockedPreds[pred]; ok {
+					continue
+				}
+
+				filteredPreds = append(filteredPreds, pred)
+			}
+			return filteredPreds
+		}
+		preds = dropUnAuthorizedPreds()
 
 		// There's a types filter at this level so filter out any non-uid predicates
 		// since only uid nodes can have a type.
