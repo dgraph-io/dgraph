@@ -488,9 +488,17 @@ func setupServer() {
 	go serveGRPC(grpcListener, tlsCfg, &wg)
 	go serveHTTP(httpListener, tlsCfg, &wg)
 
+	doneTelemetry := make(chan interface{})
+	if Alpha.Conf.GetBool("telemetry") {
+		wg.Add(1)
+		go edgraph.PeriodicallyPostTelemetry(doneTelemetry, &wg)
+	}
+
 	go func() {
 		defer wg.Done()
 		<-shutdownCh
+		close(doneTelemetry)
+
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {
 			glog.Warningf("Error while closing gRPC listener: %s", err)
@@ -499,10 +507,6 @@ func setupServer() {
 			glog.Warningf("Error while closing HTTP listener: %s", err)
 		}
 	}()
-
-	if Alpha.Conf.GetBool("telemetry") {
-		go edgraph.PeriodicallyPostTelemetry()
-	}
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())

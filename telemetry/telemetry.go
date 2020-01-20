@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -30,26 +31,25 @@ import (
 
 // Telemetry holds information about the state of the zero and alpha server.
 type Telemetry struct {
-	Arch                 string
-	Cid                  string
-	ClusterSize          int
-	DiskUsageMB          int64
-	NumAlphas            int
-	NumGroups            int
-	NumTablets           int
-	NumZeros             int
-	OS                   string
-	SinceHours           int
-	Version              string
-	GraphqlQueryCount    uint64
-	NonGraphqlQueryCount uint64
+	Arch                string
+	Cid                 string
+	ClusterSize         int
+	DiskUsageMB         int64
+	NumAlphas           int
+	NumGroups           int
+	NumTablets          int
+	NumZeros            int
+	OS                  string
+	SinceHours          int
+	Version             string
+	GraphqlQueryCount   uint64
+	GraphqlpmQueryCount uint64
 }
 
 var keenURL = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
-// NewZeroTelemetry returns a Telemetry struct that holds information about the state of zero
-// server.
-func NewZeroTelemetry(ms *pb.MembershipState) *Telemetry {
+// NewZero returns a Telemetry struct that holds information about the state of zero server.
+func NewZero(ms *pb.MembershipState) *Telemetry {
 	if len(ms.Cid) == 0 {
 		glog.V(2).Infoln("No CID found yet")
 		return nil
@@ -74,19 +74,14 @@ func NewZeroTelemetry(ms *pb.MembershipState) *Telemetry {
 	return t
 }
 
-// NewAlphaTelemetry returns a Telemetry struct that holds information about the state of alpha
-// server.
-func NewAlphaTelemetry(ms *pb.MembershipState, graphqlQueryCount uint64,
-	nonGraphqlQueryCount uint64) *Telemetry {
-	t := &Telemetry{
-		Cid:                  ms.Cid,
-		Version:              x.Version(),
-		OS:                   runtime.GOOS,
-		Arch:                 runtime.GOARCH,
-		GraphqlQueryCount:    graphqlQueryCount,
-		NonGraphqlQueryCount: nonGraphqlQueryCount,
+// NewAlpha returns a Telemetry struct that holds information about the state of alpha server.
+func NewAlpha(ms *pb.MembershipState) *Telemetry {
+	return &Telemetry{
+		Cid:     ms.Cid,
+		Version: x.Version(),
+		OS:      runtime.GOOS,
+		Arch:    runtime.GOARCH,
 	}
-	return t
 }
 
 // Post reports the Telemetry to the stats server.
@@ -108,7 +103,7 @@ func (t *Telemetry) Post() error {
 		"97497CA758881BD7D56CC2355A2F36B4560102CBC3279AC7B27E5391372C36A31167EB0D06BF3764894AD20"+
 		"A0554BAFF14C292A40BC252BB9FF008736A0FD1D44E085")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
