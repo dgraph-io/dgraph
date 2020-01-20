@@ -61,9 +61,12 @@ const (
 	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
+
+type Authorize int
+
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
-	NeedAuthorize = iota
+	NeedAuthorize Authorize = iota
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
@@ -670,11 +673,11 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 }
 
 // QueryForGraphql handles queries or mutations
-func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
+func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request, authorize Authorize) (*api.Response, error) {
+	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, authorize)
 }
 
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize Authorize) (
 	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {

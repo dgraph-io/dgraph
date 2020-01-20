@@ -111,6 +111,12 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
+// dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
+// that proxies query/mutation resolution through Query method in dgraph server,
+// and it doens't require authorization
+type adminExecutor struct {
+}
+
 // A Resolved is the result of resolving a single query or mutation.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -140,9 +146,30 @@ func DgraphAsQueryExecutor() QueryExecutor {
 	return &dgraphExecutor{}
 }
 
+func AdminQueryExecutor() QueryExecutor {
+	return &adminExecutor{}
+}
+
 // DgraphAsMutationExecutor builds a MutationExecutor for dog.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
+}
+
+// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+func AdminMutationExecutor() MutationExecutor {
+	return &adminExecutor{}
+}
+
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	ctx = context.WithValue(ctx, "needAuthorize", false)
+	return dgraph.Query(ctx, query)
+}
+
+func (de *adminExecutor) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
