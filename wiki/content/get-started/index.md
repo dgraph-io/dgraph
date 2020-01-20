@@ -83,6 +83,18 @@ title = "Get Started with Dgraph"
           </p>
         </div>
       </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-7/index.md">}}">
+              7 - Fuzzy Search on Social Graphs
+            </a>
+          </div>
+          <p class="section-desc">
+            Learn about searching user names using fuzzy search on social graphs.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </section>

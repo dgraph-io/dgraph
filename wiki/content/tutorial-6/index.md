@@ -16,6 +16,8 @@ Specifically, we'll focus on two advanced feature:
 
 The accompanying video of the tutorial will be out shortly, so stay tuned to [our YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w).
 
+---
+
 Before we dive in, let's do a quick recap of how to model the tweets in Dgraph.
 
 {{% load-img "/images/tutorials/5/a-graph-model.jpg" "tweet model" %}}
@@ -376,15 +378,6 @@ Let's learn about the fuzzy search in our next tutorial.
 
 Sounds interesting?
 Then see you all soon in the next tutorial. Till then, happy Graphing!
-
-## What's Next?
-
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
-with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
-  in a cluster.
 
 ## Need Help
 
