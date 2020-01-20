@@ -1857,16 +1857,18 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 		preds = uniquePreds(preds)
 
-		dropUnAuthorizedPreds := func() []string {
-			// ignoring error here because we have already done this check while
-			// authorizing query.
-			userData, _ := worker.ExtractUserAndGroups(ctx)
+		dropUnAuthorizedPreds := func() ([]string, error) {
+			userData, err := worker.ExtractUserAndGroups(ctx)
+			if err != nil {
+				return nil, err
+			}
+
 			userId := userData[0]
 			groupIds := userData[1:]
 
 			if x.IsGuardian(groupIds) {
 				// Members of guardian groups are allowed to query anything.
-				return preds
+				return preds, nil
 			}
 
 			blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Read)
@@ -1879,9 +1881,12 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 				filteredPreds = append(filteredPreds, pred)
 			}
-			return filteredPreds
+			return filteredPreds, nil
 		}
-		preds = dropUnAuthorizedPreds()
+		preds, err = dropUnAuthorizedPreds()
+		if err != nil {
+			return nil, err
+		}
 
 		// There's a types filter at this level so filter out any non-uid predicates
 		// since only uid nodes can have a type.
