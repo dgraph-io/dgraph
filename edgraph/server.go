@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -79,40 +80,46 @@ const (
 )
 
 var (
-	graphqlQueryCount    uint64
-	nonGraphqlQueryCount uint64
+	graphqlQueryCount   uint64
+	graphqlpmQueryCount uint64
 )
 
 // Server implements protos.DgraphServer
 type Server struct{}
 
-// PeriodicallyPostTelemetry periodically report telemetry data for alpha.
-func PeriodicallyPostTelemetry() {
+// PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
+func PeriodicallyPostTelemetry(doneTelemetry <-chan interface{}, wg *sync.WaitGroup) {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
-	start := time.Now()
 
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
-	for range ticker.C {
-		if time.Since(lastPostedAt) < time.Hour {
-			continue
-		}
-		ms := worker.GetMembershipState()
-		t := telemetry.NewAlphaTelemetry(ms, graphqlQueryCount, nonGraphqlQueryCount)
-		if t == nil {
-			continue
-		}
-		t.SinceHours = int(time.Since(start).Hours())
-		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+	for {
+		select {
+		case <-ticker.C:
+			if time.Since(lastPostedAt) < time.Hour {
+				continue
+			}
+			ms := worker.GetMembershipState()
+			t := telemetry.NewAlpha(ms)
+			t.GraphqlQueryCount = graphqlQueryCount
+			t.GraphqlpmQueryCount = graphqlpmQueryCount
+			t.SinceHours = int(time.Since(lastPostedAt).Hours())
+			glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-		err := t.Post()
-		glog.V(2).Infof("Telemetry data posted with error: %v", err)
-		if err == nil {
-			atomic.StoreUint64(&graphqlQueryCount, 0)
-			atomic.StoreUint64(&nonGraphqlQueryCount, 0)
-			lastPostedAt = time.Now()
+			err := t.Post()
+			if err == nil {
+				atomic.StoreUint64(&graphqlQueryCount, 0)
+				atomic.StoreUint64(&graphqlpmQueryCount, 0)
+				lastPostedAt = time.Now()
+			} else {
+				glog.V(1).Infof("Telemetry couldn't be posted. Error: %v", err)
+			}
+		case <-doneTelemetry:
+			glog.V(2).Infof("Stopping reporting of Telemetry data.")
+			wg.Done()
+			return
 		}
 	}
 }
@@ -704,7 +711,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&nonGraphqlQueryCount, 1)
+	atomic.AddUint64(&graphqlpmQueryCount, 1)
 	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
