@@ -36,10 +36,10 @@ import (
 // The range 0x80 - 0xff is for custom tokenizers.
 // TODO: use these everywhere where we must ensure a system tokenizer.
 const (
-	IdentNone      = 0x0
-	IdentTerm      = 0x1
-	IdentExact     = 0x2
-	IdentExactLang = 0x3
+	IdentNone  = 0x0
+	IdentTerm  = 0x1
+	IdentExact = 0x2
+	// IdentExactLang = 0x3
 	IdentYear      = 0x4
 	IdentMonth     = 0x41
 	IdentDay       = 0x42
@@ -327,7 +327,7 @@ func (t ExactTokenizer) Identifier() byte { return IdentExact }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 func (t ExactTokenizer) Prefix() []byte {
-	prefix := []byte{IdentExactLang}
+	prefix := []byte{IdentExact}
 	if t.cl == nil {
 		return prefix
 	}

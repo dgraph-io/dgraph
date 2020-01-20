@@ -18,7 +18,6 @@ package worker
 
 import (
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -278,9 +277,6 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			condition := token[1] == tok.IdentDelimiter
-			fmt.Println(condition)
-			fmt.Println(k)
 			if predicateHasLang && !queryHasLang && len(token) > 1 &&
 				token[1] == tok.IdentDelimiter {
 				continue
