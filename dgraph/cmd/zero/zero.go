@@ -102,31 +102,26 @@ func (s *Server) periodicallyPostTelemetry() {
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
-	for {
-		select {
-		case <-ticker.C:
-			if !s.Node.AmLeader() {
-				continue
-			}
-			if time.Since(lastPostedAt) < time.Hour {
-				continue
-			}
-			ms := s.membershipState()
-			t := telemetry.NewZero(ms)
-			if t == nil {
-				continue
-			}
-			t.SinceHours = int(time.Since(start).Hours())
-			glog.V(2).Infof("Posting Telemetry data: %+v", t)
+	for range ticker.C {
+		if !s.Node.AmLeader() {
+			continue
+		}
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		ms := s.membershipState()
+		t := telemetry.NewZero(ms)
+		if t == nil {
+			continue
+		}
+		t.SinceHours = int(time.Since(start).Hours())
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-			err := t.Post()
-			if err == nil {
-				lastPostedAt = time.Now()
-			} else {
-				glog.V(1).Infof("Telemetry couldn't be posted. Error: %v", err)
-			}
-		case <-s.closer.HasBeenClosed():
-			return
+		err := t.Post()
+		if err == nil {
+			lastPostedAt = time.Now()
+		} else {
+			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
 }

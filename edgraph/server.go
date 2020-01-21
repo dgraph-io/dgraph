@@ -23,7 +23,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -80,46 +79,39 @@ const (
 )
 
 var (
-	graphqlQueryCount   uint64
-	graphqlpmQueryCount uint64
+	numQueries uint64
+	numGraphQL uint64
 )
 
 // Server implements protos.DgraphServer
 type Server struct{}
 
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
-func PeriodicallyPostTelemetry(doneTelemetry <-chan interface{}, wg *sync.WaitGroup) {
+func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
-	for {
-		select {
-		case <-ticker.C:
-			if time.Since(lastPostedAt) < time.Hour {
-				continue
-			}
-			ms := worker.GetMembershipState()
-			t := telemetry.NewAlpha(ms)
-			t.GraphqlQueryCount = graphqlQueryCount
-			t.GraphqlpmQueryCount = graphqlpmQueryCount
-			t.SinceHours = int(time.Since(lastPostedAt).Hours())
-			glog.V(2).Infof("Posting Telemetry data: %+v", t)
+	for range ticker.C {
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		ms := worker.GetMembershipState()
+		t := telemetry.NewAlpha(ms)
+		t.NumQueries = atomic.SwapUint64(&numQueries, 0)
+		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
+		t.SinceHours = int(time.Since(lastPostedAt).Hours())
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-			err := t.Post()
-			if err == nil {
-				atomic.StoreUint64(&graphqlQueryCount, 0)
-				atomic.StoreUint64(&graphqlpmQueryCount, 0)
-				lastPostedAt = time.Now()
-			} else {
-				glog.V(1).Infof("Telemetry couldn't be posted. Error: %v", err)
-			}
-		case <-doneTelemetry:
-			glog.V(2).Infof("Stopping reporting of Telemetry data.")
-			wg.Done()
-			return
+		err := t.Post()
+		if err == nil {
+			lastPostedAt = time.Now()
+		} else {
+			atomic.AddUint64(&numQueries, t.NumQueries)
+			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
+			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
 }
@@ -711,13 +703,13 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&graphqlpmQueryCount, 1)
+	atomic.AddUint64(&numGraphQL, 1)
 	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
 // QueryForGraphql handles queries or mutations
 func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&graphqlQueryCount, 1)
+	atomic.AddUint64(&numQueries, 1)
 	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
 
