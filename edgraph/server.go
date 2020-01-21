@@ -773,6 +773,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	if authorize == NeedAuthorize {
+		userData, err := extractUserAndGroups(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, err.Error())
+		}
+		ctx = context.WithValue(ctx, "userId", userData[0])
+		ctx = context.WithValue(ctx, "groupIds", userData[1:])
+
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}

@@ -513,14 +513,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		if err != nil {
-			// We don't follow fail open approach anymore.
-			return status.Error(codes.Unauthenticated, err.Error())
-		}
-
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = ctx.Value("userId").(string)
+		groupIds = ctx.Value("groupIds").([]string)
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
@@ -620,14 +614,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		if err != nil {
-			// We don't follow fail open approach anymore.
-			return status.Error(codes.Unauthenticated, err.Error())
-		}
-
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = ctx.Value("userId").(string)
+		groupIds = ctx.Value("groupIds").([]string)
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardians group are allowed to mutate anything
@@ -747,13 +735,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
-		userData, err := extractUserAndGroups(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, err.Error())
-		}
-
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = ctx.Value("userId").(string)
+		groupIds = ctx.Value("groupIds").([]string)
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
@@ -796,21 +779,14 @@ func authorizeGroot(ctx context.Context) error {
 	var userID string
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			return status.Error(codes.PermissionDenied, err.Error())
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userID = userData[0]
-			if userID == x.GrootId {
-				return nil
-			}
-			// Deny non groot users.
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-				"Only User '%v' is authorized.", userID, x.GrootId))
+		userId = ctx.Value("userId").(string)
+
+		if userID == x.GrootId {
+			return nil
 		}
+		// Deny non groot users.
+		return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
+			"Only User '%v' is authorized.", userID, x.GrootId))
 	}
 
 	return doAuthorizeGroot()
