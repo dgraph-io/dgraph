@@ -33,6 +33,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type GraphqlContextKey int
+
+const (
+	NeedAuthorize GraphqlContextKey = iota
+)
+
 // Query is the underlying dgraph implementation of QueryExecutor.
 func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	span := trace.FromContext(ctx)
@@ -50,7 +56,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	}
 
 	authorize := edgraph.NeedAuthorize
-	if val := ctx.Value("needAuthorize"); val != nil && !val.(bool) {
+	if val := ctx.Value(NeedAuthorize); val != nil && !val.(bool) {
 		authorize = edgraph.NoAuthorize
 	}
 	fmt.Println(ctx)

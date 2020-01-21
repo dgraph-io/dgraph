@@ -161,7 +161,7 @@ func AdminMutationExecutor() MutationExecutor {
 }
 
 func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	ctx = context.WithValue(ctx, "needAuthorize", false)
+	ctx = context.WithValue(ctx, dgraph.NeedAuthorize, false)
 	return dgraph.Query(ctx, query)
 }
 
@@ -169,6 +169,7 @@ func (de *adminExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	ctx = context.WithValue(ctx, dgraph.NeedAuthorize, false)
 	return dgraph.Mutate(ctx, query, mutations)
 }
 

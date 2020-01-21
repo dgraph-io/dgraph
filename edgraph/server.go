@@ -673,7 +673,8 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 }
 
 // QueryForGraphql handles queries or mutations
-func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request, authorize Authorize) (*api.Response, error) {
+func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request,
+	authorize Authorize) (*api.Response, error) {
 	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, authorize)
 }
 
