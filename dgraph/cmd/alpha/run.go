@@ -488,16 +488,13 @@ func setupServer(closer *y.Closer) {
 	go serveGRPC(grpcListener, tlsCfg, &wg)
 	go serveHTTP(httpListener, tlsCfg, &wg)
 
-	doneTelemetry := make(chan interface{})
 	if Alpha.Conf.GetBool("telemetry") {
-		wg.Add(1)
-		go edgraph.PeriodicallyPostTelemetry(doneTelemetry, &wg)
+		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	go func() {
 		defer wg.Done()
 		<-shutdownCh
-		close(doneTelemetry)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {
