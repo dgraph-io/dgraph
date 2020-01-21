@@ -776,17 +776,16 @@ func authorizeGroot(ctx context.Context) error {
 		return nil
 	}
 
-	var userID string
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		userId = ctx.Value("userId").(string)
+		userId := ctx.Value("userId").(string)
 
-		if userID == x.GrootId {
+		if userId == x.GrootId {
 			return nil
 		}
 		// Deny non groot users.
 		return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-			"Only User '%v' is authorized.", userID, x.GrootId))
+			"Only User '%v' is authorized.", userId, x.GrootId))
 	}
 
 	return doAuthorizeGroot()
@@ -861,4 +860,20 @@ func removeGroupBy(gbAttrs []gql.GroupByAttr,
 		filteredGbAttrs = append(filteredGbAttrs, gbAttr)
 	}
 	return filteredGbAttrs
+}
+
+func authenticateAndUpdateContext(ctx context.Context) (context.Context, error) {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return ctx, nil
+	}
+
+	userData, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+	ctx = context.WithValue(ctx, "userId", userData[0])
+	ctx = context.WithValue(ctx, "groupIds", userData[1:])
+
+	return ctx, nil
 }

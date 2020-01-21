@@ -125,6 +125,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 
+	ctx, err := authenticateAndUpdateContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
@@ -773,13 +778,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	if authorize == NeedAuthorize {
-		userData, err := extractUserAndGroups(ctx)
+		ctx, err := authenticateAndUpdateContext(ctx)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, err.Error())
+			return
 		}
-		ctx = context.WithValue(ctx, "userId", userData[0])
-		ctx = context.WithValue(ctx, "groupIds", userData[1:])
-
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}
