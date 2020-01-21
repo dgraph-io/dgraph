@@ -42,6 +42,27 @@ func ApplyFilterPacked(u *pb.UidPack, f func(uint64, int) bool) *pb.UidPack {
 	return encoder.Done()
 }
 
+// IntersectWithPacked intersects u with v. u and v should be sorted.
+func IntersectWithPacked(u, v *pb.UidPack) *pb.UidPack {
+	n := codec.ApproxLen(u)
+	m := codec.ApproxLen(v)
+	if n > m {
+		n, m = m, n
+	}
+	if n == 0 {
+		n = 1
+	}
+
+	// Select appropriate function based on heuristics.
+	ratio := float64(m) / float64(n)
+	switch {
+	case ratio < 100:
+		return IntersectWithLinPacked(u, v)
+	default:
+		return IntersectWithJumpPacked(u, v)
+	}
+}
+
 // IntersectWithLinPacked performs the liner intersection between two compressed uid lists.
 func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 	if u == nil || v == nil {
@@ -94,6 +115,70 @@ func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
 				result.Add(uid)
 				vIdx++
 				uIdx++
+			default:
+				for uIdx = uIdx + 1; uIdx < uLen && uuids[uIdx] < vid; uIdx++ {
+				}
+			}
+		}
+	}
+	return result.Done()
+}
+
+func IntersectWithJumpPacked(u, v *pb.UidPack) *pb.UidPack {
+	if u == nil || v == nil {
+		return nil
+	}
+
+	uDec := codec.NewDecoder(u)
+	uuids := uDec.Uids()
+	vDec := codec.NewDecoder(v)
+	vuids := vDec.Uids()
+	uIdx, vIdx := 0, 0
+	result := codec.Encoder{BlockSize: int(u.BlockSize)}
+
+	for {
+		// Break if the end of a list has been reached.
+		if len(uuids) == 0 || len(vuids) == 0 {
+			break
+		}
+
+		// Load the next block of the encoded lists if necessary.
+		if uIdx == len(uuids) {
+			if uDec.Valid() {
+				uuids = uDec.Next()
+				uIdx = 0
+			} else {
+				break
+			}
+
+		}
+		if vIdx == len(vuids) {
+			if vDec.Valid() {
+				vuids = vDec.Next()
+				vIdx = 0
+			} else {
+				break
+			}
+		}
+
+		uLen := len(uuids)
+		vLen := len(vuids)
+
+		for uIdx < uLen && vIdx < vLen {
+			uid := uuids[uIdx]
+			vid := vuids[vIdx]
+			switch {
+			case uid == vid:
+				result.Add(uid)
+				vIdx++
+				uIdx++
+			case vIdx+jump < vLen && uid > vuids[vIdx+jump]:
+				vIdx += jump
+			case uIdx+jump < uLen && vid > uuids[uIdx+jump]:
+				uIdx += jump
+			case uid > vid:
+				for vIdx = vIdx + 1; vIdx < vLen && vuids[vIdx] < uid; vIdx++ {
+				}
 			default:
 				for uIdx = uIdx + 1; uIdx < uLen && uuids[uIdx] < vid; uIdx++ {
 				}
