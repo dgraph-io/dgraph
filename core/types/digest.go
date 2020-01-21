@@ -17,6 +17,8 @@
 package types
 
 import (
+	"errors"
+
 	"github.com/ChainSafe/gossamer/common"
 )
 
@@ -45,12 +47,39 @@ var PreRuntimeDigestType = byte(1)
 var ConsensusDigestType = byte(2)
 var SealDigestType = byte(4)
 
+func DecodeDigestItem(in []byte) (DigestItem, error) {
+	if len(in) < 2 {
+		return nil, errors.New("cannot decode invalid digest encoding")
+	}
+
+	switch in[0] {
+	case ChangesTrieRootDigestType:
+		d := new(ChangesTrieRootDigest)
+		err := d.Decode(in[1:])
+		return d, err
+	case PreRuntimeDigestType:
+		d := new(PreRuntimeDigest)
+		err := d.Decode(in[1:])
+		return d, err
+	case ConsensusDigestType:
+		d := new(ConsensusDigest)
+		err := d.Decode(in[1:])
+		return d, err
+	case SealDigestType:
+		d := new(SealDigest)
+		err := d.Decode(in[1:])
+		return d, err
+	}
+
+	return nil, errors.New("invalid digest item type")
+}
+
 // DigestItem can be of one of four types of digest: ChangesTrieRootDigest, PreRuntimeDigest, ConsensusDigest, or SealDigest.
 // see https://github.com/paritytech/substrate/blob/f548309478da3935f72567c2abc2eceec3978e9f/primitives/runtime/src/generic/digest.rs#L77
 type DigestItem interface {
 	Type() byte
 	Encode() []byte
-	//Decode([]byte)
+	Decode([]byte) error // Decode assumes the type byte (first byte) has been removed from the encoding.
 }
 
 // ChangesTrieRootDigest contains the root of the changes trie at a given block, if the runtime supports it.
@@ -63,7 +92,16 @@ func (d *ChangesTrieRootDigest) Type() byte {
 }
 
 func (d *ChangesTrieRootDigest) Encode() []byte {
-	return d.Hash[:]
+	return append([]byte{ChangesTrieRootDigestType}, d.Hash[:]...)
+}
+
+func (d *ChangesTrieRootDigest) Decode(in []byte) error {
+	if len(in) < 32 {
+		return errors.New("input is too short: need 32 bytes")
+	}
+
+	copy(d.Hash[:], in)
+	return nil
 }
 
 // PreRuntimeDigest contains messages from the consensus engine to the runtime.
@@ -82,6 +120,16 @@ func (d *PreRuntimeDigest) Encode() []byte {
 	return append(enc, d.Data...)
 }
 
+func (d *PreRuntimeDigest) Decode(in []byte) error {
+	if len(in) < 4 {
+		return errors.New("input is too short: need at least 4 bytes")
+	}
+
+	copy(d.ConsensusEngineID[:], in[:4])
+	d.Data = in[4:]
+	return nil
+}
+
 // ConsensusDigest contains messages from the runtime to the consensus engine.
 type ConsensusDigest struct {
 	ConsensusEngineID ConsensusEngineID
@@ -98,6 +146,16 @@ func (d *ConsensusDigest) Encode() []byte {
 	return append(enc, d.Data...)
 }
 
+func (d *ConsensusDigest) Decode(in []byte) error {
+	if len(in) < 4 {
+		return errors.New("input is too short: need at least 4 bytes")
+	}
+
+	copy(d.ConsensusEngineID[:], in[:4])
+	d.Data = in[4:]
+	return nil
+}
+
 // SealDigest contains the seal or signature. This is only used by native code.
 type SealDigest struct {
 	ConsensusEngineID ConsensusEngineID
@@ -112,4 +170,14 @@ func (d *SealDigest) Encode() []byte {
 	enc := []byte{SealDigestType}
 	enc = append(enc, d.ConsensusEngineID[:]...)
 	return append(enc, d.Data...)
+}
+
+func (d *SealDigest) Decode(in []byte) error {
+	if len(in) < 4 {
+		return errors.New("input is too short: need at least 4 bytes")
+	}
+
+	copy(d.ConsensusEngineID[:], in[:4])
+	d.Data = in[4:]
+	return nil
 }

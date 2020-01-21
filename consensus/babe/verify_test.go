@@ -70,5 +70,43 @@ func TestVerifySlotWinner(t *testing.T) {
 	if !ok {
 		t.Fatal("did not verify slot winner")
 	}
+}
 
+func TestVerifyAuthorshipRight(t *testing.T) {
+	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &SessionConfig{
+		Runtime: rt,
+		Keypair: kp,
+	}
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = babesession.configurationFromRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	babesession.authorityData = make([]AuthorityData, 1)
+	babesession.authorityData[0] = AuthorityData{
+		id:     kp.Public().(*sr25519.PublicKey),
+		weight: 1,
+	}
+
+	block, slot := createTestBlock(babesession, t)
+
+	ok, err := babesession.verifyAuthorshipRight(slot.number, block.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !ok {
+		t.Fatal("did not verify authorship right")
+	}
 }

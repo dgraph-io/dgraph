@@ -534,29 +534,10 @@ func TestSeal(t *testing.T) {
 	}
 }
 
-func TestBuildBlock_ok(t *testing.T) {
-	rt := newRuntime(t)
-	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := &SessionConfig{
-		Runtime: rt,
-		Keypair: kp,
-	}
-
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func createTestBlock(babesession *Session, t *testing.T) (*types.Block, Slot) {
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)
+	babesession.authorityIndex = 0
 	var slotNumber uint64 = 1
 
 	outAndProof, err := babesession.runLottery(slotNumber)
@@ -591,17 +572,36 @@ func TestBuildBlock_ok(t *testing.T) {
 		number:   slotNumber,
 	}
 
-	// create pre-digest
-	preDigest, err := babesession.buildBlockPreDigest(slot)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// build block
 	block, err := babesession.buildBlock(parentHeader, slot)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	return block, slot
+}
+func TestBuildBlock_ok(t *testing.T) {
+	rt := newRuntime(t)
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &SessionConfig{
+		Runtime: rt,
+		Keypair: kp,
+	}
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = babesession.configurationFromRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	block, slot := createTestBlock(babesession, t)
 
 	// hash of parent header
 	parentHash, err := common.HexToHash("0x03106e6f6f740140676f7373616d65725f69735f636f6f6c6c00000000000000")
@@ -615,6 +615,12 @@ func TestBuildBlock_ok(t *testing.T) {
 	}
 
 	extrinsicsRoot, err := common.HexToHash("0xd88e048eda17aaefc427c832ea1208508d67a3e96527be0995db742b5cd91a61")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create pre-digest
+	preDigest, err := babesession.buildBlockPreDigest(slot)
 	if err != nil {
 		t.Fatal(err)
 	}

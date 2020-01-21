@@ -297,6 +297,7 @@ func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error
 	if err != nil {
 		return nil, err
 	}
+
 	encBabeHeader := babeHeader.Encode()
 
 	return &types.PreRuntimeDigest{
