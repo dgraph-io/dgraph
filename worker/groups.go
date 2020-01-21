@@ -71,12 +71,6 @@ func groups() *groupi {
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
-	gr = &groupi{
-		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
-	}
-	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-
 	if len(x.WorkerConfig.MyAddr) == 0 {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
