@@ -18,6 +18,7 @@ package conn
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -31,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/context"
 )
 
 func (n *Node) run(wg *sync.WaitGroup) {

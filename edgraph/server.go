@@ -18,6 +18,7 @@ package edgraph
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"math"
 	"sort"
@@ -46,7 +47,6 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"

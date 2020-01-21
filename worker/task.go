@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,7 +43,6 @@ import (
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,

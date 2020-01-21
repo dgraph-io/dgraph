@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -47,7 +48,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
 
