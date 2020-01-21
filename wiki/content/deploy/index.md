@@ -226,11 +226,11 @@ Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. User
 
 ### Ports used by different nodes
 
- Dgraph Node Type | gRPC-internal  | gRPC-external | HTTP-external
-------------------|----------------|---------------|---------------
-       zero       |  --Not Used--  |     5080      |     6080
-       alpha      |      7080      |     9080      |     8080
-       ratel      |  --Not Used--  | --Not Used--  |     8000
+ Dgraph Node Type | gRPC-internal  | gRPC-external | HTTP-internal  | HTTP-external
+------------------|----------------|---------------|----------------|--------------
+       zero       |  --Not Used--  |     5080      |      6080      | --Not Used--
+       alpha      |      7080      |     9080      |  --Not Used--  |     8080
+       ratel      |  --Not Used--  | --Not Used--  |  --Not Used--  |     8000
 
 Users have to modify security rules or open firewall depending up on their underlying network to allow communication between cluster nodes and between a server and a client. During development a general rule could be wide open *-external (gRPC/HTTP) ports to public and gRPC-internal to be open within the cluster nodes.
 
