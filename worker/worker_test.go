@@ -358,16 +358,7 @@ func TestMain(m *testing.M) {
 	x.Init()
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
-	defer os.RemoveAll(dir)
-	opt := badger.DefaultOptions(dir)
-	ps, err := badger.OpenManaged(opt)
-	x.Check(err)
-	pstore = ps
-	posting.Init(ps)
-	Init(ps)
+	gr = new(groupi)
 	gr.gid = 1
 	gr.tablets = make(map[string]*pb.Tablet)
 	gr.tablets["name"] = &pb.Tablet{GroupId: 1}
@@ -377,6 +368,17 @@ func TestMain(m *testing.M) {
 	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
 	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
 	gr.tablets[""] = &pb.Tablet{GroupId: 1}
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	posting.Init(ps)
+	Init(ps)
 
 	os.Exit(m.Run())
 }

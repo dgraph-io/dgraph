@@ -60,7 +60,10 @@ type groupi struct {
 	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
-var gr *groupi
+var gr = &groupi{
+	blockDeletes: new(sync.Mutex),
+	tablets:      make(map[string]*pb.Tablet),
+}
 
 func groups() *groupi {
 	return gr
@@ -71,6 +74,7 @@ func groups() *groupi {
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
+	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 	if len(x.WorkerConfig.MyAddr) == 0 {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
