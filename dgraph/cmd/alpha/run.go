@@ -164,6 +164,7 @@ they form a Raft group and provide synchronous replication.
 			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
+	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -487,9 +488,14 @@ func setupServer(closer *y.Closer) {
 	go serveGRPC(grpcListener, tlsCfg, &wg)
 	go serveHTTP(httpListener, tlsCfg, &wg)
 
+	if Alpha.Conf.GetBool("telemetry") {
+		go edgraph.PeriodicallyPostTelemetry()
+	}
+
 	go func() {
 		defer wg.Done()
 		<-shutdownCh
+
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {
 			glog.Warningf("Error while closing gRPC listener: %s", err)

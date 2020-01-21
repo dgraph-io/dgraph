@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -76,8 +78,43 @@ const (
 	isGraphQL key = iota
 )
 
+var (
+	numQueries uint64
+	numGraphQL uint64
+)
+
 // Server implements protos.DgraphServer
 type Server struct{}
+
+// PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
+func PeriodicallyPostTelemetry() {
+	glog.V(2).Infof("Starting telemetry data collection for alpha...")
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	var lastPostedAt time.Time
+	for range ticker.C {
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		ms := worker.GetMembershipState()
+		t := telemetry.NewAlpha(ms)
+		t.NumQueries = atomic.SwapUint64(&numQueries, 0)
+		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
+		t.SinceHours = int(time.Since(lastPostedAt).Hours())
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+
+		err := t.Post()
+		if err == nil {
+			lastPostedAt = time.Now()
+		} else {
+			atomic.AddUint64(&numQueries, t.NumQueries)
+			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
+			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
+		}
+	}
+}
 
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
@@ -666,17 +703,18 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	atomic.AddUint64(&numGraphQL, 1)
 	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
 // QueryForGraphql handles queries or mutations
 func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
+	atomic.AddUint64(&numQueries, 1)
 	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	resp *api.Response, rerr error) {
-
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

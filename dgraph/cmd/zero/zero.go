@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
@@ -94,7 +95,7 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	glog.V(2).Infof("Starting telemetry data collection...")
+	glog.V(2).Infof("Starting telemetry data collection for zero...")
 	start := time.Now()
 
 	ticker := time.NewTicker(time.Minute)
@@ -109,17 +110,18 @@ func (s *Server) periodicallyPostTelemetry() {
 			continue
 		}
 		ms := s.membershipState()
-		t := newTelemetry(ms)
+		t := telemetry.NewZero(ms)
 		if t == nil {
 			continue
 		}
 		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-		err := t.post()
-		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		err := t.Post()
 		if err == nil {
 			lastPostedAt = time.Now()
+		} else {
+			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
 }
