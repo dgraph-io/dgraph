@@ -19,7 +19,6 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/golang/glog"
@@ -59,7 +58,6 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	if val := ctx.Value(NeedAuthorize); val != nil && !val.(bool) {
 		authorize = edgraph.NoAuthorize
 	}
-	fmt.Println(ctx)
 	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, authorize)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
@@ -95,7 +93,11 @@ func Mutate(
 		CommitNow: true,
 		Mutations: mutations,
 	}
-	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, edgraph.NeedAuthorize)
+	authorize := edgraph.NeedAuthorize
+	if val := ctx.Value(NeedAuthorize); val != nil && !val.(bool) {
+		authorize = edgraph.NoAuthorize
+	}
+	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, authorize)
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}

@@ -99,7 +99,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var res *schema.Response
-	gqlReq, err := getRequest(r, ctx)
+	gqlReq, err := getRequest(ctx, r)
 
 	if authToken := r.Header.Get("accessJwt"); authToken != "" {
 		md := metadata.New(nil)
@@ -135,7 +135,7 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func getRequest(r *http.Request, ctx context.Context) (*schema.Request, error) {
+func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	gqlReq := &schema.Request{}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
