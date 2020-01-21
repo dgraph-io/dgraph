@@ -216,7 +216,7 @@ overall health of that group.
 
 ## Ports Usage
 
-Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. User has to pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.
+Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. Users should pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.
 
 ### Types of ports
 
