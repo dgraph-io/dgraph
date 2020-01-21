@@ -75,6 +75,7 @@ func groups() *groupi {
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+
 	if len(x.WorkerConfig.MyAddr) == 0 {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
