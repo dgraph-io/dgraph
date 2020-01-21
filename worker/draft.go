@@ -905,7 +905,7 @@ func (n *node) Run() {
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
