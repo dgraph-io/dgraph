@@ -43,7 +43,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
