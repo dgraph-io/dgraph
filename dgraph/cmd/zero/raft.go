@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -37,7 +38,6 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/context"
 )
 
 type node struct {

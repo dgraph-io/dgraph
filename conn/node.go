@@ -18,6 +18,7 @@ package conn
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -36,7 +37,6 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 )
 
 var (

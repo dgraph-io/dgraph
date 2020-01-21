@@ -17,14 +17,13 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"

@@ -17,10 +17,9 @@
 package query
 
 import (
+	"context"
 	"os"
 	"testing"
-
-	context "golang.org/x/net/context"
 
 	"github.com/stretchr/testify/require"
 
