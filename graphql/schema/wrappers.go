@@ -832,15 +832,9 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 }
 
 func (t *astType) Field(name string) FieldDefinition {
-	typName := t.Name()
-	parentInt := parentInterface(t.inSchema, t.inSchema.Types[typName], name)
-	if parentInt != nil {
-		typName = parentInt.Name
-	}
-
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef:        t.inSchema.Types[typName].Fields.ForName(name),
+		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
 	}
