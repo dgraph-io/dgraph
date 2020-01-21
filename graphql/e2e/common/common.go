@@ -34,8 +34,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -150,17 +150,16 @@ func BootstrapServer(schema, data []byte) {
 			"but it never did.\n Got last error: %+v", err.Error()))
 	}
 
-	conf := viper.New()
-	conf.Set("alpha", alphagRPC)
-	conf.Set("user", "groot")
-	conf.Set("password", "password")
-
-	client, closeFunc := x.GetDgraphClient(conf, true)
-	defer closeFunc()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
-		fmt.Println(err)
 		panic(err)
 	}
 
@@ -171,6 +170,10 @@ func BootstrapServer(schema, data []byte) {
 
 	err = checkGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
 	if err != nil {
+		panic(err)
+	}
+
+	if err = d.Close(); err != nil {
 		panic(err)
 	}
 }
@@ -468,7 +471,6 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	req.Header.Set("authToken", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1Nzk1MzU5NTMsImdyb3VwcyI6WyJndWFyZGlhbnMiXSwidXNlcmlkIjoiZ3Jvb3QifQ.yO23WtY1mPQvrbl7zgTG0H0On6DhFxrHz92OdE9k6SM")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -682,8 +684,6 @@ func addSchema(url string, schema string) error {
 			}
 		}
 	}
-
-	fmt.Println(string(resp))
 
 	err = json.Unmarshal(resp, &addResult)
 	if err != nil {

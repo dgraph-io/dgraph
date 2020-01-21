@@ -25,6 +25,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -33,8 +34,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
 )
 
@@ -52,18 +53,14 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	conf := viper.New()
-	conf.Set("alpha", alphagRPC)
-	conf.Set("user", "groot")
-	conf.Set("password", "password")
-
-	client, closeFunc := x.GetDgraphClient(conf, true)
-	defer closeFunc()
+	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", newCountry.ID)),
 	}
-	_, err := client.NewTxn().Mutate(context.Background(), mu)
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err)
 
 	tests := [2]string{"name", "id name"}
