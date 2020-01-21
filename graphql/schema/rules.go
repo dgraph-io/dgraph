@@ -302,9 +302,11 @@ func isInverse(sch *ast.Schema, expectedInvType, expectedInvField, typeName stri
 	// We might have copied this directive in from an interface we are implementing.
 	// If so, make the check for that interface.
 	parentInt := parentInterface(sch, sch.Types[expectedInvType], expectedInvField)
-	if parentInt != nil &&
-		parentInt.Fields.ForName(expectedInvField).Directives.ForName(inverseDirective) != nil {
-		expectedInvType = parentInt.Name
+	if parentInt != nil {
+		fld := parentInt.Fields.ForName(expectedInvField)
+		if fld.Directives != nil && fld.Directives.ForName(inverseDirective) != nil {
+			expectedInvType = parentInt.Name
+		}
 	}
 
 	invType := field.Type.Name()
