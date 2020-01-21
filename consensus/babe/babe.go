@@ -106,7 +106,7 @@ func (b *Session) invokeBlockAuthoring() {
 	for ; currentSlot < b.config.EpochLength; currentSlot++ {
 		// TODO: call buildBlock
 		b.newBlocks <- types.Block{
-			Header: &types.BlockHeader{
+			Header: &types.Header{
 				Number: big.NewInt(0),
 			},
 		}
@@ -216,7 +216,7 @@ func calculateThreshold(C1, C2, authorityIndex uint64, authorityWeights []uint64
 }
 
 // construct a block for this slot with the given parent
-func (b *Session) buildBlock(parent *types.BlockHeader, slot Slot) (*types.Block, error) {
+func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
 	log.Debug("build-block", "parent", parent, "slot", slot)
 
 	// create pre-digest
@@ -273,7 +273,7 @@ func (b *Session) buildBlock(parent *types.BlockHeader, slot Slot) (*types.Block
 
 // buildBlockSeal creates the seal for the block header.
 // the seal consists of the ConsensusEngineId and a signature of the encoded block header.
-func (b *Session) buildBlockSeal(header *types.BlockHeader) (*types.SealDigest, error) {
+func (b *Session) buildBlockSeal(header *types.Header) (*types.SealDigest, error) {
 	encHeader, err := header.Encode()
 	if err != nil {
 		return nil, err

@@ -65,8 +65,8 @@ func (b *Session) finalizeBlock() (*types.Block, error) {
 	}
 
 	bh := &types.Block{
-		Header: new(types.BlockHeader),
-		Body:   new(types.BlockBody),
+		Header: new(types.Header),
+		Body:   new(types.Body),
 	}
 
 	_, err = scale.Decode(data, bh)

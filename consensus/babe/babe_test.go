@@ -336,11 +336,11 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 	}
 
 	genesisBlock := types.Block{
-		Header: &types.BlockHeader{
+		Header: &types.Header{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
 		},
-		Body: &types.BlockBody{},
+		Body: &types.Body{},
 	}
 	genesisBlock.SetBlockArrivalTime(uint64(1000))
 
@@ -354,11 +354,11 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 
 	for i := 1; i <= depth; i++ {
 		block := types.Block{
-			Header: &types.BlockHeader{
+			Header: &types.Header{
 				ParentHash: previousHash,
 				Number:     big.NewInt(int64(i)),
 			},
-			Body: &types.BlockBody{},
+			Body: &types.Body{},
 		}
 
 		hash := block.Header.Hash()
@@ -509,7 +509,7 @@ func TestSeal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	header, err := types.NewBlockHeader(zeroHash, big.NewInt(0), zeroHash, zeroHash, [][]byte{})
+	header, err := types.NewHeader(zeroHash, big.NewInt(0), zeroHash, zeroHash, [][]byte{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +580,7 @@ func TestBuildBlock_ok(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parentHeader := &types.BlockHeader{
+	parentHeader := &types.Header{
 		ParentHash: zeroHash,
 		Number:     big.NewInt(0),
 	}
@@ -619,7 +619,7 @@ func TestBuildBlock_ok(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedBlockHeader := &types.BlockHeader{
+	expectedBlockHeader := &types.Header{
 		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
@@ -688,7 +688,7 @@ func TestBuildBlock_failing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parentHeader := &types.BlockHeader{
+	parentHeader := &types.Header{
 		ParentHash: zeroHash,
 		Number:     big.NewInt(0),
 	}

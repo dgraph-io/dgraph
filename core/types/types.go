@@ -29,8 +29,8 @@ type Extrinsic []byte
 
 // Block defines a state block
 type Block struct {
-	Header      *BlockHeader
-	Body        *BlockBody
+	Header      *Header
+	Body        *Body
 	arrivalTime uint64 // arrival time of this block
 }
 
@@ -44,8 +44,8 @@ func (b *Block) SetBlockArrivalTime(t uint64) {
 	b.arrivalTime = t
 }
 
-// BlockHeader is a state block header
-type BlockHeader struct {
+// Header is a state block header
+type Header struct {
 	ParentHash     common.Hash `json:"parentHash"`
 	Number         *big.Int    `json:"number"`
 	StateRoot      common.Hash `json:"stateRoot"`
@@ -54,14 +54,14 @@ type BlockHeader struct {
 	hash           common.Hash
 }
 
-// NewBlockHeader creates a new block header and sets its hash field
-func NewBlockHeader(parentHash common.Hash, number *big.Int, stateRoot common.Hash, extrinsicsRoot common.Hash, digest [][]byte) (*BlockHeader, error) {
+// NewHeader creates a new block header and sets its hash field
+func NewHeader(parentHash common.Hash, number *big.Int, stateRoot common.Hash, extrinsicsRoot common.Hash, digest [][]byte) (*Header, error) {
 	if number == nil {
 		// Hash() will panic if number is nil
 		return nil, errors.New("cannot have nil block number")
 	}
 
-	bh := &BlockHeader{
+	bh := &Header{
 		ParentHash:     parentHash,
 		Number:         number,
 		StateRoot:      stateRoot,
@@ -73,10 +73,27 @@ func NewBlockHeader(parentHash common.Hash, number *big.Int, stateRoot common.Ha
 	return bh, nil
 }
 
+// DeepCopy returns a deep copy of the header to prevent side effects down the road
+func (bh *Header) DeepCopy() *Header {
+	//copy everything but pointers / array
+	safeCopyHeader := *bh
+	//copy number ptr
+	if bh.Number != nil {
+		safeCopyHeader.Number = new(big.Int).Set(bh.Number)
+	}
+	//copy digest byte array
+	if len(bh.Digest) > 0 {
+		safeCopyHeader.Digest = make([][]byte, len(bh.Digest))
+		copy(safeCopyHeader.Digest, bh.Digest)
+	}
+
+	return &safeCopyHeader
+}
+
 // Hash returns the hash of the block header
 // If the internal hash field is nil, it hashes the block and sets the hash field.
 // If hashing the header errors, this will panic.
-func (bh *BlockHeader) Hash() common.Hash {
+func (bh *Header) Hash() common.Hash {
 	if bh.hash == [32]byte{} {
 		enc, err := scale.Encode(bh)
 		if err != nil {
@@ -94,18 +111,18 @@ func (bh *BlockHeader) Hash() common.Hash {
 	return bh.hash
 }
 
-func (bh *BlockHeader) Encode() ([]byte, error) {
+func (bh *Header) Encode() ([]byte, error) {
 	return scale.Encode(bh)
 }
 
 // BlockBody is the extrinsics inside a state block
-type BlockBody []byte
+type Body []byte
 
 /// BlockData is stored within the BlockDB
 type BlockData struct {
 	Hash   common.Hash
-	Header *BlockHeader
-	Body   *BlockBody
+	Header *Header
+	Body   *Body
 	// Receipt
 	// MessageQueue
 	// Justification

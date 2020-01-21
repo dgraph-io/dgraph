@@ -22,6 +22,7 @@ require (
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
+	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v1.20.0
 	github.com/wasmerio/go-ext-wasm v0.0.0-20191206132826-225d01fcd22c
 	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876

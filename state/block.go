@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ChainSafe/gossamer/consensus/babe"
-
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/polkadb"
 )
 
+// blockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type blockState struct {
-	bt          *blocktree.BlockTree
-	db          *polkadb.BlockDB
-	latestBlock types.BlockHeader
+	bt           *blocktree.BlockTree
+	db           *polkadb.BlockDB
+	latestHeader *types.Header
 }
 
 // NewBlockState will create a new blockState struct using dataDir
@@ -72,8 +72,8 @@ func babeHeaderKey(epoch uint64, slot uint64) []byte {
 }
 
 // GetHeader returns a BlockHeader for a given hash
-func (bs *blockState) GetHeader(hash common.Hash) (*types.BlockHeader, error) {
-	var result *types.BlockHeader
+func (bs *blockState) GetHeader(hash common.Hash) (*types.Header, error) {
+	var result *types.Header
 
 	data, err := bs.db.Db.Get(headerKey(hash))
 	if err != nil {
@@ -112,9 +112,9 @@ func (bs *blockState) GetBabeHeader(epoch uint64, slot uint64) (babe.BabeHeader,
 	return result, err
 }
 
-// GetLatestBlock returns the latest block available on blockState
-func (bs *blockState) GetLatestBlock() types.BlockHeader {
-	return bs.latestBlock
+// LatestHeader returns the latest block available on blockState
+func (bs *blockState) LatestHeader() *types.Header {
+	return bs.latestHeader.DeepCopy()
 }
 
 // GetBlockByHash returns a block for a given hash
@@ -151,7 +151,7 @@ func (bs *blockState) GetBlockByNumber(blockNumber *big.Int) (types.Block, error
 }
 
 // SetHeader will set the header into DB
-func (bs *blockState) SetHeader(header types.BlockHeader) error {
+func (bs *blockState) SetHeader(header *types.Header) error {
 	hash := header.Hash()
 
 	// Write the encoded header
@@ -194,13 +194,28 @@ func (bs *blockState) SetBabeHeader(epoch uint64, slot uint64, blockData babe.Ba
 	return err
 }
 
-// AddBlock will add a block into the DB
-func (bs *blockState) AddBlock(block types.BlockHeader) error {
+// AddBlock will set the latestBlock in blockState DB
+func (bs *blockState) AddBlock(newBlock types.Block) error {
+
 	// Set the latest block
-	if block.Number.Cmp(bs.latestBlock.Number) == 1 {
-		bs.latestBlock = block
+	// If latestHeader is nil OR the new block number is greater than current block number
+	if bs.latestHeader == nil || (newBlock.Header.Number != nil && newBlock.Header.Number.Cmp(bs.latestHeader.Number) == 1) {
+		bs.latestHeader = newBlock.Header.DeepCopy()
 	}
 
-	//TODO: Implement Add Block
-	return nil
+	// Add the blockHeader to the DB
+	err := bs.SetHeader(bs.latestHeader)
+	if err != nil {
+		return err
+	}
+	hash := newBlock.Header.Hash()
+
+	// Create BlockData
+	bd := types.BlockData{
+		Hash:   hash,
+		Header: newBlock.Header,
+		Body:   newBlock.Body,
+	}
+	err = bs.SetBlockData(hash, bd)
+	return err
 }

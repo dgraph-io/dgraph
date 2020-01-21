@@ -87,7 +87,7 @@ func (n *node) getNodeFromBlockNumber(b *big.Int) *node {
 }
 
 func (n *node) getBlockFromNode() *types.Block {
-	bh := types.BlockHeader{
+	bh := types.Header{
 		ParentHash: n.parent.hash,
 		Number:     n.number,
 	}
@@ -95,7 +95,7 @@ func (n *node) getBlockFromNode() *types.Block {
 
 	b := &types.Block{
 		Header: &bh,
-		Body:   &types.BlockBody{},
+		Body:   &types.Body{},
 	}
 	b.SetBlockArrivalTime(n.arrivalTime)
 

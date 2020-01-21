@@ -10,8 +10,8 @@ import (
 	"github.com/ChainSafe/gossamer/polkadb"
 )
 
-func setup(t *testing.T) (polkadb.Database, *types.BlockHeader) {
-	h := &types.BlockHeader{
+func setup(t *testing.T) (polkadb.Database, *types.Header) {
+	h := &types.Header{
 		ParentHash:     common.BytesToHash([]byte("parent_test")),
 		Number:         big.NewInt(2),
 		StateRoot:      common.BytesToHash([]byte("state_root_test")),
@@ -37,7 +37,7 @@ func TestSetHeader(t *testing.T) {
 }
 
 func TestSetBlockData(t *testing.T) {
-	var body *types.BlockBody
+	var body *types.Body
 	memDB, h := setup(t)
 
 	hash := h.Hash()

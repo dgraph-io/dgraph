@@ -30,11 +30,11 @@ var zeroHash, _ = common.HexToHash("0x00")
 
 func createGenesisBlock() types.Block {
 	b := types.Block{
-		Header: &types.BlockHeader{
+		Header: &types.Header{
 			ParentHash: zeroHash,
 			Number:     big.NewInt(0),
 		},
-		Body: &types.BlockBody{},
+		Body: &types.Body{},
 	}
 	b.Header.Hash()
 	b.SetBlockArrivalTime(uint64(0))
@@ -54,11 +54,11 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 	hashes := []common.Hash{bt.head.hash}
 	for i := 1; i <= depth; i++ {
 		block := types.Block{
-			Header: &types.BlockHeader{
+			Header: &types.Header{
 				ParentHash: previousHash,
 				Number:     big.NewInt(int64(i)),
 			},
-			Body: &types.BlockBody{},
+			Body: &types.Body{},
 		}
 
 		hash := block.Header.Hash()
@@ -92,11 +92,11 @@ func TestBlockTree_AddBlock(t *testing.T) {
 	bt, hashes := createFlatTree(t, 1)
 
 	block := types.Block{
-		Header: &types.BlockHeader{
+		Header: &types.Header{
 			ParentHash: hashes[1],
 			Number:     big.NewInt(1),
 		},
-		Body: &types.BlockBody{},
+		Body: &types.Body{},
 	}
 
 	hash := block.Header.Hash()
@@ -137,11 +137,11 @@ func TestBlockTree_LongestPath(t *testing.T) {
 
 	// Insert a block to create a competing path
 	extraBlock := types.Block{
-		Header: &types.BlockHeader{
+		Header: &types.Header{
 			ParentHash: hashes[0],
 			Number:     big.NewInt(1),
 		},
-		Body: &types.BlockBody{},
+		Body: &types.Body{},
 	}
 
 	extraBlock.Header.Hash()
@@ -162,11 +162,11 @@ func TestBlockTree_Subchain(t *testing.T) {
 
 	// Insert a block to create a competing path
 	extraBlock := types.Block{
-		Header: &types.BlockHeader{
+		Header: &types.Header{
 			ParentHash: hashes[0],
 			Number:     big.NewInt(1),
 		},
-		Body: &types.BlockBody{},
+		Body: &types.Body{},
 	}
 
 	extraBlock.Header.Hash()
