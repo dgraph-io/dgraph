@@ -1637,12 +1637,13 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		// We don't do this for eq because eq could have multiple arguments and we would have to
 		// compare the value with all of them. Also eq would usually have less arguments, hence we
 		// won't be fetching many index keys.
-		if q.UidList != nil && !isIndexedAttr {
+		switch {
+		case q.UidList != nil && !isIndexedAttr:
 			fc.n = len(q.UidList.Uids)
-		} else if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
+		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
-		} else {
+		default:
 			fc.n = len(fc.tokens)
 		}
 	case compareScalarFn:
