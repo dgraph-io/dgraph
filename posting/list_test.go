@@ -471,7 +471,6 @@ func TestMillion(t *testing.T) {
 		if i%10000 == 0 {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
-			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
@@ -491,13 +490,15 @@ func TestMillion(t *testing.T) {
 	}
 }
 
-const N int = 100000
+const M int = 100000
+
 var ts uint64
+
 func TestParallelMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey("bal", 1331)
+	key := x.DataKey("balance", 1332)
 
 	commit := make(chan int)
 	go mutate(t, key, commit)
@@ -517,14 +518,14 @@ func TestParallelMillion(t *testing.T) {
 
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
-	val, err := ol.Value(uint64(2*N + 1))
+	val, err := ol.Value(uint64(2*M + 1))
 	t.Logf("Final Value = %v", val)
 }
 
 func mutate(t *testing.T, key []byte, commitCh chan int) {
-	for i := 0; i < N; i++ {
+	for i := 0; i < M; i++ {
 		startTs := atomic.AddUint64(&ts, 2)
-		addEdgeToValue(t, "bal", 1331, strconv.Itoa(i), startTs-1, startTs)
+		addEdgeToValue(t, "balance", 1332, strconv.Itoa(i), startTs-1, startTs)
 		if i%10000 == 0 {
 			fmt.Printf("mutate at %v\n", i)
 		}
