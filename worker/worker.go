@@ -69,7 +69,6 @@ func Init(ps *badger.DB) {
 		tablets:      make(map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-
 }
 
 // grpcWorker struct implements the gRPC server interface.
