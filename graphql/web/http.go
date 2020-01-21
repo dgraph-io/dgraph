@@ -101,9 +101,9 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
 
-	if authToken := r.Header.Get("accessJwt"); authToken != "" {
+	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
 		md := metadata.New(nil)
-		md.Append("accessJwt", authToken)
+		md.Append("accessJwt", accessJwt)
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 

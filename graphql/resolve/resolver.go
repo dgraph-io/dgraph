@@ -113,7 +113,8 @@ type dgraphExecutor struct {
 
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query/mutation resolution through Query method in dgraph server,
-// and it doens't require authorization
+// and it doens't require authorization. Currently it's only used for quering
+// gqlschema during init.
 type adminExecutor struct {
 }
 
@@ -150,12 +151,12 @@ func AdminQueryExecutor() QueryExecutor {
 	return &adminExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+// DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+// DgraphAsMutationExecutor builds a MutationExecutor.
 func AdminMutationExecutor() MutationExecutor {
 	return &adminExecutor{}
 }
