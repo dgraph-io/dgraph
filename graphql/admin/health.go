@@ -44,19 +44,26 @@ var statusMessage = map[healthStatus]string{
 }
 
 func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+	gql := "graphql"
 	msg := "message"
 	status := "status"
 
-	for _, f := range q.SelectionSet() {
-		if f.Name() == "message" {
-			msg = f.ResponseName()
+	for _, fld := range q.SelectionSet() {
+		if fld.Name() == gql {
+			gql = fld.ResponseName()
 		}
-		if f.Name() == "status" {
-			status = f.ResponseName()
+		for _, f := range fld.SelectionSet() {
+			if f.Name() == "message" {
+				msg = f.ResponseName()
+			}
+			if f.Name() == "status" {
+				status = f.ResponseName()
+			}
 		}
 	}
 
-	hr.format = fmt.Sprintf(`{"%s":[{"%s":"%%s","%s":"%%s"}]}`, q.ResponseName(), msg, status)
+	hr.format =
+		fmt.Sprintf(`{"%s":[{"%s":{"%s":"%%s","%s":"%%s"}}]}`, q.ResponseName(), gql, msg, status)
 	return nil, nil
 }
 

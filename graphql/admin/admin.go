@@ -59,11 +59,15 @@ const (
 	}
 
 	type Health {
-		message: String!
-		status: HealthStatus!
+		graphql: GQLHealth!
 	}
 
-	enum HealthStatus {
+	type GQLHealth {
+		message: String!
+		status: GQLHealthStatus!
+	}
+
+	enum GQLHealthStatus {
 		ErrNoConnection
 		NoGraphQLSchema
 		Healthy

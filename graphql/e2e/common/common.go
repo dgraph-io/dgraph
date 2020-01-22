@@ -610,8 +610,10 @@ func checkGraphQLHealth(url string, status []string) error {
 	health := &GraphQLParams{
 		Query: `query {
 			health {
-				message
-				status
+				graphql {
+					message
+					status
+				}
 			}
 		}`,
 	}
@@ -628,8 +630,10 @@ func checkGraphQLHealth(url string, status []string) error {
 	var healthResult struct {
 		Data struct {
 			Health struct {
-				Message string
-				Status  string
+				GraphQL struct {
+					Message string
+					Status  string
+				}
 			}
 		}
 		Errors x.GqlErrorList
@@ -645,13 +649,13 @@ func checkGraphQLHealth(url string, status []string) error {
 	}
 
 	for _, s := range status {
-		if healthResult.Data.Health.Status == s {
+		if healthResult.Data.Health.GraphQL.Status == s {
 			return nil
 		}
 	}
 
 	return errors.Errorf("GraphQL server was not at right health: found %s",
-		healthResult.Data.Health.Status)
+		healthResult.Data.Health.GraphQL.Status)
 }
 
 func addSchema(url string, schema string) error {
