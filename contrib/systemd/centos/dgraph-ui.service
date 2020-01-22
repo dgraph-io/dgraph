@@ -6,6 +6,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/bash -c 'dgraph-ratel'
+Restart=on-failure
 StandardOutput=journal
 StandardError=journal
 User=dgraph
