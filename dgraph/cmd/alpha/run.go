@@ -648,12 +648,12 @@ func run() {
 
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)
-	worker.StartRaftNodes(worker.State.WALstore, bindall)
-	// initialization of the admin account can only be done after raft nodes are running
-	// and health check passes
-	edgraph.ResetAcl()
-	// Handle ACL refresh concurrently
 	go func() {
+		worker.StartRaftNodes(worker.State.WALstore, bindall)
+		// initialization of the admin account can only be done after raft nodes are running
+		// and health check passes
+		edgraph.ResetAcl()
+		// Handle ACL refresh concurrently
 		edgraph.RefreshAcls(aclCloser)
 	}()
 
