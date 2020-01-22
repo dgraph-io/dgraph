@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,7 +31,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"

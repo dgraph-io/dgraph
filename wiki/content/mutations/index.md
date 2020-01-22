@@ -512,7 +512,7 @@ other types of geolocation data. Below is an example:
 ```
 {
   "food": "taco",
-  location: {
+  "location": {
     "type": "Point",
     "coordinates": [1.0, 2.0]
   }

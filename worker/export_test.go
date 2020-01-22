@@ -37,14 +37,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 

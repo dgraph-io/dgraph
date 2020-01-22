@@ -18,6 +18,7 @@ package conn
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -36,7 +37,6 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -276,7 +276,7 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 // SaveToStorage saves the hard state, entries, and snapshot to persistent storage, in that order.
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+func (n *Node) SaveToStorage(h *raftpb.HardState, es []raftpb.Entry, s *raftpb.Snapshot) {
 	for {
 		if err := n.Store.Save(h, es, s); err != nil {
 			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)

@@ -208,3 +208,27 @@ func TestTypeKey(t *testing.T) {
 		require.Equal(t, sattr, pk.Attr)
 	}
 }
+
+func TestBadStartUid(t *testing.T) {
+	testKey := func(key []byte) {
+		key, err := GetSplitKey(key, 10)
+		require.NoError(t, err)
+		_, err = Parse(key)
+		require.NoError(t, err)
+		key = append(key, 0)
+		_, err = Parse(key)
+		require.Error(t, err)
+	}
+
+	key := DataKey("aa", 1)
+	testKey(key)
+
+	key = ReverseKey("aa", 1)
+	testKey(key)
+
+	key = CountKey("aa", 0, false)
+	testKey(key)
+
+	key = CountKey("aa", 0, true)
+	testKey(key)
+}
