@@ -71,7 +71,7 @@ func groups() *groupi {
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
-// This function triggers RAFT nodes to be created, and is the entrace to the RAFT
+// This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
@@ -992,7 +992,7 @@ func EnterpriseEnabled() bool {
 		return false
 	}
 	g := groups()
-	if g == nil {
+	if g.state == nil {
 		return askZeroForEE()
 	}
 	g.RLock()
