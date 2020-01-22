@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 )
 
 var (
