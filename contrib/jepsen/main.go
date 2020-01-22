@@ -186,7 +186,12 @@ func jepsenDown() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		log.Fatal(err)
+		switch {
+		case strings.Contain(err.Error(), "Couldn't find env file"):
+			// OK. Probably tried to call down before up was ever called.
+		default:
+			log.Println(err)
+		}
 	}
 }
 
