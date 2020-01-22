@@ -62,14 +62,16 @@ const (
 	groupFile    = "group_id"
 )
 
-type AuthMode int
-
 type GraphqlContextKey int
 
 const (
+	// IsGraphql is used to validate requests which are allowed to mutate dgraph.graphql.schema.
 	IsGraphql GraphqlContextKey = iota
+	// Authorize is used to set if the request requires validation.
 	Authorize
 )
+
+type AuthMode int
 
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
