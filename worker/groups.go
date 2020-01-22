@@ -157,6 +157,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
+	gr.proposeInitialTypes()
 }
 
 func (g *groupi) informZeroAboutTablets() {
@@ -185,20 +186,30 @@ func (g *groupi) informZeroAboutTablets() {
 	}
 }
 
+func (g *groupi) proposeInitialTypes() {
+	initialTypes := schema.InitialTypes()
+	for _, t := range initialTypes {
+		if _, ok := schema.State().GetType(t.TypeName); ok {
+			continue
+		}
+		g.upsertSchema(nil, t)
+	}
+}
+
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else if gid == 0 {
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else {
 			// The schema for this predicate has already been proposed.
 			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
@@ -207,7 +218,7 @@ func (g *groupi) proposeInitialSchema() {
 	}
 }
 
-func (g *groupi) upsertSchema(sch *pb.SchemaUpdate) {
+func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
@@ -220,7 +231,12 @@ func (g *groupi) upsertSchema(sch *pb.SchemaUpdate) {
 	}
 
 	m.StartTs = ts.StartId
-	m.Schema = append(m.Schema, sch)
+	if sch != nil {
+		m.Schema = append(m.Schema, sch)
+	}
+	if typ != nil {
+		m.Types = append(m.Types, typ)
+	}
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.

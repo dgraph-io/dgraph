@@ -47,7 +47,9 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	req := &dgoapi.Request{
 		Query: queryStr,
 	}
-	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req)
+
+	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
@@ -82,7 +84,9 @@ func Mutate(
 		CommitNow: true,
 		Mutations: mutations,
 	}
-	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req)
+
+	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}

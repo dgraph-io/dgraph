@@ -18,6 +18,7 @@ package web
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -97,7 +99,14 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var res *schema.Response
-	gqlReq, err := getRequest(r)
+	gqlReq, err := getRequest(ctx, r)
+
+	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
+		md := metadata.New(nil)
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+
 	if err != nil {
 		res = schema.ErrorResponse(err, api.RequestID(ctx))
 	} else {
@@ -126,7 +135,7 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func getRequest(r *http.Request) (*schema.Request, error) {
+func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	gqlReq := &schema.Request{}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
