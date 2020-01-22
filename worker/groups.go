@@ -1051,7 +1051,11 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group
 		case <-closer.HasBeenClosed():
 			return
 		default:
-
+			// Graphql server may start subscribing before raft server starts. So, we need to
+			// check whether raft server initialized the group or not.
+			if groups() == nil {
+				continue
+			}
 			// Connect to any of the group 1 nodes.
 			members := groups().AnyTwoServers(group)
 			// There may be a lag while starting so keep retrying.
