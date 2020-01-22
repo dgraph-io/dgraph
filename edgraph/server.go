@@ -84,8 +84,8 @@ const (
 )
 
 var (
-	numQueries uint64
-	numGraphQL uint64
+	numGraphQLPM uint64
+	numGraphQL   uint64
 )
 
 // Server implements protos.DgraphServer
@@ -95,6 +95,7 @@ type Server struct{}
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
+	start := time.Now()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -105,16 +106,16 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.NumQueries = atomic.SwapUint64(&numQueries, 0)
+		t.NumGraphQLPM = atomic.SwapUint64(&numGraphQLPM, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
-		t.SinceHours = int(time.Since(lastPostedAt).Hours())
+		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
 		err := t.Post()
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numQueries, t.NumQueries)
+			atomic.AddUint64(&numGraphQLPM, t.NumGraphQLPM)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
@@ -712,12 +713,18 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	if auth == nil || auth.(bool) {
 		return s.doQuery(ctx, req, NeedAuthorize)
 	}
-	atomic.AddUint64(&numGraphQL, 1)
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
+	if isGraphQL {
+		atomic.AddUint64(&numGraphQL, 1)
+	} else {
+		atomic.AddUint64(&numGraphQLPM, 1)
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -767,8 +774,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if isMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
-
-	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 
 	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
