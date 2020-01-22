@@ -144,6 +144,10 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
 	pk, err := x.Parse(key)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
