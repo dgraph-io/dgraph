@@ -79,8 +79,8 @@ const (
 )
 
 var (
-	numQueries uint64
-	numGraphQL uint64
+	numGraphQLPM uint64
+	numGraphQL   uint64
 )
 
 // Server implements protos.DgraphServer
@@ -90,6 +90,7 @@ type Server struct{}
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
+	start := time.Now()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -100,16 +101,16 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.NumQueries = atomic.SwapUint64(&numQueries, 0)
+		t.NumGraphQLPM = atomic.SwapUint64(&numGraphQLPM, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
-		t.SinceHours = int(time.Since(lastPostedAt).Hours())
+		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
 		err := t.Post()
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numQueries, t.NumQueries)
+			atomic.AddUint64(&numGraphQLPM, t.NumGraphQLPM)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
@@ -703,13 +704,13 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&numGraphQL, 1)
+	atomic.AddUint64(&numGraphQLPM, 1)
 	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
 // QueryForGraphql handles queries or mutations
 func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&numQueries, 1)
+	atomic.AddUint64(&numGraphQL, 1)
 	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
 }
 
