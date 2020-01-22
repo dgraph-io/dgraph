@@ -434,10 +434,6 @@ func LoadTypesFromDb() error {
 // Dgraph's execution. It looks at the schema state to determine which
 // types to insert.
 func InitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal()
-}
-
-func initialTypesInternal() []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes, &pb.TypeUpdate{
 		TypeName: "dgraph.graphql",

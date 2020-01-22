@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -111,9 +112,9 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
-// dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
-// that proxies query/mutation resolution through Query method in dgraph server,
-// and it doens't require authorization. Currently it's only used for quering
+// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// that proxies query resolution through Query method in dgraph server, and
+// it doens't require authorization. Currently it's only used for quering
 // gqlschema during init.
 type adminExecutor struct {
 }
@@ -156,28 +157,17 @@ func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor.
-func AdminMutationExecutor() MutationExecutor {
-	return &adminExecutor{}
-}
-
 func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	ctx = context.WithValue(ctx, dgraph.NeedAuthorize, false)
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
-}
-
-func (de *adminExecutor) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	ctx = context.WithValue(ctx, dgraph.NeedAuthorize, false)
-	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return dgraph.Query(ctx, query)
 }
 
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,

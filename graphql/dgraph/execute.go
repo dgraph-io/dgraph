@@ -32,21 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type GraphqlContextKey int
-
-const (
-	NeedAuthorize GraphqlContextKey = iota
-)
-
-func getAuthorize(ctx context.Context) edgraph.Authorize {
-	authorize := edgraph.NeedAuthorize
-	if val := ctx.Value(NeedAuthorize); val != nil && !val.(bool) {
-		authorize = edgraph.NoAuthorize
-	}
-
-	return authorize
-}
-
 // Query is the underlying dgraph implementation of QueryExecutor.
 func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	span := trace.FromContext(ctx)
@@ -63,7 +48,8 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 		Query: queryStr,
 	}
 
-	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, getAuthorize(ctx))
+	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
@@ -98,7 +84,9 @@ func Mutate(
 		CommitNow: true,
 		Mutations: mutations,
 	}
-	resp, err := (&edgraph.Server{}).QueryForGraphql(ctx, req, getAuthorize(ctx))
+
+	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}
