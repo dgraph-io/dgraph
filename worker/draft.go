@@ -207,6 +207,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 		}
 
+		if len(proposal.Mutations.Schema) > 0 {
+			// Clear cache If there is a schema update. Because, index rebuilder will invalidate
+			// the state.
+			posting.ResetCache()
+		}
+
 		for _, tupdate := range proposal.Mutations.Types {
 			if err := runTypeMutation(ctx, tupdate); err != nil {
 				return err

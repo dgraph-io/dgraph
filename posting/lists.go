@@ -158,7 +158,8 @@ func Init(ps *badger.DB) {
 
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
-			ostats.Record(context.Background(), x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
+			ostats.Record(context.Background(),
+				x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
 				x.CacheAddedKeys.M(int64(m.KeysAdded())),
 				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
 				x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
