@@ -1063,6 +1063,22 @@
     }
 
 -
+  name: "Get with XID where no ID in type"
+  gqlquery: |
+    query {
+      getState(code: "NSW") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getState(func: eq(State.code, "NSW")) @filter(type(State)) {
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Query editor using code"
   gqlquery: |
     query {
