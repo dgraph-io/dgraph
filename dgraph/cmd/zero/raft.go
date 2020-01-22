@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -37,7 +38,6 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/context"
 )
 
 type node struct {
@@ -674,7 +674,7 @@ func (n *node) Run() {
 					n.Send(&rd.Messages[i])
 				}
 			}
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {

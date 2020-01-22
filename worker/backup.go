@@ -19,10 +19,11 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
 // Backup implements the Worker interface.

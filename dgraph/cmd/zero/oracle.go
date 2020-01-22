@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -29,7 +30,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 )
 
 type syncMark struct {

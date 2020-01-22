@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -24,7 +25,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
