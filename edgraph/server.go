@@ -778,8 +778,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 	}
 
 	if authorize == NeedAuthorize {
-		ctx, err := authenticateAndUpdateContext(ctx)
-		if err != nil {
+		ctx, rerr = authenticateAndUpdateContext(ctx)
+		if rerr != nil {
 			return
 		}
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {

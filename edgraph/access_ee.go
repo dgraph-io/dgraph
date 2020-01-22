@@ -513,8 +513,9 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
-		userId = ctx.Value("userId").(string)
-		groupIds = ctx.Value("groupIds").([]string)
+		credentials := ctx.Value("credentials").(accessEntry)
+		userId = credentials.userId
+		groupIds = credentials.groups
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
@@ -614,8 +615,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
-		userId = ctx.Value("userId").(string)
-		groupIds = ctx.Value("groupIds").([]string)
+		credentials := ctx.Value("credentials").(accessEntry)
+		userId = credentials.userId
+		groupIds = credentials.groups
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardians group are allowed to mutate anything
@@ -735,8 +737,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
-		userId = ctx.Value("userId").(string)
-		groupIds = ctx.Value("groupIds").([]string)
+		credentials := ctx.Value("credentials").(accessEntry)
+		userId = credentials.userId
+		groupIds = credentials.groups
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
@@ -778,7 +781,8 @@ func authorizeGroot(ctx context.Context) error {
 
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		userId := ctx.Value("userId").(string)
+		credentials := ctx.Value("credentials").(accessEntry)
+		userId := credentials.userId
 
 		if userId == x.GrootId {
 			return nil
@@ -870,10 +874,13 @@ func authenticateAndUpdateContext(ctx context.Context) (context.Context, error) 
 
 	userData, err := extractUserAndGroups(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+		return ctx, status.Error(codes.Unauthenticated, err.Error())
 	}
-	ctx = context.WithValue(ctx, "userId", userData[0])
-	ctx = context.WithValue(ctx, "groupIds", userData[1:])
 
-	return ctx, nil
+	newCtx := context.WithValue(ctx, "credentials", accessEntry{
+		userId: userData[0],
+		groups: userData[1:],
+	})
+
+	return newCtx, nil
 }
