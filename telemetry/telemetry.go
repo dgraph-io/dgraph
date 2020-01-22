@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package zero
+package telemetry
 
 import (
 	"bytes"
@@ -22,13 +22,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-// Telemetry holds information about the state of the zero server.
+// Telemetry holds information about the state of the zero and alpha server.
 type Telemetry struct {
 	Arch        string
 	Cid         string
@@ -41,11 +42,14 @@ type Telemetry struct {
 	OS          string
 	SinceHours  int
 	Version     string
+	NumQueries  uint64
+	NumGraphQL  uint64
 }
 
-var keenURL = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+var url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
-func newTelemetry(ms *pb.MembershipState) *Telemetry {
+// NewZero returns a Telemetry struct that holds information about the state of zero server.
+func NewZero(ms *pb.MembershipState) *Telemetry {
 	if len(ms.Cid) == 0 {
 		glog.V(2).Infoln("No CID found yet")
 		return nil
@@ -70,14 +74,27 @@ func newTelemetry(ms *pb.MembershipState) *Telemetry {
 	return t
 }
 
-func (t *Telemetry) post() error {
+// NewAlpha returns a Telemetry struct that holds information about the state of alpha server.
+func NewAlpha(ms *pb.MembershipState) *Telemetry {
+	return &Telemetry{
+		Cid:     ms.Cid,
+		Version: x.Version(),
+		OS:      runtime.GOOS,
+		Arch:    runtime.GOARCH,
+	}
+}
+
+// Post reports the Telemetry to the stats server.
+func (t *Telemetry) Post() error {
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
-	url := keenURL + "/dev"
+
 	if len(t.Version) > 0 {
-		url = keenURL + "/pings"
+		url += "/pings"
+	} else {
+		url += "/dev"
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
@@ -88,7 +105,7 @@ func (t *Telemetry) post() error {
 		"97497CA758881BD7D56CC2355A2F36B4560102CBC3279AC7B27E5391372C36A31167EB0D06BF3764894AD20"+
 		"A0554BAFF14C292A40BC252BB9FF008736A0FD1D44E085")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

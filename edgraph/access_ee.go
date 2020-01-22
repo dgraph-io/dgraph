@@ -729,7 +729,9 @@ func (log *accessEntry) String() string {
 }
 
 func logAccess(log *accessEntry) {
-	glog.V(1).Infof(log.String())
+	if glog.V(1) {
+		glog.Info(log.String())
+	}
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all

@@ -17,14 +17,13 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
@@ -60,7 +59,10 @@ type groupi struct {
 	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
-var gr *groupi
+var gr = &groupi{
+	blockDeletes: new(sync.Mutex),
+	tablets:      make(map[string]*pb.Tablet),
+}
 
 func groups() *groupi {
 	return gr
@@ -68,13 +70,9 @@ func groups() *groupi {
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
-// This function triggers RAFT nodes to be created, and is the entrace to the RAFT
+// This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
-	gr = &groupi{
-		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
-	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	if len(x.WorkerConfig.MyAddr) == 0 {
@@ -329,6 +327,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 
 		for _, member := range g.state.GetRemoved() {
+			// TODO: This leader check can be done once instead of repeatedly.
 			if member.GetGroupId() == g.Node.gid && g.Node.AmLeader() {
 				go func() {
 					// Don't try to remove a member if it's already marked as removed in
@@ -992,7 +991,7 @@ func EnterpriseEnabled() bool {
 		return false
 	}
 	g := groups()
-	if g == nil {
+	if g.state == nil {
 		return askZeroForEE()
 	}
 	g.RLock()
@@ -1042,34 +1041,42 @@ func askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32) {
-	for {
-		// Connect to any of the group 1 nodes.
-		members := groups().AnyTwoServers(group)
-		// There may be a lag while starting so keep retrying.
-		if len(members) == 0 {
-			continue
-		}
-		pool := conn.GetPools().Connect(members[0])
-		client := pb.NewWorkerClient(pool.Get())
+func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32,
+	closer *y.Closer) {
+	defer closer.Done()
 
-		// Get Subscriber stream.
-		stream, err := client.Subscribe(context.Background(), &pb.SubscriptionRequest{
-			Prefixes: prefixes,
-		})
-		if err != nil {
-			glog.Errorf("Error from alpha client subscribe: %v", err)
-			continue
-		}
-	receiver:
-		for {
-			// Listen for updates.
-			kvs, err := stream.Recv()
-			if err != nil {
-				glog.Errorf("Error from worker subscribe stream: %v", err)
-				break receiver
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		default:
+
+			// Connect to any of the group 1 nodes.
+			members := groups().AnyTwoServers(group)
+			// There may be a lag while starting so keep retrying.
+			if len(members) == 0 {
+				continue
 			}
-			cb(kvs)
+			pool := conn.GetPools().Connect(members[0])
+			client := pb.NewWorkerClient(pool.Get())
+
+			// Get Subscriber stream.
+			stream, err := client.Subscribe(context.Background(),
+				&pb.SubscriptionRequest{Prefixes: prefixes})
+			if err != nil {
+				glog.Errorf("Error from alpha client subscribe: %v", err)
+				continue
+			}
+		receiver:
+			for {
+				// Listen for updates.
+				kvs, err := stream.Recv()
+				if err != nil {
+					glog.Errorf("Error from worker subscribe stream: %v", err)
+					break receiver
+				}
+				cb(kvs)
+			}
 		}
 	}
 }

@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -29,7 +30,6 @@ import (
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 

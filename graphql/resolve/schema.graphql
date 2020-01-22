@@ -69,3 +69,15 @@ type Human implements Character & Employee {
         dob: DateTime
         female: Boolean
 }
+
+# just for testing singluar (non-list) edges in both directions
+
+type House {
+        id: ID!
+        owner: Owner @hasInverse(field: house)
+}
+
+type Owner {
+        id: ID!
+        house: House
+}
