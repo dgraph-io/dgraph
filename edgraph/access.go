@@ -69,3 +69,7 @@ func authorizeGroot(ctx context.Context) error {
 	// always allow access
 	return nil
 }
+
+func authenticateAndUpdateContext(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
