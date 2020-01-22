@@ -322,12 +322,25 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	if doUpdateIndex {
-		// Check original value BEFORE any mutation actually happens.
+	// if doUpdateIndex {
+	// 	// Check original value BEFORE any mutation actually happens.
+	// 	val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
+	// 	if err != nil {
+	// 		return val, found, emptyCountParams, err
+	// 	}
+	// }
+
+	countBefore, countAfter := 0, 0
+	switch {
+	case hasCountIndex:
+		countBefore, found, val, err = l.lengthAndValue(txn.StartTs, 0, fingerprintEdge(t))
+	case doUpdateIndex:
 		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
-		if err != nil {
-			return val, found, emptyCountParams, err
-		}
+	}
+
+	// TODO: ErrTsTooOld
+	if err != nil {
+		return val, found, emptyCountParams, err
 	}
 
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
@@ -351,21 +364,43 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	countBefore, countAfter := 0, 0
-	if hasCountIndex {
-		countBefore = l.length(txn.StartTs, 0)
-		if countBefore == -1 {
-			return val, found, emptyCountParams, ErrTsTooOld
-		}
-	}
+	// if hasCountIndex {
+	// 	// countBefore = l.length(txn.StartTs, 0)
+	// 	countBefore, found, _, err := l.lengthAndPosting(txn.StartTs, 0, fingerprintEdge(t))
+	// 	if err != nil {
+	// 		return val, found, emptyCountParams, err
+	// 	}
+	// 	if countBefore == -1 {
+	// 		return val, found, emptyCountParams, ErrTsTooOld
+	// 	}
+	// }
 	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
+
 	if hasCountIndex {
-		countAfter = l.length(txn.StartTs, 0)
-		if countAfter == -1 {
-			return val, found, emptyCountParams, ErrTsTooOld
+		// countAfter = l.length(txn.StartTs, 0)
+		// if countAfter == -1 {
+		// 	return val, found, emptyCountParams, ErrTsTooOld
+		// }
+
+		if t.Op == pb.DirectedEdge_SET {
+			if found {
+				countAfter = countBefore
+			} else {
+				countAfter = countBefore + 1
+			}
+		} else if t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star { // single delete.
+			if found {
+				countAfter = countBefore - 1
+			} else {
+				countAfter = countBefore
+			}
+		} else if t.Op == pb.DirectedEdge_DEL && string(t.Value) == x.Star { // delete all.
+			countAfter = 0
 		}
+		// handle deleteAll case.
+
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
