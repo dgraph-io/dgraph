@@ -148,7 +148,10 @@ func Init(ps *badger.DB) {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l := val.(*List)
+			l, ok := val.(*List)
+			if !ok {
+				return int64(0)
+			}
 			return int64(l.DeepSize())
 		},
 	})
