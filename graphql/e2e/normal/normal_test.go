@@ -26,10 +26,12 @@ import (
 )
 
 func TestRunAll_Normal(t *testing.T) {
+	t.Skip()
 	common.RunAll(t)
 }
 
 func TestSchema_Normal(t *testing.T) {
+	t.Skip()
 	expectedDgraphSchema := `
 	{
 		"schema": [{
