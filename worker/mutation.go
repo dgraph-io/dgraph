@@ -692,6 +692,14 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	m *pb.Mutations) error {
 	if x.WorkerConfig.StrictMutations {
 		for _, edge := range m.Edges {
+			// Reserved Predicates may not always exist in schema causing the below
+			// called TypeOf function to return error. Because they already exist,
+			// we don't need to check their type. This check handles the scenario when
+			// ACL is off and a <uid * *> deletion is issued.
+			if x.IsReservedPredicate(edge.Attr) {
+				continue
+			}
+
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
 				return err
 			}
