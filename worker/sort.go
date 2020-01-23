@@ -225,15 +225,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 
 	var prefix []byte
 	if len(order.Langs) > 0 {
-		// Only one language is allowed.
+		// Only one languge is allowed.
 		lang := order.Langs[0]
 		tokenizer = tok.GetLangTokenizer(tokenizer, lang)
-		langTokenizer, ok := tokenizer.(tok.LangTokenizer)
-		if !ok {
-			return resultWithError(errors.Errorf(
-				"Invalid tokenizer for language %s.", lang))
-		}
-		prefix = langTokenizer.Prefix()
+		prefix = []byte{tokenizer.Identifier()}
+		prefix = append(prefix, []byte(tok.LangBase(lang))...)
+		prefix = append(prefix, byte(tok.IdentDelimiter))
 	} else {
 		prefix = []byte{tokenizer.Identifier()}
 	}
