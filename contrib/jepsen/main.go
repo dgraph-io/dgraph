@@ -34,10 +34,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
@@ -163,8 +165,8 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 }
 
 func jepsenUp() {
-	cmd := command("./up.sh",
-		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
+	cmd := command("./up.sh", "--dev", "--daemon",
+		"--compose", "../dgraph/docker/docker-compose.yml")
 	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -188,15 +190,53 @@ func jepsenDown() {
 	}
 }
 
-func jepsenServe() {
-	cmd := command(
-		"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
-		"lein", "run", "serve")
+func jepsenServe() error {
+	// Check if the page is already up
+	checkServing := func() error {
+		url := jepsenUrl()
+		_, err := http.Get(url)
+		return err
+	}
+	if err := checkServing(); err == nil {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	errCh := make(chan error)
 	// Ignore output and errors. It's okay if "lein run serve" already ran before.
-	_ = cmd.Run()
+	go func() {
+		// If this runs for the first time it takes about a minute before
+		// starting in order to fetch and install dependencies.
+		cmd := command(
+			"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
+			"lein", "run", "serve")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stdout
+		_ = cmd.Start()
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-time.After(5 * time.Minute):
+				wg.Done()
+				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
+				return
+			case <-ticker.C:
+				if err := check(); err == nil {
+					ticker.Stop()
+					wg.Done()
+					errCh <- nil
+					return
+				}
+			default:
+			}
+		}
+	}()
+	wg.Wait()
+	return <-errCh
 }
 
-func openJepsenBrowser() {
+func jepsenUrl() string {
 	cmd := command(
 		"docker", "inspect", "--format",
 		`{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}`,
@@ -207,8 +247,12 @@ func openJepsenBrowser() {
 		log.Fatal(err)
 	}
 	port := strings.TrimSpace(out.String())
-	jepsenUrl := "http://localhost:" + port
-	browser.Open(jepsenUrl)
+	return "http://localhost:" + port
+}
+
+func openJepsenBrowser() {
+	url := jepsenUrl()
+	browser.Open(url)
 }
 
 func runJepsenTest(test *jepsenTest) error {
@@ -313,6 +357,7 @@ func main() {
 		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
 	}
 	pflag.Parse()
+	shouldOpenPage := *web && !*dryRun
 	if *jepsenRoot == "" {
 		log.Fatal("--jepsen-root must be set.")
 	}
@@ -351,12 +396,12 @@ func main() {
 		jepsenUp()
 	}
 	if *doServe {
-		go jepsenServe()
-		if *web && !*dryRun {
+		jepsenServe()
+		if shouldOpenPage {
 			openJepsenBrowser()
 		}
 	}
-	if *web && !*dryRun && *jaeger != "" {
+	if shouldOpenPage && *jaeger != "" {
 		// Open Jaeger UI
 		browser.Open("http://localhost:16686")
 	}
@@ -381,10 +426,10 @@ func main() {
 			})
 			if err != nil {
 				if err == errTestFail {
-					defer os.Exit(1)
 					if *exitOnFailure {
 						os.Exit(1)
 					}
+					defer os.Exit(1)
 				}
 			}
 			tcEnd(err)
