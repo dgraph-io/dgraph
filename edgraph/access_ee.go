@@ -522,11 +522,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	doAuthorizeAlter := func() error {
 		userId, ok := ctx.Value(userId).(string)
 		if !ok {
-			errors.New("Inappropriate value of userId in context: expected type string")
+			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
 		groupIds, ok := ctx.Value(groups).([]string)
 		if !ok {
-			errors.New("Inappropriate value of groups in context: expected type []srting")
+			return errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
 
 		if x.IsGuardian(groupIds) {
@@ -629,11 +629,11 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	doAuthorizeMutation := func() error {
 		userId, ok := ctx.Value(userId).(string)
 		if !ok {
-			errors.New("Inappropriate value of userId in context: expected type string")
+			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
 		groupIds, ok := ctx.Value(groups).([]string)
 		if !ok {
-			errors.New("Inappropriate value of groups in context: expected type []srting")
+			return errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
 
 		if x.IsGuardian(groupIds) {
@@ -756,11 +756,11 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
 		userId, ok := ctx.Value(userId).(string)
 		if !ok {
-			errors.New("Inappropriate value of userId in context: expected type string")
+			return nil, errors.New("Inappropriate value of userId in context: expected type string")
 		}
 		groupIds, ok := ctx.Value(groups).([]string)
 		if !ok {
-			errors.New("Inappropriate value of groups in context: expected type []srting")
+			return nil, errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
 
 		if x.IsGuardian(groupIds) {
