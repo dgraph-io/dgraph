@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	scale "github.com/ChainSafe/gossamer/codec"
-	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/keystore"
 	allocator "github.com/ChainSafe/gossamer/runtime/allocator"
 	log "github.com/ChainSafe/log15"
@@ -96,11 +95,6 @@ func NewRuntime(code []byte, s Storage, ks *keystore.Keystore) (*Runtime, error)
 
 func (r *Runtime) Stop() {
 	r.vm.Close()
-}
-
-// TODO, this should be removed once core is refactored
-func (r *Runtime) StorageRoot() (common.Hash, error) {
-	return r.storage.StorageRoot()
 }
 
 func (r *Runtime) Store(data []byte, location int32) {

@@ -30,7 +30,6 @@ import (
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
-	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
@@ -92,10 +91,12 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	// Core
 	coreConfig := &core.Config{
-		Keystore: ks,
-		Runtime:  r,
-		MsgRec:   p2pMsgSend, // message channel from p2p service to core service
-		MsgSend:  p2pMsgRec,  // message channel from core service to p2p service
+		BlockState:   stateSrv.Block,
+		StorageState: stateSrv.Storage,
+		Keystore:     ks,
+		Runtime:      r,
+		MsgRec:       p2pMsgSend, // message channel from p2p service to core service
+		MsgSend:      p2pMsgRec,  // message channel from core service to p2p service
 	}
 	coreSrvc := createCoreService(coreConfig)
 	srvcs = append(srvcs, coreSrvc)
@@ -238,10 +239,7 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 
 // createCoreService creates the core service from the provided core configuration
 func createCoreService(coreConfig *core.Config) *core.Service {
-
-	coreBlkRec := make(chan types.Block)
-
-	coreService, err := core.NewService(coreConfig, coreBlkRec)
+	coreService, err := core.NewService(coreConfig)
 	if err != nil {
 		log.Error("Failed to create new core service", "err", err)
 	}

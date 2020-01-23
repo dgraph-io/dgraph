@@ -38,23 +38,28 @@ var _ services.Service = &Service{}
 // BABE session, and p2p service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
-	rt      *runtime.Runtime
-	bs      *babe.Session
-	blkRec  <-chan types.Block // receive blocks from BABE session
-	msgRec  <-chan p2p.Message // receive messages from p2p service
-	msgSend chan<- p2p.Message // send messages to p2p service
+	blockState   BlockState
+	storageState StorageState
+	rt           *runtime.Runtime
+	bs           *babe.Session
+	blkRec       <-chan types.Block // receive blocks from BABE session
+	msgRec       <-chan p2p.Message // receive messages from p2p service
+	msgSend      chan<- p2p.Message // send messages to p2p service
 }
 
 type Config struct {
-	Keystore *keystore.Keystore
-	Runtime  *runtime.Runtime
-	MsgRec   <-chan p2p.Message
-	MsgSend  chan<- p2p.Message
+	BlockState   BlockState
+	StorageState StorageState
+	Keystore     *keystore.Keystore
+	Runtime      *runtime.Runtime
+	MsgRec       <-chan p2p.Message
+	MsgSend      chan<- p2p.Message
+	NewBlocks    chan types.Block // only used for testing purposes
 }
 
 // NewService returns a new core service that connects the runtime, BABE
 // session, and p2p service.
-func NewService(cfg *Config, newBlocks chan types.Block) (*Service, error) {
+func NewService(cfg *Config) (*Service, error) {
 	if cfg.Keystore == nil {
 		return nil, fmt.Errorf("no keystore provided")
 	}
@@ -70,11 +75,16 @@ func NewService(cfg *Config, newBlocks chan types.Block) (*Service, error) {
 		keys = cfg.Keystore.Sr25519Keypairs()
 	}
 
+	if cfg.NewBlocks == nil {
+		cfg.NewBlocks = make(chan types.Block)
+	}
+
 	// BABE session configuration
 	bsConfig := &babe.SessionConfig{
-		Keypair:   keys[0].(*sr25519.Keypair),
-		Runtime:   cfg.Runtime,
-		NewBlocks: newBlocks, // becomes block send channel in BABE session
+		BlockState: cfg.BlockState,
+		Keypair:    keys[0].(*sr25519.Keypair),
+		Runtime:    cfg.Runtime,
+		NewBlocks:  cfg.NewBlocks, // becomes block send channel in BABE session
 	}
 
 	// create a new BABE session
@@ -85,11 +95,13 @@ func NewService(cfg *Config, newBlocks chan types.Block) (*Service, error) {
 
 	// core service
 	return &Service{
-		rt:      cfg.Runtime,
-		bs:      bs,
-		blkRec:  newBlocks, // becomes block receive channel in core service
-		msgRec:  cfg.MsgRec,
-		msgSend: cfg.MsgSend,
+		rt:           cfg.Runtime,
+		bs:           bs,
+		blkRec:       cfg.NewBlocks, // becomes block receive channel in core service
+		msgRec:       cfg.MsgRec,
+		msgSend:      cfg.MsgSend,
+		blockState:   cfg.BlockState,
+		storageState: cfg.StorageState,
 	}, nil
 }
 
@@ -126,7 +138,7 @@ func (s *Service) Stop() error {
 
 // StorageRoot returns the hash of the runtime storage root
 func (s *Service) StorageRoot() (common.Hash, error) {
-	return s.rt.StorageRoot()
+	return s.storageState.StorageRoot()
 }
 
 // receiveBlocks starts receiving blocks from the BABE session
