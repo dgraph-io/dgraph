@@ -788,6 +788,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if doAuth == NeedAuthorize {
 		ctx, rerr = authenticateAndUpdateContext(ctx)
 		if rerr != nil {
+			glog.V(1).Info(rerr.Error())
 			return
 		}
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {

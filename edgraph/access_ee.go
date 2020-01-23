@@ -38,6 +38,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var errTypAssertString = errors.New(
+	"Inappropriate value of userId in context: expected type string")
+
+var errTypAssertStringSlice = errors.New(
+	"Inappropriate value of groups in context: expected type []string")
+
 type userContextKey int
 
 const (
@@ -522,11 +528,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	doAuthorizeAlter := func() error {
 		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
-			return errors.New("Inappropriate value of userId in context: expected type string")
+			return errTypAssertString
 		}
 		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
-			return errors.New("Inappropriate value of groups in context: expected type []srting")
+			return errTypAssertStringSlice
 		}
 
 		if x.IsGuardian(groupIds) {
@@ -629,11 +635,11 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	doAuthorizeMutation := func() error {
 		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
-			return errors.New("Inappropriate value of userId in context: expected type string")
+			return errTypAssertString
 		}
 		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
-			return errors.New("Inappropriate value of groups in context: expected type []srting")
+			return errTypAssertStringSlice
 		}
 
 		if x.IsGuardian(groupIds) {
@@ -756,11 +762,11 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
 		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
-			return nil, errors.New("Inappropriate value of userId in context: expected type string")
+			return nil, errTypAssertString
 		}
 		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
-			return nil, errors.New("Inappropriate value of groups in context: expected type []srting")
+			return nil, errTypAssertStringSlice
 		}
 
 		if x.IsGuardian(groupIds) {
@@ -805,7 +811,7 @@ func authorizeGroot(ctx context.Context) error {
 	doAuthorizeGroot := func() error {
 		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
-			return errors.New("Inappropriate value of userId in context: expected type string")
+			return errTypAssertString
 		}
 
 		if userId == x.GrootId {
