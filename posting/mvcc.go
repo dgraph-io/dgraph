@@ -229,22 +229,24 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {
-		l := cachedVal.(*List)
+		l, ok := cachedVal.(*List)
+		if ok {
 
-		// No need to clone the immutable layer or the key since mutations will not modify it.
-		lCopy := &List{
-			minTs: l.minTs,
-			maxTs: l.maxTs,
-			key:   key,
-			plist: l.plist,
-		}
-		if l.mutationMap != nil {
-			lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-			for ts, pl := range l.mutationMap {
-				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
 			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
 		}
-		return lCopy, nil
 	}
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
