@@ -17,12 +17,9 @@
 package normal
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/pkg/errors"
 )
 
 func TestRunAll_Normal(t *testing.T) {
@@ -280,20 +277,20 @@ func TestSchema_Normal(t *testing.T) {
 	})
 }
 
-func TestMain(m *testing.M) {
-	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
+// func TestMain(m *testing.M) {
+// 	schemaFile := "schema.graphql"
+// 	schema, err := ioutil.ReadFile(schemaFile)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
+// 	jsonFile := "test_data.json"
+// 	data, err := ioutil.ReadFile(jsonFile)
+// 	if err != nil {
+// 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+// 	}
 
-	common.BootstrapServer(schema, data)
+// 	common.BootstrapServer(schema, data)
 
-	os.Exit(m.Run())
-}
+// 	os.Exit(m.Run())
+// }
