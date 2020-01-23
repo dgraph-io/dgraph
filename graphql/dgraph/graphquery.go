@@ -88,13 +88,24 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 	}
 }
 
-func writeUidFunc(b *strings.Builder, uids []uint64) {
+func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
 	x.Check2(b.WriteString("uid("))
-	for i, uid := range uids {
-		if i != 0 {
-			x.Check2(b.WriteString(", "))
+	if len(uids) > 0 {
+		// uid function with uint64 - uid(0x123, 0x456, ...)
+		for i, uid := range uids {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(fmt.Sprintf("%#x", uid)))
 		}
-		x.Check2(b.WriteString(fmt.Sprintf("%#x", uid)))
+	} else {
+		// uid function with a Dgraph query variable - uid(Post1)
+		for i, arg := range args {
+			if i != 0 {
+				x.Check2(b.WriteString(", "))
+			}
+			x.Check2(b.WriteString(arg.Value))
+		}
 	}
 	x.Check2(b.WriteString(")"))
 }
@@ -111,7 +122,7 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	switch {
 	case q.Func.Name == "uid":
 		x.Check2(b.WriteString("(func: "))
-		writeUidFunc(b, q.Func.UID)
+		writeUIDFunc(b, q.Func.UID, q.Func.Args)
 	case q.Func.Name == "type" && len(q.Func.Args) == 1:
 		x.Check2(b.WriteString(fmt.Sprintf("(func: type(%s)", q.Func.Args[0].Value)))
 	case q.Func.Name == "eq" && len(q.Func.Args) == 2:
@@ -129,7 +140,7 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 
 	switch {
 	case f.Name == "uid":
-		writeUidFunc(b, f.UID)
+		writeUIDFunc(b, f.UID, f.Args)
 	case len(f.Args) == 1:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value)))
 	case len(f.Args) == 2:
