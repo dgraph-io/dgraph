@@ -38,6 +38,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type userContextKey int
+
+const (
+	userId userContextKey = iota
+	groups
+)
+
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
@@ -513,9 +520,14 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
-		credentials := ctx.Value("credentials").(accessEntry)
-		userId = credentials.userId
-		groupIds = credentials.groups
+		userId, ok := ctx.Value(userId).(string)
+		if !ok {
+			errors.New("Inappropriate value of userId in context: expected type string")
+		}
+		groupIds, ok := ctx.Value(groups).([]string)
+		if !ok {
+			errors.New("Inappropriate value of groups in context: expected type []srting")
+		}
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
@@ -615,9 +627,14 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
-		credentials := ctx.Value("credentials").(accessEntry)
-		userId = credentials.userId
-		groupIds = credentials.groups
+		userId, ok := ctx.Value(userId).(string)
+		if !ok {
+			errors.New("Inappropriate value of userId in context: expected type string")
+		}
+		groupIds, ok := ctx.Value(groups).([]string)
+		if !ok {
+			errors.New("Inappropriate value of groups in context: expected type []srting")
+		}
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardians group are allowed to mutate anything
@@ -737,9 +754,14 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
-		credentials := ctx.Value("credentials").(accessEntry)
-		userId = credentials.userId
-		groupIds = credentials.groups
+		userId, ok := ctx.Value(userId).(string)
+		if !ok {
+			errors.New("Inappropriate value of userId in context: expected type string")
+		}
+		groupIds, ok := ctx.Value(groups).([]string)
+		if !ok {
+			errors.New("Inappropriate value of groups in context: expected type []srting")
+		}
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
@@ -781,8 +803,10 @@ func authorizeGroot(ctx context.Context) error {
 
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		credentials := ctx.Value("credentials").(accessEntry)
-		userId := credentials.userId
+		userId, ok := ctx.Value(userId).(string)
+		if !ok {
+			errors.New("Inappropriate value of userId in context: expected type string")
+		}
 
 		if userId == x.GrootId {
 			return nil
@@ -877,10 +901,8 @@ func authenticateAndUpdateContext(ctx context.Context) (context.Context, error) 
 		return ctx, status.Error(codes.Unauthenticated, err.Error())
 	}
 
-	newCtx := context.WithValue(ctx, "credentials", accessEntry{
-		userId: userData[0],
-		groups: userData[1:],
-	})
+	newCtx := context.WithValue(ctx, userId, userData[0])
+	newCtx = context.WithValue(newCtx, groups, userData[1:])
 
 	return newCtx, nil
 }
