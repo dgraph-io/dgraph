@@ -28,6 +28,7 @@ import (
 // in a dgraph alpha for one group, that update should also be propogated to alpha nodes in other
 // groups.
 func TestSchemaSubscribe(t *testing.T) {
+	t.Skip()
 	groupOneServer := "http://localhost:8180/graphql"
 	groupOneAdminServer := "http://localhost:8180/admin"
 	groupTwoServer := "http://localhost:8182/graphql"
