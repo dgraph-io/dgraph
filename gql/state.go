@@ -184,9 +184,10 @@ func lexContent(l *lex.Lexer, leftRune, rightRune rune, returnTo lex.StateFn) le
 			depth++
 		case rightRune:
 			depth--
-			if depth < 0 {
+			switch {
+			case depth < 0:
 				return l.Errorf("Unopened %c found", rightRune)
-			} else if depth == 0 {
+			case depth == 0:
 				l.Emit(itemUpsertBlockOpContent)
 				return returnTo
 			}
@@ -584,19 +585,20 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(isNameSuffix)
 	// l.Pos would be index of the end of operation type + 1.
 	word := l.Input[l.Start:l.Pos]
-	if word == "mutation" {
+	switch word {
+	case "mutation":
 		l.Emit(itemOpType)
 		return lexInsideMutation
-	} else if word == "fragment" {
+	case "fragment":
 		l.Emit(itemOpType)
 		return lexQuery
-	} else if word == "query" {
+	case "query":
 		l.Emit(itemOpType)
 		return lexQuery
-	} else if word == "schema" {
+	case "schema":
 		l.Emit(itemOpType)
 		return lexInsideSchema
-	} else {
+	default:
 		return l.Errorf("Invalid operation type: %s", word)
 	}
 }
