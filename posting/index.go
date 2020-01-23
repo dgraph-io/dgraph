@@ -322,15 +322,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	// if doUpdateIndex {
-	// 	// Check original value BEFORE any mutation actually happens.
-	// 	val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
-	// 	if err != nil {
-	// 		return val, found, emptyCountParams, err
-	// 	}
-	// }
-
-	findUid := func(t *pb.DirectedEdge) uint64 {
+	getUID := func(t *pb.DirectedEdge) uint64 {
 		if t.ValueType == pb.Posting_UID {
 			return t.ValueId
 		}
@@ -341,7 +333,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	countBefore, countAfter := 0, 0
 	switch {
 	case hasCountIndex:
-		countBefore, found, val, err = l.lengthAndValue(txn.StartTs, 0, findUid(t))
+		countBefore, found, val, err = l.lengthAndValue(txn.StartTs, 0, getUID(t))
 	case doUpdateIndex:
 		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
 	}
@@ -372,26 +364,11 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	// if hasCountIndex {
-	// 	// countBefore = l.length(txn.StartTs, 0)
-	// 	countBefore, found, _, err := l.lengthAndPosting(txn.StartTs, 0, fingerprintEdge(t))
-	// 	if err != nil {
-	// 		return val, found, emptyCountParams, err
-	// 	}
-	// 	if countBefore == -1 {
-	// 		return val, found, emptyCountParams, ErrTsTooOld
-	// 	}
-	// }
 	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 
 	if hasCountIndex {
-		// countAfter = l.length(txn.StartTs, 0)
-		// if countAfter == -1 {
-		// 	return val, found, emptyCountParams, ErrTsTooOld
-		// }
-
 		if t.Op == pb.DirectedEdge_SET {
 			if found {
 				countAfter = countBefore
@@ -407,7 +384,6 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		} else {
 			panic("should not come here.")
 		}
-		// handle deleteAll case.
 
 		return val, found, countParams{
 			attr:        t.Attr,

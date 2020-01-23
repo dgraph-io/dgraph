@@ -21,9 +21,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -90,6 +92,9 @@ func TestSystem(t *testing.T) {
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
 	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
+	t.Run("count index concurrent setdel", wrap(CountIndexConcurrentSetDelUIDList))
+	t.Run("count index concurrent setdel scalar predicate",
+		wrap(CountIndexConcurrentSetDelScalarPredicate))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1645,6 +1650,272 @@ func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DropValue must not be empty")
+}
+
+func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	maxUID := 100
+	txnTotal := uint64(1000)
+	txnCur := uint64(0)
+
+	insertedMap := make(map[int]struct{})
+	var l sync.Mutex
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := 2 + int(r.Int31n(int32(maxUID))) // 1 id subject id.
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to inserted uid with err: %s", err)
+				}
+				if err == nil { // Successful insertion.
+					l.Lock()
+					if _, ok := insertedMap[id]; !ok {
+						insertedMap[id] = struct{}{}
+					}
+					l.Unlock()
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q := fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, len(insertedMap))
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Now start deleting UIDs.
+	var insertedUids []int
+	for uid := range insertedMap {
+		insertedUids = append(insertedUids, uid)
+	}
+	// Avoid deleting at least one uid. There might be a scenario where all inserted uids
+	// are deleted and we are querying for 0 count, which results in error.
+	insertedCount := len(insertedMap)
+	insertedUids = insertedUids[:len(insertedUids)-1]
+	deletedMap := make(map[int]struct{})
+	txnCur = uint64(0)
+
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := insertedUids[r.Intn(len(insertedUids))]
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to delete uid with err: %s", err)
+				}
+				if err == nil { // Successful deletion.
+					l.Lock()
+					if _, ok := deletedMap[id]; !ok {
+						deletedMap[id] = struct{}{}
+					}
+					l.Unlock()
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q = fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, insertedCount-len(deletedMap))
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Delete all friends now.
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<0x1> <friend> * .")),
+	}
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	if err != nil && err != dgo.ErrAborted {
+		require.Fail(t, "unable to inserted uid with err: %s", err)
+	}
+	q = fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, insertedCount-len(deletedMap))
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+}
+
+func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `name: string @index(exact) @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	txnTotal := uint64(100)
+	txnCur := uint64(0)
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := int(r.Int31n(int32(10000)))
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <name> \"name%d\" .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to inserted uid with err: %s", err)
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q := `{
+		q(func: eq(count(name), 1)) {
+			name
+		}
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	var s struct {
+		Q []struct {
+			Name string `json:"name"`
+		} `json:q`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &s))
+	require.Equal(t, 1, len(s.Q))
+	require.Contains(t, s.Q[0].Name, "name")
+
+	// Now delete the inserted name.
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<0x1> <name> \"%s\" .", s.Q[0].Name)),
+	}
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	if err != nil && err != dgo.ErrAborted {
+		require.Fail(t, "unable to inserted uid with err", err)
+	}
+
+	// Querying should return 0 uids.
+	q = `{
+		me(func: eq(count(name), 1)) {
+			uid
+		}
+	}`
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+}
+
+func CountIndexConcurrentDelete(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	maxUID := 1000
+	inserted := make(map[int]struct{})
+	var l sync.Mutex
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+
+	txnTotal := uint64(10000)
+	txnCur := uint64(0)
+
+	expectedCount := uint64(0)
+	successTxn := uint64(0)
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+
+				id := 2 + int(r.Int31n(int32(maxUID))) // 1 id subject id
+
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to inserted uid with err: %s", err)
+				}
+				if err == nil { // Successful insertion.
+					atomic.AddUint64(&successTxn, 1)
+					l.Lock()
+					if _, ok := inserted[id]; !ok {
+						inserted[id] = struct{}{}
+						atomic.AddUint64(&expectedCount, 1)
+					}
+					l.Unlock()
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q := fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, expectedCount)
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
 }
 
 func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
