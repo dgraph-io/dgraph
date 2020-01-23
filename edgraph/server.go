@@ -138,7 +138,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 	span.Annotatef(nil, "Alter operation: %+v", op)
-
+	if op.CreateNamespace != "" {
+		return &api.Payload{}, s.CreateNamespace(ctx, op.CreateNamespace)
+	}
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 

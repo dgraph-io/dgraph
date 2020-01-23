@@ -23,6 +23,6 @@ import (
 )
 
 func TestReserverPredicateForMutation(t *testing.T) {
-	err := addTriplesToCluster(`_:x <dgraph.graphql.schema> "df"`)
+	err := addTriplesToCluster(`_:x <dgraph.graphql.schema> "df"`, "")
 	require.Error(t, err, "Cannot mutate graphql reserved predicate dgraph.graphql.schema")
 }
