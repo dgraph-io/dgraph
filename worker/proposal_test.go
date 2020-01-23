@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 )
 
 // proposeAndWaitEmulator emulates proposeAndWait. It has one function(propose) inside it,

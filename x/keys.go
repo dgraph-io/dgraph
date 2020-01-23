@@ -548,9 +548,9 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+// These predicates appear for queries that have * as predicate in them.
 var reservedPredicateMap = map[string]struct{}{
-	"dgraph.type":           {},
-	"dgraph.graphql.schema": {},
+	"dgraph.type": {},
 }
 
 var aclPredicateMap = map[string]struct{}{
@@ -590,7 +590,8 @@ func IsAclPredicate(pred string) bool {
 	return ok
 }
 
-// ReservedPredicates returns the complete list of reserved predicates.
+// ReservedPredicates returns the complete list of reserved predicates that needs to
+// be expanded when * is given as a predicate.
 func ReservedPredicates() []string {
 	var preds []string
 	for pred := range reservedPredicateMap {

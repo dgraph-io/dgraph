@@ -465,6 +465,9 @@
       Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
+      var(func: uid(Post3)) {
+        Author4 as Post.author
+      }
     }
   dgmutations:
     - setjson: |
@@ -490,6 +493,13 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author4)",
+            "Author.posts": [{"uid": "uid(Post3)"}]
+          }
+        ]
       cond: "@if(eq(len(Post3), 1))"
 
 -
@@ -538,8 +548,14 @@
       Post3 as Post3(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
-      Post6 as Post6(func: uid(0x124)) @filter(type(Post)) {
+      var(func: uid(Post3)) {
+        Author4 as Post.author
+      }
+      Post7 as Post7(func: uid(0x124)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post7)) {
+        Author8 as Post.author
       }
     }
   dgmutations:
@@ -566,31 +582,53 @@
             }
           ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author4)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post3)"
+              }
+            ]
+          }
+        ]
       cond: "@if(eq(len(Post3), 1))"
     - setjson: |
-        { "uid": "_:Author4",
+        { "uid": "_:Author5",
           "dgraph.type": [ "Author" ],
           "Author.name": "Different Author",
           "Author.dob": "2000-01-01",
           "Author.posts": [
             {
-              "uid": "_:Post5",
+              "uid": "_:Post6",
               "dgraph.type": [ "Post" ],
               "Post.title": "New new post",
               "Post.text": "A wonderful post",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             },
             {
               "uid": "0x124",
               "Post.author": {
-                "uid": "_:Author4"
+                "uid": "_:Author5"
               }
             }
           ]
         }
-      cond: "@if(eq(len(Post6), 1))"
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author8)",
+            "Author.posts": [
+              {
+              "uid": "uid(Post7)"
+              }
+            ]
+          }
+        ]
+      cond: "@if(eq(len(Post7), 1))"
 
 -
   name: "Deep add with two existing"
@@ -623,8 +661,14 @@
       Post2 as Post2(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
-      Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
+      var(func: uid(Post2)) {
+        Author3 as Post.author
+      }
+      Post4 as Post4(func: uid(0x456)) @filter(type(Post)) {
         uid
+      }
+      var(func: uid(Post4)) {
+        Author5 as Post.author
       }
     }
   dgmutations:
@@ -648,7 +692,18 @@
             }
           ]
         }
-      cond: "@if(eq(len(Post2), 1) AND eq(len(Post3), 1))"
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          },
+          {
+            "uid": "uid(Author5)",
+            "Author.posts": [{"uid": "uid(Post4)"}]
+          }
+        ]
+      cond: "@if(eq(len(Post2), 1) AND eq(len(Post4), 1))"
 
 -
   name: "Deep add with null"
@@ -770,6 +825,9 @@
       State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
+      var(func: uid(State2)) {
+        Country3 as State.country
+      }
     }
   dgmutations:
     - setjson: |
@@ -800,6 +858,13 @@
             }
           } ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country3)",
+            "Country.states": [{"uid": "uid(State2)"}]
+          }
+        ]
       cond: "@if(eq(len(State2), 1))"
 
 -
@@ -828,6 +893,9 @@
       State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
+      var(func: uid(State2)) {
+        Country3 as State.country
+      }
     }
   dgmutations:
     - setjson: |
@@ -842,4 +910,11 @@
             }
           } ]
         }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country3)",
+            "Country.states": [{"uid": "uid(State2)"}]
+          }
+        ]
       cond: "@if(eq(len(State2), 1))"
