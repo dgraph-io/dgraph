@@ -156,6 +156,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
+		// TODO: should be namespace based drop all.
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
@@ -167,6 +168,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
+				s.Predicate = x.GenerateAttr(x.DefaultNamespace, s.Predicate)
 				if err := updateSchema(s); err != nil {
 					return err
 				}

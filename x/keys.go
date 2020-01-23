@@ -52,23 +52,22 @@ const (
 	ByteUnused = byte(0xff)
 	//NamespaceSeperator is a constant used as seperator between namespace and attr name.
 	NamespaceSeperator = byte(30)
+	// DefaultNamespace is the default namespace name.
+	DefaultNamespace = "default"
 )
 
 // GenerateAttr is used to generate attr from namespace.
 func GenerateAttr(namespace, attr string) string {
-	if namespace != "" {
-		return namespace + string(NamespaceSeperator) + attr
+	if namespace == "" {
+		namespace = DefaultNamespace
 	}
-	return attr
+	return namespace + string(NamespaceSeperator) + attr
 }
 
 // GetNamespaceAndAttr returns the namespace and attr from the given value.
 func GetNamespaceAndAttr(attr string) (string, string) {
 	splits := strings.Split(attr, string(NamespaceSeperator))
-	AssertTrue(len(splits) < 3)
-	if len(splits) == 1 {
-		return "", attr
-	}
+	AssertTrue(len(splits) == 2)
 	return splits[0], splits[1]
 }
 

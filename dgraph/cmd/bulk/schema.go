@@ -52,6 +52,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// better to include them in case the input data contains triples with these
 	// predicates.
 	for _, update := range schema.CompleteInitialSchema() {
+		update.Predicate = x.GenerateAttr(x.DefaultNamespace, update.Predicate)
 		s.schemaMap[update.Predicate] = update
 	}
 
@@ -63,7 +64,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	}
 
 	for _, sch := range initial.Preds {
-		p := sch.Predicate
+		p := x.GenerateAttr(x.DefaultNamespace, sch.Predicate)
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.schemaMap[p]; ok {
 			fmt.Printf("Predicate %q already exists in schema\n", p)
@@ -72,6 +73,12 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		s.schemaMap[p] = sch
 	}
 
+	for _, update := range initial.Types {
+		update.TypeName = x.GenerateAttr(x.DefaultNamespace, update.TypeName)
+		for _, field := range update.Fields {
+			field.Predicate = x.GenerateAttr(x.DefaultNamespace, field.Predicate)
+		}
+	}
 	s.types = initial.Types
 
 	return s

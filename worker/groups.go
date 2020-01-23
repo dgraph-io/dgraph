@@ -189,6 +189,11 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialTypes() {
 	initialTypes := schema.InitialTypes()
 	for _, t := range initialTypes {
+		// Convert types for the deafult namespace.
+		t.TypeName = x.GenerateAttr(x.DefaultNamespace, t.TypeName)
+		for _, field := range t.Fields {
+			field.Predicate = x.GenerateAttr(x.DefaultNamespace, field.Predicate)
+		}
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
@@ -199,6 +204,8 @@ func (g *groupi) proposeInitialTypes() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
+		s.Predicate = x.GenerateAttr(x.DefaultNamespace, s.Predicate)
+
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
