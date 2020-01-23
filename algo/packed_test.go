@@ -34,6 +34,24 @@ func newUidPack(data []uint64) *pb.UidPack {
 	return encoder.Done()
 }
 
+func newBigUidPack(data []uint64) *pb.UidPack {
+	// Like newUidPack but uses a bigger blockSize.
+	encoder := codec.Encoder{BlockSize: 256}
+	for _, uid := range data {
+		encoder.Add(uid)
+	}
+	return encoder.Done()
+}
+
+func generateList(start, end uint64) []uint64 {
+	l := make([]uint64, end-start)
+	var i uint64
+	for ; i < end-start; i++ {
+		l[i] = i + start
+	}
+	return l
+}
+
 func TestMergeSorted1Packed(t *testing.T) {
 	input := []*pb.UidPack{
 		newUidPack([]uint64{55}),
@@ -176,6 +194,47 @@ func TestUIDListIntersectDupSecondPacked(t *testing.T) {
 	v := newUidPack([]uint64{1, 1, 2, 4})
 	o := IntersectWithLinPacked(u, v)
 	require.Equal(t, []uint64{1, 2}, codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked1(t *testing.T) {
+	u := newBigUidPack(generateList(1, 1000))
+	v := newBigUidPack(generateList(10, 500))
+	o := IntersectWithJumpPacked(u, v)
+	require.Equal(t, generateList(10, 500), codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked2(t *testing.T) {
+	u := newBigUidPack(generateList(1, 1000))
+	v := newBigUidPack(generateList(1000, 2000))
+	o := IntersectWithJumpPacked(u, v)
+	require.Equal(t, []uint64{}, codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked3(t *testing.T) {
+	u := newBigUidPack(generateList(1, 1000))
+	v := newBigUidPack(generateList(999, 2000))
+	o := IntersectWithJumpPacked(u, v)
+	require.Equal(t, []uint64{999}, codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked4(t *testing.T) {
+	u := newBigUidPack(generateList(10, 500))
+	v := newBigUidPack(generateList(1, 1000))
+	o := IntersectWithJumpPacked(u, v)
+	require.Equal(t, generateList(10, 500), codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked5(t *testing.T) {
+	u := newBigUidPack(generateList(1000, 1500))
+	v := newBigUidPack(generateList(666, 1200))
+	o := IntersectWithJumpPacked(u, v)
+	require.Equal(t, generateList(1000, 1200), codec.Decode(o, 0))
+}
+
+func TestIntersectWithJumpPacked6(t *testing.T) {
+	u := newBigUidPack(generateList(1000, 1500))
+	o := IntersectWithJumpPacked(u, nil)
+	require.Equal(t, []uint64{}, codec.Decode(o, 0))
 }
 
 func TestIntersectSorted1Packed(t *testing.T) {
