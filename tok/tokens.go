@@ -42,8 +42,10 @@ func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 		if err != nil {
 			langTag = enLangTag
 		}
-		return LangTokenizer{langBase: LangBase(lang), cl: collate.New(langTag),
+		return ExactTokenizer{langBase: LangBase(lang), cl: collate.New(langTag),
 			buffer: &collate.Buffer{}}
+	default:
+		return t
 	}
 }
 

@@ -93,7 +93,6 @@ func init() {
 	registerTokenizer(MonthTokenizer{})
 	registerTokenizer(DayTokenizer{})
 	registerTokenizer(ExactTokenizer{})
-	registerTokenizer(LangTokenizer{})
 	registerTokenizer(BoolTokenizer{})
 	registerTokenizer(TrigramTokenizer{})
 	registerTokenizer(HashTokenizer{})
@@ -292,34 +291,24 @@ func (t TermTokenizer) Identifier() byte { return IdentTerm }
 func (t TermTokenizer) IsSortable() bool { return false }
 func (t TermTokenizer) IsLossy() bool    { return true }
 
-// ExactTokenizer returns the exact string as a token.
-type ExactTokenizer struct{}
-
-func (t ExactTokenizer) Name() string { return "exact" }
-func (t ExactTokenizer) Type() string { return "string" }
-func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
-	if term, ok := v.(string); ok {
-		return []string{term}, nil
-	}
-	return nil, errors.Errorf("Exact indices only supported for string types")
-}
-func (t ExactTokenizer) Identifier() byte { return IdentExact }
-func (t ExactTokenizer) IsSortable() bool { return true }
-func (t ExactTokenizer) IsLossy() bool    { return false }
-
-// LangTokenizer returns the exact string along with language prefix as a token.
-type LangTokenizer struct {
+// ExactTokenizer returns the exact string as a token. If collator is provided for
+// any language then it also adds the language in the prefix .
+type ExactTokenizer struct {
 	langBase string
 	cl       *collate.Collator
 	buffer   *collate.Buffer
 }
 
-func (t LangTokenizer) Name() string { return "lang" }
-func (t LangTokenizer) Type() string { return "string" }
-func (t LangTokenizer) Tokens(v interface{}) ([]string, error) {
+func (t ExactTokenizer) Name() string { return "exact" }
+func (t ExactTokenizer) Type() string { return "string" }
+func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
 	val, ok := v.(string)
 	if !ok {
-		return nil, errors.Errorf("Lang indices only supported for string types")
+		return nil, errors.Errorf("Exact indices only supported for string types")
+	}
+
+	if t.cl == nil {
+		return []string{val}, nil
 	}
 
 	encodedTerm := t.cl.KeyFromString(t.buffer, val)
@@ -332,10 +321,19 @@ func (t LangTokenizer) Tokens(v interface{}) ([]string, error) {
 	t.buffer.Reset()
 	return []string{string(term)}, nil
 }
-func (t LangTokenizer) Identifier() byte { return IdentExactLang }
-func (t LangTokenizer) IsSortable() bool { return true }
-func (t LangTokenizer) IsLossy() bool    { return false }
-func (t LangTokenizer) Prefix() []byte {
+
+func (t ExactTokenizer) Identifier() byte {
+	if t.cl == nil {
+		return IdentExact
+	}
+	return IdentExactLang
+}
+func (t ExactTokenizer) IsSortable() bool { return true }
+func (t ExactTokenizer) IsLossy() bool    { return false }
+func (t ExactTokenizer) Prefix() []byte {
+	if t.cl == nil {
+		return []byte{IdentExact}
+	}
 	prefix := []byte{IdentExactLang}
 	prefix = append(prefix, []byte(t.langBase)...)
 	prefix = append(prefix, IdentDelimiter)
