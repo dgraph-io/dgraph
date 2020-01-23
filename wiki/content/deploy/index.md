@@ -1178,7 +1178,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
 | `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
 
-#### Monitoring
+### Monitoring in Kubernetes
 
 Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
 
