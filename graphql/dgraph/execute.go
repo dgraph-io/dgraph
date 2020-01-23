@@ -45,7 +45,8 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	}
 
 	req := &dgoapi.Request{
-		Query: queryStr,
+		Query:    queryStr,
+		ReadOnly: true,
 	}
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
