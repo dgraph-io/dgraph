@@ -1,0 +1,16 @@
+[Unit]
+Description=dgraph.io Web UI
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash -c 'dgraph-ratel'
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+User=dgraph
+Group=dgraph
+
+[Install]
+WantedBy=multi-user.target
