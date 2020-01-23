@@ -414,7 +414,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	}
 }
 
-func setupServer(closer *y.Closer) {
+func setupServer() { //closer *y.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -657,13 +657,13 @@ func run() {
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
-	adminCloser := y.NewCloser(1)
+	// adminCloser := y.NewCloser(1)
 
-	setupServer(adminCloser)
+	setupServer() //adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
-	adminCloser.SignalAndWait()
+	// adminCloser.SignalAndWait()
 	glog.Info("Disposing server state.")
 	worker.State.Dispose()
 	glog.Infoln("Server shutdown. Bye!")
