@@ -41,8 +41,8 @@ import (
 type userContextKey int
 
 const (
-	userId userContextKey = iota
-	groups
+	userIdKey userContextKey = iota
+	groupsKey
 )
 
 // Login handles login requests from clients.
@@ -520,11 +520,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	// doAuthorizeAlter checks if alter of all the predicates are allowed
 	// as a byproduct, it also sets the userId, groups variables
 	doAuthorizeAlter := func() error {
-		userId, ok := ctx.Value(userId).(string)
+		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
 			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
-		groupIds, ok := ctx.Value(groups).([]string)
+		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
 			return errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
@@ -627,11 +627,11 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
-		userId, ok := ctx.Value(userId).(string)
+		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
 			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
-		groupIds, ok := ctx.Value(groups).([]string)
+		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
 			return errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
@@ -754,11 +754,11 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	preds := parsePredsFromQuery(parsedReq.Query)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
-		userId, ok := ctx.Value(userId).(string)
+		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
 			return nil, errors.New("Inappropriate value of userId in context: expected type string")
 		}
-		groupIds, ok := ctx.Value(groups).([]string)
+		groupIds, ok := ctx.Value(groupsKey).([]string)
 		if !ok {
 			return nil, errors.New("Inappropriate value of groups in context: expected type []srting")
 		}
@@ -803,7 +803,7 @@ func authorizeGroot(ctx context.Context) error {
 
 	// doAuthorizeState checks if the user is authorized to perform this API request
 	doAuthorizeGroot := func() error {
-		userId, ok := ctx.Value(userId).(string)
+		userId, ok := ctx.Value(userIdKey).(string)
 		if !ok {
 			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
@@ -901,8 +901,8 @@ func authenticateAndUpdateContext(ctx context.Context) (context.Context, error) 
 		return ctx, status.Error(codes.Unauthenticated, err.Error())
 	}
 
-	newCtx := context.WithValue(ctx, userId, userData[0])
-	newCtx = context.WithValue(newCtx, groups, userData[1:])
+	newCtx := context.WithValue(ctx, userIdKey, userData[0])
+	newCtx = context.WithValue(newCtx, groupsKey, userData[1:])
 
 	return newCtx, nil
 }
