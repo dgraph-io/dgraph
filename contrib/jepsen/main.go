@@ -209,7 +209,6 @@ func jepsenServe() error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	errCh := make(chan error)
-	// Ignore output and errors. It's okay if "lein run serve" already ran before.
 	go func() {
 		// If this runs for the first time it takes about a minute before
 		// starting in order to fetch and install dependencies.
@@ -218,6 +217,8 @@ func jepsenServe() error {
 			"lein", "run", "serve")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stdout
+		// lein run serve runs indefinitely, so there's no need to wait for the
+		// command to finish.
 		_ = cmd.Start()
 		ticker := time.NewTicker(time.Second)
 		for {
