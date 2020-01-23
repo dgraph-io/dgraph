@@ -16,6 +16,10 @@ We'll specifically learn about:
   - Comparing strings using the `exact` index.
   - Searching for tweets based on keywords using the `term` index.
 
+You can see the accompanying video below.
+
+{{< youtube Ww5cwixwkHo >}}
+
 Let's start analyzing the anatomy of a real tweet and figure out how to model it in Dgraph.
 
 The accompanying video of the tutorial will be out shortly, so stay tuned to [our YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w).
