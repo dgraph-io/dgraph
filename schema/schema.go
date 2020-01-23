@@ -435,15 +435,15 @@ func LoadTypesFromDb() error {
 // types to insert.
 func InitialTypes() []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
-	initialTypes = append(initialTypes, &pb.TypeUpdate{
-		TypeName: "dgraph.graphql",
-		Fields: []*pb.SchemaUpdate{
-			{
-				Predicate: "dgraph.graphql.schema",
-				ValueType: pb.Posting_STRING,
-			},
-		},
-	})
+	// initialTypes = append(initialTypes, &pb.TypeUpdate{
+	// 	TypeName: "dgraph.graphql",
+	// 	Fields: []*pb.SchemaUpdate{
+	// 		{
+	// 			Predicate: "dgraph.graphql.schema",
+	// 			ValueType: pb.Posting_STRING,
+	// 		},
+	// 	},
+	// })
 
 	return initialTypes
 }
@@ -473,9 +473,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 		List:      true,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
-		ValueType: pb.Posting_STRING,
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
