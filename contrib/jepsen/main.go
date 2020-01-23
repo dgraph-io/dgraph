@@ -187,7 +187,7 @@ func jepsenDown() {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		switch {
-		case strings.Contain(err.Error(), "Couldn't find env file"):
+		case strings.Contains(err.Error(), "Couldn't find env file"):
 			// OK. Probably tried to call down before up was ever called.
 		default:
 			log.Println(err)
@@ -227,7 +227,7 @@ func jepsenServe() error {
 				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
 				return
 			case <-ticker.C:
-				if err := check(); err == nil {
+				if err := checkServing(); err == nil {
 					ticker.Stop()
 					wg.Done()
 					errCh <- nil
