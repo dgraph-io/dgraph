@@ -330,10 +330,18 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	// 	}
 	// }
 
+	findUid := func(t *pb.DirectedEdge) uint64 {
+		if t.ValueType == pb.Posting_UID {
+			return t.ValueId
+		}
+
+		return fingerprintEdge(t)
+	}
+
 	countBefore, countAfter := 0, 0
 	switch {
 	case hasCountIndex:
-		countBefore, found, val, err = l.lengthAndValue(txn.StartTs, 0, fingerprintEdge(t))
+		countBefore, found, val, err = l.lengthAndValue(txn.StartTs, 0, findUid(t))
 	case doUpdateIndex:
 		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
 	}
@@ -390,14 +398,14 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			} else {
 				countAfter = countBefore + 1
 			}
-		} else if t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star { // single delete.
+		} else if t.Op == pb.DirectedEdge_DEL { // single delete, delete all is handled separately.
 			if found {
 				countAfter = countBefore - 1
 			} else {
 				countAfter = countBefore
 			}
-		} else if t.Op == pb.DirectedEdge_DEL && string(t.Value) == x.Star { // delete all.
-			countAfter = 0
+		} else {
+			panic("should not come here.")
 		}
 		// handle deleteAll case.
 
