@@ -805,7 +805,7 @@ func authorizeGroot(ctx context.Context) error {
 	doAuthorizeGroot := func() error {
 		userId, ok := ctx.Value(userId).(string)
 		if !ok {
-			errors.New("Inappropriate value of userId in context: expected type string")
+			return errors.New("Inappropriate value of userId in context: expected type string")
 		}
 
 		if userId == x.GrootId {
