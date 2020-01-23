@@ -120,11 +120,12 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
 
-		if qt == QueryTypeWithin {
+		switch qt {
+		case QueryTypeWithin:
 			require.Len(t, toks, 1)
-		} else if qt == QueryTypeContains {
+		case QueryTypeContains:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
-		} else {
+		default:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)

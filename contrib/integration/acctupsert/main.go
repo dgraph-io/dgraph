@@ -121,12 +121,13 @@ func upsert(c *dgo.Dgraph, acc account) {
 			lastStatus = time.Now()
 		}
 		err := tryUpsert(c, acc)
-		if err == nil {
+		switch err {
+		case nil:
 			atomic.AddUint64(&successCount, 1)
 			return
-		} else if err == dgo.ErrAborted {
-			// pass
-		} else {
+		case dgo.ErrAborted:
+			break
+		default:
 			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
