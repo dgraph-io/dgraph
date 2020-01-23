@@ -455,9 +455,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 		List:      true,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
-		ValueType: pb.Posting_STRING,
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
