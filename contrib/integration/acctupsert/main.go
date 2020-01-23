@@ -126,7 +126,7 @@ func upsert(c *dgo.Dgraph, acc account) {
 			atomic.AddUint64(&successCount, 1)
 			return
 		case dgo.ErrAborted:
-			break
+			// pass
 		default:
 			fmt.Printf("ERROR: %v", err)
 		}
