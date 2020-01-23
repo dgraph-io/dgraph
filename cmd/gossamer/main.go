@@ -36,6 +36,7 @@ var (
 	p2pFlags = []cli.Flag{
 		utils.BootnodesFlag,
 		utils.P2pPortFlag,
+		utils.ProtocolIdFlag,
 		utils.NoBootstrapFlag,
 		utils.NoMdnsFlag,
 	}

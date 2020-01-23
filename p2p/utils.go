@@ -28,8 +28,8 @@ import (
 	"path"
 	"path/filepath"
 
-	// leb128 "github.com/filecoin-project/go-leb128"
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/filecoin-project/go-leb128"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
@@ -71,7 +71,7 @@ func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
 	} else {
 		r = mrand.New(mrand.NewSource(seed))
 	}
-	key, _, err := crypto.GenerateECDSAKeyPair(r)
+	key, _, err := crypto.GenerateEd25519Key(r)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func loadKey(fp string) (crypto.PrivKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return crypto.UnmarshalECDSAPrivateKey(dec)
+	return crypto.UnmarshalEd25519PrivateKey(dec)
 }
 
 // makeDir creates `.gossamer` if directory does not already exist
@@ -135,12 +135,11 @@ func saveKey(priv crypto.PrivKey, fp string) (err error) {
 	return f.Close()
 }
 
-// TODO: implement LEB128 variable-length encoding
-
-// Decodes a byte array to uint64 using LEB128 variable-length encoding
-// func leb128ToUint64(in []byte) uint64 {
-// 	return leb128.ToUInt64(in)
-// }
+// encodeMessageLEB128 applies leb128 variable-length encoding
+func encodeMessageLEB128(encMsg []byte) []byte {
+	out := leb128.FromUInt64(uint64(len(encMsg)))
+	return append(out, encMsg...)
+}
 
 // decodeMessage decodes the message based on message type
 func decodeMessage(r io.Reader) (m Message, err error) {

@@ -39,6 +39,7 @@ type GlobalConfig struct {
 type P2pCfg struct {
 	BootstrapNodes []string `toml:"bootstrap-nodes"`
 	Port           uint32   `toml:"port"`
+	ProtocolId     string   `toml:"protocol-id"`
 	NoBootstrap    bool     `toml:"no-bootstrap"`
 	NoMdns         bool     `toml:"no-mdns"`
 }

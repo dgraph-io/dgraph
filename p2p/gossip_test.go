@@ -25,6 +25,7 @@ import (
 func TestGossip(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
+		ProtocolId:  "gossamer/test",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -37,6 +38,7 @@ func TestGossip(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
+		ProtocolId:  "gossamer/test",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -59,6 +61,7 @@ func TestGossip(t *testing.T) {
 
 	configC := &Config{
 		Port:        7003,
+		ProtocolId:  "gossamer/test",
 		RandSeed:    3,
 		NoBootstrap: true,
 		NoMdns:      true,

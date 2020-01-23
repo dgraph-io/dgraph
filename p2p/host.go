@@ -64,7 +64,6 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 		libp2p.DisableRelay(),
 		libp2p.Identity(cfg.privateKey),
 		libp2p.NATPortMap(),
-		libp2p.Ping(true),
 		libp2p.ConnectionManager(cm),
 	}
 
@@ -81,13 +80,13 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 	h = rhost.Wrap(h, dht)
 
 	// format bootnodes
-	bns, err := cfg.bootnodes()
+	bns, err := stringsToAddrInfos(cfg.BootstrapNodes)
 	if err != nil {
 		return nil, err
 	}
 
 	// format protocol id
-	pid := cfg.protocolId()
+	pid := protocol.ID(cfg.ProtocolId)
 
 	return &host{
 		ctx:        ctx,
@@ -187,6 +186,9 @@ func (h *host) send(p peer.ID, msg Message) (err error) {
 	if err != nil {
 		return err
 	}
+
+	// append leb128 variable-length encoding
+	encMsg = encodeMessageLEB128(encMsg)
 
 	_, err = s.Write(encMsg)
 	if err != nil {

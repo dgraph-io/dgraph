@@ -84,7 +84,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, err
 	}
 
-	log.Info("🕸\t Configuring node...", "datadir", fig.Global.DataDir, "protocolID", string(gendata.ProtocolId), "bootnodes", fig.P2p.BootstrapNodes)
+	log.Info("🕸\t Configuring node...", "datadir", fig.Global.DataDir, "protocol", fig.P2p.ProtocolId, "bootnodes", fig.P2p.BootstrapNodes)
 
 	// P2P
 	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(fig, gendata)
@@ -178,6 +178,10 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 		fig.BootstrapNodes = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
 	}
 
+	if protocol := ctx.GlobalString(utils.ProtocolIdFlag.Name); protocol != "" {
+		fig.ProtocolId = protocol
+	}
+
 	if port := ctx.GlobalUint(utils.P2pPortFlag.Name); port != 0 {
 		fig.Port = uint32(port)
 	}
@@ -195,12 +199,19 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 
 // createP2PService creates a p2p service from the command configuration and genesis data
 func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Service, chan p2p.Message, chan p2p.Message) {
-	// Default bootnodes are from genesis
+
+	// Default bootnodes and protocol from genesis file
 	boostrapNodes := common.BytesToStringArray(gendata.Bootnodes)
+	protocolId := string(gendata.ProtocolId)
 
 	// If bootnodes flag has more than 1 bootnode, overwrite
 	if len(fig.P2p.BootstrapNodes) > 0 {
 		boostrapNodes = fig.P2p.BootstrapNodes
+	}
+
+	// If protocol id flag is not an empty string, overwrite
+	if fig.P2p.ProtocolId != "" {
+		protocolId = fig.P2p.ProtocolId
 	}
 
 	// p2p service configuation
@@ -211,7 +222,7 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 		NoBootstrap:    fig.P2p.NoBootstrap,
 		NoMdns:         fig.P2p.NoMdns,
 		DataDir:        fig.Global.DataDir,
-		ProtocolId:     string(gendata.ProtocolId),
+		ProtocolId:     protocolId,
 	}
 
 	p2pMsgRec := make(chan p2p.Message)

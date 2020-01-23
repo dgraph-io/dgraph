@@ -61,6 +61,10 @@ var (
 		Name:  "p2pport",
 		Usage: "Set P2P listening port",
 	}
+	ProtocolIdFlag = cli.StringFlag{
+		Name:  "protocol",
+		Usage: "Set protocol id",
+	}
 	NoBootstrapFlag = cli.BoolFlag{
 		Name:  "nobootstrap",
 		Usage: "Disables p2p bootstrapping (mdns still enabled)",

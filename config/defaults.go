@@ -26,13 +26,16 @@ import (
 )
 
 const (
+	// RPC
 	DefaultRpcHttpHost = "localhost" // Default host interface for the HTTP RPC server
 	DefaultRpcHttpPort = 8545        // Default port for
 
 	// P2P
-	DefaultP2PPort = 7001
+	DefaultP2PPort       = 7001
+	DefaultP2PProtocolId = "/gossamer/dot/0"
 
-	DefaultGenesisPath = "./genesis.json"
+	// Genesis
+	DefaultGenesisPath = "config/gssmr0.json"
 )
 
 var (
@@ -50,6 +53,7 @@ var (
 	// P2P
 	DefaultP2PConfig = P2pCfg{
 		Port:           DefaultP2PPort,
+		ProtocolId:     DefaultP2PProtocolId,
 		BootstrapNodes: DefaultP2PBootstrap,
 		NoBootstrap:    false,
 		NoMdns:         false,

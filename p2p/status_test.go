@@ -41,6 +41,7 @@ var TestStatusMessage = &StatusMessage{
 func TestStatus(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
+		ProtocolId:  "gossamer/test",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -56,6 +57,7 @@ func TestStatus(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
+		ProtocolId:  "gossamer/test",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,

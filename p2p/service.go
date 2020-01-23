@@ -178,16 +178,16 @@ func (s *Service) handleStream(stream network.Stream) {
 	r := bufio.NewReader(stream)
 
 	for {
+		// read leb128 variable-length encoding
+		_, err := readByte(r)
+		if err != nil {
+			log.Error("Failed to read message encoding", "peer", peer, "err", err)
+			return // exit
+		}
+
 		// decode message based on message type
 		msg, err := decodeMessage(r)
 		if err != nil {
-
-			// exit loop if last received byte was nil (stream closed or reset)
-			ub := r.UnreadByte()
-			if ub == nil {
-				return // exit
-			}
-
 			log.Error("Failed to decode message from peer", "peer", peer, "err", err)
 			return // exit
 		}

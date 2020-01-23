@@ -20,7 +20,6 @@ import (
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
 const KeyFile = "node.key"
@@ -47,20 +46,6 @@ type Config struct {
 	privateKey crypto.PrivKey
 }
 
-// bootnodes formats the configuration bootnodes
-func (c *Config) bootnodes() (peer []peer.AddrInfo, err error) {
-	bootnodes, err := stringsToAddrInfos(c.BootstrapNodes)
-	if err != nil {
-		return nil, err
-	}
-	return bootnodes, nil
-}
-
-// protocolId formats the configuration protocol id
-func (c *Config) protocolId() protocol.ID {
-	return protocol.ID(c.ProtocolId)
-}
-
 // build checks the configuration, sets up the private key for the p2p service,
 // and applies default values where appropriate
 func (c *Config) build() error {
@@ -85,7 +70,6 @@ func (c *Config) build() error {
 		log.Warn(
 			"Generating temporary deterministic p2p identity",
 			"directory", c.DataDir,
-			"keyfile", KeyFile,
 		)
 
 		// generate temporary deterministic key
@@ -117,7 +101,6 @@ func (c *Config) setupKey() error {
 		log.Trace(
 			"Generating new p2p identity",
 			"directory", c.DataDir,
-			"keyfile", KeyFile,
 		)
 
 		// generate key
@@ -137,7 +120,6 @@ func (c *Config) setupKey() error {
 		log.Trace(
 			"Using existing p2p identity",
 			"directory", c.DataDir,
-			"keyfile", KeyFile,
 			"id", id,
 		)
 	}
