@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -111,6 +112,13 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
+// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// that proxies query resolution through Query method in dgraph server, and
+// it doens't require authorization. Currently it's only used for quering
+// gqlschema during init.
+type adminExecutor struct {
+}
+
 // A Resolved is the result of resolving a single query or mutation.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -140,15 +148,26 @@ func DgraphAsQueryExecutor() QueryExecutor {
 	return &dgraphExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+func AdminQueryExecutor() QueryExecutor {
+	return &adminExecutor{}
+}
+
+// DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
+}
+
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Query(ctx, query)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return dgraph.Query(ctx, query)
 }
 
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,

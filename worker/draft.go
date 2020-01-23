@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -47,7 +48,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
 
@@ -905,7 +905,7 @@ func (n *node) Run() {
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {

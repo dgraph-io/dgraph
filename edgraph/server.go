@@ -18,6 +18,7 @@ package edgraph
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"math"
 	"sort"
@@ -46,7 +47,6 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -63,24 +63,29 @@ const (
 	methodQuery  = "Server.Query"
 	groupFile    = "group_id"
 )
+
+type GraphqlContextKey int
+
+const (
+	// IsGraphql is used to validate requests which are allowed to mutate dgraph.graphql.schema.
+	IsGraphql GraphqlContextKey = iota
+	// Authorize is used to set if the request requires validation.
+	Authorize
+)
+
+type AuthMode int
+
 const (
 	// NeedAuthorize is used to indicate that the request needs to be authorized.
-	NeedAuthorize = iota
+	NeedAuthorize AuthMode = iota
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
 )
 
-type key int
-
-const (
-	// isGraphQL is used to indicate that the request is made by the graphql admin or not.
-	isGraphQL key = iota
-)
-
 var (
-	numQueries uint64
-	numGraphQL uint64
+	numGraphQLPM uint64
+	numGraphQL   uint64
 )
 
 // Server implements protos.DgraphServer
@@ -90,6 +95,7 @@ type Server struct{}
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
+	start := time.Now()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -100,16 +106,16 @@ func PeriodicallyPostTelemetry() {
 		}
 		ms := worker.GetMembershipState()
 		t := telemetry.NewAlpha(ms)
-		t.NumQueries = atomic.SwapUint64(&numQueries, 0)
+		t.NumGraphQLPM = atomic.SwapUint64(&numGraphQLPM, 0)
 		t.NumGraphQL = atomic.SwapUint64(&numGraphQL, 0)
-		t.SinceHours = int(time.Since(lastPostedAt).Hours())
+		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
 		err := t.Post()
 		if err == nil {
 			lastPostedAt = time.Now()
 		} else {
-			atomic.AddUint64(&numQueries, t.NumQueries)
+			atomic.AddUint64(&numGraphQLPM, t.NumGraphQLPM)
 			atomic.AddUint64(&numGraphQL, t.NumGraphQL)
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
@@ -708,18 +714,22 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&numGraphQL, 1)
-	return s.doQuery(ctx, req, NeedAuthorize)
+	auth := ctx.Value(Authorize)
+	if auth == nil || auth.(bool) {
+		return s.doQuery(ctx, req, NeedAuthorize)
+	}
+	return s.doQuery(ctx, req, NoAuthorize)
 }
 
-// QueryForGraphql handles queries or mutations
-func (s *Server) QueryForGraphql(ctx context.Context, req *api.Request) (*api.Response, error) {
-	atomic.AddUint64(&numQueries, 1)
-	return s.doQuery(context.WithValue(ctx, isGraphQL, true), req, NeedAuthorize)
-}
-
-func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
+func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
+	if isGraphQL {
+		atomic.AddUint64(&numGraphQL, 1)
+	} else {
+		atomic.AddUint64(&numGraphQLPM, 1)
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -770,14 +780,12 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
-
 	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
 
-	if authorize == NeedAuthorize {
+	if doAuth == NeedAuthorize {
 		ctx, rerr = authenticateAndUpdateContext(ctx)
 		if rerr != nil {
 			return

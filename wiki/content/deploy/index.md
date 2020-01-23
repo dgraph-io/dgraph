@@ -216,7 +216,7 @@ overall health of that group.
 
 ## Ports Usage
 
-Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. User has to pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.
+Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. Users should pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.
 
 ### Types of ports
 
@@ -226,13 +226,18 @@ Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. User
 
 ### Ports used by different nodes
 
- Dgraph Node Type | gRPC-internal  | gRPC-external | HTTP-external
-------------------|----------------|---------------|---------------
-       zero       |  --Not Used--  |     5080      |     6080
-       alpha      |      7080      |     9080      |     8080
-       ratel      |  --Not Used--  | --Not Used--  |     8000
+ Dgraph Node Type |     gRPC-internal     | gRPC-external | HTTP-external
+------------------|-----------------------|---------------|---------------
+       zero       |      5080<sup>1</sup> | --Not Used--  |  6080<sup>2</sup>
+       alpha      |      7080             |     9080      |  8080
+       ratel      |  --Not Used--         | --Not Used--  |  8000
 
-Users have to modify security rules or open firewall depending up on their underlying network to allow communication between cluster nodes and between a server and a client. During development a general rule could be wide open *-external (gRPC/HTTP) ports to public and gRPC-internal to be open within the cluster nodes.
+
+<sup>1</sup>: Dgraph Zero's gRPC-internal port is used for internal communication within the cluster. It's also needed for the [fast data loading]({{< relref "#fast-data-loading" >}}) tools Dgraph Live Loader and Dgraph Bulk Loader.
+
+<sup>2</sup>: Dgraph Zero's HTTP-external port is used for [admin]({{< relref "#more-about-dgraph-zero" >}}) operations. Access to it is not required by clients.
+
+Users have to modify security rules or open firewall ports depending up on their underlying network to allow communication between cluster nodes and between the Dgraph instances themselves and between Dgraph and a client. A general rule is to make *-external (gRPC/HTTP) ports wide open to clients and gRPC-internal ports open within the cluster nodes.
 
 **Ratel UI** accesses Dgraph Alpha on the HTTP-external port (default localhost:8080) and can be configured to talk to remote Dgraph cluster. This way you can run Ratel on your local machine and point to a remote cluster. But if you are deploying Ratel along with Dgraph cluster, then you may have to expose 8000 to the public.
 
@@ -241,24 +246,6 @@ Users have to modify security rules or open firewall depending up on their under
 For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then the Alpha node binds to 7082 (gRPC-internal), 8082 (HTTP-external) & 9092 (gRPC-external) respectively.
 
 **Ratel UI** by default listens on port 8000. You can use the `-port` flag to configure to listen on any other port.
-
-{{% notice "tip" %}}
-**For Dgraph v1.0.2 (or older)**
-
-Zero's default ports are 7080 and 8080. When following instructions for the different setup guides below, override the Zero ports using `--port_offset` to match the current default ports.
-
-```sh
-# Run Zero with ports 5080 and 6080
-dgraph zero --idx=1 --port_offset -2000
-# Run Zero with ports 5081 and 6081
-dgraph zero --idx=2 --port_offset -1999
-```
-Likewise, Ratel's default port is 8081, so override it using `--port` to the current default port.
-
-```sh
-dgraph-ratel --port 8080
-```
-{{% /notice %}}
 
 ### HA Cluster Setup
 

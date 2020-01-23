@@ -31,19 +31,19 @@ import (
 
 // Telemetry holds information about the state of the zero and alpha server.
 type Telemetry struct {
-	Arch        string
-	Cid         string
-	ClusterSize int
-	DiskUsageMB int64
-	NumAlphas   int
-	NumGroups   int
-	NumTablets  int
-	NumZeros    int
-	OS          string
-	SinceHours  int
-	Version     string
-	NumQueries  uint64
-	NumGraphQL  uint64
+	Arch         string
+	Cid          string
+	ClusterSize  int
+	DiskUsageMB  int64
+	NumAlphas    int
+	NumGroups    int
+	NumTablets   int
+	NumZeros     int
+	OS           string
+	SinceHours   int
+	Version      string
+	NumGraphQLPM uint64
+	NumGraphQL   uint64
 }
 
 var url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
