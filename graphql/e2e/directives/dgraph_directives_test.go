@@ -26,10 +26,12 @@ import (
 )
 
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
+	t.Skip()
 	common.RunAll(t)
 }
 
 func TestSchema_WithDgraphDirectives(t *testing.T) {
+	t.Skip()
 	expectedDgraphSchema := `
 	{
 		"schema": [
