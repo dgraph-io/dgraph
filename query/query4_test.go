@@ -1546,3 +1546,22 @@ func TestNumUids(t *testing.T) {
 	require.Equal(t, metrics.NumUids["friend"], uint64(10))
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
 }
+
+func TestMultiTenancy(t *testing.T) {
+	createNamespace("dev")
+	setSchema(`
+	name :string .
+	`, "dev")
+
+	err := addTriplesToCluster(`
+	_:a <name> "balaji" .`, "dev")
+
+	require.NoError(t, err)
+	res, err := processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name)){
+			name
+		}
+	}`, `dev`)
+	require.NoError(t, err)
+	panic(res)
+}

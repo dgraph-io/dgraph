@@ -92,7 +92,7 @@ func populateGraphExport(t *testing.T) {
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
-		e, err := rnq.ToEdgeUsing(idMap)
+		e, err := rnq.ToEdgeUsing(x.DefaultNamespace, idMap)
 		require.NoError(t, err)
 		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
 	}

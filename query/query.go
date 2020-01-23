@@ -1913,7 +1913,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var suffix string
-	fmt.Println("%+v", sg)
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
 	}
