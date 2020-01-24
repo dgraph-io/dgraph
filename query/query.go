@@ -25,12 +25,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -1793,6 +1795,55 @@ func uniquePreds(list []string) []string {
 	return preds
 }
 
+func filterUnauthorizedPreds(ctx context.Context, preds []string) []string {
+	// extract the jwt and unmarshal the jwt to get the list of groups
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return preds
+	}
+	accessJwt := md.Get("accessJwt")
+	if len(accessJwt) == 0 {
+		return preds
+	}
+	tokens, _, err := new(jwt.Parser).ParseUnverified(accessJwt[0], jwt.MapClaims{})
+	if err != nil {
+		return preds
+	}
+	claims, ok := tokens.Claims.(jwt.MapClaims)
+	if !ok {
+		return preds
+	}
+	userId, ok := claims["userid"].(string)
+	if !ok {
+		return preds
+	}
+	groups, ok := claims["groups"].([]interface{})
+	if !ok {
+		return preds
+	}
+	groupIds := make([]string, 0, len(groups))
+	for _, group := range groups {
+		groupId, ok := group.(string)
+		if !ok {
+			// This shouldn't happen. So, no need to make the client try to refresh the tokens.
+			return preds
+		}
+
+		groupIds = append(groupIds, groupId)
+	}
+	if x.IsGuardian(groupIds) {
+		return preds
+	}
+	blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Read)
+	filteredPreds := preds[:0]
+	for _, pred := range preds {
+		if _, ok := blockedPreds[pred]; !ok {
+			filteredPreds = append(filteredPreds, pred)
+		}
+	}
+	return filteredPreds
+}
+
 func recursiveCopy(dst *SubGraph, src *SubGraph) {
 	dst.Attr = src.Attr
 	dst.Params = src.Params
@@ -1851,6 +1902,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 		}
 		preds = uniquePreds(preds)
+		preds = filterUnauthorizedPreds(ctx, preds)
 
 		// There's a types filter at this level so filter out any non-uid predicates
 		// since only uid nodes can have a type.

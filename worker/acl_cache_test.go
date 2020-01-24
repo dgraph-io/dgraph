@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package edgraph
+package worker
 
 import (
 	"encoding/json"
@@ -21,7 +21,7 @@ import (
 )
 
 func TestAclCache(t *testing.T) {
-	aclCachePtr = &aclCache{
+	aclCachePtr := &aclCache{
 		predPerms: make(map[string]map[string]int32),
 	}
 
@@ -44,7 +44,7 @@ func TestAclCache(t *testing.T) {
 			Acls:    string(aclBytes),
 		},
 	}
-	aclCachePtr.update(groups)
+	aclCachePtr.Update(groups)
 	// after a rule is defined, the anonymous user should no longer have access
 	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should not have access when the predicate has acl defined")
@@ -52,7 +52,7 @@ func TestAclCache(t *testing.T) {
 		"the user with group authorized should have access")
 
 	// update the cache with empty acl list in order to clear the cache
-	aclCachePtr.update([]acl.Group{})
+	aclCachePtr.Update([]acl.Group{})
 	// the anonymous user should have access again
 	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should not have access when the acl cache is empty")

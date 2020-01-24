@@ -326,7 +326,7 @@ func RefreshAcls(closer *y.Closer) {
 			return err
 		}
 
-		aclCachePtr.update(groups)
+		worker.AclCachePtr.Update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -460,26 +460,6 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) map[string]struct{} {
-
-	blockedPreds := make(map[string]struct{})
-	for _, pred := range preds {
-		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
-			logAccess(&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: aclOp,
-				allowed:   false,
-			})
-
-			blockedPreds[pred] = struct{}{}
-		}
-	}
-	return blockedPreds
-}
-
 // authorizeAlter parses the Schema in the operation and authorizes the operation
 // using the aclCachePtr. It will return error if any one of the predicates specified in alter
 // are not authorized.
@@ -533,7 +513,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -549,13 +529,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Modify,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Modify,
+			err == nil,
+		)).String())
 	}
 
 	return err
@@ -641,7 +621,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds := worker.AuthorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -659,13 +639,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Write,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Write,
+			err == nil,
+		)).String())
 	}
 
 	return err
@@ -677,7 +657,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 {
+		if len(gq.Attr) > 0 && gq.Expand == "" {
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {
@@ -714,26 +694,6 @@ func parsePredsFromFilter(f *gql.FilterTree) []string {
 	return preds
 }
 
-type accessEntry struct {
-	userId    string
-	groups    []string
-	preds     []string
-	operation *acl.Operation
-	allowed   bool
-}
-
-func (log *accessEntry) String() string {
-	return fmt.Sprintf("ACL-LOG Authorizing user %q with groups %q on predicates %q "+
-		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
-		strings.Join(log.preds, ","), log.operation.Name, log.allowed)
-}
-
-func logAccess(log *accessEntry) {
-	if glog.V(1) {
-		glog.Info(log.String())
-	}
-}
-
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
@@ -760,19 +720,19 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 			return nil, nil
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		return worker.AuthorizePreds(userId, groupIds, preds, acl.Read), nil
 	}
 
 	blockedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (&accessEntry{
-			userId:    userId,
-			groups:    groupIds,
-			preds:     preds,
-			operation: acl.Read,
-			allowed:   err == nil,
-		}).String())
+		span.Annotatef(nil, (worker.NewAccessEntry(
+			userId,
+			groupIds,
+			preds,
+			acl.Read,
+			err == nil,
+		)).String())
 	}
 
 	if err != nil {

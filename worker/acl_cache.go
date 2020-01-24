@@ -10,10 +10,12 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package edgraph
+package worker
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -28,11 +30,11 @@ type aclCache struct {
 	predPerms map[string]map[string]int32
 }
 
-var aclCachePtr = &aclCache{
+var AclCachePtr = &aclCache{
 	predPerms: make(map[string]map[string]int32),
 }
 
-func (cache *aclCache) update(groups []acl.Group) {
+func (cache *aclCache) Update(groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
 	// the dev group has the following blob representing its ACL rules
 	// [friend, 4], [name, 7] where friend and name are predicates,
@@ -71,9 +73,9 @@ func (cache *aclCache) update(groups []acl.Group) {
 		}
 	}
 
-	aclCachePtr.Lock()
-	defer aclCachePtr.Unlock()
-	aclCachePtr.predPerms = predPerms
+	AclCachePtr.Lock()
+	defer AclCachePtr.Unlock()
+	AclCachePtr.predPerms = predPerms
 }
 
 func (cache *aclCache) authorizePredicate(groups []string, predicate string,
@@ -82,9 +84,9 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 		return errors.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
 	}
 
-	aclCachePtr.RLock()
-	predPerms := aclCachePtr.predPerms
-	aclCachePtr.RUnlock()
+	AclCachePtr.RLock()
+	predPerms := AclCachePtr.predPerms
+	AclCachePtr.RUnlock()
 
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
@@ -110,4 +112,56 @@ func hasRequiredAccess(groupPerms map[string]int32, groups []string,
 		}
 	}
 	return false
+}
+
+func AuthorizePreds(userId string, groupIds, preds []string,
+	aclOp *acl.Operation) map[string]struct{} {
+
+	blockedPreds := make(map[string]struct{})
+	for _, pred := range preds {
+		if err := AclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
+			logAccess(&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: aclOp,
+				allowed:   false,
+			})
+
+			blockedPreds[pred] = struct{}{}
+		}
+	}
+	return blockedPreds
+}
+
+type accessEntry struct {
+	userId    string
+	groups    []string
+	preds     []string
+	operation *acl.Operation
+	allowed   bool
+}
+
+func NewAccessEntry(userId string, groups, preds []string,
+	operation *acl.Operation, allowed bool) *accessEntry {
+
+	return &accessEntry{
+		userId:    userId,
+		groups:    groups,
+		preds:     preds,
+		operation: operation,
+		allowed:   allowed,
+	}
+}
+
+func logAccess(log *accessEntry) {
+	if glog.V(1) {
+		glog.Info(log.String())
+	}
+}
+
+func (log *accessEntry) String() string {
+	return fmt.Sprintf("ACL-LOG Authorizing user %q with groups %q on predicates %q "+
+		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
+		strings.Join(log.preds, ","), log.operation.Name, log.allowed)
 }
