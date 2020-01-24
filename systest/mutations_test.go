@@ -95,6 +95,8 @@ func TestSystem(t *testing.T) {
 	t.Run("count index concurrent setdel", wrap(CountIndexConcurrentSetDelUIDList))
 	t.Run("count index concurrent setdel scalar predicate",
 		wrap(CountIndexConcurrentSetDelScalarPredicate))
+	t.Run("count index delete on non list predicate", wrap(CountIndexNonlistPredicateDelete))
+	t.Run("Reverse count index delete", wrap(ReverseCountIndexDelete))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1766,14 +1768,8 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 		DelNquads: []byte(fmt.Sprintf("<0x1> <friend> * .")),
 	}
 	_, err = c.NewTxn().Mutate(context.Background(), mu)
-	if err != nil && err != dgo.ErrAborted {
-		require.Fail(t, "unable to inserted uid with err: %s", err)
-	}
-	q = fmt.Sprintf(`{
-		me(func: eq(count(friend), %d)) {
-			uid
-		}
-	}`, insertedCount-len(deletedMap))
+	require.NoError(t, err, "mutation to delete all friends should have been succeeded")
+
 	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
@@ -1838,84 +1834,94 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 		DelNquads: []byte(fmt.Sprintf("<0x1> <name> \"%s\" .", s.Q[0].Name)),
 	}
 	_, err = c.NewTxn().Mutate(context.Background(), mu)
-	if err != nil && err != dgo.ErrAborted {
-		require.Fail(t, "unable to inserted uid with err", err)
-	}
+	require.NoError(t, err, "mutation to delete name should have been succeeded")
 
 	// Querying should return 0 uids.
-	q = `{
-		me(func: eq(count(name), 1)) {
-			uid
-		}
-	}`
 	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+	testutil.CompareJSON(t, `{"q":[]}`, string(resp.GetJson()))
 }
 
-func CountIndexConcurrentDelete(t *testing.T, c *dgo.Dgraph) {
+func CountIndexNonlistPredicateDelete(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
-	op.Schema = `friend: [uid] @count .`
+	op.Schema = `name: string @index(exact) @count .`
 
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
 	require.NoError(t, err)
 
-	maxUID := 1000
-	inserted := make(map[int]struct{})
-	var l sync.Mutex
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-
-	txnTotal := uint64(10000)
-	txnCur := uint64(0)
-
-	expectedCount := uint64(0)
-	successTxn := uint64(0)
-
-	numRoutines := 10
-	var wg sync.WaitGroup
-	wg.Add(numRoutines)
-	for i := 0; i < numRoutines; i++ {
-		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
-			defer wg.Done()
-			for {
-				if atomic.AddUint64(&txnCur, 1) > txnTotal {
-					break
-				}
-
-				id := 2 + int(r.Int31n(int32(maxUID))) // 1 id subject id
-
-				mu := &api.Mutation{
-					CommitNow: true,
-				}
-
-				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
-				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err != nil && err != dgo.ErrAborted {
-					require.Fail(t, "unable to inserted uid with err: %s", err)
-				}
-				if err == nil { // Successful insertion.
-					atomic.AddUint64(&successTxn, 1)
-					l.Lock()
-					if _, ok := inserted[id]; !ok {
-						inserted[id] = struct{}{}
-						atomic.AddUint64(&expectedCount, 1)
-					}
-					l.Unlock()
-				}
-			}
-		}(c, &wg)
+	// Insert single record for uid 0x1.
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <name> \"name1\" ."),
 	}
-	wg.Wait()
 
-	q := fmt.Sprintf(`{
-		me(func: eq(count(friend), %d)) {
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to insert name for first time")
+
+	// query it using count index.
+	q := `{
+		q(func: eq(count(name), 1)) {
 			uid
 		}
-	}`, expectedCount)
+	}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
-	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+	testutil.CompareJSON(t, `{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Delete by some other name.
+	mu = &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <name> \"othername\" ."),
+	}
+
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to delete other name")
+
+	// Query it using count index.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+}
+
+func ReverseCountIndexDelete(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count @reverse .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	mu := &api.Mutation{
+		CommitNow: true,
+	}
+	mu.SetNquads = []byte(`
+	<0x1> <friend> <0x2> .
+	<0x1> <friend> <0x3> .`)
+	_, err = c.NewTxn().Mutate(ctx, mu)
+	require.NoError(t, err, "unable to insert friends")
+
+	q := `{
+		me(func: eq(count(~friend), 1)) {
+			uid
+		}
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x2"}, {"uid": "0x3"}]}`, string(resp.GetJson()))
+
+	// Delete one friend for <0x1>.
+	mu = &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <friend> <0x2> ."),
+	}
+	_, err = c.NewTxn().Mutate(ctx, mu)
+	require.NoError(t, err, "unable to delete friend")
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x3"}]}`, string(resp.GetJson()))
+
 }
 
 func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
