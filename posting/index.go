@@ -338,10 +338,9 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	delNonListPredicateCond := !schema.State().IsList(t.Attr) &&
 		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
 
-	// Here we want to call function which is super set of all.
-	// For updating index we need to call l.findValue().
-	// For adding mutation for predicate which is not list, we need to call l.findPosting().
-	// For finding count, we need to call l.length().
+	// Here we want to call function, which is super set of all. For countIndex we need to check if
+	// some posting already exists for uid and length of posting list. If doUpdateIndex or
+	// delNonListPredicateCond is true, we just need to get the posting for uid.
 	countBefore, countAfter := 0, 0
 	var currPost *pb.Posting
 	var currVal types.Val
