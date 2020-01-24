@@ -58,6 +58,7 @@ type jepsenTest struct {
 	replicas          int
 	skew              string
 	testCount         int
+	deferDbTeardown   bool
 }
 
 var (
@@ -123,6 +124,7 @@ var (
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
+	deferDbTeardown = pflag.Bool("defer-db-teardown", false, "Wait until user input to tear down DB nodes")
 
 	// Jepsen control flags
 	doUp       = pflag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
@@ -433,6 +435,7 @@ func main() {
 				replicas:          *replicas,
 				skew:              *skew,
 				testCount:         *testCount,
+				deferDbTeardown:   *deferDbTeardown,
 			})
 			if err != nil {
 				if err == errTestFail {
