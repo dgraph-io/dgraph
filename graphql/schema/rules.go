@@ -480,11 +480,53 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		)
 	}
 	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: reverse pred argument for @dgraph directive is not supported.",
-			typ.Name, field.Name,
-		)
+		// The inverse directive is not required on this field as given that the dgraph field name
+		// starts with ~ we already know this field has to be a reverse edge of some other field.
+		invDirective := field.Directives.ForName(inverseDirective)
+		if invDirective != nil {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @hasInverse directive is not allowed when pred argument in "+
+					"@dgraph directive starts with a ~.",
+				typ.Name, field.Name,
+			)
+		}
+
+		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
+		// TODO - Abstract into a function, instead of copy pasting.
+		invTypeName := field.Type.Name()
+		if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
+			return gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s is of type %s, but reverse predicate in @dgraph"+
+					" directive only applies to fields with object types.", typ.Name, field.Name,
+				invTypeName)
+		}
+
+		invType := sch.Types[invTypeName]
+		forwardFound := false
+		// We need to loop through all the fields of the invType and see if we find a field which
+		// is a forward edge field for this reverse field.
+		for _, field := range invType.Fields {
+			dir := field.Directives.ForName(dgraphDirective)
+			if dir == nil {
+				continue
+			}
+			predArg := dir.Arguments.ForName(dgraphPredArg)
+			if predArg == nil || predArg.Value.Raw == "" {
+				continue
+			}
+			if predArg.Value.Raw == forwardEdgePred {
+				forwardFound = true
+			}
+		}
+		if !forwardFound {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: pred argument: %s is not supported as forward edge doesn't exist for type %s.",
+				typ.Name, field.Name, predArg.Value.Raw, invTypeName,
+			)
+		}
 	}
 	return nil
 }
