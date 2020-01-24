@@ -159,16 +159,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		if (found && edge.Op == pb.DirectedEdge_SET) || (!found && edge.Op == pb.DirectedEdge_DEL) {
-			countAfter = countBefore
-		} else if !found && edge.Op == pb.DirectedEdge_SET {
-			countAfter = countBefore + 1
-		} else if found && edge.Op == pb.DirectedEdge_DEL {
-			countAfter = countBefore - 1
-		} else {
-			// should not reach here.
-		}
-
+		countAfter = countAfterMutation(countBefore, found, edge.Op)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -315,6 +306,17 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
+func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
+	if !found && op == pb.DirectedEdge_SET {
+		return countBefore + 1
+	} else if found && op == pb.DirectedEdge_DEL {
+		return countBefore - 1
+	}
+
+	// (found && op == pb.DirectedEdge_SET) || (!found && op == pb.DirectedEdge_DEL)
+	return countBefore
+}
+
 func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
 	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
 
@@ -343,19 +345,19 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	// delNonListPredicateCond is true, we just need to get the posting for uid.
 	countBefore, countAfter := 0, 0
 	var currPost *pb.Posting
-	var currVal types.Val
+	var val types.Val
 	var found bool
 	var err error
 	switch {
 	case hasCountIndex:
 		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
-			return currVal, false, emptyCountParams, ErrTsTooOld
+			return val, false, emptyCountParams, ErrTsTooOld
 		}
 	case doUpdateIndex || delNonListPredicateCond:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
-			return currVal, found, emptyCountParams, err
+			return val, found, emptyCountParams, err
 		}
 	}
 
@@ -372,37 +374,28 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		// return found to be true.
 		if found && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
-			return currVal, false, emptyCountParams, nil
+			return val, false, emptyCountParams, nil
 		}
 	}
 
 	if err = l.addMutationInternal(ctx, txn, t); err != nil {
-		return currVal, found, emptyCountParams, err
+		return val, found, emptyCountParams, err
 	}
 
-	if found {
-		currVal = valueToTypesVal(currPost)
+	if found && doUpdateIndex {
+		val = valueToTypesVal(currPost)
 	}
 
 	if hasCountIndex {
-		if (found && t.Op == pb.DirectedEdge_SET) || (!found && t.Op == pb.DirectedEdge_DEL) {
-			countAfter = countBefore
-		} else if !found && t.Op == pb.DirectedEdge_SET {
-			countAfter = countBefore + 1
-		} else if found && t.Op == pb.DirectedEdge_DEL {
-			countAfter = countBefore - 1
-		} else {
-			// should not reach here.
-		}
-
-		return currVal, found, countParams{
+		countAfter = countAfterMutation(countBefore, found, t.Op)
+		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      t.Entity,
 		}, nil
 	}
-	return currVal, found, emptyCountParams, nil
+	return val, found, emptyCountParams, nil
 }
 
 // AddMutationWithIndex is addMutation with support for indexing. It also
