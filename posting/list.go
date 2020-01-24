@@ -665,28 +665,24 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
-func (l *List) lengthAndValue(readTs, afterUid, uid uint64) (int, bool, types.Val, error) {
+func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
 	var count int
 	var found bool
-	var pos *pb.Posting
-	var defaultVal types.Val
+	var post *pb.Posting
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
-			pos = p
+			post = p
 			found = true
 		}
 		count++
 		return nil
 	})
 	if err != nil {
-		return -1, false, defaultVal, err
-	}
-	if found {
-		return count, found, valueToTypesVal(pos), nil
+		return -1, false, nil
 	}
 
-	return count, found, defaultVal, nil
+	return count, found, post
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
