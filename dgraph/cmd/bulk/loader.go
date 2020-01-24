@@ -74,6 +74,8 @@ type options struct {
 	BadgerVlog string
 	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
 	BadgerKeyFile string
+	// Badger is the compression level to use while writing to badger.
+	BadgerCompressionLevel int
 }
 
 type state struct {

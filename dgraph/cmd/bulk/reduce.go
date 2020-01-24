@@ -109,9 +109,6 @@ func (r *reducer) createBadger(i int) *badger.DB {
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile))
 
-	// TOOD(Ibrahim): Remove this once badger is updated.
-	opt.ZSTDCompressionLevel = 1
-
 	// Over-write badger options based on the options provided by the user.
 	r.setBadgerOptions(&opt)
 
@@ -146,6 +143,13 @@ func (r *reducer) setBadgerOptions(opt *badger.Options) {
 		opt.ValueLogLoadingMode = bo.FileIO
 	default:
 		x.Fatalf("Invalid Badger ValueLog Loading mode: %s", r.state.opt.BadgerVlog)
+	}
+
+	// Set the compression level. Default to 1 if the compression level is set to
+	// zero or a negative number.
+	opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
+	if r.state.opt.BadgerCompressionLevel < 1 {
+		opt.ZSTDCompressionLevel = 1
 	}
 }
 

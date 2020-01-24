@@ -110,6 +110,8 @@ func init() {
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	flag.Int("badger.compression_level", 1,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func run() {
@@ -135,9 +137,10 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 
-		BadgerTables:  Bulk.Conf.GetString("badger.tables"),
-		BadgerVlog:    Bulk.Conf.GetString("badger.vlog"),
-		BadgerKeyFile: Bulk.Conf.GetString("encryption_key_file"),
+		BadgerTables:           Bulk.Conf.GetString("badger.tables"),
+		BadgerVlog:             Bulk.Conf.GetString("badger.vlog"),
+		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
+		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
 
 	x.PrintVersion()
