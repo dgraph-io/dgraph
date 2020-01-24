@@ -30,8 +30,9 @@ func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 		// We must return a new instance because another goroutine might be calling this
 		// with a different lang.
 		return FullTextTokenizer{lang: lang}
+	default:
+		return t
 	}
-	return t
 }
 
 // GetTokens returns the tokens for the given tokenizer ID and value.
