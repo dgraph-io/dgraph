@@ -65,10 +65,6 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
@@ -101,6 +97,19 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+
+	// Options around how to set up Badger.
+	flag.String("badger.tables", "mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
+			"Option sequence consume most to least RAM while providing best to worst read "+
+			"performance respectively.")
+	flag.String("badger.vlog", "mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored."+
+			" mmap consumes more RAM, but provides better performance.")
+	flag.String("encryption_key_file", "",
+		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
+			"The key size determines the corresponding block size for AES encryption "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 }
 
 func run() {
@@ -111,7 +120,6 @@ func run() {
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
-		BadgerKeyFile:    Bulk.Conf.GetString("encryption_key_file"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
 		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
@@ -126,6 +134,10 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
+
+		BadgerTables:  Bulk.Conf.GetString("badger.tables"),
+		BadgerVlog:    Bulk.Conf.GetString("badger.vlog"),
+		BadgerKeyFile: Bulk.Conf.GetString("encryption_key_file"),
 	}
 
 	x.PrintVersion()

@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 )
 
 type reducer struct {
@@ -111,6 +112,9 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	// TOOD(Ibrahim): Remove this once badger is updated.
 	opt.ZSTDCompressionLevel = 1
 
+	// Over-write badger options based on the options provided by the user.
+	r.setBadgerOptions(&opt)
+
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 
@@ -119,6 +123,30 @@ func (r *reducer) createBadger(i int) *badger.DB {
 
 	r.dbs = append(r.dbs, db)
 	return db
+}
+
+func (r *reducer) setBadgerOptions(opt *badger.Options) {
+	glog.Infof("Setting Badger table load option: %s", r.state.opt.BadgerTables)
+	switch r.state.opt.BadgerTables {
+	case "mmap":
+		opt.TableLoadingMode = bo.MemoryMap
+	case "ram":
+		opt.TableLoadingMode = bo.LoadToRAM
+	case "disk":
+		opt.TableLoadingMode = bo.FileIO
+	default:
+		x.Fatalf("Invalid Badger Table Loading mode: %s", r.state.opt.BadgerTables)
+	}
+
+	glog.Infof("Setting Badger value log load option: %s", r.state.opt.BadgerVlog)
+	switch r.state.opt.BadgerVlog {
+	case "mmap":
+		opt.ValueLogLoadingMode = bo.MemoryMap
+	case "disk":
+		opt.ValueLogLoadingMode = bo.FileIO
+	default:
+		x.Fatalf("Invalid Badger ValueLog Loading mode: %s", r.state.opt.BadgerVlog)
+	}
 }
 
 type mapIterator struct {
