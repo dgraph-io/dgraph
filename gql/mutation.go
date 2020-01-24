@@ -116,7 +116,7 @@ var emptyEdge pb.DirectedEdge
 func (nq NQuad) createEdgePrototype(namespace string, subjectUid uint64) *pb.DirectedEdge {
 	// QUESTION: how do we know the given Entity is belong to the current namespace?
 	if nq.Predicate != x.Star {
-		nq.Predicate = x.GenerateAttr(namespace, nq.Predicate)
+		nq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
 	}
 	return &pb.DirectedEdge{
 		Entity: subjectUid,

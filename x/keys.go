@@ -56,16 +56,16 @@ const (
 	DefaultNamespace = "default"
 )
 
-// GenerateAttr is used to generate attr from namespace.
-func GenerateAttr(namespace, attr string) string {
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(namespace, attr string) string {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
 	return namespace + string(NamespaceSeperator) + attr
 }
 
-// GetNamespaceAndAttr returns the namespace and attr from the given value.
-func GetNamespaceAndAttr(attr string) (string, string) {
+// ParseNamespaceAttr returns the namespace and attr from the given value.
+func ParseNamespaceAttr(attr string) (string, string) {
 	splits := strings.Split(attr, string(NamespaceSeperator))
 	AssertTrue(len(splits) == 2)
 	return splits[0], splits[1]

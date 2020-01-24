@@ -44,10 +44,6 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
-const (
-	defaultNamespace = ""
-)
-
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
@@ -214,10 +210,10 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
-		de = nq.CreateUidEdge(defaultNamespace, sid, oid)
+		de = nq.CreateUidEdge(x.DefaultNamespace, sid, oid)
 	} else {
 		var err error
-		de, err = nq.CreateValueEdge(defaultNamespace, sid)
+		de, err = nq.CreateValueEdge(x.DefaultNamespace, sid)
 		x.Check(err)
 	}
 

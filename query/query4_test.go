@@ -1548,6 +1548,7 @@ func TestNumUids(t *testing.T) {
 }
 
 func TestMultiTenancy(t *testing.T) {
+	// See the cluster with sample data
 	createNamespace("dev")
 	setSchema(`
 	name :string .
@@ -1562,6 +1563,86 @@ func TestMultiTenancy(t *testing.T) {
 			name
 		}
 	}`, `dev`)
+	require.JSONEq(t, res, `{"data":{"me":[{"name":"balaji"}]}}`)
+
+	// Test type system.
+	setSchema(`
+	name :string .
+	type Student{
+		name
+	}
+	`, "dev")
+	err = addTriplesToCluster(`
+	_:a <name> "vegeta" .
+	_:a <dgraph.type> "Student" .`, "dev")
 	require.NoError(t, err)
-	panic(res)
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:type(Student)){
+			name
+		}
+	}`, `dev`)
+	require.NoError(t, err)
+	require.JSONEq(t, res, `{"data":{"me":[{"name":"vegeta"}]}}`)
+
+	// Test schema retrival.
+	res, err = getSchemaWithNamespace(context.Background(), t, `
+		schema {}
+	`, `dev`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"schema":{
+		   "schema":[
+			  {
+				 "predicate":"dgraph.graphql.schema",
+				 "type":"string"
+			  },
+			  {
+				 "predicate":"dgraph.group.acl",
+				 "type":"string"
+			  },
+			  {
+				 "predicate":"dgraph.password",
+				 "type":"password"
+			  },
+			  {
+				 "predicate":"dgraph.type",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "list":true
+			  },
+			  {
+				 "predicate":"dgraph.user.group",
+				 "type":"uid",
+				 "reverse":true,
+				 "list":true
+			  },
+			  {
+				 "predicate":"dgraph.xid",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "upsert":true
+			  },
+			  {
+				 "predicate":"name",
+				 "type":"string"
+			  }
+		   ],
+		   "types":[
+			  {
+				 "fields":[
+					{
+					   "name":"name"
+					}
+				 ],
+				 "name":"Student"
+			  }
+		   ]
+		}
+	 }`, res)
 }

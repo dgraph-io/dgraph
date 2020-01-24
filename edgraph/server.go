@@ -95,7 +95,7 @@ func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	schemas := schema.InitialSchema()
 	for _, schema := range schemas {
-		schema.Predicate = x.GenerateAttr(namespace, schema.Predicate)
+		schema.Predicate = x.NamespaceAttr(namespace, schema.Predicate)
 	}
 	m.Schema = schemas
 	_, err := query.ApplyMutations(ctx, namespace, m)
@@ -140,6 +140,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	span.Annotatef(nil, "Alter operation: %+v", op)
 	if op.CreateNamespace != "" {
 		return &api.Payload{}, s.CreateNamespace(ctx, op.CreateNamespace)
+	}
+	if op.Namespace == "" {
+		op.Namespace = x.DefaultNamespace
 	}
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
@@ -210,7 +213,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		var attr string
 		if len(op.DropAttr) > 0 {
-			attr = op.DropAttr
+			attr = x.NamespaceAttr(op.Namespace, op.DropAttr)
 		} else {
 			attr = op.DropValue
 		}
@@ -268,7 +271,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// Set the schema name according to the namespace.
-		update.Predicate = x.GenerateAttr(op.Namespace, update.Predicate)
+		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
@@ -277,15 +280,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	for _, schemaType := range result.Types {
 		// Convert the type name according to the current tenant.
-		schemaType.TypeName = x.GenerateAttr(op.Namespace, schemaType.TypeName)
+		schemaType.TypeName = x.NamespaceAttr(op.Namespace, schemaType.TypeName)
 
 		for _, field := range schemaType.Fields {
 			// Convert the type field according to the current tenant.
 			if field.Predicate[0] == '~' {
-				field.Predicate = ("~" + x.GenerateAttr(op.Namespace, field.Predicate[1:]))
+				field.Predicate = ("~" + x.NamespaceAttr(op.Namespace, field.Predicate[1:]))
 				continue
 			}
-			field.Predicate = x.GenerateAttr(op.Namespace, field.Predicate)
+			field.Predicate = x.NamespaceAttr(op.Namespace, field.Predicate)
 		}
 	}
 	m.Types = result.Types
@@ -761,6 +764,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return nil, ctx.Err()
 	}
 
+	if req.Namespace == "" {
+		req.Namespace = x.DefaultNamespace
+	}
+
 	l := &query.Latency{}
 	l.Start = time.Now()
 
@@ -807,7 +814,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL, namespace: req.Namespace}
+	qc := &queryContext{
+		req:       req,
+		latency:   l,
+		span:      span,
+		graphql:   isGraphQL,
+		namespace: req.Namespace,
+	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}

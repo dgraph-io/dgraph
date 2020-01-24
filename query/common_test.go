@@ -90,6 +90,23 @@ func processQueryWithNamespace(ctx context.Context, t *testing.T, query string, 
 	return string(jsonResponse), err
 }
 
+func getSchemaWithNamespace(ctx context.Context, t *testing.T, query string, namespace string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:     query,
+		Namespace: namespace,
+	})
+	fmt.Println(res.Json)
+	response := map[string]interface{}{}
+	response["schema"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
 func processQueryNoErr(t *testing.T, query string) string {
 	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
@@ -132,10 +149,12 @@ func addTriplesToCluster(triples string, namespace string) error {
 		Namespace: namespace,
 		Mutations: []*api.Mutation{&api.Mutation{
 			SetNquads: []byte(triples),
-			CommitNow: true,
 		}},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return txn.Commit(ctx)
 }
 
 func deleteTriplesInCluster(triples string) {

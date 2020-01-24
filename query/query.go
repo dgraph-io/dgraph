@@ -417,7 +417,7 @@ func mathCopy(dst *mathTree, src *gql.MathTree) error {
 	return nil
 }
 
-func filterCopy(namespace string, sg *SubGraph, ft *gql.FilterTree) error {
+func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	if len(ft.Op) > 0 {
 		sg.FilterOp = ft.Op
@@ -440,11 +440,10 @@ func filterCopy(namespace string, sg *SubGraph, ft *gql.FilterTree) error {
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 		}
 	}
-	// Set namespace for the given filter.
-	sg.Params.Namespace = namespace
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
-		if err := filterCopy(namespace, child, ftc); err != nil {
+		child.Params.Namespace = sg.Params.Namespace
+		if err := filterCopy(child, ftc); err != nil {
 			return err
 		}
 		sg.Filters = append(sg.Filters, child)
@@ -588,7 +587,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
-			if err := filterCopy(sg.Params.Namespace, dstf, gchild.Filter); err != nil {
+			dstf.Params.Namespace = sg.Params.Namespace
+			if err := filterCopy(dstf, gchild.Filter); err != nil {
 				return err
 			}
 			dst.Filters = append(dst.Filters, dstf)
@@ -796,7 +796,8 @@ func newGraph(ctx context.Context, namespace string, gq *gql.GraphQuery) (*SubGr
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
-		if err := filterCopy(namespace, sgf, gq.Filter); err != nil {
+		sgf.Params.Namespace = namespace
+		if err := filterCopy(sgf, gq.Filter); err != nil {
 			return nil, errors.Wrapf(err, "while copying filter")
 		}
 		sg.Filters = append(sg.Filters, sgf)
@@ -871,7 +872,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         x.GenerateAttr(sg.Params.Namespace, attr),
+		Attr:         x.NamespaceAttr(sg.Params.Namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1869,7 +1870,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
-			typeNamespace, attr := x.GetNamespaceAndAttr(pred)
+			typeNamespace, attr := x.ParseNamespaceAttr(pred)
 			x.AssertTrue(typeNamespace == child.Params.Namespace)
 
 			temp := &SubGraph{
@@ -2308,7 +2309,7 @@ func (sg *SubGraph) createOrderForTask() []*pb.Order {
 	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
 		oc := &pb.Order{
-			Attr:  x.GenerateAttr(sg.Params.Namespace, o.Attr),
+			Attr:  x.NamespaceAttr(sg.Params.Namespace, o.Attr),
 			Desc:  o.Desc,
 			Langs: o.Langs,
 		}
@@ -2526,7 +2527,7 @@ func getPredicatesFromTypes(namespace string, typeNames []string) []string {
 	var preds []string
 
 	for _, typeName := range typeNames {
-		typeDef, ok := schema.State().GetType(x.GenerateAttr(namespace, typeName))
+		typeDef, ok := schema.State().GetType(x.NamespaceAttr(namespace, typeName))
 		if !ok {
 			continue
 		}
@@ -2775,7 +2776,7 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 	out := []*pb.TypeUpdate{}
 
 	for _, update := range types {
-		typeNamespace, typeName := x.GetNamespaceAndAttr(update.TypeName)
+		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue
 		}
@@ -2783,7 +2784,7 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 		fields := []*pb.SchemaUpdate{}
 		// Convert field name for the current namespace.
 		for _, field := range update.Fields {
-			fieldNamespace, fieldName := x.GetNamespaceAndAttr(field.Predicate)
+			fieldNamespace, fieldName := x.ParseNamespaceAttr(field.Predicate)
 			x.AssertTrue(fieldNamespace == namespace)
 			field.Predicate = fieldName
 			fields = append(fields, field)
@@ -2799,7 +2800,7 @@ func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*p
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
-		nodeNamespace, attrName := x.GetNamespaceAndAttr(node.Predicate)
+		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
 			continue
 		}
