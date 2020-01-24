@@ -117,6 +117,22 @@ func (sd *Decoder) DecodePtrFixedWidthInt(t interface{}) (err error) {
 	return err
 }
 
+// DecodePtrByteArray accepts a byte array representing a SCALE encoded byte array and performs SCALE decoding
+// of the byte array
+func (sd *Decoder) DecodePtrByteArray(output interface{}) error {
+	_, err := sd.DecodeInteger()
+	if err != nil {
+		return err
+	}
+
+	_, err = sd.Reader.Read(output.([]byte))
+	if err != nil {
+		return errors.New("could not decode invalid byte array: reached early EOF")
+	}
+
+	return nil
+}
+
 // DecodePtrBigInt decodes a SCALE encoded byte array into a *big.Int
 //  Changes the value of output to decoded value
 // Works for all integers, including ints > 2**64

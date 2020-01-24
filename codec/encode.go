@@ -306,6 +306,14 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 			n, err = se.encodeArray(elem)
 			bytesEncoded += n
 		}
+	case []string:
+		n, err = se.encodeInteger(uint(len(arr)))
+		bytesEncoded += n
+
+		for _, elem := range arr {
+			n, err = se.encodeByteArray([]byte(elem))
+			bytesEncoded += n
+		}
 	}
 
 	return bytesEncoded, err

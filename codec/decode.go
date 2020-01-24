@@ -281,22 +281,6 @@ func (sd *Decoder) DecodeByteArray() (o []byte, err error) {
 	return b, nil
 }
 
-// DecodePtrByteArray accepts a byte array representing a SCALE encoded byte array and performs SCALE decoding
-// of the byte array
-func (sd *Decoder) DecodePtrByteArray(output interface{}) error {
-	_, err := sd.DecodeInteger()
-	if err != nil {
-		return err
-	}
-
-	_, err = sd.Reader.Read(output.([]byte))
-	if err != nil {
-		return errors.New("could not decode invalid byte array: reached early EOF")
-	}
-
-	return nil
-}
-
 // DecodeBool accepts a byte array representing a SCALE encoded bool and performs SCALE decoding
 // of the bool then returns it. if invalid, return false and an error
 func (sd *Decoder) DecodeBool() (bool, error) {
@@ -534,6 +518,13 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 				// get the pointer to the value and set the value
 				ptr := fieldValue.(*string)
 				*ptr = string(o.([]byte))
+			case []string:
+				o, err = sd.DecodeStringArray()
+				if err != nil {
+					break
+				}
+				ptr := fieldValue.(*[]string)
+				*ptr = o.([]string)
 			default:
 				_, err = sd.Decode(v.Field(i).Interface())
 				if err != nil {
@@ -603,4 +594,21 @@ func (sd *Decoder) DecodeBoolArray() ([]bool, error) {
 		}
 	}
 	return o, nil
+}
+
+func (sd *Decoder) DecodeStringArray() ([]string, error) {
+	length, err := sd.DecodeInteger()
+	if err != nil {
+		return nil, err
+	}
+	s := make([]string, length)
+
+	for i := 0; i < int(length); i++ {
+		o, err := sd.DecodeByteArray()
+		if err != nil {
+			return nil, err
+		}
+		s[i] = string(o[:]) // cast []byte into string
+	}
+	return s, nil
 }

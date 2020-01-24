@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type encodeTest struct {
@@ -189,4 +191,22 @@ func TestEncodeAndDecodeStringInStruct(t *testing.T) {
 	if !reflect.DeepEqual(test, dec) {
 		t.Fatalf("Fail: got %v expected %v", dec, test)
 	}
+}
+
+func TestEncodeAndDecodeStringArrayInStruct(t *testing.T) {
+	test := &struct {
+		A []string
+	}{
+		A: []string{"noot", "noot2"},
+	}
+
+	enc, err := Encode(test)
+	require.Nil(t, err)
+	require.NotEqual(t, 0, len(enc), "Failed to encode StringArrayInStruct")
+
+	var result = &struct{ A []string }{}
+
+	err = DecodePtr(enc, result)
+	require.Nil(t, err)
+	require.Equal(t, test, result, "Decoding failed")
 }
