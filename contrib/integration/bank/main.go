@@ -175,7 +175,7 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	fmt.Fprintf(w, "==>\n")
 	defer func() {
 		fmt.Fprintf(w, "---\n")
-		w.Flush()
+		_ = w.Flush()
 	}()
 
 	ctx := context.Background()
