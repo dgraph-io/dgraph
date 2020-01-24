@@ -493,7 +493,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		}
 
 		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
-		// TODO - Abstract into a function, instead of copy pasting.
+		// TODO - Abstract into a function, instead of copy pasting. Is Interface allowed here?
 		invTypeName := field.Type.Name()
 		if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
 			return gqlerror.ErrorPosf(
@@ -517,6 +517,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				continue
 			}
 			if predArg.Value.Raw == forwardEdgePred {
+				// TODO - Type of this field should also be Object or is interface allowed?
 				forwardFound = true
 			}
 		}

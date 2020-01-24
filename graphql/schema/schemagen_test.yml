@@ -368,3 +368,21 @@ schemas:
         B.correct: bool
       }
       B.correct: bool @index(bool) .
+
+  -
+    name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
+    input: |
+      type Movie {
+        director: [Person] @dgraph(pred: "~directed.movies")
+      }
+      type Person {
+        directed: [Movie] @dgraph(pred: "directed.movies")
+      }
+    output: |
+      type Movie {
+        ~directed.movies: [uid]
+      }
+      type Person {
+        directed.movies: [uid]
+      }
+      directed.movies [uid] @reverse .
