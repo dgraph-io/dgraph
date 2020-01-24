@@ -597,9 +597,6 @@ func ReservedPredicates() []string {
 	for pred := range reservedPredicateMap {
 		preds = append(preds, pred)
 	}
-	for pred := range aclPredicateMap {
-		preds = append(preds, pred)
-	}
 	return preds
 }
 
