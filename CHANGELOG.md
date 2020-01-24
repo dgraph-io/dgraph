@@ -19,7 +19,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Added
 
-- Add GraphQL API for Dgraph accessible via the `/graphql` and `/admin` HTTP endpoints on Dgraph Alpha. ([#933][])
 - Add `debuginfo` subcommand to dgraph. ([#4464][])
 - Support filtering on non-indexed predicate. Fixes [#4305][]. ([#4531][])
 - Add support for variables in recurse. Fixes [#3301][]. ([#4385][]).
@@ -66,7 +65,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#4479]: https://github.com/dgraph-io/dgraph/issues/4479
 [#4136]: https://github.com/dgraph-io/dgraph/issues/4136
 [#4411]: https://github.com/dgraph-io/dgraph/issues/4411
-[#933]: https://github.com/dgraph-io/dgraph/issues/933
 [#4464]: https://github.com/dgraph-io/dgraph/issues/4464
 [#4531]: https://github.com/dgraph-io/dgraph/issues/4531
 [#4305]: https://github.com/dgraph-io/dgraph/issues/4305
