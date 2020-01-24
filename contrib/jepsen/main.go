@@ -55,6 +55,7 @@ type jepsenTest struct {
 	nemesisInterval   string
 	localBinary       string
 	nodes             string
+	replicas          int
 	skew              string
 	testCount         int
 }
@@ -117,6 +118,7 @@ var (
 	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
 	nodes     = pflag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	replicas  = pflag.Int("replicas", 3, "How many replicas of data should dgraph store?")
 	skew      = pflag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
@@ -280,6 +282,7 @@ func runJepsenTest(test *jepsenTest) error {
 		"--nemesis-interval", test.nemesisInterval,
 		"--local-binary", test.localBinary,
 		"--nodes", test.nodes,
+		"--replicas", strconv.Itoa(test.replicas),
 		"--test-count", strconv.Itoa(test.testCount),
 	}
 	if test.nemesis == "skew-clock" {
@@ -427,6 +430,7 @@ func main() {
 				nemesisInterval:   *nemesisInterval,
 				localBinary:       *localBinary,
 				nodes:             *nodes,
+				replicas:          *replicas,
 				skew:              *skew,
 				testCount:         *testCount,
 			})
