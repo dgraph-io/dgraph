@@ -91,7 +91,12 @@ func (m *dumpMeta) dumpTable(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
+	escapedColNames := make([]string, len(tableInfo.columnNames))
+	for _, c := range tableInfo.columnNames {
+		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
+	}
+
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err
@@ -135,7 +140,12 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
+	escapedColNames := make([]string, len(tableInfo.columnNames))
+	for _, c := range tableInfo.columnNames {
+		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
+	}
+
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err
