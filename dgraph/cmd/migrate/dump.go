@@ -91,7 +91,7 @@ func (m *dumpMeta) dumpTable(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	escapedColNames := make([]string, len(tableInfo.columnNames))
+	var escapedColNames []string
 	for _, c := range tableInfo.columnNames {
 		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
 	}
@@ -140,7 +140,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	escapedColNames := make([]string, len(tableInfo.columnNames))
+	var escapedColNames []string
 	for _, c := range tableInfo.columnNames {
 		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
 	}
