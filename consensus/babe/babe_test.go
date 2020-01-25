@@ -18,15 +18,14 @@ package babe
 
 import (
 	"bytes"
-	"io"
 	"math"
 	"math/big"
-	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/tests"
 
 	"github.com/ChainSafe/gossamer/common"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
@@ -34,68 +33,7 @@ import (
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	db "github.com/ChainSafe/gossamer/polkadb"
-	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/trie"
 )
-
-const POLKADOT_RUNTIME_FP string = "../../substrate_test_runtime.compact.wasm"
-const POLKADOT_RUNTIME_URL string = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
-
-// getRuntimeBlob checks if the polkadot runtime wasm file exists and if not, it fetches it from github
-func getRuntimeBlob() (n int64, err error) {
-	if Exists(POLKADOT_RUNTIME_FP) {
-		return 0, nil
-	}
-
-	out, err := os.Create(POLKADOT_RUNTIME_FP)
-	if err != nil {
-		return 0, err
-	}
-	defer out.Close()
-
-	resp, err := http.Get(POLKADOT_RUNTIME_URL)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	n, err = io.Copy(out, resp.Body)
-	return n, err
-}
-
-// Exists reports whether the named file or directory exists.
-func Exists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
-}
-
-func newRuntime(t *testing.T) *runtime.Runtime {
-	_, err := getRuntimeBlob()
-	if err != nil {
-		t.Fatalf("Fail: could not get polkadot runtime")
-	}
-
-	fp, err := filepath.Abs(POLKADOT_RUNTIME_FP)
-	if err != nil {
-		t.Fatal("could not create filepath")
-	}
-
-	tr := trie.NewEmptyTrie(nil)
-	ss := NewTestRuntimeStorage(tr)
-
-	r, err := runtime.NewRuntimeFromFile(fp, ss, nil)
-	if err != nil {
-		t.Fatal(err)
-	} else if r == nil {
-		t.Fatal("did not create new VM")
-	}
-
-	return r
-}
 
 func TestCalculateThreshold(t *testing.T) {
 	// C = 1
@@ -163,7 +101,7 @@ func TestCalculateThreshold_AuthorityWeights(t *testing.T) {
 }
 
 func TestRunLottery(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
@@ -193,7 +131,7 @@ func TestRunLottery(t *testing.T) {
 }
 
 func TestRunLottery_False(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
@@ -235,7 +173,7 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 }
 
 func TestConfigurationFromRuntime(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +311,7 @@ func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
 }
 
 func TestSlotTime(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	bt := createFlatBlockTree(t, 100)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
@@ -408,7 +346,7 @@ func TestSlotTime(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -445,7 +383,7 @@ func TestStart(t *testing.T) {
 }
 
 func TestBabeAnnounceMessage(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -484,7 +422,7 @@ func TestBabeAnnounceMessage(t *testing.T) {
 }
 
 func TestSeal(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -581,7 +519,7 @@ func createTestBlock(babesession *Session, t *testing.T) (*types.Block, Slot) {
 	return block, slot
 }
 func TestBuildBlock_ok(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -642,7 +580,7 @@ func TestBuildBlock_ok(t *testing.T) {
 }
 
 func TestBuildBlock_failing(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -714,39 +652,4 @@ func TestBuildBlock_failing(t *testing.T) {
 	if !bytes.Equal(*txc.Extrinsic, txa) {
 		t.Fatal("did not readd valid transaction to queue")
 	}
-}
-
-func NewTestRuntimeStorage(tr *trie.Trie) *TestRuntimeStorage {
-	return &TestRuntimeStorage{
-		trie: tr,
-	}
-}
-
-type TestRuntimeStorage struct {
-	trie *trie.Trie
-}
-
-func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
-	return trs.trie.Put(key, value)
-}
-func (trs TestRuntimeStorage) GetStorage(key []byte) ([]byte, error) {
-	return trs.trie.Get(key)
-}
-func (trs TestRuntimeStorage) StorageRoot() (common.Hash, error) {
-	return trs.trie.Hash()
-}
-func (trs TestRuntimeStorage) SetStorageChild(keyToChild []byte, child *trie.Trie) error {
-	return trs.trie.PutChild(keyToChild, child)
-}
-func (trs TestRuntimeStorage) SetStorageIntoChild(keyToChild, key, value []byte) error {
-	return trs.trie.PutIntoChild(keyToChild, key, value)
-}
-func (trs TestRuntimeStorage) GetStorageFromChild(keyToChild, key []byte) ([]byte, error) {
-	return trs.trie.GetFromChild(keyToChild, key)
-}
-func (trs TestRuntimeStorage) ClearStorage(key []byte) error {
-	return trs.trie.Delete(key)
-}
-func (trs TestRuntimeStorage) Entries() map[string][]byte {
-	return trs.trie.Entries()
 }

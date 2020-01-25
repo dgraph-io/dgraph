@@ -17,86 +17,24 @@
 package core
 
 import (
-	"io"
 	"math/big"
-	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/tests"
+
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/trie"
 )
-
-const POLKADOT_RUNTIME_FP string = "../substrate_test_runtime.compact.wasm"
-const POLKADOT_RUNTIME_URL string = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
 
 var TestMessageTimeout = 2 * time.Second
 
-// getRuntimeBlob checks if the polkadot runtime wasm file exists and then it
-// will fetch the file from github if the file does not exist.
-func getRuntimeBlob() (n int64, err error) {
-	if Exists(POLKADOT_RUNTIME_FP) {
-		return 0, nil
-	}
-
-	out, err := os.Create(POLKADOT_RUNTIME_FP)
-	if err != nil {
-		return 0, err
-	}
-	defer out.Close()
-
-	resp, err := http.Get(POLKADOT_RUNTIME_URL)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	n, err = io.Copy(out, resp.Body)
-	return n, err
-}
-
-// Exists reports whether the named file or directory exists.
-func Exists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
-}
-
-func newRuntime(t *testing.T) *runtime.Runtime {
-	_, err := getRuntimeBlob()
-	if err != nil {
-		t.Fatal("Failed to get runtime blob")
-	}
-
-	fp, err := filepath.Abs(POLKADOT_RUNTIME_FP)
-	if err != nil {
-		t.Fatal("Failed to create runtime filepath")
-	}
-
-	ss := NewTestRuntimeStorage()
-	r, err := runtime.NewRuntimeFromFile(fp, ss, nil)
-	if err != nil {
-		t.Fatal(err)
-	} else if r == nil {
-		t.Fatal("Failed to create new runtime from file")
-	}
-
-	return r
-}
-
 func TestStartService(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -117,7 +55,7 @@ func TestStartService(t *testing.T) {
 }
 
 func TestValidateBlock(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -141,7 +79,7 @@ func TestValidateBlock(t *testing.T) {
 }
 
 func TestValidateTransaction(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -182,7 +120,7 @@ func TestValidateTransaction(t *testing.T) {
 }
 
 func TestAnnounceBlock(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	blkRec := make(chan types.Block)
 	msgSend := make(chan p2p.Message)
@@ -228,7 +166,7 @@ func TestAnnounceBlock(t *testing.T) {
 }
 
 func TestProcessBlockAnnounceMessage(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	msgRec := make(chan p2p.Message)
 	msgSend := make(chan p2p.Message)
@@ -274,7 +212,7 @@ func TestProcessBlockAnnounceMessage(t *testing.T) {
 }
 
 func TestProcessBlockResponseMessage(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -304,7 +242,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 }
 
 func TestProcessTransactionMessage(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -337,43 +275,4 @@ func TestProcessTransactionMessage(t *testing.T) {
 			"\nreceived:", bsTxExt,
 		)
 	}
-}
-
-func NewTestRuntimeStorage() *TestRuntimeStorage {
-	return &TestRuntimeStorage{
-		trie: trie.NewEmptyTrie(nil),
-	}
-}
-
-type TestRuntimeStorage struct {
-	trie *trie.Trie
-}
-
-func (trs TestRuntimeStorage) TrieAsString() string {
-	return trs.trie.String()
-}
-
-func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
-	return trs.trie.Put(key, value)
-}
-func (trs TestRuntimeStorage) GetStorage(key []byte) ([]byte, error) {
-	return trs.trie.Get(key)
-}
-func (trs TestRuntimeStorage) StorageRoot() (common.Hash, error) {
-	return trs.trie.Hash()
-}
-func (trs TestRuntimeStorage) SetStorageChild(keyToChild []byte, child *trie.Trie) error {
-	return trs.trie.PutChild(keyToChild, child)
-}
-func (trs TestRuntimeStorage) SetStorageIntoChild(keyToChild, key, value []byte) error {
-	return trs.trie.PutIntoChild(keyToChild, key, value)
-}
-func (trs TestRuntimeStorage) GetStorageFromChild(keyToChild, key []byte) ([]byte, error) {
-	return trs.trie.GetFromChild(keyToChild, key)
-}
-func (trs TestRuntimeStorage) ClearStorage(key []byte) error {
-	return trs.trie.Delete(key)
-}
-func (trs TestRuntimeStorage) Entries() map[string][]byte {
-	return trs.trie.Entries()
 }

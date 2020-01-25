@@ -18,12 +18,12 @@ package runtime
 
 import (
 	"encoding/binary"
-	"io"
 	"math"
-	"net/http"
-	"os"
 	"reflect"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/tests"
+	"github.com/stretchr/testify/require"
 
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -271,57 +271,32 @@ var allTests = []testHolder{
 	{offset: 19, tests: heapShouldBeZeroAfterFreeWithOffsetFiveTimes},
 }
 
-const SimpleWasmFP = "simple.wasm"
-const SimpleWasmURL = "https://github.com//wasmerio/go-ext-wasm/blob/master/wasmer/test/testdata/examples/simple.wasm?raw=true"
-
 // utility function to create a wasm.Memory instance for testing
 //   it checks if simple.wasm has been downloaded from git repo, if not if fetchs it for building the test wasm blob
-func NewWasmMemory() (*wasm.Memory, error) {
-	// check if file already downloaded
-	if _, err := os.Stat(SimpleWasmFP); err != nil {
-		if os.IsNotExist(err) {
-			// file not found, so load if from git repo
-			out, err := os.Create(SimpleWasmFP)
-			if err != nil {
-				return nil, err
-			}
-			defer out.Close()
+func NewWasmMemory(t *testing.T) *wasm.Memory {
+	testRuntimeFilePath, testRuntimeURL := tests.GetAbsolutePath(tests.SIMPLE_WASM_FP), tests.SIMPLE_RUNTIME_URL
 
-			resp, err := http.Get(SimpleWasmURL)
-			if err != nil {
-				return nil, err
-			}
-			defer resp.Body.Close()
+	_, err := tests.GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
+	require.Nil(t, err, "Fail: could not get simple wasm runtime")
 
-			_, err = io.Copy(out, resp.Body)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
 	// Reads the WebAssembly simple.wasm mock wasm blob.
 	//  note the wasm blob can be any valid wasm blob that will create a new wasm instance in this case we're using
 	//  test blob from https://github.com/wasmerio/go-ext-wasm/tree/master/wasmer/test/testdata/examples/simple.wasm
-	bytes, err := wasm.ReadBytes(SimpleWasmFP)
-	if err != nil {
-		return nil, err
-	}
-	instance, err := wasm.NewInstance(bytes)
-	if err != nil {
-		return nil, err
-	}
+	bytes, err := wasm.ReadBytes(tests.SIMPLE_WASM_FP)
+	require.Nil(t, err, "Fail: could ReadBytes for simple wasm runtime")
 
-	return instance.Memory, nil
+	instance, err := wasm.NewInstance(bytes)
+	require.Nil(t, err, "Fail: could not NewInstance simple wasm runtime")
+
+	return instance.Memory
 }
 
 // iterates allTests and runs tests on them based on data contained in
 //  test holder
 func TestAllocator(t *testing.T) {
 	for _, test := range allTests {
-		mem, err := NewWasmMemory()
-		if err != nil {
-			t.Fatal(err)
-		}
+		mem := NewWasmMemory(t)
+
 		allocator := NewAllocator(mem, test.offset)
 
 		for _, theTest := range test.tests {
@@ -369,16 +344,14 @@ func compareState(allocator FreeingBumpHeapAllocator, state allocatorState, resu
 //  request is larger than current size
 func TestShouldNotAllocateIfTooLarge(t *testing.T) {
 	// given
-	mem, err := NewWasmMemory()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := NewWasmMemory(t)
+
 	currentSize := mem.Length()
 
 	fbha := NewAllocator(mem, 0)
 
 	// when
-	_, err = fbha.Allocate(currentSize + 1)
+	_, err := fbha.Allocate(currentSize + 1)
 
 	// then expect error since trying to over Allocate
 	if err == nil {
@@ -393,10 +366,8 @@ func TestShouldNotAllocateIfTooLarge(t *testing.T) {
 //  it's already full
 func TestShouldNotAllocateIfFull(t *testing.T) {
 	// given
-	mem, err := NewWasmMemory()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := NewWasmMemory(t)
+
 	currentSize := mem.Length()
 	fbha := NewAllocator(mem, 0)
 
@@ -425,12 +396,10 @@ func TestShouldNotAllocateIfFull(t *testing.T) {
 // test to confirm that allocator can allocate the MaxPossibleAllocation
 func TestShouldAllocateMaxPossibleAllocationSize(t *testing.T) {
 	// given, grow heap memory so that we have at least MaxPossibleAllocation available
-	mem, err := NewWasmMemory()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := NewWasmMemory(t)
+
 	pagesNeeded := (MaxPossibleAllocation / pageSize) - (mem.Length() / pageSize) + 1
-	err = mem.Grow(pagesNeeded)
+	err := mem.Grow(pagesNeeded)
 	if err != nil {
 		t.Error(err)
 	}
@@ -452,14 +421,12 @@ func TestShouldAllocateMaxPossibleAllocationSize(t *testing.T) {
 // test that allocator should not allocate memory if request is too large
 func TestShouldNotAllocateIfRequestSizeTooLarge(t *testing.T) {
 	// given
-	mem, err := NewWasmMemory()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := NewWasmMemory(t)
+
 	fbha := NewAllocator(mem, 0)
 
 	// when
-	_, err = fbha.Allocate(MaxPossibleAllocation + 1)
+	_, err := fbha.Allocate(MaxPossibleAllocation + 1)
 
 	// then
 	if err != nil {

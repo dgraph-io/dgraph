@@ -5,11 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/tests"
+
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
 func TestVerifySlotWinner(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +76,7 @@ func TestVerifySlotWinner(t *testing.T) {
 }
 
 func TestVerifyAuthorshipRight(t *testing.T) {
-	rt := newRuntime(t)
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
