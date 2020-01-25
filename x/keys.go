@@ -573,8 +573,9 @@ var internalPredicateMap = map[string]struct{}{
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
 func IsGraphqlReservedPredicate(pred string) bool {
-	_, ok := graphqlReservedPredicate[pred]
-	return ok
+	return false
+	// _, ok := graphqlReservedPredicate[pred]
+	// return ok
 }
 
 // IsReservedPredicate returns true if the predicate is in the reserved predicate list.
