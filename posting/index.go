@@ -63,7 +63,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 	}
 
 	if !schema.State().IsIndexed(attr) {
-		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", x.ParseAttr(attr))
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {

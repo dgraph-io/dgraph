@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -259,6 +260,6 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		}
 		out = append(out, &typeUpdate)
 	}
-
+	fmt.Printf("type udpates %+v", out)
 	return out, nil
 }

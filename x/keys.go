@@ -71,6 +71,13 @@ func ParseNamespaceAttr(attr string) (string, string) {
 	return splits[0], splits[1]
 }
 
+// ParseAttr returns the attr from the given value.
+func ParseAttr(attr string) string {
+	splits := strings.Split(attr, string(NamespaceSeperator))
+	AssertTrue(len(splits) == 2)
+	return splits[1]
+}
+
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))

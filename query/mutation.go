@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,12 +37,13 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
+	fmt.Printf("before %+v \n", m.Edges)
 	edges, err := expandEdges(ctx, namespace, m)
+	fmt.Printf("expanded edges %+v \n", edges)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
 	m.Edges = edges
-
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -63,13 +65,18 @@ func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
+			sg.Params.Namespace = namespace
 
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
 				return nil, err
 			}
 			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
-			preds = append(preds, x.ReservedPredicates()...)
+			// Convert reserved predicates for the given namespace.
+			for _, pred := range x.ReservedPredicates() {
+				preds = append(preds, x.NamespaceAttr(namespace, pred))
+			}
+
 		}
 
 		for _, pred := range preds {

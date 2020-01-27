@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -229,6 +230,7 @@ func updateType(typeName string, t pb.TypeUpdate) error {
 	schema.State().SetType(typeName, t)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
+	fmt.Printf("\n\nsptring type %+v \n\n", t)
 	data, err := t.Marshal()
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
@@ -546,7 +548,6 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	if err != nil {
 		return tctx, err
 	}
-
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {

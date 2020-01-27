@@ -1851,7 +1851,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if len(child.ExpandPreds) > 0 {
 				span.Annotate(nil, "expand default")
 				// We already have the predicates populated from the var.
-				preds = getPredsFromVals(child.ExpandPreds)
+				temp := getPredsFromVals(child.ExpandPreds)
+				for _, pred := range temp {
+					preds = append(preds, x.NamespaceAttr(sg.Params.Namespace, pred))
+				}
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
 				preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
@@ -2755,9 +2758,20 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
+		preds := []string{}
+		for _, pred := range req.GqlQuery.Schema.Predicates {
+			preds = append(preds, x.NamespaceAttr(req.Namespace, pred))
+		}
+		req.GqlQuery.Schema.Predicates = preds
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
 		}
+
+		typeNames := []string{}
+		for _, typeName := range req.GqlQuery.Schema.Types {
+			typeNames = append(typeNames, x.NamespaceAttr(req.Namespace, typeName))
+		}
+		req.GqlQuery.Schema.Types = typeNames
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching types")
 		}
@@ -2774,8 +2788,8 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 // filterTypesForNamespace filters types for the given namespace.
 func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
 	out := []*pb.TypeUpdate{}
-
 	for _, update := range types {
+		fmt.Printf("type name %s \n", update.TypeName)
 		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue
@@ -2784,8 +2798,16 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 		fields := []*pb.SchemaUpdate{}
 		// Convert field name for the current namespace.
 		for _, field := range update.Fields {
+			reverse := field.Predicate[0] == '~'
+			if reverse {
+				field.Predicate = field.Predicate[1:]
+			}
+			fmt.Printf("predicate yo %s \n", field.Predicate)
 			fieldNamespace, fieldName := x.ParseNamespaceAttr(field.Predicate)
 			x.AssertTrue(fieldNamespace == namespace)
+			if reverse {
+				fieldName = "~" + fieldName
+			}
 			field.Predicate = fieldName
 			fields = append(fields, field)
 		}

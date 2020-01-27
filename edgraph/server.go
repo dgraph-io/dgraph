@@ -213,7 +213,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		var attr string
 		if len(op.DropAttr) > 0 {
-			attr = x.NamespaceAttr(op.Namespace, op.DropAttr)
+			attr = op.DropAttr
 		} else {
 			attr = op.DropValue
 		}
@@ -225,6 +225,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
+		if attr == op.DropAttr {
+			attr = x.NamespaceAttr(op.Namespace, attr)
+		}
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   attr,
