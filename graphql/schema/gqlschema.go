@@ -1046,9 +1046,9 @@ func addPasswordMutation(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 	add := &ast.FieldDefinition{
-		Name: "changePassword",
+		Name: "change" + defn.Name + "Password",
 		Type: &ast.Type{
-			NamedType: "Boolean",
+			NamedType: "changePasswordPayload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			{
@@ -1075,6 +1075,20 @@ func addPasswordMutation(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+
+	schema.Types["changePasswordPayload"] = &ast.Definition{
+		Kind: ast.Object,
+		Name: "changePasswordPayload",
+		Fields: []*ast.FieldDefinition{
+			{
+				Name: "msg",
+				Type: &ast.Type{
+					NamedType: "String",
+				},
+			},
+		},
+	}
+
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
