@@ -44,6 +44,8 @@ type updateRewriter struct {
 }
 type deleteRewriter struct{}
 
+type passwordRewriter struct{}
+
 // A mutationFragment is a partially built Dgraph mutation.  Given a GraphQL
 // mutation input, we traverse the input data and build a Dgraph mutation.  That
 // mutation might require queries (e.g. to check types), conditions (to guard the
@@ -92,6 +94,10 @@ func NewUpdateRewriter() MutationRewriter {
 // NewDeleteRewriter returns new MutationRewriter for delete mutations..
 func NewDeleteRewriter() MutationRewriter {
 	return &deleteRewriter{}
+}
+
+func NewPasswordRewriter() MutationRewriter {
+	return &passwordRewriter{}
 }
 
 // Rewrite takes a GraphQL schema.Mutation add and builds a Dgraph upsert mutation.
@@ -198,6 +204,19 @@ func (mrw *addRewriter) Rewrite(
 	return queryFromFragments(mrw.frags[0]),
 		mutations,
 		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+}
+
+func (mrw *passwordRewriter) Rewrite(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+
+	return nil, nil, nil
+}
+
+func (mrw *passwordRewriter) FromMutationResult(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) (*gql.GraphQuery, error) {
+	return nil, nil
 }
 
 func (mrw *addRewriter) handleMultipleMutations(
