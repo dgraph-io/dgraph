@@ -49,6 +49,7 @@ const (
 	// capability into the schema.
 	schemaExtras = `
 scalar DateTime
+scalar Password
 
 enum DgraphIndex {
 	int
@@ -226,6 +227,7 @@ var scalarToDgraph = map[string]string{
 	"Float":    "float",
 	"String":   "string",
 	"DateTime": "dateTime",
+	"Password": "password",
 }
 
 var directiveValidators = map[string]directiveValidator{
@@ -420,9 +422,10 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   "Add" + defn.Name + "Input",
-		Fields: getFieldsWithoutIDType(schema, defn),
+		Kind: ast.InputObject,
+		Name: "Add" + defn.Name + "Input",
+		Fields: append(getFieldsWithoutIDType(schema, defn),
+			getPasswordField(defn)...),
 	}
 }
 
@@ -435,6 +438,7 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 		flds = append(getIDField(defn), getXIDField(defn)...)
 	} else {
 		flds = append(getIDField(defn), getFieldsWithoutIDType(schema, defn)...)
+		flds = append(flds, getPasswordField(defn)...)
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -955,8 +959,35 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
+		Name: "checkPassword",
+		Type: &ast.Type{
+			NamedType: "Boolean",
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			{
+				Name: "id",
+				Type: &ast.Type{
+					NamedType: "ID",
+					NonNull:   true,
+				},
+			},
+			{
+				Name: "password",
+				Type: &ast.Type{
+					NamedType: "Password",
+					NonNull:   true,
+				},
+			},
+		},
+	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+}
+
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
 	addGetQuery(schema, defn)
+	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
 }
 
@@ -1026,8 +1057,45 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
+func addPasswordMutation(schema *ast.Schema, defn *ast.Definition) {
+	if len(getPasswordField(defn)) == 0 {
+		return
+	}
+	add := &ast.FieldDefinition{
+		Name: "changePassword",
+		Type: &ast.Type{
+			NamedType: "Boolean",
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			{
+				Name: "id",
+				Type: &ast.Type{
+					NamedType: "ID",
+					NonNull:   true,
+				},
+			},
+			{
+				Name: "oldPassword",
+				Type: &ast.Type{
+					NamedType: "Password",
+					NonNull:   true,
+				},
+			},
+			{
+				Name: "newPassword",
+				Type: &ast.Type{
+					NamedType: "Password",
+					NonNull:   true,
+				},
+			},
+		},
+	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+}
+
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
 	addAddMutation(schema, defn)
+	addPasswordMutation(schema, defn)
 	addUpdateMutation(schema, defn)
 	addDeleteMutation(schema, defn)
 }
@@ -1104,6 +1172,10 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
+		if isPasswordField(defn, fld) {
+			continue
+		}
+
 		// see also comment in getNonIDFields
 		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
@@ -1125,6 +1197,21 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 			fldList = append(fldList, &newFld)
 			break
 		}
+	}
+	return fldList
+}
+
+func getPasswordField(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if !isPasswordField(defn, fld) {
+			continue
+		}
+		newFld := *fld
+		newFldType := *fld.Type
+		newFld.Type = &newFldType
+		fldList = append(fldList, &newFld)
+		break
 	}
 	return fldList
 }
@@ -1365,6 +1452,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 
 func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 	return fld.Type.Name() == idTypeFor(defn)
+}
+
+func isPasswordField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
+	return fld.Type.Name() == "Password"
 }
 
 func idTypeFor(defn *ast.Definition) string {
