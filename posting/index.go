@@ -313,6 +313,7 @@ func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int 
 		return countBefore - 1
 	}
 
+	// Only conditions remaining are below, for which countAfter will be same as countBefore.
 	// (found && op == pb.DirectedEdge_SET) || (!found && op == pb.DirectedEdge_DEL)
 	return countBefore
 }
@@ -337,24 +338,25 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		return fingerprintEdge(t)
 	}
 
-	delNonListPredicateCond := !schema.State().IsList(t.Attr) &&
-		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
-
-	// Here we want to call function, which is super set of all. For countIndex we need to check if
-	// some posting already exists for uid and length of posting list. If doUpdateIndex or
-	// delNonListPredicateCond is true, we just need to get the posting for uid.
+	// For countIndex we need to check if some posting already exists for uid and length of posting
+	// list, hence will are calling l.getPostingAndLength(). If doUpdateIndex or delNonListPredicate
+	// is true, we just need to get the posting for uid, hence calling l.findPosting().
 	countBefore, countAfter := 0, 0
 	var currPost *pb.Posting
 	var val types.Val
 	var found bool
 	var err error
+
+	delNonListPredicate := !schema.State().IsList(t.Attr) &&
+		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
+
 	switch {
 	case hasCountIndex:
 		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
 			return val, false, emptyCountParams, ErrTsTooOld
 		}
-	case doUpdateIndex || delNonListPredicateCond:
+	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
 			return val, found, emptyCountParams, err
@@ -363,7 +365,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
-	if delNonListPredicateCond {
+	if delNonListPredicate {
 		newPost := NewPosting(t)
 
 		// This is a scalar value of non-list type and a delete edge mutation, so if the value
