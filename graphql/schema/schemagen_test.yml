@@ -385,3 +385,20 @@ schemas:
         directed.movies: [uid]
       }
       directed.movies: [uid] @reverse .
+
+  -
+    name: "Field with reverse predicate in dgraph directive where actual predicate comes first."
+    input: |
+      type Person {
+        directed: [Movie] @dgraph(pred: "directed.movies")
+      }
+      type Movie {
+        director: [Person] @dgraph(pred: "~directed.movies")
+      }
+    output: |
+      type Person {
+        directed.movies: [uid]
+      }
+      directed.movies: [uid] @reverse .
+      type Movie {
+      }
