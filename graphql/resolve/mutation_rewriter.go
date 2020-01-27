@@ -280,6 +280,12 @@ func (mrw *passwordRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
+
+	t := result["t"].([]interface{})
+	if len(t) == 0 {
+		return nil, fmt.Errorf("Wrong password or uid doens't exists")
+	}
+
 	return nil, nil
 }
 
