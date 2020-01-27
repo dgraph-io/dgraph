@@ -145,11 +145,11 @@ func (r *reducer) setBadgerOptions(opt *badger.Options) {
 		x.Fatalf("Invalid Badger ValueLog Loading mode: %s", r.state.opt.BadgerVlog)
 	}
 
-	// Set the compression level. Default to 1 if the compression level is set to
-	// zero or a negative number.
+	// Set the compression level.
 	opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
 	if r.state.opt.BadgerCompressionLevel < 1 {
-		opt.ZSTDCompressionLevel = 1
+		x.Fatalf("Invalid compression level: %d. It should be greater than zero",
+			r.state.opt.BadgerCompressionLevel)
 	}
 }
 
