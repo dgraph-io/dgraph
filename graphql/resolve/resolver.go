@@ -103,6 +103,7 @@ type ResolverFns struct {
 	Qrw QueryRewriter
 	Arw func() MutationRewriter
 	Urw func() MutationRewriter
+	Pwd func() MutationRewriter
 	Drw MutationRewriter
 	Qe  QueryExecutor
 	Me  MutationExecutor
@@ -224,6 +225,13 @@ func (rf *resolverFactory) WithConventionResolvers(
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
 				fns.Urw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+		})
+	}
+
+	for _, m := range s.Mutations(schema.PasswordMutation) {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewMutationResolver(
+				fns.Pwd(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 

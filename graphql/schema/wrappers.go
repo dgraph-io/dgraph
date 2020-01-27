@@ -47,6 +47,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
+	PasswordMutation     MutationType = "changePassword"
 	UpdateMutation       MutationType = "update"
 	DeleteMutation       MutationType = "delete"
 	NotSupportedMutation MutationType = "notsupported"
@@ -121,6 +122,7 @@ type Type interface {
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
+	PasswordField() FieldDefinition
 	Name() string
 	DgraphName() string
 	DgraphPredicate(fld string) string
@@ -368,6 +370,9 @@ func mutatedTypeMapping(s *ast.Schema,
 			mutatedTypeName = strings.TrimPrefix(field.Name, "update")
 		case strings.HasPrefix(field.Name, "delete"):
 			mutatedTypeName = strings.TrimPrefix(field.Name, "delete")
+		case strings.HasPrefix(field.Name, "change"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "change")
+			mutatedTypeName = strings.TrimSuffix(mutatedTypeName, "Password")
 		default:
 		}
 		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
@@ -819,6 +824,8 @@ func mutationType(name string) MutationType {
 		return UpdateMutation
 	case strings.HasPrefix(name, "delete"):
 		return DeleteMutation
+	case strings.HasPrefix(name, "change"):
+		return PasswordMutation
 	default:
 		return NotSupportedMutation
 	}
@@ -875,6 +882,10 @@ func (fd *fieldDefinition) IsID() bool {
 func hasIDDirective(fd *ast.FieldDefinition) bool {
 	id := fd.Directives.ForName("id")
 	return id != nil
+}
+
+func isPassword(fd *ast.FieldDefinition) bool {
+	return fd.Type.Name() == "Password"
 }
 
 func isID(fd *ast.FieldDefinition) bool {
@@ -982,6 +993,24 @@ func (t *astType) IDField() FieldDefinition {
 
 	for _, fd := range def.Fields {
 		if isID(fd) {
+			return &fieldDefinition{
+				fieldDef: fd,
+				inSchema: t.inSchema,
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *astType) PasswordField() FieldDefinition {
+	def := t.inSchema.Types[t.Name()]
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
+		return nil
+	}
+
+	for _, fd := range def.Fields {
+		if isPassword(fd) {
 			return &fieldDefinition{
 				fieldDef: fd,
 				inSchema: t.inSchema,
