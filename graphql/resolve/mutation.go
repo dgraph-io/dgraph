@@ -220,3 +220,11 @@ func deleteCompletion() CompletionFunc {
 		return []byte(`{ "msg": "Deleted" }`), err
 	})
 }
+
+func passwordCompletion() CompletionFunc {
+	return CompletionFunc(func(
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+
+		return []byte(`{ "msg": "Password succesfully changed" }`), err
+	})
+}

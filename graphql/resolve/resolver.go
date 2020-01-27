@@ -230,7 +230,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, m := range s.Mutations(schema.PasswordMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
-				fns.Pwd(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+				fns.Pwd(), NoOpQueryExecution(), fns.Me, StdPasswordCompletion(m.ResponseName()))
 		})
 	}
 
@@ -273,6 +273,11 @@ func StdMutationCompletion(name string) CompletionFunc {
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
 func StdDeleteCompletion(name string) CompletionFunc {
 	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
+}
+
+// StdDeleteCompletion is the completion steps that get run for add and update mutations
+func StdPasswordCompletion(name string) CompletionFunc {
+	return addPathCompletion(name, addRootFieldCompletion(name, passwordCompletion()))
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
