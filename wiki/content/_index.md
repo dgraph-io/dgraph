@@ -178,7 +178,7 @@ Dgraph is an open source, scalable, distributed, highly available, fast, and nat
         <div class="section-item">
           <div class="section-name">
             <a href="https://github.com/dgraph-io/flock">
-              Flock - A Tweet data Loader and Query Client
+              Flock - Tweet data Loader and Query Client
             </a>
           </div>
           <p class="section-desc">
