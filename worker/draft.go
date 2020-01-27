@@ -700,7 +700,7 @@ func (n *node) updateRaftProgress() error {
 }
 
 func (n *node) checkpointAndClose(done chan struct{}) {
-	slowTicker := time.NewTicker(time.Second)
+	slowTicker := time.NewTicker(2 * time.Second)
 	defer slowTicker.Stop()
 
 	for {
