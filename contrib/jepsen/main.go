@@ -124,7 +124,8 @@ var (
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
-	deferDbTeardown = pflag.Bool("defer-db-teardown", false, "Wait until user input to tear down DB nodes")
+	deferDbTeardown = pflag.Bool("defer-db-teardown", false,
+		"Wait until user input to tear down DB nodes")
 
 	// Jepsen control flags
 	doUp       = pflag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
@@ -144,7 +145,8 @@ var (
 	testAll = pflag.Bool("test-all", false,
 		"Run the following workload and nemesis combinations: "+
 			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
-	exitOnFailure = pflag.BoolP("exit-on-failure", "e", false, "Don't run any more tests after a failure.")
+	exitOnFailure = pflag.BoolP("exit-on-failure", "e", false,
+		"Don't run any more tests after a failure.")
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -203,7 +205,7 @@ func jepsenServe() error {
 	// Check if the page is already up
 	checkServing := func() error {
 		url := jepsenUrl()
-		_, err := http.Get(url)
+		_, err := http.Get(url) // nolint:gosec
 		return err
 	}
 	if err := checkServing(); err == nil {
@@ -407,7 +409,9 @@ func main() {
 		jepsenUp()
 	}
 	if *doServe {
-		jepsenServe()
+		if err := jepsenServe(); err != nil {
+			log.Fatal(err)
+		}
 		if shouldOpenPage {
 			openJepsenBrowser()
 		}
