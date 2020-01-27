@@ -6,7 +6,6 @@ import (
 	"github.com/ChainSafe/gossamer/state"
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
-	"github.com/ChainSafe/gossamer/common"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/trie"
@@ -20,20 +19,22 @@ func loadGenesis(ctx *cli.Context) error {
 		return err
 	}
 
-	// read genesis file
 	fp := getGenesisPath(ctx)
+
 	dataDir := fig.Global.DataDir
 	if ctx.String(utils.DataDirFlag.Name) != "" {
 		dataDir = ctx.String(utils.DataDirFlag.Name)
 	}
+
 	log.Debug("Loading genesis", "genesisfile", fp, "datadir", dataDir)
 
-	gen, err := genesis.LoadGenesisData(fp)
+	// read genesis configuration file
+	gen, err := genesis.LoadGenesisJSONFile(fp)
 	if err != nil {
 		return err
 	}
 
-	log.Info("🕸\t Initializing node", "name", gen.Name, "id", gen.Id, "protocolID", gen.ProtocolId, "bootnodes", common.BytesToStringArray(gen.Bootnodes))
+	log.Info("🕸\t Initializing node", "name", gen.Name, "id", gen.Id, "protocolID", gen.ProtocolId, "bootnodes", gen.Bootnodes)
 
 	// Create service, initialize stateDB and blockDB
 	stateSrv := state.NewService(dataDir)
@@ -57,7 +58,7 @@ func loadGenesis(ctx *cli.Context) error {
 	// create and load storage trie with initial genesis state
 	t := trie.NewEmptyTrie(tdb)
 
-	err = t.Load(gen.GenesisFields().Raw)
+	err = t.Load(gen.GenesisFields().Raw[0])
 	if err != nil {
 		return fmt.Errorf("cannot load trie with initial state: %s", err)
 	}
@@ -74,7 +75,7 @@ func loadGenesis(ctx *cli.Context) error {
 	}
 
 	// store node name, ID, p2p protocol, bootnodes in DB
-	return t.Db().StoreGenesisData(gen)
+	return t.Db().StoreGenesisData(gen.GenesisData())
 }
 
 // getGenesisPath gets the path to the genesis file
