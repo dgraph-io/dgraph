@@ -949,6 +949,6 @@
           "MovieDirector.name" : "Steven Spielberg",
           "directed.movies": [{
             "uid" : "0x2"
-          }
+          }]
         }
       cond: "@if(eq(len(Movie2), 1))"

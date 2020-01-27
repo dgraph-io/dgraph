@@ -726,3 +726,83 @@
         House4 as Owner.house
       }
     }
+
+-
+  name: "Update add reference doesn't add reverse edge"
+  gqlmutation: |
+    mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
+      updateMovieDirector(input: $patch) {
+        moviedirector {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "directed": [ { "id": "0x456" } ]
+        }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "directed.movies": [
+            {
+              "uid": "0x456"
+            }
+          ]
+        }
+      cond: "@if(eq(len(Movie2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateMovieDirector(func: type(MovieDirector)) @filter(uid(0x123)) {
+        uid
+      }
+      Movie2 as Movie2(func: uid(0x456)) @filter(type(Movie)) {
+        uid
+      }
+    }
+
+-
+  name: "Update remove reference doesn't try to remove reverse edge."
+  gqlmutation: |
+    mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
+      updateMovieDirector(input: $patch) {
+        moviedirector {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "remove": {
+          "directed": [ { "id": "0x456" } ]
+        }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        { "uid" : "uid(x)",
+          "directed.movies": [
+            {
+              "uid": "0x456"
+            }
+          ]
+        }
+      cond: "@if(eq(len(Movie2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateMovieDirector(func: type(MovieDirector)) @filter(uid(0x123)) {
+        uid
+      }
+      Movie2 as Movie2(func: uid(0x456)) @filter(type(Movie)) {
+        uid
+      }
+    }
