@@ -182,7 +182,7 @@ Dgraph is an open source, scalable, distributed, highly available, fast, and nat
             </a>
           </div>
           <p class="section-desc">
-            Load tweet data in Dgraph and run various interesting queries over social graph.
+            Load tweet data in Dgraph and then run various interesting queries over social graph.
           </p>
         </div>
       </div>
