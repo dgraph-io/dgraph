@@ -246,6 +246,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							forwardPred := dgPreds[forwardEdge]
 							forwardPred.reverseStr = "@reverse "
 							dgPreds[forwardEdge] = forwardPred
+						} else {
+							edge := dgPreds[fname]
+							edge.typ = typStr
+							dgPreds[fname] = edge
 						}
 					}
 					pred := dgPreds[fname]
@@ -311,7 +315,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		}
 	}
 
-	fmt.Printf("types: %+v, preds: %+v\n", dgTypes, dgPreds)
 	for _, typ := range dgTypes {
 		var typeDef, preds strings.Builder
 		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)

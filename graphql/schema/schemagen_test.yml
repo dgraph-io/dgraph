@@ -380,9 +380,8 @@ schemas:
       }
     output: |
       type Movie {
-        ~directed.movies: [uid]
       }
       type Person {
         directed.movies: [uid]
       }
-      directed.movies [uid] @reverse .
+      directed.movies: [uid] @reverse .
