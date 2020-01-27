@@ -422,7 +422,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 func (n *node) processRollups() {
 	defer n.closer.Done()                   // CLOSER:1
-	tick := time.NewTicker(5 * time.Second) // Rolling up once every 5 minutes seems alright.
+	tick := time.NewTicker(2 * time.Second) // Rolling up once every 5 minutes seems alright.
 	defer tick.Stop()
 
 	var readTs, last uint64
