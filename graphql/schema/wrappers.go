@@ -45,6 +45,7 @@ const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
 	SchemaQuery          QueryType    = "schema"
+	PasswordQuery        QueryType    = "checkPassword"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	PasswordMutation     MutationType = "changePassword"
@@ -111,6 +112,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	QueriedType() Type
 	Rename(newName string)
 }
 
@@ -159,6 +161,8 @@ type schema struct {
 	dgraphPredicate map[string]map[string]string
 	// Map of mutation field name to mutated type.
 	mutatedType map[string]*astType
+	// Map of mutation field name to queried type.
+	queriedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
 }
@@ -354,6 +358,49 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	return dgraphPredicate
 }
 
+func queriedTypeMapping(s *ast.Schema,
+	dgraphPredicate map[string]map[string]string) map[string]*astType {
+	if s.Query == nil {
+		return nil
+	}
+
+	m := make(map[string]*astType, len(s.Query.Fields))
+	for _, field := range s.Query.Fields {
+		mutatedTypeName := ""
+		switch {
+		case strings.HasPrefix(field.Name, "get"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "get")
+		case strings.HasPrefix(field.Name, "query"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "query")
+		case strings.HasPrefix(field.Name, "check"):
+			mutatedTypeName = strings.TrimPrefix(field.Name, "check")
+			mutatedTypeName = strings.TrimSuffix(mutatedTypeName, "Password")
+		default:
+		}
+		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
+		// for UpdateTPayload and get the type from the first field. There is no direct way to get
+		// the type from the definition of an object. We use Update and not Add here because
+		// Interfaces only have Update.
+		var def *ast.Definition
+		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		}
+
+		if def == nil {
+			continue
+		}
+
+		// Accessing 0th element should be safe to do as according to the spec an object must define
+		// one or more fields.
+		typ := def.Fields[0].Type
+		// This would contain mapping of mutation field name to the Type()
+		// for e.g. addPost => astType for Post
+		m[field.Name] = &astType{typ, s, dgraphPredicate}
+	}
+	return m
+
+}
+
 func mutatedTypeMapping(s *ast.Schema,
 	dgraphPredicate map[string]map[string]string) map[string]*astType {
 	if s.Mutation == nil {
@@ -416,6 +463,7 @@ func AsSchema(s *ast.Schema) Schema {
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
+		queriedType:     queriedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
 	}
 }
@@ -699,6 +747,10 @@ func (q *query) QueryType() QueryType {
 	return queryType(q.Name())
 }
 
+func (q *query) QueriedType() Type {
+	return q.op.inSchema.queriedType[q.Name()]
+}
+
 func queryType(name string) QueryType {
 	switch {
 	case strings.HasPrefix(name, "get"):
@@ -707,6 +759,8 @@ func queryType(name string) QueryType {
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
+	case strings.HasPrefix(name, "check"):
+		return PasswordQuery
 	default:
 		return NotSupportedQuery
 	}

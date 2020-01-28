@@ -961,9 +961,9 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: "checkPassword",
+		Name: "check" + defn.Name + "Password",
 		Type: &ast.Type{
-			NamedType: "Boolean",
+			NamedType: "CheckPasswordPayload",
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			{
@@ -983,6 +983,19 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+
+	schema.Types["CheckPasswordPayload"] = &ast.Definition{
+		Kind: ast.Object,
+		Name: "CheckPasswordPayload",
+		Fields: []*ast.FieldDefinition{
+			{
+				Name: "msg",
+				Type: &ast.Type{
+					NamedType: "String",
+				},
+			},
+		},
+	}
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1104,7 +1117,6 @@ func addPasswordMutation(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
-
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
