@@ -106,3 +106,15 @@ type Starship @dgraph(type: "star.ship") {
         name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
         length: Float
 }
+
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie] @dgraph(pred: "directed.movies")
+}

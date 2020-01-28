@@ -18,6 +18,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -110,6 +111,7 @@ func SchemaTest(t *testing.T, expectedDgraphSchema string) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
 
+	fmt.Println(string(resp.GetJson()))
 	testutil.CompareJSON(t, expectedDgraphSchema, string(resp.GetJson()))
 }
 
