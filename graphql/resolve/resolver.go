@@ -327,7 +327,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	if glog.V(3) {
 		// don't log the introspection queries they are sent too frequently
 		// by GraphQL dev tools
-		if !op.IsQuery() || !strings.HasPrefix(op.Queries()[0].Name(), "__") {
+		if !op.IsQuery() ||
+			(op.IsQuery() && !strings.HasPrefix(op.Queries()[0].Name(), "__")) {
 			b, err := json.Marshal(gqlReq.Variables)
 			if err != nil {
 				glog.Infof("Failed to marshal variables for logging : %s", err)
