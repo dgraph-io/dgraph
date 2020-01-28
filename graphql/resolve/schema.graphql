@@ -37,7 +37,7 @@ type Post {
         isPublished: Boolean @search
         postType: PostType @search
         author: Author!
-        category: Category @hasInverse(field: posts)   
+        category: Category @hasInverse(field: posts)
 }
 
 type Category {
