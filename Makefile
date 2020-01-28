@@ -63,6 +63,10 @@ docker: docker-build
 	@echo "  >  \033[32mStarting Gossamer Container...\033[0m "
 	docker run --rm $(FULLDOCKERNAME)
 
+docker-version:
+	@echo "  >  \033[32mStarting Gossamer Container...\033[0m "
+	docker run -it $(FULLDOCKERNAME) /bin/bash -c "/usr/local/gossamer --version"
+
 docker-build:
 	@echo "  >  \033[32mBuilding Docker Container...\033[0m "
 	docker build -t $(FULLDOCKERNAME) -f Dockerfile.dev .
