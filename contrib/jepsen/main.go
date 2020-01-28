@@ -331,26 +331,6 @@ func inCi() bool {
 	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
-func tcStart(testName string) func(err error) {
-	if !inCi() {
-		return func(error) {}
-	}
-	now := time.Now()
-	fmt.Printf("##teamcity[testStarted name='%v']\n", testName)
-	return func(err error) {
-		durMs := time.Since(now).Nanoseconds() / 1e6
-		switch err {
-		case nil:
-			fmt.Printf("##teamcity[testFinished name='%v' duration='%v']\n", testName, durMs)
-		case errTestFail:
-			fmt.Printf("##teamcity[testFailed='%v' duration='%v']\n", testName, durMs)
-		case errTestIncomplete:
-			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n",
-				testName, durMs)
-		}
-	}
-}
-
 func main() {
 	pflag.ErrHelp = errors.New("")
 	pflag.Usage = func() {
@@ -417,7 +397,6 @@ func main() {
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
-			tcEnd := tcStart(fmt.Sprintf("Workload:%v,Nemeses:%v", w, n))
 			err := runJepsenTest(&jepsenTest{
 				workload:          w,
 				nemesis:           n,
@@ -440,7 +419,6 @@ func main() {
 					defer os.Exit(1)
 				}
 			}
-			tcEnd(err)
 		}
 	}
 }
