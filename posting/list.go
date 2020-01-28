@@ -1176,7 +1176,8 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 
 // shouldSplit returns true if the given plist should be split in two.
 func shouldSplit(plist *pb.PostingList) bool {
-	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+	return false
+	// return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
 // splitUpList checks the list and splits it in smaller parts if needed.

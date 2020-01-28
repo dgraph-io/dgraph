@@ -26,7 +26,7 @@ import (
 	"github.com/golang/glog"
 )
 
-type matchFunc func(types.Val, stringFilter) bool
+type matchFunc func(types.Val, *stringFilter) bool
 
 type stringFilter struct {
 	funcName  string
@@ -39,8 +39,13 @@ type stringFilter struct {
 	tokName   string
 }
 
-func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.List {
+func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb.List {
 	rv := &pb.List{}
+	if filter == nil {
+		// Handle a nil filter as filtering all the elements out.
+		return rv
+	}
+
 	for i := 0; i < len(values); i++ {
 		for j := 0; j < len(values[i]); j++ {
 			if filter.match(values[i][j], filter) {
@@ -53,7 +58,7 @@ func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.
 	return rv
 }
 
-func defaultMatch(value types.Val, filter stringFilter) bool {
+func defaultMatch(value types.Val, filter *stringFilter) bool {
 	tokenMap := map[string]bool{}
 	for _, t := range filter.tokens {
 		tokenMap[t] = false
@@ -79,7 +84,7 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 	return cnt > 0
 }
 
-func ineqMatch(value types.Val, filter stringFilter) bool {
+func ineqMatch(value types.Val, filter *stringFilter) bool {
 	if len(filter.eqVals) == 0 {
 		return types.CompareVals(filter.funcName, value, filter.ineqValue)
 	}
@@ -92,7 +97,7 @@ func ineqMatch(value types.Val, filter stringFilter) bool {
 	return false
 }
 
-func tokenizeValue(value types.Val, filter stringFilter) []string {
+func tokenizeValue(value types.Val, filter *stringFilter) []string {
 	tokenizer, found := tok.GetTokenizer(filter.tokName)
 	// tokenizer was used in previous stages of query processing, it has to be available
 	x.AssertTrue(found)
