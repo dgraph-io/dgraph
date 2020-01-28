@@ -250,7 +250,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
+		m.DropValue = x.NamespaceAttr(op.Namespace, op.DropValue)
 		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}
@@ -342,10 +342,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
-			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
+			if oldHint := predHints[x.NamespaceAttr(qc.namespace, pred)]; oldHint == pb.Metadata_LIST {
 				continue
 			}
-			predHints[pred] = hint
+			predHints[x.NamespaceAttr(qc.namespace, pred)] = hint
 		}
 	}
 	m := &pb.Mutations{

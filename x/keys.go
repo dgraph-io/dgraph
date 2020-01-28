@@ -631,6 +631,6 @@ func ReservedPredicates() []string {
 
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
 func IsInternalPredicate(pred string) bool {
-	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	_, ok := internalPredicateMap[strings.ToLower(ParseAttr(pred))]
 	return ok
 }

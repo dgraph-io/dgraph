@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -165,7 +166,8 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
-		ch <- resultErr{result: schema, err: e}
+		fmt.Printf("SCHEMA YOOA %+v \n", schema)
+		ch <- resultErr{result: proto.Clone(schema).(*pb.SchemaResult), err: e}
 		return
 	}
 
@@ -258,7 +260,7 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		if !found {
 			continue
 		}
-		out = append(out, &typeUpdate)
+		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
 	fmt.Printf("type udpates %+v", out)
 	return out, nil

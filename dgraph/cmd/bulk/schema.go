@@ -57,7 +57,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	}
 
 	if opt.StoreXids {
-		s.schemaMap["xid"] = &pb.SchemaUpdate{
+		s.schemaMap[x.NamespaceAttr(x.DefaultNamespace, "xid")] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"hash"},
 		}

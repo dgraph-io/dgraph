@@ -1059,7 +1059,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf(
 			"Attribute %v does not have trigram index for regex matching. "+
 				"Please add a trigram index or use has/uid function with regexp() as filter.",
-			attr)
+			x.ParseAttr(attr))
 	}
 
 	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)

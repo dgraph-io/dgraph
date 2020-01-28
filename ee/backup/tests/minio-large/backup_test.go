@@ -35,6 +35,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -108,9 +109,22 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetState()
 		require.NoError(t, err)
-		_, ok1 := state.Groups["1"].Tablets["name1"]
-		_, ok2 := state.Groups["2"].Tablets["name2"]
-		_, ok3 := state.Groups["3"].Tablets["name3"]
+		var ok1, ok2, ok3 bool
+		for _, tablet := range state.Groups["1"].Tablets {
+			if strings.Contains(tablet.Predicate, "name1") {
+				ok1 = true
+			}
+		}
+		for _, tablet := range state.Groups["2"].Tablets {
+			if strings.Contains(tablet.Predicate, "name2") {
+				ok2 = true
+			}
+		}
+		for _, tablet := range state.Groups["3"].Tablets {
+			if strings.Contains(tablet.Predicate, "name3") {
+				ok3 = true
+			}
+		}
 		if ok1 && ok2 && ok3 {
 			moveOk = true
 			break
@@ -162,11 +176,14 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
-	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)
+	restored1, err := testutil.GetPredicateValues("./data/restore/p1",
+		x.NamespaceAttr(x.DefaultNamespace, "name1"), commitTs)
 	require.NoError(t, err)
-	restored2, err := testutil.GetPredicateValues("./data/restore/p2", "name2", commitTs)
+	restored2, err := testutil.GetPredicateValues("./data/restore/p2",
+		x.NamespaceAttr(x.DefaultNamespace, "name2"), commitTs)
 	require.NoError(t, err)
-	restored3, err := testutil.GetPredicateValues("./data/restore/p3", "name3", commitTs)
+	restored3, err := testutil.GetPredicateValues("./data/restore/p3",
+		x.NamespaceAttr(x.DefaultNamespace, "name3"), commitTs)
 	require.NoError(t, err)
 
 	restored := make(map[string]string)

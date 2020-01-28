@@ -1874,8 +1874,12 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
 			typeNamespace, attr := x.ParseNamespaceAttr(pred)
+			reverse := typeNamespace[0] == '~'
+			if reverse {
+				typeNamespace = typeNamespace[1:]
+				attr = "~" + attr
+			}
 			x.AssertTrue(typeNamespace == child.Params.Namespace)
-
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
 				Attr:   attr,

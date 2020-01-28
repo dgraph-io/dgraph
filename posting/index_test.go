@@ -524,7 +524,10 @@ func TestNeedsListTypeRebuild(t *testing.T) {
 	require.NoError(t, err)
 
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
+		List:      false,
+		Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+	}
 	rebuild, err = rb.needsListTypeRebuild()
 	require.False(t, rebuild)
 	require.Error(t, err)
