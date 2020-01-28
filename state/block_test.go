@@ -3,14 +3,53 @@ package state
 import (
 	"io/ioutil"
 	"math/big"
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/common"
-
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/trie"
+	"github.com/stretchr/testify/require"
 )
+
+func TestSetAndGetHeader(t *testing.T) {
+	dataDir, err := ioutil.TempDir("", "./test_data")
+	require.Nil(t, err)
+
+	blockDb, err := polkadb.NewBlockDB(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		err = blockDb.Db.Close()
+		require.Nil(t, err, "BlockDB close err: ", err)
+	}()
+
+	bs := &blockState{
+		db: blockDb,
+	}
+
+	header := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
+	err = bs.SetHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := bs.GetHeader(header.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, header) {
+		t.Fatalf("Fail: got %v expected %v", res, header)
+	}
+}
 
 func TestGetBlockByNumber(t *testing.T) {
 	dataDir, err := ioutil.TempDir("", "TestGetBlockByNumber")
@@ -18,6 +57,14 @@ func TestGetBlockByNumber(t *testing.T) {
 
 	// Create & start a new State service
 	stateService := NewService(dataDir)
+	err = stateService.Initialize(&types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = stateService.Start()
 	require.Nil(t, err)
 
@@ -62,15 +109,19 @@ func TestAddBlock(t *testing.T) {
 	dataDir, err := ioutil.TempDir("", "TestAddBlock")
 	require.Nil(t, err)
 
-	//Create a new blockState
-	blockState, err := NewBlockState(dataDir)
-	require.Nil(t, err)
+	blockDb, err := polkadb.NewBlockDB(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	//Close DB
 	defer func() {
-		err = blockState.db.Db.Close()
+		err = blockDb.Db.Close()
 		require.Nil(t, err, "BlockDB close err: ", err)
 	}()
+
+	blockState := &blockState{
+		db: blockDb,
+	}
 
 	// Create header
 	header0 := &types.Header{

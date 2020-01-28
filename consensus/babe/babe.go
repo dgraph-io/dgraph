@@ -27,6 +27,7 @@ import (
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
+	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/runtime"
@@ -34,40 +35,45 @@ import (
 )
 
 // Session contains the VRF keys for the validator, as well as BABE configuation data
-//nolint:structcheck
 type Session struct {
-	blockState     BlockState //nolint:unused
+	blockState     BlockState
 	keypair        *sr25519.Keypair
 	rt             *runtime.Runtime
 	config         *BabeConfiguration
 	authorityIndex uint64
-	authorityData  []AuthorityData
+	authorityData  []*AuthorityData
 	epochThreshold *big.Int // validator threshold for this epoch
 	txQueue        *tx.PriorityQueue
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 	newBlocks      chan<- types.Block            // send blocks to core service
 }
 
-//nolint:structcheck
 type SessionConfig struct {
-	BlockState BlockState //nolint:unused
-	Keypair    *sr25519.Keypair
-	Runtime    *runtime.Runtime
-	NewBlocks  chan<- types.Block
+	BlockState     BlockState
+	Keypair        *sr25519.Keypair
+	Runtime        *runtime.Runtime
+	NewBlocks      chan<- types.Block
+	AuthorityIndex uint64
+	AuthData       []*AuthorityData
+	EpochThreshold *big.Int // should only be used for testing
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
 func NewSession(cfg *SessionConfig) (*Session, error) {
 	if cfg.Keypair == nil {
-		return nil, errors.New("cannot start BABE session; no keypair provided")
+		return nil, errors.New("cannot create BABE session; no keypair provided")
 	}
 
 	babeSession := &Session{
-		keypair:     cfg.Keypair,
-		rt:          cfg.Runtime,
-		txQueue:     new(tx.PriorityQueue),
-		slotToProof: make(map[uint64]*VrfOutputAndProof),
-		newBlocks:   cfg.NewBlocks,
+		blockState:     cfg.BlockState,
+		keypair:        cfg.Keypair,
+		rt:             cfg.Runtime,
+		txQueue:        new(tx.PriorityQueue),
+		slotToProof:    make(map[uint64]*VrfOutputAndProof),
+		newBlocks:      cfg.NewBlocks,
+		authorityIndex: cfg.AuthorityIndex,
+		authorityData:  cfg.AuthData,
+		epochThreshold: cfg.EpochThreshold,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -75,10 +81,19 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		return nil, err
 	}
 
+	log.Info("BABE config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
+
 	return babeSession, nil
 }
 
 func (b *Session) Start() error {
+	if b.epochThreshold == nil {
+		err := b.setEpochThreshold()
+		if err != nil {
+			return err
+		}
+	}
+
 	var i uint64 = 0
 	var err error
 	for ; i < b.config.EpochLength; i++ {
@@ -88,7 +103,6 @@ func (b *Session) Start() error {
 		}
 	}
 
-	//TODO: finish implementation of build block
 	go b.invokeBlockAuthoring()
 
 	return nil
@@ -105,15 +119,43 @@ func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
 
 func (b *Session) invokeBlockAuthoring() {
 	// TODO: we might not actually be starting at slot 0, need to run median algorithm here
-	var currentSlot uint64 = 0
+	var slotNum uint64 = 0
 
-	for ; currentSlot < b.config.EpochLength; currentSlot++ {
-		// TODO: call buildBlock
-		b.newBlocks <- types.Block{
-			Header: &types.Header{
-				Number: big.NewInt(0),
-			},
+	if b.config == nil {
+		log.Error("BABE block authoring", "error", "config is nil")
+		return
+	}
+
+	if b.blockState == nil {
+		log.Error("BABE block authoring", "error", "blockState is nil")
+		return
+	}
+
+	for ; slotNum < b.config.EpochLength; slotNum++ {
+		parentHeader := b.blockState.LatestHeader()
+		if parentHeader == nil {
+			log.Error("BABE block authoring", "error", "parent header is nil")
+		} else {
+			currentSlot := Slot{
+				start:    uint64(time.Now().Unix()),
+				duration: b.config.SlotDuration,
+				number:   slotNum,
+			}
+
+			block, err := b.buildBlock(parentHeader, currentSlot)
+			if err != nil {
+				log.Error("BABE block authoring", "error", err)
+			} else {
+				hash := block.Header.Hash()
+				log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
+				b.newBlocks <- *block
+				err = b.blockState.AddBlock(*block)
+				if err != nil {
+					log.Error("BABE block authoring", "error", err)
+				}
+			}
 		}
+
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
 }
@@ -312,12 +354,12 @@ func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error
 
 // buildBlockBabeHeader creates the BABE header for the slot.
 // the BABE header includes the proof of authorship right for this slot.
-func (b *Session) buildBlockBabeHeader(slot Slot) (*BabeHeader, error) {
+func (b *Session) buildBlockBabeHeader(slot Slot) (*babetypes.BabeHeader, error) {
 	if b.slotToProof[slot.number] == nil {
 		return nil, errors.New("not authorized to produce block")
 	}
 	outAndProof := b.slotToProof[slot.number]
-	return &BabeHeader{
+	return &babetypes.BabeHeader{
 		VrfOutput:          outAndProof.output,
 		VrfProof:           outAndProof.proof,
 		BlockProducerIndex: b.authorityIndex,

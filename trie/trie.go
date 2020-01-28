@@ -23,6 +23,8 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 )
 
+var EmptyHash, _ = NewEmptyTrie(nil).Hash()
+
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
 // Use NewTrie to create a trie that sits on top of a database.
@@ -58,6 +60,11 @@ func (t *Trie) Root() node {
 // Db returns the trie's underlying database
 func (t *Trie) Db() *Database {
 	return t.db
+}
+
+// SetDb sets the database backing the trie. This is used by the state service to set the database.
+func (t *Trie) SetDb(db *Database) {
+	t.db = db
 }
 
 // EncodeRoot returns the encoded root of the trie

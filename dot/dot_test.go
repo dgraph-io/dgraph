@@ -17,10 +17,13 @@
 package dot
 
 import (
+	"math/big"
 	"os"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/state"
+	"github.com/ChainSafe/gossamer/trie"
 
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
@@ -48,6 +51,14 @@ func createTestDot(t *testing.T) *Dot {
 	// DB
 	dataDir := "../test_data"
 	dbSrv := state.NewService(dataDir)
+	err = dbSrv.Initialize(&types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	services = append(services, dbSrv)
 
 	// API

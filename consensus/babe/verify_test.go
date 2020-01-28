@@ -60,8 +60,8 @@ func TestVerifySlotWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babesession.authorityData = make([]AuthorityData, 1)
-	babesession.authorityData[0] = AuthorityData{
+	babesession.authorityData = make([]*AuthorityData, 1)
+	babesession.authorityData[0] = &AuthorityData{
 		id: kp.Public().(*sr25519.PublicKey),
 	}
 
@@ -96,8 +96,8 @@ func TestVerifyAuthorshipRight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babesession.authorityData = make([]AuthorityData, 1)
-	babesession.authorityData[0] = AuthorityData{
+	babesession.authorityData = make([]*AuthorityData, 1)
+	babesession.authorityData[0] = &AuthorityData{
 		id:     kp.Public().(*sr25519.PublicKey),
 		weight: 1,
 	}

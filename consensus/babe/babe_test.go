@@ -18,14 +18,12 @@ package babe
 
 import (
 	"bytes"
+	"io/ioutil"
 	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/tests"
 
 	"github.com/ChainSafe/gossamer/common"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
@@ -33,6 +31,10 @@ import (
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	db "github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/state"
+	"github.com/ChainSafe/gossamer/tests"
+	"github.com/ChainSafe/gossamer/trie"
 )
 
 func TestCalculateThreshold(t *testing.T) {
@@ -345,17 +347,46 @@ func TestSlotTime(t *testing.T) {
 	}
 }
 
-func TestStart(t *testing.T) {
+func TestBabeAnnounceMessage(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
+	newBlocks := make(chan types.Block)
+
+	dataDir, err := ioutil.TempDir("", "./test_data")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dbSrv := state.NewService(dataDir)
+	err = dbSrv.Initialize(&types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = dbSrv.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		err = dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	cfg := &SessionConfig{
-		Runtime:   rt,
-		Keypair:   kp,
-		NewBlocks: make(chan types.Block),
+		Runtime:    rt,
+		Keypair:    kp,
+		NewBlocks:  newBlocks,
+		BlockState: dbSrv.Block,
 	}
 
 	babesession, err := NewSession(cfg)
@@ -363,9 +394,7 @@ func TestStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babesession.authorityIndex = 0
-	babesession.authorityData = []AuthorityData{{nil, 1}}
-	conf := &BabeConfiguration{
+	babesession.config = &BabeConfiguration{
 		SlotDuration:       1,
 		EpochLength:        6,
 		C1:                 1,
@@ -374,35 +403,9 @@ func TestStart(t *testing.T) {
 		Randomness:         0,
 		SecondarySlots:     false,
 	}
-	babesession.config = conf
-
-	err = babesession.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBabeAnnounceMessage(t *testing.T) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
-	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	newBlocks := make(chan types.Block)
-
-	cfg := &SessionConfig{
-		Runtime:   rt,
-		Keypair:   kp,
-		NewBlocks: newBlocks,
-	}
-
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	babesession.authorityIndex = 0
-	babesession.authorityData = []AuthorityData{
+	babesession.authorityData = []*AuthorityData{
 		{nil, 1}, {nil, 1}, {nil, 1},
 	}
 
@@ -410,14 +413,11 @@ func TestBabeAnnounceMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Duration(babesession.config.SlotDuration) * time.Duration(babesession.config.EpochLength) * time.Millisecond)
 
-	for i := 0; i < int(babesession.config.EpochLength); i++ {
-		block := <-newBlocks
-		blockNumber := big.NewInt(int64(0))
-		if !reflect.DeepEqual(block.Header.Number, blockNumber) {
-			t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", block.Header.Number, blockNumber)
-		}
+	block := <-newBlocks
+	blockNumber := big.NewInt(int64(1))
+	if !reflect.DeepEqual(block.Header.Number, blockNumber) {
+		t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", block.Header.Number, blockNumber)
 	}
 }
 
@@ -441,6 +441,8 @@ func TestSeal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	babesession.authorityData = []*AuthorityData{{nil, 1}}
 
 	zeroHash, err := common.HexToHash("0x00")
 	if err != nil {
@@ -599,6 +601,8 @@ func TestBuildBlock_failing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	babesession.authorityData = []*AuthorityData{{nil, 1}}
 
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)

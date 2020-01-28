@@ -39,6 +39,8 @@ func TestStartService(t *testing.T) {
 	cfg := &Config{
 		Runtime:  rt,
 		Keystore: keystore.NewKeystore(),
+		MsgRec:   make(chan p2p.Message),
+		MsgSend:  make(chan p2p.Message),
 	}
 
 	s, err := NewService(cfg)
@@ -66,7 +68,6 @@ func TestValidateBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Stop()
 
 	// https://github.com/paritytech/substrate/blob/426c26b8bddfcdbaf8d29f45b128e0864b57de1c/core/test-runtime/src/system.rs#L371
 	data := []byte{69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 179, 38, 109, 225, 55, 210, 10, 93, 15, 243, 166, 64, 30, 181, 113, 39, 82, 95, 217, 178, 105, 55, 1, 240, 191, 90, 138, 133, 63, 163, 235, 224, 3, 23, 10, 46, 117, 151, 183, 183, 227, 216, 76, 5, 57, 29, 19, 154, 98, 177, 87, 231, 135, 134, 216, 192, 130, 242, 157, 207, 76, 17, 19, 20, 0, 0}
@@ -90,7 +91,6 @@ func TestValidateTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Stop()
 
 	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
 	tx := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
@@ -122,14 +122,14 @@ func TestValidateTransaction(t *testing.T) {
 func TestAnnounceBlock(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
-	blkRec := make(chan types.Block)
 	msgSend := make(chan p2p.Message)
+	newBlocks := make(chan types.Block)
 
 	cfg := &Config{
 		Runtime:   rt,
 		MsgSend:   msgSend, // message channel from core service to p2p service
 		Keystore:  keystore.NewKeystore(),
-		NewBlocks: blkRec,
+		NewBlocks: newBlocks,
 	}
 
 	s, err := NewService(cfg)
@@ -144,7 +144,7 @@ func TestAnnounceBlock(t *testing.T) {
 	defer s.Stop()
 
 	// simulate block sent from BABE session
-	blkRec <- types.Block{
+	newBlocks <- types.Block{
 		Header: &types.Header{
 			Number: big.NewInt(0),
 		},

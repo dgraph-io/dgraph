@@ -17,6 +17,7 @@
 package common
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -25,10 +26,6 @@ type Address string
 
 // Hash used to store a blake2b hash
 type Hash [32]byte
-
-func (h *Hash) String() string {
-	return fmt.Sprintf("0x%x", h[:])
-}
 
 // NewHash casts a byte array to a Hash
 // if the input is longer than 32 bytes, it takes the first 32 bytes
@@ -42,4 +39,12 @@ func NewHash(in []byte) (res Hash) {
 func (h Hash) ToBytes() []byte {
 	b := [32]byte(h)
 	return b[:]
+}
+
+func (h Hash) Equal(g Hash) bool {
+	return bytes.Equal(h[:], g[:])
+}
+
+func (h Hash) String() string {
+	return fmt.Sprintf("0x%x", h[:])
 }

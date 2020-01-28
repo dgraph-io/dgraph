@@ -17,9 +17,6 @@
 package babe
 
 import (
-	"encoding/binary"
-	"errors"
-
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
@@ -40,42 +37,17 @@ type AuthorityDataRaw struct {
 	Weight uint64
 }
 
-//nolint:structcheck
 type AuthorityData struct {
 	id     *sr25519.PublicKey
 	weight uint64
 }
 
-// BabeHeader as defined in Polkadot RE Spec, definition 5.10 in section 5.1.4
-type BabeHeader struct {
-	VrfOutput          [sr25519.VrfOutputLength]byte
-	VrfProof           [sr25519.VrfProofLength]byte
-	BlockProducerIndex uint64
-	SlotNumber         uint64
-}
-
-func (bh *BabeHeader) Encode() []byte {
-	enc := []byte{}
-	enc = append(enc, bh.VrfOutput[:]...)
-	enc = append(enc, bh.VrfProof[:]...)
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, bh.BlockProducerIndex)
-	enc = append(enc, buf...)
-	binary.LittleEndian.PutUint64(buf, bh.SlotNumber)
-	enc = append(enc, buf...)
-	return enc
-}
-
-func (bh *BabeHeader) Decode(in []byte) error {
-	if len(in) < sr25519.VrfOutputLength+sr25519.VrfProofLength+16 {
-		return errors.New("input is too short: need at least VrfOutputLength (32) + VrfProofLength (64) + 16")
+// NewAuthorityData returns AuthorityData with the given id and weight
+func NewAuthorityData(pub *sr25519.PublicKey, weight uint64) *AuthorityData {
+	return &AuthorityData{
+		id:     pub,
+		weight: weight,
 	}
-
-	copy(bh.VrfOutput[:], in[:sr25519.VrfOutputLength])
-	copy(bh.VrfProof[:], in[sr25519.VrfOutputLength:sr25519.VrfOutputLength+sr25519.VrfProofLength])
-	bh.BlockProducerIndex = binary.LittleEndian.Uint64(in[sr25519.VrfOutputLength+sr25519.VrfProofLength : sr25519.VrfOutputLength+sr25519.VrfProofLength+8])
-	bh.SlotNumber = binary.LittleEndian.Uint64(in[sr25519.VrfOutputLength+sr25519.VrfProofLength+8 : sr25519.VrfOutputLength+sr25519.VrfProofLength+16])
-	return nil
 }
 
 type VrfOutputAndProof struct {

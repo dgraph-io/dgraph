@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"math/big"
 	"os"
 	"reflect"
 	"testing"
@@ -12,13 +13,14 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
+	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/trie"
 	"github.com/urfave/cli"
 )
 
 func TestStoreGenesisInfo(t *testing.T) {
-	tempFile, _ := createTempConfigFile()
+	tempFile, cfg := createTempConfigFile()
 	defer teardown(tempFile)
 
 	genesispath := createTempGenesisFile(t)
@@ -39,8 +41,17 @@ func TestStoreGenesisInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	setGlobalConfig(ctx, &fig.Global)
-	dbSrv := state.NewService(fig.Global.DataDir)
+	dataDir := cfg.Global.DataDir
+
+	dbSrv := state.NewService(dataDir)
+	err = dbSrv.Initialize(&types.Header{
+		Number:         big.NewInt(0),
+		StateRoot:      trie.EmptyHash,
+		ExtrinsicsRoot: trie.EmptyHash,
+	}, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = dbSrv.Start()
 	if err != nil {
@@ -49,11 +60,9 @@ func TestStoreGenesisInfo(t *testing.T) {
 
 	defer dbSrv.Stop()
 
-	tdb := &trie.Database{
-		Db: dbSrv.Storage.Db.Db,
-	}
+	setGlobalConfig(ctx, &fig.Global)
 
-	gendata, err := tdb.LoadGenesisData()
+	gendata, err := dbSrv.Storage.LoadGenesisData()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +76,17 @@ func TestStoreGenesisInfo(t *testing.T) {
 
 	if !reflect.DeepEqual(gendata, expected) {
 		t.Fatalf("Fail to get genesis data: got %s expected %s", gendata, expected)
+	}
+
+	stateRoot := dbSrv.Block.LatestHeader().StateRoot
+	expectedHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), stateRoot, trie.EmptyHash, [][]byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	genesisHeader := dbSrv.Block.LatestHeader()
+	if !genesisHeader.Hash().Equal(expectedHeader.Hash()) {
+		t.Fatalf("Fail: got %v expected %v", genesisHeader, expectedHeader)
 	}
 }
 

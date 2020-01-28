@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/common/optional"
@@ -65,6 +66,7 @@ func NewService(cfg *Config) (*Service, error) {
 	}
 
 	keys := cfg.Keystore.Sr25519Keypairs()
+
 	// no validator keypair found, generate a new one
 	if len(keys) == 0 {
 		kp, err := sr25519.GenerateKeypair()
@@ -81,10 +83,13 @@ func NewService(cfg *Config) (*Service, error) {
 
 	// BABE session configuration
 	bsConfig := &babe.SessionConfig{
-		BlockState: cfg.BlockState,
-		Keypair:    keys[0].(*sr25519.Keypair),
-		Runtime:    cfg.Runtime,
-		NewBlocks:  cfg.NewBlocks, // becomes block send channel in BABE session
+		Keypair:        keys[0].(*sr25519.Keypair),
+		Runtime:        cfg.Runtime,
+		NewBlocks:      cfg.NewBlocks, // becomes block send channel in BABE session
+		BlockState:     cfg.BlockState,
+		AuthorityIndex: 0, // TODO: where do we get the BABE authority data?
+		AuthData:       []*babe.AuthorityData{babe.NewAuthorityData(keys[0].Public().(*sr25519.PublicKey), 1)},
+		EpochThreshold: big.NewInt(0),
 	}
 
 	// create a new BABE session
@@ -117,7 +122,12 @@ func (s *Service) Start() error {
 	// start receiving messages from p2p service
 	go s.receiveMessages()
 
-	return nil
+	err := s.bs.Start()
+	if err != nil {
+		log.Error("CORE could not start BABE", "error", err)
+	}
+
+	return err
 }
 
 // Stop stops the core service

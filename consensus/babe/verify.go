@@ -4,10 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/core/types"
 )
 
-func (b *Session) verifySlotWinner(slot uint64, header *BabeHeader) (bool, error) {
+// verifySlotWinner verifies the claim for a slot, given the BabeHeader for that slot.
+func (b *Session) verifySlotWinner(slot uint64, header *babetypes.BabeHeader) (bool, error) {
 	if len(b.authorityData) <= int(header.BlockProducerIndex) {
 		return false, fmt.Errorf("no authority data for index %d", header.BlockProducerIndex)
 	}
@@ -21,6 +23,7 @@ func (b *Session) verifySlotWinner(slot uint64, header *BabeHeader) (bool, error
 	return pub.VrfVerify(vrfInput, header.VrfOutput[:], header.VrfProof[:])
 }
 
+// verifyAuthorshipRight verifies that the authority that produced a block was authorized to produce it.
 func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool, error) {
 	// header should have 2 digest items (possibly more in the future)
 	// first item should be pre-digest, second should be seal
@@ -52,7 +55,7 @@ func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool
 		return false, fmt.Errorf("last digest item is not seal")
 	}
 
-	babeHeader := new(BabeHeader)
+	babeHeader := new(babetypes.BabeHeader)
 	err = babeHeader.Decode(preDigest.Data)
 	if err != nil {
 		return false, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
