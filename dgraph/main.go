@@ -38,7 +38,7 @@ func main() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 
-		minDiff := uint64(512 << 20)
+		minDiff := uint64(2 << 30)
 		var lastMs runtime.MemStats
 		var lastNumGC uint32
 		var ms runtime.MemStats
@@ -56,18 +56,22 @@ func main() {
 			case ms.NumGC > lastNumGC:
 				// GC was already run by the Go runtime. No need to run it again.
 				lastNumGC = ms.NumGC
+				lastMs = ms
+
 			case diff < minDiff:
 				// Do not run the GC if the allocated memory has not shrunk or expanded by
 				// more than 0.5GB since the last time the memory stats were collected.
 				lastNumGC = ms.NumGC
+				// Nobody ran a GC. Don't update lastMs.
+
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
 				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
 					humanize.Bytes(ms.HeapInuse),
 					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
 				lastNumGC = ms.NumGC + 1
+				lastMs = ms
 			}
-			lastMs = ms
 		}
 	}()
 
