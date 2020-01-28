@@ -494,7 +494,8 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 
 		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
 		invTypeName := field.Type.Name()
-		if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
+		if sch.Types[invTypeName].Kind != ast.Object &&
+			sch.Types[invTypeName].Kind != ast.Interface {
 			return gqlerror.ErrorPosf(
 				field.Position,
 				"Type %s; Field %s is of type %s, but reverse predicate in @dgraph"+
