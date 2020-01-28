@@ -734,6 +734,52 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
+// SingleListRollup works like rollup but generates a single list with no splits.
+// It's used during backup so that each backed up posting list is stored in a single key.
+func (l *List) SingleListRollup() (*bpb.KV, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	readTs := uint64(math.MaxUint64)
+	plist := &pb.PostingList{}
+	enc := codec.Encoder{BlockSize: blockSize}
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		enc.Add(p.Uid)
+		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
+			plist.Postings = append(plist.Postings, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "while rolling up list into a single list")
+	}
+	plist.Pack = enc.Done()
+
+	maxCommitTs := l.minTs
+	{
+		// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
+		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
+		// way to get the max commit timestamp is to pick all the relevant postings for the given
+		// readTs and calculate the maxCommitTs.
+		// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
+		// postings has been trimmed down.
+		deleteBelowTs, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
+		for _, mp := range mposts {
+			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+		}
+	}
+
+	kv := &bpb.KV{}
+	kv.Version = maxCommitTs
+	kv.Key = l.key
+	val, meta := marshalPostingList(plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+
+	return kv, nil
+}
+
 func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
 	kv := &bpb.KV{}
