@@ -11,7 +11,7 @@ schemas:
       }
     output: |
       type A {
-        A.p: uid
+        A.p
       }
       A.p: uid .
       type P {
@@ -26,7 +26,7 @@ schemas:
       }
     output: |
       type X {
-        X.names: [string]
+        X.names
       }
       X.names: [string] .
 
@@ -41,7 +41,7 @@ schemas:
       }
     output: |
       type X {
-        X.p: [uid]
+        X.p
       }
       X.p: [uid] .
       type P {
@@ -64,15 +64,15 @@ schemas:
       }
     output: |
       type X {
-        X.p: int
-        X.pList: [int]
-        X.q: bool
-        X.r: string
-        X.rList: [string]
-        X.s: dateTime
-        X.sList: [dateTime]
-        X.t: float
-        X.tList: [float]
+        X.p
+        X.pList
+        X.q
+        X.r
+        X.rList
+        X.s
+        X.sList
+        X.t
+        X.tList
       }
       X.p: int .
       X.pList: [int] .
@@ -94,8 +94,8 @@ schemas:
       enum E { A }
     output: |
       type X {
-        X.e: string
-        X.f: [string]
+        X.e
+        X.f
       }
       X.e: string @index(hash) .
       X.f: [string] @index(hash) .
@@ -136,33 +136,33 @@ schemas:
       enum E { A }
     output: |
       type X {
-        X.i1: int
-        X.i2: int
-        X.f1: float
-        X.f2: float
-        X.b1: bool
-        X.b2: bool
-        X.s1: string
-        X.s2: string
-        X.s3: string
-        X.s4: string
-        X.s5: string
-        X.s6: string
-        X.s7: string
-        X.s8: string
-        X.dt1: dateTime
-        X.dt2: dateTime
-        X.dt3: dateTime
-        X.dt4: dateTime
-        X.dt5: dateTime
-        X.e: string
-        X.e1: string
-        X.e2: string
-        X.e3: string
-        X.e4: string
-        X.e5: string
-        X.e6: string
-        X.e7: string
+        X.i1
+        X.i2
+        X.f1
+        X.f2
+        X.b1
+        X.b2
+        X.s1
+        X.s2
+        X.s3
+        X.s4
+        X.s5
+        X.s6
+        X.s7
+        X.s8
+        X.dt1
+        X.dt2
+        X.dt3
+        X.dt4
+        X.dt5
+        X.e
+        X.e1
+        X.e2
+        X.e3
+        X.e4
+        X.e5
+        X.e6
+        X.e7
       }
       X.i1: int @index(int) .
       X.i2: int @index(int) .
@@ -207,17 +207,17 @@ schemas:
       }
     output: |
       type A {
-        A.name: string
+        A.name
       }
       A.name: string @index(exact) .
       type B {
-        A.name: string
-        B.correct: bool
+        A.name
+        B.correct
       }
       B.correct: bool @index(bool) .
       type C {
-        A.name: string
-        C.dob: dateTime
+        A.name
+        C.dob
       }
       C.dob: dateTime .
 
@@ -261,14 +261,14 @@ schemas:
       }
     output: |
       type dgraph.type.A {
-        dgraph.type.A.p: int
-        pList: [int]
-        dgraph.type.A.q: bool
-        dgraph.r: string
-        dgraph.type.A.rList: [string]
-        s: dateTime
-        dgraph.type.A.t: float
-        dgraph.tList: [float]
+        dgraph.type.A.p
+        pList
+        dgraph.type.A.q
+        dgraph.r
+        dgraph.type.A.rList
+        s
+        dgraph.type.A.t
+        dgraph.tList
       }
       dgraph.type.A.p: int .
       pList: [int] .
@@ -279,30 +279,30 @@ schemas:
       dgraph.type.A.t: float .
       dgraph.tList: [float] .
       type dgraph.interface.B {
-        dgraph.abc.name: string
-        dgraph.interface.B.age: int
+        dgraph.abc.name
+        dgraph.interface.B.age
       }
       dgraph.abc.name: string @index(exact) .
       dgraph.interface.B.age: int .
       type type.C {
-        dgraph.abc.name: string
-        dgraph.interface.B.age: int
-        dgraph.correct: bool
-        type.C.incorrect: bool
+        dgraph.abc.name
+        dgraph.interface.B.age
+        dgraph.correct
+        type.C.incorrect
       }
       dgraph.correct: bool @index(bool) .
       type.C.incorrect: bool .
       type dgraph.type.X {
-        dgraph.x.e: string
-        dgraph.x.eList: [string]
+        dgraph.x.e
+        dgraph.x.eList
       }
       dgraph.x.e: string @index(hash) .
       dgraph.x.eList: [string] @index(hash) .
       type Y {
-        Y.p: int
-        Y.q: string
-        dgraph.pList: [int]
-        f: float
+        Y.p
+        Y.q
+        dgraph.pList
+        f
       }
       Y.p: int .
       Y.q: string .
@@ -320,12 +320,12 @@ schemas:
       }
     output: |
       type A {
-        A.id: string
+        A.id
       }
       A.id: string @index(hash) @upsert .
       type B {
-        A.id: string
-        B.correct: bool
+        A.id
+        B.correct
       }
       B.correct: bool @index(bool) .
 
@@ -340,12 +340,12 @@ schemas:
       }
     output: |
       type A {
-        A.id: string
+        A.id
       }
       A.id: string @index(trigram, hash) @upsert .
       type B {
-        A.id: string
-        B.correct: bool
+        A.id
+        B.correct
       }
       B.correct: bool @index(bool) .
 
@@ -360,11 +360,11 @@ schemas:
       }
     output: |
       type A {
-        A.id: string
+        A.id
       }
       A.id: string @index(hash, term) @upsert .
       type B {
-        A.id: string
-        B.correct: bool
+        A.id
+        B.correct
       }
       B.correct: bool @index(bool) .
