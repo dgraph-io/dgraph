@@ -1025,6 +1025,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
+	require.True(t, len(ol.plist.Splits) > 0)
 
 	return ol, commits
 }
@@ -1057,6 +1058,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
+	require.True(t, len(ol.plist.Splits) > 0)
 
 	// Delete all the previously inserted entries from the list.
 	baseStartTs := uint64(size) + 1
@@ -1076,6 +1078,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
+	require.Equal(t, 0, len(ol.plist.Splits))
 
 	return ol, commits
 }
@@ -1094,7 +1097,6 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 func TestMultiPartListBasic(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, false)
-	t.Logf("List parts %v", len(ol.plist.Splits))
 	opt := ListOptions{ReadTs: uint64(size) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
@@ -1108,7 +1110,6 @@ func TestMultiPartListBasic(t *testing.T) {
 func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
-	t.Logf("List parts %v", len(ol.plist.Splits))
 
 	var visitedUids []uint64
 	ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
@@ -1125,7 +1126,6 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 func TestMultiPartListWithPostings(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
-	t.Logf("List parts %v", len(ol.plist.Splits))
 
 	var labels []string
 	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
@@ -1145,7 +1145,6 @@ func TestMultiPartListWithPostings(t *testing.T) {
 func TestMultiPartListMarshal(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
-	t.Logf("List parts %v", len(ol.plist.Splits))
 
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
@@ -1202,7 +1201,6 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 func TestMultiPartListDelete(t *testing.T) {
 	size := int(1e4)
 	ol, commits := createAndDeleteMultiPartList(t, size)
-	t.Logf("List parts %v", len(ol.plist.Splits))
 	require.Equal(t, size*2, commits)
 
 	counter := 0

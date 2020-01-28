@@ -97,7 +97,7 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post: Post
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 }
 
 type DeletePostPayload {
@@ -121,27 +121,27 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
-input PatchPost {
-	title: String
-	text: String
-	postType: PostType
-}
-
-input PostFilter {
-	ids: [ID!]
-	not: PostFilter
-}
-
-input PostInput {
+input AddPostInput {
 	title: String!
 	text: String
 	postType: PostType!
+}
+
+input PostFilter {
+	id: [ID!]
+	not: PostFilter
 }
 
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	title: String
+	text: String
+	postType: PostType
 }
 
 input PostRef {
@@ -153,8 +153,8 @@ input PostRef {
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -171,7 +171,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }

@@ -505,8 +505,8 @@ func Parse(key []byte) (ParsedKey, error) {
 			break
 		}
 
-		if len(k) < 16 {
-			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
+		if len(k) != 16 {
+			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[8:]
@@ -535,8 +535,8 @@ func Parse(key []byte) (ParsedKey, error) {
 			break
 		}
 
-		if len(k) < 12 {
-			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
+		if len(k) != 12 {
+			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[4:]
@@ -548,10 +548,9 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+// These predicates appear for queries that have * as predicate in them.
 var reservedPredicateMap = map[string]struct{}{
-	"dgraph.type":           {},
-	"dgraph.graphql.schema": {},
-	"dgraph.graphql.date":   {},
+	"dgraph.type": {},
 }
 
 var aclPredicateMap = map[string]struct{}{
@@ -591,13 +590,11 @@ func IsAclPredicate(pred string) bool {
 	return ok
 }
 
-// ReservedPredicates returns the complete list of reserved predicates.
+// ReservedPredicates returns the complete list of reserved predicates that needs to
+// be expanded when * is given as a predicate.
 func ReservedPredicates() []string {
 	var preds []string
 	for pred := range reservedPredicateMap {
-		preds = append(preds, pred)
-	}
-	for pred := range aclPredicateMap {
 		preds = append(preds, pred)
 	}
 	return preds

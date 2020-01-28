@@ -21,104 +21,22 @@ import (
 	"encoding/hex"
 	"math"
 	"strconv"
-	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
-
-// incrRollupi is used to batch keys for rollup incrementally.
-type incrRollupi struct {
-	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
-	keysCh chan *[][]byte
-	// keysPool is sync.Pool to share the batched keys to rollup.
-	keysPool *sync.Pool
-}
 
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
-
-	// IncrRollup is used to batch keys for rollup incrementally.
-	IncrRollup = &incrRollupi{
-		keysCh: make(chan *[][]byte),
-		keysPool: &sync.Pool{
-			New: func() interface{} {
-				return new([][]byte)
-			},
-		},
-	}
+	// ErrInvalidKey is returned when trying to read a posting list using
+	// an invalid key (e.g the key to a single part of a larger multi-part list).
+	ErrInvalidKey = errors.Errorf("cannot read posting list from this key")
 )
-
-// rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
-func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
-	l, err := GetNoStore(key)
-	if err != nil {
-		return err
-	}
-
-	kvs, err := l.Rollup()
-	if err != nil {
-		return err
-	}
-
-	return writer.Write(&bpb.KVList{Kv: kvs})
-}
-
-func (ir *incrRollupi) addKeyToBatch(key []byte) {
-	batch := ir.keysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
-	if len(*batch) < 64 {
-		ir.keysPool.Put(batch)
-		return
-	}
-
-	select {
-	case ir.keysCh <- batch:
-	default:
-		// Drop keys and build the batch again. Lossy behavior.
-		*batch = (*batch)[:0]
-		ir.keysPool.Put(batch)
-	}
-}
-
-// Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process() {
-	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
-	limiter := time.NewTicker(100 * time.Millisecond)
-	writer := NewTxnWriter(pstore)
-
-	for batch := range ir.keysCh {
-		currTs := time.Now().Unix()
-		for _, key := range *batch {
-			hash := z.MemHash(key)
-			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
-				// Key not present or Key present but last roll up was more than 10 sec ago.
-				// Add/Update map and rollup.
-				m[hash] = currTs
-				if err := ir.rollUpKey(writer, key); err != nil {
-					glog.Warningf("Error %v rolling up key %v\n", err, key)
-					continue
-				}
-			}
-		}
-		// clear the batch and put it back in Sync keysPool
-		*batch = (*batch)[:0]
-		ir.keysPool.Put(batch)
-
-		// throttle to 1 batch = 64 rollups per 100 ms.
-		<-limiter.C
-	}
-	// keysCh is closed. This should never happen.
-}
 
 // ShouldAbort returns whether the transaction should be aborted.
 func (txn *Txn) ShouldAbort() bool {
@@ -226,11 +144,23 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read once using the canonical list (with startUid equal to zero).
+		return nil, ErrInvalidKey
+	}
+
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
-	const maxDeltaCount = 2
-	deltaCount := 0
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -253,6 +183,17 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
+
+			// If this list is a multi-part list, advance past the keys holding the parts.
+			if len(l.plist.GetSplits()) > 0 {
+				lastKey, err := x.GetSplitKey(key, math.MaxUint64)
+				if err != nil {
+					return nil, errors.Wrapf(err,
+						"while advancing past the end of multi-part list with key [%v]", key)
+				}
+				it.Seek(lastKey)
+			}
+
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
@@ -275,7 +216,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if err != nil {
 				return nil, err
 			}
-			deltaCount++
 		case BitSchemaPosting:
 			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
@@ -288,11 +228,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
-
-	if deltaCount >= maxDeltaCount {
-		IncrRollup.addKeyToBatch(key)
-	}
-
 	return l, nil
 }
 

@@ -118,9 +118,7 @@ const (
 	GroupIdFileName = "group_id"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `
-	{"predicate":"dgraph.graphql.date","type":"datetime", "index": true, "tokenizer":["day"]},
-	{"predicate":"dgraph.graphql.schema", "type": "string"}`
+	GraphqlPredicates = `{"predicate":"dgraph.graphql.schema", "type": "string"}`
 )
 
 var (
@@ -184,17 +182,17 @@ func (gqlErr *GqlError) Error() string {
 		return ""
 	}
 
-	buf.WriteString(gqlErr.Message)
+	Check2(buf.WriteString(gqlErr.Message))
 
 	if len(gqlErr.Locations) > 0 {
-		buf.WriteString(" (Locations: [")
+		Check2(buf.WriteString(" (Locations: ["))
 		for i, loc := range gqlErr.Locations {
 			if i > 0 {
-				buf.WriteString(", ")
+				Check2(buf.WriteString(", "))
 			}
-			buf.WriteString(fmt.Sprintf("{Line: %v, Column: %v}", loc.Line, loc.Column))
+			Check2(buf.WriteString(fmt.Sprintf("{Line: %v, Column: %v}", loc.Line, loc.Column)))
 		}
-		buf.WriteString("])")
+		Check2(buf.WriteString("])"))
 	}
 
 	return buf.String()
@@ -204,9 +202,9 @@ func (errList GqlErrorList) Error() string {
 	var buf bytes.Buffer
 	for i, gqlErr := range errList {
 		if i > 0 {
-			buf.WriteByte('\n')
+			Check(buf.WriteByte('\n'))
 		}
-		buf.WriteString(gqlErr.Error())
+		Check2(buf.WriteString(gqlErr.Error()))
 	}
 	return buf.String()
 }

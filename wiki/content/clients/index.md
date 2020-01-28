@@ -808,6 +808,40 @@ The result:
 }
 ```
 
+### Running read-only queries
+
+You can set the query parameter `ro=true` to `/query` to set it as a
+[read-only]({{< relref "#read-only-transactions" >}}) query.
+
+
+```sh
+$ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?ro=true" -d $'
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    uid
+    name
+    balance
+  }
+}
+```
+
+### Running best-effort queries
+
+You can set the query parameter `be=true` to `/query` to set it as a
+[best-effort]({{< relref "#read-only-transactions" >}}) query.
+
+
+```sh
+$ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?be=true" -d $'
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    uid
+    name
+    balance
+  }
+}
+```
+
 ### Compression via HTTP
 
 Dgraph supports gzip-compressed requests to and from Dgraph Alphas for `/query`, `/mutate`, and `/alter`.

@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -32,7 +33,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 const baseTimeout time.Duration = 4 * time.Second

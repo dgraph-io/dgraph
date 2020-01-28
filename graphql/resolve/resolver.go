@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -111,6 +112,13 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
+// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// that proxies query resolution through Query method in dgraph server, and
+// it doens't require authorization. Currently it's only used for quering
+// gqlschema during init.
+type adminExecutor struct {
+}
+
 // A Resolved is the result of resolving a single query or mutation.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -140,15 +148,26 @@ func DgraphAsQueryExecutor() QueryExecutor {
 	return &dgraphExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+func AdminQueryExecutor() QueryExecutor {
+	return &adminExecutor{}
+}
+
+// DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
+}
+
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Query(ctx, query)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return dgraph.Query(ctx, query)
 }
 
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
@@ -432,13 +451,13 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 		res, err := cf(ctx, field, result, err)
 
 		var b bytes.Buffer
-		b.WriteString("\"")
-		b.WriteString(name)
-		b.WriteString(`": `)
+		x.Check2(b.WriteString("\""))
+		x.Check2(b.WriteString(name))
+		x.Check2(b.WriteString(`": `))
 		if len(res) > 0 {
-			b.Write(res)
+			x.Check2(b.Write(res))
 		} else {
-			b.WriteString("null")
+			x.Check2(b.WriteString("null"))
 		}
 
 		return b.Bytes(), err
@@ -557,9 +576,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 	nullResponse := func() []byte {
 		var buf bytes.Buffer
-		buf.WriteString(`{ "`)
-		buf.WriteString(field.ResponseName())
-		buf.WriteString(`": null }`)
+		x.Check2(buf.WriteString(`{ "`))
+		x.Check2(buf.WriteString(field.ResponseName()))
+		x.Check2(buf.WriteString(`": null }`))
 		return buf.Bytes()
 	}
 
@@ -712,7 +731,7 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
-	buf.WriteRune('{')
+	x.Check2(buf.WriteRune('{'))
 
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -734,10 +753,10 @@ func completeObject(
 			continue
 		}
 
-		buf.WriteString(comma)
-		buf.WriteRune('"')
-		buf.WriteString(f.ResponseName())
-		buf.WriteString(`": `)
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(f.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
 
 		val := res[f.ResponseName()]
 		if f.Name() == schema.Typename {
@@ -764,10 +783,10 @@ func completeObject(
 			}
 			completed = []byte(`null`)
 		}
-		buf.Write(completed)
+		x.Check2(buf.Write(completed))
 		comma = ", "
 	}
-	buf.WriteRune('}')
+	x.Check2(buf.WriteRune('}'))
 
 	return buf.Bytes(), errs
 }
@@ -873,11 +892,11 @@ func completeList(
 		return mismatched(path, field, values)
 	}
 
-	buf.WriteRune('[')
+	x.Check2(buf.WriteRune('['))
 	for i, b := range values {
 		r, err := completeValue(append(path, i), field, b)
 		errs = append(errs, err...)
-		buf.WriteString(comma)
+		x.Check2(buf.WriteString(comma))
 		if r == nil {
 			if !field.Type().ListType().Nullable() {
 				// Unlike the choice in completeValue() above, where we turn missing
@@ -896,13 +915,13 @@ func completeList(
 				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 				return nil, errs
 			}
-			buf.WriteString("null")
+			x.Check2(buf.WriteString("null"))
 		} else {
-			buf.Write(r)
+			x.Check2(buf.Write(r))
 		}
 		comma = ", "
 	}
-	buf.WriteRune(']')
+	x.Check2(buf.WriteRune(']'))
 
 	return buf.Bytes(), errs
 }

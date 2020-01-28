@@ -3,7 +3,7 @@
 
 type Country {
         id: ID!
-        name: String! @search(by: [trigram])
+        name: String! @search(by: [trigram, exact])
         states: [State] @hasInverse(field: country)
 }
 
@@ -68,4 +68,16 @@ type Director implements Character {
 type Human implements Character & Employee {
         dob: DateTime
         female: Boolean
+}
+
+# just for testing singluar (non-list) edges in both directions
+
+type House {
+        id: ID!
+        owner: Owner @hasInverse(field: house)
+}
+
+type Owner {
+        id: ID!
+        house: House
 }

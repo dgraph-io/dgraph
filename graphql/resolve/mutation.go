@@ -194,16 +194,20 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
+	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
-	if err != nil {
-		return nil, resolverFailed,
-			schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
+	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+		"couldn't rewrite query for mutation %s", mutation.Name()))
+
+	if dgQuery == nil && err != nil {
+		return nil, resolverFailed, errs
 	}
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
+	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	return resp, resolverSucceeded,
-		schema.GQLWrapf(err, "mutation %s succeeded but query failed", mutation.Name())
+	return resp, resolverSucceeded, errs
 }
 
 // deleteCompletion returns `{ "msg": "Deleted" }`

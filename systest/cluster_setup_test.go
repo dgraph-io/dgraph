@@ -17,14 +17,21 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -149,4 +156,72 @@ func (d *DgraphCluster) Close() {
 	if d.dgraph != nil && d.dgraph.Process != nil {
 		d.dgraph.Process.Kill()
 	}
+}
+
+type matchExport struct {
+	expectedRDF    int
+	expectedSchema int
+	dir            string
+	port           int
+}
+
+func matchExportCount(opts matchExport) error {
+	// Now try and export data from second server.
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", opts.port))
+	if err != nil {
+		return err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	expected := `{"code": "Success", "message": "Export completed."}`
+	if string(b) != expected {
+		return errors.Errorf("Unexpected message while exporting: %v", string(b))
+	}
+
+	dataFile, err := findFile(filepath.Join(opts.dir, "export"), ".rdf.gz")
+	if err != nil {
+		return err
+	}
+	cmd := fmt.Sprintf("gunzip -c %s | wc -l", dataFile)
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return err
+	}
+	count := strings.TrimSpace(string(out))
+	if count != strconv.Itoa(opts.expectedRDF) {
+		return errors.Errorf("Export count mismatch. Got: %s", count)
+	}
+
+	schemaFile, err := findFile(filepath.Join(opts.dir, "export"), ".schema.gz")
+	if err != nil {
+		return err
+	}
+	cmd = fmt.Sprintf("gunzip -c %s | wc -l", schemaFile)
+	out, err = exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return err
+	}
+	count = strings.TrimSpace(string(out))
+	if count != strconv.Itoa(opts.expectedSchema) {
+		return errors.Errorf("Schema export count mismatch. Got: %s", count)
+	}
+	glog.Infoln("Export count matched.")
+	return nil
+}
+
+func findFile(dir string, ext string) (string, error) {
+	var fp string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ext) {
+			fp = path
+			return nil
+		}
+		return nil
+	})
+	return fp, err
 }

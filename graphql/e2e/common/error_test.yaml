@@ -7,7 +7,8 @@
   gqlvariables: 
     { }
   errors:
-    [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean \"getAuthor\"?",
+    [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean
+       \"getAuthor\"?",
       "locations": [ { "line": 2, "column": 3 } ] } ]
     
 -
@@ -55,8 +56,11 @@
   gqlvariables: 
     { "filter": "type was wrong" }
   errors:
-    [ { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position 
-        expecting type \"AuthorFilter\".",
+    [ { "message": "Variable type provided AuthorFiltarzzz! is incompatible with expected
+    type AuthorFilter",
+      "locations": [{ "line": 2, "column": 23}]},
+  { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position
+       expecting type \"AuthorFilter\".",
       "locations": [ { "line": 2, "column": 23 } ] },
       { "message": "Unknown type \"AuthorFiltarzzz\".",
       "locations": [ { "line": 1, "column": 1 } ] } ]
