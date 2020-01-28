@@ -187,10 +187,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
 	type dgPred struct {
-		typ        string
-		indexStr   string
-		upsertStr  string
-		reverseStr string
+		typ     string
+		index   string
+		upsert  string
+		reverse string
 	}
 
 	type field struct {
@@ -244,7 +244,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							// remove ~
 							forwardEdge := fname[1:]
 							forwardPred := dgPreds[forwardEdge]
-							forwardPred.reverseStr = "@reverse "
+							forwardPred.reverse = "@reverse "
 							dgPreds[forwardEdge] = forwardPred
 						} else {
 							edge := dgPreds[fname]
@@ -284,9 +284,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 					if parentInt == nil {
 						dgPreds[fname] = dgPred{
-							typ:       typStr,
-							indexStr:  indexStr,
-							upsertStr: upsertStr,
+							typ:    typStr,
+							index:  indexStr,
+							upsert: upsertStr,
 						}
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -304,8 +304,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					if parentInt == nil {
 						dgPreds[fname] = dgPred{
-							typ:      typStr,
-							indexStr: indexStr,
+							typ:   typStr,
+							index: indexStr,
 						}
 						typ.fields = append(typ.fields, field{fname, parentInt != nil})
 					}
@@ -325,8 +325,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			}
 			fmt.Fprintf(&typeDef, "  %s: %s\n", fld.name, f.typ)
 			if !fld.inherited {
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, f.indexStr, f.upsertStr,
-					f.reverseStr)
+				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, f.index, f.upsert,
+					f.reverse)
 			}
 		}
 		fmt.Fprintf(&typeDef, "}\n")
