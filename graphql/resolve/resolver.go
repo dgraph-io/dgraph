@@ -300,36 +300,29 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
 
-	reqID := api.RequestID(ctx)
-
 	if r == nil {
-		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", reqID)
-		return schema.ErrorResponse(errors.New("Internal error"), reqID)
+		glog.Errorf("Call to Resolve with nil RequestResolver")
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	if r.schema == nil {
-		glog.Errorf("[%s] Call to Resolve with no schema", reqID)
-		return schema.ErrorResponse(errors.New("Internal error"), reqID)
+		glog.Errorf("Call to Resolve with no schema")
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
-		return schema.ErrorResponse(err, reqID)
+		return schema.ErrorResponse(err)
 	}
 
-	resp := &schema.Response{
-		Extensions: &schema.Extensions{
-			RequestID: reqID,
-		},
-	}
+	resp := &schema.Response{}
 
 	if glog.V(3) {
 		b, err := json.Marshal(gqlReq.Variables)
 		if err != nil {
 			glog.Infof("Failed to marshal variables for logging : %s", err)
 		}
-		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
-			reqID, gqlReq.Query, string(b))
+		glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n", gqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
@@ -350,7 +343,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
-				defer api.PanicHandler(api.RequestID(ctx),
+				defer api.PanicHandler(
 					func(err error) {
 						allResolved[storeAt] = &Resolved{Err: err}
 					})
@@ -583,8 +576,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	}
 
 	dgraphError := func() ([]byte, error) {
-		glog.Errorf("[%s] Could not process Dgraph result : \n%s",
-			api.RequestID(ctx), string(dgResult))
+		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
@@ -599,8 +591,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	var valToComplete map[string]interface{}
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
-		glog.Errorf("[%s] %+v \n Dgraph result :\n%s\n",
-			api.RequestID(ctx),
+		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
 		return nullResponse(),
@@ -631,16 +622,13 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Errorf("[%s] Got a list of length %v from Dgraph when expecting a "+
-					"one-item list.\n"+
-					"GraphQL query was : %s\n",
-					api.RequestID(ctx), len(val), api.QueryString(ctx))
+				glog.Errorf("Got a list of length %v from Dgraph when expecting a " +
+					"one-item list.\n")
 
 				errs = append(errs,
 					x.GqlErrorf(
 						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-							"The first item in the list was used to produce the result. "+
-							"Logged as a potential bug; see the API log for more details.",
+							"The first item in the list was used to produce the result. ",
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
@@ -677,11 +665,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		//
 		// This isn't really an observable GraphQL error, so no need to add anything
 		// to the payload of errors for the result.
-		glog.Errorf("[%s] Top level completeObject didn't return a result.  "+
-			"That's only possible if the query result is non-nullable.  "+
-			"There's something wrong in the GraphQL schema.  \n"+
-			"GraphQL query was : %s\n",
-			api.RequestID(ctx), api.QueryString(ctx))
+		glog.Errorf("Top level completeObject didn't return a result.  " +
+			"That's only possible if the query result is non-nullable.  " +
+			"There's something wrong in the GraphQL schema.")
 		return nullResponse(), append(errs, gqlErrs...)
 	}
 

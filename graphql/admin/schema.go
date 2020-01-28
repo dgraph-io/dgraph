@@ -26,7 +26,6 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -132,9 +131,9 @@ func (asr *updateSchemaResolver) Mutate(
 		asr.newSchema.ID = asr.admin.schema.ID
 	}
 
-	glog.Infof("[%s] Altering Dgraph schema.", api.RequestID(ctx))
+	glog.Infof("Altering Dgraph schema.")
 	if glog.V(3) {
-		glog.Infof("[%s] New schema Dgraph:\n\n%s\n", api.RequestID(ctx), asr.newDgraphSchema)
+		glog.Infof("New schema Dgraph:\n\n%s\n", asr.newDgraphSchema)
 	}
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
@@ -147,8 +146,7 @@ func (asr *updateSchemaResolver) Mutate(
 	asr.admin.resetSchema(asr.newGQLSchema)
 	asr.admin.schema = asr.newSchema
 
-	glog.Infof("[%s] Successfully loaded new GraphQL schema.  Serving New GraphQL API.",
-		api.RequestID(ctx))
+	glog.Infof("Successfully loaded new GraphQL schema.  Serving New GraphQL API.")
 
 	return assigned, result, nil
 }
