@@ -61,9 +61,44 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 
 	case schema.FilterQuery:
 		return rewriteAsQuery(gqlQuery), nil
+	case schema.PasswordQuery:
+		return passwordQuery(gqlQuery)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
+	unParsedUID := m.ArgValue("id").(string)
+	password := m.ArgValue("password").(string)
+
+	uid, err := strconv.ParseUint(unParsedUID, 0, 64)
+	if err != nil {
+		return nil, schema.GQLWrapf(err,
+			"received %s as an invalid uid", unParsedUID)
+	}
+
+	queriedType := m.QueriedType()
+	predicate := queriedType.DgraphPredicate(queriedType.PasswordField().Name())
+
+	qry := &gql.GraphQuery{
+		Children: []*gql.GraphQuery{
+			{
+				Attr: "q",
+				Children: []*gql.GraphQuery{{
+					Alias: "pwd",
+					Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
+						password),
+				}},
+				Func: &gql.Function{
+					UID:  []uint64{uid},
+					Name: "uid",
+				},
+			},
+		},
+	}
+
+	return qry, nil
 }
 
 func intersection(a, b []uint64) []uint64 {
