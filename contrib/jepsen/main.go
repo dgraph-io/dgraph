@@ -132,7 +132,6 @@ var (
 	doUpOnly   = pflag.BoolP("up-only", "U", false, "Do --up and exit.")
 	doDown     = pflag.BoolP("down", "d", false, "Stop the Jepsen cluster after tests run.")
 	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
-	doServe    = pflag.Bool("serve", true, "Serve the test results page (lein run serve).")
 	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
 
 	// Script flags
@@ -204,7 +203,7 @@ func jepsenDown() {
 func jepsenServe() error {
 	// Check if the page is already up
 	checkServing := func() error {
-		url := jepsenUrl()
+		url := jepsenURL()
 		_, err := http.Get(url) // nolint:gosec
 		return err
 	}
@@ -248,7 +247,7 @@ func jepsenServe() error {
 	return <-errCh
 }
 
-func jepsenUrl() string {
+func jepsenURL() string {
 	cmd := command(
 		"docker", "inspect", "--format",
 		`{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}`,
@@ -260,11 +259,6 @@ func jepsenUrl() string {
 	}
 	port := strings.TrimSpace(out.String())
 	return "http://localhost:" + port
-}
-
-func openJepsenBrowser() {
-	url := jepsenUrl()
-	browser.Open(url)
 }
 
 func runJepsenTest(test *jepsenTest) error {
@@ -408,19 +402,16 @@ func main() {
 	if *doUp {
 		jepsenUp()
 	}
-	if *doServe {
-		if err := jepsenServe(); err != nil {
-			log.Fatal(err)
-		}
-		if shouldOpenPage {
-			openJepsenBrowser()
+	if err := jepsenServe(); err != nil {
+		log.Fatal(err)
+	}
+	if shouldOpenPage {
+		url := jepsenURL()
+		browser.Open(url)
+		if *jaeger != "" {
+			browser.Open("http://localhost:16686")
 		}
 	}
-	if shouldOpenPage && *jaeger != "" {
-		// Open Jaeger UI
-		browser.Open("http://localhost:16686")
-	}
-
 	workloads := strings.Split(*workload, " ")
 	nemeses := strings.Split(*nemesis, " ")
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
