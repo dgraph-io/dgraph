@@ -1121,7 +1121,7 @@
   dgquery: |-
     query {
       queryCategory(func: type(Category)) {
-        iAmDeprecated : Post.iAmDeprecated
+        iAmDeprecated : Category.iAmDeprecated
         dgraph.uid : uid
       }
     }
