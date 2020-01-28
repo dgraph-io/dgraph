@@ -1,55 +1,46 @@
 package main
 
 import (
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/ChainSafe/gossamer/keystore"
 )
 
 func TestUnlock(t *testing.T) {
-	var testKeystoreDir = "./test_keystore/"
+	testKeystoreDir, err := ioutil.TempDir("", "test_keystore")
+	require.Nil(t, err)
+
 	var testPassword = []byte("1234")
 
 	keyfile, err := generateKeypair("sr25519", testKeystoreDir, testPassword)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	t.Log(keyfile)
-
-	defer os.RemoveAll(testKeystoreDir)
 
 	ctx, err := createCliContext("unlock",
 		[]string{"datadir", "unlock", "password"},
 		[]interface{}{testKeystoreDir, "0", string(testPassword)},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
 
 	err = unlockKeys(ctx, testKeystoreDir, ks)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	priv, err := keystore.ReadFromFileAndDecrypt(keyfile, testPassword)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	pub, err := priv.Public()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	kp, err := keystore.PrivateKeyToKeypair(priv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	kpRes := ks.Get(pub.Address())
 	if !reflect.DeepEqual(kpRes, kp) {
@@ -62,9 +53,7 @@ func TestUnlockFlag(t *testing.T) {
 	var testPassword = []byte("1234")
 
 	_, err := generateKeypair("sr25519", testKeystoreDir, testPassword)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	defer os.RemoveAll(testKeystoreDir)
 
@@ -75,15 +64,11 @@ func TestUnlockFlag(t *testing.T) {
 		[]string{"datadir", "genesis"},
 		[]interface{}{testKeystoreDir, genesispath},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	command := initCommand
 	err = command.Run(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	ctx, err = createCliContext("unlock",
 		[]string{"datadir", "unlock", "password"},
@@ -94,7 +79,5 @@ func TestUnlockFlag(t *testing.T) {
 	}
 
 	_, _, err = makeNode(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 }

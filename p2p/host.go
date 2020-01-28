@@ -86,7 +86,7 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 	}
 
 	// format protocol id
-	pid := protocol.ID(cfg.ProtocolId)
+	pid := protocol.ID(cfg.ProtocolID)
 
 	return &host{
 		ctx:        ctx,

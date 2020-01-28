@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -36,7 +37,7 @@ var (
 	p2pFlags = []cli.Flag{
 		utils.BootnodesFlag,
 		utils.P2pPortFlag,
-		utils.ProtocolIdFlag,
+		utils.ProtocolIDFlag,
 		utils.NoBootstrapFlag,
 		utils.NoMdnsFlag,
 	}
@@ -65,7 +66,7 @@ var (
 
 var (
 	dumpConfigCommand = cli.Command{
-		Action:      dumpConfig,
+		Action:      utils.FixFlagOrder(dumpConfig),
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
@@ -74,7 +75,7 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 	initCommand = cli.Command{
-		Action:    initNode,
+		Action:    utils.FixFlagOrder(initNode),
 		Name:      "init",
 		Usage:     "Initialize node genesis state",
 		ArgsUsage: "",
@@ -88,7 +89,7 @@ var (
 		Description: `The init command initializes the node with a genesis state. Usage: gossamer init --genesis genesis.json`,
 	}
 	accountCommand = cli.Command{
-		Action:   handleAccounts,
+		Action:   utils.FixFlagOrder(handleAccounts),
 		Name:     "account",
 		Usage:    "manage gossamer keystore",
 		Flags:    append(append(accountFlags, utils.DataDirFlag), utils.VerbosityFlag),
@@ -124,6 +125,8 @@ func init() {
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
+		//log err
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

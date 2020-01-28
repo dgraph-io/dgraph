@@ -1,5 +1,5 @@
 [global]
-data-dir = "./.gossamer"
+data-dir = "~/.gossamer"
 
 [p2p]
 bootstrap-nodes = []

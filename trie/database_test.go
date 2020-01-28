@@ -208,8 +208,8 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 
 	expected := &genesis.GenesisData{
 		Name:       "gossamer",
-		Id:         "gossamer",
-		ProtocolId: "gossamer",
+		ID:         "gossamer",
+		ProtocolID: "gossamer",
 		Bootnodes:  [][]byte{[]byte("noot")},
 	}
 

@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -45,15 +46,17 @@ import (
 
 // makeNode sets up node; opening badgerDB instance and returning the Dot container
 func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
-	fig, err := getConfig(ctx)
+	currentConfig, err := getConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var srvcs []services.Service
 
+	dataDir := currentConfig.Global.DataDir
+
 	// Create service, initialize stateDB and blockDB
-	stateSrv := state.NewService(fig.Global.DataDir)
+	stateSrv := state.NewService(dataDir)
 	srvcs = append(srvcs, stateSrv)
 
 	err = stateSrv.Start()
@@ -65,7 +68,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	ks := keystore.NewKeystore()
 	// unlock keys, if specified
 	if keyindices := ctx.String(utils.UnlockFlag.Name); keyindices != "" {
-		err = unlockKeys(ctx, fig.Global.DataDir, ks)
+		err = unlockKeys(ctx, dataDir, ks)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not unlock keys: %s", err)
 		}
@@ -83,10 +86,10 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, err
 	}
 
-	log.Info("🕸\t Configuring node...", "datadir", fig.Global.DataDir, "protocol", fig.P2p.ProtocolId, "bootnodes", fig.P2p.BootstrapNodes)
+	log.Info("🕸\t Configuring node...", "dataDir", dataDir, "protocolID", gendata.ProtocolID, "BootstrapNodes", currentConfig.P2p.BootstrapNodes)
 
 	// P2P
-	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(fig, gendata)
+	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(currentConfig, gendata)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// Core
@@ -106,9 +109,9 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	srvcs = append(srvcs, apiSrvc)
 
 	// RPC
-	rpcSrvr := startRpc(ctx, fig.Rpc, apiSrvc)
+	rpcSrvr := startRpc(ctx, currentConfig.Rpc, apiSrvc)
 
-	return dot.NewDot(string(gendata.Name), srvcs, rpcSrvr), fig, nil
+	return dot.NewDot(gendata.Name, srvcs, rpcSrvr), currentConfig, nil
 }
 
 func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
@@ -132,21 +135,28 @@ func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtim
 
 // getConfig checks for config.toml if --config flag is specified and sets CLI flags
 func getConfig(ctx *cli.Context) (*cfg.Config, error) {
-	fig := cfg.DefaultConfig()
+	currentConfig := cfg.DefaultConfig()
 	// Load config file.
 	if file := ctx.GlobalString(utils.ConfigFileFlag.Name); file != "" {
-		err := loadConfig(file, fig)
+		configFile := ctx.GlobalString(utils.ConfigFileFlag.Name)
+		err := loadConfig(configFile, currentConfig)
 		if err != nil {
 			log.Warn("err loading toml file", "err", err.Error())
-			return fig, err
+			return currentConfig, err
 		}
+	} else {
+		log.Debug("Config File is not set")
 	}
 
+	//expand tilde or dot
+	newDataDir := expandTildeOrDot(currentConfig.Global.DataDir)
+	currentConfig.Global.DataDir = newDataDir
+
 	// Parse CLI flags
-	setGlobalConfig(ctx, &fig.Global)
-	setP2pConfig(ctx, &fig.P2p)
-	setRpcConfig(ctx, &fig.Rpc)
-	return fig, nil
+	setGlobalConfig(ctx, &currentConfig.Global)
+	setP2pConfig(ctx, &currentConfig.P2p)
+	setRpcConfig(ctx, &currentConfig.Rpc)
+	return currentConfig, nil
 }
 
 // loadConfig loads the contents from config toml and inits Config object
@@ -166,11 +176,12 @@ func loadConfig(file string, config *cfg.Config) error {
 	return nil
 }
 
-func setGlobalConfig(ctx *cli.Context, fig *cfg.GlobalConfig) {
+func setGlobalConfig(ctx *cli.Context, currentConfig *cfg.GlobalConfig) {
+	newDataDir := currentConfig.DataDir
 	if dir := ctx.GlobalString(utils.DataDirFlag.Name); dir != "" {
-		fig.DataDir, _ = filepath.Abs(dir)
+		newDataDir = expandTildeOrDot(dir)
 	}
-	fig.DataDir, _ = filepath.Abs(fig.DataDir)
+	currentConfig.DataDir, _ = filepath.Abs(newDataDir)
 }
 
 func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
@@ -179,8 +190,8 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 		fig.BootstrapNodes = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
 	}
 
-	if protocol := ctx.GlobalString(utils.ProtocolIdFlag.Name); protocol != "" {
-		fig.ProtocolId = protocol
+	if protocol := ctx.GlobalString(utils.ProtocolIDFlag.Name); protocol != "" {
+		fig.ProtocolID = protocol
 	}
 
 	if port := ctx.GlobalUint(utils.P2pPortFlag.Name); port != 0 {
@@ -203,7 +214,7 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 
 	// Default bootnodes and protocol from genesis file
 	boostrapNodes := common.BytesToStringArray(gendata.Bootnodes)
-	protocolId := string(gendata.ProtocolId)
+	protocolID := string(gendata.ProtocolID)
 
 	// If bootnodes flag has more than 1 bootnode, overwrite
 	if len(fig.P2p.BootstrapNodes) > 0 {
@@ -211,8 +222,8 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 	}
 
 	// If protocol id flag is not an empty string, overwrite
-	if fig.P2p.ProtocolId != "" {
-		protocolId = fig.P2p.ProtocolId
+	if fig.P2p.ProtocolID != "" {
+		protocolID = fig.P2p.ProtocolID
 	}
 
 	// p2p service configuation
@@ -223,7 +234,7 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 		NoBootstrap:    fig.P2p.NoBootstrap,
 		NoMdns:         fig.P2p.NoMdns,
 		DataDir:        fig.Global.DataDir,
-		ProtocolId:     protocolId,
+		ProtocolID:     protocolID,
 	}
 
 	p2pMsgRec := make(chan p2p.Message)
@@ -283,14 +294,14 @@ func strToMods(strs []string) []api.Module {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	fig, err := getConfig(ctx)
+	currentConfig, err := getConfig(ctx)
 	if err != nil {
 		return err
 	}
 
 	comment := ""
 
-	out, err := toml.Marshal(fig)
+	out, err := toml.Marshal(currentConfig)
 	if err != nil {
 		return err
 	}
@@ -336,4 +347,16 @@ var tomlSettings = toml.Config{
 		}
 		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
 	},
+}
+
+// expandTildeOrDot will expand a tilde prefix path to full home path
+func expandTildeOrDot(targetPath string) string {
+	if strings.HasPrefix(targetPath, "~\\") || strings.HasPrefix(targetPath, "~/") {
+		if homeDir := cfg.HomeDir(); homeDir != "" {
+			targetPath = homeDir + targetPath[1:]
+		}
+	} else if strings.HasPrefix(targetPath, ".\\") || strings.HasPrefix(targetPath, "./") {
+		targetPath, _ = filepath.Abs(targetPath)
+	}
+	return path.Clean(os.ExpandEnv(targetPath))
 }

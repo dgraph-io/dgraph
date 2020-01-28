@@ -32,7 +32,7 @@ const (
 
 	// P2P
 	DefaultP2PPort       = 7001
-	DefaultP2PProtocolId = "/gossamer/dot/0"
+	DefaultP2PProtocolID = "/gossamer/dot/0"
 
 	// Genesis
 	DefaultGenesisPath = "config/gssmr0.json"
@@ -53,7 +53,7 @@ var (
 	// P2P
 	DefaultP2PConfig = P2pCfg{
 		Port:           DefaultP2PPort,
-		ProtocolId:     DefaultP2PProtocolId,
+		ProtocolID:     DefaultP2PProtocolID,
 		BootstrapNodes: DefaultP2PBootstrap,
 		NoBootstrap:    false,
 		NoMdns:         false,
@@ -80,7 +80,7 @@ func DefaultConfig() *Config {
 // persistence requirements.
 func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
-	home := homeDir()
+	home := HomeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Gossamer")
@@ -94,7 +94,8 @@ func DefaultDataDir() string {
 	return ""
 }
 
-func homeDir() string {
+// HomeDir returns the current HOME directory
+func HomeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}

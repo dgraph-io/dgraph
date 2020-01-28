@@ -80,7 +80,7 @@ func TestBuildConfig(t *testing.T) {
 
 	testCfg := &Config{
 		BootstrapNodes: nil,
-		ProtocolId:     "",
+		ProtocolID:     "",
 		Port:           0,
 		RandSeed:       0,
 		NoBootstrap:    false,

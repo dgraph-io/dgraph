@@ -19,9 +19,9 @@ func TestParseGenesisJson(t *testing.T) {
 
 	expected := &Genesis{
 		Name:       "gossamer",
-		Id:         "gossamer",
+		ID:         "gossamer",
 		Bootnodes:  []string{"/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj"},
-		ProtocolId: "gossamer",
+		ProtocolID: "gossamer",
 		Genesis:    GenesisFields{},
 	}
 

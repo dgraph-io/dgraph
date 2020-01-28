@@ -11,18 +11,18 @@ import (
 // Genesis stores the data parsed from the genesis configuration file
 type Genesis struct {
 	Name       string
-	Id         string
+	ID         string
 	Bootnodes  []string
-	ProtocolId string
+	ProtocolID string
 	Genesis    GenesisFields
 }
 
 // GenesisData defines the genesis file data formatted for trie storage
 type GenesisData struct {
 	Name       string
-	Id         string
+	ID         string
 	Bootnodes  [][]byte
-	ProtocolId string
+	ProtocolID string
 }
 
 // GenesisFields stores genesis raw data
@@ -51,9 +51,9 @@ func LoadGenesisJSONFile(file string) (*Genesis, error) {
 func (g *Genesis) GenesisData() *GenesisData {
 	return &GenesisData{
 		Name:       g.Name,
-		Id:         g.Id,
+		ID:         g.ID,
 		Bootnodes:  common.StringArrayToBytes(g.Bootnodes),
-		ProtocolId: g.ProtocolId,
+		ProtocolID: g.ProtocolID,
 	}
 }
 
