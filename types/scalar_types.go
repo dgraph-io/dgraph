@@ -190,28 +190,30 @@ func ValueForType(id TypeID) Val {
 // ParseTime parses the time from string trying various datetime formats.
 // By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
+	if len(val) < 5 && (len(val) < 3 || val[2] != '-') {
+		// We don't have a time.stdYear with a dash in the 3rd position
+		return time.Parse(dateFormatY, val)
+	}
+	if len(val) < 8 {
+		// We don't have colons and only dateFormatYM works here.
+		return time.Parse(dateFormatYM, val)
+	}
+	if len(val) < 11 {
+		// We don't have colons and only dateFormatYMD works here.
+		return time.Parse(dateFormatYMD, val)
+	}
+	if t, err := time.Parse(time.RFC3339, val); err == nil {
 		return t, err
 	}
 	if t, err := time.Parse(dateFormatYMDZone, val); err == nil {
 		return t, err
 	}
 	// try without timezone
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYMD, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYM, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatY, val)
+	return time.Parse(dateTimeFormat, val)
 }
 
-const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
+const dateFormatY = "2006"
 const dateFormatYMD = "2006-01-02"
 const dateFormatYM = "2006-01"
-const dateFormatY = "2006"
+const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
 const dateTimeFormat = "2006-01-02T15:04:05"
