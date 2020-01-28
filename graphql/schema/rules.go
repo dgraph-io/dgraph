@@ -493,7 +493,6 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		}
 
 		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
-		// TODO - Abstract into a function, instead of copy pasting. Is Interface allowed here?
 		invTypeName := field.Type.Name()
 		if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
 			return gqlerror.ErrorPosf(
@@ -517,7 +516,11 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				continue
 			}
 			if predArg.Value.Raw == forwardEdgePred {
-				// TODO - Type of this field should also be Object or is interface allowed?
+				if field.Type.Name() != typ.Name {
+					return gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
+						" type %s to be compatible with @dgraph reverse directive but is of"+
+						" type %s.", invTypeName, field.Name, typ.Name, field.Type.Name())
+				}
 				forwardFound = true
 			}
 		}

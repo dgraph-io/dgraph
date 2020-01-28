@@ -624,6 +624,24 @@ invalid_schemas:
       "locations":[{"line":5, "column":12}]}
     ]
 
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
 
 valid_schemas:
   -

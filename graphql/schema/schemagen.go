@@ -194,8 +194,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	}
 
 	type field struct {
-		name      string
-		inherited bool // if the field was inherited from an interface
+		name string
+		// true if the field was inherited from an interface, we don't add the predicate schema
+		// for it then as the it would already have been added with the interface.
+		inherited bool
 	}
 
 	type dgType struct {
@@ -252,8 +254,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							dgPreds[fname] = edge
 						}
 					}
-					pred := dgPreds[fname]
-					pred.typ = typStr
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
