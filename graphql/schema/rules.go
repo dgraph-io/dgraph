@@ -524,8 +524,8 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		if !forwardFound {
 			return gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s: pred argument: %s is not supported as forward edge doesn't exist for type %s.",
-				typ.Name, field.Name, predArg.Value.Raw, invTypeName,
+				"Type %s; Field %s: pred argument: %s is not supported as forward edge doesn't "+
+					"exist for type %s.", typ.Name, field.Name, predArg.Value.Raw, invTypeName,
 			)
 		}
 	}
