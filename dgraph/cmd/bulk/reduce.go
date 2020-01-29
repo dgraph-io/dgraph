@@ -323,6 +323,9 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 	pl := new(pb.PostingList)
 	var size int
 
+	userMeta := []byte{posting.BitCompletePosting}
+	writeVersionTs := r.state.writeTs
+
 	appendToList := func() {
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
@@ -358,8 +361,8 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		kv := &bpb.KV{
 			Key:      y.Copy(currentKey),
 			Value:    val,
-			UserMeta: []byte{posting.BitCompletePosting},
-			Version:  r.state.writeTs,
+			UserMeta: userMeta,
+			Version:  writeVersionTs,
 		}
 		size += kv.Size()
 		list.Kv = append(list.Kv, kv)

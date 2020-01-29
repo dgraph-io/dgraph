@@ -39,6 +39,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	panicMsg = "\n****\nThis test should trap this panic.\n" +
+		"It's working as expected if this message is logged with a stack trace.\n****\n"
+)
+
 type ErrorCase struct {
 	Name       string
 	GQLRequest string
@@ -259,12 +264,12 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
 }
