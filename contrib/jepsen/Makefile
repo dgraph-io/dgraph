@@ -1,7 +1,13 @@
-.PHONY: jepsen test
+.PHONY: jepsen test list
+
+clean:
+	go clean .
 
 jepsen: main.go
 	go build -o jepsen main.go
 
 test:
-	@echo "Not implemented yet"
+	go test .
+
+list:
+	go test -list=.
