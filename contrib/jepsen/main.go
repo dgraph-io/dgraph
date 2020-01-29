@@ -37,6 +37,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -124,7 +125,8 @@ var (
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
-	deferDbTeardown = pflag.Bool("defer-db-teardown", false,
+	jaegerSaveTraces = pflag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
+	deferDbTeardown  = pflag.Bool("defer-db-teardown", false,
 		"Wait until user input to tear down DB nodes")
 
 	// Jepsen control flags
@@ -193,7 +195,7 @@ func jepsenDown() {
 	if err := cmd.Run(); err != nil {
 		switch {
 		case strings.Contains(err.Error(), "Couldn't find env file"):
-			// OK. Probably tried to call down before up was ever called.
+			// This is OK. Probably tried to call down before up was ever called.
 		default:
 			log.Println(err)
 		}
@@ -331,6 +333,21 @@ func inCi() bool {
 	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
+func saveJaegerTracesToJepsen() {
+	dst := path.Join(*jepsenRoot, "dgraph", "store", "current", "jaeger")
+	cmd := command("docker", "cp", "jaeger:/worker/jaeger", dst)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+	absDst, err := os.Readlink(dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Saved Jaeger traces to %v\n", absDst)
+}
+
 func main() {
 	pflag.ErrHelp = errors.New("")
 	pflag.Usage = func() {
@@ -413,6 +430,9 @@ func main() {
 			})
 			if err != nil {
 				if err == errTestFail {
+					if *jaegerSaveTraces {
+						saveJaegerTracesToJepsen()
+					}
 					if *exitOnFailure {
 						os.Exit(1)
 					}
