@@ -1459,22 +1459,22 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = "fulltext"
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case standardFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = "term"
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case customIndexFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = arg.q.SrcFunc.Args[0]
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
 		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	}
 
 	for i := 0; i < len(arg.out.UidMatrix); i++ {

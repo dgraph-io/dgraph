@@ -219,7 +219,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
+					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s .\n", fname, typStr)
 					}
@@ -250,7 +250,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						indexStr = fmt.Sprintf(" @index(hash)")
 					}
 
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
+					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s%s %s.\n", fname, typStr, indexStr, upsertStr)
 					}
@@ -266,7 +266,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 						}
 					}
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
+					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
 						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
 					}
