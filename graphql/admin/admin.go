@@ -176,6 +176,8 @@ func newAdminResolver(
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
 
+		glog.Infof("Updating GraphQL schema from subscription.")
+
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
@@ -279,8 +281,7 @@ func (as *adminServer) initServer() {
 
 		sch, err := getCurrentGraphQLSchema(as.resolver)
 		if err != nil {
-			glog.Infof("Error reading GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error reading GraphQL schema: %s.", err)
 			break
 		} else if sch == nil {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
@@ -289,16 +290,14 @@ func (as *adminServer) initServer() {
 
 		schHandler, err := schema.NewHandler(sch.Schema)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
 		}
 
 		sch.GeneratedSchema = schHandler.GQLSchema()
 		generatedSchema, err := schema.FromString(sch.GeneratedSchema)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
 		}
 
