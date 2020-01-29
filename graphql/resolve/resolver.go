@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -324,12 +325,17 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	if glog.V(3) {
-		b, err := json.Marshal(gqlReq.Variables)
-		if err != nil {
-			glog.Infof("Failed to marshal variables for logging : %s", err)
+		// don't log the introspection queries they are sent too frequently
+		// by GraphQL dev tools
+		if !op.IsQuery() ||
+			(op.IsQuery() && !strings.HasPrefix(op.Queries()[0].Name(), "__")) {
+			b, err := json.Marshal(gqlReq.Variables)
+			if err != nil {
+				glog.Infof("Failed to marshal variables for logging : %s", err)
+			}
+			glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+				reqID, gqlReq.Query, string(b))
 		}
-		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
-			reqID, gqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
