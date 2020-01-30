@@ -1,4 +1,4 @@
-.PHONY: jepsen test list
+.PHONY: jepsen test-all list
 
 clean:
 	go clean .
@@ -6,8 +6,8 @@ clean:
 jepsen: main.go
 	go build -o jepsen main.go
 
-test:
-	go test .
+test-all:
+	go test -timeout=12h .
 
 list:
 	go test -list=.

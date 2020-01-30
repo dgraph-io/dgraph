@@ -171,10 +171,10 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 }
 
-func jepsenUp() {
+func jepsenUp(jepsenPath string) {
 	cmd := command("./up.sh", "--dev", "--daemon",
 		"--compose", "../dgraph/docker/docker-compose.yml")
-	cmd.Dir = *jepsenRoot + "/docker/"
+	cmd.Dir = jepsenPath + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	env := os.Environ()
@@ -184,12 +184,12 @@ func jepsenUp() {
 	}
 }
 
-func jepsenDown() {
+func jepsenDown(jepsenPath string) {
 	cmd := command("docker-compose",
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
 		"down")
-	cmd.Dir = *jepsenRoot + "/docker/"
+	cmd.Dir = jepsenPath + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -222,6 +222,11 @@ func jepsenServe() error {
 		cmd := command(
 			"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
 			"lein", "run", "serve")
+		if *dryRun {
+			wg.Done()
+			errCh <- nil
+			return
+		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stdout
 		// lein run serve runs indefinitely, so there's no need to wait for the
@@ -333,8 +338,8 @@ func inCi() bool {
 	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
-func saveJaegerTracesToJepsen() {
-	dst := path.Join(*jepsenRoot, "dgraph", "store", "current", "jaeger")
+func saveJaegerTracesToJepsen(jepsenPath string) {
+	dst := path.Join(jepsenPath, "dgraph", "store", "current", "jaeger")
 	cmd := command("docker", "cp", "jaeger:/worker/jaeger", dst)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -361,7 +366,6 @@ func main() {
 		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
 	}
 	pflag.Parse()
-	shouldOpenPage := *web && !*dryRun
 	if *jepsenRoot == "" {
 		log.Fatal("--jepsen-root must be set.")
 	}
@@ -369,12 +373,14 @@ func main() {
 		log.Fatal("GOPATH must be set.")
 	}
 
+	shouldOpenPage := *web && !*dryRun
+
 	if *doDownOnly {
-		jepsenDown()
+		jepsenDown(*jepsenRoot)
 		os.Exit(0)
 	}
 	if *doUpOnly {
-		jepsenUp()
+		jepsenUp(*jepsenRoot)
 		os.Exit(0)
 	}
 
@@ -394,10 +400,10 @@ func main() {
 	}
 
 	if *doDown {
-		jepsenDown()
+		jepsenDown(*jepsenRoot)
 	}
 	if *doUp {
-		jepsenUp()
+		jepsenUp(*jepsenRoot)
 	}
 	if err := jepsenServe(); err != nil {
 		log.Fatal(err)
@@ -431,7 +437,7 @@ func main() {
 			if err != nil {
 				if err == errTestFail {
 					if *jaegerSaveTraces {
-						saveJaegerTracesToJepsen()
+						saveJaegerTracesToJepsen(*jepsenRoot)
 					}
 					if *exitOnFailure {
 						os.Exit(1)

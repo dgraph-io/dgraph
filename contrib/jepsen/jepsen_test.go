@@ -1,32 +1,98 @@
 package main
 
 import (
+	"flag"
+	"os"
+	"path"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
 )
 
-// These tests use the same flags defined in main.go.
+var (
+	optJepsenRoot = flag.String("jepsen-root", "",
+		"Directory path to jepsen repo. This sets the JEPSEN_ROOT env var for Jepsen ./up.sh.")
+	optTimeLimit = flag.Int("time-limit", 600,
+		"Time limit per Jepsen test in seconds.")
+	optConcurrency = flag.String("concurrency", "6n",
+		"Number of concurrent workers per test. \"6n\" means 6 workers per node.")
+	optRebalanceInterval = flag.String("rebalance-interval", "10h",
+		"Interval of Dgraph's tablet rebalancing.")
+	optNemesisInterval = flag.String("nemesis-interval", "10",
+		"Roughly how long to wait (in seconds) between nemesis operations.")
+	optLocalBinary = flag.String("local-binary", "/gobin/dgraph",
+		"Path to Dgraph binary within the Jepsen control node.")
+	optNodes     = flag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	optReplicas  = flag.Int("replicas", 3, "How many replicas of data should dgraph store?")
+	optSkew      = flag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
+	optTestCount = flag.Int("test-count", 1, "Test count per Jepsen test.")
+	optJaeger    = flag.String("jaeger", "http://jaeger:14268",
+		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
+	optJaegerSaveTraces = flag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
+	optDeferDbTeardown  = flag.Bool("defer-db-teardown", false,
+		"Wait until user input to tear down DB nodes")
+	optWeb = flag.Bool("web", true, "Open the test results page in the browser.")
+)
+
+func buildDgraph(t *testing.T) {
+	t.Helper()
+	exPath, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := command("make", "install")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	p := path.Join(exPath, "..", "..")
+	t.Log(p)
+	cmd.Dir = p
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func test(t *testing.T, workload, nemesis string) {
-	jepsenUp()
-	defer jepsenDown()
+	buildDgraph(t)
+	jepsenUp(*optJepsenRoot)
+	defer jepsenDown(*optJepsenRoot)
+	if err := jepsenServe(); err != nil {
+		t.Fatal(err)
+	}
+	shouldOpenPage := *optWeb
+	if shouldOpenPage {
+		url := jepsenURL()
+		browser.Open(url)
+		if *jaeger != "" {
+			browser.Open("http://localhost:16686")
+		}
+	}
+
 	err := runJepsenTest(&jepsenTest{
 		workload:          workload,
 		nemesis:           nemesis,
-		timeLimit:         *timeLimit,
-		concurrency:       *concurrency,
-		rebalanceInterval: *rebalanceInterval,
-		nemesisInterval:   *nemesisInterval,
-		localBinary:       *localBinary,
-		nodes:             *nodes,
-		replicas:          *replicas,
-		skew:              *skew,
-		testCount:         *testCount,
-		deferDbTeardown:   *deferDbTeardown,
+		timeLimit:         *optTimeLimit,
+		concurrency:       *optConcurrency,
+		rebalanceInterval: *optRebalanceInterval,
+		nemesisInterval:   *optNemesisInterval,
+		localBinary:       *optLocalBinary,
+		nodes:             *optNodes,
+		replicas:          *optReplicas,
+		skew:              *optSkew,
+		testCount:         *optTestCount,
+		deferDbTeardown:   *optDeferDbTeardown,
 	})
+	if err != nil {
+		t.Log(err.Error())
+	} else {
+		t.Log("No error")
+	}
 	if err == errTestFail {
-		t.Error("Test failed.")
+		if *optJaegerSaveTraces {
+			saveJaegerTracesToJepsen(*optJepsenRoot)
+		}
+		t.Error(err.Error())
 	} else if err == errTestIncomplete {
-		t.Skip("Test incomplete.")
+		t.Error(err.Error())
 	}
 }
 
@@ -137,4 +203,10 @@ func TestJepsenSequentialKillAlphaKillZero(t *testing.T) {
 }
 func TestJepsenSequentialMoveTablet(t *testing.T) {
 	test(t, "sequential", "move-tablet")
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	jepsenRoot = optJepsenRoot
+	os.Exit(m.Run())
 }
