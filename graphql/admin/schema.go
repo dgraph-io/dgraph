@@ -65,6 +65,8 @@ type updateGQLSchemaInput struct {
 func (asr *updateSchemaResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
+	glog.Info("Got updateGQLSchema request")
+
 	input, err := getSchemaInput(m)
 	if err != nil {
 		return nil, nil, err
@@ -131,16 +133,10 @@ func (asr *updateSchemaResolver) Mutate(
 		asr.newSchema.ID = asr.admin.schema.ID
 	}
 
-	glog.Infof("Altering Dgraph schema.")
-	if glog.V(3) {
-		glog.Infof("New schema Dgraph:\n\n%s\n", asr.newDgraphSchema)
-	}
-
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err,
-			"succeeded in saving GraphQL schema but failed to alter Dgraph schema "+
-				"(you should retry)")
+			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
 
 	asr.admin.resetSchema(asr.newGQLSchema)
