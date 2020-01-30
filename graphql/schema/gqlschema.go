@@ -39,6 +39,8 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 
+	deprecatedDirective = "deprecated"
+
 	Typename = "__typename"
 
 	// schemaExtras is everything that gets added to an input schema to make it
@@ -225,6 +227,13 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:  searchValidation,
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
+	deprecatedDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error

@@ -368,3 +368,19 @@ schemas:
         B.correct
       }
       B.correct: bool @index(bool) .
+
+  -
+    name: "deprecated fields get included in Dgraph schema"
+    input: |
+      type A {
+        id: ID!
+        p: String @deprecated
+        q: String @deprecated(reason: "just because it is")
+      }
+    output: |
+      type A {
+        A.p
+        A.q
+      }
+      A.p: string .
+      A.q: string .
