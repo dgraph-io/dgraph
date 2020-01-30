@@ -30,7 +30,7 @@ import (
 
 func newUidPack(data []uint64) *pb.UidPack {
 	// Using a small block size to make sure multiple blocks are used by the tests.
-	encoder := codec.Encoder{BlockSize: 5}
+	encoder := &codec.Encoder{}
 	for _, uid := range data {
 		encoder.Add(uid)
 	}
@@ -307,7 +307,7 @@ func TestSubSorted6Packed(t *testing.T) {
 }
 
 func TestIndexOfPacked1(t *testing.T) {
-	encoder := codec.Encoder{BlockSize: 10}
+	encoder := &codec.Encoder{}
 	for i := 0; i < 1000; i++ {
 		encoder.Add(uint64(i))
 	}
@@ -320,7 +320,7 @@ func TestIndexOfPacked1(t *testing.T) {
 }
 
 func TestIndexOfPacked2(t *testing.T) {
-	encoder := codec.Encoder{BlockSize: 10}
+	encoder := &codec.Encoder{}
 	for i := 0; i < 100; i++ {
 		encoder.Add(uint64(i))
 	}
@@ -345,6 +345,7 @@ func TestApplyFilterUintPacked(t *testing.T) {
 }
 
 func BenchmarkIntersectSortedRatio(b *testing.B) {
+	// TODO: Things to look at: sizes of blocks, number of blocks
 	randomTests := func(sz int, overlap float64) {
 		rs := []int{1, 10, 50, 100, 500, 1000, 10000, 100000, 1000000}
 		for _, r := range rs {
@@ -365,8 +366,8 @@ func BenchmarkIntersectSortedRatio(b *testing.B) {
 			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
-			compressedUids1 := codec.Encode(u1, 256)
-			compressedUids2 := codec.Encode(v1, 256)
+			compressedUids1 := codec.Encode(u1)
+			compressedUids2 := codec.Encode(v1)
 			compressedLists := []*pb.UidPack{compressedUids1, compressedUids2}
 
 			fmt.Printf("compressed1: %d, compressed2: %d, bytes/int 1: %f\n, bytes/int 2: %f\n",
