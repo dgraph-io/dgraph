@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,7 +43,6 @@ import (
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -796,7 +796,8 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	stop := x.SpanTimer(span, "processTask"+q.Attr)
 	defer stop()
 
-	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
+	span.Annotatef(nil, "Waiting for startTs: %d at node: %d, gid: %d",
+		q.ReadTs, groups().Node.Id, gid)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &pb.Result{}, err
 	}
@@ -1458,22 +1459,22 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = "fulltext"
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case standardFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = "term"
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case customIndexFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filter.tokName = arg.q.SrcFunc.Args[0]
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
 		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
-		filtered = matchStrings(filtered, values, filter)
+		filtered = matchStrings(filtered, values, &filter)
 	}
 
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
@@ -1636,12 +1637,13 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		// We don't do this for eq because eq could have multiple arguments and we would have to
 		// compare the value with all of them. Also eq would usually have less arguments, hence we
 		// won't be fetching many index keys.
-		if q.UidList != nil && !isIndexedAttr {
+		switch {
+		case q.UidList != nil && !isIndexedAttr:
 			fc.n = len(q.UidList.Uids)
-		} else if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
+		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
-		} else {
+		default:
 			fc.n = len(fc.tokens)
 		}
 	case compareScalarFn:

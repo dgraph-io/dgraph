@@ -73,8 +73,7 @@ type GraphQuery struct {
 	FacetsFilter     *FilterTree
 	GroupbyAttrs     []GroupByAttr
 	FacetVar         map[string]string
-	FacetOrder       string
-	FacetDesc        bool
+	FacetsOrder      []*FacetOrder
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -108,6 +107,12 @@ type GroupByAttr struct {
 	Attr  string
 	Alias string
 	Langs []string
+}
+
+// FacetOrder stores ordering for single facet key.
+type FacetOrder struct {
+	Key  string
+	Desc bool // true if ordering should be decending by this facet.
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -1902,11 +1907,10 @@ L:
 }
 
 type facetRes struct {
-	f          *pb.FacetParams
-	ft         *FilterTree
-	vmap       map[string]string
-	facetOrder string
-	orderdesc  bool
+	f           *pb.FacetParams
+	ft          *FilterTree
+	vmap        map[string]string
+	facetsOrder []*FacetOrder
 }
 
 func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
@@ -2006,15 +2010,15 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 
 	facetVar := make(map[string]string)
 	var facets pb.FacetParams
-	var orderdesc bool
-	var orderkey string
+	var facetsOrder []*FacetOrder
 
 	if _, ok := tryParseItemType(it, itemRightRound); ok {
 		// @facets() just parses to an empty set of facets.
-		res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+		res.f, res.vmap, res.facetsOrder = &facets, facetVar, facetsOrder
 		return res, true, nil
 	}
 
+	facetsOrderKeys := make(map[string]struct{})
 	for {
 		// We've just consumed a leftRound or a comma.
 
@@ -2041,12 +2045,13 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				Alias: facetItem.alias,
 			})
 			if facetItem.ordered {
-				if orderkey != "" {
+				if _, ok := facetsOrderKeys[facetItem.name]; ok {
 					return res, false,
-						facetItemIt.Errorf("Invalid use of orderasc/orderdesc in facets")
+						it.Errorf("Sorting by facet: [%s] can only be done once", facetItem.name)
 				}
-				orderdesc = facetItem.orderdesc
-				orderkey = facetItem.name
+				facetsOrderKeys[facetItem.name] = struct{}{}
+				facetsOrder = append(facetsOrder,
+					&FacetOrder{Key: facetItem.name, Desc: facetItem.orderdesc})
 			}
 		}
 
@@ -2066,7 +2071,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			}
 			out = append(out, facets.Param[flen-1])
 			facets.Param = out
-			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+			res.f, res.vmap, res.facetsOrder = &facets, facetVar, facetsOrder
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
@@ -2401,8 +2406,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		switch {
 		case res.f != nil:
 			curp.FacetVar = res.vmap
-			curp.FacetOrder = res.facetOrder
-			curp.FacetDesc = res.orderdesc
+			curp.FacetsOrder = res.facetsOrder
 			if curp.Facets != nil {
 				return item.Errorf("Only one facets allowed")
 			}

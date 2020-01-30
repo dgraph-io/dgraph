@@ -27,8 +27,7 @@ import (
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -45,12 +44,6 @@ const (
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
-
-	// The schema fragment that's needed in Dgraph to operate the GraphQL layer.
-	dgraphAdminSchema = `
-	type dgraph.graphql {
-		dgraph.graphql.schema
-	}`
 
 	// GraphQL schema for /admin endpoint.
 	//
@@ -130,8 +123,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
-
+func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		panic(err)
@@ -146,7 +138,7 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
 	}
-	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection)
+	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, closer)
 	adminServer := web.NewServer(adminResolvers)
 
 	return mainServer, adminServer
@@ -156,7 +148,8 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 func newAdminResolver(
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
-	withIntrospection bool) *resolve.RequestResolver {
+	withIntrospection bool,
+	closer *y.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
@@ -182,6 +175,8 @@ func newAdminResolver(
 		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
+
+		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
@@ -230,7 +225,7 @@ func newAdminResolver(
 		server.schema = newSchema
 		server.status = healthy
 		server.resetSchema(gqlSchema)
-	}, 1)
+	}, 1, closer)
 
 	go server.initServer()
 
@@ -273,15 +268,6 @@ func (as *adminServer) initServer() {
 		<-time.After(waitFor)
 		waitFor = 10 * time.Second
 
-		err := checkAdminSchemaExists()
-		if err != nil {
-			if glog.V(3) {
-				glog.Infof("Failed checking GraphQL admin schema: %s.  Trying again in %f seconds",
-					err, waitFor.Seconds())
-			}
-			continue
-		}
-
 		// Nothing else should be able to lock before here.  The admin resolvers aren't yet
 		// set up (they all just error), so we will obtain the lock here without contention.
 		// We then setup the admin resolvers and they must wait until we are done before the
@@ -295,8 +281,7 @@ func (as *adminServer) initServer() {
 
 		sch, err := getCurrentGraphQLSchema(as.resolver)
 		if err != nil {
-			glog.Infof("Error reading GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error reading GraphQL schema: %s.", err)
 			break
 		} else if sch == nil {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
@@ -305,16 +290,14 @@ func (as *adminServer) initServer() {
 
 		schHandler, err := schema.NewHandler(sch.Schema)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
 		}
 
 		sch.GeneratedSchema = schHandler.GQLSchema()
 		generatedSchema, err := schema.FromString(sch.GeneratedSchema)
 		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.  "+
-				"Admin server is connected, but no GraphQL schema is being served.", err)
+			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
 		}
 
@@ -326,15 +309,6 @@ func (as *adminServer) initServer() {
 
 		break
 	}
-}
-
-func checkAdminSchemaExists() error {
-	// We could query for existing schema and only alter if it's not there, but
-	// this has same effect.  We might eventually have to migrate old versions of the
-	// metadata here.
-	_, err := (&edgraph.Server{}).Alter(context.Background(),
-		&dgoapi.Operation{Schema: dgraphAdminSchema})
-	return err
 }
 
 // addConnectedAdminResolvers sets up the real resolvers
@@ -380,7 +354,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				getResolver := &getSchemaResolver{
 					admin:        as,
 					baseRewriter: qryRw,
-					baseExecutor: qryExec,
+					baseExecutor: resolve.AdminQueryExecutor(),
 				}
 
 				return resolve.NewQueryResolver(

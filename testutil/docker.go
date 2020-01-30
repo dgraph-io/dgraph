@@ -55,9 +55,7 @@ func DockerUnpause(services ...string) error {
 // DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
 func DockerCp(srcPath, dstPath string) error {
-	argv := []string{"docker", "cp"}
-	argv = append(argv, srcPath)
-	argv = append(argv, dstPath)
+	argv := []string{"docker", "cp", srcPath, dstPath}
 	return Exec(argv...)
 }
 

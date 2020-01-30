@@ -14,6 +14,7 @@ package zero
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
 // proposeTrialLicense proposes an enterprise license valid for 30 days.

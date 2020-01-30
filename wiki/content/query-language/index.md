@@ -212,9 +212,19 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 ## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates.{{% /notice %}}
+Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
 
-Functions allow filtering based on properties of nodes or variables.  Functions can be applied in the query root or in filters.
+{{% notice "note" %}}Support for filters on non-indexed predicates was added with Dgraph `v1.2.0`.
+{{% /notice %}}
+
+Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func:`) can only
+be applied on [indexed predicates]({{< relref "#indexing">}}). Since v1.2, comparison functions
+can now be used on [@filter]({{<relref "#applying-filters">}}) directives even on predicates
+that have not been indexed.
+Filtering on non-indexed predicates can be slow for large datasets, as they require
+iterating over all of the possible values at the level where the filter is being used.
+
+All other functions, in the query root or in the filter can only be applied to indexed predicates.
 
 For functions on string valued predicates, if no language preference is given, the function is applied to all languages and strings without a language tag; if a language preference is given, the function is applied only to strings of the given language.
 
@@ -468,7 +478,7 @@ Syntax Examples:
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
-Index Required: An index is required for the `eq(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index Required: An index is required for the `eq(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -530,7 +540,7 @@ With `IE` replaced by
 
 Schema Types: `int`, `float`, `string`, `dateTime`
 
-Index required: An index is required for the `IE(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index required: An index is required for the `IE(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -1946,7 +1956,7 @@ You can also apply `@normalize` on nested query blocks. It will work similarly b
 {{< /runnable >}}
 
 
-## Ignorereflex directive
+## IgnoreReflex directive
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
@@ -2183,6 +2193,18 @@ concurrent upserts.
 This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
+```
+
+### Noconflict directive
+
+The NoConflict directive prevents conflict detection at the predicate level. This is an experimental feature and not a
+recommended directive but exists to help avoid conflicts for predicates that don't have high
+correctness requirements. This can cause data loss, especially when used for predicates with count
+index.
+
+This is how you specify the `@noconflict` directive for a predicate.
+```
+email: string @index(exact) @noconflict .
 ```
 
 ### RDF Types

@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"math"
 	"os"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
 // ServerState holds the state of the Dgraph server.
