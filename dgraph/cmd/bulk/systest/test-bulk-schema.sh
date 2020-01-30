@@ -22,7 +22,7 @@ INFO "running bulk load schema test"
 
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
-cp dgraph/cmd/bulk/systest/shard_schema.out $WORKDIR
+cp dgraph/cmd/bulk/systest/schema.txt $WORKDIR
 cd $WORKDIR
 
 LOGFILE=$WORKDIR/output.log
@@ -191,7 +191,7 @@ EOF
 
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
-  diff all_dbs.out shard_schema.out
+  diff all_dbs.out schema.txt
 }
 
 function StopServers
