@@ -755,19 +755,17 @@ func (l *List) SingleListRollup() (*bpb.KV, error) {
 	}
 	plist.Pack = enc.Done()
 
+	// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
+	// postings which had deletions to provide a sorted view of the list. Therefore, the safest
+	// way to get the max commit timestamp is to pick all the relevant postings for the given
+	// readTs and calculate the maxCommitTs.
+	// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
+	// postings has been trimmed down.
+	deleteBelowTs, mposts := l.pickPostings(readTs)
 	maxCommitTs := l.minTs
-	{
-		// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
-		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
-		// way to get the max commit timestamp is to pick all the relevant postings for the given
-		// readTs and calculate the maxCommitTs.
-		// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
-		// postings has been trimmed down.
-		deleteBelowTs, mposts := l.pickPostings(readTs)
-		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
-		for _, mp := range mposts {
-			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
-		}
+	maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
+	for _, mp := range mposts {
+		maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
 	}
 
 	kv := &bpb.KV{}
@@ -883,17 +881,19 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		out.parts[startUid] = plist
 	}
 
-	// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
-	// postings which had deletions to provide a sorted view of the list. Therefore, the safest
-	// way to get the max commit timestamp is to pick all the relevant postings for the given
-	// readTs and calculate the maxCommitTs.
-	// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
-	// postings has been trimmed down.
 	maxCommitTs := l.minTs
-	deleteBelowTs, mposts := l.pickPostings(readTs)
-	maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
-	for _, mp := range mposts {
-		maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+	{
+		// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
+		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
+		// way to get the max commit timestamp is to pick all the relevant postings for the given
+		// readTs and calculate the maxCommitTs.
+		// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
+		// postings has been trimmed down.
+		deleteBelowTs, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
+		for _, mp := range mposts {
+			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+		}
 	}
 
 	// Check if the list (or any of it's parts if it's been previously split) have
