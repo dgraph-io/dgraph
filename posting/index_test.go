@@ -52,14 +52,16 @@ func indexTokensForTest(attr, lang string, val types.Val) ([]string, error) {
 
 func TestIndexingInt(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("age:int @index(int) ."), 1))
-	a, err := indexTokensForTest("age", "", types.Val{Tid: types.StringID, Value: []byte("10")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "age"), "",
+		types.Val{Tid: types.StringID, Value: []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("age:int @index(int) ."), 1))
-	a, err := indexTokensForTest("age", "", types.Val{Tid: types.StringID, Value: []byte("-10")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "age"), "",
+		types.Val{Tid: types.StringID, Value: []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6},
 		[]byte(a[0]))
@@ -67,22 +69,25 @@ func TestIndexingIntNegative(t *testing.T) {
 
 func TestIndexingFloat(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("age:float @index(float) ."), 1))
-	a, err := indexTokensForTest("age", "", types.Val{Tid: types.StringID, Value: []byte("10.43")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "age"), "",
+		types.Val{Tid: types.StringID, Value: []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("age:dateTime @index(year) ."), 1))
-	a, err := indexTokensForTest("age", "", types.Val{Tid: types.StringID,
-		Value: []byte("0010-01-01T01:01:01.000000001")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "age"), "",
+		types.Val{Tid: types.StringID,
+			Value: []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("name:string @index(term) ."), 1))
-	a, err := indexTokensForTest("name", "", types.Val{Tid: types.StringID, Value: []byte("abc")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "",
+		types.Val{Tid: types.StringID, Value: []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
@@ -91,26 +96,30 @@ func TestIndexingMultiLang(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1))
 
 	// ensure that default tokenizer is suitable for English
-	a, err := indexTokensForTest("name", "", types.Val{Tid: types.StringID,
-		Value: []byte("stemming")})
+	a, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "",
+		types.Val{Tid: types.StringID,
+			Value: []byte("stemming")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08stem", string(a[0]))
 
 	// ensure that Finnish tokenizer is used
-	a, err = indexTokensForTest("name", "fi", types.Val{Tid: types.StringID,
-		Value: []byte("edeltäneessä")})
+	a, err = indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "fi",
+		types.Val{Tid: types.StringID,
+			Value: []byte("edeltäneessä")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08edeltän", string(a[0]))
 
 	// ensure that German tokenizer is used
-	a, err = indexTokensForTest("name", "de", types.Val{Tid: types.StringID,
-		Value: []byte("Auffassungsvermögen")})
+	a, err = indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "de",
+		types.Val{Tid: types.StringID,
+			Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermog", string(a[0]))
 
 	// ensure that default tokenizer works differently than German
-	a, err = indexTokensForTest("name", "", types.Val{Tid: types.StringID,
-		Value: []byte("Auffassungsvermögen")})
+	a, err = indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "",
+		types.Val{Tid: types.StringID,
+			Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermögen", string(a[0]))
 }
@@ -119,21 +128,21 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1))
 
 	// tokenizer for "xx" language won't return an error.
-	_, err := indexTokensForTest("name", "xx", types.Val{Tid: types.StringID,
+	_, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "xx", types.Val{Tid: types.StringID,
 		Value: []byte("error")})
 	require.NoError(t, err)
 }
 
 func TestIndexingAliasedLang(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1))
-	_, err := indexTokensForTest("name", "es", types.Val{Tid: types.StringID,
+	_, err := indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "es", types.Val{Tid: types.StringID,
 		Value: []byte("base")})
 	require.NoError(t, err)
 	// es-es and es-419 are aliased to es
-	_, err = indexTokensForTest("name", "es-es", types.Val{Tid: types.StringID,
+	_, err = indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "es-es", types.Val{Tid: types.StringID,
 		Value: []byte("alias")})
 	require.NoError(t, err)
-	_, err = indexTokensForTest("name", "es-419", types.Val{Tid: types.StringID,
+	_, err = indexTokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name"), "es-419", types.Val{Tid: types.StringID,
 		Value: []byte("alias")})
 	require.NoError(t, err)
 }
@@ -181,26 +190,27 @@ friend:[uid] @reverse .
 func TestTokensTable(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 
-	key := x.DataKey("name", 1)
+	key := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, "name"), 1)
 	l, err := getNew(key, ps)
 	require.NoError(t, err)
 
 	edge := &pb.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
-		Attr:   "name",
+		Attr:   x.NamespaceAttr(x.DefaultNamespace, "name"),
 		Entity: 157,
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
 
-	key = x.IndexKey("name", "\x01david")
+	key = x.IndexKey(x.NamespaceAttr(x.DefaultNamespace, "name"), "\x01david")
 	time.Sleep(10 * time.Millisecond)
 
 	txn := ps.NewTransactionAt(3, false)
 	_, err = txn.Get(key)
 	require.NoError(t, err)
 
-	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
+	require.EqualValues(t, []string{"\x01david"},
+		tokensForTest(x.NamespaceAttr(x.DefaultNamespace, "name")))
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -259,13 +269,15 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func TestRebuildIndex(t *testing.T) {
-	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
-	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 91, "Michonne", uint64(1),
+		uint64(2))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 92, "David", uint64(3),
+		uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get("name2")
+	currentSchema, _ := schema.State().Get(x.NamespaceAttr(x.DefaultNamespace, "name2"))
 	rb := IndexRebuild{
-		Attr:          "name2",
+		Attr:          x.NamespaceAttr(x.DefaultNamespace, "name2"),
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
@@ -277,7 +289,7 @@ func TestRebuildIndex(t *testing.T) {
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "name2"}
+	pk := x.ParsedKey{Attr: x.NamespaceAttr(x.DefaultNamespace, "name2")}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*List
@@ -297,8 +309,10 @@ func TestRebuildIndex(t *testing.T) {
 	}
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
-	require.EqualValues(t, idxKeys[0], x.IndexKey("name2", "\x01david"))
-	require.EqualValues(t, idxKeys[1], x.IndexKey("name2", "\x01michonne"))
+	require.EqualValues(t, idxKeys[0], x.IndexKey(x.NamespaceAttr(x.DefaultNamespace, "name2"),
+		"\x01david"))
+	require.EqualValues(t, idxKeys[1], x.IndexKey(x.NamespaceAttr(x.DefaultNamespace, "name2"),
+		"\x01michonne"))
 
 	uids1 := uids(idxVals[0], 6)
 	uids2 := uids(idxVals[1], 6)
@@ -363,14 +377,14 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	addEdgeToUID(t, "friend", 1, 23, uint64(10), uint64(11))
-	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
-	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
+	addEdgeToUID(t, x.NamespaceAttr(x.DefaultNamespace, "friend"), 1, 23, uint64(10), uint64(11))
+	addEdgeToUID(t, x.NamespaceAttr(x.DefaultNamespace, "friend"), 1, 24, uint64(12), uint64(13))
+	addEdgeToUID(t, x.NamespaceAttr(x.DefaultNamespace, "friend"), 2, 23, uint64(14), uint64(15))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get("friend")
+	currentSchema, _ := schema.State().Get(x.NamespaceAttr(x.DefaultNamespace, "friend"))
 	rb := IndexRebuild{
-		Attr:          "friend",
+		Attr:          x.NamespaceAttr(x.DefaultNamespace, "friend"),
 		StartTs:       16,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
@@ -385,7 +399,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	iterOpts.AllVersions = true
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "friend"}
+	pk := x.ParsedKey{Attr: x.NamespaceAttr(x.DefaultNamespace, "friend")}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
 	var revVals []*List

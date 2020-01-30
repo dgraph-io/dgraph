@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestLoaderXidmap(t *testing.T) {
@@ -78,11 +77,11 @@ func TestLoaderXidmap(t *testing.T) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	require.NoError(t, err)
 
-	expected = `<0x1> <` + x.NamespaceAttr(x.DefaultNamespace, "age") + `> "13" .
-<0x1> <` + x.NamespaceAttr(x.DefaultNamespace, "friend") + `> <0x2711> .
-<0x1> <` + x.NamespaceAttr(x.DefaultNamespace, "location") + `> "Wonderland" .
-<0x1> <` + x.NamespaceAttr(x.DefaultNamespace, "name") + `> "Alice" .
-<0x2711> <` + x.NamespaceAttr(x.DefaultNamespace, "name") + `> "Bob" .
+	expected = `<0x1> <age> "13" .
+<0x1> <friend> <0x2711> .
+<0x1> <location> "Wonderland" .
+<0x1> <name> "Alice" .
+<0x2711> <name> "Bob" .
 `
 	require.Equal(t, expected, string(out))
 }

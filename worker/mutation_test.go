@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestConvertEdgeType(t *testing.T) {
@@ -39,14 +40,14 @@ func TestConvertEdgeType(t *testing.T) {
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.NamespaceAttr(x.DefaultNamespace, "name"),
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
-				Attr:      "name",
+				Attr:      x.NamespaceAttr(x.DefaultNamespace, "name"),
 				ValueType: 9,
 			},
 		},
@@ -54,7 +55,7 @@ func TestConvertEdgeType(t *testing.T) {
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.NamespaceAttr(x.DefaultNamespace, "name"),
 				Op:    pb.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
@@ -62,7 +63,7 @@ func TestConvertEdgeType(t *testing.T) {
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
-				Attr:      "name",
+				Attr:      x.NamespaceAttr(x.DefaultNamespace, "name"),
 				Op:        pb.DirectedEdge_DEL,
 				ValueType: 9,
 			},
@@ -71,7 +72,7 @@ func TestConvertEdgeType(t *testing.T) {
 			input: &pb.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
-				Attr:    "name",
+				Attr:    x.NamespaceAttr(x.DefaultNamespace, "name"),
 			},
 			to:        types.StringID,
 			expectErr: true,
@@ -80,7 +81,7 @@ func TestConvertEdgeType(t *testing.T) {
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.NamespaceAttr(x.DefaultNamespace, "name"),
 			},
 			to:        types.UidID,
 			expectErr: true,
@@ -120,9 +121,10 @@ func TestPopulateMutationMap(t *testing.T) {
 	edges := []*pb.DirectedEdge{{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
+		Attr:  x.NamespaceAttr(x.DefaultNamespace, ""),
 	}}
 	schema := []*pb.SchemaUpdate{{
-		Predicate: "name",
+		Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
 	}}
 	m := &pb.Mutations{Edges: edges, Schema: schema}
 
@@ -138,66 +140,79 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, posting.DeleteAll())
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
-	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID}
+	s1 := &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to password
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to string
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	// int to password
 	err = schema.ParseBytes([]byte("name:int ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to password
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_PASSWORD}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+		ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend"),
+		ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 
 	// Schema with internal predicate.
-	s1 = &pb.SchemaUpdate{Predicate: "uid", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.NamespaceAttr(x.DefaultNamespace, "uid"),
+		ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
 	result, err := schema.Parse(s)
 	require.NoError(t, err)
+	result.Preds[0].Predicate = x.NamespaceAttr(x.DefaultNamespace, result.Preds[0].Predicate)
 	err = checkSchema(result.Preds[0])
 	require.Error(t, err)
 	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive",
@@ -209,8 +224,10 @@ func TestCheckSchema(t *testing.T) {
 	`
 	result, err = schema.Parse(s)
 	require.NoError(t, err)
+	result.Preds[0].Predicate = x.NamespaceAttr(x.DefaultNamespace, result.Preds[0].Predicate)
 	err = checkSchema(result.Preds[0])
 	require.NoError(t, err)
+	result.Preds[1].Predicate = x.NamespaceAttr(x.DefaultNamespace, result.Preds[1].Predicate)
 	err = checkSchema(result.Preds[1])
 	require.NoError(t, err)
 }
