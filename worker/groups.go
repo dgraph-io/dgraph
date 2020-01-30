@@ -414,9 +414,11 @@ func (g *groupi) BelongsTo(key string) (uint32, error) {
 // should reject that query.
 func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	g.RLock()
+	fmt.Println("\n\n\n\n\ntablets  %s\n\n\n\n", key)
 	tablet := g.tablets[key]
 	g.RUnlock()
 	if tablet != nil {
+		fmt.Printf("\n\n\n\n\n found tablet %v \n\n\n\n\n\n", tablet)
 		if ts > 0 && ts < tablet.MoveTs {
 			return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
 				ts, tablet.MoveTs, key)

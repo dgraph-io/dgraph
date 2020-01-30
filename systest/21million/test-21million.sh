@@ -144,20 +144,20 @@ if [[ ! -z "$TEAMCITY_VERSION" ]]; then
 fi
 go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
-if [[ $CLEANUP == all ]]; then
-    Info "bringing down zero and alpha and data volumes"
-    DockerCompose down -v
-elif [[ $CLEANUP == none ]]; then
-    Info "leaving up zero and alpha"
-else
-    Info "bringing down zero and alpha only"
-    DockerCompose down
-fi
+# if [[ $CLEANUP == all ]]; then
+#     Info "bringing down zero and alpha and data volumes"
+#     DockerCompose down -v
+# elif [[ $CLEANUP == none ]]; then
+#     Info "leaving up zero and alpha"
+# else
+#     Info "bringing down zero and alpha only"
+#     DockerCompose down
+# fi
 
-if [[ $FOUND_DIFFS -eq 0 ]]; then
-    Info "no diffs found in query results"
-else
-    Info "found some diffs in query results"
-fi
+# if [[ $FOUND_DIFFS -eq 0 ]]; then
+#     Info "no diffs found in query results"
+# else
+#     Info "found some diffs in query results"
+# fi
 
 exit $FOUND_DIFFS

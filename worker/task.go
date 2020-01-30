@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -145,6 +146,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 
 	if groups().ServesGroup(gid) {
+		fmt.Println("Yoo")
 		// No need for a network call, as this should be run from within this instance.
 		return processTask(ctx, q, gid)
 	}
@@ -790,6 +792,7 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	fmt.Println("processing")
 	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
 	defer span.End()
 
@@ -836,8 +839,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
+		fmt.Printf("\n\n\n help err %+v \n\n\n", err)
 		return &pb.Result{}, err
 	}
+	fmt.Printf("\n\n\n heping %+v\n\n", out)
 	return out, nil
 }
 
@@ -2106,6 +2111,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
+	fmt.Printf("\n\n\n\n attr %s \n\n\n\n", q.Attr)
 	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
@@ -2125,6 +2131,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	itOpt.AllVersions = true
 	itOpt.Prefix = prefix
 	it := txn.NewIterator(itOpt)
+	fmt.Println("inside")
 	defer it.Close()
 
 	lang := langForFunc(q.Langs)
@@ -2147,6 +2154,7 @@ loop:
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.Valid(); {
+		fmt.Println("iterating")
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()
