@@ -26,7 +26,6 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -143,8 +142,7 @@ func (asr *updateSchemaResolver) Mutate(
 	asr.admin.resetSchema(asr.newGQLSchema)
 	asr.admin.schema = asr.newSchema
 
-	glog.Infof("[%s] Successfully loaded new GraphQL schema.  Serving New GraphQL API.",
-		api.RequestID(ctx))
+	glog.Infof("Successfully loaded new GraphQL schema.  Serving New GraphQL API.")
 
 	return assigned, result, nil
 }

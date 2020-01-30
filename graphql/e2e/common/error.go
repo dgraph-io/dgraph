@@ -250,10 +250,9 @@ func panicCatcher(t *testing.T) {
 			gqlResponse := test.ExecuteAsPost(t, ts.URL)
 
 			require.Equal(t, x.GqlErrorList{
-				{Message: fmt.Sprintf("[%s] Internal Server Error - a panic was trapped.  "+
-					"This indicates a bug in the GraphQL server.  A stack trace was logged.  "+
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-					gqlResponse.Extensions["requestID"].(string))}},
+				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
+					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
+					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
 			require.Nil(t, gqlResponse.Data)
