@@ -529,13 +529,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (worker.NewAccessEntry(
+		span.Annotatef(nil, worker.NewAccessEntry(
 			userId,
 			groupIds,
 			preds,
 			acl.Modify,
 			err == nil,
-		)).String())
+		).String())
 	}
 
 	return err
@@ -639,13 +639,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (worker.NewAccessEntry(
+		span.Annotatef(nil, worker.NewAccessEntry(
 			userId,
 			groupIds,
 			preds,
 			acl.Write,
 			err == nil,
-		)).String())
+		).String())
 	}
 
 	return err
@@ -726,13 +726,13 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	blockedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (worker.NewAccessEntry(
+		span.Annotatef(nil, worker.NewAccessEntry(
 			userId,
 			groupIds,
 			preds,
 			acl.Read,
 			err == nil,
-		)).String())
+		).String())
 	}
 
 	if err != nil {

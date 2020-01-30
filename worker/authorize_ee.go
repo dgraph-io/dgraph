@@ -41,8 +41,7 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 		}
 	}
 
-	// no rule has been defined that can match the predicate
-	// by default we block operation
+	// No rule has been defined that can match the predicate by default we block operation.
 	return errors.Errorf("unauthorized to do %s on predicate %s",
 		operation.Name, predicate)
 
@@ -101,7 +100,7 @@ func (log *AccessEntry) String() string {
 }
 
 func FilterUnauthorizedPreds(ctx context.Context, preds []string) []string {
-	// extract the jwt and unmarshal the jwt to get the list of groups
+	// Extract the jwt and unmarshal the jwt to get the list of groups.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return preds
