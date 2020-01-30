@@ -629,13 +629,13 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Errorf("Got a list of length %v from Dgraph when expecting a " +
+				glog.Error("Got a list of length %v from Dgraph when expecting a " +
 					"one-item list.\n")
 
 				errs = append(errs,
 					x.GqlErrorf(
 						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-							"The first item in the list was used to produce the result. ",
+							"The first item in the list was used to produce the result.",
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
