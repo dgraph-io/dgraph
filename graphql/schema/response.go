@@ -83,7 +83,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if r == nil {
 		i, err := w.Write([]byte(
 			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
-				` "data": null, "extensions": { "requestID": "unknown request ID" } }`))
+				` "data": null }`))
 		return int64(i), err
 	}
 
