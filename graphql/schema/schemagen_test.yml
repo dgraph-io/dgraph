@@ -379,8 +379,8 @@ schemas:
       }
     output: |
       type A {
-        A.p: string
-        A.q: string
+        A.p
+        A.q
       }
       A.p: string .
       A.q: string .
