@@ -327,8 +327,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			if err != nil {
 				glog.Infof("Failed to marshal variables for logging : %s", err)
 			}
-			glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
-				reqID, gqlReq.Query, string(b))
+			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+				gqlReq.Query, string(b))
 		}
 	}
 
