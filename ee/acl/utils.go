@@ -116,6 +116,7 @@ type Group struct {
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
 	Acls    string `json:"dgraph.group.acl"`
+	Rules   []Acl  `json:"dgraph.group.rule"`
 }
 
 // GetUid returns the UID of the group.

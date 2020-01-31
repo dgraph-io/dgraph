@@ -53,9 +53,13 @@ func (cache *aclCache) update(groups []acl.Group) {
 	for _, group := range groups {
 		aclBytes := []byte(group.Acls)
 		var acls []acl.Acl
-		if err := json.Unmarshal(aclBytes, &acls); err != nil {
-			glog.Errorf("Unable to unmarshal the aclBytes: %v", err)
-			continue
+		if len(aclBytes) > 0 {
+			if err := json.Unmarshal(aclBytes, &acls); err != nil {
+				glog.Errorf("Unable to unmarshal the aclBytes: %v", err)
+				continue
+			}
+		} else {
+			acls = group.Rules
 		}
 
 		for _, acl := range acls {
