@@ -68,10 +68,6 @@ type options struct {
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
-	// BadgerTables is the name of the mode used to load the badger tables.
-	BadgerTables string
-	// BadgerVlog is the name of the mode used to load the badger value log.
-	BadgerVlog string
 	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
 	BadgerKeyFile string
 	// Badger is the compression level to use while writing to badger.
