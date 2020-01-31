@@ -96,10 +96,6 @@ func NewDeleteRewriter() MutationRewriter {
 	return &deleteRewriter{}
 }
 
-func NewPasswordRewriter() MutationRewriter {
-	return &passwordRewriter{}
-}
-
 // Rewrite takes a GraphQL schema.Mutation add and builds a Dgraph upsert mutation.
 // m must have a single argument called 'input' that carries the mutation data.
 //
@@ -204,89 +200,6 @@ func (mrw *addRewriter) Rewrite(
 	return queryFromFragments(mrw.frags[0]),
 		mutations,
 		schema.GQLWrapf(err, "failed to rewrite mutation payload")
-}
-
-func (mrw *passwordRewriter) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
-
-	mutatedType := m.MutatedType()
-
-	predicateName := mutatedType.DgraphPredicate(mutatedType.PasswordField().Name())
-
-	unParsedUID := m.ArgValue("id").(string)
-	oldPassword := m.ArgValue("oldPassword").(string)
-	newPassword := m.ArgValue("newPassword").(string)
-
-	uid, err := strconv.ParseUint(unParsedUID, 0, 64)
-	if err != nil {
-		return nil, nil, schema.GQLWrapf(err,
-			"received %s as an invalid uid", unParsedUID)
-	}
-
-	qry := &gql.GraphQuery{
-		Children: []*gql.GraphQuery{
-			{
-				Attr: "q",
-				Children: []*gql.GraphQuery{{
-					Var: "pwd",
-					Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicateName,
-						oldPassword),
-				}},
-				Func: &gql.Function{
-					UID:  []uint64{uid},
-					Name: "uid",
-				},
-			},
-			{
-				Var:  "t",
-				Attr: "t",
-				Filter: &gql.FilterTree{
-					Op: "and",
-					Child: []*gql.FilterTree{{
-						Func: &gql.Function{
-							Name: "eq",
-							Args: []gql.Arg{
-								{
-									Value: "val(pwd)",
-								},
-								{
-									Value: "1",
-								},
-							},
-						},
-					}},
-				},
-				Func: &gql.Function{
-					UID:  []uint64{uid},
-					Name: "uid",
-				},
-				Children: []*gql.GraphQuery{{
-					Attr: "uid",
-				}},
-			},
-		},
-	}
-
-	mutation := dgoapi.Mutation{
-		SetJson: []byte(fmt.Sprintf(`{"uid": "%#x", "%s":  "%s"}`, uid, predicateName,
-			newPassword)),
-		Cond: "@if(eq(len(t),1))",
-	}
-
-	return qry, []*dgoapi.Mutation{&mutation}, nil
-}
-
-func (mrw *passwordRewriter) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	t := result["t"].([]interface{})
-	if len(t) == 0 {
-		return nil, fmt.Errorf("Wrong password or uid doens't exists")
-	}
-
-	return nil, nil
 }
 
 func (mrw *addRewriter) handleMultipleMutations(

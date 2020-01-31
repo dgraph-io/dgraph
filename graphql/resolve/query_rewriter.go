@@ -69,33 +69,54 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
-	unParsedUID := m.ArgValue("id").(string)
-	password := m.ArgValue("password").(string)
-
-	uid, err := strconv.ParseUint(unParsedUID, 0, 64)
+	xid, uid, err := m.IDArgValue()
 	if err != nil {
-		return nil, schema.GQLWrapf(err,
-			"received %s as an invalid uid", unParsedUID)
+		return nil, err
 	}
 
-	queriedType := m.QueriedType()
-	predicate := queriedType.DgraphPredicate(queriedType.PasswordField().Name())
+	dgQuery := rewriteAsGet(m, uid, xid)
 
-	qry := &gql.GraphQuery{
-		Children: []*gql.GraphQuery{
-			{
-				Attr: "q",
-				Children: []*gql.GraphQuery{{
-					Alias: "pwd",
-					Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
-						password),
-				}},
-				Func: &gql.Function{
-					UID:  []uint64{uid},
-					Name: "uid",
+	queriedType := m.QueriedType()
+	name := queriedType.PasswordField().Name()
+	predicate := queriedType.DgraphPredicate(name)
+	password := m.ArgValue(name).(string)
+
+	op := &gql.GraphQuery{
+		Attr:   "checkPwd",
+		Func:   dgQuery.Func,
+		Filter: dgQuery.Filter,
+		Children: []*gql.GraphQuery{{
+			Var: "pwd",
+			Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
+				password),
+		}},
+	}
+
+	ft := &gql.FilterTree{
+		Op: "and",
+		Child: []*gql.FilterTree{{
+			Func: &gql.Function{
+				Name: "eq",
+				Args: []gql.Arg{
+					{
+						Value: "val(pwd)",
+					},
+					{
+						Value: "1",
+					},
 				},
 			},
-		},
+		}},
+	}
+
+	if dgQuery.Filter != nil {
+		ft.Child = append(ft.Child, dgQuery.Filter)
+	}
+
+	dgQuery.Filter = ft
+
+	qry := &gql.GraphQuery{
+		Children: []*gql.GraphQuery{dgQuery, op},
 	}
 
 	return qry, nil

@@ -326,6 +326,24 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			inputTyp = sch.Types[inputTypeName]
 		}
 
+		for _, directive := range inputTyp.Directives {
+			if directive.Name != "secret" {
+				continue
+			}
+			name := directive.ArgumentMap(map[string]interface{}{})["field"].(string)
+			fd := &ast.FieldDefinition{
+				Name: name,
+				Type: &ast.Type{
+					NamedType: "Password",
+					NonNull:   true,
+					Position:  directive.Position,
+				},
+				Directives: ast.DirectiveList{},
+				Position:   directive.Position,
+			}
+			inputTyp.Fields = append(inputTyp.Fields, fd)
+		}
+
 		for _, fld := range inputTyp.Fields {
 			if isID(fld) {
 				// We don't need a mapping for the field, as we the dgraph predicate for them is
@@ -417,9 +435,6 @@ func mutatedTypeMapping(s *ast.Schema,
 			mutatedTypeName = strings.TrimPrefix(field.Name, "update")
 		case strings.HasPrefix(field.Name, "delete"):
 			mutatedTypeName = strings.TrimPrefix(field.Name, "delete")
-		case strings.HasPrefix(field.Name, "change"):
-			mutatedTypeName = strings.TrimPrefix(field.Name, "change")
-			mutatedTypeName = strings.TrimSuffix(mutatedTypeName, "Password")
 		default:
 		}
 		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
@@ -529,8 +544,9 @@ func (f *field) Include() bool {
 
 func (f *field) XIDArg() string {
 	xidArgName := ""
+	passwordField := f.Type().PasswordField()
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName {
+		if arg.Name != IDArgName && arg.Name != passwordField.Name() {
 			xidArgName = arg.Name
 		}
 	}
@@ -539,15 +555,20 @@ func (f *field) XIDArg() string {
 
 func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	idField := f.Type().IDField()
+	passwordField := f.Type().PasswordField()
 	xidArgName := ""
-	// This method is only called for Get queries. These queries can accept one of the
+	// This method is only called for Get queries and check. These queries can accept one of the
 	// combinations as input.
 	// 1. ID only
 	// 2. XID only
 	// 3. ID and XID fields
-	// Therefore, the non ID field is an XID field.
+	// 4. ID and Password
+	// 5. XID and Password
+	// 6. ID, XID and Password
+	// Therefore, the non ID field and non password is an XID field.
 	for _, arg := range f.field.Arguments {
-		if idField == nil || arg.Name != idField.Name() {
+		if (idField == nil || arg.Name != idField.Name()) &&
+			arg.Name != passwordField.Name() {
 			xidArgName = arg.Name
 		}
 	}
@@ -1062,7 +1083,6 @@ func (t *astType) PasswordField() FieldDefinition {
 			}
 		}
 	}
-
 	return nil
 }
 

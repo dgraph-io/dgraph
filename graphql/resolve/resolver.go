@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -103,7 +102,6 @@ type ResolverFns struct {
 	Qrw QueryRewriter
 	Arw func() MutationRewriter
 	Urw func() MutationRewriter
-	Pwd func() MutationRewriter
 	Drw MutationRewriter
 	Qe  QueryExecutor
 	Me  MutationExecutor
@@ -208,17 +206,11 @@ func (rf *resolverFactory) WithConventionResolvers(
 	s schema.Schema, fns *ResolverFns) ResolverFactory {
 
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
+	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Qe,
 				StdQueryCompletion())
-		})
-	}
-
-	for _, q := range s.Queries(schema.PasswordQuery) {
-		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe,
-				queryCompletion(passwordCompleter))
 		})
 	}
 
@@ -233,13 +225,6 @@ func (rf *resolverFactory) WithConventionResolvers(
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
 				fns.Urw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
-		})
-	}
-
-	for _, m := range s.Mutations(schema.PasswordMutation) {
-		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Pwd(), NoOpQueryExecution(), fns.Me, StdPasswordCompletion(m.ResponseName()))
 		})
 	}
 
@@ -269,10 +254,6 @@ func NewResolverFactory(
 	}
 }
 
-func queryCompletion(cf CompletionFunc) CompletionFunc {
-	return removeObjectCompletion(cf)
-}
-
 // StdQueryCompletion is the completion steps that get run for queries
 func StdQueryCompletion() CompletionFunc {
 	return removeObjectCompletion(completeDgraphResult)
@@ -286,11 +267,6 @@ func StdMutationCompletion(name string) CompletionFunc {
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
 func StdDeleteCompletion(name string) CompletionFunc {
 	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
-}
-
-// StdDeleteCompletion is the completion steps that get run for add and update mutations
-func StdPasswordCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, passwordCompletion()))
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -511,36 +487,6 @@ func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 
 		return res, resErrs
 	})
-}
-
-func passwordCompleter(ctx context.Context, field schema.Field, dgResult []byte, e error) (
-	[]byte, error) {
-
-	type pwdContainer struct {
-		Pwd bool `json:"pwd,omitempty"`
-	}
-
-	var result struct {
-		Q []*pwdContainer `json:"q,omitempty"`
-	}
-
-	err := json.Unmarshal(dgResult, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(result.Q) == 0 {
-		return nil, fmt.Errorf("No such UID or predicate")
-	}
-
-	res := `{"msg": "%s"}`
-	if result.Q[0].Pwd {
-		res = fmt.Sprintf(res, "Correct Password")
-	} else {
-		res = fmt.Sprintf(res, "Wrong Password")
-	}
-
-	return []byte(res), nil
 }
 
 // Once a result has been returned from Dgraph, that result needs to be worked
