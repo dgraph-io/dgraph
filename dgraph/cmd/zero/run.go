@@ -107,6 +107,10 @@ type state struct {
 	node *node
 	rs   *conn.RaftServer
 	zero *Server
+
+	// runs every 1m, check size of vlog and run GC conditionally.
+	vlogTicker          *time.Ticker
+	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 }
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
@@ -155,6 +159,35 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 			s.Stop()
 		}
 	}()
+}
+
+func (st *state) runVlogGC(store *badger.DB) {
+	// Get initial size on start.
+	_, lastVlogSize := store.Size()
+	const GB = int64(1 << 30)
+
+	runGC := func() {
+		var err error
+		for err == nil {
+			// If a GC is successful, immediately run it again.
+			err = store.RunValueLogGC(0.7)
+		}
+		_, lastVlogSize = store.Size()
+	}
+
+	for {
+		select {
+		case <-st.vlogTicker.C:
+			_, currentVlogSize := store.Size()
+			if currentVlogSize < lastVlogSize+GB {
+				continue
+			}
+			runGC()
+		case <-st.mandatoryVlogTicker.C:
+			runGC()
+		}
+	}
+
 }
 
 func run() {
@@ -233,6 +266,9 @@ func run() {
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
+	st.vlogTicker = time.NewTicker(1 * time.Minute)
+	st.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
+	go st.runVlogGC(kv)
 
 	if Zero.Conf.GetBool("telemetry") {
 		go st.zero.periodicallyPostTelemetry()
