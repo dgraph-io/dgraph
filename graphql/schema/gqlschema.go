@@ -71,6 +71,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -506,7 +507,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Patch",
-		Fields: nonIDFields,
+		Fields: append(nonIDFields, getPasswordField(defn)...),
 	}
 	schema.Types[defn.Name+"Patch"] = patchDefn
 
@@ -960,21 +961,33 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+	hasIDField := hasID(defn)
+	hasXIDField := hasXID(defn)
+	if !hasIDField && !hasXIDField {
+		return
+	}
+
+	idField := getIDField(defn)
+	if !hasIDField {
+		idField = getXIDField(defn)
+	}
+	passwordField := getPasswordField(defn)
+
 	qry := &ast.FieldDefinition{
 		Name: "check" + defn.Name + "Password",
 		Type: &ast.Type{
-			NamedType: "CheckPasswordPayload",
+			NamedType: defn.Name,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			{
-				Name: "id",
+				Name: idField[0].Name,
 				Type: &ast.Type{
-					NamedType: "ID",
+					NamedType: idTypeFor(defn),
 					NonNull:   true,
 				},
 			},
 			{
-				Name: "password",
+				Name: passwordField[0].Name,
 				Type: &ast.Type{
 					NamedType: "Password",
 					NonNull:   true,
@@ -983,19 +996,6 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-
-	schema.Types["CheckPasswordPayload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "CheckPasswordPayload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: "msg",
-				Type: &ast.Type{
-					NamedType: "String",
-				},
-			},
-		},
-	}
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1070,58 +1070,8 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
-func addPasswordMutation(schema *ast.Schema, defn *ast.Definition) {
-	if len(getPasswordField(defn)) == 0 {
-		return
-	}
-	add := &ast.FieldDefinition{
-		Name: "change" + defn.Name + "Password",
-		Type: &ast.Type{
-			NamedType: "changePasswordPayload",
-		},
-		Arguments: []*ast.ArgumentDefinition{
-			{
-				Name: "id",
-				Type: &ast.Type{
-					NamedType: "ID",
-					NonNull:   true,
-				},
-			},
-			{
-				Name: "oldPassword",
-				Type: &ast.Type{
-					NamedType: "Password",
-					NonNull:   true,
-				},
-			},
-			{
-				Name: "newPassword",
-				Type: &ast.Type{
-					NamedType: "Password",
-					NonNull:   true,
-				},
-			},
-		},
-	}
-	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
-
-	schema.Types["changePasswordPayload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "changePasswordPayload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: "msg",
-				Type: &ast.Type{
-					NamedType: "String",
-				},
-			},
-		},
-	}
-}
-
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
 	addAddMutation(schema, defn)
-	addPasswordMutation(schema, defn)
 	addUpdateMutation(schema, defn)
 	addDeleteMutation(schema, defn)
 }
@@ -1229,15 +1179,21 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 
 func getPasswordField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
-	for _, fld := range defn.Fields {
-		if !isPasswordField(defn, fld) {
+	for _, directive := range defn.Directives {
+		if directive.Name != "secret" {
 			continue
 		}
-		newFld := *fld
-		newFldType := *fld.Type
-		newFld.Type = &newFldType
-		fldList = append(fldList, &newFld)
-		break
+		name := directive.ArgumentMap(map[string]interface{}{})["field"].(string)
+		fldList = append(fldList, &ast.FieldDefinition{
+			Name: name,
+			Type: &ast.Type{
+				NamedType: "Password",
+				NonNull:   true,
+				Position:  directive.Position,
+			},
+			Directives: ast.DirectiveList{},
+			Position:   directive.Position,
+		})
 	}
 	return fldList
 }

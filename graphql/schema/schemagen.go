@@ -215,7 +215,15 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			typName := typeName(def)
 
 			typ := dgType{name: typName}
-			for _, f := range def.Fields {
+			var typeDef strings.Builder
+			fmt.Fprintf(&typeDef, "type %s {\n", typName)
+			fd := getPasswordField(def)
+			fields := def.Fields
+			if fd != nil {
+				fields = append(fields, fd...)
+			}
+
+			for _, f := range fields {
 				if f.Type.Name() == "ID" {
 					continue
 				}
