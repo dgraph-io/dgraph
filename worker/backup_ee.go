@@ -76,9 +76,8 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
-		return errors.Errorf("You must enable enterprise features first. "+
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
-			"Backup failed.")
+		return errors.New("You must enable enterprise features first. " +
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
 	}
 
 	if req.Destination == "" {
