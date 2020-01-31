@@ -340,7 +340,7 @@ func inCi() bool {
 
 func saveJaegerTracesToJepsen(jepsenPath string) {
 	dst := path.Join(jepsenPath, "dgraph", "store", "current", "jaeger")
-	cmd := command("docker", "cp", "jaeger:/worker/jaeger", dst)
+	cmd := command("docker", "cp", "jaeger:/working/jaeger", dst)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
