@@ -24,14 +24,12 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
-type backupResolver struct {
-	// admin *adminServer
-
-	// mutation schema.Mutation
-}
+type backupResolver struct{}
 
 type backupInput struct {
 	Destination  string
@@ -53,8 +51,15 @@ func (br *backupResolver) Rewrite(
 	}
 	fmt.Printf("input: %+v\n", input)
 
-	// Return error if request fails here.
-	return nil, nil, nil
+	err = worker.ProcessBackupRequest(context.Background(), pb.BackupRequest{
+		Destination:  input.Destination,
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	}, input.ForceFull)
+
+	return nil, nil, err
 }
 
 func (br *backupResolver) FromMutationResult(
