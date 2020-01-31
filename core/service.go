@@ -25,6 +25,7 @@ import (
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/crypto"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/keystore"
@@ -43,8 +44,10 @@ type Service struct {
 	storageState StorageState
 	rt           *runtime.Runtime
 	bs           *babe.Session
+	keys         []crypto.Keypair
 	blkRec       <-chan types.Block // receive blocks from BABE session
 	msgRec       <-chan p2p.Message // receive messages from p2p service
+	epochDone    <-chan struct{}    // receive from this channel when BABE epoch changes
 	msgSend      chan<- p2p.Message // send messages to p2p service
 }
 
@@ -81,6 +84,8 @@ func NewService(cfg *Config) (*Service, error) {
 		cfg.NewBlocks = make(chan types.Block)
 	}
 
+	epochDone := make(chan struct{})
+
 	// BABE session configuration
 	bsConfig := &babe.SessionConfig{
 		Keypair:        keys[0].(*sr25519.Keypair),
@@ -90,6 +95,7 @@ func NewService(cfg *Config) (*Service, error) {
 		AuthorityIndex: 0, // TODO: where do we get the BABE authority data?
 		AuthData:       []*babe.AuthorityData{babe.NewAuthorityData(keys[0].Public().(*sr25519.PublicKey), 1)},
 		EpochThreshold: big.NewInt(0),
+		Done:           epochDone,
 	}
 
 	// create a new BABE session
@@ -102,11 +108,13 @@ func NewService(cfg *Config) (*Service, error) {
 	return &Service{
 		rt:           cfg.Runtime,
 		bs:           bs,
+		keys:         keys,
 		blkRec:       cfg.NewBlocks, // becomes block receive channel in core service
 		msgRec:       cfg.MsgRec,
 		msgSend:      cfg.MsgSend,
 		blockState:   cfg.BlockState,
 		storageState: cfg.StorageState,
+		epochDone:    epochDone,
 	}, nil
 }
 
@@ -122,9 +130,12 @@ func (s *Service) Start() error {
 	// start receiving messages from p2p service
 	go s.receiveMessages()
 
+	// monitor babe session for epoch changes
+	go s.handleBabeSession()
+
 	err := s.bs.Start()
 	if err != nil {
-		log.Error("CORE could not start BABE", "error", err)
+		log.Error("core could not start BABE", "error", err)
 	}
 
 	return err
@@ -151,18 +162,59 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	return s.storageState.StorageRoot()
 }
 
+func (s *Service) handleBabeSession() {
+	for {
+		<-s.epochDone
+		log.Trace("core: BABE epoch complete, initializing new session")
+
+		newBlocks := make(chan types.Block)
+		s.blkRec = newBlocks
+
+		epochDone := make(chan struct{})
+		s.epochDone = epochDone
+
+		// BABE session configuration
+		bsConfig := &babe.SessionConfig{
+			Keypair:        s.keys[0].(*sr25519.Keypair),
+			Runtime:        s.rt,
+			NewBlocks:      newBlocks, // becomes block send channel in BABE session
+			BlockState:     s.blockState,
+			AuthorityIndex: 0, // TODO: where do we get the BABE authority data?
+			AuthData:       []*babe.AuthorityData{babe.NewAuthorityData(s.keys[0].Public().(*sr25519.PublicKey), 1)},
+			EpochThreshold: big.NewInt(0),
+			Done:           epochDone,
+		}
+
+		// create a new BABE session
+		bs, err := babe.NewSession(bsConfig)
+		if err != nil {
+			log.Error("core could not initialize BABE", "error", err)
+			return
+		}
+
+		err = bs.Start()
+		if err != nil {
+			log.Error("core could not start BABE", "error", err)
+		}
+
+		s.bs = bs
+		log.Trace("core: BABE session initialized and started")
+	}
+}
+
 // receiveBlocks starts receiving blocks from the BABE session
 func (s *Service) receiveBlocks() {
 	for {
 		// receive block from BABE session
 		block, ok := <-s.blkRec
 		if !ok {
-			log.Error("Failed to receive block from BABE session")
-			return // exit
-		}
-		err := s.handleReceivedBlock(block)
-		if err != nil {
-			log.Error("Failed to handle block from BABE session", "err", err)
+			// epoch complete
+			log.Debug("core: BABE session complete")
+		} else {
+			err := s.handleReceivedBlock(block)
+			if err != nil {
+				log.Error("Failed to handle block from BABE session", "err", err)
+			}
 		}
 	}
 }

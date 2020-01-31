@@ -544,7 +544,7 @@ func TestBuildBlock_ok(t *testing.T) {
 	block, slot := createTestBlock(babesession, t)
 
 	// hash of parent header
-	parentHash, err := common.HexToHash("0x03106e6f6f740140676f7373616d65725f69735f636f6f6c6c00000000000000")
+	parentHash, err := common.HexToHash("0xdcdd89927d8a348e00257e1ecc8617f45edb5118efff3ea2f9961b2ad9b7690a")
 	if err != nil {
 		t.Fatal(err)
 	}

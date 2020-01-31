@@ -267,7 +267,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	log.Debug("[ext_get_allocated_storage]", "key", key)
+	log.Trace("[ext_get_allocated_storage]", "key", key)
 
 	val, err := s.GetStorage(key)
 	if err != nil {
@@ -283,7 +283,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	}
 
 	if val == nil {
-		log.Debug("[ext_get_allocated_storage]", "value", "nil")
+		log.Trace("[ext_get_allocated_storage]", "value", "nil")
 		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
 		return 0
 	}
@@ -492,10 +492,10 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	kp, err := sr25519.NewKeypairFromSeed(seedBytes)
 	if err != nil {
-		log.Debug("ext_sr25519_generate cannot generate key", "error", err)
+		log.Trace("ext_sr25519_generate cannot generate key", "error", err)
 	}
 
-	log.Debug("ext_sr25519_generate", "address", kp.Public().Address())
+	log.Trace("ext_sr25519_generate", "address", kp.Public().Address())
 
 	runtimeCtx.keystore.Insert(kp)
 
@@ -556,7 +556,7 @@ func ext_sr25519_public_keys(context unsafe.Pointer, idData, resultLen int32) in
 
 //export ext_ed25519_sign
 func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLen, out int32) int32 {
-	log.Debug("[ext_ed25519_sign] executing...")
+	log.Trace("[ext_ed25519_sign] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -590,7 +590,7 @@ func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 
 //export ext_sr25519_sign
 func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLen, out int32) int32 {
-	log.Debug("[ext_sr25519_sign] executing...")
+	log.Trace("[ext_sr25519_sign] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -625,7 +625,7 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 
 //export ext_sr25519_verify
 func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkeyData int32) int32 {
-	log.Debug("[ext_sr25519_verify] executing...")
+	log.Trace("[ext_sr25519_verify] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -646,7 +646,7 @@ func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 
 //export ext_ed25519_generate
 func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int32) {
-	log.Debug("[ext_ed25519_generate] executing...")
+	log.Trace("[ext_ed25519_generate] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -659,10 +659,10 @@ func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	kp, err := ed25519.NewKeypairFromSeed(seedBytes)
 	if err != nil {
-		log.Debug("ext_ed25519_generate cannot generate key", "error", err)
+		log.Trace("ext_ed25519_generate cannot generate key", "error", err)
 	}
 
-	log.Debug("ext_ed25519_generate", "address", kp.Public().Address())
+	log.Trace("ext_ed25519_generate", "address", kp.Public().Address())
 
 	runtimeCtx.keystore.Insert(kp)
 

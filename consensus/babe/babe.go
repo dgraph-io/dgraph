@@ -26,6 +26,7 @@ import (
 	"time"
 
 	scale "github.com/ChainSafe/gossamer/codec"
+	"github.com/ChainSafe/gossamer/common"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/core/types"
@@ -46,6 +47,7 @@ type Session struct {
 	txQueue        *tx.PriorityQueue
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 	newBlocks      chan<- types.Block            // send blocks to core service
+	done           chan<- struct{}               // lets core know when the epoch is done
 }
 
 type SessionConfig struct {
@@ -56,6 +58,7 @@ type SessionConfig struct {
 	AuthorityIndex uint64
 	AuthData       []*AuthorityData
 	EpochThreshold *big.Int // should only be used for testing
+	Done           chan<- struct{}
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
@@ -74,6 +77,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		authorityIndex: cfg.AuthorityIndex,
 		authorityData:  cfg.AuthData,
 		epochThreshold: cfg.EpochThreshold,
+		done:           cfg.Done,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -148,6 +152,7 @@ func (b *Session) invokeBlockAuthoring() {
 			} else {
 				hash := block.Header.Hash()
 				log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
+				log.Debug("BABE built block", "header", block.Header, "body", block.Body)
 				b.newBlocks <- *block
 				err = b.blockState.AddBlock(*block)
 				if err != nil {
@@ -157,6 +162,14 @@ func (b *Session) invokeBlockAuthoring() {
 		}
 
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
+	}
+
+	if b.newBlocks != nil {
+		close(b.newBlocks)
+	}
+
+	if b.done != nil {
+		close(b.done)
 	}
 }
 
@@ -271,8 +284,15 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, err
 	}
 
-	// initialize block
-	encodedHeader, err := scale.Encode(parent)
+	// create new block header
+	number := big.NewInt(0).Add(parent.Number, big.NewInt(1))
+	header, err := types.NewHeader(parent.Hash(), number, common.Hash{}, common.Hash{}, [][]byte{})
+	if err != nil {
+		return nil, err
+	}
+
+	// initialize block header
+	encodedHeader, err := scale.Encode(header)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +321,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, err
 	}
 
+	block.Header.ParentHash = parent.Hash()
 	block.Header.Number.Add(parent.Number, big.NewInt(1))
 
 	// add BABE header to digest
