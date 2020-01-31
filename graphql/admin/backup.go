@@ -53,7 +53,7 @@ func (br *backupResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	err = worker.ProcessBackupRequest(context.Background(), pb.BackupRequest{
+	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,

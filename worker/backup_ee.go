@@ -74,7 +74,7 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 	return res, nil
 }
 
-func ProcessBackupRequest(ctx context.Context, req pb.BackupRequest, forceFull bool) error {
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
 		return errors.Errorf("You must enable enterprise features first. "+
 			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
@@ -104,7 +104,7 @@ func ProcessBackupRequest(ctx context.Context, req pb.BackupRequest, forceFull b
 	if err != nil {
 		return err
 	}
-	handler, err := backup.NewUriHandler(uri, backup.GetCredentialsFromRequest(&req))
+	handler, err := backup.NewUriHandler(uri, backup.GetCredentialsFromRequest(req))
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func ProcessBackupRequest(ctx context.Context, req pb.BackupRequest, forceFull b
 		go func(req *pb.BackupRequest) {
 			_, err := BackupGroup(ctx, req)
 			errCh <- err
-		}(&req)
+		}(req)
 	}
 
 	for range groups {
@@ -167,6 +167,6 @@ func ProcessBackupRequest(ctx context.Context, req pb.BackupRequest, forceFull b
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
 
-	bp := &backup.Processor{Request: &req}
+	bp := &backup.Processor{Request: req}
 	return bp.CompleteBackup(ctx, &m)
 }

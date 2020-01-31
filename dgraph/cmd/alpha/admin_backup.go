@@ -54,7 +54,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		Anonymous:    anonymous,
 	}
 
-	if err := worker.ProcessBackupRequest(context.Background(), req, forceFull); err != nil {
+	if err := worker.ProcessBackupRequest(context.Background(), &req, forceFull); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
