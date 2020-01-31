@@ -5136,3 +5136,18 @@ func TestParseExpandFilterErr(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expand is only compatible with type filters")
 }
+
+func TestFilterWithDollar(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5)@filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+}

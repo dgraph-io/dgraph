@@ -352,8 +352,12 @@ func substituteVar(f string, res *string, vmap varMap) error {
 			return errors.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
+		return nil
 	}
-	return nil
+	// It's a quoated string so unquote it.
+	var err error
+	*res, err = unquoteIfQuoted(f)
+	return err
 }
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
@@ -387,6 +391,12 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 		for idx, v := range gq.Func.Args {
 			if !v.IsGraphQLVar {
+				// It's not a variable. So, unquoate it.
+				var err error
+				gq.Func.Args[idx].Value, err = unquoteIfQuoted(gq.Func.Args[idx].Value)
+				if err != nil {
+					return err
+				}
 				continue
 			}
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
@@ -1802,11 +1812,6 @@ L:
 			vname := collectName(it, itemInFunc.Val)
 			// TODO - Move this to a function.
 			v := strings.Trim(vname, " \t")
-			var err error
-			v, err = unquoteIfQuoted(v)
-			if err != nil {
-				return nil, err
-			}
 			val += v
 
 			if isDollar {
