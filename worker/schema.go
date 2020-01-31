@@ -262,6 +262,5 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		}
 		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
-	fmt.Printf("type udpates %+v", out)
 	return out, nil
 }

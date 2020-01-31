@@ -414,7 +414,6 @@ func (g *groupi) BelongsTo(key string) (uint32, error) {
 // should reject that query.
 func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	g.RLock()
-	fmt.Println("\n\n\n\n\ntablets  %s\n\n\n\n", key)
 	tablet := g.tablets[key]
 	g.RUnlock()
 	if tablet != nil {
