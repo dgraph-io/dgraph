@@ -44,14 +44,24 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}) {
 		return
 	}
-	if !worker.EnterpriseEnabled() {
-		x.SetStatus(w, "You must enable enterprise features first. "+
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
-			"Backup failed.")
-		return
+
+	destination := r.FormValue("destination")
+	accessKey := r.FormValue("access_key")
+	secretKey := r.FormValue("secret_key")
+	sessionToken := r.FormValue("session_token")
+	anonymous := r.FormValue("anonymous") == "true"
+	forceFull := r.FormValue("force_full") == "true"
+
+	req := pb.BackupRequest{
+		Destination:  destination,
+		UnixTs:       time.Now().UTC().Format("20060102.150405.000"),
+		AccessKey:    accessKey,
+		SecretKey:    secretKey,
+		SessionToken: sessionToken,
+		Anonymous:    anonymous,
 	}
 
-	if err := processHttpBackupRequest(context.Background(), r); err != nil {
+	if err := processBackupRequest(context.Background(), req, forceFull); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
@@ -60,17 +70,16 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
 }
 
-func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
-	destination := r.FormValue("destination")
-	if destination == "" {
-		return errors.Errorf("You must specify a 'destination' value")
+func processBackupRequest(ctx context.Context, req pb.BackupRequest, forceFull bool) error {
+	if !worker.EnterpriseEnabled() {
+		return errors.Errorf("You must enable enterprise features first. "+
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
+			"Backup failed.")
 	}
 
-	accessKey := r.FormValue("access_key")
-	secretKey := r.FormValue("secret_key")
-	sessionToken := r.FormValue("session_token")
-	anonymous := r.FormValue("anonymous") == "true"
-	forceFull := r.FormValue("force_full") == "true"
+	if req.Destination == "" {
+		return errors.Errorf("You must specify a 'destination' value")
+	}
 
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
@@ -83,15 +92,8 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		return err
 	}
 
-	req := pb.BackupRequest{
-		ReadTs:       ts.ReadOnly,
-		Destination:  destination,
-		UnixTs:       time.Now().UTC().Format("20060102.150405.000"),
-		AccessKey:    accessKey,
-		SecretKey:    secretKey,
-		SessionToken: sessionToken,
-		Anonymous:    anonymous,
-	}
+	req.ReadTs = ts.ReadOnly
+	req.UnixTs = time.Now().UTC().Format("20060102.150405.000")
 
 	// Read the manifests to get the right timestamp from which to start the backup.
 	uri, err := url.Parse(req.Destination)

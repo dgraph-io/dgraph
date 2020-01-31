@@ -54,7 +54,7 @@ const (
 	graphqlAdminSchema = `
 	type GQLSchema @dgraph(type: "dgraph.graphql") {
 		id: ID!
-		schema: String!  @dgraph(type: "dgraph.graphql.schema") 
+		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 		generatedSchema: String!
 	}
 
@@ -85,6 +85,20 @@ const (
 		schema: String!
 	}
 
+	input BackupInput {
+		destination: String!
+		accessKey: String
+		secretKey: String
+		sessionToken: String
+		anonymous: Boolean
+		forceFull: Boolean
+	}
+
+	type BackupPayload {
+		code: String
+		message: String
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
@@ -92,6 +106,7 @@ const (
 
 	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
+		backup(input: BackupInput!) : BackupPayload
 	}
  `
 )
@@ -256,6 +271,15 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
 				})
+		}).
+		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
+			backup := &backupResolver{}
+
+			return resolve.NewMutationResolver(
+				backup,
+				backup,
+				backup,
+				resolve.StdQueryCompletion())
 		}).
 		WithSchemaIntrospection()
 
