@@ -94,9 +94,13 @@ const (
 		forceFull: Boolean
 	}
 
-	type BackupPayload {
+	type Response {
 		code: String
 		message: String
+	}
+
+	type BackupPayload {
+		response: Response
 	}
 
 	type Query {
@@ -279,7 +283,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				backup,
 				backup,
 				backup,
-				resolve.StdQueryCompletion())
+				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
 		WithSchemaIntrospection()
 

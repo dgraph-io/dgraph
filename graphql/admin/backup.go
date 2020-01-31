@@ -17,19 +17,22 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-type backupResolver struct{}
+type backupResolver struct {
+	mutation schema.Mutation
+}
 
 type backupInput struct {
 	Destination  string
@@ -42,14 +45,13 @@ type backupInput struct {
 
 func (br *backupResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
-
 	glog.Info("Got backup request")
 
+	br.mutation = m
 	input, err := getBackupInput(m)
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Printf("input: %+v\n", input)
 
 	err = worker.ProcessBackupRequest(context.Background(), pb.BackupRequest{
 		Destination:  input.Destination,
@@ -79,7 +81,30 @@ func (br *backupResolver) Mutate(
 }
 
 func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return nil, nil
+	var buf bytes.Buffer
+
+	x.Check2(buf.WriteString(`{ "`))
+	x.Check2(buf.WriteString(br.mutation.SelectionSet()[0].ResponseName() + `": [{`))
+
+	for i, sel := range br.mutation.SelectionSet()[0].SelectionSet() {
+		var val string
+		switch sel.Name() {
+		case "code":
+			val = "Success"
+		case "message":
+			val = "Backup completed."
+		}
+		if i != 0 {
+			x.Check2(buf.WriteString(","))
+		}
+		x.Check2(buf.WriteString(`"`))
+		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(`":`))
+		x.Check2(buf.WriteString(`"` + val + `"`))
+	}
+	x.Check2(buf.WriteString("}]}"))
+
+	return buf.Bytes(), nil
 }
 
 func getBackupInput(m schema.Mutation) (*backupInput, error) {
