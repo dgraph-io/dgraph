@@ -23,13 +23,29 @@ docker run -it dgraph/dgraph:latest dgraph
 #### Automatic download
 
 Running
+
 ```sh
 curl https://get.dgraph.io -sSf | bash
 
 # Test that it worked fine, by running:
 dgraph
 ```
+
 would install the `dgraph` binary into your system.
+
+Other instalation options:
+
+> Add `-s --` before the flags.
+
+`--y`: Automatically agree to the terms of the Dgraph Community License.
+
+`--systemd`: Automatically create Dgraph's installation as Systemd services.
+
+>Installing Dgraph and requesting the automatic creation of systemd service. e.g:
+
+```sh
+curl https://get.dgraph.io -sSf | bash -s -- --systemd
+```
 
 #### Manual download [optional]
 
