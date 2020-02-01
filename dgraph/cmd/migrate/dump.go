@@ -49,7 +49,18 @@ type sqlRow struct {
 	tableInfo      *sqlTable
 }
 
-// dumpSchema generates the Dgraph schema based on m.tableGuides
+// escapeColumnNames wraps columnNames with backticks in order to avoid creating
+// invalid sql queries in cases where a table uses a reserved keyword as a
+// column name
+func escapeColumnNames(columnNames []string) []string {
+	var escapedColNames []string
+	for _, c := range columnNames {
+		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
+	}
+	return escapedColNames
+}
+
+// dumpschema generates the Dgraph schema based on m.tableGuides
 // and sends the schema to m.schemaWriter
 func (m *dumpMeta) dumpSchema() error {
 	for table := range m.tableGuides {
@@ -91,11 +102,7 @@ func (m *dumpMeta) dumpTable(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	var escapedColNames []string
-	for _, c := range tableInfo.columnNames {
-		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
-	}
-
+	escapedColNames := escapeColumnNames(tableInfo.columnNames)
 	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
@@ -140,11 +147,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
 
-	var escapedColNames []string
-	for _, c := range tableInfo.columnNames {
-		escapedColNames = append(escapedColNames, fmt.Sprintf("`"+"%s"+"`", c))
-	}
-
+	escapedColNames := escapeColumnNames(tableInfo.columnNames)
 	query := fmt.Sprintf(`select %s from %s`, strings.Join(escapedColNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
