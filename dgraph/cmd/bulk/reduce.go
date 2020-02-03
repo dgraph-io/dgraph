@@ -109,7 +109,9 @@ func (r *reducer) createBadger(i int) *badger.DB {
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile))
 
 	// TOOD(Ibrahim): Remove this once badger is updated.
-	opt.ZSTDCompressionLevel = 1
+	// opt.ZSTDCompressionLevel = 1
+	// Turn off compression
+	opt.Compression = bo.None
 
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
