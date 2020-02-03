@@ -319,7 +319,7 @@ message UidBlock {
 	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
-	bytes deltas = 2;
+	bytes deltas = 2; // TODO: Rename this to roaringBitmap?
 	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// switch encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit

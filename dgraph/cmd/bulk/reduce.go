@@ -474,7 +474,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 			}
 		}
 
-		pl.Pack = codec.Encode(uids, 256)
+		pl.Pack = codec.Encode(uids)
 		val, err := pl.Marshal()
 		x.Check(err)
 		kv := &bpb.KV{

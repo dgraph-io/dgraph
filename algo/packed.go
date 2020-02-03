@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"sort"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
@@ -28,7 +29,7 @@ import (
 func ApplyFilterPacked(u *pb.UidPack, f func(uint64, int) bool) *pb.UidPack {
 	index := 0
 	decoder := codec.NewDecoder(u)
-	encoder := codec.Encoder{BlockSize: int(u.BlockSize)}
+	encoder := codec.Encoder{}
 
 	for ; decoder.Valid(); decoder.Next() {
 		for _, uid := range decoder.Uids() {
@@ -42,65 +43,36 @@ func ApplyFilterPacked(u *pb.UidPack, f func(uint64, int) bool) *pb.UidPack {
 	return encoder.Done()
 }
 
-// IntersectWithLinPacked performs the liner intersection between two compressed uid lists.
-func IntersectWithLinPacked(u, v *pb.UidPack) *pb.UidPack {
-	if u == nil || v == nil {
+// IntersectWithLinPacked performs the linear intersection between two compressed uid lists.
+func IntersectWithLinPacked(uidPack1, uidPack2 *pb.UidPack) *pb.UidPack {
+	if uidPack1 == nil || uidPack2 == nil {
 		return nil
 	}
+	intersection := codec.Encoder{}
+	if len(uidPack1.Blocks) == 0 || len(uidPack2.Blocks) == 0 {
+		return intersection.Done()
+	}
+	dec1 := codec.NewDecoder(uidPack1)
+	dec2 := codec.NewDecoder(uidPack2)
+	dec2Idx := 0
+	var uidPack1Msb uint64
+	uidPack2Msb := dec2.Pack.Blocks[dec2Idx].Base
 
-	uDec := codec.NewDecoder(u)
-	uuids := uDec.Uids()
-	vDec := codec.NewDecoder(v)
-	vuids := vDec.Uids()
-	uIdx, vIdx := 0, 0
-	result := codec.Encoder{BlockSize: int(u.BlockSize)}
-
-	for {
-		// Break if the end of a list has been reached.
-		if len(uuids) == 0 || len(vuids) == 0 {
+	for dec1Idx := 0; dec1Idx < len(dec1.Pack.Blocks); dec1Idx++ {
+		uidPack1Msb = dec1.Pack.Blocks[dec1Idx].Base
+		for uidPack1Msb > uidPack2Msb && dec2Idx < (len(dec2.Pack.Blocks)-1) {
+			dec2Idx++
+			uidPack2Msb = dec2.Pack.Blocks[dec2Idx].Base
+		}
+		if uidPack1Msb == uidPack2Msb {
+			rb := roaring.And(dec1.RoaringBitmapForBlock(dec1Idx), dec2.RoaringBitmapForBlock(dec2Idx))
+			intersection.AddBlockFromBitmap(uidPack1Msb, rb, uint32(rb.GetCardinality()))
+		}
+		if dec2Idx == len(dec2.Pack.Blocks)-1 {
 			break
 		}
-
-		// Load the next block of the encoded lists if necessary.
-		if uIdx == len(uuids) {
-			if uDec.Valid() {
-				uuids = uDec.Next()
-				uIdx = 0
-			} else {
-				break
-			}
-
-		}
-		if vIdx == len(vuids) {
-			if vDec.Valid() {
-				vuids = vDec.Next()
-				vIdx = 0
-			} else {
-				break
-			}
-		}
-
-		uLen := len(uuids)
-		vLen := len(vuids)
-
-		for uIdx < uLen && vIdx < vLen {
-			uid := uuids[uIdx]
-			vid := vuids[vIdx]
-			switch {
-			case uid > vid:
-				for vIdx = vIdx + 1; vIdx < vLen && vuids[vIdx] < uid; vIdx++ {
-				}
-			case uid == vid:
-				result.Add(uid)
-				vIdx++
-				uIdx++
-			default:
-				for uIdx = uIdx + 1; uIdx < uLen && uuids[uIdx] < vid; uIdx++ {
-				}
-			}
-		}
 	}
-	return result.Done()
+	return intersection.Done()
 }
 
 // listInfoPacked stores the packed list in a format that allows lists to be sorted by size.
@@ -111,19 +83,19 @@ type listInfoPacked struct {
 
 // IntersectSortedPacked calculates the intersection of multiple lists and performs
 // the intersections from the smallest to the largest list.
-func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
-	if len(lists) == 0 {
-		encoder := codec.Encoder{BlockSize: 10}
+func IntersectSortedPacked(uidPacks []*pb.UidPack) *pb.UidPack {
+	if len(uidPacks) == 0 {
+		encoder := codec.Encoder{}
 		return encoder.Done()
 	}
-	ls := make([]listInfoPacked, 0, len(lists))
-	for _, list := range lists {
+	ls := make([]listInfoPacked, 0, len(uidPacks))
+	for _, uidPack := range uidPacks {
 		ls = append(ls, listInfoPacked{
-			l:      list,
-			length: codec.ExactLen(list),
+			l:      uidPack,
+			length: codec.ExactLen(uidPack),
 		})
 	}
-	// Sort the lists based on length.
+	// Sort the uidPacks based on length.
 	sort.Slice(ls, func(i, j int) bool {
 		return ls[i].length < ls[j].length
 	})
@@ -148,160 +120,111 @@ func IntersectSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 }
 
 // DifferencePacked performs the difference operation between two UidPack objects.
-func DifferencePacked(u, v *pb.UidPack) *pb.UidPack {
-	if u == nil || v == nil {
-		// If v == nil, then it's empty so the value of u - v is just u.
-		// Return a copy of u.
-		if v == nil {
-			return codec.CopyUidPack(u)
+func DifferencePacked(uidPack1, uidPack2 *pb.UidPack) *pb.UidPack {
+	if uidPack1 == nil || uidPack2 == nil {
+		// If uidPack2 == nil, then it's empty so the value of uidPack1 - uidPack2 is just uidPack1.
+		// Return a copy of uidPack1.
+		if uidPack2 == nil {
+			return codec.CopyUidPack(uidPack1)
 		}
-
 		return nil
 	}
 
-	result := codec.Encoder{BlockSize: int(u.BlockSize)}
+	difference := codec.Encoder{}
+	dec1 := codec.NewDecoder(uidPack1)
+	dec2 := codec.NewDecoder(uidPack2)
+	dec2Idx := 0
+	var uidPack1Msb uint64
+	uidPack2Msb := dec2.Pack.Blocks[dec2Idx].Base
 
-	uDec := codec.NewDecoder(u)
-	uuids := uDec.Uids()
-	vDec := codec.NewDecoder(v)
-	vuids := vDec.Uids()
-	uIdx, vIdx := 0, 0
-
-	for {
-		// Break if the end of a list has been reached.
-		if len(uuids) == 0 || len(vuids) == 0 {
-			break
+	for dec1Idx := 0; dec1Idx < len(dec1.Pack.Blocks); dec1Idx++ {
+		uidPack1Msb = dec1.Pack.Blocks[dec1Idx].Base
+		for uidPack1Msb > uidPack2Msb && dec2Idx < (len(dec2.Pack.Blocks)-1) {
+			dec2Idx++
+			uidPack2Msb = dec2.Pack.Blocks[dec2Idx].Base
 		}
-
-		// Load the next block of the encoded lists if necessary.
-		if uIdx == len(uuids) {
-			if uDec.Valid() {
-				uuids = uDec.Next()
-				uIdx = 0
-			} else {
-				break
-			}
-
-		}
-
-		if vIdx == len(vuids) {
-			if vDec.Valid() {
-				vuids = vDec.Next()
-				vIdx = 0
-			} else {
-				break
-			}
-		}
-
-		uLen := len(uuids)
-		vLen := len(vuids)
-
-		for uIdx < uLen && vIdx < vLen {
-			uid := uuids[uIdx]
-			vid := vuids[vIdx]
-
-			switch {
-			case uid < vid:
-				for uIdx < uLen && uuids[uIdx] < vid {
-					result.Add(uuids[uIdx])
-					uIdx++
-				}
-			case uid == vid:
-				uIdx++
-				vIdx++
-			default:
-				vIdx++
-				for {
-					if !(vIdx < vLen && vuids[vIdx] < uid) {
-						break
-					}
-					vIdx++
-				}
-			}
-		}
-
-		for uIdx < uLen && vIdx >= vLen {
-			result.Add(uuids[uIdx])
-			uIdx++
+		if uidPack1Msb == uidPack2Msb {
+			rb := roaring.AndNot(dec1.RoaringBitmapForBlock(dec1Idx), dec2.RoaringBitmapForBlock(dec2Idx))
+			difference.AddBlockFromBitmap(uidPack1Msb, rb, uint32(rb.GetCardinality()))
+		} else {
+			difference.AddBlock(dec1.Pack.Blocks[dec1Idx])
 		}
 	}
 
-	return result.Done()
+	return difference.Done()
 }
 
 // MergeSortedPacked merges already sorted UidPack objects into a single UidPack.
-func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
-	if len(lists) == 0 {
+func MergeSortedPacked(uidPacks []*pb.UidPack) *pb.UidPack {
+	if len(uidPacks) == 0 {
 		return nil
 	}
 
-	h := &uint64Heap{}
-	heap.Init(h)
-	maxSz := 0
-	blockSize := 0
+	decoderHeap := &uint64Heap{}
+	heap.Init(decoderHeap)
 
-	for i, l := range lists {
-		if l == nil {
+	for i, uidPack := range uidPacks {
+		if uidPack == nil || len(uidPack.Blocks) == 0 {
 			continue
 		}
-		if blockSize == 0 {
-			blockSize = int(l.BlockSize)
-		}
-		decoder := codec.NewDecoder(lists[i])
-		block := decoder.Uids()
-		if len(block) == 0 {
-			continue
-		}
+		decoder := codec.NewDecoder(uidPacks[i])
 
-		listLen := codec.ExactLen(lists[i])
+		listLen := codec.ExactLen(uidPacks[i])
 		if listLen > 0 {
-			heap.Push(h, elem{
-				val:       block[0],
-				listIdx:   i,
-				decoder:   decoder,
-				blockIdx:  0,
-				blockUids: block,
+			heap.Push(decoderHeap, elem{
+				val:      decoder.Pack.Blocks[0].Base,
+				listIdx:  i,
+				decoder:  decoder,
+				blockIdx: 0,
 			})
-			if listLen > maxSz {
-				maxSz = listLen
-			}
 		}
 	}
 
 	// Our final result.
-	result := codec.Encoder{BlockSize: blockSize}
-	// emptyResult is used to keep track of whether the encoder contains data since the
-	// encoder storing the final result does not have an equivalent of len.
-	emptyResult := true
-	var last uint64 // Last element added to sorted / final result.
+	result := codec.Encoder{}
 
-	for h.Len() > 0 { // While heap is not empty.
-		me := &(*h)[0] // Peek at the top element in heap.
-		if emptyResult || me.val != last {
-			result.Add(me.val) // Add if unique.
-			last = me.val
-			emptyResult = false
+	for decoderHeap.Len() > 0 { // While heap is not empty.
+
+		currentDecoder := heap.Pop(decoderHeap).(elem)
+		var currentRb *roaring.Bitmap = nil
+
+		for decoderHeap.Len() > 0 {
+			// Peek the next block and check that it has the same base.
+			peekedNextDecoder := &(*decoderHeap)[0]
+			if currentDecoder.val != peekedNextDecoder.val {
+				break
+			}
+			// Pop the next block.
+			nextDecoder := heap.Pop(decoderHeap).(elem)
+			// Add its successor to the heap.
+			if len(nextDecoder.decoder.Pack.Blocks) > (nextDecoder.blockIdx + 1) {
+				heap.Push(decoderHeap, elem{
+					val:      nextDecoder.decoder.Pack.Blocks[nextDecoder.blockIdx+1].Base,
+					listIdx:  nextDecoder.listIdx,
+					decoder:  nextDecoder.decoder,
+					blockIdx: nextDecoder.blockIdx + 1,
+				})
+			}
+			// Merge both blocks into the current block.
+			if currentRb == nil {
+				currentRb = currentDecoder.decoder.RoaringBitmapForBlock(currentDecoder.blockIdx)
+			}
+			currentRb.Or(nextDecoder.decoder.RoaringBitmapForBlock(nextDecoder.blockIdx))
+		}
+		if currentRb == nil {
+			result.AddBlock(currentDecoder.decoder.Pack.Blocks[currentDecoder.blockIdx])
+		} else {
+			result.AddBlockFromBitmap(currentDecoder.val, currentRb, uint32(currentRb.GetCardinality()))
 		}
 
-		// Reached the end of this list. Remove it from the heap.
-		lastBlock := me.decoder.BlockIdx() == len(me.decoder.Pack.GetBlocks())-1
-		if me.blockIdx == len(me.blockUids)-1 && lastBlock {
-			heap.Pop(h)
-			continue
+		if len(currentDecoder.decoder.Pack.Blocks) > (currentDecoder.blockIdx + 1) {
+			heap.Push(decoderHeap, elem{
+				val:      currentDecoder.decoder.Pack.Blocks[currentDecoder.blockIdx+1].Base,
+				listIdx:  currentDecoder.listIdx,
+				decoder:  currentDecoder.decoder,
+				blockIdx: currentDecoder.blockIdx + 1,
+			})
 		}
-
-		// Increment counters.
-		me.blockIdx++
-		if me.blockIdx >= len(me.blockUids) {
-			// Reached the end of the current block. Decode the next block
-			// and reset the block counter.
-			me.blockUids = me.decoder.Next()
-			me.blockIdx = 0
-		}
-
-		// Update current value and re-heapify.
-		me.val = me.blockUids[me.blockIdx]
-		heap.Fix(h, 0) // Faster than Pop() followed by Push().
 	}
 
 	return result.Done()
@@ -309,13 +232,14 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 
 // IndexOfPacked finds the index of the given uid in the UidPack. If it doesn't find it,
 // it returns -1.
+// FIXME
 func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 	if u == nil {
 		return -1
 	}
 
 	index := 0
-	decoder := codec.Decoder{Pack: u}
+	decoder := codec.NewDecoder(u)
 	decoder.Seek(uid, codec.SeekStart)
 	// Need to re-unpack this block since Seek might make Uids return an array with missing
 	// elements in this block. We need them to make the correct calculation.
@@ -328,7 +252,7 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 
 	searchFunc := func(i int) bool { return uids[i] >= uid }
 	uidx := sort.Search(len(uids), searchFunc)
-	if uids[uidx] != uid {
+	if uidx == len(uids) || uids[uidx] != uid {
 		return -1
 	}
 

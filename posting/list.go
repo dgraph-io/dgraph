@@ -127,7 +127,7 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 	}
 
 	it.uidPosting = &pb.Posting{}
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+	it.dec = codec.NewDecoder(it.plist.Pack)
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
@@ -171,7 +171,7 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+	it.dec = codec.NewDecoder(it.plist.Pack)
 	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
@@ -793,8 +793,6 @@ func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	return data, BitCompletePosting
 }
 
-const blockSize int = 256
-
 type rollupOutput struct {
 	plist    *pb.PostingList
 	parts    map[uint64]*pb.PostingList
@@ -828,7 +826,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
 	initializeSplit := func() {
-		enc = codec.Encoder{BlockSize: blockSize}
+		enc = codec.Encoder{}
 
 		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
@@ -1399,7 +1397,7 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	l.Pack = codec.Encode(bl.Uids)
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits

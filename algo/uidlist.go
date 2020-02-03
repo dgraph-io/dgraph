@@ -43,31 +43,12 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if pack == nil {
 		return
 	}
-	dec := codec.Decoder{Pack: pack}
-	dec.Seek(afterUID, codec.SeekStart)
-	n := dec.ApproxLen()
-	m := len(v.Uids)
 
-	if n > m {
-		n, m = m, n
-	}
-	dst := o.Uids[:0]
-
-	// If n equals 0, set it to 1 to avoid division by zero.
-	if n == 0 {
-		n = 1
-	}
-
-	// Select appropriate function based on heuristics.
-	ratio := float64(m) / float64(n)
-	if ratio < 500 {
-		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
-	} else {
-		IntersectCompressedWithBin(&dec, v.Uids, &dst)
-	}
-	o.Uids = dst
+	intersection := IntersectWithLinPacked(pack, codec.Encode(v.Uids))
+	o.Uids = codec.Decode(intersection, afterUID) // TODO: Optimize
 }
 
+/*
 // IntersectCompressedWithLinJump performs the intersection linearly.
 func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64) {
 	m := len(v)
@@ -88,6 +69,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 		k += off
 	}
 }
+*/
 
 // IntersectCompressedWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"

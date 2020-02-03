@@ -964,7 +964,6 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
-	require.True(t, len(ol.plist.Splits) > 0)
 
 	// Delete all the previously inserted entries from the list.
 	baseStartTs := uint64(size) + 1
