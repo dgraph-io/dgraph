@@ -28,7 +28,6 @@ import (
 	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -89,9 +88,10 @@ type pIterator struct {
 	pidx       int // index of postings
 	plen       int
 
-	dec  *codec.Decoder
-	uids []uint64
-	uidx int // Offset into the uids slice
+	uidSet   *codec.UIDSet
+	uidSetIt *codec.UidSetIterator
+	uids     []uint64
+	uidx     int // Offset into the uids slice
 
 	afterUid uint64
 	splitIdx int
@@ -128,8 +128,10 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 	}
 
 	it.uidPosting = &pb.Posting{}
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
+	it.uidSet = codec.NewUIDSet(it.plist.Pack)
+	it.uidSet.RemoveBefore(afterUid)
+	it.uidSetIt = it.uidSet.NewIterator()
+	it.uids = it.uidSet.ToUids()
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
@@ -172,9 +174,10 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
-	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
+	it.uidSet = codec.NewUIDSet(it.plist.Pack)
+	it.uidSet.RemoveBefore(it.afterUid)
+	it.uidSetIt = it.uidSet.NewIterator()
+	it.uidSetIt.Next(it.uids)
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
@@ -223,7 +226,8 @@ func (it *pIterator) next() error {
 		return nil
 	}
 	it.uidx = 0
-	it.uids = it.dec.Next()
+	it.uids = it.uids[:0]
+	it.uidSetIt.Next(it.uids)
 
 	return errors.Wrapf(it.moveToNextValidPart(), "cannot advance iterator for list with key %s",
 		hex.EncodeToString(it.l.key))
@@ -798,8 +802,6 @@ func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	return data, BitCompletePosting
 }
 
-const blockSize int = 256
-
 type rollupOutput struct {
 	plist    *pb.PostingList
 	parts    map[uint64]*pb.PostingList
@@ -826,14 +828,14 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	var plist *pb.PostingList
-	var enc codec.Encoder
+	uidSet := codec.NewUIDSet(nil)
 	var startUid, endUid uint64
 	var splitIdx int
 
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
 	initializeSplit := func() {
-		enc = codec.Encoder{BlockSize: blockSize}
+		uidSet = codec.NewUIDSet(nil)
 
 		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
@@ -856,14 +858,14 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid && split {
-			plist.Pack = enc.Done()
+			plist.Pack = uidSet.ToPack()
 			out.parts[startUid] = plist
 
 			splitIdx++
 			initializeSplit()
 		}
 
-		enc.Add(p.Uid)
+		uidSet.AddUID(p.Uid)
 		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
 			plist.Postings = append(plist.Postings, p)
 		}
@@ -871,7 +873,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	})
 	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
 	x.Check(err)
-	plist.Pack = enc.Done()
+	plist.Pack = uidSet.ToPack()
 	if len(l.plist.Splits) > 0 {
 		out.parts[startUid] = plist
 	}
@@ -914,40 +916,38 @@ func (l *List) ApproxLen() int {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
-func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+func (l *List) Uids(opt ListOptions) (*codec.UIDSet, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
-	out := &pb.List{}
 	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
-			return out, ErrTsTooOld
+			return nil, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
+		uidSet := codec.NewUIDSet(l.plist.Pack)
+		uidSet.RemoveBefore(opt.AfterUid)
+		uidSet.Intersect(codec.UIDSetFromList(opt.Intersect))
 		l.RUnlock()
-		return out, nil
+		return uidSet, nil
 	}
-
+	uidSet := codec.NewUIDSet(l.plist.Pack)
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+			uidSet.AddUID(p.Uid)
 		}
 		return nil
 	})
 	l.RUnlock()
 	if err != nil {
-		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
+		return uidSet, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
 			hex.EncodeToString(l.key))
 	}
 
 	// Do The intersection here as it's optimized.
-	out.Uids = res
 	if opt.Intersect != nil {
-		algo.IntersectWith(out, opt.Intersect, out)
+		uidSet.Intersect(codec.UIDSetFromList(opt.Intersect))
 	}
-	return out, nil
+	return uidSet, nil
 }
 
 // Postings calls postFn with the postings that are common with
@@ -1420,7 +1420,7 @@ func ToBackupPostingList(l *pb.PostingList) *pb.BackupPostingList {
 		return &bl
 	}
 
-	bl.Uids = codec.Decode(l.Pack, 0)
+	bl.Uids = codec.NewUIDSet(l.Pack).ToUids()
 	bl.Postings = l.Postings
 	bl.CommitTs = l.CommitTs
 	bl.Splits = l.Splits
@@ -1435,7 +1435,9 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	uidSet := codec.NewUIDSet(nil)
+	uidSet.AddMany(bl.Uids)
+	l.Pack = uidSet.ToPack()
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits

@@ -121,7 +121,7 @@ func benchmarkPack(trials int, chunks *chunks) int {
 	for i := range times {
 		start := time.Now()
 		for _, c := range chunks.data {
-			codec.Encode(c, 256)
+			codec.Encode(c)
 			// bp128.DeltaPack(c)
 		}
 		times[i] = int(time.Since(start).Nanoseconds())
@@ -137,14 +137,14 @@ func benchmarkPack(trials int, chunks *chunks) int {
 func benchmarkUnpack(trials int, chunks *chunks) int {
 	packed := make([]*pb.UidPack, len(chunks.data))
 	for i, c := range chunks.data {
-		packed[i] = codec.Encode(c, 256)
+		packed[i] = codec.Encode(c)
 	}
 
 	times := make([]int, trials)
 	for i := range times {
 		start := time.Now()
 		for _, p := range packed {
-			dec := codec.Decoder{Pack: p}
+			dec := codec.NewDecoder(p)
 			for uids := dec.Seek(0, 0); len(uids) > 0; uids = dec.Next() {
 			}
 		}
