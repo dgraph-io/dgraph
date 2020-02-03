@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"container/heap"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -122,20 +121,26 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 type mapIterator struct {
-	fd     *os.File
-	reader *bufio.Reader
-	tmpBuf []byte
+	fd      *os.File
+	reader  *bufio.Reader
+	current *pb.MapEntry
+	tmpBuf  []byte
 }
 
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Next() *pb.MapEntry {
+func (mi *mapIterator) Current() *pb.MapEntry {
+	return mi.current
+}
+
+func (mi *mapIterator) Next() {
 	r := mi.reader
 	buf, err := r.Peek(binary.MaxVarintLen64)
 	if err == io.EOF {
-		return nil
+		mi.current = nil
+		return
 	}
 	x.Check(err)
 	sz, n := binary.Uvarint(buf)
@@ -151,7 +156,7 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 
 	me := new(pb.MapEntry)
 	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
-	return me
+	mi.current = me
 }
 
 func newMapIterator(filename string) *mapIterator {
@@ -231,14 +236,10 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
 
-	var ph postingHeap
+	itrs := []Iterator{}
 	for _, itr := range mapItrs {
-		me := itr.Next()
-		if me != nil {
-			heap.Push(&ph, heapNode{mapEntry: me, itr: itr})
-		} else {
-			fmt.Printf("NIL first map entry for %s", itr.fd.Name())
-		}
+		itr.Next()
+		itrs = append(itrs, itr)
 	}
 
 	writer := ci.writer
@@ -249,17 +250,12 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	var prevKey []byte
 	var plistLen int
-
-	for len(ph.nodes) > 0 {
-		node0 := &ph.nodes[0]
-		me := node0.mapEntry
-		node0.mapEntry = node0.itr.Next()
-		if node0.mapEntry != nil {
-			heap.Fix(&ph, 0)
-		} else {
-			heap.Pop(&ph)
+	itr := NewMergeIterator(itrs)
+	for {
+		me := itr.Current()
+		if me == nil {
+			break
 		}
-
 		keyChanged := !bytes.Equal(prevKey, me.Key)
 		// Note that the keys are coming in sorted order from the heap. So, if
 		// we see a new key, we should push out the number of entries we got
@@ -275,6 +271,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		}
 		prevKey = me.Key
 		batch = append(batch, me)
+		itr.Next()
 		plistLen++
 	}
 	if len(batch) > 0 {
