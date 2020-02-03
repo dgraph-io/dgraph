@@ -842,8 +842,9 @@ func RunVlogGC(store *badger.DB, vlogGCCloser *y.Closer) {
 		select {
 		case <-vlogGCCloser.HasBeenClosed():
 			vlogTicker.Stop()
+			mandatoryVlogTicker.Stop()
 			vlogGCCloser.Done()
-			break
+			return
 		case <-vlogTicker.C:
 			_, currentVlogSize := store.Size()
 			if currentVlogSize < lastVlogSize+GB {

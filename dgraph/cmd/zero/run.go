@@ -104,10 +104,10 @@ func setupListener(addr string, port int, kind string) (listener net.Listener, e
 }
 
 type state struct {
-	node       *node
-	rs         *conn.RaftServer
-	zero       *Server
-	vLogCloser *y.Closer // closer for vLogGC
+	node         *node
+	rs           *conn.RaftServer
+	zero         *Server
+	vlogGCCloser *y.Closer // closer for vLogGC
 }
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
@@ -221,7 +221,7 @@ func run() {
 
 	// Initialize the servers.
 	var st state
-	st.vLogCloser = y.NewCloser(1)
+	st.vlogGCCloser = y.NewCloser(1)
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
 
@@ -235,8 +235,8 @@ func run() {
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
-	x.RunVlogGC(kv, st.vLogCloser)
-	defer st.vLogCloser.SignalAndWait()
+	x.RunVlogGC(kv, st.vlogGCCloser)
+	defer st.vlogGCCloser.SignalAndWait()
 
 	if Zero.Conf.GetBool("telemetry") {
 		go st.zero.periodicallyPostTelemetry()
