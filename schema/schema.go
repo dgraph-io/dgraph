@@ -510,6 +510,8 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			{
 				Predicate: "dgraph.acl.predicate",
 				ValueType: pb.Posting_STRING,
+				Directive: pb.SchemaUpdate_INDEX,
+				Tokenizer: []string{"exact"},
 			},
 			{
 				Predicate: "dgraph.acl.permission",

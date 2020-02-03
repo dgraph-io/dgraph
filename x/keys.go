@@ -560,7 +560,7 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.group.acl":      {},
 	"dgraph.acl.predicate":  {},
 	"dgraph.acl.permission": {},
-	"dgraph.group.rule":     {},
+	"dgraph.acl.rule":       {},
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
