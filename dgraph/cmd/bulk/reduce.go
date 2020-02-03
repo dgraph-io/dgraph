@@ -125,13 +125,14 @@ type mapIterator struct {
 	fd     *os.File
 	reader *bufio.Reader
 	tmpBuf []byte
+	meCh   chan *pb.MapEntry
 }
 
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Next() *pb.MapEntry {
+func (mi *mapIterator) next() *pb.MapEntry {
 	r := mi.reader
 	buf, err := r.Peek(binary.MaxVarintLen64)
 	if err == io.EOF {
@@ -154,13 +155,34 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 	return me
 }
 
+func (mi *mapIterator) fill() {
+	for {
+		me := mi.next()
+		if me == nil {
+			break
+		}
+		mi.meCh <- me
+	}
+	close(mi.meCh)
+}
+
+func (mi *mapIterator) Next() *pb.MapEntry {
+	return <-mi.meCh
+}
+
 func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
 	x.Check(err)
 
-	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
+	mi := &mapIterator{
+		fd:     fd,
+		reader: bufio.NewReaderSize(gzReader, 16<<10),
+		meCh:   make(chan *pb.MapEntry, 100),
+	}
+	go mi.fill()
+	return mi
 }
 
 func (r *reducer) encodeAndWrite(
