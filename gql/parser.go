@@ -352,12 +352,8 @@ func substituteVar(f string, res *string, vmap varMap) error {
 			return errors.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
-		return nil
 	}
-	// It's a quoated string so unquote it.
-	var err error
-	*res, err = unquoteIfQuoted(f)
-	return err
+	return nil
 }
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
@@ -393,7 +389,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			if !v.IsGraphQLVar {
 				// It's not a variable. So, unquoate it.
 				var err error
-				gq.Func.Args[idx].Value, err = unquoteIfQuoted(gq.Func.Args[idx].Value)
+				gq.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
 				if err != nil {
 					return err
 				}
@@ -484,6 +480,10 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
+			if !v.IsGraphQLVar {
+				// Skip if this not graphql variable.
+				continue
+			}
 			if f.Func.Name == uidFunc {
 				// This is to support GraphQL variables in uid functions.
 				idVal, ok := vmap[v.Value]

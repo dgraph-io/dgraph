@@ -18,6 +18,7 @@ package gql
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -5149,5 +5150,19 @@ func TestFilterWithDollar(t *testing.T) {
 	_, err := Parse(Request{
 		Str: query,
 	})
+	require.NoError(t, err)
+}
+
+func TestFilterWithEmpty(t *testing.T) {
+	query := `{
+		names(func: has(name)) @filter(eq(name, "")) {
+		  count(uid)
+		}
+	  }`
+
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	fmt.Printf("%+v", gq.Query[0].Filter.Func.Args)
 	require.NoError(t, err)
 }
