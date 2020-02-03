@@ -21,14 +21,16 @@ import (
 	"github.com/ChainSafe/gossamer/core/types"
 )
 
+// Pool ValidTransaction
 type Pool map[common.Hash]*ValidTransaction
 
+// Queue interface
 type Queue interface {
 	Pop() *ValidTransaction
 	Insert(vt *ValidTransaction)
 }
 
-// see: https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/sr-primitives/src/transaction_validity.rs#L178
+// Validity struct see: https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/sr-primitives/src/transaction_validity.rs#L178
 type Validity struct {
 	Priority  uint64
 	Requires  [][]byte
@@ -37,6 +39,7 @@ type Validity struct {
 	Propagate bool
 }
 
+// NewValidity returns Validity
 func NewValidity(priority uint64, requires, provides [][]byte, longevity uint64, propagate bool) *Validity {
 	return &Validity{
 		Priority:  priority,
@@ -47,11 +50,13 @@ func NewValidity(priority uint64, requires, provides [][]byte, longevity uint64,
 	}
 }
 
+// ValidTransaction struct
 type ValidTransaction struct {
 	Extrinsic *types.Extrinsic
 	Validity  *Validity
 }
 
+// NewValidTransaction returns ValidTransaction
 func NewValidTransaction(extrinsic types.Extrinsic, validity *Validity) *ValidTransaction {
 	return &ValidTransaction{
 		Extrinsic: &extrinsic,

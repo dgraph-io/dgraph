@@ -27,9 +27,9 @@ import (
 // The results of decode are written to t interface by reference (instead of returning
 //  value as Decode does)
 func (sd *Decoder) DecodePtr(t interface{}) (err error) {
-	switch t.(type) {
+	switch t := t.(type) {
 	case *big.Int:
-		err = sd.DecodePtrBigInt(t.(*big.Int))
+		err = sd.DecodePtrBigInt(t)
 	case *int8, *uint8, *int16, *uint16, *int32, *uint32, *int64, *uint64, *int, *uint:
 		err = sd.DecodePtrFixedWidthInt(t)
 	case []byte, string:
@@ -53,62 +53,62 @@ func (sd *Decoder) DecodePtr(t interface{}) (err error) {
 // DecodePtrFixedWidthInt decodes integers < 2**32 by reading the bytes in little endian
 //  and writes results by reference t
 func (sd *Decoder) DecodePtrFixedWidthInt(t interface{}) (err error) {
-	switch t.(type) {
+	switch t := t.(type) {
 	case *int8:
 		var b byte
 		b, err = sd.ReadByte()
-		*t.(*int8) = int8(b)
+		*t = int8(b)
 	case *uint8:
 		var b byte
 		b, err = sd.ReadByte()
-		*t.(*uint8) = b
+		*t = b
 	case *int16:
 		buf := make([]byte, 2)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*int16) = int16(binary.LittleEndian.Uint16(buf))
+			*t = int16(binary.LittleEndian.Uint16(buf))
 		}
 	case *uint16:
 		buf := make([]byte, 2)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*uint16) = binary.LittleEndian.Uint16(buf)
+			*t = binary.LittleEndian.Uint16(buf)
 		}
 	case *int32:
 		buf := make([]byte, 4)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*int32) = int32(binary.LittleEndian.Uint32(buf))
+			*t = int32(binary.LittleEndian.Uint32(buf))
 		}
 	case *uint32:
 		buf := make([]byte, 4)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*uint32) = binary.LittleEndian.Uint32(buf)
+			*t = binary.LittleEndian.Uint32(buf)
 		}
 	case *int64:
 		buf := make([]byte, 8)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*int64) = int64(binary.LittleEndian.Uint64(buf))
+			*t = int64(binary.LittleEndian.Uint64(buf))
 		}
 	case *uint64:
 		buf := make([]byte, 8)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*uint64) = binary.LittleEndian.Uint64(buf)
+			*t = binary.LittleEndian.Uint64(buf)
 		}
 	case *int:
 		buf := make([]byte, 8)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*int) = int(binary.LittleEndian.Uint64(buf))
+			*t = int(binary.LittleEndian.Uint64(buf))
 		}
 	case *uint:
 		buf := make([]byte, 8)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
-			*t.(*uint) = uint(binary.LittleEndian.Uint64(buf))
+			*t = uint(binary.LittleEndian.Uint64(buf))
 		}
 	default:
 		return fmt.Errorf("unexpected type: %s", reflect.TypeOf(t))

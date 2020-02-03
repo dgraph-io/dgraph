@@ -22,28 +22,28 @@ import (
 )
 
 var (
-	// BadgerDB directory
+	// DataDirFlag BadgerDB Data directory
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the database",
 	}
-	// cli service settings
+	// VerbosityFlag cli service settings
 	VerbosityFlag = cli.StringFlag{
 		Name:  "verbosity",
 		Usage: "Supports levels crit (silent) to trce (trace)",
 		Value: log.LvlInfo.String(),
 	}
-	// Genesis
+	// GenesisFlag Path to genesis JSON file
 	GenesisFlag = cli.StringFlag{
 		Name:  "genesis",
 		Usage: "Path to genesis JSON file",
 	}
-	// config file
+	// ConfigFileFlag TOML configuration file
 	ConfigFileFlag = cli.StringFlag{
 		Name:  "config",
 		Usage: "TOML configuration file",
 	}
-	// unlock keystore
+	// UnlockFlag keystore
 	UnlockFlag = cli.StringFlag{
 		Name:  "unlock",
 		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
@@ -52,24 +52,27 @@ var (
 
 // P2P flags
 var (
-	// P2P service settings
+	// BootnodesFlag P2P service settings
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
 	}
+	// P2pPortFlag Set P2P listening port
 	P2pPortFlag = cli.UintFlag{
 		Name:  "p2pport",
 		Usage: "Set P2P listening port",
 	}
+	// ProtocolIDFlag Set protocol id
 	ProtocolIDFlag = cli.StringFlag{
 		Name:  "protocol",
 		Usage: "Set protocol id",
 	}
+	// NoBootstrapFlag Disables p2p bootstrapping
 	NoBootstrapFlag = cli.BoolFlag{
 		Name:  "nobootstrap",
 		Usage: "Disables p2p bootstrapping (mdns still enabled)",
 	}
-
+	// NoMdnsFlag Disables p2p mdns
 	NoMdnsFlag = cli.BoolFlag{
 		Name:  "nomdns",
 		Usage: "Disables p2p mdns discovery",
@@ -78,19 +81,23 @@ var (
 
 // RPC flags
 var (
-	RpcEnabledFlag = cli.BoolFlag{
+	// RPCEnabledFlag Enable the HTTP-RPC
+	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server",
 	}
-	RpcHostFlag = cli.StringFlag{
+	// RPCHostFlag HTTP-RPC server listening hostname
+	RPCHostFlag = cli.StringFlag{
 		Name:  "rpchost",
 		Usage: "HTTP-RPC server listening hostname",
 	}
-	RpcPortFlag = cli.IntFlag{
+	// RPCPortFlag HTTP-RPC server listening port
+	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
 	}
-	RpcModuleFlag = cli.StringFlag{
+	// RPCModuleFlag API modules to enable via HTTP-RPC
+	RPCModuleFlag = cli.StringFlag{
 		Name:  "rpcmods",
 		Usage: "API modules to enable via HTTP-RPC, comma separated list",
 	}
@@ -98,30 +105,37 @@ var (
 
 // Account management flags
 var (
+	// GenerateFlag Generate a new keypair
 	GenerateFlag = cli.BoolFlag{
 		Name:  "generate",
 		Usage: "Generate a new keypair. If type is not specified, defaults to sr25519",
 	}
+	// PasswordFlag Password used to encrypt the keystore.
 	PasswordFlag = cli.StringFlag{
 		Name:  "password",
 		Usage: "Password used to encrypt the keystore. Used with --generate or --unlock",
 	}
+	// ImportFlag Import encrypted keystore
 	ImportFlag = cli.StringFlag{
 		Name:  "import",
 		Usage: "Import encrypted keystore file generated with gossamer",
 	}
+	// ListFlag List node keys
 	ListFlag = cli.BoolFlag{
 		Name:  "list",
 		Usage: "List node keys",
 	}
+	// Ed25519Flag Specify account type ed25519
 	Ed25519Flag = cli.BoolFlag{
 		Name:  "ed25519",
 		Usage: "Specify account type as ed25519",
 	}
+	// Sr25519Flag Specify account type sr25519
 	Sr25519Flag = cli.BoolFlag{
 		Name:  "sr25519",
 		Usage: "Specify account type as sr25519",
 	}
+	// Secp256k1Flag Specify account type secp256k1
 	Secp256k1Flag = cli.BoolFlag{
 		Name:  "secp256k1",
 		Usage: "Specify account type as secp256k1",

@@ -35,52 +35,59 @@ var (
 )
 
 // Mock runtime API
-type MockRuntimeApi struct{}
+type MockRuntimeAPI struct{}
 
-func (r *MockRuntimeApi) Chain() string {
+// Chain is a mock func that returns testRuntimeChain
+func (r *MockRuntimeAPI) Chain() string {
 	return testRuntimeChain
 }
 
-func (r *MockRuntimeApi) Name() string {
+// Name is a mock func that returns testRuntimeName
+func (r *MockRuntimeAPI) Name() string {
 	return testRuntimeName
 }
 
-func (r *MockRuntimeApi) Properties() string {
+// Properties is a mock func that returns testRuntimeProperties
+func (r *MockRuntimeAPI) Properties() string {
 	return testRuntimeProperties
 }
 
-func (r *MockRuntimeApi) Version() string {
+// Version is a mock func that returns testRuntimeVersion
+func (r *MockRuntimeAPI) Version() string {
 	return testRuntimeVersion
 }
 
 // Mock network API
-type MockP2pApi struct{}
+type MockP2pAPI struct{}
 
-func (n *MockP2pApi) Health() p2p.Health {
+// Health is a mock func that returns testHealth
+func (n *MockP2pAPI) Health() p2p.Health {
 	return testHealth
 }
 
-func (n *MockP2pApi) NetworkState() p2p.NetworkState {
+// NetworkState is a mock func that returns testNetworkState
+func (n *MockP2pAPI) NetworkState() p2p.NetworkState {
 	return testNetworkState
 }
 
-func (n *MockP2pApi) Peers() []p2p.PeerInfo {
+// Peers is a mock func that returns testPeers
+func (n *MockP2pAPI) Peers() []p2p.PeerInfo {
 	return testPeers
 }
 
-func newMockApi() *api.Api {
-	p2pApi := &MockP2pApi{}
-	runtimeApi := &MockRuntimeApi{}
+func newMockAPI() *api.API {
+	p2pAPI := &MockP2pAPI{}
+	runtimeAPI := &MockRuntimeAPI{}
 
-	return &api.Api{
-		P2pModule:     module.NewP2pModule(p2pApi),
-		RuntimeModule: module.NewRuntimeModule(runtimeApi),
+	return &api.API{
+		P2pModule:     module.NewP2pModule(p2pAPI),
+		RuntimeModule: module.NewRuntimeModule(runtimeAPI),
 	}
 }
 
 // Test RPC's System.Health() response
 func TestSystemModule_Health(t *testing.T) {
-	sys := NewSystemModule(newMockApi())
+	sys := NewSystemModule(newMockAPI())
 
 	res := &SystemHealthResponse{}
 	sys.Health(nil, nil, res)
@@ -92,7 +99,7 @@ func TestSystemModule_Health(t *testing.T) {
 
 // Test RPC's System.NetworkState() response
 func TestSystemModule_NetworkState(t *testing.T) {
-	sys := NewSystemModule(newMockApi())
+	sys := NewSystemModule(newMockAPI())
 
 	res := &SystemNetworkStateResponse{}
 	sys.NetworkState(nil, nil, res)
@@ -104,7 +111,7 @@ func TestSystemModule_NetworkState(t *testing.T) {
 
 // Test RPC's System.Peers() response
 func TestSystemModule_Peers(t *testing.T) {
-	sys := NewSystemModule(newMockApi())
+	sys := NewSystemModule(newMockAPI())
 
 	res := &SystemPeersResponse{}
 	sys.Peers(nil, nil, res)

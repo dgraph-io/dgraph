@@ -40,7 +40,7 @@ type host struct {
 	h          libp2phost.Host
 	dht        *kaddht.IpfsDHT
 	bootnodes  []peer.AddrInfo
-	protocolId protocol.ID
+	protocolID protocol.ID
 }
 
 // newHost creates a host wrapper with a new libp2p host instance
@@ -93,7 +93,7 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 		h:          h,
 		dht:        dht,
 		bootnodes:  bns,
-		protocolId: pid,
+		protocolID: pid,
 	}, nil
 
 }
@@ -125,7 +125,7 @@ func (h *host) registerConnHandler(handler func(network.Conn)) {
 
 // registerStreamHandler registers the stream handler (see handleStream)
 func (h *host) registerStreamHandler(handler func(network.Stream)) {
-	h.h.SetStreamHandler(h.protocolId, handler)
+	h.h.SetStreamHandler(h.protocolID, handler)
 }
 
 // printHostAddresses prints host multiaddresses to console
@@ -169,7 +169,7 @@ func (h *host) send(p peer.ID, msg Message) (err error) {
 	if s == nil {
 
 		// open outbound stream with host protocol id
-		s, err = h.h.NewStream(h.ctx, p, h.protocolId)
+		s, err = h.h.NewStream(h.ctx, p, h.protocolID)
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func (h *host) getStream(p peer.ID) (stream network.Stream) {
 		for _, stream := range streams {
 
 			// return stream with matching host protocol id and stream direction outbound
-			if stream.Protocol() == h.protocolId && stream.Stat().Direction == network.DirOutbound {
+			if stream.Protocol() == h.protocolID && stream.Stat().Direction == network.DirOutbound {
 				return stream
 			}
 		}

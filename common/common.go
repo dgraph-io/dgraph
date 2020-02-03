@@ -74,7 +74,7 @@ func HexToBytes(in string) ([]byte, error) {
 	return out, err
 }
 
-// HexToBytes turns a 0x prefixed hex string into type Hash
+// HexToHash turns a 0x prefixed hex string into type Hash
 func HexToHash(in string) (Hash, error) {
 	if strings.Compare(in[:2], "0x") != 0 {
 		return [32]byte{}, errors.New("could not byteify non 0x prefixed string")

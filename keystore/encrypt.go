@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
+// EncryptedKeystore holds Type PublicKey and Ciphertext
 type EncryptedKeystore struct {
 	Type       string
 	PublicKey  string

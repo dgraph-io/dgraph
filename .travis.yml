@@ -43,9 +43,7 @@ matrix:
       after_script:
         - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
     - name: "Golang-ci Linter"
-      before_script:
-        - go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.18.0
-      script: golangci-lint run ./... -c .golangci.yml
+      script: make lint
     - name: "Build docker image"
       script:
         - make docker-build

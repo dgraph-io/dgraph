@@ -32,6 +32,7 @@ type Encoder struct {
 	Writer io.Writer
 }
 
+// Encode to byte array
 func Encode(in interface{}) ([]byte, error) {
 	buffer := bytes.Buffer{}
 	se := Encoder{&buffer}
@@ -100,25 +101,25 @@ func (se *Encoder) encodeFixedWidthInteger(in interface{}) (bytesEncoded int, er
 		err = binary.Write(se.Writer, binary.LittleEndian, byte(i))
 		bytesEncoded = 1
 	case uint8:
-		err = binary.Write(se.Writer, binary.LittleEndian, byte(i))
+		err = binary.Write(se.Writer, binary.LittleEndian, i)
 		bytesEncoded = 1
 	case int16:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i))
 		bytesEncoded = 2
 	case uint16:
-		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i))
+		err = binary.Write(se.Writer, binary.LittleEndian, i)
 		bytesEncoded = 2
 	case int32:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i))
 		bytesEncoded = 4
 	case uint32:
-		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i))
+		err = binary.Write(se.Writer, binary.LittleEndian, i)
 		bytesEncoded = 4
 	case int64:
 		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
 		bytesEncoded = 8
 	case uint64:
-		err = binary.Write(se.Writer, binary.LittleEndian, uint64(i))
+		err = binary.Write(se.Writer, binary.LittleEndian, i)
 		bytesEncoded = 8
 	case int:
 		err = binary.Write(se.Writer, binary.LittleEndian, int64(i))

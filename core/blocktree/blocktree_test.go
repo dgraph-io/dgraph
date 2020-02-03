@@ -119,7 +119,7 @@ func TestNode_isDecendantOf(t *testing.T) {
 	// Create tree with depth 4 (with 4 nodes)
 	bt, hashes := createFlatTree(t, 4)
 
-	// Check leaf is decendant of root
+	// Check leaf is descendant of root
 	leaf := bt.GetNode(hashes[3])
 	if !leaf.isDescendantOf(bt.head) {
 		t.Error("failed to verify leaf is descendant of root")
@@ -127,7 +127,7 @@ func TestNode_isDecendantOf(t *testing.T) {
 
 	// Verify the inverse relationship does not hold
 	if bt.head.isDescendantOf(leaf) {
-		t.Error("root should not be decendant of anything")
+		t.Error("root should not be descendant of anything")
 	}
 
 }

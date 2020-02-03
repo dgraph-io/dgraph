@@ -92,13 +92,13 @@ linters-settings:
     check-shadowing: true
 
     # settings per analyzer
-    settings:
-      printf: # analyzer name, run `go tool vet help` to see all analyzers
-        funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+#    settings:
+#      printf: # analyzer name, run `go tool vet help` to see all analyzers
+#        funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
+#          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+#          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+#          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+#          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
   golint:
     # minimal confidence for issues, default is 0.8
     min-confidence: 0.8
@@ -187,6 +187,22 @@ linters:
     - govet
     - gofmt
     - goimports
+    - varcheck
+    - misspell
+    - ineffassign
+    - gosimple
+    - unconvert
+    - goconst
+    - errcheck
+    - govet
+    - staticcheck
+    - megacheck
+    - goimports
+    - gosec
+    - bodyclose
+    - goprintffuncname
+    - golint
+    - depguard
   enable-all: false
   disable:
     - maligned
@@ -227,6 +243,38 @@ issues:
     - linters:
         - staticcheck
       text: "SA9003:"
+
+    - linters:
+        - golint
+      text: "package comment should be of the form"
+
+    - linters:
+        - golint
+      text: "don't use ALL_CAPS in Go names;"
+
+    - linters:
+        - golint
+      text: "don't use underscores in Go names;"
+
+    - linters:
+        - golint
+      text: "which can be annoying to use"
+
+    - linters:
+        - golint
+      text: "and that stutters; consider calling this"
+
+    - linters:
+        - golint
+      text: "should have comment or be unexported"
+
+    - linters:
+        - golint
+      text: "or a comment on this block"
+
+    - linters:
+        - golint
+      text: "error strings should not be capitalized or end with punctuation or a newline"
 
     # Exclude lll issues for long lines with go:generate
     - linters:

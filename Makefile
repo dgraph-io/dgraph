@@ -22,7 +22,7 @@ $(GOLANGCI):
 ## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint` on project files.
 .PHONY: lint
 lint: $(GOLANGCI)
-	golangci-lint run ./... -c .golangci.yml
+	GOBIN=$(PWD)/build/bin go run scripts/ci.go lint
 
 clean:
 	rm -fr ./build
@@ -33,7 +33,7 @@ format:
 ## test: Runs `go test` on project test files.
 test:
 	@echo "  >  \033[32mRunning tests...\033[0m "
-	go test ./... -v
+	GOBIN=$(PWD)/build/bin go run scripts/ci.go test
 
 ## install: Install missing dependencies. Runs `go mod download` internally.
 install:

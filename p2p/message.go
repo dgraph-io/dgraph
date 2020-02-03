@@ -46,14 +46,16 @@ const (
 	ChainSpecificMsgType = 255
 )
 
+// Message interface
 type Message interface {
 	Encode() ([]byte, error)
 	Decode(io.Reader) error
 	String() string
 	GetType() int
-	Id() string
+	IDString() string
 }
 
+// StatusMessage struct
 type StatusMessage struct {
 	ProtocolVersion     uint32
 	MinSupportedVersion uint32
@@ -64,6 +66,7 @@ type StatusMessage struct {
 	ChainStatus         []byte
 }
 
+// GetType returns the StatusMsgType int
 func (sm *StatusMessage) GetType() int {
 	return StatusMsgType
 }
@@ -89,19 +92,19 @@ func (sm *StatusMessage) Encode() ([]byte, error) {
 	return append([]byte{StatusMsgType}, enc...), nil
 }
 
-// Decodes the message into a StatusMessage, it assumes the type byte has been removed
+// Decode the message into a StatusMessage, it assumes the type byte has been removed
 func (sm *StatusMessage) Decode(r io.Reader) error {
 	sd := scale.Decoder{Reader: r}
 	_, err := sd.Decode(sm)
 	return err
 }
 
-// Returns an empty string to ensure we don't rebroadcast it
-func (sm *StatusMessage) Id() string {
+// IDString Returns an empty string to ensure we don't rebroadcast it
+func (sm *StatusMessage) IDString() string {
 	return ""
 }
 
-// for optionals, if first byte is 0, then it is None
+// BlockRequestMessage for optionals, if first byte is 0, then it is None
 // otherwise it is Some
 type BlockRequestMessage struct {
 	ID            uint64
@@ -112,13 +115,14 @@ type BlockRequestMessage struct {
 	Max           *optional.Uint32
 }
 
+// GetType int
 func (bm *BlockRequestMessage) GetType() int {
 	return BlockRequestMsgType
 }
 
 // String formats a BlockRequestMessage as a string
 func (bm *BlockRequestMessage) String() string {
-	return fmt.Sprintf("BlockRequestMessage Id=%d RequestedData=%d StartingBlock=0x%x EndBlockHash=0x%s Direction=%d Max=%s",
+	return fmt.Sprintf("BlockRequestMessage ID=%d RequestedData=%d StartingBlock=0x%x EndBlockHash=0x%s Direction=%d Max=%s",
 		bm.ID,
 		bm.RequestedData,
 		bm.StartingBlock,
@@ -131,9 +135,9 @@ func (bm *BlockRequestMessage) String() string {
 func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 	encMsg := []byte{BlockRequestMsgType}
 
-	encId := make([]byte, 8)
-	binary.LittleEndian.PutUint64(encId, bm.ID)
-	encMsg = append(encMsg, encId...)
+	encID := make([]byte, 8)
+	binary.LittleEndian.PutUint64(encID, bm.ID)
+	encMsg = append(encMsg, encID...)
 
 	encMsg = append(encMsg, bm.RequestedData)
 
@@ -168,7 +172,7 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 	return encMsg, nil
 }
 
-// Decodes the message into a BlockRequestMessage, it assumes the type byte has been removed
+// Decode the message into a BlockRequestMessage, it assumes the type byte has been removed
 func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	var err error
 
@@ -247,8 +251,8 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	return nil
 }
 
-// Id Returns the ID of the block
-func (bm *BlockRequestMessage) Id() string {
+// IDString Returns the ID of the block
+func (bm *BlockRequestMessage) IDString() string {
 	return string(bm.ID)
 }
 
@@ -261,6 +265,7 @@ type BlockAnnounceMessage struct {
 	Digest         [][]byte // any additional block info eg. logs, seal
 }
 
+// GetType int
 func (bm *BlockAnnounceMessage) GetType() int {
 	return BlockAnnounceMsgType
 }
@@ -283,15 +288,15 @@ func (bm *BlockAnnounceMessage) Encode() ([]byte, error) {
 	return append([]byte{BlockAnnounceMsgType}, enc...), nil
 }
 
-// Decodes the message into a BlockAnnounceMessage, it assumes the type byte has been removed
+// Decode the message into a BlockAnnounceMessage, it assumes the type byte has been removed
 func (bm *BlockAnnounceMessage) Decode(r io.Reader) error {
 	sd := scale.Decoder{Reader: r}
 	_, err := sd.Decode(bm)
 	return err
 }
 
-// Id returns the hash of the block
-func (bm *BlockAnnounceMessage) Id() string {
+// IDString returns the hash of the block
+func (bm *BlockAnnounceMessage) IDString() string {
 	// scale encode each extrinsic
 	encMsg, err := bm.Encode()
 	if err != nil {
@@ -304,32 +309,34 @@ func (bm *BlockAnnounceMessage) Id() string {
 	return hash.String()
 }
 
+// BlockResponseMessage struct
 type BlockResponseMessage struct {
 	ID   uint64
 	Data []byte // TODO: change this to BlockData type
 }
 
+// GetType int
 func (bm *BlockResponseMessage) GetType() int {
 	return BlockResponseMsgType
 }
 
 // String formats a BlockResponseMessage as a string
 func (bm *BlockResponseMessage) String() string {
-	return fmt.Sprintf("BlockResponseMessage Id=%d Data=%x", bm.ID, bm.Data)
+	return fmt.Sprintf("BlockResponseMessage ID=%d Data=%x", bm.ID, bm.Data)
 }
 
 // Encode encodes a block response message using SCALE and appends the type byte to the start
 func (bm *BlockResponseMessage) Encode() ([]byte, error) {
 	encMsg := []byte{BlockResponseMsgType}
 
-	encId := make([]byte, 8)
-	binary.LittleEndian.PutUint64(encId, bm.ID)
-	encMsg = append(encMsg, encId...)
+	encID := make([]byte, 8)
+	binary.LittleEndian.PutUint64(encID, bm.ID)
+	encMsg = append(encMsg, encID...)
 
 	return append(encMsg, bm.Data...), nil
 }
 
-// Decodes the message into a BlockResponseMessage, it assumes the type byte has been removed
+// Decode the message into a BlockResponseMessage, it assumes the type byte has been removed
 func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 	var err error
 	bm.ID, err = readUint64(r)
@@ -349,8 +356,8 @@ func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 	return nil
 }
 
-// Id returns the Id of BlockResponseMessage
-func (bm *BlockResponseMessage) Id() string {
+// IDString returns the ID of BlockResponseMessage
+func (bm *BlockResponseMessage) IDString() string {
 	return string(bm.ID)
 }
 
@@ -384,7 +391,7 @@ func (tm *TransactionMessage) Encode() ([]byte, error) {
 	return append([]byte{TransactionMsgType}, encodedMessage...), err
 }
 
-// Decodes the message into a TransactionMessage, it assumes the type byte han been removed
+// Decode the message into a TransactionMessage, it assumes the type byte han been removed
 func (tm *TransactionMessage) Decode(r io.Reader) error {
 	sd := scale.Decoder{Reader: r}
 	decodedMessage, err := sd.Decode([]byte{})
@@ -406,8 +413,8 @@ func (tm *TransactionMessage) Decode(r io.Reader) error {
 	return nil
 }
 
-// Id returns the Hash of TransactionMessage
-func (tm *TransactionMessage) Id() string {
+// IDString returns the Hash of TransactionMessage
+func (tm *TransactionMessage) IDString() string {
 	// scale encode each extrinsic
 	encMsg, err := tm.Encode()
 	if err != nil {
@@ -447,7 +454,7 @@ func (cm *ConsensusMessage) Encode() ([]byte, error) {
 	return append(encMsg, cm.Data...), nil
 }
 
-// Decodes the message into a ConsensusMessage, it assumes the type byte has been removed
+// Decode the message into a ConsensusMessage, it assumes the type byte has been removed
 func (cm *ConsensusMessage) Decode(r io.Reader) error {
 	buf := make([]byte, 4)
 	_, err := r.Read(buf)
@@ -467,8 +474,8 @@ func (cm *ConsensusMessage) Decode(r io.Reader) error {
 	return nil
 }
 
-// Id returns the Hash of ConsensusMessage
-func (cm *ConsensusMessage) Id() string {
+// IDString returns the Hash of ConsensusMessage
+func (cm *ConsensusMessage) IDString() string {
 	// scale encode each extrinsic
 	encMsg, err := cm.Encode()
 	if err != nil {

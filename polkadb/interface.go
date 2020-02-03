@@ -56,11 +56,13 @@ type Iteratee interface {
 	NewIterator() Iterable
 }
 
+// Reader interface
 type Reader interface {
 	Get(key []byte) ([]byte, error)
 	Has(key []byte) (bool, error)
 }
 
+// Writer interface
 type Writer interface {
 	PutItem
 	Del(key []byte) error

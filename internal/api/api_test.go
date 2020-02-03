@@ -32,65 +32,71 @@ var (
 	testPeers        = append([]p2p.PeerInfo{}, p2p.PeerInfo{})
 )
 
-// Mock RuntimeApi
-type MockRuntimeApi struct{}
+// MockRuntimeAPI is the Mock for RuntimeAPI
+type MockRuntimeAPI struct{}
 
-func (r *MockRuntimeApi) Chain() string {
+// Chain is the Mock for Chain
+func (r *MockRuntimeAPI) Chain() string {
 	return testChain
 }
 
-func (r *MockRuntimeApi) Name() string {
+// Name is the Mock for Name
+func (r *MockRuntimeAPI) Name() string {
 	return testName
 }
 
-func (r *MockRuntimeApi) Properties() string {
+// Properties is the Mock for Properties
+func (r *MockRuntimeAPI) Properties() string {
 	return testProperties
 }
 
-func (r *MockRuntimeApi) Version() string {
+// Version is the Mock for Version
+func (r *MockRuntimeAPI) Version() string {
 	return testVersion
 }
 
-// Mock P2pApi
-type MockP2pApi struct{}
+// MockP2pAPI Mock P2pAPI
+type MockP2pAPI struct{}
 
-func (n *MockP2pApi) Health() p2p.Health {
+func (n *MockP2pAPI) Health() p2p.Health {
 	return testHealth
 }
 
-func (n *MockP2pApi) NetworkState() p2p.NetworkState {
+// NetworkState is the Mock for NetworkState
+func (n *MockP2pAPI) NetworkState() p2p.NetworkState {
 	return testNetworkState
 }
 
-func (n *MockP2pApi) Peers() []p2p.PeerInfo {
+// Peers is the Mock for Peers
+func (n *MockP2pAPI) Peers() []p2p.PeerInfo {
 	return testPeers
 }
 
 func TestSystemModule(t *testing.T) {
-	s := NewApiService(&MockP2pApi{}, &MockRuntimeApi{})
+	s := NewAPIService(&MockP2pAPI{}, &MockRuntimeAPI{})
 
 	// Runtime Module
 
 	// System.Chain
-	chain := s.Api.RuntimeModule.Chain()
+	chain := s.API.RuntimeModule.Chain()
 	if chain != testChain {
 		t.Fatalf("System.Chain - expected %+v got: %+v\n", testChain, chain)
 	}
 
 	// System.Name
-	name := s.Api.RuntimeModule.Name()
+	name := s.API.RuntimeModule.Name()
 	if name != testName {
 		t.Fatalf("System.Name - expected %+v got: %+v\n", testName, name)
 	}
 
 	// System.Properties
-	properties := s.Api.RuntimeModule.Properties()
+	properties := s.API.RuntimeModule.Properties()
 	if properties != testProperties {
 		t.Fatalf("System.Properties - expected: %s got: %s\n", testProperties, properties)
 	}
 
 	// System.Version
-	version := s.Api.RuntimeModule.Version()
+	version := s.API.RuntimeModule.Version()
 	if version != testVersion {
 		t.Fatalf("System.Version - expected: %s got: %s\n", testVersion, version)
 	}
@@ -98,19 +104,19 @@ func TestSystemModule(t *testing.T) {
 	// Network Module
 
 	// System.Health
-	health := s.Api.P2pModule.Health()
+	health := s.API.P2pModule.Health()
 	if health != testHealth {
 		t.Fatalf("System.Health - expected %+v got: %+v\n", testHealth, health)
 	}
 
 	// System.NetworkState
-	networkState := s.Api.P2pModule.NetworkState()
+	networkState := s.API.P2pModule.NetworkState()
 	if networkState != testNetworkState {
 		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", testNetworkState, networkState)
 	}
 
 	// System.Peers
-	peers := s.Api.P2pModule.Peers()
+	peers := s.API.P2pModule.Peers()
 	if len(peers) != len(testPeers) {
 		t.Fatalf("System.Peers - expected %+v got: %+v\n", testPeers, peers)
 	}

@@ -19,7 +19,7 @@ const VrfProofLength int = 64
 // SigningContext is the context for signatures used or created with substrate
 var SigningContext = []byte("substrate")
 
-// Sr25519Keypair is a sr25519 public-private keypair
+// Keypair is a sr25519 public-private keypair
 type Keypair struct {
 	public  *PublicKey
 	private *PrivateKey

@@ -11,9 +11,16 @@ import (
 	"github.com/ChainSafe/gossamer/crypto"
 )
 
+// PublicKeyLength is the fixed Public Key Length
 const PublicKeyLength int = 32
+
+// SeedLength is the fixed Seed Length
 const SeedLength int = 32
+
+// PrivateKeyLength is the fixed Private Key Length
 const PrivateKeyLength int = 64
+
+// SignatureLength is the fixed Signature Length
 const SignatureLength int = 64
 
 // Keypair is a ed25519 public-private keypair
@@ -22,7 +29,10 @@ type Keypair struct {
 	private *PrivateKey
 }
 
+// PrivateKey is the ed25519 Private Key
 type PrivateKey ed25519.PrivateKey
+
+// PublicKey is the ed25519 Public Key
 type PublicKey ed25519.PublicKey
 
 // NewKeypair returns an Ed25519 keypair given a ed25519 private key

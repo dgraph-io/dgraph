@@ -24,47 +24,57 @@ import (
 	"github.com/ChainSafe/gossamer/internal/api"
 )
 
+// ChainHashRequest Hash
 type ChainHashRequest common.Hash
 
+// ChainBlockNumberRequest Int
 type ChainBlockNumberRequest *big.Int
 
+// ChainBlockResponse struct
 // TODO: Waiting on Block type defined here https://github.com/ChainSafe/gossamer/pull/233
 type ChainBlockResponse struct{}
 
+// ChainBlockHeaderResponse struct
 type ChainBlockHeaderResponse struct{}
 
+// ChainHashResponse struct
 type ChainHashResponse struct {
 	ChainHash common.Hash `json:"chainHash"`
 }
 
 // ChainModule is an RPC module providing access to storage API points.
 type ChainModule struct {
-	api *api.Api
+	api *api.API
 }
 
 // NewChainModule creates a new State module.
-func NewChainModule(api *api.Api) *ChainModule {
+func NewChainModule(api *api.API) *ChainModule {
 	return &ChainModule{
 		api: api,
 	}
 }
 
+// GetBlock assigns the ChainModule api to nothing
 func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *ChainBlockResponse) {
 	_ = cm.api
 }
 
+// GetBlockHash isn't implemented properly yet.
 func (cm *ChainModule) GetBlockHash(r *http.Request, req *ChainBlockNumberRequest, res *ChainHashResponse) {
 }
 
+// GetFinalizedHead isn't implemented properly yet.
 func (cm *ChainModule) GetFinalizedHead(r *http.Request, req *EmptyRequest, res *ChainHashResponse) {
 }
 
-//DB isn't implemented properly yet. Doesn't return block headers
+//GetHeader DB isn't implemented properly yet. Doesn't return block headers
 func (cm *ChainModule) GetHeader(r *http.Request, req *ChainHashRequest, res *ChainBlockHeaderResponse) {
 }
 
+// SubscribeFinalizedHeads isn't implemented properly yet.
 func (cm *ChainModule) SubscribeFinalizedHeads(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) {
 }
 
+// SubscribeNewHead isn't implemented properly yet.
 func (cm *ChainModule) SubscribeNewHead(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) {
 }

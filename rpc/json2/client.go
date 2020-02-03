@@ -31,7 +31,7 @@ type clientRequest struct {
 	// Method params
 	Params interface{} `json:"params"`
 	// Random request ID
-	Id uint64 `json:"id"`
+	ID uint64 `json:"id"`
 }
 
 type clientResponse struct {
@@ -49,13 +49,13 @@ func EncodeClientRequest(method string, args interface{}) ([]byte, error) {
 		Version: JSONVersion,
 		Method:  method,
 		Params:  args,
-		Id:      uint64(rand.Int63()),
+		ID:      uint64(rand.Int63()),
 	}
 	return json.Marshal(c)
 }
 
-// TODO: Decide how to encode reponse values
-// DecodeClientResponse unmarshals the response value
+// DecodeClientResponse will unmarshal the response value
+// TODO: Decide how to encode response values
 func DecodeClientResponse(r io.Reader, reply interface{}) error {
 	var c clientResponse
 	if err := json.NewDecoder(r).Decode(&c); err != nil {

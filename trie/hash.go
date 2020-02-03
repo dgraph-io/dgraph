@@ -27,6 +27,7 @@ type Hasher struct {
 	hash hash.Hash
 }
 
+// NewHasher create new Hasher instance
 func NewHasher() (*Hasher, error) {
 	h, err := blake2b.New256(nil)
 	if err != nil {

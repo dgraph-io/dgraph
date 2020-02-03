@@ -27,7 +27,7 @@ import (
 
 const MdnsPeriod = time.Minute
 
-// See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
+// Notifee See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
 type Notifee struct {
 	ctx  context.Context
 	host *host
@@ -52,7 +52,7 @@ func (m *mdns) start() {
 		"Starting mDNS discovery service...",
 		"host", m.host.id(),
 		"period", MdnsPeriod,
-		"protocol", m.host.protocolId,
+		"protocol", m.host.protocolID,
 	)
 
 	// create and start service
@@ -60,7 +60,7 @@ func (m *mdns) start() {
 		m.host.ctx,
 		m.host.h,
 		MdnsPeriod,
-		string(m.host.protocolId),
+		string(m.host.protocolID),
 	)
 	if err != nil {
 		log.Error("Failed to start mDNS discovery service", "err", err)

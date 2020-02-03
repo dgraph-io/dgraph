@@ -6,18 +6,26 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
+// KeyType str
 type KeyType = string
 
+// Ed25519Type ed25519
 const Ed25519Type KeyType = "ed25519"
+
+//Sr25519Type sr25519
 const Sr25519Type KeyType = "sr25519"
+
+//Secp256k1Type secp256k1
 const Secp256k1Type KeyType = "secp256k1"
 
+// Keypair interface
 type Keypair interface {
 	Sign(msg []byte) ([]byte, error)
 	Public() PublicKey
 	Private() PrivateKey
 }
 
+// PublicKey interface
 type PublicKey interface {
 	Verify(msg, sig []byte) (bool, error)
 	Encode() []byte
@@ -26,6 +34,7 @@ type PublicKey interface {
 	Hex() string
 }
 
+// PrivateKey interface
 type PrivateKey interface {
 	Sign(msg []byte) ([]byte, error)
 	Public() (PublicKey, error)

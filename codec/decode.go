@@ -33,6 +33,7 @@ type Decoder struct {
 	Reader io.Reader
 }
 
+// Decode a byte array into interface
 func Decode(in []byte, t interface{}) (interface{}, error) {
 	buf := &bytes.Buffer{}
 	sd := Decoder{Reader: buf}
@@ -45,6 +46,7 @@ func Decode(in []byte, t interface{}) (interface{}, error) {
 	return output, err
 }
 
+// DecodePtr a byte array into a interface pointer
 func DecodePtr(in []byte, t interface{}) error {
 	buf := &bytes.Buffer{}
 	sd := Decoder{Reader: buf}
@@ -191,6 +193,7 @@ func (sd *Decoder) DecodeInteger() (_ int64, err error) {
 	return int64(o), err
 }
 
+// DecodeUnsignedInteger will decode unsigned integer
 func (sd *Decoder) DecodeUnsignedInteger() (o uint64, err error) {
 	b, err := sd.ReadByte()
 	if err != nil {
@@ -219,7 +222,7 @@ func (sd *Decoder) DecodeUnsignedInteger() (o uint64, err error) {
 	} else if byteLen > 4 && byteLen < 8 {
 		tmp := make([]byte, 8)
 		copy(tmp, buf)
-		o = uint64(binary.LittleEndian.Uint64(tmp))
+		o = binary.LittleEndian.Uint64(tmp)
 	} else {
 		err = errors.New("could not decode invalid integer")
 	}
@@ -298,6 +301,7 @@ func (sd *Decoder) DecodeBool() (bool, error) {
 	return false, errors.New("cannot decode invalid boolean")
 }
 
+// DecodeInterface will decode to interface
 func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
 	switch reflect.ValueOf(t).Kind() {
 	case reflect.Ptr:
@@ -316,6 +320,7 @@ func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
 	}
 }
 
+// DecodeArray will decode array to interface
 func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 	var v reflect.Value
 	switch reflect.ValueOf(t).Kind() {
@@ -380,7 +385,7 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 }
 
 // DecodeTuple accepts a byte array representing the SCALE encoded tuple and an interface. This interface should be a pointer
-// to a struct which the encoded tuple should be marshalled into. If it is a valid encoding for the struct, it returns the
+// to a struct which the encoded tuple should be marshaled into. If it is a valid encoding for the struct, it returns the
 // decoded struct, otherwise error,
 // Note that we return the same interface that was passed to this function; this is because we are writing directly to the
 // struct that is passed in, using reflect to get each of the fields.
@@ -609,6 +614,7 @@ func (sd *Decoder) DecodeBoolArray() ([]bool, error) {
 	return o, nil
 }
 
+// DecodeStringArray will decode to string array
 func (sd *Decoder) DecodeStringArray() ([]string, error) {
 	length, err := sd.DecodeInteger()
 	if err != nil {

@@ -29,6 +29,7 @@ import (
 	"github.com/disiqueira/gotree"
 )
 
+// Hash common.Hash
 type Hash = common.Hash
 
 // BlockTree represents the current state with all possible blocks
@@ -166,7 +167,7 @@ func (bt *BlockTree) SubChain(start Hash, end Hash) []*node {
 	return sn.subChain(en)
 }
 
-// SubChain returns the path from the node with Hash start to the node with Hash end
+// SubBlockchain returns the path from the node with Hash start to the node with Hash end
 func (bt *BlockTree) SubBlockchain(start *big.Int, end *big.Int) []*types.Block {
 	s := bt.getNodeFromBlockNumber(start)
 	e := bt.getNodeFromBlockNumber(end)
@@ -184,13 +185,13 @@ func (bt *BlockTree) DeepestLeaf() *node {
 	return bt.leaves.DeepestLeaf()
 }
 
-// DeepestLeaf returns leftmost deepest block in BlockTree BT
+// DeepestBlock returns leftmost deepest block in BlockTree BT
 func (bt *BlockTree) DeepestBlock() *types.Block {
 	b := bt.leaves.DeepestLeaf().getBlockFromNode()
 	return b
 }
 
-// computes the slot for a block from genesis
+// ComputeSlotForBlock computes the slot for a block from genesis
 // helper for now, there's a better way to do this
 func (bt *BlockTree) ComputeSlotForBlock(b *types.Block, sd uint64) uint64 {
 	gt := bt.head.arrivalTime
@@ -199,7 +200,7 @@ func (bt *BlockTree) ComputeSlotForBlock(b *types.Block, sd uint64) uint64 {
 	sp := uint64(0)
 	for gt < nt {
 		gt += sd
-		sp += 1
+		sp++
 	}
 
 	return sp

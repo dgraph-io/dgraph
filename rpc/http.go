@@ -24,19 +24,19 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-// HttpServer acts as gateway to an RPC server
-type HttpServer struct {
+// HTTPServer acts as gateway to an RPC server
+type HTTPServer struct {
 	Port      uint32  // Listening port
 	Host      string  // Listening hostname
 	rpcServer *Server // Actual RPC call handler
 }
 
-// NewHttpServer creates a new http server and registers an associated rpc server
-func NewHttpServer(api *api.Api, codec Codec, host string, port uint32, modules []api.Module) *HttpServer {
-	server := &HttpServer{
+// NewHTTPServer creates a new http server and registers an associated rpc server
+func NewHTTPServer(api *api.API, codec Codec, host string, port uint32, modules []api.Module) *HTTPServer {
+	server := &HTTPServer{
 		Port:      port,
 		Host:      host,
-		rpcServer: NewApiServer(modules, api),
+		rpcServer: NewAPIServer(modules, api),
 	}
 
 	server.rpcServer.RegisterCodec(codec)
@@ -45,7 +45,7 @@ func NewHttpServer(api *api.Api, codec Codec, host string, port uint32, modules 
 }
 
 // Start registers the rpc handler function and starts the server listening on `h.port`
-func (h *HttpServer) Start() {
+func (h *HTTPServer) Start() {
 	log.Debug("[rpc] Starting HTTP Server...", "port", h.Port)
 	http.HandleFunc("/rpc", h.rpcServer.ServeHTTP)
 

@@ -23,28 +23,36 @@ import (
 	"github.com/ChainSafe/gossamer/p2p"
 )
 
+// NOT_IMPLEMENTED used as placeholder for not implemented yet funcs
+const NOT_IMPLEMENTED = "not yet implemented"
+
 // SystemModule is an RPC module providing access to core API points
 type SystemModule struct {
-	api *api.Api // TODO: migrate to network state
+	api *api.API // TODO: migrate to network state
 }
 
 // EmptyRequest represents an RPC request with no fields
 type EmptyRequest struct{}
 
+// StringResponse holds the string response
 type StringResponse string
 
+// SystemHealthResponse struct to marshal json
 type SystemHealthResponse struct {
 	Health p2p.Health `json:"health"`
 }
 
+// SystemNetworkStateResponse struct to marshal json
 type SystemNetworkStateResponse struct {
 	NetworkState p2p.NetworkState `json:"networkState"`
 }
 
+// SystemPeersResponse struct to marshal json
 type SystemPeersResponse struct {
 	Peers []p2p.PeerInfo `json:"peers"`
 }
 
+// SystemPropertiesResponse struct to marshal json
 type SystemPropertiesResponse struct {
 	Ss58Format    int    `json:"ss58Format"`
 	TokenDecimals int    `json:"tokenDecimals"`
@@ -52,7 +60,7 @@ type SystemPropertiesResponse struct {
 }
 
 // NewSystemModule creates a new API instance
-func NewSystemModule(api *api.Api) *SystemModule {
+func NewSystemModule(api *api.API) *SystemModule {
 	return &SystemModule{
 		api: api, // TODO: migrate to network state
 	}
@@ -60,25 +68,25 @@ func NewSystemModule(api *api.Api) *SystemModule {
 
 // Chain returns the runtime chain
 func (sm *SystemModule) Chain(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = "not yet implemented"
+	*res = NOT_IMPLEMENTED
 	return nil
 }
 
 // Name returns the runtime name
 func (sm *SystemModule) Name(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = "not yet implemented"
+	*res = NOT_IMPLEMENTED
 	return nil
 }
 
 // Properties returns the runtime properties
 func (sm *SystemModule) Properties(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = "not yet implemented"
+	*res = NOT_IMPLEMENTED
 	return nil
 }
 
 // Version returns the runtime version
 func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = "not yet implemented"
+	*res = NOT_IMPLEMENTED
 	return nil
 }
 

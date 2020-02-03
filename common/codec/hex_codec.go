@@ -48,5 +48,5 @@ func Encode(in []byte) []byte {
 // combineNibbles concatenates two nibble to make a byte.
 // Assumes nibbles are the lower 4 bits of each of the inputs
 func combineNibbles(ms byte, ls byte) byte {
-	return byte(ms<<4 | (ls & 0xF))
+	return ms<<4 | (ls & 0xF)
 }

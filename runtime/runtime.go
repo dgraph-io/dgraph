@@ -29,12 +29,14 @@ import (
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
+// RuntimeCtx struct
 type RuntimeCtx struct {
 	storage   Storage
 	allocator *allocator.FreeingBumpHeapAllocator
 	keystore  *keystore.Keystore
 }
 
+// Runtime struct
 type Runtime struct {
 	vm        wasm.Instance
 	storage   Storage
@@ -93,20 +95,24 @@ func NewRuntime(code []byte, s Storage, ks *keystore.Keystore) (*Runtime, error)
 	return &r, nil
 }
 
+// Stop func
 func (r *Runtime) Stop() {
 	r.vm.Close()
 }
 
+// Store func
 func (r *Runtime) Store(data []byte, location int32) {
 	mem := r.vm.Memory.Data()
 	copy(mem[location:location+int32(len(data))], data)
 }
 
+// Load load
 func (r *Runtime) Load(location, length int32) []byte {
 	mem := r.vm.Memory.Data()
 	return mem[location : location+length]
 }
 
+// Exec func
 func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
 	ptr, err := r.malloc(uint32(len(data)))
 	if err != nil {

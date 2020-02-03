@@ -18,7 +18,7 @@ package json2
 
 type ErrCode int
 
-// Offical JSON-RPC 2.0 Error codes
+// Official JSON-RPC 2.0 Error codes
 // https://www.jsonrpc.org/specification#error_object
 const (
 	ERR_PARSE          ErrCode = -32700

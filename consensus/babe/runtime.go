@@ -24,7 +24,7 @@ import (
 
 // gets the configuration data for Babe from the runtime
 func (b *Session) configurationFromRuntime() error {
-	data, err := b.rt.Exec(runtime.BabeApiConfiguration, []byte{})
+	data, err := b.rt.Exec(runtime.BabeAPIConfiguration, []byte{})
 	if err != nil {
 		return err
 	}

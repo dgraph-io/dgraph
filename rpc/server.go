@@ -44,7 +44,7 @@ type CodecRequest interface {
 type Server struct {
 	codec    Codec       // Codec for requests/responses (default JSON)
 	services *serviceMap // Maps requests to actual procedure calls
-	api      *api.Api    // API interface for system internals
+	api      *api.API    // API interface for system internals
 }
 
 // NewServer creates a new Server.
@@ -54,8 +54,8 @@ func NewServer() *Server {
 	}
 }
 
-// NewApiServer creates a new Server.
-func NewApiServer(mods []api.Module, api *api.Api) *Server {
+// NewAPIServer creates a new Server.
+func NewAPIServer(mods []api.Module, api *api.API) *Server {
 	s := &Server{
 		services: new(serviceMap),
 		api:      api,
@@ -87,8 +87,8 @@ func (s *Server) RegisterModules(mods []api.Module) {
 	}
 }
 
-// TODO: deal with contentType
 // RegisterCodec set the codec for the server.
+// TODO: deal with contentType
 func (s *Server) RegisterCodec(codec Codec) {
 	s.codec = codec
 }

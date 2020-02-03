@@ -252,6 +252,7 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	return ok, br, err
 }
 
+// Load data into trie
 func (t *Trie) Load(data map[string]string) error {
 	for key, value := range data {
 		keyBytes, err := common.HexToBytes(key)

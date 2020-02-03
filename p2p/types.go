@@ -29,12 +29,12 @@ type Health struct {
 
 // NetworkState is network information about host needed for the rpc server and the runtime
 type NetworkState struct {
-	PeerId string
+	PeerID string
 }
 
 // PeerInfo is network information about peers needed for the rpc server
 type PeerInfo struct {
-	PeerId          string
+	PeerID          string
 	Roles           byte
 	ProtocolVersion uint32
 	BestHash        common.Hash

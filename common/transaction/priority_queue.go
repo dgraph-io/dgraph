@@ -30,6 +30,7 @@ type node struct {
 	child  *node
 }
 
+// NewPriorityQueue creates new instance of PriorityQueue
 func NewPriorityQueue() *PriorityQueue {
 	pq := PriorityQueue{
 		head:  nil,

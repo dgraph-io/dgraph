@@ -488,7 +488,7 @@ func TestShouldGetItemFromIndex(t *testing.T) {
 }
 
 // that that getItemSizeFromIndex method gets expected item size from index
-//  max index possition
+//  max index position
 func TestShouldGetMaxFromIndex(t *testing.T) {
 	// given
 	index := uint(21)

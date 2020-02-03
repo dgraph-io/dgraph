@@ -34,7 +34,7 @@ type serverRequest struct {
 	// Method params
 	Params *json.RawMessage `json:"params"`
 	// Request id, may be int or string
-	Id *json.RawMessage `json:"id"`
+	ID *json.RawMessage `json:"id"`
 }
 
 type serverResponse struct {
@@ -45,7 +45,7 @@ type serverResponse struct {
 	// Any generated errors
 	Error *Error `json:"error"`
 	// Request id
-	Id *json.RawMessage `json:"id"`
+	ID *json.RawMessage `json:"id"`
 }
 
 // Codec is used to define the JSON codec methods to adhere to the Codec interface inside the rpc package.
@@ -111,7 +111,7 @@ func (c *CodecRequest) WriteResponse(w http.ResponseWriter, reply interface{}) {
 	res := &serverResponse{
 		Version: JSONVersion,
 		Result:  reply,
-		Id:      c.request.Id,
+		ID:      c.request.ID,
 	}
 	c.writeServerResponse(w, res)
 }
@@ -128,7 +128,7 @@ func (c *CodecRequest) WriteError(w http.ResponseWriter, status int, err error) 
 	res := &serverResponse{
 		Version: JSONVersion,
 		Error:   jsonErr,
-		Id:      c.request.Id,
+		ID:      c.request.ID,
 	}
 	c.writeServerResponse(w, res)
 }

@@ -32,11 +32,13 @@ type BabeConfiguration struct {
 	SecondarySlots     bool
 }
 
+// AuthorityDataRaw represents the fields for the Authority Data
 type AuthorityDataRaw struct {
-	Id     [sr25519.PublicKeyLength]byte
+	ID     [sr25519.PublicKeyLength]byte
 	Weight uint64
 }
 
+//AuthorityData struct
 type AuthorityData struct {
 	id     *sr25519.PublicKey
 	weight uint64
@@ -50,6 +52,7 @@ func NewAuthorityData(pub *sr25519.PublicKey, weight uint64) *AuthorityData {
 	}
 }
 
+// VrfOutputAndProof represents the fields for VRF output and proof
 type VrfOutputAndProof struct {
 	output [sr25519.VrfOutputLength]byte
 	proof  [sr25519.VrfProofLength]byte

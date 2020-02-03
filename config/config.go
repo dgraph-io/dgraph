@@ -29,7 +29,7 @@ import (
 type Config struct {
 	Global GlobalConfig `toml:"global"`
 	P2p    P2pCfg       `toml:"p2p"`
-	Rpc    RpcCfg       `toml:"rpc"`
+	RPC    RPCCfg       `toml:"rpc"`
 }
 
 type GlobalConfig struct {
@@ -44,7 +44,7 @@ type P2pCfg struct {
 	NoMdns         bool     `toml:"no-mdns"`
 }
 
-type RpcCfg struct {
+type RPCCfg struct {
 	Port    uint32       `toml:"port"`
 	Host    string       `toml:"host"`
 	Modules []api.Module `toml:"modules"`
@@ -64,7 +64,7 @@ func ToTOML(file string, s *Config) *os.File {
 
 	var raw []byte
 	if raw, err = toml.Marshal(*s); err != nil {
-		log.Warn("error marshalling toml", "err", err)
+		log.Warn("error marshaling toml", "err", err)
 		os.Exit(1)
 	}
 

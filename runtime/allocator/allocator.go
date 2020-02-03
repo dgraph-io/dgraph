@@ -30,9 +30,14 @@ import (
 
 // The pointers need to be aligned to 8 bytes
 const alignment uint32 = 8
+
+// HeadsQty 22
 const HeadsQty = 22
+
+// MaxPossibleAllocation 2^24 bytes
 const MaxPossibleAllocation = 16777216 // 2^24 bytes
 
+// FreeingBumpHeapAllocator struct
 type FreeingBumpHeapAllocator struct {
 	bumper      uint32
 	heads       [HeadsQty]uint32
@@ -42,7 +47,7 @@ type FreeingBumpHeapAllocator struct {
 	TotalSize   uint32
 }
 
-// Creates a new allocation heap which follows a freeing-bump strategy.
+// NewAllocator Creates a new allocation heap which follows a freeing-bump strategy.
 // The maximum size which can be allocated at once is 16 MiB.
 //
 // # Arguments

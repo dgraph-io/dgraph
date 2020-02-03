@@ -45,14 +45,29 @@ func (cm *ConnManager) Notifee() network.Notifiee {
 	return nb
 }
 
-func (_ *ConnManager) TagPeer(peer.ID, string, int)             {}
-func (_ *ConnManager) UntagPeer(peer.ID, string)                {}
-func (_ *ConnManager) UpsertTag(peer.ID, string, func(int) int) {}
-func (_ *ConnManager) GetTagInfo(peer.ID) *connmgr.TagInfo      { return &connmgr.TagInfo{} }
-func (_ *ConnManager) TrimOpenConns(ctx context.Context)        {}
-func (_ *ConnManager) Protect(peer.ID, string)                  {}
-func (_ *ConnManager) Unprotect(peer.ID, string) bool           { return false }
-func (_ *ConnManager) Close() error                             { return nil }
+// TagPeer peer
+func (*ConnManager) TagPeer(peer.ID, string, int) {}
+
+// UntagPeer peer
+func (*ConnManager) UntagPeer(peer.ID, string) {}
+
+// UpsertTag peer
+func (*ConnManager) UpsertTag(peer.ID, string, func(int) int) {}
+
+// GetTagInfo peer
+func (*ConnManager) GetTagInfo(peer.ID) *connmgr.TagInfo { return &connmgr.TagInfo{} }
+
+// TrimOpenConns peer
+func (*ConnManager) TrimOpenConns(ctx context.Context) {}
+
+// Protect peer
+func (*ConnManager) Protect(peer.ID, string) {}
+
+// Unprotect peer
+func (*ConnManager) Unprotect(peer.ID, string) bool { return false }
+
+// Close peer
+func (*ConnManager) Close() error { return nil }
 
 // Listen is called when network starts listening on an address
 func (cm *ConnManager) Listen(n network.Network, address ma.Multiaddr) {

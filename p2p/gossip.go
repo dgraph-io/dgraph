@@ -38,10 +38,10 @@ func newGossip(host *host) *gossip {
 func (g *gossip) handleMessage(msg Message) {
 
 	// check if message has not been seen
-	if !g.hasSeen[msg.Id()] {
+	if !g.hasSeen[msg.IDString()] {
 
 		// set message to has been seen
-		g.hasSeen[msg.Id()] = true
+		g.hasSeen[msg.IDString()] = true
 
 		log.Trace(
 			"Gossiping message from peer",

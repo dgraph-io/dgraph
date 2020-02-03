@@ -29,36 +29,39 @@ import (
 
 // Database is a wrapper around a polkadb
 type Database struct {
-	Db     polkadb.Database
+	DB     polkadb.Database
 	Batch  polkadb.Batch
 	Hasher *Hasher
 }
 
+// NewDatabase create new db instance
 func NewDatabase(db polkadb.Database) *Database {
 	batch := db.NewBatch()
 
 	return &Database{
-		Db:    db,
+		DB:    db,
 		Batch: batch,
 	}
 }
 
+// Store stores a key and value into db
 func (db *Database) Store(key, value []byte) error {
-	return db.Db.Put(key, value)
+	return db.DB.Put(key, value)
 }
 
+// Load load a value for a given key from db
 func (db *Database) Load(key []byte) ([]byte, error) {
-	return db.Db.Get(key)
+	return db.DB.Get(key)
 }
 
 // StoreLatestStorageHash stores the given hash at the known LatestStorageHashKey.
 func (db *Database) StoreLatestStorageHash(hash []byte) error {
-	return db.Db.Put(common.LatestStorageHashKey, hash)
+	return db.DB.Put(common.LatestStorageHashKey, hash)
 }
 
 // LoadLatestStorageHash retrieves the hash stored at the known LatestStorageHashKey.
 func (db *Database) LoadLatestStorageHash() (common.Hash, error) {
-	hashbytes, err := db.Db.Get(common.LatestStorageHashKey)
+	hashbytes, err := db.DB.Get(common.LatestStorageHashKey)
 	if err != nil {
 		return common.Hash{}, err
 	}

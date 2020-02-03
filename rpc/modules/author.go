@@ -24,7 +24,7 @@ import (
 )
 
 type AuthorModule struct {
-	api *api.Api
+	api *api.API
 }
 
 type KeyInsertRequest struct {
@@ -41,6 +41,7 @@ type ExtrinsicOrHash struct {
 }
 type ExtrinsicOrHashRequest []ExtrinsicOrHash
 
+// KeyInsertResponse []byte
 // TODO: Waiting on Block type defined here https://github.com/ChainSafe/gossamer/pull/233
 type KeyInsertResponse []byte
 
@@ -65,34 +66,34 @@ type ExtrinsicStatus struct {
 
 type ExtrinsicHashResponse common.Hash
 
-// NewAuthorRPC creates a new Author module.
-func NewAuthorModule(api *api.Api) *AuthorModule {
+// NewAuthorModule creates a new Author module.
+func NewAuthorModule(api *api.API) *AuthorModule {
 	return &AuthorModule{
 		api: api,
 	}
 }
 
-// Insert a key into the keystore
+// InsertKey Insert a key into the keystore
 func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *KeyInsertResponse) {
 	_ = cm.api
 }
 
-// Returns all pending extrinsics
+// PendingExtrinsics Returns all pending extrinsics
 func (cm *AuthorModule) PendingExtrinsics(r *http.Request, req *EmptyRequest, res *PendingExtrinsicsResponse) {
 }
 
-// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting
+// RemoveExtrinsic Remove given extrinsic from the pool and temporarily ban it to prevent reimporting
 func (cm *AuthorModule) RemoveExtrinsic(r *http.Request, req *ExtrinsicOrHashRequest, res *RemoveExtrinsicsResponse) {
 }
 
-// Generate new session keys and returns the corresponding public keys
+// RotateKeys Generate new session keys and returns the corresponding public keys
 func (cm *AuthorModule) RotateKeys(r *http.Request, req *EmptyRequest, res *KeyRotateResponse) {
 }
 
-// Submit and subscribe to watch an extrinsic until unsubscribed
+// SubmitAndWatchExtrinsic Submit and subscribe to watch an extrinsic until unsubscribed
 func (cm *AuthorModule) SubmitAndWatchExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicStatus) {
 }
 
-// Submit a fully formatted extrinsic for block inclusion
+// SubmitExtrinsic Submit a fully formatted extrinsic for block inclusion
 func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicHashResponse) {
 }

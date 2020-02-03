@@ -25,11 +25,11 @@ var _ services.Service = &Service{}
 
 // Service couples all components required for the API.
 type Service struct {
-	Api *Api
+	API *API
 }
 
-// Api contains all the available modules
-type Api struct {
+// API contains all the available modules
+type API struct {
 	P2pModule     *apiModule.P2pModule
 	RuntimeModule *apiModule.RuntimeModule
 }
@@ -37,15 +37,15 @@ type Api struct {
 // Module represents a collection of API endpoints.
 type Module string
 
-// NewApiService creates a new API instance.
-func NewApiService(p2pApi apiModule.P2pApi, runtimeApi apiModule.RuntimeApi) *Service {
+// NewAPIService creates a new API instance.
+func NewAPIService(p2pAPI apiModule.P2pAPI, runtimeAPI apiModule.RuntimeAPI) *Service {
 	return &Service{
-		&Api{
+		&API{
 			P2pModule: &apiModule.P2pModule{
-				P2pApi: p2pApi,
+				P2pAPI: p2pAPI,
 			},
 			RuntimeModule: &apiModule.RuntimeModule{
-				RuntimeApi: runtimeApi,
+				RuntimeAPI: runtimeAPI,
 			},
 		},
 	}

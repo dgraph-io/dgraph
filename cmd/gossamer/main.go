@@ -42,10 +42,10 @@ var (
 		utils.NoMdnsFlag,
 	}
 	rpcFlags = []cli.Flag{
-		utils.RpcEnabledFlag,
-		utils.RpcHostFlag,
-		utils.RpcPortFlag,
-		utils.RpcModuleFlag,
+		utils.RPCEnabledFlag,
+		utils.RPCHostFlag,
+		utils.RPCPortFlag,
+		utils.RPCModuleFlag,
 	}
 	genesisFlags = []cli.Flag{
 		utils.GenesisFlag,

@@ -167,7 +167,7 @@ func testBatchPut(db Database, t *testing.T) {
 		if size == 0 {
 			t.Fatalf("failed to set size of data in each batch, got %v", size)
 		}
-		err = b.Delete([]byte(k(i)))
+		err = b.Delete(k(i))
 		if err != nil {
 			t.Fatalf("failed to delete batch key %v", k(i))
 		}

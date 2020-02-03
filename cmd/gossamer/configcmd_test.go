@@ -281,7 +281,7 @@ func TestSetP2pConfig(t *testing.T) {
 	}
 }
 
-func TestSetRpcConfig(t *testing.T) {
+func TestSetRPCConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
 
 	app := cli.NewApp()
@@ -290,31 +290,31 @@ func TestSetRpcConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    cfg.RpcCfg
+		expected    cfg.RPCCfg
 	}{
 		{
 			"config file",
 			[]string{"config"},
 			[]interface{}{tempFile.Name()},
-			cfgClone.Rpc,
+			cfgClone.RPC,
 		},
 		{
 			"host and port",
 			[]string{"rpchost", "rpcport"},
 			[]interface{}{"someHost", uint(1337)},
-			cfg.RpcCfg{
+			cfg.RPCCfg{
 				Port:    1337,
 				Host:    "someHost",
-				Modules: cfg.DefaultRpcModules,
+				Modules: cfg.DefaultRPCModules,
 			},
 		},
 		{
 			"modules",
 			[]string{"rpcmods"},
 			[]interface{}{"system,state"},
-			cfg.RpcCfg{
-				Port:    cfg.DefaultRpcHttpPort,
-				Host:    cfg.DefaultRpcHttpHost,
+			cfg.RPCCfg{
+				Port:    cfg.DefaultRPCHTTPPort,
+				Host:    cfg.DefaultRPCHTTPHost,
 				Modules: []api.Module{"system", "state"},
 			},
 		},
@@ -327,9 +327,9 @@ func TestSetRpcConfig(t *testing.T) {
 			require.Nil(t, err)
 
 			input := cfg.DefaultConfig()
-			setRpcConfig(context, &input.Rpc)
+			setRPCConfig(context, &input.RPC)
 
-			require.Equal(t, c.expected, input.Rpc)
+			require.Equal(t, c.expected, input.RPC)
 		})
 	}
 }

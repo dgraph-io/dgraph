@@ -121,7 +121,7 @@ func TestGossip(t *testing.T) {
 		}
 	}
 
-	hasSeenB := nodeB.gossip.hasSeen[TestMessage.Id()]
+	hasSeenB := nodeB.gossip.hasSeen[TestMessage.IDString()]
 	if hasSeenB == false {
 		t.Error(
 			"node B did not receive block request message from node A",
@@ -130,7 +130,7 @@ func TestGossip(t *testing.T) {
 		)
 	}
 
-	hasSeenA := nodeA.gossip.hasSeen[TestMessage.Id()]
+	hasSeenA := nodeA.gossip.hasSeen[TestMessage.IDString()]
 	if hasSeenA == false {
 		t.Error(
 			"node A did not receive block request message from node B or node C",
@@ -139,7 +139,7 @@ func TestGossip(t *testing.T) {
 		)
 	}
 
-	hasSeenC := nodeC.gossip.hasSeen[TestMessage.Id()]
+	hasSeenC := nodeC.gossip.hasSeen[TestMessage.IDString()]
 	if hasSeenC == false {
 		t.Error(
 			"node C did not receive block request message from node A or node B",

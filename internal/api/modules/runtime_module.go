@@ -20,43 +20,44 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
+// RuntimeModule holds a fields for interacting with the runtime
 type RuntimeModule struct {
-	RuntimeApi RuntimeApi
+	RuntimeAPI RuntimeAPI
 }
 
-// RuntimeApi is the interface for the runtime package
-type RuntimeApi interface {
+// RuntimeAPI is the interface for the runtime package
+type RuntimeAPI interface {
 	Chain() string
 	Name() string
 	Properties() string
 	Version() string
 }
 
-// RuntimeModule implements RuntimeApi
-func NewRuntimeModule(runtimeApi RuntimeApi) *RuntimeModule {
-	return &RuntimeModule{runtimeApi}
+// NewRuntimeModule creates a struct RuntimeModule with a RuntimeAPI
+func NewRuntimeModule(runtimeAPI RuntimeAPI) *RuntimeModule {
+	return &RuntimeModule{runtimeAPI}
 }
 
 // Chain returns runtime Chain()
 func (m *RuntimeModule) Chain() string {
 	log.Debug("[rpc] Executing System.Chain", "params", nil)
-	return m.RuntimeApi.Chain()
+	return m.RuntimeAPI.Chain()
 }
 
 // Name returns runtime Name()
 func (m *RuntimeModule) Name() string {
 	log.Debug("[rpc] Executing System.Name", "params", nil)
-	return m.RuntimeApi.Name()
+	return m.RuntimeAPI.Name()
 }
 
 // Properties returns runtime Properties()
 func (m *RuntimeModule) Properties() string {
 	log.Debug("[rpc] Executing System.Properties", "params", nil)
-	return m.RuntimeApi.Properties()
+	return m.RuntimeAPI.Properties()
 }
 
 // Version returns runtime Version()
 func (m *RuntimeModule) Version() string {
 	log.Debug("[rpc] Executing System.Version", "params", nil)
-	return m.RuntimeApi.Version()
+	return m.RuntimeAPI.Version()
 }
