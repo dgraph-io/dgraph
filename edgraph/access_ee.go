@@ -345,10 +345,10 @@ func RefreshAcls(closer *y.Closer) {
 
 const queryAcls = `
 {
-  allAcls(func: has(dgraph.group.acl)) {
+  allAcls(func: type(Group)) {
     dgraph.xid
 		dgraph.group.acl
-		dgraph.group.rule {
+		dgraph.acl.rule {
 			dgraph.acl.predicate
 			dgraph.acl.permission
 		}

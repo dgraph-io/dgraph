@@ -110,6 +110,9 @@ const (
 {"predicate":"dgraph.password","type":"password"},
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
 {"predicate":"dgraph.group.acl","type":"string"}
+{"predicate":"dgraph.acl.rule","type":"uid","list":true}
+{"predicate":"dgraph.acl.predicate","type":"string"}
+{"predicate":"dgraph.acl.permission","type":"int"}
 `
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper

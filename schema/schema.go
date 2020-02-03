@@ -512,7 +512,7 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 				ValueType: pb.Posting_STRING,
 			},
 			{
-				Predicate: "dgraph.acl.premission",
+				Predicate: "dgraph.acl.permission",
 				ValueType: pb.Posting_INT,
 			},
 		}...)

@@ -14,6 +14,7 @@ package acl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -681,6 +682,147 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
+		})
+	}
+}
+
+func TestNewACLPredicates(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	devGroupMut := `
+		_:g  <dgraph.xid>        "dev" .
+		_:g  <dgraph.type>       "Group" .
+		_:g  <dgraph.acl.rule>   _:r1 .
+		_:r1 <dgraph.acl.predicate>  "name" .
+		_:r1 <dgraph.acl.permission> "4" .
+		_:g  <dgraph.acl.rule>   _:r2 .
+		_:r2 <dgraph.acl.predicate>  "nickname" .
+		_:r2 <dgraph.acl.permission> "2" .
+	`
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(devGroupMut),
+		CommitNow: true,
+	})
+	require.NoError(t, err, "Error adding group and permissions")
+
+	idQuery := fmt.Sprintf(`
+	{
+		userid as var(func: eq(dgraph.xid, "%s"))
+		gid as var(func: eq(dgraph.xid, "dev"))
+	}`, userid)
+	addAliceToDevMutation := &api.NQuad{
+		Subject:   "uid(userid)",
+		Predicate: "dgraph.user.group",
+		ObjectId:  "uid(gid)",
+	}
+	_, err = dg.NewTxn().Do(ctx, &api.Request{
+		CommitNow: true,
+		Query:     idQuery,
+		Mutations: []*api.Mutation{
+			{
+				Set: []*api.NQuad{addAliceToDevMutation},
+			},
+		},
+	})
+	require.NoError(t, err, "Error adding user to dev group")
+
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <nickname> "RG" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	queryTests := []struct {
+		input       string
+		output      string
+		description string
+	}{
+		{
+			`
+			{
+				me(func: has(name)) {
+					name
+					nickname
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			"alice doesn't have read access to <nickname>",
+		},
+		{
+			`
+			{
+				me(func: has(nickname)) {
+					name
+					nickname
+				}
+			}
+			`,
+			`{}`,
+			`alice doesn't have access to <nickname> so "has(nickname)" is unauthorized`,
+		},
+	}
+
+	t.Parallel()
+	for _, tc := range queryTests {
+		t.Run(tc.description, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.Nil(t, err)
+			testutil.CompareJSON(t, tc.output, string(resp.Json))
+		})
+	}
+
+	mutationTests := []struct {
+		input       string
+		output      string
+		err         error
+		description string
+	}{
+		{
+			"_:a <name> \"Animesh\" .",
+			"",
+			errors.New(""),
+			"alice doesn't have write access on <name>.",
+		},
+		{
+			"_:a <nickname> \"Pathak\" .",
+			"",
+			nil,
+			"alice can mutate <nickname> predicate.",
+		},
+	}
+	for _, tc := range mutationTests {
+		t.Run(tc.description, func(t *testing.T) {
+			_, err := userClient.NewTxn().Mutate(ctx, &api.Mutation{
+				SetNquads: []byte(tc.input),
+				CommitNow: true,
+			})
+			require.True(t, (err == nil) == (tc.err == nil))
 		})
 	}
 }
