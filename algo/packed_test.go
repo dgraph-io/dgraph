@@ -17,7 +17,10 @@
 package algo
 
 import (
+	"fmt"
 	"math"
+	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -339,4 +342,51 @@ func TestApplyFilterUintPacked(t *testing.T) {
 	u := newUidPack(l)
 	res := ApplyFilterPacked(u, func(a uint64, idx int) bool { return (l[idx] % 2) == 1 })
 	require.Equal(t, []uint64{1, 3, 5, 7, 9}, codec.Decode(res, 0))
+}
+
+func BenchmarkIntersectSortedRatio(b *testing.B) {
+	randomTests := func(sz int, overlap float64) {
+		rs := []int{1, 10, 50, 100, 500, 1000, 10000, 100000, 1000000}
+		for _, r := range rs {
+			sz1 := sz
+			sz2 := sz * r
+			if sz2 > 1000000 {
+				break
+			}
+
+			u1, v1 := make([]uint64, sz1), make([]uint64, sz2)
+			limit := int64(float64(sz) / overlap)
+			for i := 0; i < sz1; i++ {
+				u1[i] = uint64(rand.Int63n(limit))
+			}
+			for i := 0; i < sz2; i++ {
+				v1[i] = uint64(rand.Int63n(limit))
+			}
+			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
+
+			compressedUids1 := codec.Encode(u1, 256)
+			compressedUids2 := codec.Encode(v1, 256)
+			compressedLists := []*pb.UidPack{compressedUids1, compressedUids2}
+
+			fmt.Printf("compressed1: %d, compressed2: %d, bytes/int 1: %f, bytes/int 2: %f\n",
+				compressedUids1.Size(), compressedUids2.Size(),
+				float64(compressedUids1.Size())/float64(len(u1)),
+				float64(compressedUids2.Size())/float64(len(v1)))
+			b.Run(fmt.Sprintf("Compressed:IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						IntersectSortedPacked(compressedLists)
+					}
+				})
+			fmt.Println()
+		}
+	}
+
+	randomTests(10, 0.01)
+	randomTests(100, 0.01)
+	randomTests(1000, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(100000, 0.01)
+	randomTests(1000000, 0.01)
 }
