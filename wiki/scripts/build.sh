@@ -20,8 +20,9 @@ HOST=https://docs.dgraph.io
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
-	'v1.1.1'
+	'v1.2.0'
 	'master'
+	'v1.1.1'
 	'v1.1.0'
 	'v1.0.18'
 	'v1.0.17'
