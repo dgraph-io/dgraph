@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -385,8 +384,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
 
-	requireContainsRequestID(t, result)
-
 	return result
 
 }
@@ -496,22 +493,6 @@ func runGQLRequest(req *http.Request) ([]byte, error) {
 	}
 
 	return body, nil
-}
-
-func requireContainsRequestID(t *testing.T, resp *GraphQLResponse) {
-
-	v, ok := resp.Extensions["requestID"]
-	require.True(t, ok,
-		"GraphQL response didn't contain a request ID - response was:\n%s",
-		serializeOrError(resp))
-
-	str, ok := v.(string)
-	require.True(t, ok, "GraphQL requestID is not a string - response was:\n%s",
-		serializeOrError(resp))
-
-	_, err := uuid.Parse(str)
-	require.NoError(t, err, "GraphQL requestID is not a UUID - response was:\n%s",
-		serializeOrError(resp))
 }
 
 func requireUID(t *testing.T, uid string) {

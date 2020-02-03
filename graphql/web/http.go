@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -55,7 +54,7 @@ type graphqlHandler struct {
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
 func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
 	gh := &graphqlHandler{resolver: resolver}
-	gh.handler = api.WithRequestID(recoveryHandler(commonHeaders(gh)))
+	gh.handler = recoveryHandler(commonHeaders(gh))
 	return gh
 }
 
@@ -69,7 +68,7 @@ func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 
 // write chooses between the http response writer and gzip writer
 // and sends the schema response using that.
-func write(w http.ResponseWriter, rr *schema.Response, errMsg string, acceptGzip bool) {
+func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	var out io.Writer = w
 
 	// If the receiver accepts gzip, then we would update the writer
@@ -82,7 +81,7 @@ func write(w http.ResponseWriter, rr *schema.Response, errMsg string, acceptGzip
 	}
 
 	if _, err := rr.WriteTo(out); err != nil {
-		glog.Error(errMsg, err)
+		glog.Error(err)
 	}
 }
 
@@ -108,13 +107,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		res = schema.ErrorResponse(err, api.RequestID(ctx))
+		res = schema.ErrorResponse(err)
 	} else {
 		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
 
-	write(w, res, fmt.Sprintf("[%s]", api.RequestID(ctx)),
-		strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 
 }
 
@@ -200,12 +198,10 @@ func commonHeaders(next http.Handler) http.Handler {
 func recoveryHandler(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqID := api.RequestID(r.Context())
-		defer api.PanicHandler(reqID,
+		defer api.PanicHandler(
 			func(err error) {
-				rr := schema.ErrorResponse(err, reqID)
-				write(w, rr, fmt.Sprintf("[%s]", reqID),
-					strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+				rr := schema.ErrorResponse(err)
+				write(w, rr, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 			})
 
 		next.ServeHTTP(w, r)

@@ -23,7 +23,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -121,8 +120,8 @@ func (qr *queryResolver) rewriteAndExecute(
 
 	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
 	if err != nil {
-		glog.Infof("[%s] query execution failed : %s", api.RequestID(ctx), err)
-		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
+		glog.Infof("Dgraph query execution failed : %s", err)
+		return nil, schema.GQLWrapf(err, "Dgraph query failed")
 	}
 
 	return resp, nil
