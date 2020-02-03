@@ -38,6 +38,25 @@ func (n *node) current() *pb.MapEntry {
 	return n.iter.Current()
 }
 
+func (n *node) setIterator(itr Iterator) {
+	n.iter = itr
+	n.mapItr, _ = itr.(*mapIterator)
+	n.mergeItr, _ = itr.(*MergeIterator)
+}
+
+func (n *node) next() {
+	switch {
+	case n.mapItr != nil:
+		n.mapItr.Next()
+		return
+	case n.mergeItr != nil:
+		n.mergeItr.Next()
+		return
+	default:
+		n.iter.Next()
+	}
+}
+
 func (mi *MergeIterator) bigger() *node {
 	if mi.small == &mi.left {
 		return &mi.right
@@ -57,7 +76,7 @@ func (mi *MergeIterator) swapSmall() {
 }
 
 func (mi *MergeIterator) Next() {
-	mi.small.iter.Next()
+	mi.small.next()
 	mi.fix()
 }
 
@@ -85,14 +104,9 @@ func NewMergeIterator(itrs []Iterator) Iterator {
 	case 1:
 		return itrs[0]
 	case 2:
-		mi := &MergeIterator{
-			left: node{
-				iter: itrs[0],
-			},
-			right: node{
-				iter: itrs[1],
-			},
-		}
+		mi := &MergeIterator{}
+		mi.left.setIterator(itrs[0])
+		mi.right.setIterator(itrs[1])
 		mi.small = &mi.left
 		mi.fix()
 		return mi
