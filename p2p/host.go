@@ -80,7 +80,7 @@ func newHost(ctx context.Context, cfg *Config) (*host, error) {
 	h = rhost.Wrap(h, dht)
 
 	// format bootnodes
-	bns, err := stringsToAddrInfos(cfg.BootstrapNodes)
+	bns, err := stringsToAddrInfos(cfg.Bootnodes)
 	if err != nil {
 		return nil, err
 	}

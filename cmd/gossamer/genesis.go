@@ -32,7 +32,7 @@ func loadGenesis(ctx *cli.Context) error {
 	log.Debug("Loading genesis", "genesisPath", genesisPath, "dataDir", dataDir)
 
 	// read genesis configuration file
-	gen, err := genesis.LoadGenesisJSONFile(genesisPath)
+	gen, err := genesis.LoadGenesisFromJSON(genesisPath)
 	if err != nil {
 		return err
 	}

@@ -41,8 +41,8 @@ const (
 )
 
 var (
-	// DefaultP2PBootstrap Must be non-nil to match toml parsing semantics
-	DefaultP2PBootstrap = []string{}
+	// DefaultP2PBootnodes Must be non-nil to match toml parsing semantics
+	DefaultP2PBootnodes = []string{}
 	// DefaultRPCModules holds defaults RPC modules
 	DefaultRPCModules = []api.Module{"system"}
 )
@@ -55,11 +55,11 @@ var (
 
 	// DefaultP2PConfig P2P
 	DefaultP2PConfig = P2pCfg{
-		Port:           DefaultP2PPort,
-		ProtocolID:     DefaultP2PProtocolID,
-		BootstrapNodes: DefaultP2PBootstrap,
-		NoBootstrap:    false,
-		NoMdns:         false,
+		Bootnodes:   DefaultP2PBootnodes,
+		ProtocolID:  DefaultP2PProtocolID,
+		Port:        DefaultP2PPort,
+		NoBootstrap: false,
+		NoMdns:      false,
 	}
 
 	// DefaultRPCConfig RPC

@@ -19,28 +19,25 @@ package dot
 import (
 	"math/big"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/state"
-	"github.com/ChainSafe/gossamer/trie"
-
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/state"
+	"github.com/ChainSafe/gossamer/trie"
 )
 
 // Creates a Dot with default configurations. Does not include RPC server.
-func createTestDot(t *testing.T) *Dot {
+func createTestDot(t *testing.T, testDir string) *Dot {
 	var services []services.Service
+
 	// P2P
 	p2pCfg := &p2p.Config{
-		BootstrapNodes: []string{},
-		Port:           7000,
-		RandSeed:       1,
-		NoBootstrap:    false,
-		NoMdns:         false,
-		DataDir:        "",
+		RandSeed: 1,       // default 0
+		DataDir:  testDir, // default "~/.gossamer"
 	}
 	p2pSrvc, err := p2p.NewService(p2pCfg, nil, nil)
 	services = append(services, p2pSrvc)
@@ -69,13 +66,16 @@ func createTestDot(t *testing.T) *Dot {
 }
 
 func TestDot_Start(t *testing.T) {
-	var availableServices = [...]services.Service{
+	testDir := path.Join(os.TempDir(), "gossamer-test")
+	defer os.RemoveAll(testDir)
+
+	availableServices := [...]services.Service{
 		&p2p.Service{},
 		&api.Service{},
 		&state.Service{},
 	}
 
-	dot := createTestDot(t)
+	dot := createTestDot(t, testDir)
 
 	go dot.Start()
 
@@ -90,12 +90,7 @@ func TestDot_Start(t *testing.T) {
 	}
 
 	dot.Stop()
+
 	// Wait for everything to finish
 	<-dot.stop
-
-	defer func() {
-		if err := os.RemoveAll("../test_data"); err != nil {
-			t.Log("removal of temp directory test_data failed", "error", err)
-		}
-	}()
 }

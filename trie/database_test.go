@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	db "github.com/ChainSafe/gossamer/polkadb"
 )
@@ -206,11 +207,16 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 
 	defer trie.closeDb()
 
+	bootnodes := common.StringArrayToBytes([]string{
+		"/ip4/127.0.0.1/tcp/7001/p2p/12D3KooWHHzSeKaY8xuZVzkLbKFfvNgPPeKhFBGrMbNzbm5akpqu",
+		"/ip4/127.0.0.1/tcp/7001/p2p/12D3KooWHHzSeKaY8xuZVzkLbKFfvNgPPeKhFBGrMbNzbm5akpqu",
+	})
+
 	expected := &genesis.GenesisData{
 		Name:       "gossamer",
 		ID:         "gossamer",
-		ProtocolID: "gossamer",
-		Bootnodes:  [][]byte{[]byte("noot")},
+		Bootnodes:  bootnodes,
+		ProtocolID: "/gossamer/test/0",
 	}
 
 	err = trie.db.StoreGenesisData(expected)

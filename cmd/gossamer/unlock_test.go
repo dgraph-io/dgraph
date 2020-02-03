@@ -1,19 +1,18 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/keystore"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUnlock(t *testing.T) {
-	testKeystoreDir, err := ioutil.TempDir("", "test_keystore")
-	require.Nil(t, err)
+	testKeystoreDir := path.Join(os.TempDir(), "gossamer-test")
+	defer os.RemoveAll(testKeystoreDir)
 
 	var testPassword = []byte("1234")
 
@@ -49,20 +48,20 @@ func TestUnlock(t *testing.T) {
 }
 
 func TestUnlockFlag(t *testing.T) {
-	var testKeystoreDir = "./test_keystore/"
+	testKeystoreDir := path.Join(os.TempDir(), "gossamer-test")
+	defer os.RemoveAll(testKeystoreDir)
+
 	var testPassword = []byte("1234")
 
 	_, err := generateKeypair("sr25519", testKeystoreDir, testPassword)
 	require.Nil(t, err)
 
-	defer os.RemoveAll(testKeystoreDir)
-
-	genesispath := createTempGenesisFile(t)
-	defer os.Remove(genesispath)
+	genesisPath := createTempGenesisFile(t)
+	defer os.Remove(genesisPath)
 
 	ctx, err := createCliContext("load genesis",
 		[]string{"datadir", "genesis"},
-		[]interface{}{testKeystoreDir, genesispath},
+		[]interface{}{testKeystoreDir, genesisPath},
 	)
 	require.Nil(t, err)
 
@@ -71,8 +70,8 @@ func TestUnlockFlag(t *testing.T) {
 	require.Nil(t, err)
 
 	ctx, err = createCliContext("unlock",
-		[]string{"datadir", "unlock", "password"},
-		[]interface{}{testKeystoreDir, "0", string(testPassword)},
+		[]string{"datadir", "genesis", "unlock", "password"},
+		[]interface{}{testKeystoreDir, genesisPath, "0", string(testPassword)},
 	)
 	if err != nil {
 		t.Fatal(err)

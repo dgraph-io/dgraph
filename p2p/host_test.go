@@ -26,7 +26,7 @@ import (
 func TestConnect(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -40,7 +40,7 @@ func TestConnect(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -86,7 +86,7 @@ func TestConnect(t *testing.T) {
 func TestBootstrap(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -101,11 +101,11 @@ func TestBootstrap(t *testing.T) {
 	addrA := nodeA.host.multiaddrs()[0]
 
 	configB := &Config{
-		BootstrapNodes: []string{addrA.String()},
-		Port:           7002,
-		ProtocolID:     "gossamer/test",
-		RandSeed:       2,
-		NoMdns:         true,
+		Bootnodes:  []string{addrA.String()},
+		Port:       7002,
+		ProtocolID: "/gossamer/test/0",
+		RandSeed:   2,
+		NoMdns:     true,
 	}
 
 	nodeB, _, _ := createTestService(t, configB)
@@ -138,7 +138,7 @@ func TestBootstrap(t *testing.T) {
 func TestPing(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -152,7 +152,7 @@ func TestPing(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -194,7 +194,7 @@ func TestPing(t *testing.T) {
 func TestSend(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -208,7 +208,7 @@ func TestSend(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -253,7 +253,7 @@ func TestSend(t *testing.T) {
 func TestBroadcast(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -267,7 +267,7 @@ func TestBroadcast(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -291,7 +291,7 @@ func TestBroadcast(t *testing.T) {
 
 	configC := &Config{
 		Port:        7003,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    3,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -347,7 +347,7 @@ func TestBroadcast(t *testing.T) {
 func TestExistingStream(t *testing.T) {
 	configA := &Config{
 		Port:        7001,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -366,7 +366,7 @@ func TestExistingStream(t *testing.T) {
 
 	configB := &Config{
 		Port:        7002,
-		ProtocolID:  "gossamer/test",
+		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,

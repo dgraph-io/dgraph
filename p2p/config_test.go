@@ -61,7 +61,6 @@ func TestSetupKey(t *testing.T) {
 // test build configuration method
 func TestBuildConfig(t *testing.T) {
 	testDir := path.Join(os.TempDir(), "gossamer-test")
-
 	defer os.RemoveAll(testDir)
 
 	cfg := &Config{
@@ -79,14 +78,14 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	testCfg := &Config{
-		BootstrapNodes: nil,
-		ProtocolID:     "",
-		Port:           0,
-		RandSeed:       0,
-		NoBootstrap:    false,
-		NoMdns:         false,
-		DataDir:        testDir,
-		privateKey:     testKey,
+		Bootnodes:   DefaultBootnodes,
+		ProtocolID:  DefaultProtocolID,
+		Port:        0,
+		RandSeed:    0,
+		NoBootstrap: false,
+		NoMdns:      false,
+		DataDir:     testDir,
+		privateKey:  testKey,
 	}
 
 	if reflect.DeepEqual(cfg, testCfg) {

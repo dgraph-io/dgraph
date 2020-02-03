@@ -25,23 +25,36 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/tests"
-
-	"github.com/ChainSafe/gossamer/state"
 
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/internal/api"
+	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/state"
+	"github.com/ChainSafe/gossamer/tests"
 	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 )
 
 const TestDataDir = "./test_data"
+
+const TestProtocolID = "/gossamer/test/0"
+
+var TestBootnodes = []string{
+	"/dns4/p2p.cc3-0.kusama.network/tcp/30100/p2p/QmeCit3Nif4VfNqrEJsdYHZGcKzRCnZvGxg6hha1iNj4mk",
+	"/dns4/p2p.cc3-1.kusama.network/tcp/30100/p2p/QmchDJtEGiEWf7Ag58HNoTg9jSGzxkSZ23VgmF6xiLKKsZ",
+}
+
+var TestGenesis = &genesis.Genesis{
+	Name:       "gossamer",
+	ID:         "gossamer",
+	Bootnodes:  TestBootnodes,
+	ProtocolID: TestProtocolID,
+	Genesis:    genesis.GenesisFields{},
+}
 
 func teardown(tempFile *os.File) {
 	if err := os.Remove(tempFile.Name()); err != nil {
@@ -88,14 +101,6 @@ func createCliContext(description string, flags []string, values []interface{}) 
 	return context, nil
 }
 
-var tmpGenesis = &genesis.Genesis{
-	Name:       "gossamer",
-	ID:         "gossamer",
-	Bootnodes:  []string{"/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj"},
-	ProtocolID: "gossamer",
-	Genesis:    genesis.GenesisFields{},
-}
-
 func createTempGenesisFile(t *testing.T) string {
 	_ = runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
@@ -110,14 +115,14 @@ func createTempGenesisFile(t *testing.T) string {
 	testHex := hex.EncodeToString(testBytes)
 	testRaw := [2]map[string]string{}
 	testRaw[0] = map[string]string{"0x3a636f6465": "0x" + testHex}
-	tmpGenesis.Genesis = genesis.GenesisFields{Raw: testRaw}
+	TestGenesis.Genesis = genesis.GenesisFields{Raw: testRaw}
 
 	// Create temp file
-	file, err := ioutil.TempFile("", "genesis-test")
+	file, err := ioutil.TempFile(os.TempDir(), "genesis-test")
 	require.Nil(t, err)
 
 	// Grab json encoded bytes
-	bz, err := json.Marshal(tmpGenesis)
+	bz, err := json.Marshal(TestGenesis)
 	require.Nil(t, err)
 
 	// Write to temp file
@@ -192,12 +197,10 @@ func TestSetGlobalConfig(t *testing.T) {
 }
 
 func TestCreateP2PService(t *testing.T) {
-	gendata := &genesis.GenesisData{
-		ProtocolID: "/gossamer/test",
+	srv, _, _ := createP2PService(cfg.DefaultConfig(), &genesis.GenesisData{})
+	if srv == nil {
+		t.Fatalf("failed to create p2p service")
 	}
-
-	srv, _, _ := createP2PService(cfg.DefaultConfig(), gendata)
-	require.NotNil(t, srv, "failed to create p2p service")
 }
 
 func TestSetP2pConfig(t *testing.T) {
@@ -221,23 +224,23 @@ func TestSetP2pConfig(t *testing.T) {
 			[]string{"nobootstrap", "nomdns"},
 			[]interface{}{true, true},
 			cfg.P2pCfg{
-				BootstrapNodes: cfg.DefaultP2PBootstrap,
-				Port:           cfg.DefaultP2PPort,
-				ProtocolID:     cfg.DefaultP2PProtocolID,
-				NoBootstrap:    true,
-				NoMdns:         true,
+				Bootnodes:   cfg.DefaultP2PBootnodes,
+				ProtocolID:  cfg.DefaultP2PProtocolID,
+				Port:        cfg.DefaultP2PPort,
+				NoBootstrap: true,
+				NoMdns:      true,
 			},
 		},
 		{
 			"bootstrap nodes",
 			[]string{"bootnodes"},
-			[]interface{}{"1234,5678"},
+			[]interface{}{strings.Join(TestBootnodes[:], ",")},
 			cfg.P2pCfg{
-				BootstrapNodes: []string{"1234", "5678"},
-				Port:           cfg.DefaultP2PPort,
-				ProtocolID:     cfg.DefaultP2PProtocolID,
-				NoBootstrap:    false,
-				NoMdns:         false,
+				Bootnodes:   TestBootnodes,
+				ProtocolID:  cfg.DefaultP2PProtocolID,
+				Port:        cfg.DefaultP2PPort,
+				NoBootstrap: false,
+				NoMdns:      false,
 			},
 		},
 		{
@@ -245,23 +248,23 @@ func TestSetP2pConfig(t *testing.T) {
 			[]string{"p2pport"},
 			[]interface{}{uint(1337)},
 			cfg.P2pCfg{
-				BootstrapNodes: cfg.DefaultP2PBootstrap,
-				Port:           1337,
-				ProtocolID:     cfg.DefaultP2PProtocolID,
-				NoBootstrap:    false,
-				NoMdns:         false,
+				Bootnodes:   cfg.DefaultP2PBootnodes,
+				ProtocolID:  cfg.DefaultP2PProtocolID,
+				Port:        1337,
+				NoBootstrap: false,
+				NoMdns:      false,
 			},
 		},
 		{
 			"protocol id",
 			[]string{"protocol"},
-			[]interface{}{"/gossamer/test"},
+			[]interface{}{"/gossamer/test/0"},
 			cfg.P2pCfg{
-				BootstrapNodes: cfg.DefaultP2PBootstrap,
-				Port:           cfg.DefaultP2PPort,
-				ProtocolID:     "/gossamer/test",
-				NoBootstrap:    false,
-				NoMdns:         false,
+				Bootnodes:   cfg.DefaultP2PBootnodes,
+				ProtocolID:  "/gossamer/test/0",
+				Port:        cfg.DefaultP2PPort,
+				NoBootstrap: false,
+				NoMdns:      false,
 			},
 		},
 	}
@@ -349,8 +352,8 @@ func TestMakeNode(t *testing.T) {
 	defer teardown(tempFile)
 	defer removeTestDataDir()
 
-	genesispath := createTempGenesisFile(t)
-	defer os.Remove(genesispath)
+	genesisPath := createTempGenesisFile(t)
+	defer os.Remove(genesisPath)
 
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
@@ -360,8 +363,8 @@ func TestMakeNode(t *testing.T) {
 		values   []interface{}
 		expected *cfg.Config
 	}{
-		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesispath}, cfgClone},
-		{"default node (norpc)", []string{"genesis"}, []interface{}{genesispath}, cfgClone},
+		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesisPath}, cfgClone},
+		{"default node (norpc)", []string{"genesis"}, []interface{}{genesisPath}, cfgClone},
 	}
 
 	for _, c := range tc {

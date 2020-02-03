@@ -37,11 +37,11 @@ type GlobalConfig struct {
 }
 
 type P2pCfg struct {
-	BootstrapNodes []string `toml:"bootstrap-nodes"`
-	Port           uint32   `toml:"port"`
-	ProtocolID     string   `toml:"protocol-id"`
-	NoBootstrap    bool     `toml:"no-bootstrap"`
-	NoMdns         bool     `toml:"no-mdns"`
+	Bootnodes   []string `toml:"bootstrap-nodes"`
+	ProtocolID  string   `toml:"protocol-id"`
+	Port        uint32   `toml:"port"`
+	NoBootstrap bool     `toml:"no-bootstrap"`
+	NoMdns      bool     `toml:"no-mdns"`
 }
 
 type RPCCfg struct {

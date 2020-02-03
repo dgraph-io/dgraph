@@ -8,16 +8,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/ChainSafe/gossamer/state"
-
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/state"
 	"github.com/ChainSafe/gossamer/trie"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 )
 
@@ -25,12 +23,12 @@ func TestStoreGenesisInfo(t *testing.T) {
 	tempFile, cfg := createTempConfigFile()
 	defer teardown(tempFile)
 
-	genesispath := createTempGenesisFile(t)
-	defer os.Remove(genesispath)
+	genesisPath := createTempGenesisFile(t)
+	defer os.Remove(genesisPath)
 
 	set := flag.NewFlagSet("config", 0)
 	set.String("config", tempFile.Name(), "TOML configuration file")
-	set.String("genesis", genesispath, "genesis file")
+	set.String("genesis", genesisPath, "path to genesis file")
 	ctx := cli.NewContext(nil, set, nil)
 
 	err := loadGenesis(ctx)
@@ -60,10 +58,10 @@ func TestStoreGenesisInfo(t *testing.T) {
 	require.Nil(t, err)
 
 	expected := &genesis.GenesisData{
-		Name:       tmpGenesis.Name,
-		ID:         tmpGenesis.ID,
-		ProtocolID: tmpGenesis.ProtocolID,
-		Bootnodes:  common.StringArrayToBytes(tmpGenesis.Bootnodes),
+		Name:       TestGenesis.Name,
+		ID:         TestGenesis.ID,
+		Bootnodes:  common.StringArrayToBytes(TestGenesis.Bootnodes),
+		ProtocolID: TestGenesis.ProtocolID,
 	}
 
 	if !reflect.DeepEqual(gendata, expected) {
@@ -86,15 +84,17 @@ func TestGenesisStateLoading(t *testing.T) {
 	tempFile, _ := createTempConfigFile()
 	defer teardown(tempFile)
 
-	genesispath := createTempGenesisFile(t)
-	defer os.Remove(genesispath)
+	genesisPath := createTempGenesisFile(t)
+	defer os.Remove(genesisPath)
 
-	gen, err := genesis.LoadGenesisJSONFile(genesispath)
-	require.Nil(t, err)
+	gen, err := genesis.LoadGenesisFromJSON(genesisPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	set := flag.NewFlagSet("config", 0)
 	set.String("config", tempFile.Name(), "TOML configuration file")
-	set.String("genesis", genesispath, "genesis file")
+	set.String("genesis", genesisPath, "path to genesis file")
 	context := cli.NewContext(nil, set, nil)
 
 	err = loadGenesis(context)
