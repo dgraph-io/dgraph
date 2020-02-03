@@ -18,7 +18,6 @@ package gql
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -5141,7 +5140,23 @@ func TestParseExpandFilterErr(t *testing.T) {
 func TestFilterWithDollar(t *testing.T) {
 	query := `
 	{
-		q(func: eq(name, "Bob"), first:5)@filter(eq(description, "$yo")) {
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "$yo")
+}
+
+func TestFilterWithDollarError(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, $yo)) {
 		  name
 		  description
 		}
@@ -5150,7 +5165,22 @@ func TestFilterWithDollar(t *testing.T) {
 	_, err := Parse(Request{
 		Str: query,
 	})
+	require.Error(t, err)
+}
+
+func TestFilterWithVar(t *testing.T) {
+	query := `query data($a: string = "dgraph")
+	{
+		data(func: eq(name, "Bob"), first:5) @filter(eq(description, $a)) {
+			name
+			description
+		  }
+	}`
+	gq, err := Parse(Request{
+		Str: query,
+	})
 	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "dgraph")
 }
 
 func TestFilterWithEmpty(t *testing.T) {
@@ -5159,10 +5189,9 @@ func TestFilterWithEmpty(t *testing.T) {
 		  count(uid)
 		}
 	  }`
-
 	gq, err := Parse(Request{
 		Str: query,
 	})
-	fmt.Printf("%+v", gq.Query[0].Filter.Func.Args)
 	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
 }
