@@ -387,7 +387,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 		for idx, v := range gq.Func.Args {
 			if !v.IsGraphQLVar {
-				// It's not a variable. So, unquoate it.
+				// It's not a variable. So, unquoate if necessary.
 				var err error
 				gq.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
 				if err != nil {
@@ -482,6 +482,11 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		for idx, v := range f.Func.Args {
 			if !v.IsGraphQLVar {
 				// Skip if this not graphql variable.
+				var err error
+				f.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
+				if err != nil {
+					return err
+				}
 				continue
 			}
 			if f.Func.Name == uidFunc {
