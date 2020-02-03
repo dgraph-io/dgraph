@@ -825,14 +825,13 @@ func RunVlogGC(store *badger.DB, vlogGCCloser *y.Closer) {
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
 
-	// Runs every 1m, check size of vlog and run GC conditionally.
+	// Runs every 1m, checks size of vlog and runs GC conditionally.
 	vlogTicker := time.NewTicker(1 * time.Minute)
-	// Runs every 10m, we always run vlog GC.
+	// Runs vlog GC unconditionally every 10 minutes.
 	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
 
 	runGC := func() {
-		var err error
-		for err == nil {
+		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
 			err = store.RunValueLogGC(0.7)
 		}
