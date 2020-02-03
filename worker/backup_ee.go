@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -139,13 +140,13 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 
 	errCh := make(chan error, len(state.Groups))
 	for _, gid := range groups {
-		req := req
-		req.GroupId = gid
-		req.Predicates = predMap[gid]
+		br := proto.Clone(req).(*pb.BackupRequest)
+		br.GroupId = gid
+		br.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			_, err := BackupGroup(ctx, req)
 			errCh <- err
-		}(req)
+		}(br)
 	}
 
 	for range groups {

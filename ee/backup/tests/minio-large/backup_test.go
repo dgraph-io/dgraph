@@ -207,7 +207,8 @@ func copyToLocalFs(t *testing.T) {
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
 		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		err := os.MkdirAll(dstDir, os.ModePerm)
+		require.NoError(t, err)
 
 		// Get all the files in that folder and
 		lsCh2 := make(chan struct{})
@@ -215,7 +216,8 @@ func copyToLocalFs(t *testing.T) {
 		for object := range objectCh2 {
 			require.NoError(t, object.Err)
 			dstFile := backupDir + "/" + object.Key
-			mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
+			err := mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
+			require.NoError(t, err)
 		}
 		close(lsCh2)
 	}
