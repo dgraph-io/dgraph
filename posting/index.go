@@ -150,7 +150,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	plist.Lock()
 	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore, found, _ = plist.getPostingAndLength(txn.StartTs, 0, edge.ValueId)
+		countBefore, found, _ = plist.findPostingAndLength(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -159,7 +159,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, edge.Op)
+		countAfter = countBefore + countAfterMutation(found, edge.Op)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -306,16 +306,16 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
-func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
+func countAfterMutation(found bool, op pb.DirectedEdge_Op) int {
 	if !found && op == pb.DirectedEdge_SET {
-		return countBefore + 1
+		return 1
 	} else if found && op == pb.DirectedEdge_DEL {
-		return countBefore - 1
+		return -1
 	}
 
 	// Only conditions remaining are below, for which countAfter will be same as countBefore.
 	// (found && op == pb.DirectedEdge_SET) || (!found && op == pb.DirectedEdge_DEL)
-	return countBefore
+	return 0
 }
 
 func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
@@ -352,7 +352,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	switch {
 	case hasCountIndex:
-		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
+		countBefore, found, currPost = l.findPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
 			return val, false, emptyCountParams, ErrTsTooOld
 		}
@@ -389,7 +389,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, t.Op)
+		countAfter = countBefore + countAfterMutation(found, t.Op)
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,

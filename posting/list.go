@@ -665,7 +665,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
-func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+func (l *List) findPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
 	var count int
 	var found bool
