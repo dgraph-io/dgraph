@@ -1378,10 +1378,11 @@ corrupted and data cannot be recovered), you can use the `/removeNode` API to
 remove the node from the cluster. With a Kubernetes StatefulSet, you'll need to
 remove the node in this order:
 
-1. Call `/removeNode` to remove the Dgraph instance from the cluster (see [More
-   about Dgraph Zero]({{< relref "#more-about-dgraph-zero" >}})). The removed
-   instance will immediately stop running. Any further attempts to join the
-   cluster will fail for that instance since it has been removed.
+1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
+   the cluster (see [More about Dgraph Zero]({{< relref
+   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   running. Any further attempts to join the cluster will fail for that instance
+   since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
    This prepares the pod to join with a clean state.
 3. Restart the pod. This will create a new PersistentVolumeClaim to create new
