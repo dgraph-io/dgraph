@@ -17,9 +17,8 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -80,9 +79,9 @@ func matchFuzzy(query, val string, max int) bool {
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
-func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
+func uidsForMatch(attr string, arg funcArgs) (*codec.UIDSet, error) {
 	opts := posting.ListOptions{ReadTs: arg.q.ReadTs}
-	uidsForNgram := func(ngram string) (*pb.List, error) {
+	uidsForNgram := func(ngram string) (*codec.UIDSet, error) {
 		key := x.IndexKey(attr, ngram)
 		pl, err := posting.GetNoStore(key)
 		if err != nil {
@@ -96,12 +95,21 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 		return nil, err
 	}
 
-	uidMatrix := make([]*pb.List, len(tokens))
-	for i, t := range tokens {
-		uidMatrix[i], err = uidsForNgram(t)
-		if err != nil {
-			return nil, err
+	var out *codec.UIDSet
+	for _, t := range tokens {
+		if out == nil {
+			out, err = uidsForNgram(t)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			next, err := uidsForNgram(t)
+			if err != nil {
+				return nil, err
+			}
+			out.Merge(next)
 		}
 	}
-	return algo.MergeSorted(uidMatrix), nil
+
+	return out, nil
 }

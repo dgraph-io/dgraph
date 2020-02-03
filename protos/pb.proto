@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 /* import "gogoproto/gogo.proto"; */
@@ -84,7 +84,7 @@ message LangList {
 }
 
 message Result {
-	repeated List uid_matrix = 1;
+	repeated UidPack uid_matrix = 1;
 	repeated ValueList value_matrix = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
@@ -319,7 +319,7 @@ message UidBlock {
 	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
-	bytes deltas = 2;
+	bytes deltas = 2; // TODO: Rename this to roaringBitmap?
 	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// switch encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
@@ -330,8 +330,9 @@ message UidBlock {
 }
 
 message UidPack {
-	uint32 block_size        = 1;
+	uint32 block_size        = 1 [deprecated = true];
 	repeated UidBlock blocks = 2;
+	uint64 num_uids          = 3;
 }
 
 message PostingList {
@@ -339,7 +340,7 @@ message PostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
-  repeated uint64 splits = 4;
+	 repeated uint64 splits = 4;
 }
 
 message FacetParam {

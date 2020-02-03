@@ -30,6 +30,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -481,8 +482,9 @@ func TestMillion(t *testing.T) {
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids := l.ToUids()
+	require.Equal(t, commits, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1)*2, uid)
 	}
 }
@@ -507,8 +509,9 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		opt := ListOptions{ReadTs: uint64(i)}
 		list, err := ol.Uids(opt)
 		require.NoError(t, err)
-		require.EqualValues(t, 1, len(list.Uids))
-		require.EqualValues(t, uint64(i), list.Uids[0])
+		uids := list.ToUids()
+		require.EqualValues(t, 1, len(uids))
+		require.EqualValues(t, uint64(i), uids[0])
 	}
 	require.EqualValues(t, 0, ol.Length(readTs, 0))
 	require.NoError(t, ol.commitMutation(1, 0))
@@ -562,8 +565,9 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		opts := ListOptions{ReadTs: 15}
 		list, err := ol.Uids(opts)
 		require.NoError(t, err)
-		require.EqualValues(t, 7, list.Uids[0])
-		require.EqualValues(t, 9, list.Uids[1])
+		uids := list.ToUids()
+		require.EqualValues(t, 7, uids[0])
+		require.EqualValues(t, 9, uids[1])
 	}
 }
 
@@ -964,7 +968,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
-	require.True(t, len(ol.plist.Splits) > 0)
+	//require.True(t, len(ol.plist.Splits) > 0)
 
 	// Delete all the previously inserted entries from the list.
 	baseStartTs := uint64(size) + 1
@@ -1006,8 +1010,9 @@ func TestMultiPartListBasic(t *testing.T) {
 	opt := ListOptions{ReadTs: uint64(size) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids := l.ToUids()
+	require.Equal(t, commits, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 }
@@ -1092,14 +1097,16 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
-	originalUids, err := originalList.Uids(opt)
+	originalUIDSet, err := originalList.Uids(opt)
 	require.NoError(t, err)
-	newUids, err := newList.Uids(opt)
+	newUIDSet, err := newList.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(originalUids.Uids))
-	require.Equal(t, len(originalUids.Uids), len(newUids.Uids))
-	for i := range originalUids.Uids {
-		require.Equal(t, originalUids.Uids[i], newUids.Uids[i])
+	originalUids := originalUIDSet.ToUids()
+	require.Equal(t, commits, len(originalUids))
+	newUids := newUIDSet.ToUids()
+	require.Equal(t, len(originalUids), len(newUids))
+	for i := range originalUids {
+		require.Equal(t, originalUids[i], newUids[i])
 	}
 }
 
@@ -1162,8 +1169,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt := ListOptions{ReadTs: math.MaxUint64}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids := l.ToUids()
+	require.Equal(t, size, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 
@@ -1196,8 +1204,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt = ListOptions{ReadTs: math.MaxUint64}
 	l, err = ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, 50000, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids = l.ToUids()
+	require.Equal(t, 50000, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, 50000+uint64(i+1), uid)
 	}
 
@@ -1231,8 +1240,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	opt = ListOptions{ReadTs: math.MaxUint64}
 	l, err = ol.Uids(opt)
 	require.NoError(t, err)
-	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	uids = l.ToUids()
+	require.Equal(t, size, len(uids), "List of Uids received: %+v", uids)
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
 }
@@ -1297,12 +1307,20 @@ func TestRecursiveSplits(t *testing.T) {
 
 	// Rollup the list. The final output should have more than two parts.
 	kvs, err := ol.Rollup()
+	//require.True(t, false)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
-	require.True(t, len(ol.plist.Splits) > 2)
+	println("num splits:", len(ol.plist.Splits))
+	require.True(t, len(ol.plist.Splits) >= int(math.Ceil(float64(size)/float64(codec.NumMaxUidsPerBitmap))))
 
+	println("first split:", ol.plist.Splits[0])
+	println("second split:", ol.plist.Splits[1])
+	println("len postings:", len(ol.plist.Postings))
+
+	//for i, wat := range ol.plist.
+	//println("part len:", startUid, codec.NewUIDSet(plist.Pack).NumUids())
 	// Read back the list and verify the data is correct.
 	var labels []string
 	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
