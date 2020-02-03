@@ -1133,3 +1133,19 @@
       }
     }
 
+-
+  name: "deprecated fields can be queried"
+  gqlquery: |
+    query {
+      queryCategory {
+        iAmDeprecated
+      }
+    }
+
+  dgquery: |-
+    query {
+      queryCategory(func: type(Category)) {
+        iAmDeprecated : Category.iAmDeprecated
+        dgraph.uid : uid
+      }
+    }

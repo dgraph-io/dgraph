@@ -25,6 +25,7 @@
           "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
+
 -
   name: "Add multiple mutation with variables"
   gqlmutation: |
@@ -919,6 +920,32 @@
         ]
       cond: "@if(eq(len(State2), 1))"
 
+
+-
+  name: "deprecated fields can be mutated"
+  gqlmutation: |
+    mutation addCategory($cat: AddCategoryInput!) {
+      addCategory(input: [$cat]) {
+        category {
+          name
+          iAmDeprecated
+        }
+      }
+    }
+  gqlvariables: |
+    { "cat":
+      { "name": "A Category",
+        "iAmDeprecated": "but I can be written to"
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Category1",
+          "dgraph.type": ["Category"],
+          "Category.name": "A Category",
+          "Category.iAmDeprecated": "but I can be written to"
+        }
+
 -
   name: "Add mutation with reverse predicate"
   gqlmutation: |
@@ -926,9 +953,6 @@
       addMovieDirector(input: [$dir]) {
         moviedirector {
           id
-        }
-      }
-    }
   gqlvariables: |
     { "dir":
       { "name": "Steven Spielberg",
@@ -936,12 +960,6 @@
       }
     }
   explanation: "The reference to the directed.movies edge node should not add a new movie edge."
-  dgquery: |-
-    query {
-      Movie2 as Movie2(func: uid(0x2)) @filter(type(Movie)) {
-        uid
-      }
-    }
   dgmutations:
     - setjson: |
         { "uid" : "_:MovieDirector1",
@@ -952,3 +970,5 @@
           }]
         }
       cond: "@if(eq(len(Movie2), 1))"
+
+

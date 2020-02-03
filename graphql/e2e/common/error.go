@@ -39,6 +39,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	panicMsg = "\n****\nThis test should trap this panic.\n" +
+		"It's working as expected if this message is logged with a stack trace.\n****\n"
+)
+
 type ErrorCase struct {
 	Name       string
 	GQLRequest string
@@ -245,10 +250,9 @@ func panicCatcher(t *testing.T) {
 			gqlResponse := test.ExecuteAsPost(t, ts.URL)
 
 			require.Equal(t, x.GqlErrorList{
-				{Message: fmt.Sprintf("[%s] Internal Server Error - a panic was trapped.  "+
-					"This indicates a bug in the GraphQL server.  A stack trace was logged.  "+
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-					gqlResponse.Extensions["requestID"].(string))}},
+				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
+					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
+					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
 			require.Nil(t, gqlResponse.Data)
@@ -259,12 +263,12 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
 }

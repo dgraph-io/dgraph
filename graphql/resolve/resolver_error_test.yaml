@@ -252,8 +252,7 @@
     { "getAuthor": { "name": "A.N. Author" } }
   errors:
     [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one 
-          item.  The first item in the list was used to produce the result. 
-          Logged as a potential bug; see the API log for more details.",
+          item.  The first item in the list was used to produce the result.",
         "locations": [ { "column":3, "line":2 } ] } ]
 
 -

@@ -35,25 +35,17 @@ import (
 
 // Response represents a GraphQL response
 type Response struct {
-	Errors     x.GqlErrorList
-	Data       bytes.Buffer
-	Extensions *Extensions
-}
-
-// Extensions : GraphQL specifies allowing "extensions" in results, but the
-// format is up to the implementation.
-type Extensions struct {
-	RequestID string `json:"requestID,omitempty"`
+	Errors x.GqlErrorList
+	Data   bytes.Buffer
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
 // a response with that error list and no data.  Because it doesn't add data, it
 // should be used before starting execution - GraphQL spec requires no data if an
 // error is detected before execution begins.
-func ErrorResponse(err error, requestID string) *Response {
+func ErrorResponse(err error) *Response {
 	return &Response{
-		Errors:     AsGQLErrors(err),
-		Extensions: &Extensions{RequestID: requestID},
+		Errors: AsGQLErrors(err),
 	}
 }
 
@@ -91,32 +83,23 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if r == nil {
 		i, err := w.Write([]byte(
 			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
-				` "data": null, "extensions": { "requestID": "unknown request ID" } }`))
+				` "data": null }`))
 		return int64(i), err
 	}
 
 	js, err := json.Marshal(struct {
-		Errors     []*x.GqlError   `json:"errors,omitempty"`
-		Data       json.RawMessage `json:"data,omitempty"`
-		Extensions *Extensions     `json:"extensions,omitempty"`
+		Errors []*x.GqlError   `json:"errors,omitempty"`
+		Data   json.RawMessage `json:"data,omitempty"`
 	}{
-		Errors:     r.Errors,
-		Data:       r.Data.Bytes(),
-		Extensions: r.Extensions,
+		Errors: r.Errors,
+		Data:   r.Data.Bytes(),
 	})
 
 	if err != nil {
-		var reqID string
-		if r.Extensions != nil {
-			reqID = r.Extensions.RequestID
-		} else {
-			reqID = "unknown request ID"
-		}
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("[%s] %+v", reqID, errors.Wrap(err, msg))
+		glog.Errorf("%+v", errors.Wrap(err, msg))
 		js = []byte(fmt.Sprintf(
-			`{ "errors": [{"message": "%s"}], "data": null, "extensions": { "requestID": "%s" } }`,
-			msg, reqID))
+			`{ "errors": [{"message": "%s"}], "data": null }`, msg))
 	}
 
 	i, err := w.Write(js)
