@@ -579,7 +579,7 @@ invalid_schemas:
     ]
 
   -
-    name: "Dgraph directive with reverse pred argument on field produces an error"
+    name: "Dgraph directive with reverse pred argument on scalar field produces an error"
     input: |
       type X {
         f1: String! @dgraph(pred:"~movie")

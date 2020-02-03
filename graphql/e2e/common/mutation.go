@@ -2473,13 +2473,16 @@ func addMovie(t *testing.T, executeRequest requestExecutor) *movie {
 				movie {
 					id
 					name
+					director {
+						name
+					}
 				}
 			}
 		}`,
 		Variables: map[string]interface{}{"name": "Testmovie"},
 	}
 	addMovieExpected := `
-		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie" }] } }`
+		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addMovieParams)
 	requireNoGQLErrors(t, gqlResponse)
@@ -2531,23 +2534,7 @@ func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 
-	var expected, result struct {
-		DeleteMovie struct {
-			Msg string
-		}
-		DeleteMovieDirector struct {
-			Msg string
-		}
-	}
-
-	err := json.Unmarshal([]byte(multiMutationExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
+	testutil.CompareJSON(t, multiMutationExpected, string(gqlResponse.Data))
 }
 
 func addMutationWithReverseDgraphEdge(t *testing.T) {
