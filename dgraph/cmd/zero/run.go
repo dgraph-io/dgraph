@@ -235,7 +235,7 @@ func run() {
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
-	x.RunVlogGC(kv, st.vlogGCCloser)
+	go x.RunVlogGC(kv, st.vlogGCCloser)
 	defer st.vlogGCCloser.SignalAndWait()
 
 	if Zero.Conf.GetBool("telemetry") {
