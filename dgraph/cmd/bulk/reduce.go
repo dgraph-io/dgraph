@@ -212,6 +212,8 @@ func (r *reducer) encodeAndWrite(
 				prevSID = kv.StreamId
 			}
 			addDone(doneStreams, list)
+			// TODO(dmai): Step 2. Check
+			// Step 3. Remove. ci.addUid
 			x.Check(writer.Write(list))
 			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
@@ -270,7 +272,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		}
 
 		if len(batch) >= batchSize && keyChanged {
-			entryCh <- batch
+			// entryCh <- batch
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
 		}
 		prevKey = me.Key
@@ -278,7 +280,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		plistLen++
 	}
 	if len(batch) > 0 {
-		entryCh <- batch
+		// entryCh <- batch
 	}
 	if plistLen > 0 {
 		ci.addUid(prevKey, plistLen)
