@@ -665,24 +665,22 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
-func (l *List) findPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+func (l *List) findPostingAndLength(readTs, afterUid, uid uint64) (int, *pb.Posting) {
 	l.AssertRLock()
 	var count int
-	var found bool
 	var post *pb.Posting
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			post = p
-			found = true
 		}
 		count++
 		return nil
 	})
 	if err != nil {
-		return -1, false, nil
+		return -1, nil
 	}
 
-	return count, found, post
+	return count, post
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
@@ -1080,11 +1078,11 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 
 	// look for value without language
 	if any || len(langs) == 0 {
-		found, pos, err := l.findPosting(readTs, math.MaxUint64)
+		pos, err := l.findPosting(readTs, math.MaxUint64)
 		switch {
 		case err != nil:
 			return nil, err
-		case found:
+		case pos != nil:
 			return pos, nil
 		}
 	}
@@ -1116,11 +1114,11 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr error) {
 	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
-	found, p, err := l.findPosting(readTs, uid)
+	p, err := l.findPosting(readTs, uid)
 	if err != nil {
 		return p, err
 	}
-	if !found {
+	if p == nil {
 		return p, ErrNoValue
 	}
 
@@ -1129,25 +1127,24 @@ func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr err
 
 func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err error) {
 	l.AssertRLock()
-	found, p, err := l.findPosting(readTs, uid)
-	if !found {
-		return rval, found, err
+	p, err := l.findPosting(readTs, uid)
+	if p == nil {
+		return rval, false, err
 	}
 
 	return valueToTypesVal(p), true, nil
 }
 
-func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
+func (l *List) findPosting(readTs uint64, uid uint64) (pos *pb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass UID - 1
 	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			pos = p
-			found = true
 		}
 		return ErrStopIteration
 	})
 
-	return found, pos, err
+	return pos, err
 }
 
 // Facets gives facets for the posting representing value.

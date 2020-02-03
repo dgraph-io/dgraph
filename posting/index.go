@@ -145,12 +145,12 @@ type countParams struct {
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
-	found := false
+	var post *pb.Posting
 
 	plist.Lock()
 	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore, found, _ = plist.findPostingAndLength(txn.StartTs, 0, edge.ValueId)
+		countBefore, post = plist.findPostingAndLength(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -159,7 +159,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = countBefore + countAfterMutation(found, edge.Op)
+		countAfter = countBefore + countAfterMutation(post != nil, edge.Op)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -344,7 +344,6 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	countBefore, countAfter := 0, 0
 	var currPost *pb.Posting
 	var val types.Val
-	var found bool
 	var err error
 
 	delNonListPredicate := !schema.State().IsList(t.Attr) &&
@@ -352,14 +351,14 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	switch {
 	case hasCountIndex:
-		countBefore, found, currPost = l.findPostingAndLength(txn.StartTs, 0, getUID(t))
+		countBefore, currPost = l.findPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
 			return val, false, emptyCountParams, ErrTsTooOld
 		}
 	case doUpdateIndex || delNonListPredicate:
-		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
+		currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
-			return val, found, emptyCountParams, err
+			return val, false, emptyCountParams, err
 		}
 	}
 
@@ -374,30 +373,30 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		// This second check is required because we fingerprint the scalar values as math.MaxUint64,
 		// so even though they might be different the check in the doUpdateIndex block above would
 		// return found to be true.
-		if found && !(bytes.Equal(currPost.Value, newPost.Value) &&
+		if currPost != nil && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
 			return val, false, emptyCountParams, nil
 		}
 	}
 
 	if err = l.addMutationInternal(ctx, txn, t); err != nil {
-		return val, found, emptyCountParams, err
+		return val, false, emptyCountParams, err
 	}
 
-	if found && doUpdateIndex {
+	if currPost != nil && doUpdateIndex {
 		val = valueToTypesVal(currPost)
 	}
 
 	if hasCountIndex {
-		countAfter = countBefore + countAfterMutation(found, t.Op)
-		return val, found, countParams{
+		countAfter = countBefore + countAfterMutation(currPost != nil, t.Op)
+		return val, currPost != nil, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      t.Entity,
 		}, nil
 	}
-	return val, found, emptyCountParams, nil
+	return val, currPost != nil, emptyCountParams, nil
 }
 
 // AddMutationWithIndex is addMutation with support for indexing. It also
