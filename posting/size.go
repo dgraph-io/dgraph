@@ -181,6 +181,7 @@ func calculatePackSize(pack *pb.UidPack) uint64 {
 }
 
 // calculateUIDBlock is used to calculate UidBlock
+// TODO: Review this
 func calculateUIDBlock(block *pb.UidBlock) uint64 {
 	if block == nil {
 		return 0
@@ -194,8 +195,7 @@ func calculateUIDBlock(block *pb.UidBlock) uint64 {
 		1*8 + // XXX_sizecache consistss of 1 word.
 		1*8 // Rounding it to 10 words by adding 1.
 
-	// Adding the size of each entry in Deltas array.
-	size += uint64(cap(block.Deltas))
+	size += uint64(cap(block.RoaringBitmap))
 
 	// Adding the size of each entry in XXX_unrecognized array.
 	size += uint64(cap(block.XXX_unrecognized))

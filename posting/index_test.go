@@ -35,7 +35,7 @@ import (
 func uids(l *List, readTs uint64) []uint64 {
 	r, err := l.Uids(ListOptions{ReadTs: readTs})
 	x.Check(err)
-	return r.Uids
+	return r.ToUids()
 }
 
 // indexTokensForTest is just a wrapper around indexTokens used for convenience.

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -366,11 +367,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
 	outputs := make([]*pb.Result, numGo)
-	listType := schema.State().IsList(q.Attr)
+	isList := schema.State().IsList(q.Attr)
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
-		out := &pb.Result{}
+		out := &pb.Result{
+			UidMatrix:   map[uint64]*pb.UidPack{},
+			ValueMatrix: map[uint64]*pb.ValueList{},
+			Counts:      map[uint64]uint32{},
+			FacetMatrix: map[uint64]*pb.FacetsMap{},
+			LangMatrix:  map[uint64]*pb.LangList{},
+		}
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
@@ -379,7 +386,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return ctx.Err()
 			default:
 			}
-			key := x.DataKey(q.Attr, q.UidList.Uids[i])
+			UID := q.UidList.Uids[i]
+			key := x.DataKey(q.Attr, UID)
 
 			// Get or create the posting list for an entity, attribute combination.
 			pl, err := qs.cache.Get(key)
@@ -389,31 +397,32 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			// If count is being requested, there is no need to populate value and facets matrix.
 			if q.DoCount {
-				count, err := countForValuePostings(args, pl, facetsTree, listType)
+				count, err := countForValuePostings(args, pl, facetsTree, isList)
 				if err != nil && err != posting.ErrNoValue {
 					return err
 				}
-				out.Counts = append(out.Counts, uint32(count))
-				// Add an empty UID list to make later processing consistent.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				//out.Counts = append(out.Counts, uint32(count))
+				out.Counts[UID] = uint32(count)
+				out.UidMatrix[UID] = &pb.UidPack{}
 				continue
 			}
 
-			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
+			vals, facetsMap, err := retrieveValuesAndFacets(args, pl, facetsTree, isList)
 			switch {
 			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
 				// This branch is taken when the value does not exist in the pl or
 				// the number of values retreived is zero (there could still be facets).
-				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+				// We add empty lists to the UidMatrix, FacetMatrix, ValueMatrix and
 				// LangMatrix so that all these data structure have predicatble layouts.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-				out.ValueMatrix = append(out.ValueMatrix,
-					&pb.ValueList{Values: []*pb.TaskValue{}})
+				out.UidMatrix[UID] = &pb.UidPack{}
+				out.FacetMatrix[UID] = &pb.FacetsMap{Facets: map[uint64]*pb.Facets{}}
+				out.ValueMatrix[UID] = &pb.ValueList{Values: []*pb.TaskValue{}}
+			case err == posting.ErrNoValue || len(vals) == 0:
 				if q.ExpandAll {
 					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
+					out.LangMatrix[UID] = &pb.LangList{}
 				}
+
 				continue
 			case err != nil:
 				return err
@@ -424,10 +433,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				if err != nil {
 					return err
 				}
-				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
+				out.LangMatrix[UID] = &pb.LangList{Lang: langTags}
 			}
 
-			uidList := new(pb.List)
+			uidSet := codec.NewUIDSet()
 			var vl pb.ValueList
 			for _, val := range vals {
 				newValue, err := convertToType(val, srcFn.atype)
@@ -443,42 +452,44 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 						return err
 					}
 					if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						uidSet.AddUID(UID)
 						break
 					}
 				} else {
 					vl.Values = append(vl.Values, newValue)
 				}
 			}
-			out.ValueMatrix = append(out.ValueMatrix, &vl)
+			out.ValueMatrix[UID] = &vl
 
 			// Add facets to result.
-			out.FacetMatrix = append(out.FacetMatrix, fcs)
+			out.FacetMatrix[UID] = facetsMap
 
 			switch {
 			case srcFn.fnType == aggregatorFn:
-				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix[UID] = &pb.UidPack{}
 			case srcFn.fnType == passwordFn:
-				lastPos := len(out.ValueMatrix) - 1
-				if len(out.ValueMatrix[lastPos].Values) == 0 {
+				if i == 0 {
 					continue
 				}
-				newValue := out.ValueMatrix[lastPos].Values[0]
+				lastUID := q.UidList.Uids[i-1]
+				if len(out.ValueMatrix[lastUID].Values) == 0 {
+					continue
+				}
+				newValue := out.ValueMatrix[lastUID].Values[0]
 				if len(newValue.Val) == 0 {
-					out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
+					out.ValueMatrix[lastUID].Values[0] = ctask.FalseVal
 				}
 				pwd := q.SrcFunc.Args[0]
 				err = types.VerifyPassword(pwd, string(newValue.Val))
 				if err != nil {
-					out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
+					out.ValueMatrix[lastUID].Values[0] = ctask.FalseVal
 				} else {
-					out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
+					out.ValueMatrix[lastUID].Values[0] = ctask.TrueVal
 				}
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix[UID] = &pb.UidPack{}
 			default:
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix[UID] = uidSet.ToPack()
 			}
 		}
 		return nil
@@ -500,14 +511,26 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	// All goroutines are done. Now attach their results.
+
 	out := args.out
 	for _, chunk := range outputs {
-		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
-		out.Counts = append(out.Counts, chunk.Counts...)
-		out.ValueMatrix = append(out.ValueMatrix, chunk.ValueMatrix...)
-		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
-		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
+		for k, v := range chunk.UidMatrix {
+			out.UidMatrix[k] = v
+		}
+		for k, v := range chunk.Counts {
+			out.Counts[k] = v
+		}
+		for k, v := range chunk.ValueMatrix {
+			out.ValueMatrix[k] = v
+		}
+		for k, v := range chunk.FacetMatrix {
+			out.FacetMatrix[k] = v
+		}
+		for k, v := range chunk.LangMatrix {
+			out.LangMatrix[k] = v
+		}
 	}
+
 	return nil
 }
 
@@ -581,10 +604,10 @@ func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTr
 }
 
 func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	listType bool) ([]types.Val, *pb.FacetsList, error) {
+	listType bool) ([]types.Val, *pb.FacetsMap, error) {
 	q := args.q
 	var vals []types.Val
-	var fcs []*pb.Facets
+	var facetsMap map[uint64]*pb.Facets
 
 	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
 		vals = append(vals, types.Val{
@@ -592,14 +615,14 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 			Value: p.Value,
 		})
 		if q.FacetParam != nil {
-			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+			facetsMap[p.Uid] = &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)}
 		}
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return vals, &pb.FacetsList{FacetsList: fcs}, nil
+	return vals, &pb.FacetsMap{Facets: facetsMap}, nil
 }
 
 func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
@@ -633,27 +656,26 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 }
 
 func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
+	opts posting.ListOptions) (*pb.UidPack, *pb.FacetsMap, error) {
 	q := args.q
 
-	var fcsList []*pb.Facets
-	uidList := &pb.List{
-		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
-	}
+	facetsMap := &pb.FacetsMap{Facets: map[uint64]*pb.Facets{}}
+	uidSet := codec.NewUIDSet()
 
 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
+		uidSet.AddUID(p.Uid)
 		if q.FacetParam != nil {
-			fcsList = append(fcsList, &pb.Facets{
+			uidSet.AddUID(p.Uid)
+			facetsMap.Facets[p.Uid] = &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-			})
+			}
 		}
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return uidList, fcsList, nil
+	return uidSet.ToPack(), facetsMap, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
@@ -688,7 +710,13 @@ func (qs *queryState) handleUidPostings(
 
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
-		out := &pb.Result{}
+		out := &pb.Result{
+			UidMatrix:   map[uint64]*pb.UidPack{},
+			ValueMatrix: map[uint64]*pb.ValueList{},
+			Counts:      map[uint64]uint32{},
+			FacetMatrix: map[uint64]*pb.FacetsMap{},
+			LangMatrix:  map[uint64]*pb.LangList{},
+		}
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
@@ -729,9 +757,9 @@ func (qs *queryState) handleUidPostings(
 				if err != nil {
 					return err
 				}
-				out.Counts = append(out.Counts, uint32(count))
-				// Add an empty UID list to make later processing consistent.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				UID := q.UidList.Uids[i]
+				out.Counts[UID] = uint32(count)
+				out.UidMatrix[UID] = &pb.UidPack{}
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
@@ -742,8 +770,8 @@ func (qs *queryState) handleUidPostings(
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold) {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					UID := q.UidList.Uids[i]
+					out.UidMatrix[UID] = codec.PackOfOne(q.UidList.Uids[i])
 				}
 			case srcFn.fnType == hasFn:
 				if i == 0 {
@@ -754,48 +782,56 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					UID := q.UidList.Uids[i]
+					out.UidMatrix[UID] = codec.PackOfOne(q.UidList.Uids[i])
 				}
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
-					Intersect: reqList,
+					Intersect: codec.UIDSetFromPack(codec.PackOfOne(srcFn.uidPresent)),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
 					return err
 				}
-				if len(plist.Uids) > 0 {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+				if !plist.IsEmpty() {
+					UID := q.UidList.Uids[i]
+					out.UidMatrix[UID] = codec.PackOfOne(q.UidList.Uids[i])
 				}
 			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
-				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
+				UIDPack, facetsMap, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				UID := q.UidList.Uids[i]
+				out.UidMatrix[UID] = UIDPack
 				if q.FacetParam != nil {
-					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
+					out.FacetMatrix[UID] = facetsMap
 				}
 			default:
 				if i == 0 {
 					span.Annotate(nil, "default no facets")
 				}
-				uidList, err := pl.Uids(opts)
+				UIDSet, err := pl.Uids(opts)
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				/*
+					glog.V(3).Infof("*** q: %s", q.String())
+					glog.V(3).Infof("*** q.UidList: %s", q.UidList)
+					for i, uid := range q.UidList.Uids {
+						glog.V(3).Infof("*** q.UidList.Uids[%s]: %s", i, uid)
+					}
+				*/
+				// FIXME Using 0 as UID
+				out.UidMatrix[0] = UIDSet.ToPack()
 			}
 		}
 		return nil
@@ -819,15 +855,17 @@ func (qs *queryState) handleUidPostings(
 	// All goroutines are done. Now attach their results.
 	out := args.out
 	for _, chunk := range outputs {
-		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
-		out.Counts = append(out.Counts, chunk.Counts...)
-		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
+		for k, v := range chunk.FacetMatrix {
+			out.FacetMatrix[k] = v
+		}
+		for k, v := range chunk.Counts {
+			out.Counts[k] = v
+		}
+		for k, v := range chunk.UidMatrix {
+			out.UidMatrix[k] = v
+		}
 	}
-	var total int
-	for _, list := range out.UidMatrix {
-		total += len(list.Uids)
-	}
-	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
+
 	return nil
 }
 
@@ -900,6 +938,12 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 
 	span := otrace.FromContext(ctx)
 	out := new(pb.Result)
+	out.UidMatrix = map[uint64]*pb.UidPack{}
+	out.ValueMatrix = map[uint64]*pb.ValueList{}
+	out.Counts = map[uint64]uint32{}
+	out.FacetMatrix = map[uint64]*pb.FacetsMap{}
+	out.LangMatrix = map[uint64]*pb.LangList{}
+
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(ctx, q)
@@ -948,7 +992,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
-		opts.Intersect = q.UidList
+		opts.Intersect = codec.UIDSetFromList(q.UidList)
 	}
 
 	args := funcArgs{q, gid, srcFn, out}
@@ -1083,8 +1127,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	empty := pb.List{}
-	var uids *pb.List
+	uidSet := codec.NewUIDSet()
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1099,12 +1142,14 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		// not support eq/gt/lt/le in @filter, see #4077), and this was new code that
 		// was added just to support the aforementioned case, the race condition is only
 		// in this part of the code.
-		uids = &pb.List{}
-		uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
+
+		// TODO: Determine if the following is still needed
+		//uids = &pb.List{}
+		//uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
 
 	// Prefer to use an index (fast)
 	case useIndex:
-		uids, err = uidsForRegex(attr, arg, query, &empty)
+		uidSet, err = uidsForRegex(attr, arg, query, codec.NewUIDSet())
 		if err != nil {
 			return err
 		}
@@ -1117,55 +1162,63 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			attr)
 	}
 
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+	// FIXME: What should the srcUID be below?
+	arg.out.UidMatrix[0] = uidSet.ToPack()
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uidSet.NumUids(), isList, lang)
 
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-
-		vals := make([]types.Val, 1)
-		switch {
-		case lang != "":
-			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
-
-		case isList:
-			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
-
-		default:
-			vals[0], err = pl.Value(arg.q.ReadTs)
-		}
-		if err != nil {
-			if err == posting.ErrNoValue {
-				continue
+	filtered := codec.NewUIDSet()
+	uids := make([]uint64, 64)
+	uidSetIter := uidSet.NewIterator()
+	for numUids := uidSetIter.Next(uids); numUids > 0; numUids = uidSetIter.Next(uids) {
+		for _, uid := range uids[:numUids] {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
-			return err
-		}
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				return err
+			}
 
-		for _, val := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-				filtered.Uids = append(filtered.Uids, uid)
-				// NOTE: We only add the uid once.
-				break
+			vals := make([]types.Val, 1)
+			switch {
+			case lang != "":
+				vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+			case isList:
+				vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+			default:
+				vals[0], err = pl.Value(arg.q.ReadTs)
+			}
+			if err != nil {
+				if err == posting.ErrNoValue {
+					continue
+				}
+				return err
+			}
+
+			for _, val := range vals {
+				// convert data from binary to appropriate format
+				strVal, err := types.Convert(val, types.StringID)
+				if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+					filtered.AddUID(uid)
+					// NOTE: We only add the uid once.
+					break
+				}
 			}
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	for srcUID := range arg.out.UidMatrix {
+		// TODO: Optimize multiple pack intersection
+		uidSet := codec.UIDSetFromPack(arg.out.UidMatrix[srcUID])
+		uidSet.Intersect(filtered)
+		arg.out.UidMatrix[srcUID] = uidSet.ToPack()
 	}
 
 	return nil
@@ -1201,6 +1254,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		switch {
 		case arg.srcFn.fname == eq:
 			// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
+			// See https://dgraph.io/docs/query-language/#inequality for examples.
 			rowsToFilter = len(arg.srcFn.tokens)
 		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
 			// If operation is not eq and ineqValueToken equals first token,
@@ -1209,91 +1263,99 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		}
 		isList := schema.State().IsList(attr)
 		lang := langForFunc(arg.q.Langs)
-		for row := 0; row < rowsToFilter; row++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			var filterErr error
-			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				switch lang {
-				case "":
-					if isList {
+		// TODO: Remove. This is a test of an assumption.
+		x.AssertTrue(len(arg.out.UidMatrix) == rowsToFilter)
+
+		for _, UIDPack := range arg.out.UidMatrix {
+			row := 0
+			x.Check(codec.UIDSetFromPack(UIDPack).Iterate(func(uid uint64) error {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+				var filterErr error
+				algo.ApplyFilterPacked(UIDPack, func(uid uint64, i int) bool {
+					switch lang {
+					case "":
+						if isList {
+							pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+							if err != nil {
+								filterErr = err
+								return false
+							}
+							svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
+							if err != nil {
+								if err != posting.ErrNoValue {
+									filterErr = err
+								}
+								return false
+							}
+							for _, sv := range svs {
+								dst, err := types.Convert(sv, typ)
+								if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
+									arg.srcFn.eqTokens[row]) {
+									return true
+								}
+							}
+
+							return false
+						}
+
 						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 						if err != nil {
 							filterErr = err
 							return false
 						}
-						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
+						sv, err := pl.Value(arg.q.ReadTs)
 						if err != nil {
 							if err != posting.ErrNoValue {
 								filterErr = err
 							}
 							return false
 						}
-						for _, sv := range svs {
+						dst, err := types.Convert(sv, typ)
+						return err == nil &&
+							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
+					case ".":
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+						if err != nil {
+							filterErr = err
+							return false
+						}
+						values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
+						if err != nil {
+							filterErr = err
+							return false
+						}
+						for _, sv := range values {
 							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
-								arg.srcFn.eqTokens[row]) {
+							if err == nil &&
+								types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
 								return true
 							}
 						}
-
 						return false
-					}
-
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					sv, err := pl.Value(arg.q.ReadTs)
-					if err != nil {
-						if err != posting.ErrNoValue {
-							filterErr = err
+					default:
+						sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+						if err != nil {
+							if err != posting.ErrNoValue {
+								filterErr = err
+							}
+							return false
 						}
-						return false
-					}
-					dst, err := types.Convert(sv, typ)
-					return err == nil &&
-						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
-				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					for _, sv := range values {
-						dst, err := types.Convert(sv, typ)
-						if err == nil &&
-							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
-							return true
+						if sv.Value == nil {
+							return false
 						}
+						return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 					}
-					return false
-				default:
-					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
-					if err != nil {
-						if err != posting.ErrNoValue {
-							filterErr = err
-						}
-						return false
-					}
-					if sv.Value == nil {
-						return false
-					}
-					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
+				})
+				if filterErr != nil {
+					return err
 				}
-			})
-			if filterErr != nil {
-				return err
-			}
+				return nil
+			}))
+			row++
 		}
 	}
 	return nil
@@ -1310,7 +1372,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	var uids *pb.List
+	var uidSet *codec.UIDSet
 	switch {
 	case !typ.IsScalar():
 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -1319,11 +1381,11 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 
 	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
-		uids = arg.q.UidList
+		uidSet = codec.UIDSetFromList(arg.q.UidList)
 
 	case schema.State().HasTokenizer(ctx, tok.IdentTrigram, attr):
 		var err error
-		uids, err = uidsForMatch(attr, arg)
+		uidSet, err = uidsForMatch(attr, arg)
 		if err != nil {
 			return err
 		}
@@ -1337,54 +1399,61 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uidSet.NumUids(), isList, lang)
+	arg.out.UidMatrix[arg.srcFn.uidPresent] = uidSet.ToPack()
 
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-
-		vals := make([]types.Val, 1)
-		switch {
-		case lang != "":
-			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
-
-		case isList:
-			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
-
-		default:
-			vals[0], err = pl.Value(arg.q.ReadTs)
-		}
-		if err != nil {
-			if err == posting.ErrNoValue {
-				continue
+	//filtered := &pb.List{}
+	filtered := codec.NewUIDSet()
+	uids := make([]uint64, 64)
+	uidSetIter := uidSet.NewIterator()
+	for numUids := uidSetIter.Next(uids); numUids > 0; numUids = uidSetIter.Next(uids) {
+		for _, uid := range uids[:numUids] {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
-			return err
-		}
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				return err
+			}
 
-		max := int(arg.srcFn.threshold)
-		for _, val := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
-				filtered.Uids = append(filtered.Uids, uid)
-				// NOTE: We only add the uid once.
-				break
+			vals := make([]types.Val, 1)
+			switch {
+			case lang != "":
+				vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+			case isList:
+				vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+			default:
+				vals[0], err = pl.Value(arg.q.ReadTs)
+			}
+			if err != nil {
+				if err == posting.ErrNoValue {
+					continue
+				}
+				return err
+			}
+
+			max := int(arg.srcFn.threshold)
+			for _, val := range vals {
+				// convert data from binary to appropriate format
+				strVal, err := types.Convert(val, types.StringID)
+				if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
+					filtered.AddUID(uid)
+					// NOTE: We only add the uid once.
+					break
+				}
 			}
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	for srcUID, UIDPack := range arg.out.UidMatrix {
+		UIDSet := codec.UIDSetFromPack(UIDPack)
+		UIDSet.Intersect(filtered)
+		arg.out.UidMatrix[srcUID] = UIDSet.ToPack()
 	}
 
 	return nil
@@ -1396,18 +1465,24 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	defer stop()
 
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	numGo, width := x.DivideAndRule(len(uids.Uids))
+	// TODO: Refactor
+	UIDPacks := make([]*pb.UidPack, 0, len(arg.out.UidMatrix))
+	for _, UIDPack := range arg.out.UidMatrix {
+		UIDPacks = append(UIDPacks, UIDPack)
+	}
+	uidPack := algo.MergeSortedPacked(UIDPacks)
+	numGo, width := x.DivideAndRule(int(uidPack.NumUids))
 	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
-			len(uids.Uids), numGo, width)
+			uidPack.NumUids, numGo, width)
 	}
 
 	filtered := make([]*pb.List, numGo)
 	filter := func(idx, start, end int) error {
 		filtered[idx] = &pb.List{}
 		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
+		// TODO: Optimize
+		for _, uid := range codec.UIDSetFromPack(uidPack).ToUids()[start:end] {
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1433,8 +1508,8 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
-		if end > len(uids.Uids) {
-			end = len(uids.Uids)
+		if end > int(uidPack.NumUids) {
+			end = int(uidPack.NumUids)
 		}
 		go func(idx, start, end int) {
 			errCh <- filter(idx, start, end)
@@ -1452,8 +1527,12 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
 	}
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
+	finalUIDSet := codec.UIDSetFromList(final)
+	for srcUID, UIDPack := range arg.out.UidMatrix {
+		// TODO: Refactor
+		UIDSet := codec.UIDSetFromPack(UIDPack)
+		UIDSet.Intersect(finalUIDSet)
+		arg.out.UidMatrix[srcUID] = UIDSet.ToPack()
 	}
 	return nil
 }
@@ -1467,36 +1546,46 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		defer glog.Infof("Done filterStringFunction")
 	}
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
+	// TODO: Refactor
+	UIDPacks := make([]*pb.UidPack, 0, len(arg.out.UidMatrix))
+	for _, UIDPack := range arg.out.UidMatrix {
+		UIDPacks = append(UIDPacks, UIDPack)
+	}
+	uidPack := algo.MergeSortedPacked(UIDPacks)
 	var values [][]types.Val
-	filteredUids := make([]uint64, 0, len(uids.Uids))
+	filteredUids := make([]uint64, 0, uidPack.NumUids)
 	lang := langForFunc(arg.q.Langs)
 
 	// This iteration must be done in a serial order, because we're also storing the values in a
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	for _, uid := range uids.Uids {
-		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
-		switch {
-		case err == posting.ErrNoValue:
-			continue
-		case err != nil:
-			return err
-		}
-
-		var strVals []types.Val
-		for _, v := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(v, types.StringID)
-			if err != nil {
+	uidSet := codec.UIDSetFromPack(uidPack)
+	uidSetIter := uidSet.NewIterator()
+	uids := make([]uint64, 64)
+	for numUids := uidSetIter.Next(uids); numUids > 0; numUids = uidSetIter.Next(uids) {
+		for _, uid := range uids[:numUids] {
+			vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
+			switch {
+			case err == posting.ErrNoValue:
 				continue
+			case err != nil:
+				return err
 			}
-			strVals = append(strVals, strVal)
-		}
-		if len(strVals) > 0 {
-			values = append(values, strVals)
-			filteredUids = append(filteredUids, uid)
+
+			var strVals []types.Val
+			for _, v := range vals {
+				// convert data from binary to appropriate format
+				strVal, err := types.Convert(v, types.StringID)
+				if err != nil {
+					continue
+				}
+				strVals = append(strVals, strVal)
+			}
+			if len(strVals) > 0 {
+				values = append(values, strVals)
+				filteredUids = append(filteredUids, uid)
+			}
 		}
 	}
 
@@ -1533,8 +1622,11 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		filtered = matchStrings(filtered, values, &filter)
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	filteredUIDSet := codec.UIDSetFromList(filtered)
+	for srcUID, UIDPack := range arg.out.UidMatrix {
+		UIDSet := codec.UIDSetFromPack(UIDPack)
+		UIDSet.Intersect(filteredUIDSet)
+		arg.out.UidMatrix[srcUID] = UIDSet.ToPack()
 	}
 	return nil
 }
@@ -2137,7 +2229,11 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		out.UidMatrix = append(out.UidMatrix, uids)
+		pk, err := x.Parse(countKey) // TODO: Does this make sense?
+		if err != nil {
+			return err
+		}
+		out.UidMatrix[pk.Uid] = uids.ToPack()
 		return nil
 	}
 
@@ -2173,7 +2269,11 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		out.UidMatrix = append(out.UidMatrix, uids)
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return err
+		}
+		out.UidMatrix[pk.Uid] = uids.ToPack()
 	}
 	return nil
 }
@@ -2312,6 +2412,7 @@ loop:
 	if span != nil {
 		span.Annotatef(nil, "handleHasFunction found %d uids", len(result.Uids))
 	}
-	out.UidMatrix = append(out.UidMatrix, result)
+	// TODO: Check if below is correct
+	out.UidMatrix[initKey.Uid] = codec.UIDSetFromList(result).ToPack()
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -61,7 +62,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			preds = []string{edge.Attr}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
+			sg.DestUIDs = codec.UIDSetFromPack(codec.PackOfOne(edge.GetEntity()))
 			sg.ReadTs = m.StartTs
 
 			types, err := getNodeTypes(ctx, sg)

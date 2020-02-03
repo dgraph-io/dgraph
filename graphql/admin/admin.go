@@ -488,7 +488,6 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// the Alpha which created the gql schema node will get the uid here
 	uid, ok := resp.GetUids()[varName]
 	if ok {

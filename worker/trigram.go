@@ -21,9 +21,8 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 
-	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -32,16 +31,15 @@ var errRegexTooWide = errors.New(
 	"regular expression is too wide-ranging and can't be executed efficiently")
 
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *pb.List) (*pb.List, error) {
-	var results *pb.List
+	query *cindex.Query, intersect *codec.UIDSet) (*codec.UIDSet, error) {
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 	}
-	if intersect.Size() > 0 {
+	if intersect.NumUids() > 0 {
 		opts.Intersect = intersect
 	}
 
-	uidsForTrigram := func(trigram string) (*pb.List, error) {
+	uidsForTrigram := func(trigram string) (*codec.UIDSet, error) {
 		key := x.IndexKey(attr, trigram)
 		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
@@ -50,6 +48,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		return pl.Uids(opts)
 	}
 
+	var results *codec.UIDSet
 	switch query.Op {
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
@@ -61,10 +60,10 @@ func uidsForRegex(attr string, arg funcArgs,
 			if results == nil {
 				results = trigramUids
 			} else {
-				algo.IntersectWith(results, trigramUids, results)
+				results.Intersect(trigramUids)
 			}
 
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
@@ -78,21 +77,19 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
 	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
-		uidMatrix := make([]*pb.List, len(query.Trigram))
-		var err error
-		for i, t := range query.Trigram {
-			uidMatrix[i], err = uidsForTrigram(t)
+		for _, trigram := range query.Trigram {
+			uidSet, err := uidsForTrigram(trigram)
 			if err != nil {
 				return nil, err
 			}
+			results.Merge(uidSet)
 		}
-		results = algo.MergeSorted(uidMatrix)
 		for _, sub := range query.Sub {
 			if results == nil {
 				results = intersect
@@ -101,7 +98,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			results = algo.MergeSorted([]*pb.List{results, subUids})
+			results.Merge(subUids)
 		}
 	default:
 		return nil, errRegexTooWide

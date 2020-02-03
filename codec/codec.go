@@ -17,13 +17,11 @@
 package codec
 
 import (
-	"bytes"
-	"math"
 	"sort"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-groupvarint"
 )
 
 type seekPos int
@@ -36,70 +34,479 @@ const (
 )
 
 var (
-	bitMask uint64 = 0xffffffff00000000
+	// NumMsb is the number of most significant bits that are used as bases for UidBlocks.
+	// It must be at least 32 to ensure that the number of least significant bits of UIDs is at most
+	// 32 so that they can be stored in roaring bitmaps.
+	NumMsb uint8 = 48
+	// NumMaxUidsPerBitmap is the maximum number of UIDs in a roaring bitmap given NumMsb
+	DefaultBufferLength uint32 = 64
+	NumMaxUidsPerBitmap uint32 = (1 << (64 - NumMsb)) - 1
+	msbBitMask          uint64 = ((1 << NumMsb) - 1) << (64 - NumMsb)
+	lsbBitMask          uint64 = ^msbBitMask
 )
 
 // Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
-	BlockSize int
-	pack      *pb.UidPack
-	uids      []uint64
+	currentBase uint64
+	pack        *pb.UidPack
+	uids        []uint32
 }
 
-func (e *Encoder) packBlock() {
-	if len(e.uids) == 0 {
-		return
-	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
-	last := e.uids[0]
-	e.uids = e.uids[1:]
+// Decoder is used to read a pb.UidPack object back into a list of UIDs.
+type Decoder struct {
+	Pack          *pb.UidPack
+	blockIdx      int
+	uids          []uint64
+	RoaringBitmap *roaring.Bitmap
+}
 
-	var out bytes.Buffer
-	buf := make([]byte, 17)
-	tmpUids := make([]uint32, 4)
-	for {
-		for i := 0; i < 4; i++ {
-			if i >= len(e.uids) {
-				// Padding with '0' because Encode4 encodes only in batch of 4.
-				tmpUids[i] = 0
-			} else {
-				tmpUids[i] = uint32(e.uids[i] - last)
-				last = e.uids[i]
+// UIDSet stores UIDs which are split into two parts. The most significant bits are used as keys in
+// the map, and the least significant bits are stored in the values of the map -- roaring bitmaps.
+type UIDSet struct {
+	bitmaps map[uint64]*roaring.Bitmap
+}
+
+// NewUIDSet returns a new UIDSet
+func NewUIDSet() *UIDSet {
+	return &UIDSet{
+		bitmaps: make(map[uint64]*roaring.Bitmap),
+	}
+}
+
+// UIDSetFromSlice returns a UIDSet given a slice of UIDs
+func UIDSetFromSlice(UIDs []uint64) *UIDSet {
+	uidSet := &UIDSet{
+		bitmaps: make(map[uint64]*roaring.Bitmap),
+	}
+	uidSet.AddMany(UIDs)
+	return uidSet
+}
+
+// UIDSetFromPack returns a UIDSet given a UidPack
+func UIDSetFromPack(pack *pb.UidPack) *UIDSet {
+	uidSet := &UIDSet{
+		bitmaps: make(map[uint64]*roaring.Bitmap),
+	}
+	if pack != nil {
+		for _, block := range pack.Blocks {
+			bitmap := roaring.New()
+			x.Check2(bitmap.FromBuffer(block.RoaringBitmap))
+			uidSet.bitmaps[block.Base] = bitmap
+			x.AssertTrue(block.Base&lsbBitMask == 0)
+		}
+	}
+	return uidSet
+}
+
+func (uidSet *UIDSet) Clone() *UIDSet {
+	newUIDSet := &UIDSet{
+		bitmaps: make(map[uint64]*roaring.Bitmap),
+	}
+	for base, bitmap := range uidSet.bitmaps {
+		newUIDSet.bitmaps[base] = bitmap.Clone()
+	}
+	return newUIDSet
+}
+
+// ToUids returns an array of contained UIDs
+func (uidSet *UIDSet) ToUids() []uint64 {
+	if uidSet.IsEmpty() {
+		return []uint64{}
+	}
+	uidSetIt := uidSet.NewIterator()
+	uids := make([]uint64, DefaultBufferLength)
+	var result []uint64
+	for sz := uidSetIt.Next(uids); sz > 0; sz = uidSetIt.Next(uids) {
+		result = append(result, uids[:sz]...)
+	}
+	return result
+}
+
+// Clear deletes all the roaring bitmaps in the UIDSet
+func (uidSet *UIDSet) Clear() {
+	for base := range uidSet.bitmaps {
+		delete(uidSet.bitmaps, base)
+	}
+}
+
+// UIDSetFromList returns a UidSet given a List
+func UIDSetFromList(list *pb.List) *UIDSet {
+	uidSet := NewUIDSet()
+	uidSet.AddMany(list.Uids)
+	return uidSet
+}
+
+// IsEmpty returns whether the UidSet is empty
+func (uidSet *UIDSet) IsEmpty() bool {
+	if uidSet == nil {
+		return true
+	}
+	for _, bitmap := range uidSet.bitmaps {
+		if !bitmap.IsEmpty() {
+			return false
+		}
+	}
+	return true
+}
+
+// NumUids
+func (uidSet *UIDSet) NumUids() uint64 {
+	var result uint64
+	for _, bitmap := range uidSet.bitmaps {
+		result += bitmap.GetCardinality()
+	}
+	return result
+}
+
+type UidSetIterator struct {
+	bases       []uint64
+	bitmaps     *map[uint64]*roaring.Bitmap
+	curIdx      int
+	roaringIter roaring.ManyIntIterable
+	uidsLsbs    []uint32
+}
+
+// NewIterator
+func (uidSet *UIDSet) NewIterator() *UidSetIterator {
+	uidSetIt := &UidSetIterator{
+		uidsLsbs: make([]uint32, DefaultBufferLength),
+	}
+	for base := range uidSet.bitmaps {
+		uidSetIt.bases = append(uidSetIt.bases, base)
+	}
+	sort.Slice(uidSetIt.bases, func(i, j int) bool {
+		return uidSetIt.bases[i] < uidSetIt.bases[j]
+	})
+	if len(uidSetIt.bases) == 0 {
+		return nil
+	}
+	base := uidSetIt.bases[0]
+	uidSetIt.bitmaps = &uidSet.bitmaps
+	if bitmap, ok := (*uidSetIt.bitmaps)[base]; ok {
+		uidSetIt.roaringIter = bitmap.ManyIterator()
+	}
+	return uidSetIt
+}
+
+func (uidSet *UIDSet) IntersectionIterate(other *UIDSet, callback func(uid uint64) error) error {
+	if other != nil && uidSet != nil && len(other.bitmaps) > 0 && len(uidSet.bitmaps) > 0 {
+		for base, bitmap := range uidSet.bitmaps {
+			if otherBitmap, ok := other.bitmaps[base]; ok {
+				for it := roaring.And(bitmap, otherBitmap).Iterator(); it.HasNext(); it.Next() {
+					err := callback(base + uint64(it.PeekNext()))
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
+	}
+	return nil
+}
 
-		data := groupvarint.Encode4(buf, tmpUids)
-		x.Check2(out.Write(data))
-
-		// e.uids has ended and we have padded tmpUids with 0s
-		if len(e.uids) <= 4 {
-			e.uids = e.uids[:0]
-			break
+func (uidSet *UIDSet) Iterate(callback func(uid uint64) error) error {
+	iter := uidSet.NewIterator()
+	uids := make([]uint64, DefaultBufferLength)
+	for numUids := iter.Next(uids); numUids > 0; numUids = iter.Next(uids) {
+		for _, uid := range uids[:numUids] {
+			error := callback(uid)
+			if error != nil {
+				return error
+			}
 		}
-		e.uids = e.uids[4:]
+	}
+	return nil
+}
+
+func (uidSet *UIDSet) ApplyFilter(callback func(uint64) bool) {
+	clone := uidSet.Clone()
+	for base, bitmap := range clone.bitmaps {
+		for it := bitmap.Iterator(); it.HasNext(); it.Next() {
+			UID := base + uint64(it.PeekNext())
+			if !callback(UID) {
+				uidSet.bitmaps[base].Remove(it.PeekNext())
+			}
+		}
+	}
+}
+
+// Seek jumps to the first UID at or after the given UID
+// func (uidSetIt *UidSetIterator) Seek(uids []uint64, uid uint64, inclusive bool) int {}
+
+// Next
+func (uidSetIter *UidSetIterator) Next(uids []uint64) int {
+	if uidSetIter == nil || uidSetIter.curIdx >= len(uidSetIter.bases) {
+		return 0
 	}
 
-	block.Deltas = out.Bytes()
+	if len(uids) > cap(uidSetIter.uidsLsbs) {
+		uidSetIter.uidsLsbs = make([]uint32, len(uids))
+	}
+
+	fill := func(base uint64) int {
+		if uidSetIter.roaringIter == nil {
+			return 0
+		}
+		out := uidSetIter.roaringIter.NextMany(uidSetIter.uidsLsbs)
+		for i := 0; i < out; i++ {
+			// NOTE that we can not set the uids slice via append, etc. That would not get reflected
+			// back to the caller. All we can do is to set the internal elements of the given slice.
+			uids[i] = base | uint64(uidSetIter.uidsLsbs[i])
+		}
+		return out
+	}
+
+	base := uidSetIter.bases[uidSetIter.curIdx]
+	for uidSetIter.curIdx < len(uidSetIter.bases) {
+		sz := fill(base)
+		if sz > 0 {
+			return sz
+		}
+		uidSetIter.roaringIter = nil
+		uidSetIter.curIdx++
+		if uidSetIter.curIdx < len(uidSetIter.bases) {
+			base = uidSetIter.bases[uidSetIter.curIdx]
+			if bitmap, ok := (*uidSetIter.bitmaps)[base]; ok {
+				uidSetIter.roaringIter = bitmap.ManyIterator()
+			}
+		}
+	}
+	return 0
+}
+
+func (uidSet *UIDSet) ToPack() *pb.UidPack {
+	pack := &pb.UidPack{
+		NumUids: uidSet.NumUids(),
+	}
+	for base, bitmap := range uidSet.bitmaps {
+		data, err := bitmap.ToBytes()
+		x.Check(err)
+		block := &pb.UidBlock{
+			Base:          base,
+			RoaringBitmap: data,
+		}
+		pack.Blocks = append(pack.Blocks, block)
+	}
+	sort.Slice(pack.Blocks, func(i, j int) bool {
+		return pack.Blocks[i].Base < pack.Blocks[j].Base
+	})
+	return pack
+}
+
+func (uidSet *UIDSet) ToList() *pb.List {
+	return &pb.List{Uids: uidSet.ToUids()}
+}
+
+func (uidSet *UIDSet) AddUID(uid uint64) {
+	base := uid & msbBitMask
+	bitmap, ok := uidSet.bitmaps[base]
+	if !ok {
+		bitmap = roaring.New()
+		uidSet.bitmaps[base] = bitmap
+	}
+	bitmap.Add(uint32(uid & lsbBitMask))
+}
+
+func (uidSet *UIDSet) Contains(uid uint64) bool {
+	base := uid & msbBitMask
+	if bitmap, ok := uidSet.bitmaps[base]; ok {
+		return bitmap.Contains(uint32(uid & lsbBitMask))
+	}
+	return false
+}
+
+func (uidSet *UIDSet) RemoveOne(uid uint64) {
+	base := uid & msbBitMask
+	if bitmap, ok := uidSet.bitmaps[base]; ok {
+		bitmap.Remove(uint32(uid & lsbBitMask))
+	}
+}
+
+func (uidSet *UIDSet) AddMany(uids []uint64) {
+	for _, uid := range uids {
+		uidSet.AddUID(uid)
+	}
+
+}
+
+func Intersect(uidSet, other *UIDSet) *UIDSet {
+	if other == nil || uidSet == nil || len(other.bitmaps) == 0 || len(uidSet.bitmaps) == 0 {
+		return NewUIDSet()
+	}
+	intersection := uidSet.Clone()
+	for base, bitmap := range uidSet.bitmaps {
+		if otherBitmap, ok := other.bitmaps[base]; ok {
+			intersection.bitmaps[base] = roaring.And(bitmap, otherBitmap)
+		}
+	}
+	return intersection
+}
+
+func (uidSet *UIDSet) Intersect(other *UIDSet) {
+	if other == nil || len(other.bitmaps) == 0 {
+		// other might be empty. In that case, just ignore.
+		return
+	}
+	for base, bitmap := range uidSet.bitmaps {
+		if otherBitmap, ok := other.bitmaps[base]; !ok {
+			// other does not have this base. So, remove.
+			delete(uidSet.bitmaps, base)
+		} else {
+			bitmap.And(otherBitmap)
+		}
+	}
+}
+
+func (uidSet *UIDSet) IntersectMany(others []*UIDSet) {
+	for _, other := range others {
+		uidSet.Intersect(other)
+	}
+}
+
+func Difference(uidSet, other *UIDSet) *UIDSet {
+	if other == nil || len(other.bitmaps) == 0 {
+		return uidSet.Clone()
+	}
+	if uidSet == nil || len(uidSet.bitmaps) == 0 {
+		return NewUIDSet()
+	}
+	difference := uidSet.Clone()
+	for otherBase, otherBitmap := range other.bitmaps {
+		if bitmap, ok := difference.bitmaps[otherBase]; ok {
+			bitmap.AndNot(otherBitmap)
+		}
+	}
+	return difference
+}
+
+// Difference removes the intersection of the receiver and other UIDSet.
+func (uidSet *UIDSet) Difference(other *UIDSet) {
+	if other == nil || len(other.bitmaps) == 0 {
+		return
+	}
+	for otherBase, otherMap := range other.bitmaps {
+		if bitmap, ok := uidSet.bitmaps[otherBase]; ok {
+			bitmap.AndNot(otherMap)
+		}
+	}
+}
+
+func (uidSet *UIDSet) DifferenceMany(others []*UIDSet) {
+	for _, other := range others {
+		uidSet.Difference(other)
+	}
+}
+
+func (uidSet *UIDSet) Merge(other *UIDSet) {
+	if other == nil || len(other.bitmaps) == 0 {
+		return
+	}
+	for otherBase, otherMap := range other.bitmaps {
+		if bitmap, ok := uidSet.bitmaps[otherBase]; ok {
+			bitmap.Or(otherMap)
+		} else {
+			// uidSet does not have this bitmap. So, add.
+			uidSet.bitmaps[otherBase] = otherMap
+		}
+	}
+}
+
+func (uidSet *UIDSet) MergeMany(others []*UIDSet) {
+	for _, other := range others {
+		uidSet.Merge(other)
+	}
+}
+
+// RemoveBefore
+func (uidSet *UIDSet) RemoveBefore(uid uint64) {
+	if uid == 0 {
+		return
+	}
+	uidBase := uid & msbBitMask
+	// Iteration is not in serial order. So, can't break early.
+	for base, bitmap := range uidSet.bitmaps {
+		if base < uidBase {
+			delete(uidSet.bitmaps, base)
+		} else if base == uidBase {
+			bitmap.RemoveRange(0, uid&lsbBitMask)
+		}
+	}
+}
+
+// RemoveUpTo
+func (uidSet *UIDSet) RemoveUpTo(uid uint64) {
+	uidSet.RemoveBefore(uid + 1)
+}
+
+// PackOfOne
+func PackOfOne(uid uint64) *pb.UidPack {
+	uidSet := NewUIDSet()
+	uidSet.AddUID(uid)
+	return uidSet.ToPack()
+}
+
+// AddBlock
+func (uidSet *UIDSet) AddBlock(block *pb.UidBlock) error {
+	bitmap, ok := uidSet.bitmaps[block.Base]
+	if !ok {
+		return nil
+	}
+	dst := roaring.New()
+	if _, err := dst.FromBuffer(block.RoaringBitmap); err != nil {
+		return err
+	}
+	bitmap.Or(dst)
+	return nil
+}
+
+// Msb returns the most significant bits of a UID used for the base of a UidBlock
+func Msb(uid uint64) uint64 {
+	return uid & msbBitMask
+}
+
+func NewEncoder() *Encoder {
+	encoder := &Encoder{
+		pack: &pb.UidPack{},
+	}
+	return encoder
+}
+
+// Add takes a UID and adds it to the list of UIDs to be encoded.
+func (e *Encoder) Add(uid uint64) {
+	base := uid & msbBitMask
+	if e.pack == nil {
+		e.pack = &pb.UidPack{}
+	}
+	lenUids := len(e.uids)
+	if lenUids > 0 && e.currentBase != base {
+		e.packBlock()
+		e.uids = e.uids[:0]
+	}
+	e.currentBase = base
+	e.uids = append(e.uids, uint32(uid & ^msbBitMask))
+}
+
+// AddBlock appends the given block to the Encoder pack
+func (e *Encoder) AddBlock(block *pb.UidBlock) {
+	if e.pack == nil {
+		e.pack = &pb.UidPack{}
+	}
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
-// Add takes an uid and adds it to the list of UIDs to be encoded.
-func (e *Encoder) Add(uid uint64) {
+// AddBlockFromBitmap appends a new block given a roaring bitmap and base
+func (e *Encoder) AddBlockFromBitmap(base uint64, rb *roaring.Bitmap, size uint32) {
 	if e.pack == nil {
-		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+		e.pack = &pb.UidPack{}
 	}
-
-	size := len(e.uids)
-	if size > 0 && !match32MSB(e.uids[size-1], uid) {
-		e.packBlock()
-		e.uids = e.uids[:0]
+	serializedBitmap, err := rb.ToBytes()
+	x.Check(err)
+	block := &pb.UidBlock{
+		Base:          base,
+		RoaringBitmap: serializedBitmap,
+		NumUids:       size,
 	}
-
-	e.uids = append(e.uids, uid)
-	if len(e.uids) >= e.BlockSize {
-		e.packBlock()
-		e.uids = e.uids[:0]
-	}
+	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
 // Done returns the final output of the encoder.
@@ -108,20 +515,48 @@ func (e *Encoder) Done() *pb.UidPack {
 	return e.pack
 }
 
-// Decoder is used to read a pb.UidPack object back into a list of UIDs.
-type Decoder struct {
-	Pack     *pb.UidPack
-	blockIdx int
-	uids     []uint64
+func (e *Encoder) packBlock() {
+	if len(e.uids) == 0 {
+		return
+	}
+	roaringBitmap := roaring.New()
+	roaringBitmap.AddMany(e.uids)
+	e.AddBlockFromBitmap(e.currentBase, roaringBitmap, uint32(len(e.uids)))
+	e.uids = e.uids[:0]
 }
 
 // NewDecoder returns a decoder for the given UidPack and properly initializes it.
 func NewDecoder(pack *pb.UidPack) *Decoder {
 	decoder := &Decoder{
-		Pack: pack,
+		Pack:          pack,
+		RoaringBitmap: roaring.New(),
 	}
 	decoder.Seek(0, SeekStart)
 	return decoder
+}
+
+// CurrentBase returns the base of the current block
+func (d *Decoder) CurrentBase() uint64 {
+	return d.Pack.Blocks[d.blockIdx].Base
+}
+
+// CurrentBlock returns the current block
+func (d *Decoder) CurrentBlock() *pb.UidBlock {
+	return d.Pack.Blocks[d.blockIdx]
+}
+
+// UnpackBlockRoaringBitmap returns roaring bitmap for block
+func (d *Decoder) UnpackBlockRoaringBitmap() *roaring.Bitmap {
+	block := d.Pack.Blocks[d.blockIdx]
+	x.Check2(d.RoaringBitmap.FromBuffer(block.RoaringBitmap))
+	return d.RoaringBitmap
+}
+
+// RoaringBitmapForBlock returns roaring bitmap for block at given index
+func (d *Decoder) RoaringBitmapForBlock(blockIdx int) *roaring.Bitmap {
+	block := d.Pack.Blocks[blockIdx]
+	x.Check2(d.RoaringBitmap.FromBuffer(block.RoaringBitmap))
+	return d.RoaringBitmap
 }
 
 func (d *Decoder) UnpackBlock() []uint64 {
@@ -135,35 +570,13 @@ func (d *Decoder) UnpackBlock() []uint64 {
 	if d.blockIdx >= len(d.Pack.Blocks) {
 		return d.uids
 	}
-	block := d.Pack.Blocks[d.blockIdx]
 
-	last := block.Base
-	d.uids = append(d.uids, last)
-
-	tmpUids := make([]uint32, 4)
-	var sum uint64
-	encData := block.Deltas
-
-	for uint32(len(d.uids)) < block.NumUids {
-		if len(encData) < 17 {
-			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
-			// decoding and expects it to be of length >= 4 at all the stages.
-			// The SSE code tries to read 16 bytes past the header(1 byte).
-			// So we are padding encData to increase its length to 17 bytes.
-			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
-			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
-		}
-
-		groupvarint.Decode4(tmpUids, encData)
-		encData = encData[groupvarint.BytesUsed[encData[0]]:]
-		for i := 0; i < 4; i++ {
-			sum = last + uint64(tmpUids[i])
-			d.uids = append(d.uids, sum)
-			last = sum
-		}
+	d.UnpackBlockRoaringBitmap()
+	d.uids = make([]uint64, d.RoaringBitmap.GetCardinality())
+	for i, lsb := range d.RoaringBitmap.ToArray() {
+		d.uids[i] = d.CurrentBase() + uint64(lsb)
 	}
 
-	d.uids = d.uids[:block.NumUids]
 	return d.uids
 }
 
@@ -190,33 +603,16 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	}
 
 	pack := d.Pack
-	blocksFunc := func() searchFunc {
-		var f searchFunc
-		switch whence {
-		case SeekStart:
-			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
-		case SeekCurrent:
-			f = func(i int) bool { return pack.Blocks[i].Base > uid }
-		}
-		return f
+	idx := sort.Search(len(pack.Blocks), func(i int) bool {
+		return pack.Blocks[i].Base >= (uid & msbBitMask)
+	})
+
+	if idx == len(pack.Blocks) {
+		return []uint64{}
 	}
 
-	idx := sort.Search(len(pack.Blocks), blocksFunc())
-	// The first block.Base >= uid.
-	if idx == 0 {
-		return d.UnpackBlock()
-	}
-	// The uid is the first entry in the block.
-	if idx < len(pack.Blocks) && pack.Blocks[idx].Base == uid {
-		d.blockIdx = idx
-		return d.UnpackBlock()
-	}
-
-	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
-	// we found the first block index whose base is greater than uid. In these cases, go to the
-	// previous block and search there.
-	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	d.UnpackBlock()      // And get all their uids.
+	d.blockIdx = idx
+	d.UnpackBlock()
 
 	uidsFunc := func() searchFunc {
 		var f searchFunc
@@ -247,30 +643,6 @@ func (d *Decoder) Uids() []uint64 {
 	return d.uids
 }
 
-// LinearSeek returns uids of the last block whose base is less than seek.
-// If there are no such blocks i.e. seek < base of first block, it returns uids of first
-// block. LinearSeek is used to get closest uids which are >= seek.
-func (d *Decoder) LinearSeek(seek uint64) []uint64 {
-	for {
-		v := d.PeekNextBase()
-		if seek < v {
-			break
-		}
-		d.blockIdx++
-	}
-
-	return d.UnpackBlock()
-}
-
-// PeekNextBase returns the base of the next block without advancing the decoder.
-func (d *Decoder) PeekNextBase() uint64 {
-	bidx := d.blockIdx + 1
-	if bidx < len(d.Pack.Blocks) {
-		return d.Pack.Blocks[bidx].Base
-	}
-	return math.MaxUint64
-}
-
 // Valid returns true if the decoder has not reached the end of the packed data.
 func (d *Decoder) Valid() bool {
 	return d.blockIdx < len(d.Pack.Blocks)
@@ -287,22 +659,18 @@ func (d *Decoder) BlockIdx() int {
 	return d.blockIdx
 }
 
-// Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
-// given size, with the last block having fewer uids. Within each block, it stores the first uid as
-// base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,
-// as mentioned here: https://developers.google.com/protocol-buffers/docs/encoding . This ensures
-// that the deltas being considerably smaller than the original uids are nicely packed in fewer
-// bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
-// mechanism is a LOT simpler to understand and if needed, debug.
-func Encode(uids []uint64, blockSize int) *pb.UidPack {
-	enc := Encoder{BlockSize: blockSize}
+// Encode takes in a list of uids and packs them into blocks. Within each block, all UIDs share the
+// same most significant bits (of length `numMsb`, stored as `base` in the block), and the remaining
+// least significant bits of each UID is stored in a roaring bitmap.
+func Encode(uids []uint64) *pb.UidPack {
+	enc := NewEncoder()
 	for _, uid := range uids {
 		enc.Add(uid)
 	}
 	return enc.Done()
 }
 
-// ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
+// ApproxLen returns the approximate number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
 	if pack == nil {
@@ -311,19 +679,16 @@ func ApproxLen(pack *pb.UidPack) int {
 	return len(pack.Blocks) * int(pack.BlockSize)
 }
 
-// ExactLen would calculate the total number of UIDs. Instead of using a UidPack, it accepts blocks,
+// ExactLen returns the total number of UIDs. Instead of using a UidPack, it accepts blocks,
 // so we can calculate the number of uids after a seek.
+// TODO: Can we store exact len in uidpack?
 func ExactLen(pack *pb.UidPack) int {
-	if pack == nil {
-		return 0
-	}
-	sz := len(pack.Blocks)
-	if sz == 0 {
+	if pack == nil || len(pack.Blocks) == 0 {
 		return 0
 	}
 	num := 0
 	for _, b := range pack.Blocks {
-		num += int(b.NumUids) // NumUids includes the base UID.
+		num += int(b.NumUids)
 	}
 	return num
 }
@@ -331,17 +696,15 @@ func ExactLen(pack *pb.UidPack) int {
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, ApproxLen(pack))
-	dec := Decoder{Pack: pack}
-
-	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
+	if pack == nil {
+		return []uint64{}
+	}
+	uids := make([]uint64, 0, ExactLen(pack))
+	dec := NewDecoder(pack)
+	for block := dec.Seek(seek, SeekStart); dec.Valid(); block = dec.Next() {
 		uids = append(uids, block...)
 	}
 	return uids
-}
-
-func match32MSB(num1, num2 uint64) bool {
-	return (num1 & bitMask) == (num2 & bitMask)
 }
 
 // CopyUidPack creates a copy of the given UidPack.
@@ -358,8 +721,8 @@ func CopyUidPack(pack *pb.UidPack) *pb.UidPack {
 		packCopy.Blocks[i] = new(pb.UidBlock)
 		packCopy.Blocks[i].Base = block.Base
 		packCopy.Blocks[i].NumUids = block.NumUids
-		packCopy.Blocks[i].Deltas = make([]byte, len(block.Deltas))
-		copy(packCopy.Blocks[i].Deltas, block.Deltas)
+		packCopy.Blocks[i].RoaringBitmap = make([]byte, len(block.RoaringBitmap))
+		copy(packCopy.Blocks[i].RoaringBitmap, block.RoaringBitmap)
 	}
 
 	return packCopy

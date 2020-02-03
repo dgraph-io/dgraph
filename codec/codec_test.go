@@ -32,48 +32,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func getUids(size int) []uint64 {
-	var uids []uint64
-	last := uint64(rand.Intn(100))
-	uids = append(uids, last)
-	for i := 1; i < size; i++ {
-		last += uint64(rand.Intn(33))
-		uids = append(uids, last)
+func getUniqueUids(size int) []uint64 {
+	uids := make([]uint64, 0, size)
+	//var uids []uint64
+	uidMap := make(map[uint64]struct{}, size)
+	for len(uidMap) < size {
+		last := rand.Uint64()
+		if _, found := uidMap[last]; !found {
+			uids = append(uids, last)
+		}
+		uidMap[last] = struct{}{}
 	}
 	return uids
+}
+
+func sortedSample(ints []uint64, size int) []uint64 {
+	shuffle := append([]uint64(nil), ints...)
+	rand.Shuffle(size, func(i, j int) { shuffle[i], shuffle[j] = shuffle[j], shuffle[i] })
+	sortedShuffle := shuffle[:size]
+	sort.Slice(sortedShuffle, func(i, j int) bool { return sortedShuffle[i] < sortedShuffle[j] })
+	return sortedShuffle
 }
 
 func TestUidPack(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Some edge case tests.
-	Encode([]uint64{}, 128)
+	Encode([]uint64{})
 	require.Equal(t, 0, ApproxLen(&pb.UidPack{}))
 	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
-	for i := 0; i < 13; i++ {
-		size := rand.Intn(10e6)
-		if size < 0 {
-			size = 1e6
-		}
+	randomUids := getUniqueUids(1 << 21)
+	for i := uint(0); i < 22; i += 3 {
+		size := rand.Intn(1 << i)
 		t.Logf("Testing with size = %d", size)
 
-		expected := getUids(size)
-		pack := Encode(expected, 256)
+		expected := sortedSample(randomUids, size)
+		pack := Encode(expected)
 		require.Equal(t, len(expected), ExactLen(pack))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
 	}
 }
 
+func BenchmarkUidPack2(b *testing.B) { // FIXME: Name
+	rand.Seed(time.Now().UnixNano())
+	var actual []uint64
+
+	randomUids := getUniqueUids(1 << 21)
+
+	size := rand.Intn(1 << 21)
+	b.Logf("Testing with size = %d", size)
+
+	expected := sortedSample(randomUids, size)
+	for n := 0; n < b.N; n++ {
+		pack := Encode(expected)
+		actual = Decode(pack, 0)
+		require.NotEmpty(b, actual)
+	}
+}
+
 func TestSeek(t *testing.T) {
 	N := 10001
-	enc := Encoder{BlockSize: 10}
+	enc := Encoder{}
 	for i := 0; i < N; i += 10 {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
-	dec := Decoder{Pack: pack}
+	dec := NewDecoder(pack)
 
 	tests := []struct {
 		in, out uint64
@@ -107,21 +133,24 @@ func TestSeek(t *testing.T) {
 		}
 	}
 
-	dec.blockIdx = 0
-	for i := 100; i < 10000; i += 100 {
-		uids := dec.LinearSeek(uint64(i))
-		require.Contains(t, uids, uint64(i))
-	}
+	/*
+		dec.blockIdx = 0
+		for i := 100; i < 10000; i += 100 {
+			uids := dec.LinearSeek(uint64(i))
+			require.Contains(t, uids, uint64(i))
+		}
+	*/
 }
 
+/*
 func TestLinearSeek(t *testing.T) {
 	N := 10001
-	enc := Encoder{BlockSize: 10}
+	enc := Encoder{}
 	for i := 0; i < N; i += 10 {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
-	dec := Decoder{Pack: pack}
+	dec := NewDecoder(pack)
 
 	for i := 0; i < 2*N; i += 10 {
 		uids := dec.LinearSeek(uint64(i))
@@ -140,18 +169,19 @@ func TestLinearSeek(t *testing.T) {
 		require.NotContains(t, uids, uint64(i))
 	}
 }
+*/
 
 func TestDecoder(t *testing.T) {
 	N := 10001
 	var expected []uint64
-	enc := Encoder{BlockSize: 10}
+	enc := Encoder{}
 	for i := 3; i < N; i += 3 {
 		enc.Add(uint64(i))
 		expected = append(expected, uint64(i))
 	}
 	pack := enc.Done()
 
-	dec := Decoder{Pack: pack}
+	dec := NewDecoder(pack)
 	for i := 3; i < N; i += 3 {
 		uids := dec.Seek(uint64(i), SeekStart)
 		require.Equal(t, uint64(i), uids[0])
@@ -172,7 +202,7 @@ func TestDecoder(t *testing.T) {
 func BenchmarkGzip(b *testing.B) {
 	rand.Seed(time.Now().UnixNano())
 
-	uids := getUids(1e6)
+	uids := getUniqueUids(1e6)
 	b.ResetTimer()
 	sz := uint64(len(uids)) * 8
 
@@ -206,14 +236,14 @@ func BenchmarkGzip(b *testing.B) {
 func benchmarkUidPackEncode(b *testing.B, blockSize int) {
 	rand.Seed(time.Now().UnixNano())
 
-	uids := getUids(1e6)
+	uids := getUniqueUids(1e6)
 	sz := uint64(len(uids)) * 8
 	b.Logf("Dataset Len=%d. Size: %s", len(uids), humanize.Bytes(sz))
 	b.ResetTimer()
 
 	var data []byte
 	for i := 0; i < b.N; i++ {
-		pack := Encode(uids, blockSize)
+		pack := Encode(uids)
 		out, err := pack.Marshal()
 		if err != nil {
 			b.Fatalf("Error marshaling uid pack: %s", err.Error())
@@ -243,11 +273,11 @@ func BenchmarkUidPack(b *testing.B) {
 func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 	rand.Seed(time.Now().UnixNano())
 
-	uids := getUids(1e6)
+	uids := getUniqueUids(1e6)
 	sz := uint64(len(uids)) * 8
 	b.Logf("Dataset Len=%d. Size: %s", len(uids), humanize.Bytes(sz))
 
-	pack := Encode(uids, blockSize)
+	pack := Encode(uids)
 	data, err := pack.Marshal()
 	x.Check(err)
 	b.Logf("Output size: %s. Compression: %.2f",
@@ -284,7 +314,7 @@ func TestEncoding(t *testing.T) {
 
 		sort.Slice(ints, func(i, j int) bool { return ints[i] < ints[j] })
 
-		encodedInts := Encode(ints, 256)
+		encodedInts := Encode(ints)
 		decodedInts := Decode(encodedInts, 0)
 
 		require.Equal(t, ints, decodedInts)
@@ -292,7 +322,7 @@ func TestEncoding(t *testing.T) {
 }
 
 func newUidPack(data []uint64) *pb.UidPack {
-	encoder := Encoder{BlockSize: 10}
+	encoder := Encoder{}
 	for _, uid := range data {
 		encoder.Add(uid)
 	}
@@ -303,4 +333,11 @@ func TestCopyUidPack(t *testing.T) {
 	pack := newUidPack([]uint64{1, 2, 3, 4, 5})
 	copy := CopyUidPack(pack)
 	require.Equal(t, Decode(pack, 0), Decode(copy, 0))
+}
+
+func TestNumMsb(t *testing.T) {
+	// Roaring bitmaps support 32 bit integers, so most significant bits used as the base of a
+	// block must cover at least the first 32 bits of a 64 bit UID.
+	require.GreaterOrEqual(t, NumMsb, uint8(32))
+	require.LessOrEqual(t, NumMsb, uint8(64))
 }

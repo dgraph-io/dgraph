@@ -25,12 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -38,6 +34,10 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 /*
@@ -247,27 +247,32 @@ type SubGraph struct {
 
 	// count stores the count of an edge (predicate). There would be one value corresponding to each
 	// uid in SrcUIDs.
-	counts []uint32
+	counts map[uint64]uint32
 	// valueMatrix is a slice of ValueList. If this SubGraph is for a scalar predicate type, then
 	// there would be one list for each uid in SrcUIDs storing the value of the predicate.
 	// The individual elements of the slice are a ValueList because we support scalar predicates
 	// of list type. For non-list type scalar predicates, there would be only one value in every
 	// ValueList.
-	valueMatrix []*pb.ValueList
+	//valueMatrix []*pb.ValueList
+	valueMatrix map[uint64]*pb.ValueList
 	// uidMatrix is a slice of List. There would be one List corresponding to each uid in SrcUIDs.
 	// In graph terms, a list is a slice of outgoing edges from a node.
-	uidMatrix []*pb.List
+	//uidMatrix map[uint64]*pb.UidPack
+	uidMatrix map[uint64]*codec.UIDSet
 
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
-	facetsMatrix []*pb.FacetsList
-	ExpandPreds  []*pb.ValueList
-	GroupbyRes   []*groupResults // one result for each uid list.
-	LangTags     []*pb.LangList
+	//facetsMatrix []*pb.FacetsList
+	//facetsMatrix map[uint64]*pb.FacetsList
+	facetsMatrix map[uint64]*pb.FacetsMap
+	//ExpandPreds []*pb.ValueList
+	ExpandPreds map[uint64]*pb.ValueList
+	GroupbyRes  map[uint64]*groupResults // one result for each uid list.
+	LangTags    map[uint64]*pb.LangList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *pb.List
+	SrcUIDs *codec.UIDSet
 	// SrcFunc specified using func. Should only be non-nil at root. At other levels,
 	// filters are used.
 	SrcFunc *Function
@@ -279,7 +284,8 @@ type SubGraph struct {
 	Children     []*SubGraph // children of the current node, should be empty for leaf nodes.
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *pb.List
+	//DestUIDs *pb.List
+	DestUIDs *codec.UIDSet
 	List     bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
@@ -337,10 +343,10 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 func (sg *SubGraph) DebugPrint(prefix string) {
 	var src, dst int
 	if sg.SrcUIDs != nil {
-		src = len(sg.SrcUIDs.Uids)
+		src = int(sg.SrcUIDs.NumUids())
 	}
 	if sg.DestUIDs != nil {
-		dst = len(sg.DestUIDs.Uids)
+		dst = int(sg.DestUIDs.NumUids())
 	}
 	glog.Infof("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
@@ -738,12 +744,11 @@ func isDebug(ctx context.Context) bool {
 	return debug || d
 }
 
-func (sg *SubGraph) populate(uids []uint64) error {
-	// Put sorted entries in matrix.
-	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-	sg.uidMatrix = []*pb.List{{Uids: uids}}
-	// User specified list may not be sorted.
-	sg.SrcUIDs = &pb.List{Uids: uids}
+// Only called on root
+func (sg *SubGraph) populate(UIDs []uint64) error {
+	// FIXME: Using 0
+	sg.uidMatrix = map[uint64]*codec.UIDSet{0: codec.UIDSetFromSlice(UIDs)}
+	sg.SrcUIDs = codec.UIDSetFromSlice(UIDs)
 	return nil
 }
 
@@ -898,7 +903,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	}
 
 	if sg.SrcUIDs != nil {
-		out.UidList = sg.SrcUIDs
+		out.UidList = sg.SrcUIDs.ToList()
 	}
 	return out, nil
 }
@@ -947,7 +952,7 @@ type varValue struct {
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// strList stores the valueMatrix corresponding to a predicate and is later used in
 	// expand(val(x)) query.
-	strList []*pb.ValueList
+	strList map[uint64]*pb.ValueList
 }
 
 func evalLevelAgg(
@@ -1011,21 +1016,24 @@ func evalLevelAgg(
 	vals := doneVars[needsVar].Vals
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
-	for i, list := range relSG.uidMatrix {
+	for srcUID, UIDSet := range relSG.uidMatrix {
 		ag := aggregator{
 			name: sg.SrcFunc.Name,
 		}
-		for _, uid := range list.Uids {
-			if val, ok := vals[uid]; ok {
+
+		x.Check(UIDSet.Iterate(func(adjUID uint64) error {
+			if val, ok := vals[adjUID]; ok {
 				ag.Apply(val)
 			}
-		}
+			return nil
+		}))
+
 		v, err := ag.Value()
 		if err != nil && err != ErrEmptyVal {
 			return nil, err
 		}
 		if v.Value != nil {
-			mp[relSG.SrcUIDs.Uids[i]] = v
+			mp[srcUID] = v
 		}
 	}
 	return mp, nil
@@ -1069,27 +1077,28 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			continue
 		}
 
-		for i := 0; i < len(curNode.uidMatrix); i++ {
-			ul := curNode.uidMatrix[i]
-			srcUid := curNode.SrcUIDs.Uids[i]
-			curVal, ok := newMap[srcUid]
+		for srcUID, adjUIDSet := range curNode.uidMatrix {
+			curVal, ok := newMap[srcUID]
 			if !ok || curVal.Value == nil {
 				continue
 			}
 			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
 				return nil, errors.Errorf("Encountered non int/float type for summing")
 			}
-			for j := 0; j < len(ul.Uids); j++ {
-				dstUid := ul.Uids[j]
+			x.Check(adjUIDSet.Iterate(func(dstUID uint64) error {
 				ag := aggregator{name: "sum"}
 				ag.Apply(curVal)
-				ag.Apply(tempMap[dstUid])
+				ag.Apply(tempMap[dstUID])
 				val, err := ag.Value()
 				if err != nil {
-					continue
+					return err
 				}
-				tempMap[dstUid] = val
-			}
+				tempMap[dstUID] = val
+				return nil
+			}))
+		}
+		for i := 0; i < len(curNode.uidMatrix); i++ {
+
 		}
 		newMap = tempMap
 	}
@@ -1200,7 +1209,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 				doneVars[sg.Params.Var] = it
 				return nil
 			}
-			for _, uid := range rangeOver.Uids {
+			for _, uid := range rangeOver.ToUids() { // TODO: Revise
 				mp[uid] = sg.MathExp.Const
 			}
 			it := doneVars[sg.Params.Var]
@@ -1248,21 +1257,18 @@ func (sg *SubGraph) updateFacetMatrix() {
 		return
 	}
 
-	for lidx, l := range sg.uidMatrix {
+	for srcUID, adjUIDSet := range sg.uidMatrix {
 		// For scalar predicates, uid list would be empty, we don't need to update facetsMatrix.
 		// If its an uid predicate and uid list is empty then also we don't need to update
 		// facetsMatrix, as results won't be returned to client in outputnode.go.
-		if len(l.Uids) == 0 {
-			continue
+		if !adjUIDSet.IsEmpty() {
+			// TODO: Use difference iterator?
+			x.Check(codec.Difference(sg.DestUIDs, adjUIDSet).Iterate(func(destUID uint64) error {
+				// If uid wasn't filtered then we keep the facet for it.
+				delete(sg.facetsMatrix[srcUID].Facets, destUID)
+				return nil
+			}))
 		}
-		out := sg.facetsMatrix[lidx].FacetsList[:0]
-		for idx, uid := range l.Uids {
-			// If uid wasn't filtered then we keep the facet for it.
-			if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
-				out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
-			}
-		}
-		sg.facetsMatrix[lidx].FacetsList = out
 	}
 }
 
@@ -1274,17 +1280,9 @@ func (sg *SubGraph) updateFacetMatrix() {
 // lists in uidMatrix which are not in DestUIDs.
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
-	for _, l := range sg.uidMatrix {
-		if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
-			// We can't do intersection directly as the list is not sorted by UIDs.
-			// So do filter.
-			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				return algo.IndexOf(sg.DestUIDs, uid) >= 0 // Binary search.
-			})
-		} else {
-			// If we didn't order on UIDmatrix, it'll be sorted.
-			algo.IntersectWith(l, sg.DestUIDs, l)
-		}
+	for _, UIDSet := range sg.uidMatrix {
+		// TODO: (Alvin) Ensure ordering is done later due to deletions here
+		UIDSet.Intersect(sg.DestUIDs)
 	}
 }
 
@@ -1296,7 +1294,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
 	}
-	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
+	out := make([]uint64, 0, sg.DestUIDs.NumUids())
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
 	}
@@ -1325,7 +1323,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	for i, uid := range sg.DestUIDs.Uids {
+	x.Check(sg.DestUIDs.Iterate(func(uid uint64) error {
 		var exclude bool
 		for _, child := range sg.Children {
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
@@ -1338,9 +1336,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			// current UID should be removed from this level.
 			if !child.IsInternal() &&
 				// Check len before accessing index.
-				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
-				(len(child.counts) <= i) &&
-				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
+				(len(child.valueMatrix[uid].Values) == 0) && child.uidMatrix[uid].IsEmpty() {
 				exclude = true
 				break
 			}
@@ -1348,10 +1344,11 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		if !exclude {
 			out = append(out, uid)
 		}
-	}
+		return nil
+	}))
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
-	sg.DestUIDs = &pb.List{Uids: out}
+	sg.DestUIDs = codec.UIDSetFromSlice(out)
 
 AssignStep:
 	return sg.updateVars(doneVars, sgPath)
@@ -1397,13 +1394,14 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path:    sgPath,
 			strList: sg.valueMatrix,
 		}
-		for idx, uid := range sg.SrcUIDs.Uids {
+		x.Check(sg.SrcUIDs.Iterate(func(srcUID uint64) error {
 			val := types.Val{
 				Tid:   types.IntID,
-				Value: int64(sg.counts[idx]),
+				Value: int64(sg.counts[srcUID]),
 			}
-			doneVars[sg.Params.Var].Vals[uid] = val
-		}
+			doneVars[sg.Params.Var].Vals[srcUID] = val
+			return nil
+		}))
 	case sg.Params.DoCount && sg.Attr == "uid" && sg.IsInternal():
 		// 2. This is the case where count(uid) is requested in the query and stored as variable.
 		// In this case there is just one value which is stored corresponding to the uid
@@ -1419,10 +1417,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// we use the length of SrcUIDs instead of DestUIDs.
 		val := types.Val{
 			Tid:   types.IntID,
-			Value: int64(len(sg.SrcUIDs.Uids)),
+			Value: int64(sg.SrcUIDs.NumUids()),
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
-	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
+	case sg.DestUIDs.NumUids() != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
 		//    me(func: (...)) {
@@ -1444,7 +1442,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids:    uids,
+				Uids:    uids.ToList(),
 				path:    sgPath,
 				Vals:    make(map[uint64]types.Val),
 				strList: sg.valueMatrix,
@@ -1454,7 +1452,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
-		lists := append([]*pb.List(nil), v.Uids, uids)
+		lists := append([]*pb.List(nil), v.Uids, uids.ToList())
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
 	case len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0:
@@ -1466,15 +1464,15 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			v.strList = sg.valueMatrix
 		}
 
-		for idx, uid := range sg.SrcUIDs.Uids {
-			if len(sg.valueMatrix[idx].Values) > 1 {
+		for _, uid := range sg.SrcUIDs.ToUids() {
+			if len(sg.valueMatrix[uid].Values) > 1 {
 				return errors.Errorf("Value variables not supported for predicate with list type.")
 			}
 
-			if len(sg.valueMatrix[idx].Values) == 0 {
+			if len(sg.valueMatrix[uid].Values) == 0 {
 				continue
 			}
-			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
+			val, err := convertWithBestEffort(sg.valueMatrix[uid].Values[0], sg.Attr)
 			if err != nil {
 				continue
 			}
@@ -1525,16 +1523,16 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 
 	// Note: We ignore the facets if its a value edge as we can't
 	// attach the value to any node.
-	for i, uids := range sg.uidMatrix {
-		for j, uid := range uids.Uids {
-			facet := sg.facetsMatrix[i].FacetsList[j]
-			for _, f := range facet.Facets {
-				fvar, ok := sg.Params.FacetVar[f.Key]
+	for srcUID, UIDSet := range sg.uidMatrix {
+		x.Check(UIDSet.Iterate(func(uid uint64) error {
+			facetsList := sg.facetsMatrix[srcUID].Facets[uid]
+			for _, facet := range facetsList.Facets {
+				fvar, ok := sg.Params.FacetVar[facet.Key]
 				if !ok {
 					continue
 				}
 				if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
-					fVal, err := facets.ValFor(f)
+					fVal, err := facets.ValFor(facet)
 					if err != nil {
 						return err
 					}
@@ -1543,7 +1541,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				} else {
 					// If the value is int/float we add them up. Else we throw an error as
 					// many to one maps are not allowed for other types.
-					nVal, err := facets.ValFor(f)
+					nVal, err := facets.ValFor(facet)
 					if err != nil {
 						return err
 					}
@@ -1562,7 +1560,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 					doneVars[fvar].Vals[uid] = fVal
 				}
 			}
-		}
+			return nil
+		}))
 	}
 	return nil
 }
@@ -1680,8 +1679,8 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if err := sg.replaceVarInFunc(); err != nil {
 		return err
 	}
-	lists = append(lists, sg.DestUIDs)
-	sg.DestUIDs = algo.MergeSorted(lists)
+	lists = append(lists, sg.DestUIDs.ToList())
+	sg.DestUIDs = codec.UIDSetFromList(algo.MergeSorted(lists))
 	return nil
 }
 
@@ -1756,46 +1755,49 @@ func (sg *SubGraph) applyIneqFunc() error {
 
 	if sg.SrcUIDs != nil {
 		// This means its a filter.
-		for _, uid := range sg.SrcUIDs.Uids {
+		for _, uid := range sg.SrcUIDs.ToUids() {
 			curVal, ok := sg.Params.UidToVal[uid]
 			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+				sg.DestUIDs.AddUID(uid)
 			}
 		}
 	} else {
 		// This means it's a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.UidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+				sg.DestUIDs.AddUID(uid)
 			}
 		}
-		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
-			return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
-		})
-		sg.uidMatrix = []*pb.List{sg.DestUIDs}
+		/*
+			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
+				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
+			})
+		*/
+		// FIXME: temporarily using srcUID of 0
+		sg.uidMatrix = map[uint64]*codec.UIDSet{0: sg.DestUIDs.Clone()}
 	}
 	return nil
 }
 
 func (sg *SubGraph) appendDummyValues() {
-	if sg.SrcUIDs == nil || len(sg.SrcUIDs.Uids) == 0 {
+	if sg.SrcUIDs == nil || sg.SrcUIDs.NumUids() == 0 {
 		return
 	}
-	var l pb.List
 	var val pb.ValueList
-	for range sg.SrcUIDs.Uids {
-		// This is necessary so that preTraverse can be processed smoothly.
-		sg.uidMatrix = append(sg.uidMatrix, &l)
-		sg.valueMatrix = append(sg.valueMatrix, &val)
-	}
+	// TODO: Verify if below is still necessary
+	x.Check(sg.SrcUIDs.Iterate(func(uid uint64) error {
+		sg.uidMatrix[uid] = codec.NewUIDSet()
+		sg.valueMatrix[uid] = &val
+		return nil
+	}))
 }
 
-func getPredsFromVals(vl []*pb.ValueList) []string {
+func getPredsFromVals(valueLists map[uint64]*pb.ValueList) []string {
 	preds := make([]string, 0)
-	for _, l := range vl {
-		for _, v := range l.Values {
-			if len(v.Val) > 0 {
-				preds = append(preds, string(v.Val))
+	for _, valueList := range valueLists {
+		for _, taskValue := range valueList.Values {
+			if len(taskValue.Val) > 0 {
+				preds = append(preds, string(taskValue.Val))
 			}
 		}
 	}
@@ -1948,18 +1950,20 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
 		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
-		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
+		if sg.SrcUIDs != nil && !sg.SrcUIDs.IsEmpty() {
 			// I am root. I don't have any function to execute, and my
 			// result has been prepared for me already by list passed by the user.
 			// uidmatrix retains the order. SrcUids are sorted (in newGraph).
 			sg.DestUIDs = sg.SrcUIDs
 		} else {
 			// Populated variable.
-			o := append(sg.DestUIDs.Uids[:0:0], sg.DestUIDs.Uids...)
-			sg.uidMatrix = []*pb.List{{Uids: o}}
-			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
-				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
-			})
+			// FIXME: Check if below is correct. Used 0 again
+			sg.uidMatrix = map[uint64]*codec.UIDSet{0: sg.DestUIDs.Clone()}
+			/*
+				sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
+					return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
+				})
+			*/
 		}
 	case len(sg.Attr) == 0:
 		// This is when we have uid function in children.
@@ -1970,7 +1974,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
-			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
+			sg.DestUIDs.Intersect(sg.SrcUIDs)
 			rch <- nil
 			return
 		}
@@ -1985,7 +1989,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
 		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
+		sg.DestUIDs = sg.SrcUIDs.Clone()
 	default:
 		isInequalityFn := sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name)
 		switch {
@@ -2008,11 +2012,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 
-			curVal := types.Val{Tid: types.IntID, Value: int64(len(sg.DestUIDs.Uids))}
+			curVal := types.Val{Tid: types.IntID, Value: int64(sg.DestUIDs.NumUids())}
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = sg.SrcUIDs.Uids
+				sg.DestUIDs = sg.SrcUIDs.Clone()
 			} else {
-				sg.DestUIDs.Uids = nil
+				sg.DestUIDs.Clear()
 			}
 		default:
 			taskQuery, err := createTaskQuery(sg)
@@ -2029,7 +2033,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 
-			sg.uidMatrix = result.UidMatrix
+			sg.uidMatrix = make(map[uint64]*codec.UIDSet, len(result.UidMatrix))
+			for srcUID, UIDPack := range result.UidMatrix {
+				sg.uidMatrix[srcUID] = codec.UIDSetFromPack(UIDPack)
+			}
 			sg.valueMatrix = result.ValueMatrix
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
@@ -2042,18 +2049,25 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					rch <- nil
 					return
 				}
-				sg.counts = make([]uint32, len(sg.uidMatrix))
+				sg.counts = make(map[uint64]uint32, len(sg.uidMatrix))
 			}
 
-			if result.IntersectDest {
-				sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
-			} else {
-				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+			var destUIDPack *pb.UidPack
+			UIDMatrixPacks := make([]*pb.UidPack, len(result.UidMatrix))
+			for _, UIDPack := range result.UidMatrix {
+				UIDMatrixPacks = append(UIDMatrixPacks, UIDPack)
 			}
+			if result.IntersectDest {
+				destUIDPack = algo.IntersectSortedPacked(UIDMatrixPacks)
+			} else {
+				destUIDPack = algo.MergeSortedPacked(UIDMatrixPacks)
+			}
+			sg.DestUIDs = codec.UIDSetFromPack(destUIDPack)
 
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
-				sg.uidMatrix = []*pb.List{sg.DestUIDs}
+				// FIXME: Used 0 for srcUID
+				sg.uidMatrix = map[uint64]*codec.UIDSet{0: codec.UIDSetFromPack(destUIDPack)}
 			}
 		}
 	}
@@ -2094,19 +2108,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		// Now apply the results from filter.
-		var lists []*pb.List
+		var uidSets []*codec.UIDSet
 		for _, filter := range sg.Filters {
-			lists = append(lists, filter.DestUIDs)
+			uidSets = append(uidSets, filter.DestUIDs)
 		}
 
 		switch {
 		case sg.FilterOp == "or":
-			sg.DestUIDs = algo.MergeSorted(lists)
+			sg.DestUIDs.MergeMany(uidSets)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
-			sg.DestUIDs = algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
+			sg.DestUIDs.Difference(sg.Filters[0].DestUIDs)
 		case sg.FilterOp == "and":
-			sg.DestUIDs = algo.IntersectSorted(lists)
+			sg.DestUIDs.IntersectMany(uidSets)
 		default:
 			// We need to also intersect the original dest uids in this case to get the final
 			// DestUIDs.
@@ -2114,8 +2128,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			// TODO - See if the server performing the filter can intersect with the srcUIDs before
 			// returning them in this case.
-			lists = append(lists, sg.DestUIDs)
-			sg.DestUIDs = algo.IntersectSorted(lists)
+			uidSets = append(uidSets, sg.DestUIDs)
+			sg.DestUIDs.IntersectMany(uidSets)
 		}
 	}
 
@@ -2125,16 +2139,26 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- err
 			return
 		}
-	} else {
-		// If we are asked for count, we don't need to change the order of results.
-		if !sg.Params.DoCount {
-			// We need to sort first before pagination.
-			if err = sg.applyOrderAndPagination(ctx); err != nil {
-				rch <- err
-				return
-			}
-		}
 	}
+	// FIXME
+	/*
+		else {
+			// If we are asked for count, we don't need to change the order of results.
+
+			/*
+				if !sg.Params.DoCount {
+
+					// We need to sort first before pagination.
+
+
+						if err = sg.applyOrderAndPagination(ctx); err != nil {
+							rch <- err
+							return
+						}
+
+				}
+		}
+	*/
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
@@ -2144,12 +2168,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
-		sg.counts = make([]uint32, len(sg.uidMatrix))
+		sg.counts = make(map[uint64]uint32, len(sg.uidMatrix))
 		sg.updateUidMatrix()
-		for i, ul := range sg.uidMatrix {
+		for srcUID, UIDSet := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-			sg.counts[i] = uint32(len(ul.Uids))
+			sg.counts[srcUID] = uint32(UIDSet.NumUids())
 		}
 		rch <- nil
 		return
@@ -2213,7 +2237,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestUIDs == nil || sg.DestUIDs.NumUids() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if span != nil {
 			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
@@ -2240,16 +2264,21 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 
 	sg.updateUidMatrix()
-	for i := 0; i < len(sg.uidMatrix); i++ {
+	for srcUID, UIDSet := range sg.uidMatrix {
 		// Apply the offsets.
-		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
-		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, int(UIDSet.NumUids()))
+		// FIXME: Make another property for paginated results? Optimize
+		UIDs := UIDSet.ToUids()[start:end]
+		sg.uidMatrix[srcUID] = codec.UIDSetFromSlice(UIDs)
 	}
 	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+	for _, UIDSet := range sg.uidMatrix {
+		sg.DestUIDs.Merge(UIDSet)
+	}
 	return nil
 }
 
+/*
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
@@ -2314,24 +2343,19 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	sg.updateDestUids()
 	return nil
 }
+*/
 
 func (sg *SubGraph) updateDestUids() {
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, len(sg.DestUIDs.Uids))
-	for _, ul := range sg.uidMatrix {
-		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-			if idx >= 0 {
-				included[idx] = true
-			}
-		}
+	for _, UIDSet := range sg.uidMatrix {
+		sg.DestUIDs.Intersect(UIDSet)
 	}
-	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, idx int) bool { return included[idx] })
 }
 
+/*
 func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	if len(sg.facetsMatrix) == 0 {
 		return nil
@@ -2351,43 +2375,48 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
-		uids := ul.Uids[:0]
+		uids := make([]uint64, 0, ul.NumUids)
 		facetList := fl.FacetsList[:0]
 
-		values := make([][]types.Val, len(ul.Uids))
+		values := make([][]types.Val, ul.NumUids)
 		for i := 0; i < len(values); i++ {
 			values[i] = make([]types.Val, len(sg.Params.FacetsOrder))
 		}
 
-		for j := 0; j < len(ul.Uids); j++ {
-			uid := ul.Uids[j]
-			f := fl.FacetsList[j]
-			uids = append(uids, uid)
-			facetList = append(facetList, f)
+		uidSet := codec.NewUIDSet(ul)
+		uidSetIter := uidSet.NewIterator()
+		uidBuf := make([]uint64, 64)
+		for numUids := uidSetIter.Next(uidBuf); numUids > 0; numUids = uidSetIter.Next(uidBuf) {
+			for j := 0; j < numUids; j++ {
+				uid := uidBuf[j]
+				f := fl.FacetsList[j]
+				uids = append(uids, uid)
+				facetList = append(facetList, f)
 
-			// Since any facet can come only once in f.Facets, we can have counter to check if we
-			// have populated all facets or not. Once we are done populating all facets
-			// we can break out of below loop.
-			remainingFacets := len(orderbyKeys)
-			// TODO: We are searching sequentially, explore if binary search is useful here.
-			for _, it := range f.Facets {
-				idx, ok := orderbyKeys[it.Key]
-				if !ok {
-					continue
-				}
+				// Since any facet can come only once in f.Facets, we can have counter to check if we
+				// have populated all facets or not. Once we are done populating all facets
+				// we can break out of below loop.
+				remainingFacets := len(orderbyKeys)
+				// TODO: We are searching sequentially, explore if binary search is useful here.
+				for _, it := range f.Facets {
+					idx, ok := orderbyKeys[it.Key]
+					if !ok {
+						continue
+					}
 
-				fVal, err := facets.ValFor(it)
-				if err != nil {
-					return err
-				}
-				// If type is not sortable, we are ignoring it.
-				if types.IsSortable(fVal.Tid) {
-					values[j][idx] = fVal
-				}
+					fVal, err := facets.ValFor(it)
+					if err != nil {
+						return err
+					}
+					// If type is not sortable, we are ignoring it.
+					if types.IsSortable(fVal.Tid) {
+						values[j][idx] = fVal
+					}
 
-				remainingFacets--
-				if remainingFacets == 0 {
-					break
+					remainingFacets--
+					if remainingFacets == 0 {
+						break
+					}
 				}
 			}
 		}
@@ -2398,7 +2427,9 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if err := types.SortWithFacet(values, &uids, facetList, orderDesc, ""); err != nil {
 			return err
 		}
-		sg.uidMatrix[i].Uids = uids
+		uidMatrixSet := codec.NewUIDSet(nil)
+		uidMatrixSet.AddMany(uids)
+		sg.uidMatrix[i] = uidMatrixSet.ToPack()
 		// We need to update the facetmarix corresponding to changes to uidmatrix.
 		sg.facetsMatrix[i].FacetsList = facetList
 	}
@@ -2460,6 +2491,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	sg.updateDestUids()
 	return nil
 }
+*/
 
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
@@ -2657,6 +2689,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			if err != nil {
 				return err
 			}
+
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
@@ -2777,9 +2810,9 @@ func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 // for each predicate.
 func calculateMetrics(sg *SubGraph, metrics map[string]uint64) {
 	// Skip internal nodes.
-	if !sg.IsInternal() {
+	if !sg.IsInternal() && sg.SrcUIDs != nil {
 		// Add the number of SrcUIDs. This is the number of uids processed by this attribute.
-		metrics[sg.Attr] += uint64(len(sg.SrcUIDs.GetUids()))
+		metrics[sg.Attr] += sg.SrcUIDs.NumUids()
 	}
 	// Add all the uids gathered by filters.
 	for _, filter := range sg.Filters {

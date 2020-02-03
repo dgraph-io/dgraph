@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -118,14 +117,14 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				sg.updateUidMatrix()
 			}
 
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+			x.Check(sg.SrcUIDs.Iterate(func(fromUID uint64) error {
 				if allowLoop {
-					for _, ul := range sg.uidMatrix {
-						numEdges += uint64(len(ul.Uids))
+					for _, UIDSet := range sg.uidMatrix {
+						numEdges += uint64(UIDSet.NumUids())
 					}
 				} else {
-					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-						key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
+					sg.uidMatrix[fromUID].ApplyFilter(func(UID uint64) bool {
+						key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, UID)
 						_, seen := reachMap[key] // Combine fromUID here.
 						if seen {
 							return false
@@ -136,12 +135,15 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 						return true
 					})
 				}
-			}
+				return nil
+			}))
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.
 				sg.updateDestUids()
 			} else {
-				sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+				for _, UIDSet := range sg.uidMatrix {
+					sg.DestUIDs.Merge(UIDSet)
+				}
 			}
 		}
 
@@ -152,7 +154,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			if sg.UnknownAttr {
 				continue
 			}
-			if len(sg.DestUIDs.Uids) == 0 {
+			if sg.DestUIDs.IsEmpty() {
 				continue
 			}
 			if exp, err = expandChildren(ctx, sg, startChildren); err != nil {

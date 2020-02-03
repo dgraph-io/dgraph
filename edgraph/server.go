@@ -782,9 +782,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	isMutation := len(req.Mutations) > 0
+	hasMutation := len(req.Mutations) > 0
 	methodRequest := methodQuery
-	if isMutation {
+	if hasMutation {
 		methodRequest = methodMutate
 	}
 
@@ -809,7 +809,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 
 	req.Query = strings.TrimSpace(req.Query)
 	isQuery := len(req.Query) != 0
-	if !isQuery && !isMutation {
+	if !isQuery && !hasMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
@@ -821,7 +821,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 			measurements = append(measurements, x.PendingQueries.M(-1))
 		}()
 	}
-	if isMutation {
+	if hasMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
@@ -839,7 +839,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
+	if hasMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
 		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
@@ -936,7 +936,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		}
 		resp.Json, err = json.Marshal(respMap)
 	} else {
-		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
+		resp.Json, err = query.ToJSON(qc.latency, er.Subgraphs)
 	}
 	if err != nil {
 		return resp, err

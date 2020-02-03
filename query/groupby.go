@@ -22,8 +22,10 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -142,17 +144,14 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		name: child.SrcFunc.Name,
 	}
 	for _, uid := range grp.uids {
-		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-			return child.SrcUIDs.Uids[i] >= uid
-		})
-		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+		if !child.SrcUIDs.Contains(uid) {
 			continue
 		}
 
-		if len(child.valueMatrix[idx].Values) == 0 {
+		if len(child.valueMatrix[uid].Values) == 0 {
 			continue
 		}
-		v := child.valueMatrix[idx].Values[0]
+		v := child.valueMatrix[uid].Values[0]
 		val, err := convertWithBestEffort(v, child.Attr)
 		if err != nil {
 			continue
@@ -200,7 +199,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 	}
 }
 
-func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
+func (sg *SubGraph) formResult(UIDPack *pb.UidPack) (*groupResults, error) {
 	var dedupMap dedup
 	res := new(groupResults)
 
@@ -213,33 +212,28 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.GetUids()) > 0 {
-			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
-				// Ignore uids which are not part of srcUid.
-				if algo.IndexOf(ul, srcUid) < 0 {
-					continue
-				}
-
-				ul := child.uidMatrix[i]
-				for _, uid := range ul.GetUids() {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-				}
-			}
-		} else {
+		UIDSet := codec.UIDSetFromPack(UIDPack)
+		if child.DestUIDs.IsEmpty() {
 			// It's a value node.
-			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
-					continue
+			x.Check(child.SrcUIDs.IntersectionIterate(UIDSet, func(srcUID uint64) error {
+				valueList := child.valueMatrix[srcUID]
+				if len(valueList.Values) > 0 {
+					val, err := convertTo(valueList.Values[0])
+					if err != nil {
+						return err
+					}
+					dedupMap.addValue(attr, val, srcUID)
 				}
-				val, err := convertTo(v.Values[0])
-				if err != nil {
-					continue
-				}
-				dedupMap.addValue(attr, val, srcUid)
-			}
+				return nil
+			}))
+		} else {
+			// It's a UID node.
+			x.Check(child.SrcUIDs.IntersectionIterate(UIDSet, func(srcUID uint64) error {
+				return child.uidMatrix[srcUID].Iterate(func(adjUID uint64) error {
+					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: adjUID}, srcUID)
+					return nil
+				})
+			}))
 		}
 	}
 
@@ -251,7 +245,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		if child.Params.IgnoreResult {
 			continue
 		}
-		// This is a aggregation node.
+		// This is an aggregation node.
 		for _, grp := range res.group {
 			err := grp.aggregateChild(child)
 			if err != nil && err != ErrEmptyVal {
@@ -295,29 +289,28 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.GetUids()) > 0 {
-			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
-				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-				}
-			}
-			pathNode = child
-		} else {
+		if child.DestUIDs.IsEmpty() {
 			// It's a value node.
-			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 {
-					continue
+			x.Check(child.SrcUIDs.Iterate(func(srcUID uint64) error {
+				valueList := child.valueMatrix[srcUID]
+				if len(valueList.Values) > 0 {
+					val, err := convertTo(valueList.Values[0])
+					if err != nil {
+						return err
+					}
+					dedupMap.addValue(attr, val, srcUID)
 				}
-				val, err := convertTo(v.Values[0])
-				if err != nil {
-					continue
-				}
-				dedupMap.addValue(attr, val, srcUid)
-			}
+				return nil
+			}))
+		} else {
+			// It's a UID node.
+			x.Check(child.SrcUIDs.Iterate(func(srcUID uint64) error {
+				return child.uidMatrix[srcUID].Iterate(func(adjUID uint64) error {
+					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: adjUID}, srcUID)
+					return nil
+				})
+			}))
+			pathNode = child
 		}
 	}
 
@@ -369,15 +362,16 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 }
 
 func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
-	for _, ul := range sg.uidMatrix {
+	for srcUID, uidSet := range sg.uidMatrix {
 		// We need to process groupby for each list as grouping needs to happen for each path of the
 		// tree.
 
-		r, err := sg.formResult(ul)
+		r, err := sg.formResult(uidSet.ToPack())
 		if err != nil {
 			return err
 		}
-		sg.GroupbyRes = append(sg.GroupbyRes, r)
+		//sg.GroupbyRes = append(sg.GroupbyRes, r)
+		sg.GroupbyRes[srcUID] = r
 	}
 
 	if err := sg.fillGroupedVars(doneVars, path); err != nil {
