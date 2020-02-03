@@ -29,6 +29,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -187,7 +188,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		out[i].offset = int(ts.Offset)
 		var emptyList pb.List
 		out[i].ulist = &emptyList
-		out[i].uset = map[uint64]struct{}{}
+		out[i].uset = codec.NewUIDSet()
 	}
 
 	order := ts.Order[0]
@@ -313,12 +314,12 @@ type orderResult struct {
 	err error
 }
 
-func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
+func multiSort(ctx context.Context, result *sortresult, ts *pb.SortMessage) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "multiSort")
 
 	// SrcUids for other queries are all the uids present in the response of the first sort.
-	dest := destUids(r.reply.UidMatrix)
+	dest := destUids(result.reply.UidMatrix)
 
 	// For each uid in dest uids, we have multiple values which belong to different attributes.
 	// 1  -> [ "Alice", 23, "1932-01-01"]
@@ -330,8 +331,8 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 	seen := make(map[uint64]struct{})
 	// Walk through the uidMatrix and put values for this attribute in sortVals.
-	for i, ul := range r.reply.UidMatrix {
-		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
+	for i, ul := range result.reply.UidMatrix {
+		x.AssertTrue(len(ul.Uids) == len(result.vals[i]))
 		for j, uid := range ul.Uids {
 			uidx := algo.IndexOf(dest, uid)
 			x.AssertTrue(uidx >= 0)
@@ -341,7 +342,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 				continue
 			}
 			seen[uid] = struct{}{}
-			sortVals[uidx][0] = r.vals[i][j]
+			sortVals[uidx][0] = result.vals[i][j]
 		}
 	}
 
@@ -370,13 +371,13 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
-		for i := range dest.Uids {
+		for j, destUID := range dest.Uids {
 			var sv types.Val
-			if len(result.ValueMatrix[i].Values) == 0 {
+			if len(result.ValueMatrix[destUID].Values) == 0 {
 				// Assign nil value which is sorted as greater than all other values.
 				sv.Value = nil
 			} else {
-				v := result.ValueMatrix[i].Values[0]
+				v := result.ValueMatrix[destUID].Values[0]
 				val := types.ValueForType(types.TypeID(v.ValType))
 				val.Value = v.Val
 				var err error
@@ -385,7 +386,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 					return err
 				}
 			}
-			sortVals[i][or.idx] = sv
+			sortVals[j][or.idx] = sv
 		}
 	}
 
@@ -399,7 +400,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	}
 
 	// Values have been accumulated, now we do the multisort for each list.
-	for i, ul := range r.reply.UidMatrix {
+	for i, ul := range result.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
 			idx := algo.IndexOf(dest, uid)
@@ -410,9 +411,9 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			return err
 		}
 		// Paginate
-		start, end := x.PageRange(int(ts.Count), int(r.multiSortOffsets[i]), len(ul.Uids))
+		start, end := x.PageRange(int(ts.Count), int(result.multiSortOffsets[i]), len(ul.Uids))
 		ul.Uids = ul.Uids[start:end]
-		r.reply.UidMatrix[i] = ul
+		result.reply.UidMatrix[i] = ul
 	}
 
 	return nil
@@ -527,7 +528,7 @@ type intersectedList struct {
 	offset          int
 	ulist           *pb.List
 	values          []types.Val
-	uset            map[uint64]struct{}
+	uset            *codec.UIDSet
 	multiSortOffset int32
 }
 
@@ -563,17 +564,18 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 		// Intersect index with i-th input UID list.
 		listOpt := posting.ListOptions{
-			Intersect: ul,
+			Intersect: codec.UIDSetFromList(ul),
 			ReadTs:    ts.ReadTs,
 		}
-		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
+		intersection, err := pl.Uids(listOpt) // The actual intersection work is done here.
 		if err != nil {
 			return err
 		}
 
 		// Duplicates will exist between buckets if there are multiple language
 		// variants of a predicate.
-		result.Uids = removeDuplicates(result.Uids, il.uset)
+		removeDuplicates(intersection, il.uset)
+		result := &pb.List{Uids: intersection.ToUids()}
 
 		// Check offsets[i].
 		n := len(result.Uids)
@@ -646,18 +648,19 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 // removeDuplicates removes elements from uids if they are in set. It also adds
 // all uids to set.
-func removeDuplicates(uids []uint64, set map[uint64]struct{}) []uint64 {
-	for i := 0; i < len(uids); i++ {
-		uid := uids[i]
-		if _, ok := set[uid]; ok {
-			copy(uids[i:], uids[i+1:])
-			uids = uids[:len(uids)-1]
-			i-- // we just removed an entry, so go back one step
-		} else {
-			set[uid] = struct{}{}
+func removeDuplicates(uidSet, dedup *codec.UIDSet) {
+	uids := make([]uint64, 64)
+	uidSetIter := uidSet.NewIterator()
+	for numUids := uidSetIter.Next(uids); numUids > 0; numUids = uidSetIter.Next(uids) {
+		for i := 0; i < numUids; i++ {
+			uid := uids[i]
+			if dedup.Contains(uid) {
+				uidSet.RemoveOne(uid)
+			} else {
+				dedup.AddUID(uid)
+			}
 		}
 	}
-	return uids
 }
 
 func paginate(ts *pb.SortMessage, dest *pb.List, vals []types.Val) (int, int, error) {

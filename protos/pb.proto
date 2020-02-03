@@ -25,7 +25,8 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+//import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 /* import "gogoproto/gogo.proto"; */
@@ -84,12 +85,12 @@ message LangList {
 }
 
 message Result {
-	repeated List uid_matrix = 1;
-	repeated ValueList value_matrix = 2;
-	repeated uint32 counts = 3;
+	map<uint64, UidPack> uid_matrix = 1;
+	map<uint64, ValueList> value_matrix = 2;
+	map<uint64, uint32> counts = 3;
 	bool intersect_dest = 4;
-	repeated FacetsList facet_matrix = 5;
-	repeated LangList lang_matrix = 6;
+	map<uint64, FacetsMap> facet_matrix = 5;
+	map<uint64, LangList> lang_matrix = 6;
 	bool list = 7;
 }
 
@@ -279,7 +280,8 @@ message RestoreRequest {
 
 message Proposal {
 	Mutations mutations    = 2;
-	repeated KV kv         = 4;
+	//repeated KV kv         = 4;
+	repeated dgraph.badger.v2.pb.KV kv         = 4;
 	MembershipState state  = 5;
 	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
 	string key             = 7;
@@ -291,7 +293,8 @@ message Proposal {
 }
 
 message KVS {
- repeated pb.KV kv = 1;
+ //repeated pb.KV kv = 1;
+ repeated dgraph.badger.v2.pb.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
 }
@@ -331,11 +334,12 @@ message Posting {
 }
 
 message UidBlock {
+	// base is the n-most significant common bits of all UIDs in this block, where n is defined
+	// in codec.NumMsb.
 	uint64 base = 1;
-	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
-	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
-	// storing it as a byte slice is a lot cheaper in memory.
-	bytes deltas = 2;
+	// roaring_bitmap contains the serialized [64 - n] least significant bits of serialized UIDs.
+	// (https://godoc.org/github.com/RoaringBitmap/roaring)
+	bytes roaring_bitmap = 2;
 	// num_uids is the number of UIDs in the block. We are including this because we want to
 	// switch encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
@@ -348,6 +352,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1;
 	repeated UidBlock blocks = 2;
+	uint64 num_uids          = 3;
 }
 
 message PostingList {
@@ -374,6 +379,10 @@ message Facets {
 
 message FacetsList {
 	repeated Facets facets_list = 1;
+}
+
+message FacetsMap {
+	map<uint64, Facets> facets = 1;
 }
 
 message Function {
@@ -531,7 +540,8 @@ service Worker {
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	//rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream dgraph.badger.v2.pb.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -539,7 +549,8 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+	//pb.KVList kvs = 1;
+	dgraph.badger.v2.pb.KVList kvs = 1;
 }
 
 message Num {

@@ -10,6 +10,7 @@ require (
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.4 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
+	github.com/RoaringBitmap/roaring v0.4.23
 	github.com/beorn7/perks v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.0.0-20181114232033-e1f5e6cdcd76
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -51,10 +52,8 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.4.0
-	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
 	github.com/twpayne/go-geom v1.0.5
 	github.com/vektah/gqlparser/v2 v2.0.1
-	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550

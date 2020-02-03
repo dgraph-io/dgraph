@@ -936,7 +936,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		}
 		resp.Json, err = json.Marshal(respMap)
 	} else {
-		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
+		resp.Json, err = query.ToJSON(qc.latency, er.Subgraphs)
 	}
 	if err != nil {
 		return resp, err

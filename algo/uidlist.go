@@ -43,50 +43,10 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if pack == nil {
 		return
 	}
-	dec := codec.Decoder{Pack: pack}
-	dec.Seek(afterUID, codec.SeekStart)
-	n := dec.ApproxLen()
-	m := len(v.Uids)
 
-	if n > m {
-		n, m = m, n
-	}
-	dst := o.Uids[:0]
-
-	// If n equals 0, set it to 1 to avoid division by zero.
-	if n == 0 {
-		n = 1
-	}
-
-	// Select appropriate function based on heuristics.
-	ratio := float64(m) / float64(n)
-	if ratio < 500 {
-		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
-	} else {
-		IntersectCompressedWithBin(&dec, v.Uids, &dst)
-	}
-	o.Uids = dst
-}
-
-// IntersectCompressedWithLinJump performs the intersection linearly.
-func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64) {
-	m := len(v)
-	k := 0
-	_, off := IntersectWithLin(dec.Uids(), v[k:], o)
-	k += off
-
-	for k < m {
-		u := dec.LinearSeek(v[k])
-		if len(u) == 0 {
-			break
-		}
-		_, off := IntersectWithLin(u, v[k:], o)
-		if off == 0 {
-			off = 1 // If v[k] isn't in u, move forward.
-		}
-
-		k += off
-	}
+	// TODO Optimize. E.G., Use galloping search when appropriate.
+	intersection := IntersectWithLinPacked(pack, codec.Encode(v.Uids))
+	o.Uids = codec.Decode(intersection, afterUID)
 }
 
 // IntersectCompressedWithBin is based on the paper
