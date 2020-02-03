@@ -313,6 +313,9 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "Character.name"
 			  },
 			  {
+				"name": "Character.appearsIn"
+			  },
+			  {
 				"name": "Droid.primaryFunction"
 			  }
 			],
@@ -333,6 +336,9 @@ func TestSchema_Normal(t *testing.T) {
 			  },
 			  {
 				"name": "Character.name"
+			  },
+			  {
+				"name": "Character.appearsIn"
 			  },
 			  {
 				"name": "Human.starships"

@@ -307,8 +307,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							typ:   typStr,
 							index: indexStr,
 						}
-						typ.fields = append(typ.fields, field{fname, parentInt != nil})
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
 			}
 			dgTypes = append(dgTypes, typ)
