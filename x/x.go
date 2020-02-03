@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -814,4 +816,43 @@ func IsGuardian(groups []string) bool {
 	}
 
 	return false
+}
+
+// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
+// Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
+func RunVlogGC(store *badger.DB, vlogGCCloser *y.Closer) {
+	// Get initial size on start.
+	_, lastVlogSize := store.Size()
+	const GB = int64(1 << 30)
+
+	// Runs every 1m, check size of vlog and run GC conditionally.
+	vlogTicker := time.NewTicker(1 * time.Minute)
+	// Runs every 10m, we always run vlog GC.
+	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
+
+	runGC := func() {
+		var err error
+		for err == nil {
+			// If a GC is successful, immediately run it again.
+			err = store.RunValueLogGC(0.7)
+		}
+		_, lastVlogSize = store.Size()
+	}
+
+	for {
+		select {
+		case <-vlogGCCloser.HasBeenClosed():
+			vlogTicker.Stop()
+			vlogGCCloser.Done()
+			break
+		case <-vlogTicker.C:
+			_, currentVlogSize := store.Size()
+			if currentVlogSize < lastVlogSize+GB {
+				continue
+			}
+			runGC()
+		case <-mandatoryVlogTicker.C:
+			runGC()
+		}
+	}
 }
