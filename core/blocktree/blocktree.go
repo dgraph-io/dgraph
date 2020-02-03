@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ChainSafe/gossamer/core/types"
-
-	"github.com/ChainSafe/gossamer/polkadb"
-
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/db"
 	log "github.com/ChainSafe/log15"
 	"github.com/disiqueira/gotree"
 )
@@ -32,17 +30,22 @@ import (
 // Hash common.Hash
 type Hash = common.Hash
 
+// Database is the blocktree database
+type Database struct {
+	Db db.Database
+}
+
 // BlockTree represents the current state with all possible blocks
 type BlockTree struct {
 	head            *node
 	leaves          leafMap
 	finalizedBlocks []*node
-	Db              *polkadb.BlockDB
+	Db              *Database
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
 // Currently passes in arrival time as a parameter instead of setting it as time of instanciation
-func NewBlockTreeFromGenesis(genesis types.Block, db *polkadb.BlockDB) *BlockTree {
+func NewBlockTreeFromGenesis(genesis types.Block, db *Database) *BlockTree {
 	head := &node{
 		hash:        genesis.Header.Hash(),
 		number:      genesis.Header.Number,

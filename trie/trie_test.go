@@ -30,7 +30,7 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/db"
 )
 
 type commonPrefixTest struct {
@@ -70,7 +70,7 @@ var (
 
 func newEmpty() *Trie {
 	db := &Database{
-		DB: polkadb.NewMemDatabase(),
+		DB: db.NewMemDatabase(),
 	}
 	t := NewEmptyTrie(db)
 	return t
@@ -85,7 +85,7 @@ func TestNewEmptyTrie(t *testing.T) {
 
 func TestNewTrie(t *testing.T) {
 	db := &Database{
-		DB: polkadb.NewMemDatabase(),
+		DB: db.NewMemDatabase(),
 	}
 	trie := NewTrie(db, &leaf{key: []byte{0}, value: []byte{17}})
 	if trie == nil {

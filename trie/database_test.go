@@ -26,7 +26,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
-	db "github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/db"
 )
 
 func newTrie() (*Trie, error) {

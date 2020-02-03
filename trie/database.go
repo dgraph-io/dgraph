@@ -24,18 +24,18 @@ import (
 	scale "github.com/ChainSafe/gossamer/codec"
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/config/genesis"
-	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/db"
 )
 
-// Database is a wrapper around a polkadb
+// Database is a wrapper around a db
 type Database struct {
-	DB     polkadb.Database
-	Batch  polkadb.Batch
+	DB     db.Database
+	Batch  db.Batch
 	Hasher *Hasher
 }
 
 // NewDatabase create new db instance
-func NewDatabase(db polkadb.Database) *Database {
+func NewDatabase(db db.Database) *Database {
 	batch := db.NewBatch()
 
 	return &Database{

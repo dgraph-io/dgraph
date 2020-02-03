@@ -8,7 +8,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/trie"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +16,7 @@ func TestSetAndGetHeader(t *testing.T) {
 	dataDir, err := ioutil.TempDir("", "./test_data")
 	require.Nil(t, err)
 
-	blockDb, err := polkadb.NewBlockDB(dataDir)
+	blockDb, err := NewBlockDB(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +108,7 @@ func TestAddBlock(t *testing.T) {
 	dataDir, err := ioutil.TempDir("", "TestAddBlock")
 	require.Nil(t, err)
 
-	blockDb, err := polkadb.NewBlockDB(dataDir)
+	blockDb, err := NewBlockDB(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}

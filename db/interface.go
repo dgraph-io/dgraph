@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package polkadb
+package db
 
 // PutItem wraps the database write operation supported by regular database.
 type PutItem interface {

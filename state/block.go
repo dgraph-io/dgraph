@@ -11,19 +11,36 @@ import (
 	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/db"
 )
+
+// BlockDB stores block's in an underlying Database
+type BlockDB struct {
+	Db db.Database
+}
 
 // blockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type blockState struct {
 	bt           *blocktree.BlockTree
-	db           *polkadb.BlockDB
+	db           *BlockDB
 	latestHeader *types.Header
+}
+
+// NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
+func NewBlockDB(dataDir string) (*BlockDB, error) {
+	db, err := db.NewBadgerDB(dataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BlockDB{
+		db,
+	}, nil
 }
 
 // NewBlockState will create a new blockState backed by the database located at dataDir
 func NewBlockState(dataDir string, latestHash common.Hash) (*blockState, error) {
-	blockDb, err := polkadb.NewBlockDB(dataDir)
+	blockDb, err := NewBlockDB(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +61,7 @@ func NewBlockState(dataDir string, latestHash common.Hash) (*blockState, error) 
 
 // NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at dataDir
 func NewBlockStateFromGenesis(dataDir string, header *types.Header) (*blockState, error) {
-	blockDb, err := polkadb.NewBlockDB(dataDir)
+	blockDb, err := NewBlockDB(dataDir)
 	if err != nil {
 		return nil, err
 	}
