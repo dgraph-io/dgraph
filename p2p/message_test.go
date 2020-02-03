@@ -499,7 +499,7 @@ func TestDecodeBlockAnnounceMessage(t *testing.T) {
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
 		ExtrinsicsRoot: extrinsicsRoot,
-		Digest:         nil,
+		Digest:         [][]byte{},
 	}
 
 	if !reflect.DeepEqual(bhm, expected) {

@@ -317,7 +317,6 @@ var decodeTupleTests = []decodeTupleTest{
 }
 
 var decodeArrayTests = []decodeArrayTest{
-	{val: []byte{}, t: [][]byte{}, output: [][]byte{}},
 	{val: []byte{0x00}, t: []int{}, output: []int{}},
 	{val: []byte{0x04, 0x04}, t: make([]int, 1), output: []int{1}},
 	{val: []byte{0x10, 0x04, 0x08, 0x0c, 0x10}, t: make([]int, 4), output: []int{1, 2, 3, 4}},
@@ -506,5 +505,37 @@ func TestDecodeArrays(t *testing.T) {
 		} else if !reflect.DeepEqual(output, test.output) {
 			t.Errorf("Fail: got %d expected %d", output, test.output)
 		}
+	}
+}
+
+func TestDecodeEmptyArray(t *testing.T) {
+	expected := &struct {
+		Number *big.Int
+		Digest [][]byte
+	}{
+		big.NewInt(9),
+		[][]byte{{0xa, 0xb, 0xc, 0xd}, {0xe, 0xf}},
+	}
+
+	testStruct := &struct {
+		Number *big.Int
+		Digest [][]byte
+	}{
+		big.NewInt(0),
+		[][]byte{},
+	}
+
+	enc, err := Encode(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := Decode(enc, testStruct)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(output, expected) {
+		t.Fatalf("Fail: got %v expected %v", output, expected)
 	}
 }

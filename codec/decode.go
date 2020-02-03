@@ -325,10 +325,6 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 		v = reflect.ValueOf(t)
 	}
 
-	if v.Len() == 0 {
-		return t, nil
-	}
-
 	var err error
 	var o interface{}
 
@@ -341,10 +337,12 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 		return t, nil
 	}
 
-	for i := 0; i < int(length); i++ {
-		arrayValue := v.Index(i)
+	sl := reflect.MakeSlice(v.Type(), int(length), int(length))
 
-		switch v.Index(i).Interface().(type) {
+	for i := 0; i < int(length); i++ {
+		arrayValue := sl.Index(i)
+
+		switch sl.Index(i).Interface().(type) {
 		case []byte:
 			o, err = sd.DecodeByteArray()
 			if err != nil {
@@ -371,7 +369,14 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 		}
 	}
 
-	return t, err
+	switch t.(type) {
+	case [][]byte:
+		copy(t.([][]byte), sl.Interface().([][]byte))
+	case [][32]byte:
+		copy(t.([][32]byte), sl.Interface().([][32]byte))
+	}
+
+	return sl.Interface(), err
 }
 
 // DecodeTuple accepts a byte array representing the SCALE encoded tuple and an interface. This interface should be a pointer
@@ -415,6 +420,14 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 				// get the pointer to the value and set the value
 				ptr := fieldValue.(*[]byte)
 				*ptr = o.([]byte)
+			case [][]byte:
+				o, err = sd.DecodeArray([][]byte{})
+				if err != nil {
+					break
+				}
+
+				ptr := fieldValue.(*[][]byte)
+				*ptr = o.([][]byte)
 			case int8:
 				o, err = sd.DecodeFixedWidthInt(int8(0))
 				if err != nil {

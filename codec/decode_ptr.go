@@ -193,20 +193,21 @@ func (sd *Decoder) DecodePtrBool(output interface{}) error {
 
 // DecodePtrIntArray decodes a byte array to an array of ints
 func (sd *Decoder) DecodePtrIntArray(t interface{}) error {
-	_, err := sd.DecodeInteger()
+	length, err := sd.DecodeInteger()
 	if err != nil {
 		return err
 	}
 
-	for i := range t.([]int) {
-		//var temp int64
-		//var err error
+	sl := make([]int, length)
+	for i := range sl {
 		temp, err := sd.DecodeInteger()
-		t.([]int)[i] = int(temp)
+		sl[i] = int(temp)
 		if err != nil {
 			break
 		}
 	}
+
+	copy(t.([]int), sl)
 	return nil
 }
 
