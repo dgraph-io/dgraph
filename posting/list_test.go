@@ -491,7 +491,6 @@ func TestMillion(t *testing.T) {
 }
 
 const M int = 100000
-
 var ts uint64
 
 func TestParallelMillion(t *testing.T) {
@@ -509,23 +508,24 @@ func TestParallelMillion(t *testing.T) {
 	_ = <-commit
 	done1 <- true
 
+	// ol, err := getNew(key, ps)
+	// require.NoError(t, err)
+	// //t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
+	// kvs, err := ol.Rollup()
+	// require.NoError(t, err)
+	// require.NoError(t, writePostingListToDisk(kvs))
+
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	//t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
-	kvs, err := ol.Rollup()
-	require.NoError(t, err)
-	require.NoError(t, writePostingListToDisk(kvs))
-
-	ol, err = getNew(key, ps)
-	require.NoError(t, err)
 	val, err := ol.Value(uint64(2*M + 1))
-	t.Logf("Final Value = %v", val)
+	newint, err := strconv.Atoi(string(val.Value.([]byte)))
+	t.Logf("Final Value = %v", newint)
 }
 
 func mutate(t *testing.T, key []byte, commitCh chan int) {
 	for i := 0; i < M; i++ {
 		startTs := atomic.AddUint64(&ts, 2)
-		addEdgeToValue(t, "balance", 1332, strconv.Itoa(i), startTs-1, startTs)
+		addEdgeToValue(t, "balance", 1332, strconv.Itoa(i+1), startTs-1, startTs)
 		if i%10000 == 0 {
 			fmt.Printf("mutate at %v\n", i)
 		}
@@ -536,10 +536,14 @@ func mutate(t *testing.T, key []byte, commitCh chan int) {
 
 func rolluplocal(t *testing.T, key []byte, done chan bool) {
 	writer := NewTxnWriter(pstore)
+	count := 0
 	for {
 		ol, err := getNew(key, ps)
 		require.NoError(t, err)
-		//fmt.Printf("Rolling up posting list\n")
+		count++
+		if count %100 == 0 {
+			fmt.Printf("Rolling up posting list\n")
+		}
 		kvs, err := ol.Rollup()
 		require.NoError(t, err)
 		for _, kv := range kvs {
@@ -552,25 +556,37 @@ func rolluplocal(t *testing.T, key []byte, done chan bool) {
 			return
 		default:
 		}
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 	}
 }
 
 func readpl(t *testing.T, key []byte) {
 	var oldint int
+	count := 0
 	for {
-		time.Sleep(time.Millisecond * 25)
+		//time.Sleep(time.Millisecond * 1)
 
 		ol, err := getNew(key, ps)
+		require.NotNil(t, ol)
 		require.NoError(t, err)
 
 		readTs := atomic.LoadUint64(&ts)
-		//fmt.Printf("Reading at ts = %v\n", readTs)
-		newVal, err := ol.Value(readTs)
+
+		newVal, _ := ol.Value(readTs)
+		if err == ErrNoValue || newVal.Value == nil {
+			continue
+		} else {
+			x.Check(err)
+		}
+		newint, err := strconv.Atoi(string(newVal.Value.([]byte)))
 		if err != nil {
 			continue
 		}
-		newint, _ := strconv.Atoi(string(newVal.Value.([]byte)))
+		count++
+		if count % 1000 == 0 {
+			fmt.Printf("Reading at ts = %v, val = %v\n", readTs, newint)
+		}		
+		require.NotEqual(t, newint, 0)
 		if oldint != 0 {
 			if newint < oldint {
 				fmt.Printf("Value decreased, old val = %v, new val = %v\n", oldint, newint)
