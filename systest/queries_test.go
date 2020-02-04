@@ -396,6 +396,15 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
         "predicate": "dgraph.group.acl"
 	  },
 	  {
+		  "predicate": "dgraph.acl.rule"
+	  },
+	  {
+		  "predicate": "dgraph.acl.predicate"
+	  },
+	  {
+		  "predicate": "dgraph.acl.permission"
+	  },
+	  {
         "predicate": "dgraph.graphql.schema"
 	  },
       {

@@ -109,9 +109,9 @@ const (
 {"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
 {"predicate":"dgraph.password","type":"password"},
 {"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
-{"predicate":"dgraph.group.acl","type":"string"}
-{"predicate":"dgraph.acl.rule","type":"uid","list":true}
-{"predicate":"dgraph.acl.predicate","type":"string"}
+{"predicate":"dgraph.group.acl","type":"string"},
+{"predicate":"dgraph.acl.rule","type":"uid","list":true},
+{"predicate":"dgraph.acl.predicate","type":"string","index":true,"tokenizer":["exact"]},
 {"predicate":"dgraph.acl.permission","type":"int"}
 `
 	// GroupIdFileName is the name of the file storing the ID of the group to which
