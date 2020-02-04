@@ -27,23 +27,24 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // Telemetry holds information about the state of the zero and alpha server.
 type Telemetry struct {
-	Arch         string
-	Cid          string
-	ClusterSize  int
-	DiskUsageMB  int64
-	NumAlphas    int
-	NumGroups    int
-	NumTablets   int
-	NumZeros     int
-	OS           string
-	SinceHours   int
-	Version      string
-	NumGraphQLPM uint64
-	NumGraphQL   uint64
+	Arch         string `json:",omitempty"`
+	Cid          string `json:",omitempty"`
+	ClusterSize  int    `json:",omitempty"`
+	DiskUsageMB  int64  `json:",omitempty"`
+	NumAlphas    int    `json:",omitempty"`
+	NumGroups    int    `json:",omitempty"`
+	NumTablets   int    `json:",omitempty"`
+	NumZeros     int    `json:",omitempty"`
+	OS           string `json:",omitempty"`
+	SinceHours   int    `json:",omitempty"`
+	Version      string `json:",omitempty"`
+	NumGraphQLPM uint64 `json:",omitempty"`
+	NumGraphQL   uint64 `json:",omitempty"`
 }
 
 var url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
@@ -115,6 +116,9 @@ func (t *Telemetry) Post() error {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode != 201 {
+		return errors.Errorf(string(body))
 	}
 	glog.V(2).Infof("Telemetry response status: %v", resp.Status)
 	glog.V(2).Infof("Telemetry response body: %s", body)
