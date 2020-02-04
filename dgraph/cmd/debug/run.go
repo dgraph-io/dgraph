@@ -347,17 +347,19 @@ func jepsen(db *badger.DB) {
 	}
 }
 
-func history(lookup []byte, itr *badger.Iterator) {
+func history(lookup []byte, itr *badger.Iterator) int {
 	var buf bytes.Buffer
 	pk, err := x.Parse(lookup)
 	x.Check(err)
 	fmt.Fprintf(&buf, "==> key: %x. PK: %+v\n", lookup, pk)
+	var count int
 	for ; itr.Valid(); itr.Next() {
 		item := itr.Item()
 		if !bytes.Equal(item.Key(), lookup) {
 			break
 		}
 
+		count++
 		fmt.Fprintf(&buf, "ts: %d", item.Version())
 		x.Check2(buf.WriteString(" {item}"))
 		if item.IsDeletedOrExpired() {
@@ -407,6 +409,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 		x.Check2(buf.WriteString("\n"))
 	}
 	fmt.Println(buf.String())
+	return count
 }
 
 func appendPosting(w io.Writer, o *pb.Posting) {
@@ -496,7 +499,7 @@ func printKeys(db *badger.DB) {
 
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	var loop int
-	for itr.Seek(prefix); itr != nil && itr.Valid(); itr.Next() {
+	for itr.Seek(prefix); itr != nil && itr.Valid(); {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
@@ -545,8 +548,10 @@ func printKeys(db *badger.DB) {
 			fmt.Fprintf(&buf, " ts: %d", item.Version())
 		}
 		fmt.Println(buf.String())
-		history(item.KeyCopy(nil), itr)
-		loop++
+		loop += history(item.KeyCopy(nil), itr)
+		if !itr.Valid() {
+			break
+		}
 	}
 	fmt.Printf("Found %d keys\n", loop)
 }
