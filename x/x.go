@@ -820,15 +820,18 @@ func IsGuardian(groups []string) bool {
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, vlogGCCloser *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *y.Closer) {
+	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
 
 	// Runs every 1m, checks size of vlog and runs GC conditionally.
 	vlogTicker := time.NewTicker(1 * time.Minute)
+	defer vlogTicker.Stop()
 	// Runs vlog GC unconditionally every 10 minutes.
 	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
+	defer mandatoryVlogTicker.Stop()
 
 	runGC := func() {
 		for err := error(nil); err == nil; {
@@ -840,10 +843,7 @@ func RunVlogGC(store *badger.DB, vlogGCCloser *y.Closer) {
 
 	for {
 		select {
-		case <-vlogGCCloser.HasBeenClosed():
-			vlogTicker.Stop()
-			mandatoryVlogTicker.Stop()
-			vlogGCCloser.Done()
+		case <-closer.HasBeenClosed():
 			return
 		case <-vlogTicker.C:
 			_, currentVlogSize := store.Size()

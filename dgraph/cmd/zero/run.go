@@ -104,10 +104,9 @@ func setupListener(addr string, port int, kind string) (listener net.Listener, e
 }
 
 type state struct {
-	node         *node
-	rs           *conn.RaftServer
-	zero         *Server
-	vlogGCCloser *y.Closer // closer for vLogGC
+	node *node
+	rs   *conn.RaftServer
+	zero *Server
 }
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
@@ -214,6 +213,10 @@ func run() {
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
+	gcCloser := y.NewCloser(1) // closer for vLogGC
+	go x.RunVlogGC(kv, gcCloser)
+	defer gcCloser.SignalAndWait()
+
 	// zero out from memory
 	kvOpt.EncryptionKey = nil
 
@@ -221,7 +224,6 @@ func run() {
 
 	// Initialize the servers.
 	var st state
-	st.vlogGCCloser = y.NewCloser(1)
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
 
@@ -235,8 +237,6 @@ func run() {
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
-	go x.RunVlogGC(kv, st.vlogGCCloser)
-	defer st.vlogGCCloser.SignalAndWait()
 
 	if Zero.Conf.GetBool("telemetry") {
 		go st.zero.periodicallyPostTelemetry()

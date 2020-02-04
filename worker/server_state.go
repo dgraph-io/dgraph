@@ -36,9 +36,9 @@ type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
-	Pstore       *badger.DB
-	WALstore     *badger.DB
-	vlogGCCloser *y.Closer // closer for valueLogGC
+	Pstore   *badger.DB
+	WALstore *badger.DB
+	gcCloser *y.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -160,20 +160,20 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.vlogGCCloser = y.NewCloser(2)
-	go x.RunVlogGC(s.Pstore, s.vlogGCCloser)
-	go x.RunVlogGC(s.WALstore, s.vlogGCCloser)
+	s.gcCloser = y.NewCloser(2)
+	go x.RunVlogGC(s.Pstore, s.gcCloser)
+	go x.RunVlogGC(s.WALstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
 	}
 	if err := s.WALstore.Close(); err != nil {
 		glog.Errorf("Error while closing WAL store: %v", err)
 	}
-	s.vlogGCCloser.SignalAndWait()
 }
 
 func (s *ServerState) GetTimestamp(readOnly bool) uint64 {
