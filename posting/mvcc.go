@@ -227,11 +227,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	cachedVal, ok := lCache.Get(key)
-	if ok {
-		l, ok := cachedVal.(*List)
-		if ok {
-
+	// get context here.
+	// get span.
+	// show if the read was from cache or was from disk.
+	if cachedVal, ok := lCache.Get(key); ok {
+		if l, ok := cachedVal.(*List); ok {
 			// No need to clone the immutable layer or the key since mutations will not modify it.
 			lCopy := &List{
 				minTs: l.minTs,
