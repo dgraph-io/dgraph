@@ -387,7 +387,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 		for idx, v := range gq.Func.Args {
 			if !v.IsGraphQLVar {
-				// It's not a variable. So, unquote if necessary.
+				// Unquote the variable if it contains quotes.
 				var err error
 				gq.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
 				if err != nil {
