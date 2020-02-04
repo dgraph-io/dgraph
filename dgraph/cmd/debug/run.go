@@ -482,19 +482,21 @@ func printKeys(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
-	iopts := badger.DefaultIteratorOptions
-	iopts.PrefetchValues = false
-	itr := txn.NewIterator(iopts)
-	defer itr.Close()
-
 	var prefix []byte
 	if len(opt.predicate) > 0 {
 		prefix = x.PredicatePrefix(opt.predicate)
 	}
 
+	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
+	iopts.PrefetchValues = false
+	iopts.Prefix = prefix
+	itr := txn.NewIterator(iopts)
+	defer itr.Close()
+
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	var loop int
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+	for itr.Seek(prefix); itr != nil && itr.Valid(); itr.Next() {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
@@ -543,6 +545,7 @@ func printKeys(db *badger.DB) {
 			fmt.Fprintf(&buf, " ts: %d", item.Version())
 		}
 		fmt.Println(buf.String())
+		history(item.KeyCopy(nil), itr)
 		loop++
 	}
 	fmt.Printf("Found %d keys\n", loop)
