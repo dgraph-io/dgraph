@@ -209,7 +209,7 @@ func copyToLocalFs(t *testing.T) {
 		dstDir := backupDir + "/" + object.Key
 		os.MkdirAll(dstDir, os.ModePerm)
 
-		// Get all the files in that folder and
+		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})
 		objectCh2 := mc.ListObjectsV2(bucketName, "", true, lsCh2)
 		for object := range objectCh2 {
