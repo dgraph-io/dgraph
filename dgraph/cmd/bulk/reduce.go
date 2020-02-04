@@ -20,13 +20,13 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"container/heap"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
@@ -61,28 +61,18 @@ func (r *reducer) run() error {
 			defer thr.Done(nil)
 
 			mapFiles := filenamesInTree(dirs[shardId])
-			var mapItrs []*mapIterator
-			for _, mapFile := range mapFiles {
-				itr := newMapIterator(mapFile)
-				mapItrs = append(mapItrs, itr)
-			}
-
+			sort.Strings(mapFiles)
 			writer := db.NewStreamWriter()
 			if err := writer.Prepare(); err != nil {
 				x.Check(err)
 			}
 
 			ci := &countIndexer{reducer: r, writer: writer}
-			r.reduce(mapItrs, ci)
+			r.reduce(mapFiles, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
 				x.Check(err)
-			}
-			for _, itr := range mapItrs {
-				if err := itr.Close(); err != nil {
-					fmt.Printf("Error while closing iterator: %v", err)
-				}
 			}
 		}(i, r.createBadger(i))
 	}
@@ -157,6 +147,9 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
+	stat, err := fd.Stat()
+	x.Check(err)
+	fmt.Printf("\n\n\n\n size %d file %s \n\n\n\n\n ", stat.Size(), filename)
 	gzReader, err := gzip.NewReader(fd)
 	x.Check(err)
 
@@ -226,20 +219,10 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(mapFiles []string, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
-
-	var ph postingHeap
-	for _, itr := range mapItrs {
-		me := itr.Next()
-		if me != nil {
-			heap.Push(&ph, heapNode{mapEntry: me, itr: itr})
-		} else {
-			fmt.Printf("NIL first map entry for %s", itr.fd.Name())
-		}
-	}
 
 	writer := ci.writer
 	go r.encodeAndWrite(writer, entryCh, closer)
@@ -250,32 +233,32 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	var prevKey []byte
 	var plistLen int
 
-	for len(ph.nodes) > 0 {
-		node0 := &ph.nodes[0]
-		me := node0.mapEntry
-		node0.mapEntry = node0.itr.Next()
-		if node0.mapEntry != nil {
-			heap.Fix(&ph, 0)
-		} else {
-			heap.Pop(&ph)
-		}
+	for _, file := range mapFiles {
+		itr := newMapIterator(file)
+	inner:
+		for {
+			me := itr.Next()
+			if me == nil {
+				break inner
+			}
+			keyChanged := !bytes.Equal(prevKey, me.Key)
+			// Note that the keys are coming in sorted order from the heap. So, if
+			// we see a new key, we should push out the number of entries we got
+			// for the current key, so the count index can register that.
+			if keyChanged && plistLen > 0 {
+				ci.addUid(prevKey, plistLen)
+				plistLen = 0
+			}
 
-		keyChanged := !bytes.Equal(prevKey, me.Key)
-		// Note that the keys are coming in sorted order from the heap. So, if
-		// we see a new key, we should push out the number of entries we got
-		// for the current key, so the count index can register that.
-		if keyChanged && plistLen > 0 {
-			ci.addUid(prevKey, plistLen)
-			plistLen = 0
+			if len(batch) >= batchSize && keyChanged {
+				entryCh <- batch
+				batch = make([]*pb.MapEntry, 0, batchAlloc)
+			}
+			prevKey = me.Key
+			batch = append(batch, me)
+			plistLen++
 		}
-
-		if len(batch) >= batchSize && keyChanged {
-			entryCh <- batch
-			batch = make([]*pb.MapEntry, 0, batchAlloc)
-		}
-		prevKey = me.Key
-		batch = append(batch, me)
-		plistLen++
+		itr.Close()
 	}
 	if len(batch) > 0 {
 		entryCh <- batch

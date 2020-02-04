@@ -53,8 +53,9 @@ type mapper struct {
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	entries     []*pb.MapEntry
-	encodedSize uint64
+	entries     map[string][]*pb.MapEntry
+	encodedSize map[string]uint64
+	lastID      map[string]uint64
 	mu          sync.Mutex // Allow only 1 write per shard at a time.
 }
 
@@ -85,33 +86,33 @@ func less(lhs, rhs *pb.MapEntry) bool {
 	return lhsUID < rhsUID
 }
 
-func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
-	fileNum := atomic.AddUint32(&m.mapFileId, 1)
+func (m *mapper) openOutputFile(shardIdx int, predicate string, id uint64) (*os.File, error) {
+	//	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
 		mapShardDir,
 		fmt.Sprintf("%03d", shardIdx),
-		fmt.Sprintf("%06d.map.gz", fileNum),
+		fmt.Sprintf("%s_%06d.map.gz", predicate, id),
 	)
+	//	fmt.Printf("\n\n\n\n\n\n\n file name %s \n\n\n\n", filename)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
-func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
+func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, predicate string, id uint64, encodedSize uint64, shardIdx int) {
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
 
 	sort.Slice(entries, func(i, j int) bool {
 		return less(entries[i], entries[j])
 	})
 
-	f, err := m.openOutputFile(shardIdx)
+	f, err := m.openOutputFile(shardIdx, predicate, id)
 	x.Check(err)
 
 	defer func() {
 		x.Check(f.Sync())
 		x.Check(f.Close())
 	}()
-
 	gzWriter := gzip.NewWriter(f)
 	w := bufio.NewWriter(gzWriter)
 	defer func() {
@@ -162,30 +163,36 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			atomic.AddInt64(&m.prog.nquadCount, 1)
 		}
 
-		for i := range m.shards {
-			sh := &m.shards[i]
-			if sh.encodedSize >= m.opt.MapBufSize {
-				sh.mu.Lock() // One write at a time.
-				go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
-				// Clear the entries and encodedSize for the next batch.
-				// Proactively allocate 32 slots to bootstrap the entries slice.
-				sh.entries = make([]*pb.MapEntry, 0, 32)
-				sh.encodedSize = 0
-			}
-		}
+		// for i := range m.shards {
+		// 	sh := &m.shards[i]
+		// 	for predicate, size := range sh.encodedSize {
+		// 		if size >= m.opt.MapBufSize {
+		// 			sh.mu.Lock()
+		// 			sh.lastID[predicate]++
+		// 			// One write at a time.
+		// 			m.writeMapEntriesToFile(sh.entries[predicate], predicate, sh.lastID[predicate], sh.encodedSize[predicate], i)
+		// 			// Clear the entries and encodedSize for the next batch.
+		// 			// Proactively allocate 32 slots to bootstrap the entries slice.
+		// 			sh.entries[predicate] = make([]*pb.MapEntry, 0, 32)
+		// 		}
+		// 	}
+
+		// }
 	}
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if len(sh.entries) > 0 {
-			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
+		for predicate, entries := range sh.entries {
+			if len(sh.entries) > 0 {
+				sh.mu.Lock() // One write at a time.
+				m.writeMapEntriesToFile(entries, predicate, sh.lastID[predicate], sh.encodedSize[predicate], i)
+			}
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
 }
 
-func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
+func (m *mapper) addMapEntry(key []byte, predicate string, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	me := m.mePool.Get().(*pb.MapEntry)
@@ -199,8 +206,17 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh := &m.shards[shard]
 
 	var err error
-	sh.entries = append(sh.entries, me)
-	sh.encodedSize += uint64(me.Size())
+	if sh.entries == nil {
+		sh.entries = make(map[string][]*pb.MapEntry)
+		sh.encodedSize = make(map[string]uint64)
+		sh.lastID = make(map[string]uint64)
+	}
+	_, ok := sh.entries[predicate]
+	if !ok {
+		sh.entries[predicate] = []*pb.MapEntry{}
+	}
+	sh.entries[predicate] = append(sh.entries[predicate], me)
+	sh.encodedSize[predicate] += uint64(me.Size())
 	x.Check(err)
 }
 
@@ -220,11 +236,11 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	fwd, rev := m.createPostings(nq, de)
 	shard := m.state.shards.shardFor(nq.Predicate)
 	key := x.DataKey(nq.Predicate, sid)
-	m.addMapEntry(key, fwd, shard)
+	m.addMapEntry(key, nq.Predicate, fwd, shard)
 
 	if rev != nil {
 		key = x.ReverseKey(nq.Predicate, oid)
-		m.addMapEntry(key, rev, shard)
+		m.addMapEntry(key, nq.Predicate, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
 }
@@ -338,6 +354,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		for _, t := range toks {
 			m.addMapEntry(
 				x.IndexKey(nq.Predicate, t),
+				nq.Predicate,
 				&pb.Posting{
 					Uid:         de.GetEntity(),
 					PostingType: pb.Posting_REF,

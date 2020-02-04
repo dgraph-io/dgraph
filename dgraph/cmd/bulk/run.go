@@ -214,7 +214,7 @@ func run() {
 		x.Check(os.MkdirAll(opt.TmpDir, 0700))
 	}
 	if opt.CleanupTmp {
-		defer os.RemoveAll(opt.TmpDir)
+		//defer os.RemoveAll(opt.TmpDir)
 	}
 
 	loader := newLoader(&opt)
