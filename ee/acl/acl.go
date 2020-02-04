@@ -466,13 +466,11 @@ func chMod(conf *viper.Viper) error {
 		Cond: "@if(eq(len(rUID), 0) AND eq(len(gUID), 1))",
 	}
 
-	resp, err := txn.Do(ctx, &api.Request{
+	_, err = txn.Do(ctx, &api.Request{
 		Query:     ruleQuery,
 		Mutations: []*api.Mutation{ruleMutation, ruleUpsert},
 		CommitNow: true,
 	})
-
-	fmt.Printf("%v", resp)
 
 	if err != nil {
 		return err
