@@ -47,7 +47,7 @@ type Telemetry struct {
 	NumGraphQL   uint64 `json:",omitempty"`
 }
 
-var url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+const url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
 // NewZero returns a Telemetry struct that holds information about the state of zero server.
 func NewZero(ms *pb.MembershipState) *Telemetry {
@@ -92,12 +92,13 @@ func (t *Telemetry) Post() error {
 		return err
 	}
 
+	var requestURL string
 	if len(t.Version) > 0 {
-		url += "/pings"
+		requestURL = url + "/pings"
 	} else {
-		url += "/dev"
+		requestURL = url + "/dev"
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
