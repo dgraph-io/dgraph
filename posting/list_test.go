@@ -508,13 +508,6 @@ func TestParallelMillion(t *testing.T) {
 	_ = <-commit
 	done1 <- true
 
-	// ol, err := getNew(key, ps)
-	// require.NoError(t, err)
-	// //t.Logf("Rolling up posting list last time. minTs= %v, ts = %v\n", ol.minTs, atomic.LoadUint64(&ts))
-	// kvs, err := ol.Rollup()
-	// require.NoError(t, err)
-	// require.NoError(t, writePostingListToDisk(kvs))
-
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	val, err := ol.Value(uint64(2*M + 1))
