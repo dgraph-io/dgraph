@@ -340,7 +340,7 @@ ifconfig # On Ubuntu/Mac
 ```
 We'll refer to the host IP address via `HOSTIPADDR`.
 
-**Docker Network Creation**
+**Create Docker network**
 
 ```sh
 docker network create dgraph_default
@@ -359,7 +359,8 @@ docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgr
 mkdir ~/server1 # Or any other directory where data should be stored.
 
 docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
-
+```
+```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
 docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
