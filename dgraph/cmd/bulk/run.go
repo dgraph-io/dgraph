@@ -99,13 +99,6 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
-			"Option sequence consume most to least RAM while providing best to worst read "+
-			"performance respectively.")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored."+
-			" mmap consumes more RAM, but provides better performance.")
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
@@ -137,8 +130,6 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 
-		BadgerTables:           Bulk.Conf.GetString("badger.tables"),
-		BadgerVlog:             Bulk.Conf.GetString("badger.vlog"),
 		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
