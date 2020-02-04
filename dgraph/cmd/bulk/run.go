@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 )
 
@@ -223,7 +222,6 @@ func run() {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
 	}
-	defer profile.Start(profile.CPUProfile, profile.ProfilePath(".")).Stop()
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()

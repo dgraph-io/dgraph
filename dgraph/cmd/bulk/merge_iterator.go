@@ -26,16 +26,18 @@ type MergeIterator struct {
 	left  node
 	right node
 	small *node
+	entry *pb.MapEntry
 }
 
 type node struct {
 	iter     Iterator
 	mapItr   *mapIterator
 	mergeItr *MergeIterator
+	curEntry *pb.MapEntry
 }
 
 func (n *node) current() *pb.MapEntry {
-	return n.iter.Current()
+	return n.curEntry
 }
 
 func (n *node) setIterator(itr Iterator) {
@@ -48,12 +50,22 @@ func (n *node) next() {
 	switch {
 	case n.mapItr != nil:
 		n.mapItr.Next()
-		return
 	case n.mergeItr != nil:
 		n.mergeItr.Next()
-		return
 	default:
 		n.iter.Next()
+	}
+	n.setKey()
+}
+
+func (n *node) setKey() {
+	switch {
+	case n.mapItr != nil:
+		n.curEntry = n.mapItr.Current()
+	case n.mergeItr != nil:
+		n.curEntry = n.mergeItr.small.current()
+	default:
+		n.curEntry = n.iter.Current()
 	}
 }
 
@@ -108,6 +120,8 @@ func NewMergeIterator(itrs []Iterator) Iterator {
 		mi.left.setIterator(itrs[0])
 		mi.right.setIterator(itrs[1])
 		mi.small = &mi.left
+		mi.left.setKey()
+		mi.right.setKey()
 		mi.fix()
 		return mi
 	}
