@@ -454,9 +454,10 @@ working example of how to use the Java client.
 
 ### gRPC
 
-The official JavaScript gRPC client [can be found here](https://github.com/dgraph-io/dgraph-js)
-and it fully supports Dgraph v1.0.x. Follow the instructions in the
-[README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
+The official JavaScript gRPC client [can be found here](https://github.com/dgraph-io/dgraph-js).
+Follow the instructions in the [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
+
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js#supported-versions).
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
 project, which contains an end-to-end working example of how to use the JavaScript gRPC client,
