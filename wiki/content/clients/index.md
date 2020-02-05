@@ -467,9 +467,10 @@ for Node.js >= v6.
 
 ### HTTP
 
-The official JavaScript HTTP client [can be found here](https://github.com/dgraph-io/dgraph-js-http)
-and it supports Dgraph v1.0.x. Follow the instructions in the
-[README](https://github.com/dgraph-io/dgraph-js-http#readme) to get it up and running.
+The official JavaScript HTTP client [can be found here](https://github.com/dgraph-io/dgraph-js-http).
+Follow the instructions in the [README](https://github.com/dgraph-io/dgraph-js-http#readme) to get it up and running.
+
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js-http#supported-versions).
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple)
 project, which contains an end-to-end working example of how to use the JavaScript HTTP client,
