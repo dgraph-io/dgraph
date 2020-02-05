@@ -20,13 +20,13 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"container/heap"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
@@ -62,8 +62,10 @@ func (r *reducer) run() error {
 
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
+			partitionKeys := []*pb.MapEntry{}
 			for _, mapFile := range mapFiles {
-				itr := newMapIterator(mapFile)
+				header, itr := newMapIterator(mapFile)
+				partitionKeys = append(partitionKeys, header.PartitionKeys...)
 				mapItrs = append(mapItrs, itr)
 			}
 
@@ -73,7 +75,10 @@ func (r *reducer) run() error {
 			}
 
 			ci := &countIndexer{reducer: r, writer: writer}
-			r.reduce(mapItrs, ci)
+			sort.Slice(partitionKeys, func(i, j int) bool {
+				return less(partitionKeys[i], partitionKeys[j])
+			})
+			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -122,20 +127,26 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 type mapIterator struct {
-	fd     *os.File
-	reader *bufio.Reader
-	tmpBuf []byte
+	fd      *os.File
+	reader  *bufio.Reader
+	tmpBuf  []byte
+	current *pb.MapEntry
 }
 
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Next() *pb.MapEntry {
+func (mi *mapIterator) Current() *pb.MapEntry {
+	return mi.current
+}
+
+func (mi *mapIterator) Next() bool {
 	r := mi.reader
 	buf, err := r.Peek(binary.MaxVarintLen64)
 	if err == io.EOF {
-		return nil
+		mi.current = nil
+		return false
 	}
 	x.Check(err)
 	sz, n := binary.Uvarint(buf)
@@ -151,16 +162,32 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 
 	me := new(pb.MapEntry)
 	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
-	return me
+	mi.current = me
+	return true
 }
 
-func newMapIterator(filename string) *mapIterator {
+func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
 	x.Check(err)
 
-	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
+	// Read the header size.
+	reader := bufio.NewReaderSize(gzReader, 16<<10)
+	headerLenBuf := make([]byte, 8)
+	x.Check2(io.ReadFull(reader, headerLenBuf))
+	headerLen := binary.BigEndian.Uint64(headerLenBuf)
+	// Reader the map header.
+	headerBuf := make([]byte, headerLen)
+
+	x.Check2(io.ReadFull(reader, headerBuf))
+	header := &pb.MapperHeader{}
+	err = header.Unmarshal(headerBuf)
+	x.Check(err)
+
+	itr := &mapIterator{fd: fd, reader: reader}
+	itr.Next()
+	return header, itr
 }
 
 func (r *reducer) encodeAndWrite(
@@ -202,6 +229,9 @@ func (r *reducer) encodeAndWrite(
 	var doneStreams []uint32
 	var prevSID uint32
 	for batch := range entryCh {
+		sort.Slice(batch, func(i, j int) bool {
+			return less(batch[i], batch[j])
+		})
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
@@ -226,20 +256,10 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(partitonKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
-
-	var ph postingHeap
-	for _, itr := range mapItrs {
-		me := itr.Next()
-		if me != nil {
-			heap.Push(&ph, heapNode{mapEntry: me, itr: itr})
-		} else {
-			fmt.Printf("NIL first map entry for %s", itr.fd.Name())
-		}
-	}
 
 	writer := ci.writer
 	go r.encodeAndWrite(writer, entryCh, closer)
@@ -250,32 +270,31 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	var prevKey []byte
 	var plistLen int
 
-	for len(ph.nodes) > 0 {
-		node0 := &ph.nodes[0]
-		me := node0.mapEntry
-		node0.mapEntry = node0.itr.Next()
-		if node0.mapEntry != nil {
-			heap.Fix(&ph, 0)
-		} else {
-			heap.Pop(&ph)
+	for _, partitonKey := range partitonKeys {
+		for _, itr := range mapItrs {
+			for {
+				me := itr.Current()
+				if me == nil {
+					break
+				}
+				if less(me, partitonKey) {
+					plistLen++
+					keyChanged := !bytes.Equal(prevKey, me.Key)
+					if keyChanged && plistLen > 0 {
+						ci.addUid(prevKey, plistLen)
+						plistLen = 0
+					}
+					prevKey = me.Key
+					batch = append(batch, me)
+				}
+				itr.Next()
+			}
 		}
-
-		keyChanged := !bytes.Equal(prevKey, me.Key)
-		// Note that the keys are coming in sorted order from the heap. So, if
-		// we see a new key, we should push out the number of entries we got
-		// for the current key, so the count index can register that.
-		if keyChanged && plistLen > 0 {
-			ci.addUid(prevKey, plistLen)
-			plistLen = 0
-		}
-
-		if len(batch) >= batchSize && keyChanged {
+		// Flush the current batch
+		if len(batch) > 1000 {
 			entryCh <- batch
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
 		}
-		prevKey = me.Key
-		batch = append(batch, me)
-		plistLen++
 	}
 	if len(batch) > 0 {
 		entryCh <- batch
@@ -284,6 +303,32 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		ci.addUid(prevKey, plistLen)
 	}
 	close(entryCh)
+	// for {
+	// 	me := node0.mapEntry
+	// 	node0.mapEntry = node0.itr.Next()
+	// 	if node0.mapEntry != nil {
+	// 		heap.Fix(&ph, 0)
+	// 	} else {
+	// 		heap.Pop(&ph)
+	// 	}
+
+	// 	keyChanged := !bytes.Equal(prevKey, me.Key)
+	// 	// Note that the keys are coming in sorted order from the heap. So, if
+	// 	// we see a new key, we should push out the number of entries we got
+	// 	// for the current key, so the count index can register that.
+	// 	if keyChanged && plistLen > 0 {
+	// 		ci.addUid(prevKey, plistLen)
+	// 		plistLen = 0
+	// 	}
+
+	// 	if len(batch) >= batchSize && keyChanged {
+	// 		entryCh <- batch
+	// 		batch = make([]*pb.MapEntry, 0, batchAlloc)
+	// 	}
+	// 	prevKey = me.Key
+	// 	batch = append(batch, me)
+	// 	plistLen++
+	// }
 }
 
 type heapNode struct {

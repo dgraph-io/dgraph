@@ -435,6 +435,10 @@ message TypeUpdate {
 	repeated SchemaUpdate fields = 2;
 }
 
+message MapperHeader {
+	repeated MapEntry partition_keys = 1;
+}
+
 // Bulk loader proto.
 message MapEntry {
 	bytes key = 1;
