@@ -5,7 +5,7 @@ title = "Getting started with Dgraph - Advanced text search on social graphs"
 **Welcome to the sixth tutorial of getting started with Dgraph.**
 
 In the [previous tutorial]({{< relref "tutorial-5/index.md" >}}), we learned about building social graphs in Dgraph, by modeling tweets as an example.
-We queried the tweets using the 'hash' and 'exact' indices, and implemented a keyword-based search to find your favorite tweets using the 'term' index and its functions.
+We queried the tweets using the `hash` and `exact` indices, and implemented a keyword-based search to find your favorite tweets using the `term` index and its functions.
 
 In this tutorial, we'll continue from where we left off and learn about advanced text search features in Dgraph.
 
@@ -126,7 +126,7 @@ Copy the mutation below, go to the mutation tab and click Run.
 
 _Note: If you're new to Dgraph, and this is the first time you're running a mutation, we highly recommend reading the [first tutorial of the series before proceeding.]({{< relref "tutorial-1/index.md" >}})_
 
-Voilà! Now you have a graph with 'tweets', 'users', and 'hashtags'. It is ready for us to explore.
+Voilà! Now you have a graph with `tweets`, `users`, and `hashtags`. It is ready for us to explore.
 
 {{% load-img "/images/tutorials/5/x-all-tweets.png" "tweet graph" %}}
 
@@ -241,9 +241,9 @@ Dgraph internally uses [Bleve package](https://github.com/blevesearch/bleve) to 
 
 Here are the `fulltext` tokens generated for our search string: [`analyz`, `data`, `graph`, `graphdb`].
 
-As you can see from the table above, all of the 'fulltext' tokens generated for the search string exist in the matched tweet.
+As you can see from the table above, all of the `fulltext` tokens generated for the search string exist in the matched tweet.
 Hence, the `alloftext` function returns a positive match for the tweet.
-It would not have returned a positive match even if one of the tokens in the search string is missing for the tweet. But, the 'anyoftext' function would've returned a positive match as long as the tweets and the search string have at least one of the tokens in common.
+It would not have returned a positive match even if one of the tokens in the search string is missing for the tweet. But, the `anyoftext` function would've returned a positive match as long as the tweets and the search string have at least one of the tokens in common.
 
 If you're interested to see Dgraph's `fulltext` tokenizer in action, [here is the gist](https://gist.github.com/hackintoshrao/0e8d715d8739b12c67a804c7249146a3) containing the instructions to use it.
 

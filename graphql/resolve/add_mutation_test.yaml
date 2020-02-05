@@ -25,6 +25,7 @@
           "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
+
 -
   name: "Add multiple mutation with variables"
   gqlmutation: |
@@ -918,3 +919,28 @@
           }
         ]
       cond: "@if(eq(len(State2), 1))"
+
+-
+  name: "deprecated fields can be mutated"
+  gqlmutation: |
+    mutation addCategory($cat: AddCategoryInput!) {
+      addCategory(input: [$cat]) {
+        category {
+          name
+          iAmDeprecated
+        }
+      }
+    }
+  gqlvariables: |
+    { "cat":
+      { "name": "A Category",
+        "iAmDeprecated": "but I can be written to"
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "_:Category1",
+          "dgraph.type": ["Category"],
+          "Category.name": "A Category",
+          "Category.iAmDeprecated": "but I can be written to"
+        }

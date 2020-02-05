@@ -27,7 +27,6 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -41,7 +40,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	queryStr := AsString(query)
 
 	if glog.V(3) {
-		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), queryStr)
+		glog.Infof("Executing Dgraph query: \n%s\n", queryStr)
 	}
 
 	req := &dgoapi.Request{
@@ -76,8 +75,8 @@ func Mutate(
 			muts[i] = m.String()
 		}
 
-		glog.Infof("[%s] Executing Dgraph mutation; with\nQuery: \n%s\nMutations:%s",
-			api.RequestID(ctx), queryStr, strings.Join(muts, "\n"))
+		glog.Infof("Executing Dgraph mutation; with\nQuery: \n%s\nMutations:%s",
+			queryStr, strings.Join(muts, "\n"))
 	}
 
 	req := &dgoapi.Request{

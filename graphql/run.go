@@ -27,18 +27,18 @@
 // http://myapi/graphql?query={me{name}}
 //
 // POST should have a json content body like
-// {
-//   "query": "...",
-//   "operationName": "...",
-//   "variables": { "myVariable": "someValue", ... }
-// }
+// 	{
+// 	  "query": "...",
+// 	  "operationName": "...",
+// 	  "variables": { "myVariable": "someValue", ... }
+// 	}
 //
 // GraphQL servers should return 200 (even on errors),
 // and result body should be json:
-// {
-//   "data": { "query_name" : { ... } },
-//   "errors": [ { "message" : ..., ...} ... ]
-// }
+// 	{
+// 	  "data": { "query_name" : { ... } },
+// 	  "errors": [ { "message" : ..., ...} ... ]
+// 	}
 //
 // Key points about the response
 // (https://graphql.github.io/graphql-spec/June2018/#sec-Response)
