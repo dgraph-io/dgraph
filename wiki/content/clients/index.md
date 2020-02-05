@@ -452,18 +452,30 @@ working example of how to use the Java client.
 
 ## JavaScript
 
-The official JavaScript client [can be found here](https://github.com/dgraph-io/dgraph-js)
+### gRPC
+
+The official JavaScript gRPC client [can be found here](https://github.com/dgraph-io/dgraph-js)
 and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
-project, which contains an end-to-end working example of how to use the JavaScript client,
+project, which contains an end-to-end working example of how to use the JavaScript gRPC client,
+for Node.js >= v6.
+
+### HTTP
+
+The official JavaScript HTTP client [can be found here](https://github.com/dgraph-io/dgraph-js-http)
+and it supports Dgraph v1.0.x. Follow the instructions in the
+[README](https://github.com/dgraph-io/dgraph-js-http#readme) to get it up and running.
+
+We also have a [simple example](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple)
+project, which contains an end-to-end working example of how to use the JavaScript HTTP client,
 for Node.js >= v6.
 
 ## Python
 
 The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
-and it fully supports Dgraph v1.0.x and Python versions >= 2.7 and >= 3.5. Follow the
+and it fully supports Dgraph v1.0.x and Python versions >= 3.5. Follow the
 instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
 up and running.
 
