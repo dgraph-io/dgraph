@@ -707,7 +707,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64)
+	out, err := l.rollup(math.MaxUint64, true)
 	if err != nil {
 		return nil, err
 	}
@@ -740,38 +740,18 @@ func (l *List) SingleListRollup() (*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	readTs := uint64(math.MaxUint64)
-	plist := &pb.PostingList{}
-	enc := codec.Encoder{BlockSize: blockSize}
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		enc.Add(p.Uid)
-		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-			plist.Postings = append(plist.Postings, p)
-		}
-		return nil
-	})
+	out, err := l.rollup(math.MaxUint64, false)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while rolling up list into a single list")
+		return nil, err
 	}
-	plist.Pack = enc.Done()
-
-	// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
-	// postings which had deletions to provide a sorted view of the list. Therefore, the safest
-	// way to get the max commit timestamp is to pick all the relevant postings for the given
-	// readTs and calculate the maxCommitTs.
-	// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
-	// postings has been trimmed down.
-	deleteBelowTs, mposts := l.pickPostings(readTs)
-	maxCommitTs := l.minTs
-	maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
-	for _, mp := range mposts {
-		maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
-	}
+	// out is only nil when the list's minTs is greater than readTs but readTs
+	// is math.MaxUint64 so that's not possible. Assert that's true.
+	x.AssertTrue(out != nil)
 
 	kv := &bpb.KV{}
-	kv.Version = maxCommitTs
+	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(plist)
+	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
@@ -813,7 +793,7 @@ type rollupOutput struct {
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
 // directly. It should only serve as the read timestamp for iteration.
-func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
+func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	l.AssertRLock()
 
 	// Pick all committed entries
@@ -896,11 +876,14 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		}
 	}
 
-	// Check if the list (or any of it's parts if it's been previously split) have
-	// become too big. Split the list if that is the case.
-	out.newMinTs = maxCommitTs
-	out.splitUpList()
-	out.removeEmptySplits()
+	if split {
+		// Check if the list (or any of it's parts if it's been previously split) have
+		// become too big. Split the list if that is the case.
+		out.newMinTs = maxCommitTs
+		out.splitUpList()
+		out.removeEmptySplits()
+	}
+
 	return out, nil
 }
 
