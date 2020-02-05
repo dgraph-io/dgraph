@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	encjson "encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -151,7 +152,11 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		case err == ErrEmpty:
 			continue // blank line or comment
 		case err != nil:
-			return errors.Wrapf(err, "while parsing line %q", str)
+			//yhj-code 删除错误数据。dgraph bulk每次处理一千条。如果一条失败则全部失败，保证错误数据仅仅影响自身，而不影响本次批处理的其他999条。
+			fmt.Printf("err = %s ,while parsing line %q \n", err.Error(), str)
+			continue
+			//yhj-code end
+			//return errors.Wrapf(err, "while parsing line %q", str)
 		default:
 			rc.nqs.Push(&nq)
 		}
