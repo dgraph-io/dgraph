@@ -477,10 +477,11 @@ for Node.js >= v6.
 
 ## Python
 
-The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
-and it fully supports Dgraph v1.0.x and Python versions >= 3.5. Follow the
-instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
+The official Python client [can be found here](https://github.com/dgraph-io/pydgraph). 
+Follow the instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
 up and running.
+
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/pydgraph#supported-versions).
 
 We also have a [simple example](https://github.com/dgraph-io/pydgraph/tree/master/examples/simple)
 project, which contains an end-to-end working example of how to use the Python client.
