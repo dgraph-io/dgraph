@@ -442,10 +442,10 @@ fmt.Println(string(resp.Json))
 
 ## Java
 
-The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j)
-and it fully supports Dgraph v1.0.x. Follow the instructions in the
-[README](https://github.com/dgraph-io/dgraph4j#readme)
-to get it up and running.
+The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j). 
+Follow the instructions in the [README](https://github.com/dgraph-io/dgraph4j#readme) to get it up and running.
+
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph4j#supported-versions).
 
 We also have a [DgraphJavaSample] project, which contains an end-to-end
 working example of how to use the Java client.
