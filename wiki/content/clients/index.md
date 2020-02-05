@@ -68,6 +68,8 @@ go get -u -v github.com/dgraph-io/dgo/v2
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgo) contains
 documentation for the client API along with examples showing how to use it.
 
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgo#supported-versions).
+
 ### Create the client
 
 To create a client, dial a connection to Dgraph's external gRPC port (typically
