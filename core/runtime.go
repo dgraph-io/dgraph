@@ -46,7 +46,7 @@ func (s *Service) validateTransaction(e types.Extrinsic) (*tx.Validity, error) {
 
 // runs the block through runtime function Core_execute_block
 // doesn't return data, but will error if the call isn't successful
-func (s *Service) validateBlock(b []byte) error {
+func (s *Service) executeBlock(b []byte) error {
 	_, err := s.rt.Exec(runtime.CoreExecuteBlock, b)
 	if err != nil {
 		return err

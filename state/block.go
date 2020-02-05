@@ -129,17 +129,17 @@ func (bs *blockState) GetHeader(hash common.Hash) (*types.Header, error) {
 }
 
 // GetBlockData returns a BlockData for a given hash
-func (bs *blockState) GetBlockData(hash common.Hash) (types.BlockData, error) {
+func (bs *blockState) GetBlockData(hash common.Hash) (*types.BlockData, error) {
 	result := new(types.BlockData)
 
 	data, err := bs.db.Db.Get(blockDataKey(hash))
 	if err != nil {
-		return types.BlockData{}, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(data, result)
 
-	return *result, err
+	return result, err
 }
 
 // LatestHeader returns the latest block available on blockState
@@ -148,33 +148,37 @@ func (bs *blockState) LatestHeader() *types.Header {
 }
 
 // GetBlockByHash returns a block for a given hash
-func (bs *blockState) GetBlockByHash(hash common.Hash) (types.Block, error) {
+func (bs *blockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 	header, err := bs.GetHeader(hash)
 	if err != nil {
-		return types.Block{}, err
+		return nil, err
 	}
 
 	blockData, err := bs.GetBlockData(hash)
 	if err != nil {
-		return types.Block{}, err
+		return nil, err
 	}
 
-	return types.Block{Header: header, Body: blockData.Body}, nil
+	body, err := types.NewBodyFromOptional(blockData.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &types.Block{Header: header, Body: body}, nil
 }
 
 // GetBlockByNumber returns a block for a given blockNumber
-func (bs *blockState) GetBlockByNumber(blockNumber *big.Int) (types.Block, error) {
+func (bs *blockState) GetBlockByNumber(blockNumber *big.Int) (*types.Block, error) {
 	// First retrieve the block hash in a byte array based on the block number from the database
 	byteHash, err := bs.db.Db.Get(headerHashKey(blockNumber.Uint64()))
 	if err != nil {
-		return types.Block{}, err
+		return nil, err
 	}
 
 	// Then find the block based on the hash
 	hash := common.NewHash(byteHash)
 	block, err := bs.GetBlockByHash(hash)
 	if err != nil {
-		return types.Block{}, err
+		return nil, err
 	}
 
 	return block, nil
@@ -200,8 +204,17 @@ func (bs *blockState) SetHeader(header *types.Header) error {
 	return err
 }
 
+func (bs *blockState) SetBlock(block *types.Block) error {
+	blockData := &types.BlockData{
+		Hash:   block.Header.Hash(),
+		Header: block.Header.AsOptional(),
+		Body:   block.Body.AsOptional(),
+	}
+	return bs.SetBlockData(block.Header.Hash(), blockData)
+}
+
 // SetBlockData will set the block data using given hash and blockData into DB
-func (bs *blockState) SetBlockData(hash common.Hash, blockData types.BlockData) error {
+func (bs *blockState) SetBlockData(hash common.Hash, blockData *types.BlockData) error {
 	// Write the encoded header
 	bh, err := json.Marshal(blockData)
 	if err != nil {
@@ -213,8 +226,7 @@ func (bs *blockState) SetBlockData(hash common.Hash, blockData types.BlockData) 
 }
 
 // AddBlock will set the latestBlock in blockState DB
-func (bs *blockState) AddBlock(newBlock types.Block) error {
-
+func (bs *blockState) AddBlock(newBlock *types.Block) error {
 	// Set the latest block
 	// If latestHeader is nil OR the new block number is greater than current block number
 	if bs.latestHeader == nil || (newBlock.Header.Number != nil && newBlock.Header.Number.Cmp(bs.latestHeader.Number) == 1) {
@@ -229,10 +241,10 @@ func (bs *blockState) AddBlock(newBlock types.Block) error {
 	hash := newBlock.Header.Hash()
 
 	// Create BlockData
-	bd := types.BlockData{
+	bd := &types.BlockData{
 		Hash:   hash,
-		Header: newBlock.Header,
-		Body:   newBlock.Body,
+		Header: newBlock.Header.AsOptional(),
+		Body:   newBlock.Body.AsOptional(),
 	}
 	err = bs.SetBlockData(hash, bd)
 	return err
@@ -263,13 +275,13 @@ func (bs *blockState) GetBabeHeader(epoch uint64, slot uint64) (*babetypes.BabeH
 }
 
 // SetBabeHeader sets a BabeHeader in the database
-func (bs *blockState) SetBabeHeader(epoch uint64, slot uint64, blockData *babetypes.BabeHeader) error {
+func (bs *blockState) SetBabeHeader(epoch uint64, slot uint64, bh *babetypes.BabeHeader) error {
 	// Write the encoded header
-	bh, err := json.Marshal(blockData)
+	enc, err := json.Marshal(bh)
 	if err != nil {
 		return err
 	}
 
-	err = bs.db.Db.Put(babeHeaderKey(epoch, slot), bh)
+	err = bs.db.Db.Put(babeHeaderKey(epoch, slot), enc)
 	return err
 }

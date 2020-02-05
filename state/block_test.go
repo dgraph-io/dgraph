@@ -76,10 +76,10 @@ func TestGetBlockByNumber(t *testing.T) {
 	// BlockBody with fake extrinsics
 	blockBody := &types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
-	blockData := types.BlockData{
+	blockData := &types.BlockData{
 		Hash:   hash,
-		Header: blockHeader,
-		Body:   blockBody,
+		Header: blockHeader.AsOptional(),
+		Body:   blockBody.AsOptional(),
 	}
 
 	// Set the block's header & blockData in the blockState
@@ -91,10 +91,11 @@ func TestGetBlockByNumber(t *testing.T) {
 	require.Nil(t, err)
 
 	// Get block & check if it's the same as the expectedBlock
-	expectedBlock := types.Block{
+	expectedBlock := &types.Block{
 		Header: blockHeader,
 		Body:   blockBody,
 	}
+
 	retBlock, err := stateService.Block.GetBlockByNumber(blockHeader.Number)
 	require.Nil(t, err)
 
@@ -132,7 +133,7 @@ func TestAddBlock(t *testing.T) {
 	// BlockBody with fake extrinsics
 	blockBody0 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
-	block0 := types.Block{
+	block0 := &types.Block{
 		Header: header0,
 		Body:   &blockBody0,
 	}
@@ -150,7 +151,7 @@ func TestAddBlock(t *testing.T) {
 	// Create Block with fake extrinsics
 	blockBody1 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
-	block1 := types.Block{
+	block1 := &types.Block{
 		Header: header1,
 		Body:   &blockBody1,
 	}

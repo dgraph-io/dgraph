@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
@@ -303,12 +304,48 @@ func (s *Service) ProcessBlockAnnounceMessage(msg p2p.Message) error {
 // chain by calling `core_execute_block`. Valid blocks are stored in the block
 // database to become part of the canonical chain.
 func (s *Service) ProcessBlockResponseMessage(msg p2p.Message) error {
-	block := msg.(*p2p.BlockResponseMessage).Data
-
-	err := s.validateBlock(block)
+	data := msg.(*p2p.BlockResponseMessage).Data
+	buf := &bytes.Buffer{}
+	_, err := buf.Write(data)
 	if err != nil {
-		log.Error("Failed to validate block", "err", err)
 		return err
+	}
+
+	blockData, err := types.DecodeBlockDataArray(buf)
+	if err != nil {
+		return err
+	}
+
+	for _, bd := range blockData {
+		if bd.Header.Exists() && bd.Body.Exists {
+			header, err := types.NewHeaderFromOptional(bd.Header)
+			if err != nil {
+				return err
+			}
+
+			body, err := types.NewBodyFromOptional(bd.Body)
+			if err != nil {
+				return err
+			}
+
+			block := &types.Block{
+				Header: header,
+				Body:   body,
+			}
+
+			enc, err := block.Encode()
+			if err != nil {
+				return err
+			}
+
+			err = s.executeBlock(enc)
+			if err != nil {
+				log.Error("Failed to validate block", "err", err)
+				return err
+			}
+		}
+
+		// TODO: set BlockData
 	}
 
 	return nil

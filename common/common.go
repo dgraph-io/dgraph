@@ -17,8 +17,10 @@
 package common
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -133,20 +135,44 @@ func SwapNibbles(k []byte) []byte {
 	return result
 }
 
-// BytesToHash sets b to hash.
-// If b is larger than len(h), b will be cropped from the left.
-func BytesToHash(b []byte) Hash {
-	var h Hash
-	h.SetBytes(b)
-	return h
+// ReadByte reads a byte from the reader and returns it
+func ReadByte(r io.Reader) (byte, error) {
+	buf := make([]byte, 1)
+	_, err := r.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+	return buf[0], nil
 }
 
-// SetBytes sets the hash to the value of b.
-// If b is larger than len(h), b will be cropped from the left.
-func (h *Hash) SetBytes(b []byte) {
-	if len(b) > len(h) {
-		b = b[len(b)-HashLength:]
+// ReadHash reads a 32-byte hash from the reader and returns it
+func ReadHash(r io.Reader) (Hash, error) {
+	buf := make([]byte, 32)
+	_, err := r.Read(buf)
+	if err != nil {
+		return Hash{}, err
 	}
+	h := [32]byte{}
+	copy(h[:], buf)
+	return Hash(h), nil
+}
 
-	copy(h[HashLength-len(b):], b)
+// ReadUint32 reads a 4-byte uint32 from the reader and returns it
+func ReadUint32(r io.Reader) (uint32, error) {
+	buf := make([]byte, 4)
+	_, err := r.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(buf), nil
+}
+
+// ReadUint64 reads an 8-byte uint32 from the reader and returns it
+func ReadUint64(r io.Reader) (uint64, error) {
+	buf := make([]byte, 8)
+	_, err := r.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(buf), nil
 }

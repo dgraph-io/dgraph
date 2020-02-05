@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -179,7 +180,7 @@ func (s *Service) handleStream(stream network.Stream) {
 
 	for {
 		// read leb128 variable-length encoding
-		_, err := readByte(r)
+		_, err := common.ReadByte(r)
 		if err != nil {
 			log.Error("Failed to read message encoding", "peer", peer, "err", err)
 			return // exit

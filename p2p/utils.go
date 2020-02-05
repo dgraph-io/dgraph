@@ -18,7 +18,6 @@ package p2p
 
 import (
 	crand "crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -143,7 +142,7 @@ func encodeMessageLEB128(encMsg []byte) []byte {
 
 // decodeMessage decodes the message based on message type
 func decodeMessage(r io.Reader) (m Message, err error) {
-	msgType, err := readByte(r)
+	msgType, err := common.ReadByte(r)
 	if err != nil {
 		return nil, err
 	}
@@ -169,46 +168,4 @@ func decodeMessage(r io.Reader) (m Message, err error) {
 	}
 
 	return m, err
-}
-
-// readByte
-func readByte(r io.Reader) (byte, error) {
-	buf := make([]byte, 1)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return buf[0], nil
-}
-
-// readHash
-func readHash(r io.Reader) (common.Hash, error) {
-	buf := make([]byte, 32)
-	_, err := r.Read(buf)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	h := [32]byte{}
-	copy(h[:], buf)
-	return common.Hash(h), nil
-}
-
-// readUint32
-func readUint32(r io.Reader) (uint32, error) {
-	buf := make([]byte, 4)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint32(buf), nil
-}
-
-// readUint64
-func readUint64(r io.Reader) (uint64, error) {
-	buf := make([]byte, 8)
-	_, err := r.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint64(buf), nil
 }

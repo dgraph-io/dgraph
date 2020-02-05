@@ -18,10 +18,12 @@ package types
 
 import (
 	"errors"
+	"io"
 	"math/big"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/common/optional"
 )
 
 // Extrinsic is a generic transaction whose format is verified in the runtime
@@ -34,6 +36,23 @@ type Block struct {
 	arrivalTime uint64 // arrival time of this block
 }
 
+// NewBlock returns a new Block
+func NewBlock(header *Header, body *Body, arrivalTime uint64) *Block {
+	return &Block{
+		Header:      header,
+		Body:        body,
+		arrivalTime: arrivalTime,
+	}
+}
+
+// NewEmptyBlock returns a new Block with an initialized but empty Header and Body
+func NewEmptyBlock() *Block {
+	return &Block{
+		Header: new(Header),
+		Body:   new(Body),
+	}
+}
+
 // GetBlockArrivalTime returns the arrival time for a block
 func (b *Block) GetBlockArrivalTime() uint64 {
 	return b.arrivalTime
@@ -42,6 +61,28 @@ func (b *Block) GetBlockArrivalTime() uint64 {
 // SetBlockArrivalTime sets the arrival time for a block
 func (b *Block) SetBlockArrivalTime(t uint64) {
 	b.arrivalTime = t
+}
+
+// Encode returns the SCALE encoding of a block
+func (b *Block) Encode() ([]byte, error) {
+	enc, err := scale.Encode(b.Header)
+	if err != nil {
+		return nil, err
+	}
+
+	// fix since scale doesn't handle *types.Body types, but does handle []byte
+	encBody, err := scale.Encode([]byte(*b.Body))
+	if err != nil {
+		return nil, err
+	}
+
+	return append(enc, encBody...), nil
+}
+
+// Decode decodes the SCALE encoded input into this block
+func (b *Block) Decode(in []byte) error {
+	_, err := scale.Decode(in, b)
+	return err
 }
 
 // Header is a state block header
@@ -111,20 +152,297 @@ func (bh *Header) Hash() common.Hash {
 	return bh.hash
 }
 
-// Encode to byte array
+// Encode returns the SCALE encoding of a header
 func (bh *Header) Encode() ([]byte, error) {
 	return scale.Encode(bh)
 }
 
-// Body is the extrinsics inside a state block
+// Decode decodes the SCALE encoded input into this header
+func (bh *Header) Decode(in []byte) error {
+	_, err := scale.Decode(in, bh)
+	return err
+}
+
+// AsOptional returns the Header as an optional.Header
+func (bh *Header) AsOptional() *optional.Header {
+	return optional.NewHeader(true, &optional.CoreHeader{
+		ParentHash:     bh.ParentHash,
+		Number:         bh.Number,
+		StateRoot:      bh.StateRoot,
+		ExtrinsicsRoot: bh.ExtrinsicsRoot,
+		Digest:         bh.Digest,
+	})
+}
+
+// NewHeaderFromOptional returns a Header given an optional.Header. If the optional.Header is None, an error is returned.
+func NewHeaderFromOptional(oh *optional.Header) (*Header, error) {
+	if !oh.Exists() {
+		return nil, errors.New("header is None")
+	}
+
+	h := oh.Value()
+
+	if h.Number == nil {
+		// Hash() will panic if number is nil
+		return nil, errors.New("cannot have nil block number")
+	}
+
+	bh := &Header{
+		ParentHash:     h.ParentHash,
+		Number:         h.Number,
+		StateRoot:      h.StateRoot,
+		ExtrinsicsRoot: h.ExtrinsicsRoot,
+		Digest:         h.Digest,
+	}
+
+	bh.Hash()
+	return bh, nil
+}
+
+// Body is the encoded extrinsics inside a state block
 type Body []byte
+
+func NewBody(b []byte) *Body {
+	body := Body(b)
+	return &body
+}
+
+// NewBodyFromOptional returns a Body given an optional.Body. If the optional.Body is None, an error is returned.
+func NewBodyFromOptional(ob *optional.Body) (*Body, error) {
+	if !ob.Exists {
+		return nil, errors.New("body is None")
+	}
+
+	b := ob.Value
+	res := Body([]byte(b))
+	return &res, nil
+}
+
+// AsOptional returns the Body as an optional.Body
+func (b *Body) AsOptional() *optional.Body {
+	ob := optional.CoreBody([]byte(*b))
+	return optional.NewBody(true, ob)
+}
 
 // BlockData is stored within the BlockDB
 type BlockData struct {
-	Hash   common.Hash
-	Header *Header
-	Body   *Body
-	// Receipt
-	// MessageQueue
-	// Justification
+	Hash          common.Hash
+	Header        *optional.Header
+	Body          *optional.Body
+	Receipt       *optional.Bytes
+	MessageQueue  *optional.Bytes
+	Justification *optional.Bytes
+}
+
+// Encode performs SCALE encoding of the BlockData
+func (bd *BlockData) Encode() ([]byte, error) {
+	enc := bd.Hash[:]
+
+	if bd.Header.Exists() {
+		venc, err := scale.Encode(bd.Header.Value())
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, byte(1)) // Some
+		enc = append(enc, venc...)
+	} else {
+		enc = append(enc, byte(0)) // None
+	}
+
+	if bd.Body.Exists {
+		venc, err := scale.Encode([]byte(bd.Body.Value))
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, byte(1)) // Some
+		enc = append(enc, venc...)
+	} else {
+		enc = append(enc, byte(0)) // None
+	}
+
+	if bd.Receipt.Exists() {
+		venc, err := scale.Encode(bd.Receipt.Value())
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, byte(1)) // Some
+		enc = append(enc, venc...)
+	} else {
+		enc = append(enc, byte(0)) // None
+	}
+
+	if bd.MessageQueue.Exists() {
+		venc, err := scale.Encode(bd.MessageQueue.Value())
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, byte(1)) // Some
+		enc = append(enc, venc...)
+	} else {
+		enc = append(enc, byte(0)) // None
+	}
+
+	if bd.Justification.Exists() {
+		venc, err := scale.Encode(bd.Justification.Value())
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, byte(1)) // Some
+		enc = append(enc, venc...)
+	} else {
+		enc = append(enc, byte(0)) // None
+	}
+
+	return enc, nil
+}
+
+// Decode decodes the SCALE encoded input to BlockData
+func (bd *BlockData) Decode(r io.Reader) error {
+	hash, err := common.ReadHash(r)
+	if err != nil {
+		return err
+	}
+	bd.Hash = hash
+
+	bd.Header, err = decodeOptionalHeader(r)
+	if err != nil {
+		return err
+	}
+
+	bd.Body, err = decodeOptionalBody(r)
+	if err != nil {
+		return err
+	}
+
+	bd.Receipt, err = decodeOptionalBytes(r)
+	if err != nil {
+		return err
+	}
+
+	bd.MessageQueue, err = decodeOptionalBytes(r)
+	if err != nil {
+		return err
+	}
+
+	bd.Justification, err = decodeOptionalBytes(r)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// EncodeBlockDataArray encodes an array of BlockData using SCALE
+func EncodeBlockDataArray(bds []*BlockData) ([]byte, error) {
+	enc, err := scale.Encode(int32(len(bds)))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, bd := range bds {
+		benc, err := bd.Encode()
+		if err != nil {
+			return nil, err
+		}
+		enc = append(enc, benc...)
+	}
+
+	return enc, nil
+}
+
+// DecodeBlockDataArray decodes a SCALE encoded BlockData array
+func DecodeBlockDataArray(r io.Reader) ([]*BlockData, error) {
+	sd := scale.Decoder{Reader: r}
+
+	l, err := sd.Decode(int32(0))
+	if err != nil {
+		return nil, err
+	}
+
+	length := int(l.(int32))
+	bds := make([]*BlockData, length)
+
+	for i := 0; i < length; i++ {
+		bd := new(BlockData)
+		err = bd.Decode(r)
+		if err != nil {
+			return bds, err
+		}
+
+		bds[i] = bd
+	}
+
+	return bds, err
+}
+
+// decodeOptionalHeader decodes a SCALE encoded optional Header into an *optional.Header
+func decodeOptionalHeader(r io.Reader) (*optional.Header, error) {
+	sd := scale.Decoder{Reader: r}
+
+	exists, err := common.ReadByte(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists == 1 {
+		header := &Header{
+			ParentHash:     common.Hash{},
+			Number:         big.NewInt(0),
+			StateRoot:      common.Hash{},
+			ExtrinsicsRoot: common.Hash{},
+			Digest:         [][]byte{},
+		}
+		_, err = sd.Decode(header)
+		if err != nil {
+			return nil, err
+		}
+
+		header.Hash()
+		return header.AsOptional(), nil
+	}
+
+	return optional.NewHeader(false, nil), nil
+}
+
+// decodeOptionalBody decodes a SCALE encoded optional Body into an *optional.Body
+func decodeOptionalBody(r io.Reader) (*optional.Body, error) {
+	sd := scale.Decoder{Reader: r}
+
+	exists, err := common.ReadByte(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists == 1 {
+		b, err := sd.Decode([]byte{})
+		if err != nil {
+			return nil, err
+		}
+
+		body := Body(b.([]byte))
+		return body.AsOptional(), nil
+	}
+
+	return optional.NewBody(false, nil), nil
+}
+
+// decodeOptionalBytes decodes SCALE encoded optional bytes into an *optional.Bytes
+func decodeOptionalBytes(r io.Reader) (*optional.Bytes, error) {
+	sd := scale.Decoder{Reader: r}
+
+	exists, err := common.ReadByte(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists == 1 {
+		b, err := sd.Decode([]byte{})
+		if err != nil {
+			return nil, err
+		}
+
+		return optional.NewBytes(true, b.([]byte)), nil
+	}
+
+	return optional.NewBytes(false, nil), nil
 }

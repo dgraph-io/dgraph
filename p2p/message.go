@@ -176,18 +176,18 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	var err error
 
-	bm.ID, err = readUint64(r)
+	bm.ID, err = common.ReadUint64(r)
 	if err != nil {
 		return err
 	}
 
-	bm.RequestedData, err = readByte(r)
+	bm.RequestedData, err = common.ReadByte(r)
 	if err != nil {
 		return err
 	}
 
 	// starting block is a variable type; if next byte is 0 it is Hash, if next byte is 1 it is uint64
-	startingBlockType, err := readByte(r)
+	startingBlockType, err := common.ReadByte(r)
 	if err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	}
 
 	// EndBlockHash is an optional type, if next byte is 0 it doesn't exist
-	endBlockHashExists, err := readByte(r)
+	endBlockHashExists, err := common.ReadByte(r)
 	if err != nil {
 		return err
 	}
@@ -219,13 +219,13 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 		bm.EndBlockHash = optional.NewHash(false, common.Hash{})
 	} else {
 		var endBlockHash common.Hash
-		endBlockHash, err = readHash(r)
+		endBlockHash, err = common.ReadHash(r)
 		if err != nil {
 			return err
 		}
 		bm.EndBlockHash = optional.NewHash(true, endBlockHash)
 	}
-	dir, err := readByte(r)
+	dir, err := common.ReadByte(r)
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	bm.Direction = dir
 
 	// Max is an optional type, if next byte is 0 it doesn't exist
-	maxExists, err := readByte(r)
+	maxExists, err := common.ReadByte(r)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 	if maxExists == 0 {
 		bm.Max = optional.NewUint32(false, 0)
 	} else {
-		max, err := readUint32(r)
+		max, err := common.ReadUint32(r)
 		if err != nil {
 			return err
 		}
@@ -339,13 +339,13 @@ func (bm *BlockResponseMessage) Encode() ([]byte, error) {
 // Decode the message into a BlockResponseMessage, it assumes the type byte has been removed
 func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 	var err error
-	bm.ID, err = readUint64(r)
+	bm.ID, err = common.ReadUint64(r)
 	if err != nil {
 		return err
 	}
 
 	for {
-		b, err := readByte(r)
+		b, err := common.ReadByte(r)
 		if err != nil {
 			break
 		}
@@ -463,7 +463,7 @@ func (cm *ConsensusMessage) Decode(r io.Reader) error {
 	}
 	cm.ConsensusEngineID = types.NewConsensusEngineID(buf)
 	for {
-		b, err := readByte(r)
+		b, err := common.ReadByte(r)
 		if err != nil {
 			break
 		}

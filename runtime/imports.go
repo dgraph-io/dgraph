@@ -378,11 +378,11 @@ func ext_blake2_256_enumerated_trie_root(context unsafe.Pointer, valuesData, len
 		}
 	}
 	root, err := t.Hash()
-	log.Trace("[ext_blake2_256_enumerated_trie_root]", "root hash", fmt.Sprintf("0x%x", root))
 	if err != nil {
 		log.Error("[ext_blake2_256_enumerated_trie_root]", "error", err)
 		return
 	}
+	log.Trace("[ext_blake2_256_enumerated_trie_root]", "root", root)
 	copy(memory[result:result+32], root[:])
 }
 

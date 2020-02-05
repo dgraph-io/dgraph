@@ -35,6 +35,14 @@ func NewHash(in []byte) (res Hash) {
 	return res
 }
 
+// BytesToHash sets b to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func BytesToHash(b []byte) Hash {
+	var h Hash
+	h.SetBytes(b)
+	return h
+}
+
 // ToBytes turns a hash to a byte array
 func (h Hash) ToBytes() []byte {
 	b := [32]byte(h)
@@ -47,4 +55,14 @@ func (h Hash) Equal(g Hash) bool {
 
 func (h Hash) String() string {
 	return fmt.Sprintf("0x%x", h[:])
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-HashLength:]
+	}
+
+	copy(h[HashLength-len(b):], b)
 }
