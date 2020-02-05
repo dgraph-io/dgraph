@@ -8,6 +8,15 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
+### Added
+
+### Fixed
+
+## [2.0.0-beta1] - 2020-01-30
+[2.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v2.0.0-beta1
+
+### Changed
+
 - Report GraphQL stats from alpha. ([#4607][])
 
 ### Added
@@ -15,7 +24,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Add GraphQL API for Dgraph accessible via the `/graphql` and `/admin` HTTP endpoints on Dgraph Alpha. ([#933][])
 - Add support for sorting on multiple facets. Fixes [#3638][]. ([#4579][])
 
- ### Fixed
+### Fixed
  
 - Avoid running GC frequently. Only run for every 2GB of increase. Small optimizations in Bulk.reduce.
 
