@@ -507,7 +507,7 @@ things.
 
 {{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
 
-Running `docker-machine ps` shows all the AWS EC2 instances that we started.
+Running `docker-machine ls` shows all the AWS EC2 instances that we started.
 ```sh
 ➜  ~ docker-machine ls
 NAME    ACTIVE   DRIVER       STATE     URL                         SWARM   DOCKER        ERRORS
