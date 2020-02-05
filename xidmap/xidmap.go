@@ -228,6 +228,13 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	// While running bulk loader, this method is called after completion of map phase. After this
+	// method returns xidmap of bulk loader is made nil. But xidmap still show up in memory profiles
+	// even during reduce phases. If bulk loader is running on large dataset, this can occupy lot of
+	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
+	// TODO: find why xidmap is not getting GCed without below line.
+	m.shards = nil
+
 	if m.writer == nil {
 		return nil
 	}
