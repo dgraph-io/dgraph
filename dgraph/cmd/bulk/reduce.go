@@ -78,6 +78,7 @@ func (r *reducer) run() error {
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return less(partitionKeys[i], partitionKeys[j])
 			})
+			fmt.Println("partitionKeysLen", len(partitionKeys))
 			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
@@ -220,14 +221,14 @@ func (r *reducer) encodeAndWrite(
 	// number of streams.
 	// This change limits maximum number of open streams to number of streams created in a single
 	// write call. This can also be optimised if required.
-	addDone := func(doneSteams []uint32, l *bpb.KVList) {
-		for _, streamId := range doneSteams {
-			l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
-		}
-	}
+	// addDone := func(doneSteams []uint32, l *bpb.KVList) {
+	// 	for _, streamId := range doneSteams {
+	// 		l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
+	// 	}
+	// }
 
-	var doneStreams []uint32
-	var prevSID uint32
+	// var doneStreams []uint32
+	// var prevSID uint32
 	for batch := range entryCh {
 		sort.Slice(batch, func(i, j int) bool {
 			return less(batch[i], batch[j])
@@ -236,14 +237,14 @@ func (r *reducer) encodeAndWrite(
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
-				if prevSID != 0 && (prevSID != kv.StreamId) {
-					doneStreams = append(doneStreams, prevSID)
-				}
-				prevSID = kv.StreamId
+				// if prevSID != 0 && (prevSID != kv.StreamId) {
+				// 	doneStreams = append(doneStreams, prevSID)
+				// }
+				// prevSID = kv.StreamId
 			}
-			addDone(doneStreams, list)
+			// addDone(doneStreams, list)
 			x.Check(writer.Write(list))
-			doneStreams = doneStreams[:0]
+			//doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
 			listSize = 0
 		}
@@ -267,68 +268,59 @@ func (r *reducer) reduce(partitonKeys []*pb.MapEntry, mapItrs []*mapIterator, ci
 	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
-	var prevKey []byte
-	var plistLen int
+	// var plistLen int
 
-	for _, partitonKey := range partitonKeys {
-		for _, itr := range mapItrs {
+	for _, key := range partitonKeys {
+		for _, iter := range mapItrs {
+		readFromFile:
 			for {
-				me := itr.Current()
-				if me == nil {
-					break
+				curItem := iter.Current()
+				if curItem == nil {
+					break readFromFile
 				}
-				if less(me, partitonKey) {
-					plistLen++
-					keyChanged := !bytes.Equal(prevKey, me.Key)
-					if keyChanged && plistLen > 0 {
-						ci.addUid(prevKey, plistLen)
-						plistLen = 0
-					}
-					prevKey = me.Key
-					batch = append(batch, me)
+
+				if less(curItem, key) {
+					batch = append(batch, curItem)
+					iter.Next()
+				} else {
+					break readFromFile
 				}
-				itr.Next()
 			}
 		}
-		// Flush the current batch
-		if len(batch) > 1000 {
-			entryCh <- batch
-			batch = make([]*pb.MapEntry, 0, batchAlloc)
+
+		entryCh <- batch
+		fmt.Println("Flushed...")
+		batch = make([]*pb.MapEntry, 0, batchAlloc)
+	}
+	remainingCount := 0
+	var found bool
+	for _, itr := range mapItrs {
+		found = false
+	inner2:
+		for {
+			me := itr.Current()
+			if me == nil {
+				break inner2
+			}
+			if !found {
+				remainingCount++
+				found = true
+			}
+			batch = append(batch, me)
+			itr.Next()
 		}
 	}
+	fmt.Println("remainingCount ", remainingCount)
+	x.AssertTrue(remainingCount == 1)
+	fmt.Println("num of mapItrs", len(mapItrs))
 	if len(batch) > 0 {
+		fmt.Printf("sending data %d \n", len(batch))
+		sort.Slice(batch, func(i, j int) bool {
+			return less(batch[i], batch[j])
+		})
 		entryCh <- batch
 	}
-	if plistLen > 0 {
-		ci.addUid(prevKey, plistLen)
-	}
 	close(entryCh)
-	// for {
-	// 	me := node0.mapEntry
-	// 	node0.mapEntry = node0.itr.Next()
-	// 	if node0.mapEntry != nil {
-	// 		heap.Fix(&ph, 0)
-	// 	} else {
-	// 		heap.Pop(&ph)
-	// 	}
-
-	// 	keyChanged := !bytes.Equal(prevKey, me.Key)
-	// 	// Note that the keys are coming in sorted order from the heap. So, if
-	// 	// we see a new key, we should push out the number of entries we got
-	// 	// for the current key, so the count index can register that.
-	// 	if keyChanged && plistLen > 0 {
-	// 		ci.addUid(prevKey, plistLen)
-	// 		plistLen = 0
-	// 	}
-
-	// 	if len(batch) >= batchSize && keyChanged {
-	// 		entryCh <- batch
-	// 		batch = make([]*pb.MapEntry, 0, batchAlloc)
-	// 	}
-	// 	prevKey = me.Key
-	// 	batch = append(batch, me)
-	// 	plistLen++
-	// }
 }
 
 type heapNode struct {
