@@ -953,6 +953,9 @@
       addMovieDirector(input: [$dir]) {
         moviedirector {
           id
+        }
+      }
+    }
   gqlvariables: |
     { "dir":
       { "name": "Steven Spielberg",
@@ -960,6 +963,12 @@
       }
     }
   explanation: "The reference to the directed.movies edge node should not add a new movie edge."
+  dgquery: |-
+    query {
+      Movie2 as Movie2(func: uid(0x2)) @filter(type(Movie)) {
+        uid
+      }
+    }
   dgmutations:
     - setjson: |
         { "uid" : "_:MovieDirector1",
