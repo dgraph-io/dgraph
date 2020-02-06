@@ -38,9 +38,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
-- Fix bug related to posting list split, and re-enable posting list splits.
-  ([#4742][]). Fixes #4733.
+- Fix bug related to posting list split, and re-enable posting list splits. Fixes [#4733][]. ([#4742][])
 
+[#4733]: https://github.com/dgraph-io/dgraph/issues/4733
 [#4742]: https://github.com/dgraph-io/dgraph/issues/4742
 
 ## [1.2.0] - 2020-01-27
