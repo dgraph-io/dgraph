@@ -111,6 +111,14 @@ const (
 		response: Response
 	}
 
+	input ConfigInput {
+		lruMb: Float
+	}
+
+	type ConfigPayload {
+		response: Response
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
@@ -121,6 +129,7 @@ const (
 		export(input: ExportInput!): ExportPayload
 		draining(input: DrainingInput!): DrainingPayload
 		shutdown: ShutdownPayload
+		config(input: ConfigInput!): ConfigPayload
 	}
  `
 )
@@ -317,6 +326,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				shutdown,
 				shutdown,
 				shutdown,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("config", func(m schema.Mutation) resolve.MutationResolver {
+			config := &configResolver{}
+
+			// config implements the mutation rewriter, executor and query executor hence its
+			// passed thrice here.
+			return resolve.NewMutationResolver(
+				config,
+				config,
+				config,
 				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
 		WithSchemaIntrospection()

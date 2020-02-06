@@ -28,8 +28,10 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"github.com/golang/glog"
@@ -115,4 +117,16 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+}
+
+// UpdateLruMb updates the value of lru_mb
+func UpdateLruMb(memoryMB float64) error {
+	if memoryMB < MinAllottedMemory {
+		return errors.Errorf("lru_mb must be at least %.0f\n", MinAllottedMemory)
+	}
+
+	posting.Config.Mu.Lock()
+	posting.Config.AllottedMemory = memoryMB
+	posting.Config.Mu.Unlock()
+	return nil
 }

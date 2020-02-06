@@ -135,15 +135,12 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if memoryMB < worker.MinAllottedMemory {
+
+	if err := worker.UpdateLruMb(memoryMB); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", worker.MinAllottedMemory)
+		fmt.Fprintf(w, err.Error())
 		return
 	}
-
-	posting.Config.Mu.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
 
