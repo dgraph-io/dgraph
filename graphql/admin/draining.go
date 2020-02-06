@@ -20,47 +20,40 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
 
-type exportResolver struct {
+type drainingResolver struct {
 	mutation schema.Mutation
+	enable   bool
 }
 
-type exportInput struct {
-	Format string
+type drainingInput struct {
+	Enable bool
 }
 
-func (er *exportResolver) Rewrite(
+func (dr *drainingResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
-	glog.Info("Got export request through GraphQL admin API")
+	glog.Info("Got draining request through GraphQL admin API")
 
-	er.mutation = m
-	input, err := getExportInput(m)
+	dr.mutation = m
+	input, err := getDrainingInput(m)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	format := worker.DefaultExportFormat
-	if input.Format != "" {
-		format = worker.NormalizeExportFormat(input.Format)
-		if format == "" {
-			return nil, nil, errors.Errorf("invalid export format: %v", input.Format)
-		}
-	}
-
-	err = worker.ExportOverNetwork(context.Background(), format)
-	return nil, nil, errors.Wrapf(err, "export failed")
+	dr.enable = input.Enable
+	x.UpdateDrainingMode(input.Enable)
+	return nil, nil, nil
 }
 
-func (er *exportResolver) FromMutationResult(
+func (dr *drainingResolver) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -68,7 +61,7 @@ func (er *exportResolver) FromMutationResult(
 	return nil, nil
 }
 
-func (er *exportResolver) Mutate(
+func (dr *drainingResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
@@ -76,19 +69,20 @@ func (er *exportResolver) Mutate(
 	return nil, nil, nil
 }
 
-func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	var buf bytes.Buffer
 
+	// TODO - Abstract into common function.
 	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(er.mutation.SelectionSet()[0].ResponseName() + `": [{`))
+	x.Check2(buf.WriteString(dr.mutation.SelectionSet()[0].ResponseName() + `": [{`))
 
-	for i, sel := range er.mutation.SelectionSet()[0].SelectionSet() {
+	for i, sel := range dr.mutation.SelectionSet()[0].SelectionSet() {
 		var val string
 		switch sel.Name() {
 		case "code":
 			val = "Success"
 		case "message":
-			val = "Export completed."
+			val = fmt.Sprintf("draining mode has been set to %v", dr.enable)
 		}
 		if i != 0 {
 			x.Check2(buf.WriteString(","))
@@ -103,14 +97,14 @@ func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 	return buf.Bytes(), nil
 }
 
-func getExportInput(m schema.Mutation) (*exportInput, error) {
+func getDrainingInput(m schema.Mutation) (*drainingInput, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
 	inputByts, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
 
-	var input exportInput
+	var input drainingInput
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }

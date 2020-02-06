@@ -98,6 +98,14 @@ const (
 		response: Response
 	}
 
+	input DrainingInput {
+		enable: Boolean
+	}
+
+	type DrainingPayload {
+		response: Response
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
@@ -106,6 +114,7 @@ const (
 	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
 		export(input: ExportInput!): ExportPayload
+		draining(input: DrainingInput!): DrainingPayload
 	}
  `
 )
@@ -280,6 +289,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				export,
 				export,
 				export,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("draining", func(m schema.Mutation) resolve.MutationResolver {
+			draining := &drainingResolver{}
+
+			// draining implements the mutation rewriter, executor and query executor hence its
+			// passed thrice here.
+			return resolve.NewMutationResolver(
+				draining,
+				draining,
+				draining,
 				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
 		WithSchemaIntrospection()
