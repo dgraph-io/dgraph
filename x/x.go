@@ -108,7 +108,7 @@ const (
 	AclPredicates = `
 {"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
 {"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
+{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
 {"predicate":"dgraph.acl.rule","type":"uid","list":true, "upsert":true},
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"]},
 {"predicate":"dgraph.rule.permission","type":"int"}

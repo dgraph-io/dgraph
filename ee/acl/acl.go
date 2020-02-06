@@ -431,6 +431,7 @@ func chMod(conf *viper.Viper) error {
 			gUID as uid
 			rUID as dgraph.acl.rule @filter(eq(dgraph.rule.predicate, "%s"))
 		}
+		groupUIDCount(func: uid(gUID)) {count(uid)}
 	}`, groupId, predicate)
 
 	updateRule := &api.Mutation{
@@ -465,12 +466,27 @@ func chMod(conf *viper.Viper) error {
 		Cond: "@if(eq(len(rUID), 0) AND eq(len(gUID), 1))",
 	}
 
-	_, err = txn.Do(ctx, &api.Request{
+	deleteRule := &api.Mutation{
+		Del: []*api.NQuad{
+			{
+				Subject:   "uid(gUID)",
+				Predicate: "dgraph.acl.rule",
+				ObjectId:  "uid(rUID)",
+			},
+		},
+		Cond: "@if(eq(len(rUID), 1) AND eq(len(gUID), 1))",
+	}
+
+	upsertRequest := &api.Request{
 		Query:     ruleQuery,
 		Mutations: []*api.Mutation{createRule, updateRule},
 		CommitNow: true,
-	})
-
+	}
+	if perm < 0 {
+		upsertRequest.Mutations = []*api.Mutation{deleteRule}
+	}
+	resp, err := txn.Do(ctx, upsertRequest)
+	fmt.Println(string(resp.GetJson()))
 	return err
 }
 

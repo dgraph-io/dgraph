@@ -502,13 +502,13 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 				Predicate: "dgraph.acl.rule",
 				ValueType: pb.Posting_UID,
 				List:      true,
-				Upsert:    true,
 			},
 			{
 				Predicate: "dgraph.rule.predicate",
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Tokenizer: []string{"exact"},
+				Upsert:    true, // Not really sure if this will work.
 			},
 			{
 				Predicate: "dgraph.rule.permission",
