@@ -503,6 +503,12 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				invTypeName)
 		}
 
+		if field.Type.NamedType != "" {
+			return gqlerror.ErrorPosf(dir.Position,
+				"Type %s; Field %s: with a dgraph directive that starts with ~ should be of type "+
+					"list.", typ.Name, field.Name)
+		}
+
 		invType := sch.Types[invTypeName]
 		forwardFound := false
 		// We need to loop through all the fields of the invType and see if we find a field which

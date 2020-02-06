@@ -602,11 +602,11 @@ invalid_schemas:
       }
 
       type X {
-        f1: Y! @dgraph(pred:"~movie")
+        f1: [Y!] @dgraph(pred:"~movie")
       }
     errlist: [
       {"message": "Type X; Field f1: pred argument: ~movie is not supported as forward edge doesn't exist for type Y.",
-      "locations":[{"line":6, "column":11}]}
+      "locations":[{"line":6, "column":13}]}
     ]
 
   -
@@ -640,6 +640,21 @@ invalid_schemas:
       {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
       directive but is of type Z.",
       "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Field with a dgraph directive with reverse pred argument should be a list"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: X @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: with a dgraph directive that starts with ~ should be of type
+      list.",
+      "locations":[{"line":5, "column":10}]}
     ]
 
 
