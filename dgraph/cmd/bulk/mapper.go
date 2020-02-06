@@ -131,10 +131,6 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 			header.PartitionKeys = append(header.PartitionKeys, entries[i])
 		}
 	}
-	sort.Slice(header.PartitionKeys, func(i, j int) bool {
-		return less(header.PartitionKeys[i], header.PartitionKeys[j])
-	})
-	fmt.Printf("EntryLen: %d PartionKeyLen: %d\n", len(entries), len(header.PartitionKeys))
 	// Write it to mapper file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)

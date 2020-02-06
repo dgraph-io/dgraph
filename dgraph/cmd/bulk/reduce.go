@@ -279,7 +279,7 @@ func (r *reducer) reduce(partitonKeys []*pb.MapEntry, mapItrs []*mapIterator, ci
 					break readFromFile
 				}
 
-				if less(curItem, key) {
+				if bytes.Compare(curItem.GetKey(), key.GetKey()) <= 0 {
 					batch = append(batch, curItem)
 					iter.Next()
 				} else {
@@ -289,7 +289,6 @@ func (r *reducer) reduce(partitonKeys []*pb.MapEntry, mapItrs []*mapIterator, ci
 		}
 
 		entryCh <- batch
-		fmt.Println("Flushed...")
 		batch = make([]*pb.MapEntry, 0, batchAlloc)
 	}
 	remainingCount := 0
