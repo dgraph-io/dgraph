@@ -40,6 +40,9 @@ var (
 	pstore       *badger.DB
 	workerServer *grpc.Server
 	raftServer   conn.RaftServer
+	// ShutdownCh is used while trying to shutdown the server.
+	ShutdownCh chan struct{}
+
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots

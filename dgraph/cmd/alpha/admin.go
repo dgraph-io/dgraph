@@ -76,7 +76,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	close(shutdownCh)
+	close(worker.ShutdownCh)
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
