@@ -33,6 +33,16 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#3638]: https://github.com/dgraph-io/dgraph/issues/3638
 [#4579]: https://github.com/dgraph-io/dgraph/issues/4579
 
+## [1.2.1] - 2020-02-06
+[1.2.1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v1.2.1
+
+### Fixed
+
+- Fix bug related to posting list split, and re-enable posting list splits. Fixes [#4733][]. ([#4742][])
+
+[#4733]: https://github.com/dgraph-io/dgraph/issues/4733
+[#4742]: https://github.com/dgraph-io/dgraph/issues/4742
+
 ## [1.2.0] - 2020-01-27
 [1.2.0]: https://github.com/dgraph-io/dgraph/compare/v1.1.1...v1.2.0
 
