@@ -126,8 +126,9 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	header := &pb.MapperHeader{
 		PartitionKeys: []*pb.MapEntry{},
 	}
+	shardPartioionNo := len(entries) / 1
 	for i := range entries {
-		if i%partitionKeyShard == 0 {
+		if i%shardPartioionNo == 0 {
 			header.PartitionKeys = append(header.PartitionKeys, entries[i])
 		}
 	}

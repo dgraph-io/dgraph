@@ -47,6 +47,9 @@ type reducer struct {
 	streamId uint32
 }
 
+const batchSize = 10000
+const batchAlloc = batchSize * 11 / 10
+
 func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
@@ -78,8 +81,11 @@ func (r *reducer) run() error {
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return less(partitionKeys[i], partitionKeys[j])
 			})
-			fmt.Println("partitionKeysLen", len(partitionKeys))
-			r.reduce(partitionKeys, mapItrs, ci)
+			// Start bactching for the given keys
+			for _, itr := range mapItrs {
+				go itr.startBatchingForKeys(partitionKeys)
+			}
+			r.reduce(len(partitionKeys), mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -131,39 +137,84 @@ type mapIterator struct {
 	fd      *os.File
 	reader  *bufio.Reader
 	tmpBuf  []byte
-	current *pb.MapEntry
+	current []*pb.MapEntry
+	batchCh chan []*pb.MapEntry
 }
 
+func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
+	batch := make([]*pb.MapEntry, 0, batchAlloc)
+	for _, key := range partitionsKeys {
+		for {
+			// LOSING one item.
+			r := mi.reader
+			buf, err := r.Peek(binary.MaxVarintLen64)
+			if err == io.EOF {
+				break
+			}
+			x.Check(err)
+			sz, n := binary.Uvarint(buf)
+			if n <= 0 {
+				log.Fatalf("Could not read uvarint: %d", n)
+			}
+			x.Check2(r.Discard(n))
+
+			for cap(mi.tmpBuf) < int(sz) {
+				mi.tmpBuf = make([]byte, sz)
+			}
+			x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
+
+			me := new(pb.MapEntry)
+			x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
+
+			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
+			if bytes.Compare(me.GetKey(), key.GetKey()) <= 0 {
+				//		fmt.Printf("inside me %x key %x \n", me.GetKey(), key.GetKey())
+				batch = append(batch, me)
+				continue
+			}
+			//	fmt.Println("breaing with key")
+			break
+		}
+		//fmt.Println("sendniog batch", len(batch))
+		mi.batchCh <- batch
+		batch = make([]*pb.MapEntry, 0, batchAlloc)
+	}
+	// Drain the last items.
+	for {
+		r := mi.reader
+		buf, err := r.Peek(binary.MaxVarintLen64)
+		if err == io.EOF {
+			break
+		}
+		x.Check(err)
+		sz, n := binary.Uvarint(buf)
+		if n <= 0 {
+			log.Fatalf("Could not read uvarint: %d", n)
+		}
+		x.Check2(r.Discard(n))
+
+		for cap(mi.tmpBuf) < int(sz) {
+			mi.tmpBuf = make([]byte, sz)
+		}
+		x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
+
+		me := new(pb.MapEntry)
+		x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
+		batch = append(batch, me)
+
+	}
+	mi.batchCh <- batch
+}
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Current() *pb.MapEntry {
+func (mi *mapIterator) Current() []*pb.MapEntry {
 	return mi.current
 }
 
 func (mi *mapIterator) Next() bool {
-	r := mi.reader
-	buf, err := r.Peek(binary.MaxVarintLen64)
-	if err == io.EOF {
-		mi.current = nil
-		return false
-	}
-	x.Check(err)
-	sz, n := binary.Uvarint(buf)
-	if n <= 0 {
-		log.Fatalf("Could not read uvarint: %d", n)
-	}
-	x.Check2(r.Discard(n))
-
-	for cap(mi.tmpBuf) < int(sz) {
-		mi.tmpBuf = make([]byte, sz)
-	}
-	x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
-
-	me := new(pb.MapEntry)
-	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
-	mi.current = me
+	mi.current = <-mi.batchCh
 	return true
 }
 
@@ -186,8 +237,7 @@ func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 	err = header.Unmarshal(headerBuf)
 	x.Check(err)
 
-	itr := &mapIterator{fd: fd, reader: reader}
-	itr.Next()
+	itr := &mapIterator{fd: fd, reader: reader, batchCh: make(chan []*pb.MapEntry, 1000)}
 	return header, itr
 }
 
@@ -257,68 +307,35 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(partitonKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(batchLen int, mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
 
 	writer := ci.writer
 	go r.encodeAndWrite(writer, entryCh, closer)
-
-	const batchSize = 10000
-	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	// var plistLen int
-
-	for _, key := range partitonKeys {
-		for _, iter := range mapItrs {
-		readFromFile:
-			for {
-				curItem := iter.Current()
-				if curItem == nil {
-					break readFromFile
-				}
-
-				if bytes.Compare(curItem.GetKey(), key.GetKey()) <= 0 {
-					batch = append(batch, curItem)
-					iter.Next()
-				} else {
-					break readFromFile
-				}
-			}
+	for i := 0; i < batchLen; i++ {
+		for _, itr := range mapItrs {
+			itr.Next()
+			batch = append(batch, itr.Current()...)
+			//			fmt.Println("got batching")
 		}
-
+		//	fmt.Printf("Batch no %d number of entries %d total batch no %d \n", i, len(batch), batchLen)
+		// if len(batch) > 0 {
+		// 	fmt.Printf("bigger I'm %d \n\n", len(batch))
+		// }
 		entryCh <- batch
 		batch = make([]*pb.MapEntry, 0, batchAlloc)
 	}
-	remainingCount := 0
-	var found bool
+
+	// Drain the last batch
 	for _, itr := range mapItrs {
-		found = false
-	inner2:
-		for {
-			me := itr.Current()
-			if me == nil {
-				break inner2
-			}
-			if !found {
-				remainingCount++
-				found = true
-			}
-			batch = append(batch, me)
-			itr.Next()
-		}
+		itr.Next()
+		batch = append(batch, itr.Current()...)
 	}
-	fmt.Println("remainingCount ", remainingCount)
-	x.AssertTrue(remainingCount == 1)
-	fmt.Println("num of mapItrs", len(mapItrs))
-	if len(batch) > 0 {
-		fmt.Printf("sending data %d \n", len(batch))
-		sort.Slice(batch, func(i, j int) bool {
-			return less(batch[i], batch[j])
-		})
-		entryCh <- batch
-	}
+	entryCh <- batch
 	close(entryCh)
 }
 
