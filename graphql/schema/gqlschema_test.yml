@@ -625,6 +625,22 @@ invalid_schemas:
     ]
 
   -
+    name: "Dgraph directive with reverse pred argument along with hasInverse in forward direction
+      produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1") @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
     name: "Dgraph directive with reverse pred argument matching with wrong type produces an error"
     input: |
       type Z {

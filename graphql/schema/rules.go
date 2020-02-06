@@ -513,8 +513,8 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		forwardFound := false
 		// We need to loop through all the fields of the invType and see if we find a field which
 		// is a forward edge field for this reverse field.
-		for _, field := range invType.Fields {
-			dir := field.Directives.ForName(dgraphDirective)
+		for _, fld := range invType.Fields {
+			dir := fld.Directives.ForName(dgraphDirective)
 			if dir == nil {
 				continue
 			}
@@ -523,10 +523,19 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				continue
 			}
 			if predArg.Value.Raw == forwardEdgePred {
-				if field.Type.Name() != typ.Name {
+				if fld.Type.Name() != typ.Name {
 					return gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
 						" type %s to be compatible with @dgraph reverse directive but is of"+
-						" type %s.", invTypeName, field.Name, typ.Name, field.Type.Name())
+						" type %s.", invTypeName, fld.Name, typ.Name, fld.Type.Name())
+				}
+				invDirective := fld.Directives.ForName(inverseDirective)
+				if invDirective != nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s: @hasInverse directive is not allowed is not allowed "+
+							"because field is forward edge of another field with reverse directive.",
+						invType.Name, fld.Name,
+					)
 				}
 				forwardFound = true
 			}
