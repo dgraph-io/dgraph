@@ -564,11 +564,6 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	return group, nil
 }
 
-func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
-	return (len(acl1.Predicate) > 0 && len(acl2.Predicate) > 0 &&
-		acl1.Predicate == acl2.Predicate)
-}
-
 func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
