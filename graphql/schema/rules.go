@@ -480,6 +480,11 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		)
 	}
 	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
+		if sch.Types[typ.Name].Kind == ast.Interface {
+			// We don't want to consider the field of an interface but only the fields with
+			// ~ in concrete types.
+			return nil
+		}
 		// The inverse directive is not required on this field as given that the dgraph field name
 		// starts with ~ we already know this field has to be a reverse edge of some other field.
 		invDirective := field.Directives.ForName(inverseDirective)

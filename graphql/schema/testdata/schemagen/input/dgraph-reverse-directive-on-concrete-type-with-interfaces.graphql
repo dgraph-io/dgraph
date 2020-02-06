@@ -1,7 +1,7 @@
 interface Movie {
     id: ID!
     name: String!
-    director: [Director] @dgraph(pred: "~directed.movies")
+    director: [Director] @dgraph(pred: "directed.movies")
 }
 
 type OscarMovie implements Movie {
@@ -11,5 +11,5 @@ type OscarMovie implements Movie {
 type Director {
     id: ID!
     name: String!
-    directed: [OscarMovie] @dgraph(pred: "directed.movies")
+    directed: [OscarMovie] @dgraph(pred: "~directed.movies")
 }
