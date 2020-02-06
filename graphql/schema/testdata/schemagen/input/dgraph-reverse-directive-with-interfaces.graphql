@@ -1,0 +1,19 @@
+interface Movie {
+    id: ID!
+    name: String!
+    director: [Director] @dgraph(pred: "~directed.movies")
+}
+
+type OscarMovie implements Movie {
+    year: Int!
+}
+
+type IMDBMovie implements Movie {
+    rating: Float!
+}
+
+type Director {
+    id: ID!
+    name: String!
+    directed: [Movie] @dgraph(pred: "directed.movies")
+}

@@ -382,7 +382,7 @@ schemas:
       type Movie {
       }
       type Person {
-        directed.movies: [uid]
+        directed.movies
       }
       directed.movies: [uid] @reverse .
 
@@ -397,7 +397,7 @@ schemas:
       }
     output: |
       type Person {
-        directed.movies: [uid]
+        directed.movies
       }
       directed.movies: [uid] @reverse .
       type Movie {

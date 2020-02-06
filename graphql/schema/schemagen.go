@@ -323,7 +323,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			if !ok {
 				continue
 			}
-			fmt.Fprintf(&typeDef, "  %s: %s\n", fld.name, f.typ)
+			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
 			if !fld.inherited {
 				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, f.index, f.upsert,
 					f.reverse)
