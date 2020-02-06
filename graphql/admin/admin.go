@@ -279,6 +279,8 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
 			backup := &backupResolver{}
 
+			// backup implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
 			return resolve.NewMutationResolver(
 				backup,
 				backup,

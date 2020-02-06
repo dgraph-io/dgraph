@@ -207,8 +207,7 @@ func copyToLocalFs(t *testing.T) {
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
 		dstDir := backupDir + "/" + object.Key
-		err := os.MkdirAll(dstDir, os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
 
 		// Get all the files in that folder and
 		lsCh2 := make(chan struct{})

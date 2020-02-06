@@ -77,12 +77,12 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
-		return errors.New("You must enable enterprise features first. " +
+		return errors.New("you must enable enterprise features first. " +
 			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
 	}
 
 	if req.Destination == "" {
-		return errors.Errorf("You must specify a 'destination' value")
+		return errors.Errorf("you must specify a 'destination' value")
 	}
 
 	if err := x.HealthCheck(); err != nil {
