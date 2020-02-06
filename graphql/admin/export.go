@@ -17,7 +17,6 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -77,30 +75,8 @@ func (er *exportResolver) Mutate(
 }
 
 func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(er.mutation.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range er.mutation.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = "Success"
-		case "message":
-			val = "Export completed."
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
-	}
-	x.Check2(buf.WriteString("}]}"))
-
-	return buf.Bytes(), nil
+	buf := writeResponse(er.mutation, "Success", "Export completed.")
+	return buf, nil
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {

@@ -17,6 +17,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -452,4 +453,31 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 
 	as.status = healthy
+}
+
+func writeResponse(m schema.Mutation, code, message string) []byte {
+	var buf bytes.Buffer
+
+	x.Check2(buf.WriteString(`{ "`))
+	x.Check2(buf.WriteString(m.SelectionSet()[0].ResponseName() + `": [{`))
+
+	for i, sel := range m.SelectionSet()[0].SelectionSet() {
+		var val string
+		switch sel.Name() {
+		case "code":
+			val = code
+		case "message":
+			val = message
+		}
+		if i != 0 {
+			x.Check2(buf.WriteString(","))
+		}
+		x.Check2(buf.WriteString(`"`))
+		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(`":`))
+		x.Check2(buf.WriteString(`"` + val + `"`))
+	}
+	x.Check2(buf.WriteString("}]}"))
+
+	return buf.Bytes()
 }

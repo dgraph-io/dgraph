@@ -17,7 +17,6 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,31 +69,9 @@ func (dr *drainingResolver) Mutate(
 }
 
 func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-
-	// TODO - Abstract into common function.
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(dr.mutation.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range dr.mutation.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = "Success"
-		case "message":
-			val = fmt.Sprintf("draining mode has been set to %v", dr.enable)
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
-	}
-	x.Check2(buf.WriteString("}]}"))
-
-	return buf.Bytes(), nil
+	buf := writeResponse(dr.mutation, "Success",
+		fmt.Sprintf("draining mode has been set to %v", dr.enable))
+	return buf, nil
 }
 
 func getDrainingInput(m schema.Mutation) (*drainingInput, error) {
