@@ -347,10 +347,9 @@ const queryAcls = `
 {
   allAcls(func: type(Group)) {
     dgraph.xid
-	dgraph.group.acl
 	dgraph.acl.rule {
-		dgraph.acl.predicate
-		dgraph.acl.permission
+		dgraph.rule.predicate
+		dgraph.rule.permission
 	}
   }
 }

@@ -14,7 +14,6 @@ package acl
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -417,7 +416,7 @@ func chMod(conf *viper.Viper) error {
 	}
 	defer cancel()
 
-	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
@@ -430,31 +429,31 @@ func chMod(conf *viper.Viper) error {
 	{
 		var(func: eq(dgraph.xid, "%s")) @filter(type(Group)) {
 			gUID as uid
-			rUID as dgraph.acl.rule @filter(eq(dgraph.acl.predicate, "%s"))
+			rUID as dgraph.acl.rule @filter(eq(dgraph.rule.predicate, "%s"))
 		}
 	}`, groupId, predicate)
 
-	ruleUpsert := &api.Mutation{
+	updateRule := &api.Mutation{
 		Set: []*api.NQuad{
 			{
 				Subject:     "uid(rUID)",
-				Predicate:   "dgraph.acl.permission",
+				Predicate:   "dgraph.rule.permission",
 				ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(perm)}},
 			},
 		},
-		Cond: "@if(gt(len(rUID), 0) AND eq(len(gUID), 1))",
+		Cond: "@if(eq(len(rUID), 1) AND eq(len(gUID), 1))",
 	}
 
-	ruleMutation := &api.Mutation{
+	createRule := &api.Mutation{
 		Set: []*api.NQuad{
 			{
 				Subject:     "_:newrule",
-				Predicate:   "dgraph.acl.permission",
+				Predicate:   "dgraph.rule.permission",
 				ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(perm)}},
 			},
 			{
 				Subject:     "_:newrule",
-				Predicate:   "dgraph.acl.predicate",
+				Predicate:   "dgraph.rule.predicate",
 				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: predicate}},
 			},
 			{
@@ -468,15 +467,11 @@ func chMod(conf *viper.Viper) error {
 
 	_, err = txn.Do(ctx, &api.Request{
 		Query:     ruleQuery,
-		Mutations: []*api.Mutation{ruleMutation, ruleUpsert},
+		Mutations: []*api.Mutation{createRule, updateRule},
 		CommitNow: true,
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
@@ -529,10 +524,13 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	fields ...string) (group *Group, err error) {
 
 	// write query header
-	query := fmt.Sprintf(`query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
-			uid
-		    %s }}`, strings.Join(fields, ", "))
+	query := fmt.Sprintf(`
+		query search($groupid: string){
+			group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
+				uid
+				%s
+			}
+		}`, strings.Join(fields, ", "))
 
 	queryVars := map[string]string{
 		"$groupid": groupid,
@@ -596,13 +594,14 @@ func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
 
 func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error {
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
-		"dgraph.group.acl")
+		"dgraph.acl.rule{dgraph.rule.predicate, dgraph.rule.permission}")
 	if err != nil {
 		return err
 	}
 	if group == nil {
-		return errors.Errorf("The group %q does not exist.\n", groupId)
+		return errors.Errorf("The group %s doesn't exist", groupId)
 	}
+
 	fmt.Printf("Group: %s\n", groupId)
 	fmt.Printf("UID  : %s\n", group.Uid)
 	fmt.Printf("ID   : %s\n", group.GroupID)
@@ -613,17 +612,10 @@ func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error
 	}
 	fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
 
-	var acls []Acl
-	if len(group.Acls) != 0 {
-		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return errors.Wrapf(err, "unable to unmarshal the acls associated with the group %v",
-				groupId)
-		}
-
-		for _, acl := range acls {
-			fmt.Printf("ACL  : %v\n", acl)
-		}
+	for _, acl := range group.Rules {
+		fmt.Printf("ACL: %v\n", acl)
 	}
+
 	return nil
 }
 

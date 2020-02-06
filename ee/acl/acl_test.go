@@ -704,11 +704,11 @@ func TestNewACLPredicates(t *testing.T) {
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
-		_:r1 <dgraph.acl.predicate>  "name" .
-		_:r1 <dgraph.acl.permission> "4" .
+		_:r1 <dgraph.rule.predicate>  "name" .
+		_:r1 <dgraph.rule.permission> "4" .
 		_:g  <dgraph.acl.rule>   _:r2 .
-		_:r2 <dgraph.acl.predicate>  "nickname" .
-		_:r2 <dgraph.acl.permission> "2" .
+		_:r2 <dgraph.rule.predicate>  "nickname" .
+		_:r2 <dgraph.rule.permission> "2" .
 	`
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(devGroupMut),

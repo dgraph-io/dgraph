@@ -499,22 +499,19 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.group.acl",
-				ValueType: pb.Posting_STRING,
-			},
-			{
 				Predicate: "dgraph.acl.rule",
 				ValueType: pb.Posting_UID,
 				List:      true,
+				Upsert:    true,
 			},
 			{
-				Predicate: "dgraph.acl.predicate",
+				Predicate: "dgraph.rule.predicate",
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
-				Tokenizer: []string{"exact"}, // Should we have upsert directive for this ?
+				Tokenizer: []string{"exact"},
 			},
 			{
-				Predicate: "dgraph.acl.permission",
+				Predicate: "dgraph.rule.permission",
 				ValueType: pb.Posting_INT,
 			},
 		}...)
