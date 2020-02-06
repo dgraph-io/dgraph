@@ -107,10 +107,6 @@ const (
 		response: Response
 	}
 
-	input ShutdownInput {
-		_: Boolean
-	}
-
 	type ShutdownPayload {
 		response: Response
 	}
@@ -124,7 +120,7 @@ const (
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
 		export(input: ExportInput!): ExportPayload
 		draining(input: DrainingInput!): DrainingPayload
-		shutdown(input: ShutdownInput!): ShutdownPayload
+		shutdown: ShutdownPayload
 	}
  `
 )
