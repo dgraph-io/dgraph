@@ -54,7 +54,7 @@ const (
 	graphqlAdminSchema = `
 	type GQLSchema @dgraph(type: "dgraph.graphql") {
 		id: ID!
-		schema: String!  @dgraph(type: "dgraph.graphql.schema") 
+		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 		generatedSchema: String!
 	}
 
@@ -85,6 +85,19 @@ const (
 		schema: String!
 	}
 
+	input ExportInput {
+		format: String
+	}
+
+	type Response {
+		code: String
+		message: String
+	}
+
+	type ExportPayload {
+		response: Response
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
@@ -92,6 +105,7 @@ const (
 
 	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
+		export(input: ExportInput!): ExportPayload
 	}
  `
 )
@@ -256,6 +270,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
 				})
+		}).
+		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
+			export := &exportResolver{}
+
+			// export implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
+			return resolve.NewMutationResolver(
+				export,
+				export,
+				export,
+				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
 		WithSchemaIntrospection()
 
