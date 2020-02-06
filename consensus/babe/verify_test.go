@@ -102,7 +102,10 @@ func TestVerifyAuthorshipRight(t *testing.T) {
 		weight: 1,
 	}
 
-	block, slot := createTestBlock(babesession, t)
+	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
+	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
+
+	block, slot := createTestBlock(babesession, [][]byte{txb}, t)
 
 	ok, err := babesession.verifyAuthorshipRight(slot.number, block.Header)
 	if err != nil {

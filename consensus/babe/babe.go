@@ -318,25 +318,35 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 	// finalize block
 	log.Trace("build_block finalize block")
-	block, err := b.finalizeBlock()
+	header, err = b.finalizeBlock()
 	if err != nil {
 		b.addToQueue(included)
 		return nil, fmt.Errorf("cannot finalize block: %s", err)
 	}
 
-	block.Header.ParentHash = parent.Hash()
-	block.Header.Number.Add(parent.Number, big.NewInt(1))
+	header.ParentHash = parent.Hash()
+	header.Number.Add(parent.Number, big.NewInt(1))
 
 	// add BABE header to digest
-	block.Header.Digest = append(block.Header.Digest, preDigest.Encode())
+	header.Digest = append(header.Digest, preDigest.Encode())
 
 	// create seal and add to digest
-	seal, err := b.buildBlockSeal(block.Header)
+	seal, err := b.buildBlockSeal(header)
 	if err != nil {
 		return nil, err
 	}
 
-	block.Header.Digest = append(block.Header.Digest, seal.Encode())
+	header.Digest = append(header.Digest, seal.Encode())
+
+	body, err := extrinsicsToBody(included)
+	if err != nil {
+		return nil, err
+	}
+
+	block := &types.Block{
+		Header: header,
+		Body:   body,
+	}
 
 	return block, nil
 }
@@ -475,4 +485,14 @@ func (b *Session) nextReadyExtrinsic() *types.Extrinsic {
 
 func hasSlotEnded(slot Slot) bool {
 	return slot.start+slot.duration < uint64(time.Now().Unix())
+}
+
+func extrinsicsToBody(txs []*tx.ValidTransaction) (*types.Body, error) {
+	extrinsics := []types.Extrinsic{}
+
+	for _, tx := range txs {
+		extrinsics = append(extrinsics, *tx.Extrinsic)
+	}
+
+	return types.NewBodyFromExtrinsics(extrinsics)
 }

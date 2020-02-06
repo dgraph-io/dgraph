@@ -202,9 +202,33 @@ func NewHeaderFromOptional(oh *optional.Header) (*Header, error) {
 // Body is the encoded extrinsics inside a state block
 type Body []byte
 
+// NewBody returns a Body from a byte array
 func NewBody(b []byte) *Body {
 	body := Body(b)
 	return &body
+}
+
+// NewBodyFromExtrinsics creates a block body given an array of extrinsics.
+func NewBodyFromExtrinsics(exts []Extrinsic) (*Body, error) {
+	enc, err := scale.Encode(ExtrinsicsArrayToBytesArray(exts))
+	if err != nil {
+		return nil, err
+	}
+
+	body := Body(enc)
+	return &body, nil
+}
+
+// AsExtrinsics decodes the body into an array of extrinsics
+func (b *Body) AsExtrinsics() ([]Extrinsic, error) {
+	exts := [][]byte{}
+
+	dec, err := scale.Decode(*b, exts)
+	if err != nil {
+		return nil, err
+	}
+
+	return BytesArrayToExtrinsics(dec.([][]byte)), nil
 }
 
 // NewBodyFromOptional returns a Body given an optional.Body. If the optional.Body is None, an error is returned.
@@ -222,6 +246,24 @@ func NewBodyFromOptional(ob *optional.Body) (*Body, error) {
 func (b *Body) AsOptional() *optional.Body {
 	ob := optional.CoreBody([]byte(*b))
 	return optional.NewBody(true, ob)
+}
+
+// ExtrinsicsArrayToBytesArray converts an array of extrinsics into an array of byte arrays
+func ExtrinsicsArrayToBytesArray(exts []Extrinsic) [][]byte {
+	b := make([][]byte, len(exts))
+	for i, ext := range exts {
+		b[i] = []byte(ext)
+	}
+	return b
+}
+
+// BytesArrayToExtrinsics converts an array of byte arrays into an array of extrinsics
+func BytesArrayToExtrinsics(b [][]byte) []Extrinsic {
+	exts := make([]Extrinsic, len(b))
+	for i, be := range b {
+		exts[i] = Extrinsic(be)
+	}
+	return exts
 }
 
 // BlockData is stored within the BlockDB

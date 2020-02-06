@@ -58,18 +58,13 @@ func (b *Session) applyExtrinsic(data types.Extrinsic) ([]byte, error) {
 }
 
 // calls runtime API function BlockBuilder_finalize_block
-func (b *Session) finalizeBlock() (*types.Block, error) {
+func (b *Session) finalizeBlock() (*types.Header, error) {
 	data, err := b.rt.Exec(runtime.BlockBuilderFinalizeBlock, []byte{})
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: finalize block actually returns a header, not a block. need to update this function
-	// as well as buildBlock
 	bh := new(types.Header)
 	_, err = scale.Decode(data, bh)
-	return &types.Block{
-		Header: bh,
-		Body:   nil,
-	}, err
+	return bh, err
 }

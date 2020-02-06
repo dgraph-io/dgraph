@@ -474,7 +474,7 @@ func TestSeal(t *testing.T) {
 	}
 }
 
-func createTestBlock(babesession *Session, t *testing.T) (*types.Block, Slot) {
+func createTestBlock(babesession *Session, exts [][]byte, t *testing.T) (*types.Block, Slot) {
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)
 	babesession.authorityIndex = 0
@@ -491,10 +491,10 @@ func createTestBlock(babesession *Session, t *testing.T) (*types.Block, Slot) {
 
 	babesession.slotToProof[slotNumber] = outAndProof
 
-	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
-	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
-	vtx := tx.NewValidTransaction(types.Extrinsic(txb), &tx.Validity{})
-	babesession.PushToTxQueue(vtx)
+	for _, ext := range exts {
+		vtx := tx.NewValidTransaction(types.Extrinsic(ext), &tx.Validity{})
+		babesession.PushToTxQueue(vtx)
+	}
 
 	zeroHash, err := common.HexToHash("0x00")
 	if err != nil {
@@ -541,7 +541,11 @@ func TestBuildBlock_ok(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block, slot := createTestBlock(babesession, t)
+	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
+	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
+	exts := [][]byte{txb}
+
+	block, slot := createTestBlock(babesession, exts, t)
 
 	// hash of parent header
 	parentHash, err := common.HexToHash("0xdcdd89927d8a348e00257e1ecc8617f45edb5118efff3ea2f9961b2ad9b7690a")
@@ -578,6 +582,17 @@ func TestBuildBlock_ok(t *testing.T) {
 
 	if !reflect.DeepEqual(block.Header, expectedBlockHeader) {
 		t.Fatalf("Fail: got %v expected %v", block.Header, expectedBlockHeader)
+	}
+
+	// confirm block body is correct
+	extsRes, err := block.Body.AsExtrinsics()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	extsBytes := types.ExtrinsicsArrayToBytesArray(extsRes)
+	if !reflect.DeepEqual(extsBytes, exts) {
+		t.Fatalf("Fail: got %v expected %v", extsBytes, exts)
 	}
 }
 
