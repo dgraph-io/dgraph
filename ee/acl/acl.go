@@ -569,28 +569,6 @@ func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
 		acl1.Predicate == acl2.Predicate)
 }
 
-// returns whether the existing acls slice is changed
-func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
-	for idx, aclEntry := range acls {
-		if isSameAcl(&aclEntry, &newAcl) {
-			if aclEntry.Perm == newAcl.Perm {
-				// new permission is the same as the current one, no update
-				return acls, false
-			}
-			if newAcl.Perm < 0 {
-				// remove the current aclEntry from the array
-				copy(acls[idx:], acls[idx+1:])
-				return acls[:len(acls)-1], true
-			}
-			acls[idx].Perm = newAcl.Perm
-			return acls, true
-		}
-	}
-
-	// we do not find any existing aclEntry matching the newAcl predicate
-	return append(acls, newAcl), true
-}
-
 func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
