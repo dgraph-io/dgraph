@@ -2198,3 +2198,122 @@ func TestFacetsWithExpand(t *testing.T) {
 		}
 	}`, js)
 }
+
+func TestCountFacetsFilteringUidListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			count(friend) @facets(eq(since, "2006-01-02T15:04:05"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+		  "q": [
+			{
+			  "name": "Michonne",
+			  "count(friend)": 2
+			},
+			{
+			  "name": "Michale",
+			  "count(friend)": 1
+			}
+		  ]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringUidPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			count(boss) @facets(eq(company, "company1"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"count(boss)": 1
+				},
+				{
+					"name": "Michale",
+					"count(boss)": 0
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 23)) {
+			name
+			count(name) @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"count(name)": 1
+				},
+				{
+					"name": "Rick Grimes",
+					"count(name)": 1
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 12000)) {
+			name
+			alt_name
+			count(alt_name) @facets(eq(origin, "french"))
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"alt_name": [
+						"Michelle",
+						"Michelin"
+					],
+					"count(alt_name)": 1
+				},
+				{
+					"alt_name": [
+						"Potter"
+					],
+					"count(alt_name)": 0
+				}
+			]
+		}
+	}`, js)
+}
