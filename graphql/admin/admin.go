@@ -271,9 +271,13 @@ const (
 		health: Health
 
 		# ACL related endpoints
+		# TODO - The endpoints below work fine for members of guardians group but they should only
+		# return a subset of the data for other users. Test that and add validation in the server
+		# for them.
 		getUser(name: String!): User
 		getGroup(name: String!): Group
 
+		# TODO - This needs a custom handler. Implement this later.
 		# getCurrentUser: User
 
 		queryUser(filter: UserFilter): [User]
