@@ -138,7 +138,7 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := worker.UpdateLruMb(memoryMB); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, err.Error())
+		fmt.Fprint(w, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
