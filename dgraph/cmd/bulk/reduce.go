@@ -26,6 +26,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync/atomic"
 
@@ -85,7 +86,7 @@ func (r *reducer) run() error {
 			for _, itr := range mapItrs {
 				go itr.startBatchingForKeys(partitionKeys)
 			}
-			r.reduce(len(partitionKeys), mapItrs, ci)
+			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -137,12 +138,18 @@ type mapIterator struct {
 	fd      *os.File
 	reader  *bufio.Reader
 	tmpBuf  []byte
-	current []*pb.MapEntry
-	batchCh chan []*pb.MapEntry
+	current *iteratorEntry
+	batchCh chan *iteratorEntry
+}
+
+type iteratorEntry struct {
+	partitionKey *pb.MapEntry
+	batch        []*pb.MapEntry
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
+
 	for _, key := range partitionsKeys {
 		for {
 			// LOSING one item.
@@ -167,16 +174,16 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
-			if bytes.Compare(me.GetKey(), key.GetKey()) <= 0 {
-				//		fmt.Printf("inside me %x key %x \n", me.GetKey(), key.GetKey())
+			if less(me, key) {
 				batch = append(batch, me)
 				continue
 			}
-			//	fmt.Println("breaing with key")
 			break
 		}
-		//fmt.Println("sendniog batch", len(batch))
-		mi.batchCh <- batch
+		mi.batchCh <- &iteratorEntry{
+			partitionKey: key,
+			batch:        batch,
+		}
 		batch = make([]*pb.MapEntry, 0, batchAlloc)
 	}
 	// Drain the last items.
@@ -203,13 +210,16 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		batch = append(batch, me)
 
 	}
-	mi.batchCh <- batch
+	mi.batchCh <- &iteratorEntry{
+		batch:        batch,
+		partitionKey: nil,
+	}
 }
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Current() []*pb.MapEntry {
+func (mi *mapIterator) Current() *iteratorEntry {
 	return mi.current
 }
 
@@ -237,8 +247,82 @@ func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 	err = header.Unmarshal(headerBuf)
 	x.Check(err)
 
-	itr := &mapIterator{fd: fd, reader: reader, batchCh: make(chan []*pb.MapEntry, 1000)}
+	itr := &mapIterator{fd: fd, reader: reader, batchCh: make(chan *iteratorEntry, 1000)}
 	return header, itr
+}
+
+type encodeRequest struct {
+	entries []*pb.MapEntry
+	seqNo   uint64
+}
+
+type writerRequest struct {
+	list  *bpb.KVList
+	seqNo uint64
+}
+
+func (r *reducer) encodeMapEntry(entryCh chan *encodeRequest, writerCh chan *writerRequest,
+	closer *y.Closer) {
+	defer closer.Done()
+
+	list := &bpb.KVList{}
+	for req := range entryCh {
+		r.toList(req.entries, list)
+		writerCh <- &writerRequest{
+			list:  list,
+			seqNo: req.seqNo,
+		}
+	}
+}
+
+func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *writerRequest,
+	closer *y.Closer) {
+	defer closer.Done()
+	// nextSeqNo is the sequence number that needs to written to disk
+	nextSeqNo := uint64(1)
+
+	listBatch := []*writerRequest{}
+	preds := make(map[string]uint32)
+	setStreamId := func(kv *bpb.KV) {
+		pk, err := x.Parse(kv.Key)
+		x.Check(err)
+		x.AssertTrue(len(pk.Attr) > 0)
+
+		// We don't need to consider the data prefix, count prefix, etc. because each predicate
+		// contains sorted keys, the way they are produced.
+		streamId := preds[pk.Attr]
+		if streamId == 0 {
+			streamId = atomic.AddUint32(&r.streamId, 1)
+			preds[pk.Attr] = streamId
+		}
+
+		kv.StreamId = streamId
+	}
+	for req := range writerCh {
+		listBatch = append(listBatch, req)
+		// Sort the batched list according to the sequence number.
+		sort.Slice(listBatch, func(i, j int) bool {
+			return listBatch[i].seqNo < listBatch[j].seqNo
+		})
+
+		for {
+			if len(listBatch) == 0 {
+				break
+			}
+			// Check whether we got the list that needs to be written to the disk.
+			if listBatch[0].seqNo != nextSeqNo {
+				break
+			}
+			fmt.Println("seqNum", listBatch[0].seqNo)
+			for _, kv := range listBatch[0].list.Kv {
+				setStreamId(kv)
+			}
+			writer.Write(listBatch[0].list)
+			listBatch = listBatch[1:]
+			// Advance the sequence number and check for the next sequence number.
+			nextSeqNo++
+		}
+	}
 }
 
 func (r *reducer) encodeAndWrite(
@@ -307,36 +391,73 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(batchLen int, mapItrs []*mapIterator, ci *countIndexer) {
-	entryCh := make(chan []*pb.MapEntry, 100)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
+func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
 
-	writer := ci.writer
-	go r.encodeAndWrite(writer, entryCh, closer)
+	encoderCh := make(chan *encodeRequest, 10)
+	writerCh := make(chan *writerRequest, 10)
+	encoderCloser := y.NewCloser(runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		// Start listening to encode entries
+		go r.encodeMapEntry(encoderCh, writerCh, encoderCloser)
+	}
+
+	// Start lisenting to write the badger list.
+	writerCloser := y.NewCloser(1)
+	go r.startWriting(ci.writer, writerCh, writerCloser)
+	seqNo := uint64(0)
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
-	// var plistLen int
-	for i := 0; i < batchLen; i++ {
+	tmpBatch := make([]*pb.MapEntry, 0)
+	for i := 0; i < len(partitionKeys); i++ {
 		for _, itr := range mapItrs {
 			itr.Next()
-			batch = append(batch, itr.Current()...)
-			//			fmt.Println("got batching")
+			res := itr.Current()
+			y.AssertTrue(bytes.Compare(res.partitionKey.GetKey(), partitionKeys[i].GetKey()) == 0)
+			batch = append(batch, res.batch...)
 		}
-		//	fmt.Printf("Batch no %d number of entries %d total batch no %d \n", i, len(batch), batchLen)
-		// if len(batch) > 0 {
-		// 	fmt.Printf("bigger I'm %d \n\n", len(batch))
-		// }
-		entryCh <- batch
-		batch = make([]*pb.MapEntry, 0, batchAlloc)
+		fmt.Println("collected into batch. batchlen: %d", len(batch))
+		sort.Slice(batch, func(i, j int) bool {
+			return less(batch[i], batch[j])
+		})
+		tmpBatch = append(tmpBatch, batch...)
+		batch = []*pb.MapEntry{}
+		lastIdx := len(batch) - 1
+		if lastIdx < 0 {
+			continue
+		}
+		lastKey := batch[lastIdx]
+		for ; lastIdx > 0; lastIdx-- {
+			if !bytes.Equal(batch[lastIdx].Key, lastKey.Key) {
+				break
+			}
+		}
+		seqNo++
+		fmt.Println("Gonna write to channel with batch lenght", len(batch))
+		encoderCh <- &encodeRequest{entries: batch[:lastIdx+1], seqNo: seqNo}
+		batch = batch[lastIdx+1:]
 	}
 
-	// Drain the last batch
-	for _, itr := range mapItrs {
-		itr.Next()
-		batch = append(batch, itr.Current()...)
-	}
-	entryCh <- batch
-	close(entryCh)
+	// for i := 0; i < len(tmpBatch)-1; i++ {
+	// 	fmt.Printf("***%d: %x, %d: %x len: %d\n***\n", i, tmpBatch[i].Key, i+1, tmpBatch[i+1].Key, len(tmpBatch))
+	// 	y.AssertTrue(bytes.Compare(tmpBatch[i].Key, tmpBatch[i+1].Key) <= 0)
+	// }
+
+	// // Drain the last batch
+	// for _, itr := range mapItrs {
+	// 	itr.Next()
+	// 	res := itr.Current()
+	// 	y.AssertTrue(res.partitionKey == nil)
+	// 	batch = append(batch, res.batch...)
+	// }
+	// seqNo++
+	// encoderCh <- &encodeRequest{entries: batch, seqNo: seqNo}
+
+	// Close the encoders
+	close(encoderCh)
+	encoderCloser.SignalAndWait()
+
+	// Close the writer
+	close(writerCh)
+	writerCloser.SignalAndWait()
 }
 
 type heapNode struct {
