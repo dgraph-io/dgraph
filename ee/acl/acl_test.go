@@ -861,3 +861,16 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) {
 	_, err = dg.NewTxn().Mutate(ctx, mutation)
 	require.NoError(t, err)
 }
+
+func TestNonExistentGroup(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	setRuleCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", "name", "-m", "4", "-x", "password")
+
+	resp, err := setRuleCmd.CombinedOutput()
+	require.Error(t, err, "Setting permission for non-existent group should return error")
+	require.Contains(t, string(resp), `Unable to modify: Group <dev> doesn't exist`)
+}

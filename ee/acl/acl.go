@@ -14,6 +14,7 @@ package acl
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -486,8 +487,23 @@ func chMod(conf *viper.Viper) error {
 		upsertRequest.Mutations = []*api.Mutation{deleteRule}
 	}
 	resp, err := txn.Do(ctx, upsertRequest)
-	fmt.Println(string(resp.GetJson()))
-	return err
+	if err != nil {
+		return err
+	}
+	var jsonResp map[string][]map[string]int
+	err = json.Unmarshal(resp.GetJson(), &jsonResp)
+	if err != nil {
+		return err
+	}
+
+	uidCount, ok := jsonResp["groupUIDCount"][0]["count"]
+	if !ok {
+		return errors.New("Malformed output of groupUIDCount")
+	} else if uidCount == 0 {
+		// We already have a check for multiple groups with same name at dgraph/ee/acl/utils.go:142
+		return errors.Errorf("Group <%s> doesn't exist", groupId)
+	}
+	return nil
 }
 
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
