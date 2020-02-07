@@ -171,13 +171,15 @@ func (b *Builder) Add(key []byte, value y.ValueStruct) error {
 }
 
 // TODO: vvv this was the comment on ReachedCapacity.
-// FinalSize returns the *rough* final size of the array, counting the header which is not yet written.
+// FinalSize returns the *rough* final size of the array, counting the header which is
+// not yet written.
 // TODO: Look into why there is a discrepancy. I suspect it is because of Write(empty, empty)
 // at the end. The diff can vary.
 
 // ReachedCapacity returns true if we... roughly (?) reached capacity?
 func (b *Builder) ReachedCapacity(cap int64) bool {
-	estimateSz := b.buf.Len() + 8 /* empty header */ + 4*len(b.restarts) + 8 // 8 = end of buf offset + len(restarts).
+	estimateSz := b.buf.Len() + 8 /* empty header */ + 4*len(b.restarts) +
+		8 /* 8 = end of buf offset + len(restarts) */
 	return int64(estimateSz) > cap
 }
 

@@ -100,7 +100,7 @@ func run() error {
 	// and we create a new p dir for each.
 	start := time.Now()
 	err := Load(opt.location, func(r io.Reader, object string) error {
-		bo := badger.DefaultOptions
+		bo := badger.DefaultOptions("")
 		bo.SyncWrites = false
 		bo.TableLoadingMode = options.MemoryMap
 		bo.ValueThreshold = 1 << 10
@@ -113,7 +113,7 @@ func run() error {
 		}
 		defer db.Close()
 		fmt.Println("--- Creating new db:", bo.Dir)
-		return db.Load(r)
+		return db.Load(r, 16)
 	})
 	if err != nil {
 		return err

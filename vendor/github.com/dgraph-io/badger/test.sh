@@ -12,12 +12,12 @@ go test -v --manual=true -run='TestBigKeyValuePairs$'
 go test -v --manual=true -run='TestPushValueLogLimit'
 
 # Run the special Truncate test.
-rm -R p || true
+rm -rf p
 go test -v --manual=true -run='TestTruncateVlogNoClose$' .
 truncate --size=4096 p/000000.vlog
 go test -v --manual=true -run='TestTruncateVlogNoClose2$' .
 go test -v --manual=true -run='TestTruncateVlogNoClose3$' .
-rm -R p || true
+rm -rf p
 
 # Then the normal tests.
 echo

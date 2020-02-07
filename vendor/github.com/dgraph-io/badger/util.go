@@ -28,31 +28,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// summary is produced when DB is closed. Currently it is used only for testing.
-type summary struct {
-	fileIDs map[uint64]bool
-}
-
-func (s *levelsController) getSummary() *summary {
-	out := &summary{
-		fileIDs: make(map[uint64]bool),
-	}
-	for _, l := range s.levels {
-		l.getSummary(out)
-	}
-	return out
-}
-
-func (s *levelHandler) getSummary(sum *summary) {
-	s.RLock()
-	defer s.RUnlock()
-	for _, t := range s.tables {
-		sum.fileIDs[t.ID()] = true
-	}
-}
-
-func (s *DB) validate() error { return s.lc.validate() }
-
 func (s *levelsController) validate() error {
 	for _, l := range s.levels {
 		if err := l.validate(); err != nil {

@@ -104,3 +104,7 @@ func (g *directoryLockGuard) release() error {
 	g.path = ""
 	return syscall.CloseHandle(g.h)
 }
+
+// Windows doesn't support syncing directories to the file system. See
+// https://github.com/dgraph-io/badger/issues/699#issuecomment-504133587 for more details.
+func syncDir(dir string) error { return nil }
