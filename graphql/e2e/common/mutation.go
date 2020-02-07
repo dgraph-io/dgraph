@@ -2465,3 +2465,144 @@ func addMultipleMutationWithOneError(t *testing.T) {
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
+
+func addMovie(t *testing.T, executeRequest requestExecutor) *movie {
+	addMovieParams := &GraphQLParams{
+		Query: `mutation addMovie($name: String!) {
+			addMovie(input: [{ name: $name }]) {
+				movie {
+					id
+					name
+					director {
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"name": "Testmovie"},
+	}
+	addMovieExpected := `
+		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
+
+	gqlResponse := executeRequest(t, graphqlURL, addMovieParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var expected, result struct {
+		AddMovie struct {
+			Movie []*movie
+		}
+	}
+	err := json.Unmarshal([]byte(addMovieExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	require.Equal(t, len(result.AddMovie.Movie), 1)
+	requireUID(t, result.AddMovie.Movie[0].ID)
+
+	// Always ignore the ID of the object that was just created.  That ID is
+	// minted by Dgraph.
+	opt := cmpopts.IgnoreFields(movie{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddMovie.Movie[0]
+}
+
+func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
+	// Delete everything
+	multiMutationParams := &GraphQLParams{
+		Query: `mutation cleanup($movieFilter: MovieFilter!, $dirFilter: MovieDirectorFilter!) {
+		deleteMovie(filter: $movieFilter) { msg }
+		deleteMovieDirector(filter: $dirFilter) { msg }
+	}`,
+		Variables: map[string]interface{}{
+			"movieFilter": map[string]interface{}{
+				"id": []string{movieID},
+			},
+			"dirFilter": map[string]interface{}{
+				"id": []string{directorID},
+			},
+		},
+	}
+	multiMutationExpected := `{
+	"deleteMovie": { "msg": "Deleted" },
+	"deleteMovieDirector" : { "msg": "Deleted" }
+}`
+
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	testutil.CompareJSON(t, multiMutationExpected, string(gqlResponse.Data))
+}
+
+func addMutationWithReverseDgraphEdge(t *testing.T) {
+	// create movie
+	// create movie director and link the movie
+	// query for movie and movie director along reverse edge, we should be able to get the director
+
+	newMovie := addMovie(t, postExecutor)
+
+	addMovieDirectorParams := &GraphQLParams{
+		Query: `mutation addMovieDirector($dir: [AddMovieDirectorInput!]!) {
+			addMovieDirector(input: $dir) {
+			  moviedirector {
+				id
+				name
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"dir": []map[string]interface{}{{
+			"name":     "Spielberg",
+			"directed": []map[string]interface{}{{"id": newMovie.ID}},
+		}}},
+	}
+
+	addMovieDirectorExpected := `{ "addMovieDirector": { "movieDirector": [{ "id": "_UID_", "name": "Spielberg" }] } }`
+
+	gqlResponse := postExecutor(t, graphqlURL, addMovieDirectorParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var expected, result struct {
+		AddMovieDirector struct {
+			MovieDirector []*director
+		}
+	}
+	err := json.Unmarshal([]byte(addMovieDirectorExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	require.Equal(t, len(result.AddMovieDirector.MovieDirector), 1)
+	movieDirectorID := result.AddMovieDirector.MovieDirector[0].ID
+	requireUID(t, movieDirectorID)
+
+	// Always ignore the ID of the object that was just created.  That ID is
+	// minted by Dgraph.
+	opt := cmpopts.IgnoreFields(director{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	getMovieParams := &GraphQLParams{
+		Query: `query getMovie($id: ID!) {
+			getMovie(id: $id) {
+				name
+				director {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id": newMovie.ID,
+		},
+	}
+
+	gqlResponse = getMovieParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	expectedResponse := `{"getMovie":{"name":"Testmovie","director":[{"name":"Spielberg"}]}}`
+	require.Equal(t, expectedResponse, string(gqlResponse.Data))
+
+	cleanupMovieAndDirector(t, newMovie.ID, movieDirectorID)
+}

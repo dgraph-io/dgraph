@@ -1111,6 +1111,29 @@
     }
 
 -
+  name: "Query along reverse edge is converted appropriately"
+  gqlquery: |
+    query {
+      queryMovie {
+        name
+        director {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryMovie(func: type(Movie)) {
+        name : Movie.name
+        director : ~directed.movies {
+          name : MovieDirector.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "deprecated fields can be queried"
   gqlquery: |
     query {
@@ -1118,6 +1141,7 @@
         iAmDeprecated
       }
     }
+
   dgquery: |-
     query {
       queryCategory(func: type(Category)) {

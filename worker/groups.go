@@ -1081,6 +1081,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group
 				&pb.SubscriptionRequest{Prefixes: prefixes})
 			if err != nil {
 				glog.Errorf("Error from alpha client subscribe: %v", err)
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 		receiver:

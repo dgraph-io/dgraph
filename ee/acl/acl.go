@@ -397,13 +397,23 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	return queryAndPrintUser(ctx, dc.NewReadOnlyTxn(), userId)
 }
 
+/*
+	chMod adds/updates/deletes rule attached to group.
+	1. It will return error if there is no group named <groupName>.
+	2. It will add new rule if group doesn't already have a rule for the predicate.
+	3. It will update the permission if group already have a rule for the predicate and permission
+		is a non-negative integer between 0-7.
+	4. It will delete, if group already have a rule for the predicate and the permission is
+		a negative integer.
+*/
+
 func chMod(conf *viper.Viper) error {
-	groupId := conf.GetString("group")
+	groupName := conf.GetString("group")
 	predicate := conf.GetString("pred")
 	perm := conf.GetInt("perm")
 	switch {
-	case len(groupId) == 0:
-		return errors.Errorf("the groupid must not be empty")
+	case len(groupName) == 0:
+		return errors.Errorf("the group must not be empty")
 	case len(predicate) == 0:
 		return errors.Errorf("no predicates specified")
 	case perm > 7:
@@ -426,59 +436,84 @@ func chMod(conf *viper.Viper) error {
 		}
 	}()
 
-	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
-	if err != nil {
-		return errors.Wrapf(err, "while querying group")
-	}
-	if group == nil || len(group.Uid) == 0 {
-		return errors.Errorf("unable to change permission for group because it does not exist: %v",
-			groupId)
-	}
-
-	var currentAcls []Acl
-	if len(group.Acls) != 0 {
-		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return errors.Wrapf(err, "unable to unmarshal the acls associated with the group %v",
-				groupId)
+	ruleQuery := fmt.Sprintf(`
+	{
+		var(func: eq(dgraph.xid, "%s")) @filter(type(Group)) {
+			gUID as uid
+			rUID as dgraph.acl.rule @filter(eq(dgraph.rule.predicate, "%s"))
 		}
+		groupUIDCount(func: uid(gUID)) {count(uid)}
+	}`, groupName, predicate)
+
+	updateRule := &api.Mutation{
+		Set: []*api.NQuad{
+			{
+				Subject:     "uid(rUID)",
+				Predicate:   "dgraph.rule.permission",
+				ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(perm)}},
+			},
+		},
+		Cond: "@if(eq(len(rUID), 1) AND eq(len(gUID), 1))",
 	}
 
-	var newAcl Acl
-	if len(predicate) > 0 {
-		newAcl = Acl{
-			Predicate: predicate,
-			Perm:      int32(perm),
-		}
-	}
-	newAcls, updated := updateAcl(currentAcls, newAcl)
-	if !updated {
-		fmt.Printf("Nothing needs to be changed for the permission of group: %v\n", groupId)
-		return nil
+	createRule := &api.Mutation{
+		Set: []*api.NQuad{
+			{
+				Subject:     "_:newrule",
+				Predicate:   "dgraph.rule.permission",
+				ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(perm)}},
+			},
+			{
+				Subject:     "_:newrule",
+				Predicate:   "dgraph.rule.predicate",
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: predicate}},
+			},
+			{
+				Subject:   "uid(gUID)",
+				Predicate: "dgraph.acl.rule",
+				ObjectId:  "_:newrule",
+			},
+		},
+		Cond: "@if(eq(len(rUID), 0) AND eq(len(gUID), 1))",
 	}
 
-	newAclBytes, err := json.Marshal(newAcls)
-	if err != nil {
-		return errors.Wrapf(err, "unable to marshal the updated acls")
+	deleteRule := &api.Mutation{
+		Del: []*api.NQuad{
+			{
+				Subject:   "uid(gUID)",
+				Predicate: "dgraph.acl.rule",
+				ObjectId:  "uid(rUID)",
+			},
+		},
+		Cond: "@if(eq(len(rUID), 1) AND eq(len(gUID), 1))",
 	}
 
-	chModNQuads := &api.NQuad{
-		Subject:     group.Uid,
-		Predicate:   "dgraph.group.acl",
-		ObjectValue: &api.Value{Val: &api.Value_BytesVal{BytesVal: newAclBytes}},
-	}
-	mu := &api.Mutation{
+	upsertRequest := &api.Request{
+		Query:     ruleQuery,
+		Mutations: []*api.Mutation{createRule, updateRule},
 		CommitNow: true,
-		Set:       []*api.NQuad{chModNQuads},
+	}
+	if perm < 0 {
+		upsertRequest.Mutations = []*api.Mutation{deleteRule}
+	}
+	resp, err := txn.Do(ctx, upsertRequest)
+	if err != nil {
+		return err
+	}
+	var jsonResp map[string][]map[string]int
+	err = json.Unmarshal(resp.GetJson(), &jsonResp)
+	if err != nil {
+		return err
 	}
 
-	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return errors.Wrapf(err, "unable to change mutations for the group %v on predicate %v",
-			groupId, predicate)
+	uidCount, ok := jsonResp["groupUIDCount"][0]["count"]
+	if !ok {
+		return errors.New("Malformed output of groupUIDCount")
+	} else if uidCount == 0 {
+		// We already have a check for multiple groups with same name at dgraph/ee/acl/utils.go:142
+		return errors.Errorf("Group <%s> doesn't exist", groupName)
 	}
-	fmt.Printf("Successfully changed permission for group %v on predicate %v to %v\n",
-		groupId, predicate, perm)
-	fmt.Println("The latest info is:")
-	return queryAndPrintGroup(ctx, dc.NewReadOnlyTxn(), groupId)
+	return nil
 }
 
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
@@ -531,10 +566,13 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	fields ...string) (group *Group, err error) {
 
 	// write query header
-	query := fmt.Sprintf(`query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
-			uid
-		    %s }}`, strings.Join(fields, ", "))
+	query := fmt.Sprintf(`
+		query search($groupid: string){
+			group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
+				uid
+				%s
+			}
+		}`, strings.Join(fields, ", "))
 
 	queryVars := map[string]string{
 		"$groupid": groupid,
@@ -550,33 +588,6 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 		return nil, err
 	}
 	return group, nil
-}
-
-func isSameAcl(acl1 *Acl, acl2 *Acl) bool {
-	return (len(acl1.Predicate) > 0 && len(acl2.Predicate) > 0 &&
-		acl1.Predicate == acl2.Predicate)
-}
-
-// returns whether the existing acls slice is changed
-func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
-	for idx, aclEntry := range acls {
-		if isSameAcl(&aclEntry, &newAcl) {
-			if aclEntry.Perm == newAcl.Perm {
-				// new permission is the same as the current one, no update
-				return acls, false
-			}
-			if newAcl.Perm < 0 {
-				// remove the current aclEntry from the array
-				copy(acls[idx:], acls[idx+1:])
-				return acls[:len(acls)-1], true
-			}
-			acls[idx].Perm = newAcl.Perm
-			return acls, true
-		}
-	}
-
-	// we do not find any existing aclEntry matching the newAcl predicate
-	return append(acls, newAcl), true
 }
 
 func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
@@ -598,13 +609,14 @@ func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
 
 func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error {
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
-		"dgraph.group.acl")
+		"dgraph.acl.rule{dgraph.rule.predicate, dgraph.rule.permission}")
 	if err != nil {
 		return err
 	}
 	if group == nil {
-		return errors.Errorf("The group %q does not exist.\n", groupId)
+		return errors.Errorf("The group %s doesn't exist", groupId)
 	}
+
 	fmt.Printf("Group: %s\n", groupId)
 	fmt.Printf("UID  : %s\n", group.Uid)
 	fmt.Printf("ID   : %s\n", group.GroupID)
@@ -615,17 +627,10 @@ func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error
 	}
 	fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
 
-	var acls []Acl
-	if len(group.Acls) != 0 {
-		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return errors.Wrapf(err, "unable to unmarshal the acls associated with the group %v",
-				groupId)
-		}
-
-		for _, acl := range acls {
-			fmt.Printf("ACL  : %v\n", acl)
-		}
+	for _, acl := range group.Rules {
+		fmt.Printf("ACL: %v\n", acl)
 	}
+
 	return nil
 }
 
