@@ -402,8 +402,8 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-You can use the following command to create the encryption key file (modify _count_ acccording
-to your specific needs):
+You can use the following command to create the encryption key file (set _count_ equals to the
+desired key size):
 
 ```
 dd if=/dev/random bs=1 count=32 of=enc_key_file
@@ -418,8 +418,8 @@ dgraph zero --my=localhost:5080 --replicas 1 --idx 1
 dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
 
-If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` otpion to
-all the alphas.
+If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
+each of the alphas.
 
 ### Bulk loader with Encryption
 
