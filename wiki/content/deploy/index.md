@@ -37,22 +37,28 @@ Other instalation options:
 
 > Add `-s --` before the flags.
 
-`-y | --accept-license`: Automatically agree to the terms of the Dgraph Community License.
+`-y | --accept-license`: Automatically agree to the terms of the Dgraph Community License (default: "n").
 
-`-s | --systemd`: Automatically create Dgraph's installation as Systemd services.
+`-s | --systemd`: Automatically create Dgraph's installation as Systemd services (default: "n").
 
-`-v | --version=2.0.0`: Choose Dgraph's version manually (you can do tag combinations e.g 2.0.0-beta1 or -rc1).
-
-Using Environment variables:
-
-```sh
-curl https://get.dgraph.io -sSf | VERSION=2.0.0-beta1 bash
-```
+`-v | --version`: Choose Dgraph's version manually (default: The latest stable release, you can do tag combinations e.g 2.0.0-beta1 or -rc1).
 
 >Installing Dgraph and requesting the automatic creation of systemd service. e.g:
 
 ```sh
 curl https://get.dgraph.io -sSf | bash -s -- --systemd
+```
+
+Using Environment variables:
+
+`ACCEPT_LICENSE`: Automatically agree to the terms of the Dgraph Community License (default: "n").
+
+`INSTALL_IN_SYSTEMD`: Automatically create Dgraph's installation as Systemd services (default: "n").
+
+`VERSION`: Choose Dgraph's version manually (default: The latest stable release).
+
+```sh
+curl https://get.dgraph.io -sSf | VERSION=2.0.0-beta1 bash
 ```
 
 ### Manual download [optional]
