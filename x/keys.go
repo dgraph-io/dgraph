@@ -554,10 +554,12 @@ var reservedPredicateMap = map[string]struct{}{
 }
 
 var aclPredicateMap = map[string]struct{}{
-	"dgraph.xid":        {},
-	"dgraph.password":   {},
-	"dgraph.user.group": {},
-	"dgraph.group.acl":  {},
+	"dgraph.xid":             {},
+	"dgraph.password":        {},
+	"dgraph.user.group":      {},
+	"dgraph.rule.predicate":  {},
+	"dgraph.rule.permission": {},
+	"dgraph.acl.rule":        {},
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
