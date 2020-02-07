@@ -397,16 +397,26 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	return queryAndPrintUser(ctx, dc.NewReadOnlyTxn(), userId)
 }
 
+/*
+	chMod adds/updates/deletes rule attached to group.
+	1. It will return error if there is no group named <groupName>.
+	2. It will add new rule if group doesn't already have a rule for the predicate.
+	3. It will update the permission if group already have a rule for the predicate and permission
+		is a non-negative integer between 0-7.
+	4. It will delete, if group already have a rule for the predicate and the permission is
+		a negative integer.
+*/
+
 func chMod(conf *viper.Viper) error {
-	groupId := conf.GetString("group")
+	groupName := conf.GetString("group")
 	predicate := conf.GetString("pred")
 	perm := conf.GetInt("perm")
 	switch {
-	case len(groupId) == 0:
-		return errors.Errorf("the groupid must not be empty")
+	case len(groupName) == 0:
+		return errors.Errorf("the group must not be empty")
 	case len(predicate) == 0:
 		return errors.Errorf("no predicates specified")
-	case perm > 7: // TODO(Animesh): also check if perm < 0
+	case perm > 7:
 		return errors.Errorf("the perm value must be less than or equal to 7, "+
 			"the provided value is %d", perm)
 	}
@@ -433,7 +443,7 @@ func chMod(conf *viper.Viper) error {
 			rUID as dgraph.acl.rule @filter(eq(dgraph.rule.predicate, "%s"))
 		}
 		groupUIDCount(func: uid(gUID)) {count(uid)}
-	}`, groupId, predicate)
+	}`, groupName, predicate)
 
 	updateRule := &api.Mutation{
 		Set: []*api.NQuad{
@@ -501,7 +511,7 @@ func chMod(conf *viper.Viper) error {
 		return errors.New("Malformed output of groupUIDCount")
 	} else if uidCount == 0 {
 		// We already have a check for multiple groups with same name at dgraph/ee/acl/utils.go:142
-		return errors.Errorf("Group <%s> doesn't exist", groupId)
+		return errors.Errorf("Group <%s> doesn't exist", groupName)
 	}
 	return nil
 }
