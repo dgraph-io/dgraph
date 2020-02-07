@@ -579,17 +579,98 @@ invalid_schemas:
     ]
 
   -
-    name: "Dgraph directive with reverse pred argument on field produces an error"
+    name: "Dgraph directive with reverse pred argument on scalar field produces an error"
     input: |
       type X {
         f1: String! @dgraph(pred:"~movie")
         f2: String! @dgraph(pred:"<~movie>")
       }
     errlist: [
-      {"message": "Type X; Field f1: reverse pred argument for @dgraph directive is not supported.",
-      "locations":[{"line":2, "column":16}]},
-      {"message": "Type X; Field f2: reverse pred argument for @dgraph directive is not supported.",
-      "locations":[{"line":3, "column":16}]}
+      {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":2, "column":3}]},
+      {"message": "Type X; Field f2 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":3, "column":3}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument on field without a corresponding reverse field is an error"
+    input: |
+      type Y {
+        g1: String!
+      }
+
+      type X {
+        f1: [Y!] @dgraph(pred:"~movie")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument: ~movie is not supported as forward edge doesn't exist for type Y.",
+      "locations":[{"line":6, "column":13}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1") @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse in forward direction
+      produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1") @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Field with a dgraph directive with reverse pred argument should be a list"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: X @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: with a dgraph directive that starts with ~ should be of type
+      list.",
+      "locations":[{"line":5, "column":10}]}
     ]
 
 
@@ -683,4 +764,14 @@ valid_schemas:
       }
       enum E {
         A
+      }
+
+  -
+    name: "dgraph directive with correct reverse field works"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "~f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "f1")
       }
