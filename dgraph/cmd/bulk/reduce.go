@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
@@ -253,35 +254,23 @@ func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 
 type encodeRequest struct {
 	entries []*pb.MapEntry
-	seqNo   uint64
+	wg      *sync.WaitGroup
+	list    *bpb.KVList
 }
 
-type writerRequest struct {
-	list  *bpb.KVList
-	seqNo uint64
-}
-
-func (r *reducer) encodeMapEntry(entryCh chan *encodeRequest, writerCh chan *writerRequest,
-	closer *y.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
-	list := &bpb.KVList{}
 	for req := range entryCh {
-		r.toList(req.entries, list)
-		writerCh <- &writerRequest{
-			list:  list,
-			seqNo: req.seqNo,
-		}
+		req.list = &bpb.KVList{}
+		r.toList(req.entries, req.list)
+		req.wg.Done()
 	}
 }
 
-func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *writerRequest,
-	closer *y.Closer) {
+func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
-	// nextSeqNo is the sequence number that needs to written to disk
-	nextSeqNo := uint64(1)
 
-	listBatch := []*writerRequest{}
 	preds := make(map[string]uint32)
 	setStreamId := func(kv *bpb.KV) {
 		pk, err := x.Parse(kv.Key)
@@ -298,34 +287,18 @@ func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *write
 
 		kv.StreamId = streamId
 	}
-	for req := range writerCh {
-		listBatch = append(listBatch, req)
-		// Sort the batched list according to the sequence number.
-		sort.Slice(listBatch, func(i, j int) bool {
-			return listBatch[i].seqNo < listBatch[j].seqNo
-		})
 
-		for {
-			if len(listBatch) == 0 {
-				break
-			}
-			// Check whether we got the list that needs to be written to the disk.
-			if listBatch[0].seqNo != nextSeqNo {
-				break
-			}
-			fmt.Println("seqNum", listBatch[0].seqNo)
-			for _, kv := range listBatch[0].list.Kv {
-				setStreamId(kv)
-			}
-			writer.Write(listBatch[0].list)
-			listBatch = listBatch[1:]
-			// Advance the sequence number and check for the next sequence number.
-			nextSeqNo++
+	for req := range writerCh {
+		// Wait for it to be encoded.
+		req.wg.Wait()
+		for _, kv := range req.list.Kv {
+			setStreamId(kv)
 		}
+		// writer.Write(listBatch[0].list)
 	}
 }
 
-func (r *reducer) encodeAndWrite(
+func (r *reducer) encodeAndWrite_UNUSED(
 	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
@@ -392,21 +365,20 @@ func (r *reducer) encodeAndWrite(
 }
 
 func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
-
-	encoderCh := make(chan *encodeRequest, 10)
-	writerCh := make(chan *writerRequest, 10)
-	encoderCloser := y.NewCloser(runtime.NumCPU())
+	cpu := runtime.NumCPU()
+	encoderCh := make(chan *encodeRequest, 2*cpu)
+	writerCh := make(chan *encodeRequest, 4*cpu) // Double of encoder, so encoding doesn't block on writer.
+	encoderCloser := y.NewCloser(cpu)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		// Start listening to encode entries
-		go r.encodeMapEntry(encoderCh, writerCh, encoderCloser)
+		go r.encode(encoderCh, encoderCloser)
 	}
 
 	// Start lisenting to write the badger list.
 	writerCloser := y.NewCloser(1)
 	go r.startWriting(ci.writer, writerCh, writerCloser)
-	seqNo := uint64(0)
+
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
-	tmpBatch := make([]*pb.MapEntry, 0)
 	for i := 0; i < len(partitionKeys); i++ {
 		for _, itr := range mapItrs {
 			itr.Next()
@@ -414,26 +386,30 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 			y.AssertTrue(bytes.Compare(res.partitionKey.GetKey(), partitionKeys[i].GetKey()) == 0)
 			batch = append(batch, res.batch...)
 		}
-		fmt.Println("collected into batch. batchlen: %d", len(batch))
-		sort.Slice(batch, func(i, j int) bool {
-			return less(batch[i], batch[j])
-		})
-		tmpBatch = append(tmpBatch, batch...)
-		batch = []*pb.MapEntry{}
-		lastIdx := len(batch) - 1
-		if lastIdx < 0 {
+		if len(batch) < 1000 {
 			continue
 		}
-		lastKey := batch[lastIdx]
-		for ; lastIdx > 0; lastIdx-- {
-			if !bytes.Equal(batch[lastIdx].Key, lastKey.Key) {
-				break
-			}
-		}
-		seqNo++
-		fmt.Println("Gonna write to channel with batch lenght", len(batch))
-		encoderCh <- &encodeRequest{entries: batch[:lastIdx+1], seqNo: seqNo}
-		batch = batch[lastIdx+1:]
+		// fmt.Println("collected into batch. batchlen: %d", len(batch))
+		// tmpBatch = append(tmpBatch, batch...)
+		// batch = []*pb.MapEntry{}
+		// lastIdx := len(batch) - 1
+		// if lastIdx < 0 {
+		// 	continue
+		// }
+		// lastKey := batch[lastIdx]
+		// for ; lastIdx > 0; lastIdx-- {
+		// 	if !bytes.Equal(batch[lastIdx].Key, lastKey.Key) {
+		// 		break
+		// 	}
+		// }
+		// fmt.Println("Gonna write to channel with batch length", len(batch))
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		req := &encodeRequest{entries: batch, wg: wg}
+		encoderCh <- req
+		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
+		writerCh <- req
+		batch = make([]*pb.MapEntry, 0, batchAlloc)
 	}
 
 	// for i := 0; i < len(tmpBatch)-1; i++ {
@@ -460,38 +436,11 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser.SignalAndWait()
 }
 
-type heapNode struct {
-	mapEntry *pb.MapEntry
-	itr      *mapIterator
-}
-
-type postingHeap struct {
-	nodes []heapNode
-}
-
-func (h *postingHeap) Len() int {
-	return len(h.nodes)
-}
-
-func (h *postingHeap) Less(i, j int) bool {
-	return less(h.nodes[i].mapEntry, h.nodes[j].mapEntry)
-}
-
-func (h *postingHeap) Swap(i, j int) {
-	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
-}
-
-func (h *postingHeap) Push(val interface{}) {
-	h.nodes = append(h.nodes, val.(heapNode))
-}
-
-func (h *postingHeap) Pop() interface{} {
-	elem := h.nodes[len(h.nodes)-1]
-	h.nodes = h.nodes[:len(h.nodes)-1]
-	return elem
-}
-
 func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
+	sort.Slice(mapEntries, func(i, j int) bool {
+		return less(mapEntries[i], mapEntries[j])
+	})
+
 	var currentKey []byte
 	var uids []uint64
 	pl := new(pb.PostingList)
