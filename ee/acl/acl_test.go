@@ -420,7 +420,7 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 }
 
 func TestUnauthorizedDeletion(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Minute)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 	unAuthPred := "unauthorizedPredicate"
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
@@ -678,6 +678,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
@@ -686,7 +687,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 }
 
 func TestNewACLPredicates(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Minute)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -732,6 +733,7 @@ func TestNewACLPredicates(t *testing.T) {
 
 	for _, tc := range queryTests {
 		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
@@ -759,6 +761,7 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 	for _, tc := range mutationTests {
 		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
 			_, err := userClient.NewTxn().Mutate(ctx, &api.Mutation{
 				SetNquads: []byte(tc.input),
 				CommitNow: true,
@@ -769,7 +772,7 @@ func TestNewACLPredicates(t *testing.T) {
 }
 
 func TestNegativePermissionDeleteRule(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Minute)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
