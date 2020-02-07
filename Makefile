@@ -35,6 +35,11 @@ test:
 	@echo "  >  \033[32mRunning tests...\033[0m "
 	GOBIN=$(PWD)/build/bin go run scripts/ci.go test
 
+## test: Runs `go test -race` on project test files.
+test-state-race:
+	@echo "  >  \033[32mRunning race tests...\033[0m "
+	go test ./state/... -race -timeout=5m
+
 ## install: Install missing dependencies. Runs `go mod download` internally.
 install:
 	@echo "  >  \033[32mInstalling dependencies...\033[0m "

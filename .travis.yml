@@ -42,6 +42,8 @@ matrix:
       script: ./scripts/ci.sh
       after_script:
         - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
+    - name: "Test State - Race"
+      script: make test-state-race
     - name: "Golang-ci Linter"
       script: make lint
     - name: "Build docker image"

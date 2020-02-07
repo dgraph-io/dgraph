@@ -18,6 +18,7 @@ package db
 
 import (
 	"os"
+	"sync"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/dgraph-io/badger/v2"
@@ -28,6 +29,7 @@ import (
 type BadgerDB struct {
 	config Config
 	db     *badger.DB
+	lock   sync.RWMutex
 }
 
 //Config defines configurations for BadgerService instance
@@ -69,6 +71,7 @@ type batchWriter struct {
 	db   *BadgerDB
 	b    map[string][]byte
 	size int
+	lock sync.RWMutex
 }
 
 // NewBatch returns batchWriter with a badgerDB instance and an initialized mapping
@@ -81,6 +84,8 @@ func (db *BadgerDB) NewBatch() Batch {
 
 // Put puts the given key / value to the queue
 func (db *BadgerDB) Put(key []byte, value []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Set(snappy.Encode(nil, key), snappy.Encode(nil, value))
 		return err
@@ -89,6 +94,8 @@ func (db *BadgerDB) Put(key []byte, value []byte) error {
 
 // Has checks the given key exists already; returning true or false
 func (db *BadgerDB) Has(key []byte) (exists bool, err error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, errr := txn.Get(snappy.Encode(nil, key))
 		if item != nil {
@@ -105,6 +112,8 @@ func (db *BadgerDB) Has(key []byte) (exists bool, err error) {
 
 // Get returns the given key
 func (db *BadgerDB) Get(key []byte) (data []byte, err error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, e := txn.Get(snappy.Encode(nil, key))
 		if e != nil {
@@ -125,6 +134,8 @@ func (db *BadgerDB) Get(key []byte) (data []byte, err error) {
 
 // Del removes the key from the queue and database
 func (db *BadgerDB) Del(key []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(snappy.Encode(nil, key))
 		if err == badger.ErrKeyNotFound {
@@ -136,6 +147,8 @@ func (db *BadgerDB) Del(key []byte) error {
 
 // Close closes a DB
 func (db *BadgerDB) Close() error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	if err := db.db.Close(); err != nil {
 		log.Crit("Failed to close Database *BadgerDB", "err", err)
 		return err
@@ -150,6 +163,7 @@ type Iterable struct {
 	iter     *badger.Iterator
 	released bool
 	init     bool
+	lock     sync.RWMutex
 }
 
 // NewIterator returns a new iterator within the Iterator struct along with a new transaction
@@ -167,6 +181,8 @@ func (db *BadgerDB) NewIterator() Iterable {
 
 // Release closes the iterator, discards the created transaction and sets released value to true
 func (i *Iterable) Release() {
+	i.lock.Lock()
+	defer i.lock.Unlock()
 	i.iter.Close()
 	i.txn.Discard()
 	i.released = true
@@ -180,6 +196,8 @@ func (i *Iterable) Released() bool {
 // Next rewinds the iterator to the zero-th position if uninitialized, and then will advance the iterator by one
 // returns bool to ensure access to the item
 func (i *Iterable) Next() bool {
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 	if !i.init {
 		i.iter.Rewind()
 		i.init = true
@@ -191,11 +209,15 @@ func (i *Iterable) Next() bool {
 // Seek will look for the provided key if present and go to that position. If
 // absent, it would seek to the next smallest key
 func (i *Iterable) Seek(key []byte) {
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 	i.iter.Seek(snappy.Encode(nil, key))
 }
 
 // Key returns an item key
 func (i *Iterable) Key() []byte {
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 	ret, err := snappy.Decode(nil, i.iter.Item().Key())
 	if err != nil {
 		log.Warn("key retrieval error ", "error", err)
@@ -205,6 +227,8 @@ func (i *Iterable) Key() []byte {
 
 // Value returns a copy of the value of the item
 func (i *Iterable) Value() []byte {
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 	val, err := i.iter.Item().ValueCopy(nil)
 	if err != nil {
 		log.Warn("value retrieval error ", "error", err)
@@ -218,6 +242,8 @@ func (i *Iterable) Value() []byte {
 
 // Put encodes key-values and adds them to a mapping for batch writes, sets the size of item value
 func (b *batchWriter) Put(key, value []byte) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	encodedKey := snappy.Encode(nil, key)
 	encodedVal := snappy.Encode(nil, value)
 	b.b[string(encodedKey)] = encodedVal
@@ -227,6 +253,8 @@ func (b *batchWriter) Put(key, value []byte) error {
 
 // Write performs batched writes
 func (b *batchWriter) Write() error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	wb := b.db.db.NewWriteBatch()
 	defer wb.Cancel()
 
@@ -249,6 +277,8 @@ func (b *batchWriter) ValueSize() int {
 
 // Delete removes the key from the batch and database
 func (b *batchWriter) Delete(key []byte) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	err := b.db.db.NewWriteBatch().Delete(key)
 	if err != nil {
 		log.Warn("error batch deleting key ", "error", err)
@@ -259,6 +289,8 @@ func (b *batchWriter) Delete(key []byte) error {
 
 // Reset clears batch key-values and resets the size to zero
 func (b *batchWriter) Reset() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	b.b = make(map[string][]byte)
 	b.size = 0
 }

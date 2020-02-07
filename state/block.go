@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"sync"
 
 	"github.com/ChainSafe/gossamer/common"
 	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
@@ -24,6 +25,7 @@ type blockState struct {
 	bt           *blocktree.BlockTree
 	db           *BlockDB
 	latestHeader *types.Header
+	lock         sync.RWMutex
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
@@ -186,6 +188,9 @@ func (bs *blockState) GetBlockByNumber(blockNumber *big.Int) (*types.Block, erro
 
 // SetHeader will set the header into DB
 func (bs *blockState) SetHeader(header *types.Header) error {
+	bs.lock.Lock()
+	defer bs.lock.Unlock()
+
 	hash := header.Hash()
 
 	// Write the encoded header
@@ -215,6 +220,8 @@ func (bs *blockState) SetBlock(block *types.Block) error {
 
 // SetBlockData will set the block data using given hash and blockData into DB
 func (bs *blockState) SetBlockData(hash common.Hash, blockData *types.BlockData) error {
+	bs.lock.Lock()
+	defer bs.lock.Unlock()
 	// Write the encoded header
 	bh, err := json.Marshal(blockData)
 	if err != nil {
