@@ -83,7 +83,8 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 			timeToExpire := expiry.Sub(time.Now().UTC())
 			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
-				glog.Warningf("Enterprise license is going to expire in %s. Please visit https://dgraph.io/contact to get a new license.", humanize.Time(expiry))
+				glog.Warningf("Enterprise license is going to expire in %s. Please visit "+
+					"https://dgraph.io/contact to get a new license.", humanize.Time(expiry))
 			}
 
 			active := time.Now().UTC().Before(expiry)
