@@ -417,20 +417,20 @@
 		{
 			"checksumSHA1": "IyNRSmjTB8V69NehmgwbQtf53I4=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
@@ -441,20 +441,20 @@
 		{
 			"checksumSHA1": "7dxXjygrynDxvPE1UBHFDxVn7kE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "0nZcXky/WdTWm3io4j6z2XbH4oM=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "6Ya7Kr114SVcXRqa3UaglreBrY8=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "32c4f7849c890e7c7cdb4a338f9e89ec27846db1",
-			"revisionTime": "2019-07-12T09:14:51Z"
+			"revision": "587c8113304dde4ce6052a77ee5cb341c1266bea",
+			"revisionTime": "2020-02-07T19:26:47Z"
 		},
 		{
 			"checksumSHA1": "b0SSBiN/qXocMxGVb4kBfetDrYg=",
