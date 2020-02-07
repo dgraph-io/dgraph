@@ -480,11 +480,78 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		)
 	}
 	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: reverse pred argument for @dgraph directive is not supported.",
-			typ.Name, field.Name,
-		)
+		if sch.Types[typ.Name].Kind == ast.Interface {
+			// We don't want to consider the field of an interface but only the fields with
+			// ~ in concrete types.
+			return nil
+		}
+		// The inverse directive is not required on this field as given that the dgraph field name
+		// starts with ~ we already know this field has to be a reverse edge of some other field.
+		invDirective := field.Directives.ForName(inverseDirective)
+		if invDirective != nil {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @hasInverse directive is not allowed when pred argument in "+
+					"@dgraph directive starts with a ~.",
+				typ.Name, field.Name,
+			)
+		}
+
+		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
+		invTypeName := field.Type.Name()
+		if sch.Types[invTypeName].Kind != ast.Object &&
+			sch.Types[invTypeName].Kind != ast.Interface {
+			return gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s is of type %s, but reverse predicate in @dgraph"+
+					" directive only applies to fields with object types.", typ.Name, field.Name,
+				invTypeName)
+		}
+
+		if field.Type.NamedType != "" {
+			return gqlerror.ErrorPosf(dir.Position,
+				"Type %s; Field %s: with a dgraph directive that starts with ~ should be of type "+
+					"list.", typ.Name, field.Name)
+		}
+
+		invType := sch.Types[invTypeName]
+		forwardFound := false
+		// We need to loop through all the fields of the invType and see if we find a field which
+		// is a forward edge field for this reverse field.
+		for _, fld := range invType.Fields {
+			dir := fld.Directives.ForName(dgraphDirective)
+			if dir == nil {
+				continue
+			}
+			predArg := dir.Arguments.ForName(dgraphPredArg)
+			if predArg == nil || predArg.Value.Raw == "" {
+				continue
+			}
+			if predArg.Value.Raw == forwardEdgePred {
+				if fld.Type.Name() != typ.Name {
+					return gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
+						" type %s to be compatible with @dgraph reverse directive but is of"+
+						" type %s.", invTypeName, fld.Name, typ.Name, fld.Type.Name())
+				}
+				invDirective := fld.Directives.ForName(inverseDirective)
+				if invDirective != nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s: @hasInverse directive is not allowed is not allowed "+
+							"because field is forward edge of another field with reverse directive.",
+						invType.Name, fld.Name,
+					)
+				}
+				forwardFound = true
+			}
+		}
+		if !forwardFound {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: pred argument: %s is not supported as forward edge doesn't "+
+					"exist for type %s.", typ.Name, field.Name, predArg.Value.Raw, invTypeName,
+			)
+		}
 	}
 	return nil
 }

@@ -1,0 +1,223 @@
+#######################
+# Input Schema
+#######################
+
+type Movie {
+	id: ID!
+	name: String!
+	director(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector] @dgraph(pred: "~directed.movies")
+}
+
+type MovieDirector {
+	id: ID!
+	name: String!
+	directed(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie] @dgraph(pred: "directed.movies")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddMovieDirectorPayload {
+	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+}
+
+type AddMoviePayload {
+	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+}
+
+type DeleteMovieDirectorPayload {
+	msg: String
+}
+
+type DeleteMoviePayload {
+	msg: String
+}
+
+type UpdateMovieDirectorPayload {
+	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+}
+
+type UpdateMoviePayload {
+	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum MovieDirectorOrderable {
+	name
+}
+
+enum MovieOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddMovieDirectorInput {
+	name: String!
+	directed: [MovieRef]
+}
+
+input AddMovieInput {
+	name: String!
+}
+
+input MovieDirectorFilter {
+	id: [ID!]
+	not: MovieDirectorFilter
+}
+
+input MovieDirectorOrder {
+	asc: MovieDirectorOrderable
+	desc: MovieDirectorOrderable
+	then: MovieDirectorOrder
+}
+
+input MovieDirectorPatch {
+	name: String
+	directed: [MovieRef]
+}
+
+input MovieDirectorRef {
+	id: ID
+	name: String
+	directed: [MovieRef]
+}
+
+input MovieFilter {
+	id: [ID!]
+	not: MovieFilter
+}
+
+input MovieOrder {
+	asc: MovieOrderable
+	desc: MovieOrderable
+	then: MovieOrder
+}
+
+input MoviePatch {
+	name: String
+}
+
+input MovieRef {
+	id: ID
+	name: String
+}
+
+input UpdateMovieDirectorInput {
+	filter: MovieDirectorFilter!
+	set: MovieDirectorPatch
+	remove: MovieDirectorPatch
+}
+
+input UpdateMovieInput {
+	filter: MovieFilter!
+	set: MoviePatch
+	remove: MoviePatch
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getMovie(id: ID!): Movie
+	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	getMovieDirector(id: ID!): MovieDirector
+	queryMovieDirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addMovie(input: [AddMovieInput!]!): AddMoviePayload
+	updateMovie(input: UpdateMovieInput!): UpdateMoviePayload
+	deleteMovie(filter: MovieFilter!): DeleteMoviePayload
+	addMovieDirector(input: [AddMovieDirectorInput!]!): AddMovieDirectorPayload
+	updateMovieDirector(input: UpdateMovieDirectorInput!): UpdateMovieDirectorPayload
+	deleteMovieDirector(filter: MovieDirectorFilter!): DeleteMovieDirectorPayload
+}

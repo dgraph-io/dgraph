@@ -106,3 +106,15 @@ type Starship {
         name: String! @search(by: [term])
         length: Float
 }
+
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @hasInverse(field: directed)
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie]
+}

@@ -90,6 +90,15 @@ const (
 		format: String
 	}
 
+	input BackupInput {
+		destination: String!
+		accessKey: String
+		secretKey: String
+		sessionToken: String
+		anonymous: Boolean
+		forceFull: Boolean
+	}
+
 	type Response {
 		code: String
 		message: String
@@ -119,6 +128,10 @@ const (
 		response: Response
 	}
 
+	type BackupPayload {
+		response: Response
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
@@ -130,6 +143,7 @@ const (
 		draining(input: DrainingInput!): DrainingPayload
 		shutdown: ShutdownPayload
 		config(input: ConfigInput!): ConfigPayload
+		backup(input: BackupInput!) : BackupPayload
 	}
  `
 )
@@ -337,6 +351,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				config,
 				config,
 				config,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
+			backup := &backupResolver{}
+
+			// backup implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
+			return resolve.NewMutationResolver(
+				backup,
+				backup,
+				backup,
 				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
 		WithSchemaIntrospection()

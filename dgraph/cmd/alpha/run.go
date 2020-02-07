@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -284,20 +283,20 @@ func grpcPort() int {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
+	var err error
 
 	if _, ok := r.URL.Query()["all"]; ok {
-		var err error
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
 		ctx := attachAccessJwt(context.Background(), r)
 		var resp *api.Response
-		if resp, err = (&edgraph.Server{}).HealthAll(ctx); err != nil {
+		if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
 		if resp == nil {
-			x.SetStatus(w, x.ErrorNoData, "No state information available.")
+			x.SetStatus(w, x.ErrorNoData, "No health information available.")
 			return
 		}
 		_, _ = w.Write(resp.Json)
@@ -316,20 +315,18 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	info := struct {
-		Version  string        `json:"version"`
-		Instance string        `json:"instance"`
-		Uptime   time.Duration `json:"uptime"`
-	}{
-		Version:  x.Version(),
-		Instance: "alpha",
-		Uptime:   time.Since(startTime) / time.Second,
+	var resp *api.Response
+	if resp, err = (&edgraph.Server{}).Health(context.Background(), false); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
 	}
-	data, _ := json.Marshal(info)
-
+	if resp == nil {
+		x.SetStatus(w, x.ErrorNoData, "No health information available.")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	_, _ = w.Write(resp.Json)
 }
 
 func stateHandler(w http.ResponseWriter, r *http.Request) {

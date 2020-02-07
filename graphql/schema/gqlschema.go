@@ -1060,6 +1060,13 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		// Remove edges which have a reverse predicate as they should only be updated through their
+		// forward edge.
+		fname := fieldName(fld, defn.Name)
+		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
+			continue
+		}
+
 		// Even if a field isn't referenceable with an ID or XID, it can still go into an
 		// input/update type because it can be created (but not linked by reference) as
 		// part of the mutation.
@@ -1080,6 +1087,13 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			continue
+		}
+
+		// Remove edges which have a reverse predicate as they should only be updated through their
+		// forward edge.
+		fname := fieldName(fld, defn.Name)
+		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
 			continue
 		}
 

@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -728,14 +729,10 @@ func TestHealth(t *testing.T) {
 	data, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	var info struct {
-		Version  string        `json:"version"`
-		Instance string        `json:"instance"`
-		Uptime   time.Duration `json:"uptime"`
-	}
+	var info []pb.HealthInfo
 	require.NoError(t, json.Unmarshal(data, &info))
-	require.Equal(t, "alpha", info.Instance)
-	require.True(t, info.Uptime > time.Duration(1))
+	require.Equal(t, "alpha", info[0].Instance)
+	require.True(t, info[0].Uptime > int64(time.Duration(1)))
 }
 
 func setDrainingMode(t *testing.T, enable bool) {

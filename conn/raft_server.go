@@ -282,7 +282,7 @@ func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) e
 	}
 	info := pb.HealthInfo{
 		Instance: "alpha",
-		Addr:     node.MyAddr,
+		Address:  node.MyAddr,
 		Group:    strconv.Itoa(int(node.RaftContext.GetGroup())),
 		Version:  x.Version(),
 		Uptime:   int64(time.Since(node.StartTime) / time.Second),

@@ -32,245 +32,412 @@ func TestRunAll_Normal(t *testing.T) {
 func TestSchema_Normal(t *testing.T) {
 	expectedDgraphSchema := `
 	{
-		"schema": [{
+		"schema": [
+		  {
 			"predicate": "Author.country",
 			"type": "uid"
-		}, {
+		  },
+		  {
 			"predicate": "Author.dob",
 			"type": "datetime",
 			"index": true,
-			"tokenizer": ["year"]
-		}, {
+			"tokenizer": [
+			  "year"
+			]
+		  },
+		  {
 			"predicate": "Author.name",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["hash", "trigram"]
-		}, {
+			"tokenizer": [
+			  "hash",
+			  "trigram"
+			]
+		  },
+		  {
 			"predicate": "Author.posts",
 			"type": "uid",
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Author.reputation",
 			"type": "float",
 			"index": true,
-			"tokenizer": ["float"]
-		}, {
+			"tokenizer": [
+			  "float"
+			]
+		  },
+		  {
 			"predicate": "Category.name",
 			"type": "string"
-		}, {
+		  },
+		  {
 			"predicate": "Category.posts",
 			"type": "uid",
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Character.appearsIn",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["hash"],
+			"tokenizer": [
+			  "hash"
+			],
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Character.name",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["exact"]
-		}, {
+			"tokenizer": [
+			  "exact"
+			]
+		  },
+		  {
 			"predicate": "Country.name",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["trigram", "hash"]
-		}, {
+			"tokenizer": [
+			  "trigram",
+			  "hash"
+			]
+		  },
+		  {
 			"predicate": "Country.states",
 			"type": "uid",
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Droid.primaryFunction",
 			"type": "string"
-		}, {
+		  },
+		  {
 			"predicate": "Employee.ename",
 			"type": "string"
-		}, {
+		  },
+		  {
 			"predicate": "Human.starships",
 			"type": "uid",
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Human.totalCredits",
 			"type": "float"
-		}, {
+		  },
+		  {
+			"predicate": "Movie.director",
+			"type": "uid",
+			"list": true
+		  },
+		  {
+			"predicate": "Movie.name",
+			"type": "string"
+		  },
+		  {
+			"predicate": "MovieDirector.directed",
+			"type": "uid",
+			"list": true
+		  },
+		  {
+			"predicate": "MovieDirector.name",
+			"type": "string"
+		  },
+		  {
 			"predicate": "Post.author",
 			"type": "uid"
-		}, {
+		  },
+		  {
 			"predicate": "Post.category",
 			"type": "uid"
-		}, {
+		  },
+		  {
 			"predicate": "Post.isPublished",
 			"type": "bool",
 			"index": true,
-			"tokenizer": ["bool"]
-		}, {
+			"tokenizer": [
+			  "bool"
+			]
+		  },
+		  {
 			"predicate": "Post.numLikes",
 			"type": "int",
 			"index": true,
-			"tokenizer": ["int"]
-		}, {
+			"tokenizer": [
+			  "int"
+			]
+		  },
+		  {
 			"predicate": "Post.postType",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["hash", "trigram"]
-		}, {
+			"tokenizer": [
+			  "hash",
+			  "trigram"
+			]
+		  },
+		  {
 			"predicate": "Post.tags",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["exact"],
+			"tokenizer": [
+			  "exact"
+			],
 			"list": true
-		}, {
+		  },
+		  {
 			"predicate": "Post.text",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["fulltext"]
-		}, {
+			"tokenizer": [
+			  "fulltext"
+			]
+		  },
+		  {
 			"predicate": "Post.title",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["term", "fulltext"]
-		}, {
+			"tokenizer": [
+			  "term",
+			  "fulltext"
+			]
+		  },
+		  {
 			"predicate": "Post.topic",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["exact"]
-		}, {
-			"predicate": "dgraph.graphql.schema",
-			"type": "string"
-		}, {
+			"tokenizer": [
+			  "exact"
+			]
+		  },
+		  {
 			"predicate": "Starship.length",
 			"type": "float"
-		}, {
+		  },
+		  {
 			"predicate": "Starship.name",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["term"]
-		}, {
+			"tokenizer": [
+			  "term"
+			]
+		  },
+		  {
 			"predicate": "State.country",
 			"type": "uid"
-		}, {
+		  },
+		  {
 			"predicate": "State.name",
 			"type": "string"
-		}, {
+		  },
+		  {
 			"predicate": "State.xcode",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["trigram", "hash"],
+			"tokenizer": [
+			  "trigram",
+			  "hash"
+			],
 			"upsert": true
-		}, {
+		  },
+		  {
+			"predicate": "dgraph.graphql.schema",
+			"type": "string"
+		  },
+		  {
 			"predicate": "dgraph.type",
 			"type": "string",
 			"index": true,
-			"tokenizer": ["exact"],
+			"tokenizer": [
+			  "exact"
+			],
 			"list": true
-		}],
-		"types": [{
-			"fields": [{
+		  }
+		],
+		"types": [
+		  {
+			"fields": [
+			  {
 				"name": "Author.name"
-			}, {
+			  },
+			  {
 				"name": "Author.dob"
-			}, {
+			  },
+			  {
 				"name": "Author.reputation"
-			}, {
+			  },
+			  {
 				"name": "Author.country"
-			}, {
+			  },
+			  {
 				"name": "Author.posts"
-			}],
+			  }
+			],
 			"name": "Author"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Category.name"
-			}, {
+			  },
+			  {
 				"name": "Category.posts"
-			}],
+			  }
+			],
 			"name": "Category"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Character.name"
-			}, {
+			  },
+			  {
 				"name": "Character.appearsIn"
-			}],
+			  }
+			],
 			"name": "Character"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Country.name"
-			}, {
+			  },
+			  {
 				"name": "Country.states"
-			}],
+			  }
+			],
 			"name": "Country"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Character.name"
-			}, {
+			  },
+			  {
 				"name": "Character.appearsIn"
-			}, {
+			  },
+			  {
 				"name": "Droid.primaryFunction"
-			}],
+			  }
+			],
 			"name": "Droid"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Employee.ename"
-			}],
+			  }
+			],
 			"name": "Employee"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Employee.ename"
-			}, {
+			  },
+			  {
 				"name": "Character.name"
-			}, {
+			  },
+			  {
 				"name": "Character.appearsIn"
-			}, {
+			  },
+			  {
 				"name": "Human.starships"
-			}, {
+			  },
+			  {
 				"name": "Human.totalCredits"
-			}],
+			  }
+			],
 			"name": "Human"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
+				"name": "Movie.name"
+			  },
+			  {
+				"name": "Movie.director"
+			  }
+			],
+			"name": "Movie"
+		  },
+		  {
+			"fields": [
+			  {
+				"name": "MovieDirector.name"
+			  },
+			  {
+				"name": "MovieDirector.directed"
+			  }
+			],
+			"name": "MovieDirector"
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Post.title"
-			}, {
+			  },
+			  {
 				"name": "Post.text"
-			}, {
+			  },
+			  {
 				"name": "Post.tags"
-			}, {
+			  },
+			  {
 				"name": "Post.topic"
-			}, {
+			  },
+			  {
 				"name": "Post.numLikes"
-			}, {
+			  },
+			  {
 				"name": "Post.isPublished"
-			}, {
+			  },
+			  {
 				"name": "Post.postType"
-			}, {
+			  },
+			  {
 				"name": "Post.author"
-			}, {
+			  },
+			  {
 				"name": "Post.category"
-			}],
+			  }
+			],
 			"name": "Post"
-		}, {
-			"fields": [{
-				"name": "dgraph.graphql.schema"
-			}],
-			"name": "dgraph.graphql"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "Starship.name"
-			}, {
+			  },
+			  {
 				"name": "Starship.length"
-			}],
+			  }
+			],
 			"name": "Starship"
-		}, {
-			"fields": [{
+		  },
+		  {
+			"fields": [
+			  {
 				"name": "State.xcode"
-			}, {
+			  },
+			  {
 				"name": "State.name"
-			}, {
+			  },
+			  {
 				"name": "State.country"
-			}],
+			  }
+			],
 			"name": "State"
-		}]
-	}
+		  },
+		  {
+			"fields": [
+			  {
+				"name": "dgraph.graphql.schema"
+			  }
+			],
+			"name": "dgraph.graphql"
+		  }
+		]
+	  }
 	`
 
 	t.Run("graphql schema", func(t *testing.T) {

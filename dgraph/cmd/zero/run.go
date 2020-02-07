@@ -213,6 +213,10 @@ func run() {
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
+	gcCloser := y.NewCloser(1) // closer for vLogGC
+	go x.RunVlogGC(kv, gcCloser)
+	defer gcCloser.SignalAndWait()
+
 	// zero out from memory
 	kvOpt.EncryptionKey = nil
 
