@@ -73,6 +73,8 @@ const (
 	scalar DateTime
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+	directive @id on FIELD_DEFINITION
+
 
 	type UpdateGQLSchemaPayload {
 		gqlSchema: GQLSchema
@@ -132,9 +134,150 @@ const (
 		response: Response
 	}
 
+	type User {
+		name: String! @id @dgraph(pred: "dgraph.xid")
+		# TODO - Update this to actual secret after password PR is merged here.
+		password: String! @dgraph(pred: "dgraph.password")
+		groups: [Group] @dgraph(pred: "dgraph.user.group")
+	}
+
+	type Group {
+		name: String! @id @dgraph(pred: "dgraph.xid")
+		users: [User] @dgraph(pred: "~dgraph.user.group")
+		rules: [Rule] @dgraph(pred: "dgraph.acl.permission")
+	}
+
+	type Rule {
+		id: ID!
+		predicate: String!
+		permission: Permission!
+	}
+
+	input StringHashFilter {
+		eq: String
+	}
+
+	enum UserOrderable {
+		name
+	}
+
+	enum GroupOrderable {
+		name
+	}
+
+	input UserInput {
+		name: String!
+		password: String!
+		groups: [GroupRef]
+	}
+
+	input GroupInput {
+		name: String!
+		users: [UserRef]
+		rules: [RuleRef]
+	}
+
+	input UserRef {
+		name: String!
+	}
+
+	input GroupRef {
+		name: String!
+	}
+
+
+	input RuleRef {
+		predicate: String!
+		permission: Permission!
+	}
+
+	input UserFilter {
+		name: StringHashFilter
+		and: UserFilter
+		or: UserFilter
+		not: UserFilter
+	}
+
+	input UserOrder {
+		asc: UserOrderable
+		desc: UserOrderable
+		then: UserOrder
+	}
+
+	input GroupOrder {
+		asc: GroupOrderable
+		desc: GroupOrderable
+		then: GroupOrder
+	}
+
+	input UserPatch {
+		password: String
+		groups: [GroupRef]
+	}
+
+	input UpdateUserInput {
+		filter: UserFilter!
+		set: UserPatch
+		remove: UserPatch
+	}
+
+	input GroupFilter {
+		name: StringHashFilter
+		and: UserFilter
+		or: UserFilter
+		not: UserFilter
+	}
+
+	input GroupPatch {
+		users: [UserRef]
+		rules: [RuleRef]
+	}
+
+	input UpdateGroupInput {
+		filter: GroupInput!
+		set: GroupPatch
+		remove: GroupPatch
+	}
+
+	type UserPayload {
+		user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	}
+
+	type GroupPayload {
+		group(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+	}
+
+	enum Permission {
+		NOTHING     # (000)
+		ALTER       # (001)
+		WRITE       # (010)
+		ALTERWRITE  # (011)
+		READ        # (100)
+		READALTER   # (101)
+		READWRITE   # (110)
+		ALL         # (111)
+	}
+
+	type DeleteUserPayload {
+		msg: String
+	}
+
+	type DeleteGroupPayload {
+		msg: String
+	}
+
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
+
+		# ACL related endpoints
+		getUser(name: String!): User
+		getGroup(name: String!): Group
+
+		# getCurrentUser: User
+
+		queryUser(filter: UserFilter): User
+		queryGroup(filter: GroupFilter): Group
 	}
 
 	type Mutation {
@@ -144,6 +287,16 @@ const (
 		shutdown: ShutdownPayload
 		config(input: ConfigInput!): ConfigPayload
 		backup(input: BackupInput!) : BackupPayload
+
+		# ACL related endpoints.
+		addUser(input: [UserInput]): UserPayload
+		addGroup(input: [GroupInput]): GroupPayload
+
+		updateUser(input: UpdateUserInput!): UserPayload
+		updateGroup(input: UpdateGroupInput!): GroupPayload
+
+		deleteGroup(name: String): DeleteGroupPayload
+		deleteUser(name: String): DeleteUserPayload
 	}
  `
 )
