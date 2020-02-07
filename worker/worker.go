@@ -125,8 +125,8 @@ func UpdateLruMb(memoryMB float64) error {
 		return errors.Errorf("lru_mb must be at least %.0f\n", MinAllottedMemory)
 	}
 
-	posting.Config.Mu.Lock()
+	posting.Config.Lock()
 	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Mu.Unlock()
+	posting.Config.Unlock()
 	return nil
 }

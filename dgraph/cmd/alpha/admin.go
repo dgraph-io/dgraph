@@ -145,9 +145,9 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
-	posting.Config.Mu.Lock()
+	posting.Config.Lock()
 	memoryMB := posting.Config.AllottedMemory
-	posting.Config.Mu.Unlock()
+	posting.Config.Unlock()
 
 	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
