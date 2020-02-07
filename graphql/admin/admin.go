@@ -144,13 +144,13 @@ const (
 	type Group {
 		name: String! @id @dgraph(pred: "dgraph.xid")
 		users: [User] @dgraph(pred: "~dgraph.user.group")
-		rules: [Rule] @dgraph(pred: "dgraph.acl.permission")
+		rules: [Rule] @dgraph(pred: "dgraph.acl.rule")
 	}
 
 	type Rule {
 		id: ID!
-		predicate: String!
-		permission: Permission!
+		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
+		permission: Permission! @dgraph(pred: "dgraph.rule.permission")
 	}
 
 	input StringHashFilter {
@@ -276,8 +276,8 @@ const (
 
 		# getCurrentUser: User
 
-		queryUser(filter: UserFilter): User
-		queryGroup(filter: GroupFilter): Group
+		queryUser(filter: UserFilter): [User]
+		queryGroup(filter: GroupFilter): [Group]
 	}
 
 	type Mutation {
@@ -620,6 +620,34 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				return resolve.NewQueryResolver(
 					getResolver,
 					getResolver,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("queryGroup",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("queryUser",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("getGroup",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("getUser",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
 					resolve.StdQueryCompletion())
 			})
 }
