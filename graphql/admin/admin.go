@@ -165,13 +165,13 @@ const (
 		name
 	}
 
-	input UserInput {
+	input AddUserInput {
 		name: String!
 		password: String!
 		groups: [GroupRef]
 	}
 
-	input GroupInput {
+	input AddGroupInput {
 		name: String!
 		users: [UserRef]
 		rules: [RuleRef]
@@ -234,16 +234,16 @@ const (
 	}
 
 	input UpdateGroupInput {
-		filter: GroupInput!
+		filter: GroupFilter!
 		set: GroupPatch
 		remove: GroupPatch
 	}
 
-	type UserPayload {
+	type AddUserPayload {
 		user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	}
 
-	type GroupPayload {
+	type AddGroupPayload {
 		group(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
 	}
 
@@ -293,11 +293,11 @@ const (
 		backup(input: BackupInput!) : BackupPayload
 
 		# ACL related endpoints.
-		addUser(input: [UserInput]): UserPayload
-		addGroup(input: [GroupInput]): GroupPayload
+		addUser(input: [AddUserInput]): AddUserPayload
+		addGroup(input: [AddGroupInput]): AddGroupPayload
 
-		updateUser(input: UpdateUserInput!): UserPayload
-		updateGroup(input: UpdateGroupInput!): GroupPayload
+		updateUser(input: UpdateUserInput!): AddUserPayload
+		updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 		deleteGroup(name: String): DeleteGroupPayload
 		deleteUser(name: String): DeleteUserPayload
@@ -653,6 +653,22 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					qryRw,
 					qryExec,
 					resolve.StdQueryCompletion())
+			}).
+		WithMutationResolver("addUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					addRw,
+					qryExec,
+					mutExec,
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("addGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					addRw,
+					qryExec,
+					mutExec,
+					resolve.StdMutationCompletion(m.Name()))
 			})
 }
 
