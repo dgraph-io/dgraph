@@ -819,8 +819,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
 
-		// Otherwise, load the corresponding part and set endUid to correctly
-		// detect the end of the list.
+		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
 		if splitIdx+1 == len(l.plist.Splits) {
 			endUid = math.MaxUint64
@@ -832,7 +831,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	// If not a multi-part list, all UIDs go to the same encoder.
-	if len(l.plist.Splits) == 0 {
+	if len(l.plist.Splits) == 0 || !split {
 		plist = out.plist
 		endUid = math.MaxUint64
 	} else {
@@ -840,7 +839,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if p.Uid > endUid {
+		if p.Uid > endUid && split {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
@@ -882,6 +881,8 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		out.newMinTs = maxCommitTs
 		out.splitUpList()
 		out.removeEmptySplits()
+	} else {
+		out.plist.Splits = nil
 	}
 
 	return out, nil
