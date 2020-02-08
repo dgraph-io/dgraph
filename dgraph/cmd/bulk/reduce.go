@@ -575,6 +575,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 	}
 
 	// TODO: Move the unmarshaling of map entries here.
+	// We could have just one map entry here.
 	for _, mapEntry := range mapEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
@@ -590,6 +591,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		if len(uids) > 0 && uids[len(uids)-1] == uid {
 			continue
 		}
+		// TODO: Potentially could be doing codec.Encoding right here.
 		uids = append(uids, uid)
 		if mapEntry.Posting != nil {
 			pl.Postings = append(pl.Postings, mapEntry.Posting)
