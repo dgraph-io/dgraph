@@ -30,6 +30,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	bo "github.com/dgraph-io/badger/v2/options"
@@ -47,6 +48,10 @@ import (
 type reducer struct {
 	*state
 	streamId uint32
+
+	entrylistPool *sync.Pool
+	mu            *sync.RWMutex
+	streamIds     map[string]uint32
 }
 
 const batchSize = 10000
@@ -69,7 +74,7 @@ func (r *reducer) run() error {
 			var mapItrs []*mapIterator
 			partitionKeys := []*pb.MapEntry{}
 			for _, mapFile := range mapFiles {
-				header, itr := newMapIterator(mapFile)
+				header, itr := r.newMapIterator(mapFile)
 				partitionKeys = append(partitionKeys, header.PartitionKeys...)
 				mapItrs = append(mapItrs, itr)
 			}
@@ -84,6 +89,7 @@ func (r *reducer) run() error {
 				return less(partitionKeys[i], partitionKeys[j])
 			})
 			// Start bactching for the given keys
+			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
 				go itr.startBatchingForKeys(partitionKeys)
 			}
@@ -136,11 +142,13 @@ func (r *reducer) createBadger(i int) *badger.DB {
 }
 
 type mapIterator struct {
-	fd      *os.File
-	reader  *bufio.Reader
-	tmpBuf  []byte
-	current *iteratorEntry
-	batchCh chan *iteratorEntry
+	fd            *os.File
+	reader        *bufio.Reader
+	tmpBuf        []byte
+	current       *iteratorEntry
+	batchCh       chan *iteratorEntry
+	freelist      chan *iteratorEntry
+	entrylistPool *sync.Pool
 }
 
 type iteratorEntry struct {
@@ -148,12 +156,37 @@ type iteratorEntry struct {
 	batch        []*pb.MapEntry
 }
 
-func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
-	batch := make([]*pb.MapEntry, 0, batchAlloc)
+func (mi *mapIterator) release(ie *iteratorEntry) {
+	ie.batch = ie.batch[:0]
+	select {
+	case mi.freelist <- ie:
+	default:
+	}
+}
 
+func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
+	var freelist []*pb.MapEntry
 	for _, key := range partitionsKeys {
+		var ie *iteratorEntry
+		select {
+		case ie = <-mi.freelist:
+			// picks++
+			// if picks%10 == 0 {
+			// 	fmt.Printf("Picked from freelist: %d\n", picks)
+			// }
+		default:
+			ie = &iteratorEntry{
+				batch: make([]*pb.MapEntry, 0, batchAlloc),
+			}
+		}
+		ie.partitionKey = key
+		ie.batch = ie.batch[:0]
+
 		for {
 			// LOSING one item.
+			for len(freelist) == 0 {
+				freelist = mi.entrylistPool.Get().([]*pb.MapEntry)
+			}
 			r := mi.reader
 			buf, err := r.Peek(binary.MaxVarintLen64)
 			if err == io.EOF {
@@ -171,23 +204,22 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			}
 			x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
 
-			me := new(pb.MapEntry)
+			me := freelist[0]
+			freelist = freelist[1:]
 			x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
-			if less(me, key) {
-				batch = append(batch, me)
-				continue
+			if !less(me, key) {
+				break
 			}
-			break
+			ie.batch = append(ie.batch, me)
 		}
-		mi.batchCh <- &iteratorEntry{
-			partitionKey: key,
-			batch:        batch,
-		}
-		batch = make([]*pb.MapEntry, 0, batchAlloc)
+		// TODO: Needs to be fixed to ensure we pick all the map entries.
+		mi.batchCh <- ie
 	}
+
 	// Drain the last items.
+	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	for {
 		r := mi.reader
 		buf, err := r.Peek(binary.MaxVarintLen64)
@@ -206,7 +238,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		}
 		x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
 
-		me := new(pb.MapEntry)
+		me := &pb.MapEntry{}
 		x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 		batch = append(batch, me)
 
@@ -229,7 +261,7 @@ func (mi *mapIterator) Next() bool {
 	return true
 }
 
-func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
+func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
@@ -248,7 +280,13 @@ func newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
 	err = header.Unmarshal(headerBuf)
 	x.Check(err)
 
-	itr := &mapIterator{fd: fd, reader: reader, batchCh: make(chan *iteratorEntry, 1000)}
+	itr := &mapIterator{
+		fd:            fd,
+		reader:        reader,
+		batchCh:       make(chan *iteratorEntry, 3),
+		freelist:      make(chan *iteratorEntry, 3),
+		entrylistPool: r.entrylistPool,
+	}
 	return header, itr
 }
 
@@ -258,43 +296,65 @@ type encodeRequest struct {
 	list    *bpb.KVList
 }
 
+func (r *reducer) streamIdFor(pred string) uint32 {
+	r.mu.RLock()
+	if id, ok := r.streamIds[pred]; ok {
+		r.mu.RUnlock()
+		return id
+	}
+	r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if id, ok := r.streamIds[pred]; ok {
+		return id
+	}
+	streamId := atomic.AddUint32(&r.streamId, 1)
+	r.streamIds[pred] = streamId
+	return streamId
+}
+
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
 	for req := range entryCh {
 		req.list = &bpb.KVList{}
 		r.toList(req.entries, req.list)
+		for _, kv := range req.list.Kv {
+			pk, err := x.Parse(kv.Key)
+			x.Check(err)
+			x.AssertTrue(len(pk.Attr) > 0)
+			kv.StreamId = r.streamIdFor(pk.Attr)
+		}
 		req.wg.Done()
+		atomic.AddInt32(&r.prog.numEncoding, -1)
+
+		// Put in lists of 1000.
+		start, end := 0, 1000
+		for end <= len(req.entries) {
+			r.entrylistPool.Put(req.entries[start:end])
+			start = end
+			end += 1000
+		}
+		r.entrylistPool.Put(req.entries[start:])
 	}
 }
 
 func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
-	preds := make(map[string]uint32)
-	setStreamId := func(kv *bpb.KV) {
-		pk, err := x.Parse(kv.Key)
-		x.Check(err)
-		x.AssertTrue(len(pk.Attr) > 0)
-
-		// We don't need to consider the data prefix, count prefix, etc. because each predicate
-		// contains sorted keys, the way they are produced.
-		streamId := preds[pk.Attr]
-		if streamId == 0 {
-			streamId = atomic.AddUint32(&r.streamId, 1)
-			preds[pk.Attr] = streamId
-		}
-
-		kv.StreamId = streamId
-	}
-
+	idx := 0
 	for req := range writerCh {
 		// Wait for it to be encoded.
+		start := time.Now()
 		req.wg.Wait()
-		for _, kv := range req.list.Kv {
-			setStreamId(kv)
-		}
 		// writer.Write(listBatch[0].list)
+		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
+			fmt.Printf("writeCh: Time taken to write req %d: %v\n", idx, time.Since(start).Round(time.Millisecond))
+		}
+		idx++
+		if idx%100 == 0 {
+			fmt.Printf("Wrote req: %d\n", idx)
+		}
 	}
 }
 
@@ -366,8 +426,9 @@ func (r *reducer) encodeAndWrite_UNUSED(
 
 func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := runtime.NumCPU()
+	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
-	writerCh := make(chan *encodeRequest, 4*cpu) // Double of encoder, so encoding doesn't block on writer.
+	writerCh := make(chan *encodeRequest, 2*cpu)
 	encoderCloser := y.NewCloser(cpu)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		// Start listening to encode entries
@@ -380,13 +441,23 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	for i := 0; i < len(partitionKeys); i++ {
+		numInvalid := 0
 		for _, itr := range mapItrs {
 			itr.Next()
 			res := itr.Current()
+			if res == nil {
+				numInvalid++
+				continue
+			}
 			y.AssertTrue(bytes.Compare(res.partitionKey.GetKey(), partitionKeys[i].GetKey()) == 0)
 			batch = append(batch, res.batch...)
+			itr.release(res)
 		}
-		if len(batch) < 1000 {
+		if len(mapItrs) == numInvalid {
+			if len(batch) == 0 {
+				break
+			}
+		} else if len(batch) < 1000 {
 			continue
 		}
 		// fmt.Println("collected into batch. batchlen: %d", len(batch))
@@ -406,6 +477,7 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		req := &encodeRequest{entries: batch, wg: wg}
+		atomic.AddInt32(&r.prog.numEncoding, 1)
 		encoderCh <- req
 		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
 		writerCh <- req
