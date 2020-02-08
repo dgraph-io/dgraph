@@ -202,16 +202,22 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			for cap(mi.tmpBuf) < int(sz) {
 				mi.tmpBuf = make([]byte, sz)
 			}
+			// We should allocate a bigger chunk of memory (arena) and just read over that.
+			// The "mapentry" should just be a slice pointing to that.
 			x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
 
 			me := freelist[0]
 			freelist = freelist[1:]
+			// TODO: We should not unmarshal here. Instead, find a way to read the key from
+			// marshaled data.
 			x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
 
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
 			if !less(me, key) {
 				break
 			}
+			// TODO: The batch should not contain map entry, instead it should contain just the byte
+			// slices.
 			ie.batch = append(ie.batch, me)
 		}
 		// TODO: Needs to be fixed to ensure we pick all the map entries.
@@ -328,6 +334,9 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 		req.wg.Done()
 		atomic.AddInt32(&r.prog.numEncoding, -1)
 
+		for _, me := range req.entries {
+			me.Reset()
+		}
 		// Put in lists of 1000.
 		start, end := 0, 1000
 		for end <= len(req.entries) {
@@ -565,6 +574,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		pl.Reset()
 	}
 
+	// TODO: Move the unmarshaling of map entries here.
 	for _, mapEntry := range mapEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
