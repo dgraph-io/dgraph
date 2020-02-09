@@ -1110,3 +1110,21 @@
       }
     }
 
+-
+  name: "Password query"
+  gqlquery: |
+    query {
+      checkAuthorPassword(id: "0x1", pwd: "Password") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      checkAuthorPassword(func: uid(0x1)) @filter((eq(val(pwd), 1))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+      checkPwd(func: uid(0x1)) {
+        pwd as checkpwd(Author.pwd, "Password")
+      }
+    }

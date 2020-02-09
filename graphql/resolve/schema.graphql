@@ -13,7 +13,7 @@ type State {
         name: String!
 }
 
-type Author {
+type Author @secret(field: "pwd") {
         id: ID!
         name: String! @search(by: [hash])
         dob: DateTime @search

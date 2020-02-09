@@ -12,7 +12,8 @@
     { "auth":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
-        "posts": []
+        "posts": [],
+        "pwd": "Password"
       }
     }
   explanation: "A uid and type should get injected and all data transformed to
@@ -22,6 +23,7 @@
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
+          "Author.pwd":"Password",
           "Author.dob":"2000-01-01",
           "Author.posts":[]
         }
@@ -36,11 +38,15 @@
       }
     }
   gqlvariables: |
-    { "auth": [
-      { "name": "A.N. Author"
-      },
-      { "name": "Different Author"
-      }
+    {
+      "auth": [{
+          "name": "A.N. Author",
+          "pwd": "Password"
+        },
+        {
+          "name": "Different Author",
+          "pwd": "Different Password"
+        }
       ]
     }
   explanation: "A uid and type should get injected and all data transformed to
@@ -49,19 +55,21 @@
     - setjson: |
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
-          "Author.name":"A.N. Author"
+          "Author.name":"A.N. Author",
+          "Author.pwd":"Password"
         }
     - setjson: |
         { "uid":"_:Author2",
           "dgraph.type":["Author"],
-          "Author.name":"Different Author"
+          "Author.name":"Different Author",
+          "Author.pwd":"Different Password"
         }
 
 -
   name: "Add Mutation with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}]) {
+      addAuthor(input: [{ name: "A.N. Author", pwd : "Password", posts: []}]) {
         author {
           name
         }
@@ -74,21 +82,22 @@
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
-          "Author.posts":[]
+          "Author.posts":[],
+          "Author.pwd":"Password"
         }
 
 -
   name: "Add Mutation with mixed vars and embedded value"
   gqlmutation: |
-    mutation addAuthor($name: String!) {
-      addAuthor(input: [{ name: $name, posts: []}]) {
+    mutation addAuthor($name: String!, $pwd: Password!) {
+      addAuthor(input: [{ name: $name, pwd: $pwd, posts: []}]) {
         author {
           name
         }
       }
     }
   gqlvariables: |
-    { "name":  "A.N. Author" }
+    { "name":  "A.N. Author", "pwd": "Password" }
   explanation: "The input and variables should be used for the mutation, with a uid and type
     getting injected and all data transformed to underlying Dgraph edge names"
   dgmutations:
@@ -96,14 +105,16 @@
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
-          "Author.posts":[]
+          "Author.posts":[],
+          "Author.pwd":"Password"
         }
 
 -
   name: "Add Multiple Mutations with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}, {name: "Different Author", posts: []}]) {
+      addAuthor(input: [{ name: "A.N. Author", pwd : "Password", posts: []}, 
+                        { name: "Different Author", pwd : "Different Password", posts: []}]) {
         author {
           name
         }
@@ -116,13 +127,15 @@
         { "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
-          "Author.posts":[]
+          "Author.posts":[],
+          "Author.pwd":"Password"
         }
     - setjson: |
         { "uid":"_:Author2",
           "dgraph.type":["Author"],
           "Author.name":"Different Author",
-          "Author.posts":[]
+          "Author.posts":[],
+          "Author.pwd":"Different Password"
         }
 
 -
@@ -139,7 +152,8 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "0x123" },
-        "posts": []
+        "posts": [],
+        "pwd":"Password"
       }
     }
   explanation: "The reference to country should get transformed to 'uid' for the
@@ -156,7 +170,8 @@
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
           "Author.country": { "uid": "0x123" },
-          "Author.posts":[]
+          "Author.posts":[],
+          "Author.pwd":"Password"
         }
       cond: "@if(eq(len(Country2), 1))"
 
@@ -174,7 +189,8 @@
     { "auth":
       { "name": "A.N. Author",
         "country": { "id": "HI!" },
-        "posts": []
+        "posts": [],
+        "pwd": "Password"
       }
     }
   explanation: "A reference must be a valid UID"
@@ -339,6 +355,7 @@
     { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "New post",
@@ -353,6 +370,7 @@
           "dgraph.type" : [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",
@@ -380,6 +398,7 @@
     { "author": [
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "New post",
@@ -389,6 +408,7 @@
       },
       { "name": "Different Author",
         "dob": "2000-01-01",
+        "pwd": "Different Password",
         "posts": [
           {
             "title": "New New post",
@@ -403,6 +423,7 @@
           "dgraph.type" : [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",
@@ -420,6 +441,7 @@
           "dgraph.type" : [ "Author" ],
           "Author.name": "Different Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Different Password",
           "Author.posts": [
             {
               "uid": "_:Post4",
@@ -447,6 +469,7 @@
     { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "New post",
@@ -475,6 +498,8 @@
           "dgraph.type": [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",
@@ -516,6 +541,7 @@
     { "author": [
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "New post",
@@ -530,6 +556,7 @@
       },
       { "name": "Different Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "New new post",
@@ -564,6 +591,7 @@
           "dgraph.type": [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",
@@ -599,6 +627,7 @@
           "dgraph.type": [ "Author" ],
           "Author.name": "Different Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post6",
@@ -644,6 +673,7 @@
     { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "postID": "0x123",
@@ -677,6 +707,7 @@
           "dgraph.type": [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "0x123",
@@ -719,6 +750,7 @@
     { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "postID": null,
@@ -734,6 +766,7 @@
           "dgraph.type" : [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",
@@ -761,6 +794,7 @@
     { "author":
       { "name": "A.N. Author",
         "dob": "2000-01-01",
+        "pwd": "Password",
         "posts": [
           {
             "title": "Exciting post",
@@ -778,6 +812,7 @@
           "dgraph.type": [ "Author" ],
           "Author.name": "A.N. Author",
           "Author.dob": "2000-01-01",
+          "Author.pwd": "Password",
           "Author.posts": [
             {
               "uid": "_:Post2",

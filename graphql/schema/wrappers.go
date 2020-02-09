@@ -546,7 +546,7 @@ func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName && arg.Name != passwordField.Name() {
+		if arg.Name != IDArgName && (passwordField == nil || arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
 	}
@@ -568,7 +568,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	// Therefore, the non ID field and non password is an XID field.
 	for _, arg := range f.field.Arguments {
 		if (idField == nil || arg.Name != idField.Name()) &&
-			arg.Name != passwordField.Name() {
+			(passwordField == nil || arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
 	}

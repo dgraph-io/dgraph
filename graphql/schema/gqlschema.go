@@ -956,6 +956,9 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		idField = getXIDField(defn)
 	}
 	passwordField := getPasswordField(defn)
+	if len(passwordField) == 0 {
+		return
+	}
 
 	qry := &ast.FieldDefinition{
 		Name: "check" + defn.Name + "Password",
