@@ -471,6 +471,9 @@ func TestMillion(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cache after writing to disk. So, new posting list will be taken from the
+			// disk.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -920,6 +923,9 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list to retrive the posting list from disk. Otherwise, getNew
+			// returns cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -929,6 +935,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
+	// Clear the cached posting list.
+	lCache.Del(key)
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 0)
@@ -959,6 +967,8 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -979,6 +989,8 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -1088,6 +1100,9 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
 	require.NoError(t, writePostingListToDisk(kvs))
+
+	// Clear the cached posting list.
+	lCache.Del(kvs[0].Key)
 	newList, err := getNew(kvs[0].Key, ps)
 	require.NoError(t, err)
 
@@ -1153,6 +1168,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -1180,6 +1197,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -1189,6 +1208,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
+	// Clear the cached posting list.
+	lCache.Del(key)
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
 
@@ -1215,6 +1236,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Clear the cached posting list.
+			lCache.Del(key)
 			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
@@ -1224,6 +1247,8 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err = ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
+	// Clear the cached posting list.
+	lCache.Del(key)
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
 

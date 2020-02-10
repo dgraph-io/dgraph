@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -128,6 +129,27 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		}
 	}
 	return nil
+}
+
+// ResetCache will clear all the cached list.
+func ResetCache() {
+	lCache.Clear()
+}
+
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	lCache.Del(key)
+}
+
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+
+	for key := range txn.cache.deltas {
+		lCache.Del(key)
+	}
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
@@ -233,6 +255,27 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
+	// get context here.
+	// get span.
+	// show if the read was from cache or was from disk.
+	if cachedVal, ok := lCache.Get(key); ok {
+		if l, ok := cachedVal.(*List); ok {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
+		}
+	}
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
@@ -244,5 +287,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+	l, err := ReadPostingList(key, itr)
+	if err != nil {
+		return l, err
+	}
+	lCache.Set(key, l, 0)
+	return l, nil
 }

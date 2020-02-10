@@ -164,6 +164,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			return err
 		}
 
+		// Clear all the cache.
+		posting.ResetCache()
+
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
@@ -202,6 +205,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
 				return err
 			}
+		}
+
+		if len(proposal.Mutations.Schema) > 0 {
+			// Clear cache If there is a schema update. Because, index rebuilder will invalidate
+			// the state.
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -561,6 +570,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	g := groups()
 	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		// Clear all the cached list.
+		txn.RemoveCachedKeys()
+	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
@@ -1079,7 +1093,8 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		atomic.AddUint64(&numKeys, 1)
 		kvs, err := l.Rollup()
-
+		// delete the list while rollup.
+		posting.RemoveCacheFor(key)
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
 		// size calculations.

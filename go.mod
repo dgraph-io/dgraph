@@ -9,7 +9,7 @@ require (
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.4 // indirect
-	github.com/OneOfOne/xxhash v1.2.5 // indirect
+	github.com/OneOfOne/xxhash v1.2.7 // indirect
 	github.com/beorn7/perks v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.0.0-20181114232033-e1f5e6cdcd76
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -18,7 +18,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-0.20191220102048-ab4352b00a17
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
-	github.com/dgraph-io/ristretto v0.0.1 // indirect
+	github.com/dgraph-io/ristretto v0.0.2-0.20200115085837-adb35f0e53c6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
