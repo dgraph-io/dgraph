@@ -112,6 +112,11 @@ type author struct {
 	Posts      []*post    `json:"posts,omitempty"`
 }
 
+type user struct {
+	Name     string `json:"name,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
 type post struct {
 	PostID      string    `json:"postID,omitempty"`
 	Title       string    `json:"title,omitempty"`
@@ -257,6 +262,7 @@ func RunAll(t *testing.T) {
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
+	t.Run("password in mutation", passwordTest)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
