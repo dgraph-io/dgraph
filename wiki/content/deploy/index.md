@@ -11,7 +11,7 @@ For a single server setup, recommended for new users, please see [Get Started](/
 {{% /notice %}}
 
 ## Install Dgraph
-#### Docker
+### Docker
 
 ```sh
 docker pull dgraph/dgraph:latest
@@ -20,7 +20,7 @@ docker pull dgraph/dgraph:latest
 docker run -it dgraph/dgraph:latest dgraph
 ```
 
-#### Automatic download
+### Automatic download
 
 Running
 
@@ -47,7 +47,7 @@ Other instalation options:
 curl https://get.dgraph.io -sSf | bash -s -- --systemd
 ```
 
-#### Manual download [optional]
+### Manual download [optional]
 
 If you don't want to follow the automatic installation method, you could manually download the appropriate tar for your platform from **[Dgraph releases](https://github.com/dgraph-io/dgraph/releases)**. After downloading the tar for your platform from Github, extract the binary to `/usr/local/bin` like so.
 
@@ -62,7 +62,7 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 dgraph
 ```
 
-#### Building from Source
+### Building from Source
 
 {{% notice "note" %}}
 You can build the Ratel UI from source seperately following its build
@@ -95,7 +95,7 @@ causes issues while using the Go client). Update your `go-grpc` by running.
 go get -u -v google.golang.org/grpc
 ```
 
-#### Config
+### Config
 
 The full set of dgraph's configuration options (along with brief descriptions)
 can be viewed by invoking dgraph with the `--help` flag. For example, to see
@@ -340,29 +340,36 @@ ifconfig # On Ubuntu/Mac
 ```
 We'll refer to the host IP address via `HOSTIPADDR`.
 
+**Create Docker network**
+
+```sh
+docker network create dgraph_default
+```
+
 **Run dgraph zero**
 
 ```sh
 mkdir ~/zero # Or any other directory where data should be stored.
 
-docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
+docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
 ```
 
 **Run dgraph alpha**
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
-
+docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+```
+```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
+docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:latest dgraph-ratel
 ```
 
 ### Run using Docker Compose (On single AWS instance)
@@ -409,34 +416,10 @@ group which allows inbound access on port 22, 2376 (required by Docker Machine),
 Docker Compose is a tool for running multi-container Docker applications. You can follow the
 instructions [here](https://docs.docker.com/compose/install/) to install it.
 
-Copy the file below in a directory on your machine and name it `docker-compose.yml`.
+Run the command below to download the `docker-compose.yml` file on your machine.
 
 ```sh
-version: "3.2"
-services:
-  zero:
-    image: dgraph/dgraph:latest
-    volumes:
-      - /data:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    restart: on-failure
-    command: dgraph zero --my=zero:5080
-  server:
-    image: dgraph/dgraph:latest
-    volumes:
-      - /data:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    restart: on-failure
-    command: dgraph alpha --my=server:7080 --lru_mb=2048 --zero=zero:5080
-  ratel:
-    image: dgraph/dgraph:latest
-    ports:
-      - 8000:8000
-    command: dgraph-ratel
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose.yml
 ```
 
 {{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
@@ -524,7 +507,7 @@ things.
 
 {{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
 
-Running `docker-machine ps` shows all the AWS EC2 instances that we started.
+Running `docker-machine ls` shows all the AWS EC2 instances that we started.
 ```sh
 ➜  ~ docker-machine ls
 NAME    ACTIVE   DRIVER       STATE     URL                         SWARM   DOCKER        ERRORS
@@ -594,7 +577,8 @@ docker node ls
 ```
 
 Output:
-```sh
+
+```
 ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS
 ghzapjsto20c6d6l3n0m91zev     aws02               Ready               Active
 rb39d5lgv66it1yi4rto0gn6a     aws03               Ready               Active
@@ -603,88 +587,17 @@ waqdyimp8llvca9i09k4202x5 *   aws01               Ready               Active    
 
 * Start the Dgraph cluster
 
-Copy the following file on your host machine and name it as `docker-compose.yml`
+Run the command below to download the `docker-compose-multi.yml` file on your machine.
 
 ```sh
-version: "3"
-networks:
-  dgraph:
-services:
-  zero:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph zero --my=zero:5080 --replicas 3
-  alpha1:
-    image: dgraph/dgraph:latest
-    hostname: "alpha1"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
-  alpha2:
-    image: dgraph/dgraph:latest
-    hostname: "alpha2"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8081:8081
-      - 9081:9081
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
-  alpha3:
-    image: dgraph/dgraph:latest
-    hostname: "alpha3"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8082:8082
-      - 9082:9082
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
-volumes:
-  data-volume:
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose-multi.yml
 ```
+
 Run the following command on the Swarm leader to deploy the Dgraph Cluster.
 
 ```sh
 eval $(docker-machine env aws01)
-docker stack deploy -c docker-compose.yml dgraph
+docker stack deploy -c docker-compose-multi.yml dgraph
 ```
 
 This should run three Dgraph Alpha services (one on each VM because of the
@@ -711,18 +624,19 @@ docker service ls
 ```
 
 Output:
-```
-ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
-vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
-69oge03y0koz        dgraph_alpha2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_alpha3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
-uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
-v9jlw00iz2gg        dgraph_alpha1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
-```
-
-To stop the cluster run
 
 ```
+ID                NAME               MODE            REPLICAS      IMAGE                     PORTS
+vp5bpwzwawoe      dgraph_ratel       replicated      1/1           dgraph/dgraph:latest      *:8000->8000/tcp
+69oge03y0koz      dgraph_alpha2      replicated      1/1           dgraph/dgraph:latest      *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6      dgraph_alpha3      replicated      1/1           dgraph/dgraph:latest      *:8082->8082/tcp,*:9082->9082/tcp
+uild5cqp44dz      dgraph_zero        replicated      1/1           dgraph/dgraph:latest      *:5080->5080/tcp,*:6080->6080/tcp
+v9jlw00iz2gg      dgraph_alpha1      replicated      1/1           dgraph/dgraph:latest      *:8080->8080/tcp,*:9080->9080/tcp
+```
+
+To stop the cluster run:
+
+```sh
 docker stack rm dgraph
 ```
 
@@ -742,159 +656,46 @@ If you are on AWS, below is the security group (**docker-machine**) after necess
 
 {{% load-img "/images/aws.png" "AWS Security Group" %}}
 
-Copy the following file on your host machine and name it as docker-compose.yml
+Run the command below to download the `docker-compose-ha.yml` file on your machine.
 
 ```sh
-version: "3"
-networks:
-  dgraph:
-services:
-  zero1:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
-  zero2:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5081:5081
-      - 6081:6081
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
-  zero_3:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5082:5082
-      - 6082:6082
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero1:5080 --idx 3
-  alpha1:
-    image: dgraph/dgraph:latest
-    hostname: "alpha1"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
-  alpha2:
-    image: dgraph/dgraph:latest
-    hostname: "alpha2"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8081:8081
-      - 9081:9081
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
-  alpha3:
-    image: dgraph/dgraph:latest
-    hostname: "alpha3"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8082:8082
-      - 9082:9082
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
-  alpha_4:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_4"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8083:8083
-      - 9083:9083
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws04
-    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
-  alpha_5:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_5"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8084:8084
-      - 9084:9084
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws05
-    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
-  alpha_6:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_6"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8085:8085
-      - 9085:9085
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws06
-    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
-volumes:
-  data-volume:
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose-ha.yml
 ```
+
+Run the following command on the Swarm leader to deploy the Dgraph Cluster.
+
+```sh
+eval $(docker-machine env aws01)
+docker stack deploy -c docker-compose-ha.yml dgraph
+```
+
+You can verify that all services were created successfully by running:
+
+```sh
+docker service ls
+```
+
+Output:
+```
+ID                NAME               MODE            REPLICAS      IMAGE                     PORTS
+qck6v1lacvtu      dgraph_alpha1      replicated      1/1           dgraph/dgraph:latest      *:8080->8080/tcp, *:9080->9080/tcp
+i3iq5mwhxy8a      dgraph_alpha2      replicated      1/1           dgraph/dgraph:latest      *:8081->8081/tcp, *:9081->9081/tcp
+2ggma86bw7h7      dgraph_alpha3      replicated      1/1           dgraph/dgraph:latest      *:8082->8082/tcp, *:9082->9082/tcp
+wgn5adzk67n4      dgraph_alpha4      replicated      1/1           dgraph/dgraph:latest      *:8083->8083/tcp, *:9083->9083/tcp
+uzviqxv9fp2a      dgraph_alpha5      replicated      1/1           dgraph/dgraph:latest      *:8084->8084/tcp, *:9084->9084/tcp
+nl1j457ko54g      dgraph_alpha6      replicated      1/1           dgraph/dgraph:latest      *:8085->8085/tcp, *:9085->9085/tcp
+s11bwr4a6371      dgraph_ratel       replicated      1/1           dgraph/dgraph:latest      *:8000->8000/tcp
+vchibvpquaes      dgraph_zero1       replicated      1/1           dgraph/dgraph:latest      *:5080->5080/tcp, *:6080->6080/tcp
+199rezd7pw7c      dgraph_zero2       replicated      1/1           dgraph/dgraph:latest      *:5081->5081/tcp, *:6081->6081/tcp
+yb8ella56oxt      dgraph_zero3       replicated      1/1           dgraph/dgraph:latest      *:5082->5082/tcp, *:6082->6082/tcp
+```
+
+To stop the cluster run:
+
+```sh
+docker stack rm dgraph
+```
+
 {{% notice "note" %}}
 1. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph alphas or use `-p` & `-w` to configure data directories.
 2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
@@ -948,7 +749,11 @@ NAME       READY     STATUS    RESTARTS   AGE
 dgraph-0   3/3       Running   0          1m
 ```
 
-{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-0 <container_name>`. For example, try `kubectl logs -f dgraph-0 alpha` for server logs.{{% /notice %}}
+{{% notice "tip" %}}
+You can check the logs for the containers in the pod using
+`kubectl logs -f dgraph-0 <container_name>`. For example, try
+`kubectl logs -f dgraph-0 alpha` for server logs.
+{{% /notice %}}
 
 * Test the setup
 
@@ -1095,7 +900,7 @@ To install the chart with the release name `my-release`:
 helm install my-release dgraph/dgraph
 ```
 
-The above command will  install the latest available dgraph docker image. In order to install the older versions:
+The above command will install the latest available dgraph docker image. In order to install the older versions:
 
 ```sh
 helm install my-release dgraph/dgraph --set image.tag="v1.1.0"
@@ -1378,10 +1183,11 @@ corrupted and data cannot be recovered), you can use the `/removeNode` API to
 remove the node from the cluster. With a Kubernetes StatefulSet, you'll need to
 remove the node in this order:
 
-1. Call `/removeNode` to remove the Dgraph instance from the cluster (see [More
-   about Dgraph Zero]({{< relref "#more-about-dgraph-zero" >}})). The removed
-   instance will immediately stop running. Any further attempts to join the
-   cluster will fail for that instance since it has been removed.
+1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
+   the cluster (see [More about Dgraph Zero]({{< relref
+   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   running. Any further attempts to join the cluster will fail for that instance
+   since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
    This prepares the pod to join with a clean state.
 3. Restart the pod. This will create a new PersistentVolumeClaim to create new
@@ -2360,4 +2166,4 @@ On Linux and Mac, you can check the file descriptor limit with `ulimit -n -H` fo
 
 ## See Also
 
-* [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
+* [Product Roadmap 2020](https://github.com/dgraph-io/dgraph/issues/4724)

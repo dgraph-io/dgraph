@@ -107,7 +107,7 @@ func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
 	start := time.Now()
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 10)
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
@@ -688,24 +688,29 @@ type queryContext struct {
 	namespace string
 }
 
-// HealthAll handles health?all requests.
-func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+// Health handles /health and /health?all requests.
+func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if err := authorizeGroot(ctx); err != nil {
-		return nil, err
-	}
 
 	var healthAll []pb.HealthInfo
-	pool := conn.GetPools().GetAll()
-	for _, p := range pool {
-		healthAll = append(healthAll, p.HealthInfo())
+	if all {
+		if err := authorizeGroot(ctx); err != nil {
+			return nil, err
+		}
+		pool := conn.GetPools().GetAll()
+		for _, p := range pool {
+			if p.Addr == x.WorkerConfig.MyAddr {
+				continue
+			}
+			healthAll = append(healthAll, p.HealthInfo())
+		}
 	}
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
 		Instance: "alpha",
-		Addr:     x.WorkerConfig.MyAddr,
+		Address:  x.WorkerConfig.MyAddr,
 		Status:   "healthy",
 		Group:    strconv.Itoa(int(worker.GroupId())),
 		Version:  x.Version(),

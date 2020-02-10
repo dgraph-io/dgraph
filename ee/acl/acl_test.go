@@ -14,6 +14,7 @@ package acl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -675,12 +676,204 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		},
 	}
 
-	t.Parallel()
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
 			testutil.CompareJSON(t, tc.output, string(resp.Json))
 		})
 	}
+}
+
+func TestNewACLPredicates(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	queryTests := []struct {
+		input       string
+		output      string
+		description string
+	}{
+		{
+			`
+			{
+				me(func: has(name)) {
+					name
+					nickname
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			"alice doesn't have read access to <nickname>",
+		},
+		{
+			`
+			{
+				me(func: has(nickname)) {
+					name
+					nickname
+				}
+			}
+			`,
+			`{}`,
+			`alice doesn't have access to <nickname> so "has(nickname)" is unauthorized`,
+		},
+	}
+
+	for _, tc := range queryTests {
+		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.Nil(t, err)
+			testutil.CompareJSON(t, tc.output, string(resp.Json))
+		})
+	}
+
+	mutationTests := []struct {
+		input       string
+		output      string
+		err         error
+		description string
+	}{
+		{
+			"_:a <name> \"Animesh\" .",
+			"",
+			errors.New(""),
+			"alice doesn't have write access on <name>.",
+		},
+		{
+			"_:a <nickname> \"Pathak\" .",
+			"",
+			nil,
+			"alice can mutate <nickname> predicate.",
+		},
+	}
+	for _, tc := range mutationTests {
+		t.Run(tc.description, func(t *testing.T) {
+			t.Parallel()
+			_, err := userClient.NewTxn().Mutate(ctx, &api.Mutation{
+				SetNquads: []byte(tc.input),
+				CommitNow: true,
+			})
+			require.True(t, (err == nil) == (tc.err == nil))
+		})
+	}
+}
+
+func TestNegativePermissionDeleteRule(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	queryName := "{me(func: has(name)) {name}}"
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, queryName)
+	require.NoError(t, err, "Error while querying data")
+
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+		string(resp.GetJson()))
+
+	// Deleting a rule by setting negative permission works only when done by acl commandline
+	// tool. When done directly through query it will actually set negative permission,
+	// which won't work as expceted.
+	updateRule := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint,
+		"-g", devGroup, "-p", "name", "-m", "-1", "-x", "password")
+	require.NoError(t, updateRule.Run())
+	time.Sleep(6 * time.Second)
+
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, string(resp.GetJson()), `{}`)
+}
+
+func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) {
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	devGroupMut := `
+		_:g  <dgraph.xid>        "dev" .
+		_:g  <dgraph.type>       "Group" .
+		_:g  <dgraph.acl.rule>   _:r1 .
+		_:r1 <dgraph.rule.predicate>  "name" .
+		_:r1 <dgraph.rule.permission> "4" .
+		_:g  <dgraph.acl.rule>   _:r2 .
+		_:r2 <dgraph.rule.predicate>  "nickname" .
+		_:r2 <dgraph.rule.permission> "2" .
+	`
+	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(devGroupMut),
+		CommitNow: true,
+	})
+	require.NoError(t, err, "Error adding group and permissions")
+
+	idQuery := fmt.Sprintf(`
+	{
+		userid as var(func: eq(dgraph.xid, "%s"))
+		gid as var(func: eq(dgraph.xid, "dev"))
+	}`, userid)
+	addAliceToDevMutation := &api.NQuad{
+		Subject:   "uid(userid)",
+		Predicate: "dgraph.user.group",
+		ObjectId:  "uid(gid)",
+	}
+	_, err = dg.NewTxn().Do(ctx, &api.Request{
+		CommitNow: true,
+		Query:     idQuery,
+		Mutations: []*api.Mutation{
+			{
+				Set: []*api.NQuad{addAliceToDevMutation},
+			},
+		},
+	})
+	require.NoError(t, err, "Error adding user to dev group")
+
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <nickname> "RG" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
+}
+
+func TestNonExistentGroup(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	setRuleCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
+		devGroup, "-p", "name", "-m", "4", "-x", "password")
+
+	resp, err := setRuleCmd.CombinedOutput()
+	require.Error(t, err, "Setting permission for non-existent group should return error")
+	require.Contains(t, string(resp), `Unable to modify: Group <dev> doesn't exist`)
 }

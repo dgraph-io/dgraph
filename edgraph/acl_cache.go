@@ -13,12 +13,10 @@
 package edgraph
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -51,12 +49,7 @@ func (cache *aclCache) update(groups []acl.Group) {
 	// predicate to a submap, and the submap maps a group to a permission
 	predPerms := make(map[string]map[string]int32)
 	for _, group := range groups {
-		aclBytes := []byte(group.Acls)
-		var acls []acl.Acl
-		if err := json.Unmarshal(aclBytes, &acls); err != nil {
-			glog.Errorf("Unable to unmarshal the aclBytes: %v", err)
-			continue
-		}
+		acls := group.Rules
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {

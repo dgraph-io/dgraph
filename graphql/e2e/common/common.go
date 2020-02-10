@@ -136,6 +136,17 @@ type state struct {
 	Country *country `json:"country,omitempty"`
 }
 
+type movie struct {
+	ID       string      `json:"id,omitempty"`
+	Name     string      `json:"name,omitempty"`
+	Director []*director `json:"moviedirector,omitempty"`
+}
+
+type director struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
@@ -256,6 +267,8 @@ func RunAll(t *testing.T) {
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
+	t.Run("dgraph directive with reverse edge adds data correctly",
+		addMutationWithReverseDgraphEdge)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

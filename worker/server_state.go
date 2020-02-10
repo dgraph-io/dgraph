@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -37,9 +38,7 @@ type ServerState struct {
 
 	Pstore   *badger.DB
 	WALstore *badger.DB
-
-	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
-	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
+	gcCloser *y.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -64,34 +63,6 @@ func InitServerState() {
 			Config.PostingDir)
 	}
 	x.WorkerConfig.ProposedGroupId = groupId
-}
-
-func (s *ServerState) runVlogGC(store *badger.DB) {
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
-
-	runGC := func() {
-		var err error
-		for err == nil {
-			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.7)
-		}
-		_, lastVlogSize = store.Size()
-	}
-
-	for {
-		select {
-		case <-s.vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-s.mandatoryVlogTicker.C:
-			runGC()
-		}
-	}
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
@@ -189,22 +160,20 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.vlogTicker = time.NewTicker(1 * time.Minute)
-	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
-	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
+	s.gcCloser = y.NewCloser(2)
+	go x.RunVlogGC(s.Pstore, s.gcCloser)
+	go x.RunVlogGC(s.WALstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
 	}
 	if err := s.WALstore.Close(); err != nil {
 		glog.Errorf("Error while closing WAL store: %v", err)
 	}
-	s.vlogTicker.Stop()
-	s.mandatoryVlogTicker.Stop()
 }
 
 func (s *ServerState) GetTimestamp(readOnly bool) uint64 {

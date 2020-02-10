@@ -1593,16 +1593,30 @@ func TestMultiTenancy(t *testing.T) {
 		"schema":{
 		   "schema":[
 			  {
-				 "predicate":"dgraph.graphql.schema",
-				 "type":"string"
+				 "predicate":"dgraph.acl.rule",
+				 "type":"uid",
+				 "list":true
 			  },
 			  {
-				 "predicate":"dgraph.group.acl",
+				 "predicate":"dgraph.graphql.schema",
 				 "type":"string"
 			  },
 			  {
 				 "predicate":"dgraph.password",
 				 "type":"password"
+			  },
+			  {
+				 "predicate":"dgraph.rule.permission",
+				 "type":"int"
+			  },
+			  {
+				 "predicate":"dgraph.rule.predicate",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "upsert":true
 			  },
 			  {
 				 "predicate":"dgraph.type",
