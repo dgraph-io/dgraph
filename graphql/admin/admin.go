@@ -150,7 +150,12 @@ const (
 	type Rule {
 		id: ID!
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
-		permission: Permission! @dgraph(pred: "dgraph.rule.permission")
+		# TODO - Change permission to enum type once we figure out how to map enum strings to Int
+		# while storing it in Dgraph.
+		# We also need validation in Dgraph on ther permitted value of permission to be between [0,7]
+		# If we change permission to be an ENUM and only allow ACL mutations through the GraphQL API
+		# then we don't need this validation in Dgrpah.
+		permission: Int! @dgraph(pred: "dgraph.rule.permission")
 	}
 
 	input StringHashFilter {
@@ -173,7 +178,9 @@ const (
 
 	input AddGroupInput {
 		name: String!
-		users: [UserRef]
+		# Can't add users to a group in addGroup because users are a reverse edge from a group and
+		# we don't allow mutations along the reverse edge.
+		# users: [UserRef]
 		rules: [RuleRef]
 	}
 
@@ -188,7 +195,7 @@ const (
 
 	input RuleRef {
 		predicate: String!
-		permission: Permission!
+		permission: Int!
 	}
 
 	input UserFilter {
@@ -293,6 +300,10 @@ const (
 		backup(input: BackupInput!) : BackupPayload
 
 		# ACL related endpoints.
+		# 1. If user and group don't exist both are created and linked.
+		# 2. If user doesn't exist but group does, then user is created and both are linked.
+		# 3. If user exists and group doesn't exist, then two errors are returned. User exists and group doesn't exist.
+		# 4. If user and group exists, then error that user exists.
 		addUser(input: [AddUserInput]): AddUserPayload
 		addGroup(input: [AddGroupInput]): AddGroupPayload
 
@@ -657,17 +668,17 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					addRw,
-					qryExec,
-					mutExec,
+					resolve.NewAddRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					addRw,
-					qryExec,
-					mutExec,
+					resolve.NewAddRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
 			})
 }
