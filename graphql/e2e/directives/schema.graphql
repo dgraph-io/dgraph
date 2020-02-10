@@ -57,6 +57,10 @@ type Category {
         posts: [Post]
 }
 
+type User @secret(field: "password", pred:"pwd"){
+	name: String! @id
+}
+
 """
 GraphQL descriptions can be on enums.  They should work in the input
 schema and should make their way into the generated schema.

@@ -75,6 +75,13 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 				"upsert": true
 			},
 			{
+				"predicate": "User.name",
+				"type": "string",
+				"index": true,
+				"tokenizer": ["hash"],
+				"upsert": true
+			},
+			{
 				"predicate": "appears_in",
 				"type": "string",
 				"index": true,
@@ -211,6 +218,10 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 				"type": "uid"
 			},
 			{
+				"predicate": "pwd",
+				"type": "password"
+			},
+			{
 				"predicate": "roboDroid.primaryFunction",
 				"type": "string"
 			},
@@ -299,6 +310,17 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 					}
 				],
 				"name": "State"
+			},
+			{
+				"fields": [
+				        {
+						"name": "User.name"
+					},
+					{
+						"name": "pwd"
+					}
+				],
+				"name": "User"
 			},
 			{
 				"fields": [
