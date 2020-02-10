@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const ExportRequest = `mutation export {
+const ExportRequest = `mutation {
 	export(input: {format: "json"}) {
 		response {
 			code
@@ -43,7 +43,7 @@ type GraphQLError struct {
 }
 
 type GraphQLResponse struct {
-	Errors []graphQLError
+	Errors []GraphQLError
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
