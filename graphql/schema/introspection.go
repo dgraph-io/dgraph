@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strconv"
+
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
-	"strconv"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation
