@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -47,8 +48,10 @@ func (er *exportResolver) Rewrite(
 	}
 
 	format := worker.DefaultExportFormat
+	fmt.Printf("input: %+v\n", input)
 	if input.Format != "" {
 		format = worker.NormalizeExportFormat(input.Format)
+		fmt.Println("format: ", format)
 		if format == "" {
 			return nil, nil, errors.Errorf("invalid export format: %v", input.Format)
 		}

@@ -447,11 +447,6 @@ func setupServer(closer *y.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
-	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
-
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 	mainServer, adminServer := admin.NewServers(introspection, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())

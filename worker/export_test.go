@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -321,26 +322,77 @@ func TestExportJson(t *testing.T) {
 	checkExportSchema(t, schemaFileList)
 }
 
+const exportRequest = `mutation export($format: String!) {
+	export(input: {format: $format}) {
+		response {
+			code
+		}
+	}
+}`
+
+type graphQLParams struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables"`
+}
+
+type graphQLError struct {
+	Message string
+}
+
+type graphQLResponse struct {
+	Errors []graphQLError
+}
+
+func requireNoErrors(t *testing.T, resp *http.Response) {
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result *graphQLResponse
+	err = json.Unmarshal(b, &result)
+	require.NoError(t, err)
+	require.Nil(t, result.Errors)
+}
+
 func TestExportFormat(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := graphQLParams{
+		Query:     exportRequest,
+		Variables: map[string]interface{}{"format": "json"},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+	requireNoErrors(t, resp)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
+	params.Variables["format"] = "rdf"
+	b, err = json.Marshal(params)
 	require.NoError(t, err)
-	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+	requireNoErrors(t, resp)
+
+	params.Variables["format"] = "xml"
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result *graphQLResponse
+	err = json.Unmarshal(b, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Errors)
 }
 
 type skv struct {
