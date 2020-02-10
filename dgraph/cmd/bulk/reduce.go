@@ -148,6 +148,7 @@ type mapIterator struct {
 	batchCh       chan *iteratorEntry
 	freelist      chan *iteratorEntry
 	entrylistPool *sync.Pool
+	arena         []byte
 }
 
 type iteratorEntry struct {
@@ -164,6 +165,7 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
+	var bufStartIndex int
 	for _, key := range partitionsKeys {
 		var ie *iteratorEntry
 		select {
@@ -194,7 +196,13 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			}
 			x.Check2(r.Discard(n))
 
-			eBuf := make([]byte, sz)
+			if bufStartIndex+int(sz) >= len(mi.arena) {
+				// arena is filled reallocate.
+				mi.arena = make([]byte, 64*1024*1024)
+				bufStartIndex = 0
+			}
+			eBuf := mi.arena[bufStartIndex : bufStartIndex+int(sz)]
+			bufStartIndex += int(sz)
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
 			// The "mapentry" should just be a slice pointing to that.
 			x.Check2(io.ReadFull(r, eBuf))
@@ -230,11 +238,15 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		}
 		x.Check2(r.Discard(n))
 
-		for cap(mi.tmpBuf) < int(sz) {
-			mi.tmpBuf = make([]byte, sz)
+		if bufStartIndex+int(sz) >= len(mi.arena) {
+			// arena is filled reallocate.
+			mi.arena = make([]byte, 64*1024*1024)
+			bufStartIndex = 0
 		}
-		x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
-		batch = append(batch, mi.tmpBuf[:sz])
+		eBuf := mi.arena[bufStartIndex : bufStartIndex+int(sz)]
+		bufStartIndex += int(sz)
+		x.Check2(io.ReadFull(r, eBuf))
+		batch = append(batch, eBuf)
 
 	}
 	mi.batchCh <- &iteratorEntry{
@@ -280,6 +292,7 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterato
 		batchCh:       make(chan *iteratorEntry, 3),
 		freelist:      make(chan *iteratorEntry, 3),
 		entrylistPool: r.entrylistPool,
+		arena:         make([]byte, 64*1024*1024),
 	}
 	return header, itr
 }
@@ -312,7 +325,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 
 	for req := range entryCh {
 		req.list = &bpb.KVList{}
-		entries, _ := r.toList(req.entries, req.list)
+		r.toList(req.entries, req.list)
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
@@ -321,18 +334,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 		}
 		req.wg.Done()
 		atomic.AddInt32(&r.prog.numEncoding, -1)
-
-		for _, me := range entries {
-			me.Reset()
-		}
-		// Put in lists of 1000.
-		start, end := 0, 1000
-		for end <= len(entries) {
-			r.entrylistPool.Put(entries[start:end])
-			start = end
-			end += 1000
-		}
-		r.entrylistPool.Put(entries[start:])
 	}
 }
 
@@ -505,11 +506,11 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) ([]*pb.MapEntry, int) {
+func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) int {
 	entries := make([]*pb.MapEntry, 0, len(mapEntries))
-	for _, buf := range mapEntries {
+	for _, mapEntry := range mapEntries {
 		e := &pb.MapEntry{}
-		x.Check(e.Unmarshal(buf))
+		x.Check(e.Unmarshal(mapEntry))
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool {
@@ -567,30 +568,28 @@ func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) ([]*pb.MapEntry,
 		uids = uids[:0]
 		pl.Reset()
 	}
-
 	// TODO: Move the unmarshaling of map entries here.
 	// We could have just one map entry here.
-	for _, mapEntry := range entries {
+	for _, entry := range entries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
-
-		if !bytes.Equal(mapEntry.Key, currentKey) && currentKey != nil {
+		if !bytes.Equal(entry.Key, currentKey) && currentKey != nil {
 			appendToList()
 		}
-		currentKey = mapEntry.Key
+		currentKey = entry.Key
 
-		uid := mapEntry.Uid
-		if mapEntry.Posting != nil {
-			uid = mapEntry.Posting.Uid
+		uid := entry.Uid
+		if entry.Posting != nil {
+			uid = entry.Posting.Uid
 		}
 		if len(uids) > 0 && uids[len(uids)-1] == uid {
 			continue
 		}
 		// TODO: Potentially could be doing codec.Encoding right here.
 		uids = append(uids, uid)
-		if mapEntry.Posting != nil {
-			pl.Postings = append(pl.Postings, mapEntry.Posting)
+		if entry.Posting != nil {
+			pl.Postings = append(pl.Postings, entry.Posting)
 		}
 	}
 	appendToList()
-	return entries, size
+	return size
 }
