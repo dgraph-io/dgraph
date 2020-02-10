@@ -204,7 +204,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			key, err := GetKeyForMapEntry(eBuf)
 			x.Check(err)
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
-			if bytes.Compare(key, ie.partitionKey.GetKey()) < 0 {
+			if !(bytes.Compare(key, ie.partitionKey.GetKey()) < 0) {
 				break
 			}
 			// TODO: The batch should not contain map entry, instead it should contain just the byte
@@ -311,7 +311,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
 	for req := range entryCh {
-		fmt.Println("encoder req", len(req.entries))
 		req.list = &bpb.KVList{}
 		entries, _ := r.toList(req.entries, req.list)
 		for _, kv := range req.list.Kv {
@@ -320,7 +319,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 			x.AssertTrue(len(pk.Attr) > 0)
 			kv.StreamId = r.streamIdFor(pk.Attr)
 		}
-		fmt.Println("to list len ", len(req.list.Kv))
 		req.wg.Done()
 		atomic.AddInt32(&r.prog.numEncoding, -1)
 
@@ -477,7 +475,6 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 		wg.Add(1)
 		req := &encodeRequest{entries: batch, wg: wg}
 		atomic.AddInt32(&r.prog.numEncoding, 1)
-		fmt.Println("sending data with", len(req.entries))
 		encoderCh <- req
 		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
 		writerCh <- req
@@ -510,22 +507,19 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 
 func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) ([]*pb.MapEntry, int) {
 	entries := make([]*pb.MapEntry, 0, len(mapEntries))
-	fmt.Println("map entries", len(mapEntries))
-	
 	for _, buf := range mapEntries {
-		e:=&pb.MapEntry{}
+		e := &pb.MapEntry{}
 		x.Check(e.Unmarshal(buf))
 		entries = append(entries, e)
 	}
-	fmt.Println("entries len ", len(entries))
 	sort.Slice(entries, func(i, j int) bool {
 		return less(entries[i], entries[j])
 	})
 
 	var currentKey []byte
 	var uids []uint64
-	pl := new(pb.PostingList)
 	var size int
+	pl := new(pb.PostingList)
 
 	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
