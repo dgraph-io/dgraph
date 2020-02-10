@@ -205,7 +205,6 @@ func TestSchema_Normal(t *testing.T) {
 			"predicate": "Post.topic",
 			"type": "string",
 			"index": true,
-			"tokenizer": [
 			  "exact"
 			]
 		  },
@@ -238,12 +237,19 @@ func TestSchema_Normal(t *testing.T) {
 			  "hash"
 			],
 			"upsert": true
-		  },
-		  {
+		}, {
+			"predicate": "User.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash"],
+			"upsert": true
+		}, {
+			"predicate": "User.password",
+			"type": "password"
+		}, {
 			"predicate": "dgraph.graphql.schema",
 			"type": "string"
-		  },
-		  {
+		}, {
 			"predicate": "dgraph.type",
 			"type": "string",
 			"index": true,
@@ -402,10 +408,8 @@ func TestSchema_Normal(t *testing.T) {
 			  }
 			],
 			"name": "Post"
-		  },
-		  {
-			"fields": [
-			  {
+		}, {
+			"fields": [{
 				"name": "Starship.name"
 			  },
 			  {
@@ -427,17 +431,21 @@ func TestSchema_Normal(t *testing.T) {
 			  }
 			],
 			"name": "State"
-		  },
-		  {
-			"fields": [
-			  {
+
+		}, {
+			"fields": [{
+				"name": "User.name"
+			}, {
+				"name": "User.password"
+			}],
+			"name": "User"
+		}, {
+			"fields": [{
 				"name": "dgraph.graphql.schema"
-			  }
-			],
+			}],
 			"name": "dgraph.graphql"
-		  }
-		]
-	  }
+		}]
+	}
 	`
 
 	t.Run("graphql schema", func(t *testing.T) {

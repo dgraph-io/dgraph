@@ -44,8 +44,6 @@ type updateRewriter struct {
 }
 type deleteRewriter struct{}
 
-type passwordRewriter struct{}
-
 // A mutationFragment is a partially built Dgraph mutation.  Given a GraphQL
 // mutation input, we traverse the input data and build a Dgraph mutation.  That
 // mutation might require queries (e.g. to check types), conditions (to guard the

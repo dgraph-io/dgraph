@@ -265,11 +265,3 @@ func deleteCompletion() CompletionFunc {
 		return []byte(fmt.Sprintf(`{ "%s": null }`, schema.NumUid)), err
 	})
 }
-
-func passwordCompletion() CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-
-		return []byte(`{ "msg": "Password succesfully changed" }`), err
-	})
-}
