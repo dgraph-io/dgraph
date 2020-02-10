@@ -30,6 +30,7 @@ var (
 	app       = cli.NewApp()
 	nodeFlags = []cli.Flag{
 		utils.DataDirFlag,
+		utils.RolesFlag,
 		utils.ConfigFileFlag,
 		utils.UnlockFlag,
 		utils.PasswordFlag,

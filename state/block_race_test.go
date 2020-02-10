@@ -48,7 +48,7 @@ func TestConcurrencySetHeader(t *testing.T) {
 		go func(index int) {
 			defer pend.Done()
 
-			bs := &blockState{
+			bs := &BlockState{
 				db: dbs[index],
 			}
 

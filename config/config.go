@@ -34,6 +34,7 @@ type Config struct {
 
 type GlobalConfig struct {
 	DataDir string `toml:"data-dir"`
+	Roles   byte   `toml:"roles"`
 }
 
 type P2pCfg struct {

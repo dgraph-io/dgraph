@@ -32,6 +32,7 @@ var _ services.Service = &Service{}
 // Service describes a p2p service
 type Service struct {
 	ctx         context.Context
+	cfg         *Config
 	host        *host
 	mdns        *mdns
 	status      *status
@@ -62,6 +63,7 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 
 	p2p := &Service{
 		ctx:         ctx,
+		cfg:         cfg,
 		host:        host,
 		mdns:        newMdns(host),
 		status:      newStatus(host),
@@ -78,11 +80,8 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 // Start starts the p2p service
 func (s *Service) Start() error {
 
-	// receive messages from core service (including host status messages)
+	// receive messages from core service
 	go s.receiveCoreMessages()
-
-	// TODO: ensure core service generates host status message and sends to p2p
-	// service before connecting and exchanging status messages with peers
 
 	s.host.registerConnHandler(s.handleConn)
 	s.host.registerStreamHandler(s.handleStream)
@@ -134,35 +133,38 @@ func (s *Service) receiveCoreMessages() {
 		// receive message from core service
 		msg := <-s.msgRec
 
-		// check if non-status message
-		if msg.GetType() != StatusMsgType {
+		log.Trace(
+			"Broadcasting message from core service",
+			"host", s.host.id(),
+			"type", msg.GetType(),
+		)
 
-			log.Trace(
-				"Broadcasting message from core service",
-				"host", s.host.id(),
-				"type", msg.GetType(),
-			)
-
-			// broadcast message to connected peers
-			s.host.broadcast(msg)
-
-		} else {
-
-			// check if status is enabled
-			if !s.noStatus {
-
-				// update host status message
-				s.status.setHostMessage(msg)
-			}
-		}
+		// broadcast message to connected peers
+		s.host.broadcast(msg)
 	}
 }
 
 // handleConn starts processes that manage the connection
 func (s *Service) handleConn(conn network.Conn) {
-
 	// check if status is enabled
 	if !s.noStatus {
+
+		// get latest block header from block state
+		latestBlock := s.cfg.BlockState.LatestHeader()
+
+		// update host status message
+		msg := &StatusMessage{
+			ProtocolVersion:     s.cfg.ProtocolVersion,
+			MinSupportedVersion: s.cfg.MinSupportedVersion,
+			Roles:               s.cfg.Roles,
+			BestBlockNumber:     latestBlock.Number.Uint64(),
+			BestBlockHash:       latestBlock.Hash(),
+			GenesisHash:         latestBlock.StateRoot,
+			ChainStatus:         []byte{0}, // TODO
+		}
+
+		// update host status message
+		s.status.setHostMessage(msg)
 
 		// manage status messages for new connection
 		s.status.handleConn(conn)
@@ -237,8 +239,8 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 }
 
 // Health returns information about host needed for the rpc server
-func (s *Service) Health() Health {
-	return Health{
+func (s *Service) Health() common.Health {
+	return common.Health{
 		Peers:           s.host.peerCount(),
 		IsSyncing:       false, // TODO
 		ShouldHavePeers: !s.noBootstrap,
@@ -246,18 +248,18 @@ func (s *Service) Health() Health {
 }
 
 // NetworkState returns information about host needed for the rpc server and the runtime
-func (s *Service) NetworkState() NetworkState {
-	return NetworkState{
+func (s *Service) NetworkState() common.NetworkState {
+	return common.NetworkState{
 		PeerID: s.host.id().String(),
 	}
 }
 
 // Peers returns information about connected peers needed for the rpc server
-func (s *Service) Peers() (peers []PeerInfo) {
+func (s *Service) Peers() (peers []common.PeerInfo) {
 	for _, p := range s.host.peers() {
 		if s.status.confirmed(p) {
 			msg := s.status.peerMessage[p]
-			peers = append(peers, PeerInfo{
+			peers = append(peers, common.PeerInfo{
 				PeerID:          p.String(),
 				Roles:           msg.Roles,
 				ProtocolVersion: msg.ProtocolVersion,

@@ -17,35 +17,59 @@
 package state
 
 import (
+	"math/big"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/trie"
+	"github.com/stretchr/testify/require"
 )
 
-var testHealth = p2p.Health{}
-var testNetworkState = p2p.NetworkState{}
-var testPeers = []p2p.PeerInfo{}
+var testHealth = &common.Health{}
+var testNetworkState = &common.NetworkState{}
+var testPeers = &[]common.PeerInfo{}
 
 // test state.Network
 func TestNetworkState(t *testing.T) {
-
 	state := newTestService(t)
 
-	// test state.Network.Health()
-	health := state.Network.Health()
-	if health != testHealth {
-		t.Errorf("System.Health - expected %+v got: %+v\n", testHealth, health)
+	header := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
 	}
 
-	// test state.Network.NetworkState()
-	networkState := state.Network.NetworkState()
-	if networkState != testNetworkState {
-		t.Errorf("System.NetworkState - expected %+v got: %+v\n", testNetworkState, networkState)
+	err := state.Initialize(header, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// test state.Network.Peers()
-	peers := state.Network.Peers()
-	if len(peers) != len(testPeers) {
-		t.Errorf("System.Peers - expected %+v got: %+v\n", testPeers, peers)
+	err = state.Start()
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	err = state.Network.SetHealth(testHealth)
+	require.Nil(t, err)
+
+	health, err := state.Network.GetHealth()
+	require.Nil(t, err)
+
+	require.Equal(t, health, testHealth)
+
+	err = state.Network.SetNetworkState(testNetworkState)
+	require.Nil(t, err)
+
+	networkState, err := state.Network.GetNetworkState()
+	require.Nil(t, err)
+
+	require.Equal(t, networkState, testNetworkState)
+
+	err = state.Network.SetPeers(testPeers)
+	require.Nil(t, err)
+
+	peers, err := state.Network.GetPeers()
+	require.Nil(t, err)
+
+	require.Equal(t, peers, testPeers)
 }

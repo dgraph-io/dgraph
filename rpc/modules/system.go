@@ -19,8 +19,8 @@ package modules
 import (
 	"net/http"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/internal/api"
-	"github.com/ChainSafe/gossamer/p2p"
 )
 
 // NOT_IMPLEMENTED used as placeholder for not implemented yet funcs
@@ -39,17 +39,17 @@ type StringResponse string
 
 // SystemHealthResponse struct to marshal json
 type SystemHealthResponse struct {
-	Health p2p.Health `json:"health"`
+	Health common.Health `json:"health"`
 }
 
 // SystemNetworkStateResponse struct to marshal json
 type SystemNetworkStateResponse struct {
-	NetworkState p2p.NetworkState `json:"networkState"`
+	NetworkState common.NetworkState `json:"networkState"`
 }
 
 // SystemPeersResponse struct to marshal json
 type SystemPeersResponse struct {
-	Peers []p2p.PeerInfo `json:"peers"`
+	Peers []common.PeerInfo `json:"peers"`
 }
 
 // SystemPropertiesResponse struct to marshal json

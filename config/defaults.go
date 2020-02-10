@@ -51,6 +51,7 @@ var (
 	// DefaultGlobalConfig Global
 	DefaultGlobalConfig = GlobalConfig{
 		DataDir: DefaultDataDir(),
+		Roles:   byte(1), // full node
 	}
 
 	// DefaultP2PConfig P2P

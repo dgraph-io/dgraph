@@ -17,7 +17,7 @@
 package module
 
 import (
-	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/common"
 	log "github.com/ChainSafe/log15"
 )
 
@@ -28,9 +28,9 @@ type P2pModule struct {
 
 // P2pAPI is the interface for the p2p package
 type P2pAPI interface {
-	Health() p2p.Health
-	NetworkState() p2p.NetworkState
-	Peers() []p2p.PeerInfo
+	Health() common.Health
+	NetworkState() common.NetworkState
+	Peers() []common.PeerInfo
 }
 
 // NewP2pModule implements P2pAPI
@@ -39,19 +39,19 @@ func NewP2pModule(p2pAPI P2pAPI) *P2pModule {
 }
 
 // Health returns p2p service Health()
-func (m *P2pModule) Health() p2p.Health {
+func (m *P2pModule) Health() common.Health {
 	log.Debug("[rpc] Executing System.Health", "params", nil)
 	return m.P2pAPI.Health()
 }
 
 // NetworkState returns p2p service NetworkState()
-func (m *P2pModule) NetworkState() p2p.NetworkState {
+func (m *P2pModule) NetworkState() common.NetworkState {
 	log.Debug("[rpc] Executing System.NetworkState", "params", nil)
 	return m.P2pAPI.NetworkState()
 }
 
 // Peers returns p2p service Peers()
-func (m *P2pModule) Peers() []p2p.PeerInfo {
+func (m *P2pModule) Peers() []common.PeerInfo {
 	log.Debug("[rpc] Executing System.Peers", "params", nil)
 	return m.P2pAPI.Peers()
 }

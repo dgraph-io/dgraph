@@ -18,25 +18,27 @@ package p2p
 
 import (
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/core/types"
 )
 
-// Health is network information about host needed for the rpc server
-type Health struct {
-	Peers           int
-	IsSyncing       bool
-	ShouldHavePeers bool
+// BlockState interface for block state methods
+type BlockState interface {
+	LatestHeader() *types.Header
+	AddBlock(*types.Block) error
+	SetBlock(*types.Block) error
 }
 
-// NetworkState is network information about host needed for the rpc server and the runtime
-type NetworkState struct {
-	PeerID string
+// NetworkState interface for network state methods
+type NetworkState interface {
+	GetHealth() (*common.Health, error)
+	SetHealth(*common.Health) error
+	GetNetworkState() (*common.NetworkState, error)
+	SetNetworkState(*common.NetworkState) error
+	GetPeers() (*[]common.PeerInfo, error)
+	SetPeers(*[]common.PeerInfo) error
 }
 
-// PeerInfo is network information about peers needed for the rpc server
-type PeerInfo struct {
-	PeerID          string
-	Roles           byte
-	ProtocolVersion uint32
-	BestHash        common.Hash
-	BestNumber      uint64
+// StorageState interface for storage state methods
+type StorageState interface {
+	StorageRoot() (common.Hash, error)
 }

@@ -87,7 +87,7 @@ func generateKey(seed int64, fp string) (crypto.PrivKey, error) {
 
 // loadKey attempts to load a private key from the provided filepath
 func loadKey(fp string) (crypto.PrivKey, error) {
-	pth := path.Join(filepath.Clean(fp), KeyFile)
+	pth := path.Join(filepath.Clean(fp), DefaultKeyFile)
 	if _, err := os.Stat(pth); os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -117,7 +117,7 @@ func makeDir(fp string) error {
 
 // saveKey attempts to save a private key to the provided filepath
 func saveKey(priv crypto.PrivKey, fp string) (err error) {
-	pth := path.Join(filepath.Clean(fp), KeyFile)
+	pth := path.Join(filepath.Clean(fp), DefaultKeyFile)
 	f, err := os.Create(pth)
 	if err != nil {
 		return err

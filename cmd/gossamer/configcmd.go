@@ -21,6 +21,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -49,6 +50,8 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
+	log.Info("🕸\t Configuring node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.P2p.ProtocolID, "bootnodes", currentConfig.P2p.Bootnodes)
 
 	var srvcs []services.Service
 
@@ -85,10 +88,10 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, err
 	}
 
-	log.Info("🕸\t Configuring node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.P2p.ProtocolID, "bootnodes", currentConfig.P2p.Bootnodes)
+	// TODO: Configure node based on Roles #601
 
 	// P2P
-	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(currentConfig, gendata)
+	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(currentConfig, gendata, stateSrv)
 	srvcs = append(srvcs, p2pSrvc)
 
 	// Core
@@ -181,6 +184,17 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *cfg.GlobalConfig) {
 		newDataDir = expandTildeOrDot(dir)
 	}
 	currentConfig.DataDir, _ = filepath.Abs(newDataDir)
+
+	newRoles := currentConfig.Roles
+	if roles := ctx.GlobalString(utils.RolesFlag.Name); roles != "" {
+		b, err := strconv.Atoi(roles)
+		if err != nil {
+			log.Debug("Failed to convert to byte", "roles", roles)
+		} else {
+			newRoles = byte(b)
+		}
+	}
+	currentConfig.Roles = newRoles
 }
 
 func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
@@ -209,7 +223,7 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 }
 
 // createP2PService creates a p2p service from the command configuration and genesis data
-func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Service, chan p2p.Message, chan p2p.Message) {
+func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData, stateService *state.Service) (*p2p.Service, chan p2p.Message, chan p2p.Message) {
 
 	// Default bootnodes and protocol from genesis file
 	bootnodes := common.BytesToStringArray(gendata.Bootnodes)
@@ -227,13 +241,16 @@ func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData) (*p2p.Servi
 
 	// p2p service configuation
 	p2pConfig := p2p.Config{
-		Bootnodes:   bootnodes,
-		ProtocolID:  protocolID,
-		Port:        fig.P2p.Port,
-		RandSeed:    0,
-		NoBootstrap: fig.P2p.NoBootstrap,
-		NoMdns:      fig.P2p.NoMdns,
-		DataDir:     fig.Global.DataDir,
+		BlockState:   stateService.Block,
+		StorageState: stateService.Storage,
+		NetworkState: stateService.Network,
+		DataDir:      fig.Global.DataDir,
+		Roles:        fig.Global.Roles,
+		Port:         fig.P2p.Port,
+		Bootnodes:    bootnodes,
+		ProtocolID:   protocolID,
+		NoBootstrap:  fig.P2p.NoBootstrap,
+		NoMdns:       fig.P2p.NoMdns,
 	}
 
 	p2pMsgRec := make(chan p2p.Message)

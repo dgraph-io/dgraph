@@ -27,6 +27,27 @@ type Address string
 // Hash used to store a blake2b hash
 type Hash [32]byte
 
+// Health is network information about host needed for the rpc server
+type Health struct {
+	Peers           int
+	IsSyncing       bool
+	ShouldHavePeers bool
+}
+
+// NetworkState is network information about host needed for the rpc server and the runtime
+type NetworkState struct {
+	PeerID string
+}
+
+// PeerInfo is network information about peers needed for the rpc server
+type PeerInfo struct {
+	PeerID          string
+	Roles           byte
+	ProtocolVersion uint32
+	BestHash        Hash
+	BestNumber      uint64
+}
+
 // NewHash casts a byte array to a Hash
 // if the input is longer than 32 bytes, it takes the first 32 bytes
 func NewHash(in []byte) (res Hash) {

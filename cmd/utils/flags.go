@@ -27,6 +27,11 @@ var (
 		Name:  "datadir",
 		Usage: "Data directory for the database",
 	}
+	// RolesFlag role of the node (0 = no network, 1 = full node, ...)
+	RolesFlag = cli.StringFlag{
+		Name:  "roles",
+		Usage: "Roles of the gossamer node",
+	}
 	// VerbosityFlag cli service settings
 	VerbosityFlag = cli.StringFlag{
 		Name:  "verbosity",

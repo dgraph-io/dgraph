@@ -17,15 +17,20 @@
 package p2p
 
 import (
+	"os"
+	"path"
 	"testing"
 	"time"
 )
 
 // test gossip messages to connected peers
 func TestGossip(t *testing.T) {
+	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	defer os.RemoveAll(dataDirA)
+
 	configA := &Config{
+		DataDir:     dataDirA,
 		Port:        7001,
-		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -36,9 +41,12 @@ func TestGossip(t *testing.T) {
 
 	nodeA.noStatus = true
 
+	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	defer os.RemoveAll(dataDirB)
+
 	configB := &Config{
+		DataDir:     dataDirB,
 		Port:        7002,
-		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -59,9 +67,12 @@ func TestGossip(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	dataDirC := path.Join(os.TempDir(), "gossamer-test", "nodeC")
+	defer os.RemoveAll(dataDirC)
+
 	configC := &Config{
+		DataDir:     dataDirC,
 		Port:        7003,
-		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    3,
 		NoBootstrap: true,
 		NoMdns:      true,

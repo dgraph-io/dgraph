@@ -42,7 +42,7 @@ func TestSetAndGetHeader(t *testing.T) {
 		require.Nil(t, err, "BlockDB close err: ", err)
 	}()
 
-	bs := &blockState{
+	bs := &BlockState{
 		db: blockDb,
 	}
 
@@ -135,7 +135,7 @@ func TestAddBlock(t *testing.T) {
 		require.Nil(t, err, "BlockDB close err: ", err)
 	}()
 
-	blockState := &blockState{
+	blockState := &BlockState{
 		db: blockDb,
 	}
 

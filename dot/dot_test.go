@@ -36,18 +36,21 @@ func createTestDot(t *testing.T, testDir string) *Dot {
 
 	// P2P
 	p2pCfg := &p2p.Config{
-		RandSeed: 1,       // default 0
-		DataDir:  testDir, // default "~/.gossamer"
+		BlockState:   &state.BlockState{},   // required
+		NetworkState: &state.NetworkState{}, // required
+		StorageState: &state.StorageState{}, // required
+		DataDir:      testDir,               // default "~/.gossamer"
+		Roles:        1,                     // required
+		RandSeed:     1,                     // default 0
 	}
 	p2pSrvc, err := p2p.NewService(p2pCfg, nil, nil)
-	services = append(services, p2pSrvc)
 	if err != nil {
 		t.Fatal(err)
 	}
+	services = append(services, p2pSrvc)
 
 	// DB
-	dataDir := "../test_data"
-	dbSrv := state.NewService(dataDir)
+	dbSrv := state.NewService(testDir)
 	err = dbSrv.Initialize(&types.Header{
 		Number:    big.NewInt(0),
 		StateRoot: trie.EmptyHash,
@@ -55,7 +58,6 @@ func createTestDot(t *testing.T, testDir string) *Dot {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	services = append(services, dbSrv)
 
 	// API

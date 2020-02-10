@@ -19,9 +19,9 @@ package modules
 import (
 	"testing"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/internal/api"
 	module "github.com/ChainSafe/gossamer/internal/api/modules"
-	"github.com/ChainSafe/gossamer/p2p"
 )
 
 var (
@@ -29,9 +29,9 @@ var (
 	testRuntimeName       = "Gossamer"
 	testRuntimeProperties = "Properties"
 	testRuntimeVersion    = "0.0.1"
-	testHealth            = p2p.Health{}
-	testNetworkState      = p2p.NetworkState{}
-	testPeers             = append([]p2p.PeerInfo{}, p2p.PeerInfo{})
+	testHealth            = common.Health{}
+	testNetworkState      = common.NetworkState{}
+	testPeers             = append([]common.PeerInfo{}, common.PeerInfo{})
 )
 
 // Mock runtime API
@@ -60,18 +60,15 @@ func (r *MockRuntimeAPI) Version() string {
 // Mock network API
 type MockP2pAPI struct{}
 
-// Health is a mock func that returns testHealth
-func (n *MockP2pAPI) Health() p2p.Health {
+func (n *MockP2pAPI) Health() common.Health {
 	return testHealth
 }
 
-// NetworkState is a mock func that returns testNetworkState
-func (n *MockP2pAPI) NetworkState() p2p.NetworkState {
+func (n *MockP2pAPI) NetworkState() common.NetworkState {
 	return testNetworkState
 }
 
-// Peers is a mock func that returns testPeers
-func (n *MockP2pAPI) Peers() []p2p.PeerInfo {
+func (n *MockP2pAPI) Peers() []common.PeerInfo {
 	return testPeers
 }
 

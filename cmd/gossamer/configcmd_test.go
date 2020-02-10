@@ -179,6 +179,11 @@ func TestSetGlobalConfig(t *testing.T) {
 			[]interface{}{"test1"},
 			cfg.GlobalConfig{DataDir: tempPath},
 		},
+		{"roles flag",
+			[]string{"datadir", "roles"},
+			[]interface{}{"test1", "1"},
+			cfg.GlobalConfig{DataDir: tempPath, Roles: byte(1)},
+		},
 	}
 
 	for _, c := range tc {
@@ -197,10 +202,9 @@ func TestSetGlobalConfig(t *testing.T) {
 }
 
 func TestCreateP2PService(t *testing.T) {
-	srv, _, _ := createP2PService(cfg.DefaultConfig(), &genesis.GenesisData{})
-	if srv == nil {
-		t.Fatalf("failed to create p2p service")
-	}
+	stateSrv := state.NewService(TestDataDir)
+	srv, _, _ := createP2PService(cfg.DefaultConfig(), &genesis.GenesisData{}, stateSrv)
+	require.NotNil(t, srv, "failed to create p2p service")
 }
 
 func TestSetP2pConfig(t *testing.T) {
@@ -258,11 +262,11 @@ func TestSetP2pConfig(t *testing.T) {
 		{
 			"protocol id",
 			[]string{"protocol"},
-			[]interface{}{"/gossamer/test/0"},
+			[]interface{}{TestProtocolID},
 			cfg.P2pCfg{
 				Bootnodes:   cfg.DefaultP2PBootnodes,
-				ProtocolID:  "/gossamer/test/0",
 				Port:        cfg.DefaultP2PPort,
+				ProtocolID:  TestProtocolID,
 				NoBootstrap: false,
 				NoMdns:      false,
 			},

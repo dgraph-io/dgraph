@@ -17,6 +17,8 @@
 package p2p
 
 import (
+	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -26,22 +28,14 @@ import (
 // wait time for status messages to be exchanged and handled
 var TestStatusTimeout = time.Second
 
-// test status message
-var TestStatusMessage = &StatusMessage{
-	ProtocolVersion:     0,
-	MinSupportedVersion: 0,
-	Roles:               0,
-	BestBlockNumber:     0,
-	BestBlockHash:       common.Hash{0x00},
-	GenesisHash:         common.Hash{0x00},
-	ChainStatus:         []byte{0},
-}
-
 // test exchange status messages after peer connected
 func TestStatus(t *testing.T) {
+	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	defer os.RemoveAll(dataDirA)
+
 	configA := &Config{
+		DataDir:     dataDirA,
 		Port:        7001,
-		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -52,12 +46,35 @@ func TestStatus(t *testing.T) {
 
 	nodeA.noGossip = true
 
+	genesisHash, err := common.HexToHash("0xdcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bestBlockHash, err := common.HexToHash("0x829de6be9a35b55c794c609c060698b549b3064c183504c18ab7517e41255569")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testStatusMessage := &StatusMessage{
+		ProtocolVersion:     uint32(2),
+		MinSupportedVersion: uint32(2),
+		Roles:               byte(4),
+		BestBlockNumber:     uint64(2434417),
+		BestBlockHash:       bestBlockHash,
+		GenesisHash:         genesisHash,
+		ChainStatus:         []byte{0},
+	}
+
 	// simulate host status message sent from core service on startup
-	msgRecA <- TestStatusMessage
+	msgRecA <- testStatusMessage
+
+	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
+		DataDir:     dataDirB,
 		Port:        7002,
-		ProtocolID:  "/gossamer/test/0",
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMdns:      true,
@@ -69,7 +86,7 @@ func TestStatus(t *testing.T) {
 	nodeB.noGossip = true
 
 	// simulate host status message sent from core service on startup
-	msgRecB <- TestStatusMessage
+	msgRecB <- testStatusMessage
 
 	addrInfosB, err := nodeB.host.addrInfos()
 	if err != nil {

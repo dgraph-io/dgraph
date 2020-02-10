@@ -123,9 +123,6 @@ func NewService(cfg *Config) (*Service, error) {
 // Start starts the core service
 func (s *Service) Start() error {
 
-	// TODO: generate host status message and send to p2p service on startup
-	// msgSend <- hostMessage
-
 	// start receiving blocks from BABE session
 	go s.receiveBlocks()
 
