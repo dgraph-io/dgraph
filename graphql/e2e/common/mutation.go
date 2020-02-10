@@ -2559,10 +2559,11 @@ func passwordTest(t *testing.T) {
 
 		gqlResponse = postExecutor(t, graphqlURL, updateUserParams)
 		requireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, `{"updateUser":{"user":[{"name":"Test User"}]}}`,
+			string(gqlResponse.Data))
 		checkUser(t, newUser, nil)
 		updatedUser := &user{Name: newUser.Name, Password: "password_new"}
 		checkUser(t, updatedUser, updatedUser)
-
 	})
 
 	deleteUser(t, *newUser)

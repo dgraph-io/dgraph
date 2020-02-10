@@ -137,9 +137,6 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["exact"]
 		}, {
-			"predicate": "dgraph.graphql.schema",
-			"type": "string"
-		}, {
 			"predicate": "Starship.length",
 			"type": "float"
 		}, {
@@ -159,6 +156,18 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["trigram", "hash"],
 			"upsert": true
+		}, {
+			"predicate": "User.name",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash"],
+			"upsert": true
+		}, {
+			"predicate": "User.password",
+			"type": "password"
+		}, {
+			"predicate": "dgraph.graphql.schema",
+			"type": "string"
 		}, {
 			"predicate": "dgraph.type",
 			"type": "string",
@@ -250,11 +259,6 @@ func TestSchema_Normal(t *testing.T) {
 			"name": "Post"
 		}, {
 			"fields": [{
-				"name": "dgraph.graphql.schema"
-			}],
-			"name": "dgraph.graphql"
-		}, {
-			"fields": [{
 				"name": "Starship.name"
 			}, {
 				"name": "Starship.length"
@@ -269,6 +273,18 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "State.country"
 			}],
 			"name": "State"
+		}, {
+			"fields": [{
+				"name": "User.name"
+			}, {
+				"name": "User.password"
+			}],
+			"name": "User"
+		}, {
+			"fields": [{
+				"name": "dgraph.graphql.schema"
+			}],
+			"name": "dgraph.graphql"
 		}]
 	}
 	`

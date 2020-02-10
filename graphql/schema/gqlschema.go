@@ -408,10 +408,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
-		Kind: ast.InputObject,
-		Name: "Add" + defn.Name + "Input",
-		Fields: append(getFieldsWithoutIDType(schema, defn),
-			getPasswordField(defn)...),
+		Kind:   ast.InputObject,
+		Name:   "Add" + defn.Name + "Input",
+		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
 
@@ -424,7 +423,6 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 		flds = append(getIDField(defn), getXIDField(defn)...)
 	} else {
 		flds = append(getIDField(defn), getFieldsWithoutIDType(schema, defn)...)
-		flds = append(flds, getPasswordField(defn)...)
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -492,7 +490,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Patch",
-		Fields: append(nonIDFields),
+		Fields: nonIDFields,
 	}
 	schema.Types[defn.Name+"Patch"] = patchDefn
 
@@ -1122,10 +1120,6 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		if isPasswordField(defn, fld) {
-			continue
-		}
-
 		// see also comment in getNonIDFields
 		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
@@ -1135,7 +1129,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 		fldList = append(fldList, createField(schema, fld))
 	}
 
-	return fldList
+	return append(fldList, getPasswordField(defn)...)
 }
 
 func getIDField(defn *ast.Definition) ast.FieldList {
