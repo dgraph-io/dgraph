@@ -331,6 +331,22 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 				continue
 			}
 			name := directive.ArgumentMap(map[string]interface{}{})["field"].(string)
+			pred := directive.ArgumentMap(map[string]interface{}{})["pred"]
+			dirs := ast.DirectiveList{}
+
+			if pred != nil {
+				dirs = ast.DirectiveList{{
+					Name: "dgraph",
+					Arguments: ast.ArgumentList{{
+						Name: "pred",
+						Value: &ast.Value{
+							Raw:  pred.(string),
+							Kind: ast.StringValue,
+						},
+					}},
+					Position: directive.Position,
+				}}
+			}
 			fd := &ast.FieldDefinition{
 				Name: name,
 				Type: &ast.Type{
@@ -338,7 +354,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 					NonNull:   true,
 					Position:  directive.Position,
 				},
-				Directives: ast.DirectiveList{},
+				Directives: dirs,
 				Position:   directive.Position,
 			}
 			inputTyp.Fields = append(inputTyp.Fields, fd)

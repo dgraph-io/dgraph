@@ -1187,6 +1187,23 @@ func getPasswordField(defn *ast.Definition) ast.FieldList {
 			continue
 		}
 		name := directive.ArgumentMap(map[string]interface{}{})["field"].(string)
+		pred := directive.ArgumentMap(map[string]interface{}{})["pred"]
+		dirs := ast.DirectiveList{}
+
+		if pred != nil {
+			dirs = ast.DirectiveList{{
+				Name: "dgraph",
+				Arguments: ast.ArgumentList{{
+					Name: "pred",
+					Value: &ast.Value{
+						Raw:  pred.(string),
+						Kind: ast.StringValue,
+					},
+				}},
+				Position: directive.Position,
+			}}
+		}
+
 		fldList = append(fldList, &ast.FieldDefinition{
 			Name: name,
 			Type: &ast.Type{
@@ -1194,7 +1211,7 @@ func getPasswordField(defn *ast.Definition) ast.FieldList {
 				NonNull:   true,
 				Position:  directive.Position,
 			},
-			Directives: ast.DirectiveList{},
+			Directives: dirs,
 			Position:   directive.Position,
 		})
 	}
