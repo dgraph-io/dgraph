@@ -492,7 +492,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
 		Name:   defn.Name + "Patch",
-		Fields: append(nonIDFields, getPasswordField(defn)...),
+		Fields: append(nonIDFields),
 	}
 	schema.Types[defn.Name+"Patch"] = patchDefn
 
@@ -1111,7 +1111,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 
 		fldList = append(fldList, createField(schema, fld))
 	}
-	return fldList
+
+	return append(fldList, getPasswordField(defn)...)
 }
 
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
@@ -1133,6 +1134,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		fldList = append(fldList, createField(schema, fld))
 	}
+
 	return fldList
 }
 
