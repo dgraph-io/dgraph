@@ -328,7 +328,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 		// Put in lists of 1000.
 		start, end := 0, 1000
 		for end <= len(entries) {
-			r.entrylistPool.Put(req.entries[start:end])
+			r.entrylistPool.Put(entries[start:end])
 			start = end
 			end += 1000
 		}
