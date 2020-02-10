@@ -330,37 +330,13 @@ const exportRequest = `mutation export($format: String!) {
 	}
 }`
 
-type graphQLParams struct {
-	Query     string                 `json:"query"`
-	Variables map[string]interface{} `json:"variables"`
-}
-
-type graphQLError struct {
-	Message string
-}
-
-type graphQLResponse struct {
-	Errors []graphQLError
-}
-
-func requireNoErrors(t *testing.T, resp *http.Response) {
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var result *graphQLResponse
-	err = json.Unmarshal(b, &result)
-	require.NoError(t, err)
-	require.Nil(t, result.Errors)
-}
-
 func TestExportFormat(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	params := graphQLParams{
+	params := testutil.GraphQLParams{
 		Query:     exportRequest,
 		Variables: map[string]interface{}{"format": "json"},
 	}
@@ -369,7 +345,7 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	requireNoErrors(t, resp)
+	testutil.RequireNoGraphQLErrors(t, resp)
 
 	params.Variables["format"] = "rdf"
 	b, err = json.Marshal(params)
@@ -377,7 +353,7 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	requireNoErrors(t, resp)
+	testutil.RequireNoGraphQLErrors(t, resp)
 
 	params.Variables["format"] = "xml"
 	b, err = json.Marshal(params)
@@ -389,7 +365,7 @@ func TestExportFormat(t *testing.T) {
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	var result *graphQLResponse
+	var result *testutil.GraphQLResponse
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
 	require.NotNil(t, result.Errors)
