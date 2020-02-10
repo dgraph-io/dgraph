@@ -1,16 +1,22 @@
 # Contribution Guidelines
 
-Thanks for checking out our Polkadot Runtime Implementation! We're excited to hear and learn from you.
+Thank you for your interest in our implementation of the Polkadot Runtime Environment Implementation! We're excited to get to know you and work with you on gossamer. We've put together these guidelines to help you figure out how you can help us.
 
-We've put together the following guidelines to help you figure out where you can best be helpful. The Web3 foundation has a comprehensive collection of [Polkadot Resources](https://github.com/w3f/web3/blob/537a2518c24e96b05ceadd9f31348669e72b8841/docs/layer_1/platforms/polkadot.md) for both part-time and core contributors to the project in order to get up to speed.
+At any point in this process feel free to reach out on [Discord](https://discord.gg/Xdc5xjE) with any questions or to say Hello :)
 
-Additionally, the [Polkadot Runtime Specification](https://research.web3.foundation/en/latest/web/viewer.html?file=../pdf/polkadot_re_spec.pdf) serves as the primary specification, however it is currently in its draft status so things may be subject to change.
+# Getting Started
 
-Feel free to fork our repo and start creating PR’s after assigning yourself to an issue of interest.
+Generally, it is important to have a basic understanding of Polkadot and the Polkadot Runtime Environment. Having a stronger  understanding will allow you to make more significant contributions. We've put together a list of resources that can help you develop this fundamental knowledge.  
+
+The Web3 Foundation has a [Polkadot Wiki](https://wiki.polkadot.network/docs/en/learn-introduction) that would help both part-time and core contributors to the project in order to get up to speed. Our [wiki](https://github.com/ChainSafe/gossamer/wiki) also has some helpful resources. 
+
+The [Polkadot Runtime Specification](https://research.web3.foundation/en/latest/_static/pdfview/viewer.html?file=../pdf/polkadot_re_spec.pdf) serves as our primary specification, however it is currently in its draft status so things may be subject to change.
+
+One important thing distinction is that we are building the Polkadot Runtime Environment, not Polkadot itself. Given that, although a deep understanding of Polkadot is helpful, it's not critical to contribute to gossamer. To help understand how the Runtime Environment relates to Polkadot, check out this [talk that one of our team members gave at DotCon.](https://www.youtube.com/watch?v=nYkbYhM5Yfk)
 
 ## Contribution Steps
 
-**1. Set up gossamer following the instructions in README.md.**
+**1. Set up gossamer following the instructions our [README](https://github.com/ChainSafe/gossamer/blob/development/README.md).**
 
 **2. Fork the gossamer repo.**
 
@@ -29,13 +35,15 @@ $ git remote add gossamer https://github.com/ChainSafe/gossamer.git
 $ git remote -v (you should see myrepo and gossamer in the list of remotes)
 ```
 
-**6. Find an issue to work on.**
+**6. Find something to work on.**
 
-Check out [open issues](https://github.com/ChainSafe/gossamer/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
+To start, check out our open issues. We recommend starting with an [issue labeled `Good First Issue`](https://github.com/ChainSafe/gossamer/issues?q=is%3Aopen+is%3Aissue+label%3A%22Good+First+Issue%22). Leave a comment to let us know that you would like to work on it. 
+
+Another option is to improve gossamer where you see fit based on your evaluation of our code. In order to best faciliate collabration, please create an issue before you start working on it.
 
 **7. Make improvements to the code.**
 
-Each time you work on the code be sure that you are working on the branch that you have created as opposed to your local copy of the ChainSafe Systems repo. Keeping your changes segregated in this branch will make it easier to merge your changes into the repo later.
+Each time you work on the code be sure that you are working on the branch that you have created as opposed to your local copy of the gossamer repo. Keeping your changes segregated in this branch will make it easier to merge your changes into the repo later.
 
 ```
 $ git checkout feature-in-progress-branch
@@ -94,10 +102,10 @@ We consider two types of contributions to our repo and categorize them as follow
 
 ### Part-Time Contributors
 
-Anyone can become a part-time contributor and help out on implementing gossamer. Contributions can be made in the following ways:
+Anyone can become a part-time contributor and help out on gossamer. Contributions can be made in the following ways:
 
--   Engaging in Gitter conversations, asking questions on how to begin contributing to the project
--   Opening up github issues to express interest in code to implement
+-   Engaging in Discord conversations, asking questions on how to contribute to the project
+-   Opening up Github issues to contribute ideas on how the code can be improved
 -   Opening up PRs referencing any open issue in the repo. PRs should include:
     -   Detailed context of what would be required for merge
     -   Tests that are consistent with how other tests are written in our implementation
@@ -105,12 +113,13 @@ Anyone can become a part-time contributor and help out on implementing gossamer.
 -   Follow up on open PRs
     -   Have an estimated timeframe to completion and let the core contributors know if a PR will take longer than expected
 
-We do not expect all part-time contributors to be experts on all the latest Polkadot documentation, but all contributors should at least be familiarized with the Polkadot Specification fundamentals.
+We do not expect all part-time contributors to be experts on all the latest Polkadot documentation, but all contributors should at least be familiarized with the fundamentals of the [Polkadot Runtime Specification](https://research.web3.foundation/en/latest/_static/pdfview/viewer.html?file=../pdf/polkadot_re_spec.pdf).
 
 ### Core Contributors
 
 Core contributors are currently comprised of members of the ChainSafe Systems team. Core devs have all of the responsibilities of part-time contributors plus the majority of the following:
 
+-   Participate in our software development process (standups, sprint planning, retrospectives, etc)
 -   Stay up to date on the latest Polkadot research and updates
 - 	Commit high quality code on core functionality
 -   Monitor github issues and PR’s to make sure owner, labels, descriptions are correct
