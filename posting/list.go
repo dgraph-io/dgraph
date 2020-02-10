@@ -780,7 +780,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64)
+	out, err := l.rollup(math.MaxUint64, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
@@ -813,6 +813,30 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	})
 
 	return kvs, nil
+}
+
+// SingleListRollup works like rollup but generates a single list with no splits.
+// It's used during backup so that each backed up posting list is stored in a single key.
+func (l *List) SingleListRollup() (*bpb.KV, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	out, err := l.rollup(math.MaxUint64, false)
+	if err != nil {
+		return nil, err
+	}
+	// out is only nil when the list's minTs is greater than readTs but readTs
+	// is math.MaxUint64 so that's not possible. Assert that's true.
+	x.AssertTrue(out != nil)
+
+	kv := &bpb.KV{}
+	kv.Version = out.newMinTs
+	kv.Key = l.key
+	val, meta := marshalPostingList(out.plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+
+	return kv, nil
 }
 
 func (out *rollupOutput) marshalPostingListPart(
@@ -854,7 +878,7 @@ type rollupOutput struct {
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
 // directly. It should only serve as the read timestamp for iteration.
-func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
+func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	l.AssertRLock()
 
 	// Pick all committed entries
@@ -880,8 +904,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
 
-		// Otherwise, load the corresponding part and set endUid to correctly
-		// detect the end of the list.
+		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
 		if splitIdx+1 == len(l.plist.Splits) {
 			endUid = math.MaxUint64
@@ -893,7 +916,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	}
 
 	// If not a multi-part list, all UIDs go to the same encoder.
-	if len(l.plist.Splits) == 0 {
+	if len(l.plist.Splits) == 0 || !split {
 		plist = out.plist
 		endUid = math.MaxUint64
 	} else {
@@ -901,7 +924,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	}
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if p.Uid > endUid {
+		if p.Uid > endUid && split {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
@@ -946,11 +969,16 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		}
 	}
 
-	// Check if the list (or any of it's parts if it's been previously split) have
-	// become too big. Split the list if that is the case.
-	out.newMinTs = maxCommitTs
-	out.splitUpList()
-	out.removeEmptySplits()
+	if split {
+		// Check if the list (or any of it's parts if it's been previously split) have
+		// become too big. Split the list if that is the case.
+		out.newMinTs = maxCommitTs
+		out.splitUpList()
+		out.removeEmptySplits()
+	} else {
+		out.plist.Splits = nil
+	}
+
 	return out, nil
 }
 

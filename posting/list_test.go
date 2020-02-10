@@ -1237,6 +1237,36 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 }
 
+func TestSingleListRollup(t *testing.T) {
+	// Generate a split posting list.
+	size := int(1e5)
+	ol, commits := createMultiPartList(t, size, true)
+
+	// Roll list into a single list.
+	kv, err := ol.SingleListRollup()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(kv.UserMeta))
+	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
+
+	plist := pb.PostingList{}
+	err = plist.Unmarshal(kv.Value)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(plist.Splits))
+
+	var labels []string
+	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
+		if len(p.Label) > 0 {
+			labels = append(labels, p.Label)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, commits, len(labels))
+	for i, label := range labels {
+		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	}
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
