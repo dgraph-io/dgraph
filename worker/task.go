@@ -387,7 +387,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			count, vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
+			count, vals, fcs, err := retrieveValuesAndFacetsOrCount(args, pl, facetsTree, listType)
 			if err != nil && err != posting.ErrNoValue {
 				return err
 			}
@@ -399,11 +399,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				continue
 			}
 
-			if err == posting.ErrNoValue || len(vals) == 0 { // Means list was empty or got nothing in filtering.
+			// Means list was empty or got nothing in filtering.
+			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-				out.ValueMatrix = append(out.ValueMatrix,
-					&pb.ValueList{Values: []*pb.TaskValue{}})
+				out.ValueMatrix = append(out.ValueMatrix, &pb.ValueList{Values: []*pb.TaskValue{}})
 				if q.ExpandAll {
 					// To keep the cardinality same as that of ValueMatrix.
 					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -448,14 +448,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			out.FacetMatrix = append(out.FacetMatrix, fcs)
 
 			switch {
-			// case q.DoCount:
-			// 	len := pl.Length(args.q.ReadTs, 0)
-			// 	if len == -1 {
-			// 		return posting.ErrTsTooOld
-			// 	}
-			// 	out.Counts = append(out.Counts, uint32(len))
-			// 	// Add an empty UID list to make later processing consistent
-			// 	out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
@@ -511,25 +503,26 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree, listType bool) (
-	int, []types.Val, *pb.FacetsList, error) {
+func retrieveValuesAndFacetsOrCount(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool) (int, []types.Val, *pb.FacetsList, error) {
 	q := args.q
+
+	var filteredCount int
+	// We want count and there are not facets filter.
+	if q.FacetsFilter == nil && q.DoCount {
+		filteredCount = pl.Length(args.q.ReadTs, 0)
+		if filteredCount == -1 {
+			return 0, nil, nil, posting.ErrTsTooOld
+		}
+		return filteredCount, nil, nil, nil
+	}
+
 	var err error
 	var vals []types.Val
 	var fcs []*pb.Facets
-	var filteredCount int
 
 	// Retrieve values when facet filtering is not being requested.
 	if q.FacetsFilter == nil {
-		// just get the count here and return.
-		if q.DoCount {
-			filteredCount = pl.Length(args.q.ReadTs, 0)
-			if filteredCount == -1 {
-				return 0, nil, nil, posting.ErrTsTooOld
-			}
-			return filteredCount, nil, nil, nil
-		}
-
 		// Retrieve values.
 		switch {
 		case q.ExpandAll:
@@ -600,25 +593,33 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return filteredCount, vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func (qs *queryState) populateCountAndFacetsMatrix(args funcArgs, pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions, out *pb.Result) error {
-	// If count is needed and there are no facetsFilter.
-	if args.q.DoCount && facetsTree == nil {
-		len := pl.Length(args.q.ReadTs, 0)
+func (qs *queryState) facetsFilteredUidOrCount(q *pb.Query, pl *posting.List,
+	facetsTree *facetsTree, opts posting.ListOptions, out *pb.Result) error {
+
+	// If count is needed and there are no facetsFilter, populate count from pl.length().
+	if q.DoCount && facetsTree == nil {
+		len := pl.Length(q.ReadTs, 0)
 		if len == -1 {
 			return posting.ErrTsTooOld
 		}
 		out.Counts = append(out.Counts, uint32(len))
-		// Add an empty UID list to make later processing consistent
+		// Add an empty UID list to make later processing consistent.
 		out.UidMatrix = append(out.UidMatrix, &pb.List{})
 		return nil
 	}
 
-	// FacetsFilter is present. There can be two cases: 1. Count is needed 2. Only some facets are needed.
+	// If FacetsFilter is present. There can be two cases:
+	// 1. Count is needed.
+	// 2. Facets/UIDs are needed.
 	filteredCount := 0
-	uidList := &pb.List{
-		Uids: make([]uint64, 0, pl.ApproxLen()),
-	}
+	var uidList *pb.List
 	var fcsList []*pb.Facets
+
+	if !q.DoCount {
+		uidList = &pb.List{
+			Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
+		}
+	}
 
 	err := pl.Postings(opts, func(p *pb.Posting) error {
 		pick, err := applyFacetsTree(p.Facets, facetsTree)
@@ -626,16 +627,15 @@ func (qs *queryState) populateCountAndFacetsMatrix(args funcArgs, pl *posting.Li
 			return err
 		}
 		if pick {
-			// TODO: This way of picking Uids differs from how
-			// pl.Uids works. So, have a look to see if we're
-			// catching all the edge cases here.
-			if args.q.DoCount {
+			// TODO: This way of picking Uids differs from how pl.Uids works. So, have a
+			// look to see if we're catching all the edge cases here.
+			if q.DoCount {
 				filteredCount++
 			} else {
 				uidList.Uids = append(uidList.Uids, p.Uid)
-				if args.q.FacetParam != nil {
+				if q.FacetParam != nil {
 					fcsList = append(fcsList, &pb.Facets{
-						Facets: facets.CopyFacets(p.Facets, args.q.FacetParam),
+						Facets: facets.CopyFacets(p.Facets, q.FacetParam),
 					})
 				}
 			}
@@ -646,7 +646,7 @@ func (qs *queryState) populateCountAndFacetsMatrix(args funcArgs, pl *posting.Li
 		return err
 	}
 
-	if args.q.DoCount {
+	if q.DoCount {
 		out.Counts = append(out.Counts, uint32(filteredCount))
 		// Add an empty UID list to make later processing consistent
 		out.UidMatrix = append(out.UidMatrix, &pb.List{})
@@ -654,7 +654,7 @@ func (qs *queryState) populateCountAndFacetsMatrix(args funcArgs, pl *posting.Li
 	}
 
 	out.UidMatrix = append(out.UidMatrix, uidList)
-	if args.q.FacetParam != nil {
+	if q.FacetParam != nil {
 		out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 	}
 	return nil
@@ -731,17 +731,10 @@ func (qs *queryState) handleUidPostings(
 				} else if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
-				err = qs.populateCountAndFacetsMatrix(args, pl, facetsTree, opts, out)
+				err = qs.facetsFilteredUidOrCount(q, pl, facetsTree, opts, out)
 				if err != nil {
 					return err
 				}
-				// len := pl.Length(args.q.ReadTs, 0)
-				// if len == -1 {
-				// 	return posting.ErrTsTooOld
-				// }
-				// out.Counts = append(out.Counts, uint32(len))
-				// // Add an empty UID list to make later processing consistent
-				// out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
@@ -785,41 +778,6 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			// case q.FacetParam != nil || facetsTree != nil:
-			// 	if i == 0 {
-			// 		span.Annotate(nil, "default with facets")
-			// 	}
-			// 	uidList := &pb.List{
-			// 		Uids: make([]uint64, 0, pl.ApproxLen()),
-			// 	}
-
-			// 	var fcsList []*pb.Facets
-			// 	err = pl.Postings(opts, func(p *pb.Posting) error {
-			// 		pick, err := applyFacetsTree(p.Facets, facetsTree)
-			// 		if err != nil {
-			// 			return err
-			// 		}
-			// 		if pick {
-			// 			// TODO: This way of picking Uids differs from how
-			// 			// pl.Uids works. So, have a look to see if we're
-			// 			// catching all the edge cases here.
-			// 			uidList.Uids = append(uidList.Uids, p.Uid)
-			// 			if q.FacetParam != nil {
-			// 				fcsList = append(fcsList, &pb.Facets{
-			// 					Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-			// 				})
-			// 			}
-			// 		}
-			// 		return nil // continue iteration.
-			// 	})
-			// 	if err != nil {
-			// 		return err
-			// 	}
-
-			// 	out.UidMatrix = append(out.UidMatrix, uidList)
-			// 	if q.FacetParam != nil {
-			// 		out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
-			// 	}
 			default:
 				if i == 0 {
 					span.Annotate(nil, "default no facets")
