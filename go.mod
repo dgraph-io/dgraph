@@ -11,8 +11,8 @@ require (
 	github.com/disiqueira/gotree v1.0.0
 	github.com/ethereum/go-ethereum v1.9.6
 	github.com/filecoin-project/go-leb128 v0.0.0-20190212224330-8d79a5489543
-	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.1
+	github.com/golangci/golangci-lint v1.23.1 // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/ipfs/go-datastore v0.3.1
@@ -24,16 +24,12 @@ require (
 	github.com/multiformats/go-multiaddr v0.2.0
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1
-	github.com/onsi/ginkgo v1.10.1 // indirect
-	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v1.20.0
 	github.com/wasmerio/go-ext-wasm v0.0.0-20191206132826-225d01fcd22c
 	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
-	golang.org/x/net v0.0.0-20190916140828-c8589233b77d // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
-	gopkg.in/yaml.v2 v2.2.7 // indirect
 )
 
 go 1.13

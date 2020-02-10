@@ -18,6 +18,7 @@ package codec
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 	"reflect"
 	"strings"
@@ -209,4 +210,84 @@ func TestEncodeAndDecodeStringArrayInStruct(t *testing.T) {
 	err = DecodePtr(enc, result)
 	require.Nil(t, err)
 	require.Equal(t, test, result, "Decoding failed")
+}
+
+// test type for encoding
+type MockTypeA struct {
+	A string
+}
+
+// Encode func for TypeReal that uses actual Scale Encode
+func (tr *MockTypeA) Encode() ([]byte, error) {
+	return Encode(tr)
+}
+
+// test to confirm EncodeCustom is return Scale Encoded result
+func TestEncodeCustomMockTypeA(t *testing.T) {
+	test := &MockTypeA{A: "hello"}
+
+	encCust, err := EncodeCustom(test)
+	require.Nil(t, err)
+
+	encScale, err := Encode(test)
+	require.Nil(t, err)
+
+	require.Equal(t, encScale, encCust)
+}
+
+// test type for encoding, this type does not have Encode func
+type MockTypeB struct {
+	A string
+}
+
+// test to confirm EncodeCustom is return Scale Encoded result
+func TestEncodeCustomMockTypeB(t *testing.T) {
+	test := &MockTypeB{A: "hello"}
+
+	encCust, err := EncodeCustom(test)
+	require.Nil(t, err)
+
+	encScale, err := Encode(test)
+	require.Nil(t, err)
+
+	require.Equal(t, encScale, encCust)
+}
+
+// test types for encoding
+type MockTypeC struct {
+	A string
+}
+
+// Encode func for MockTypeC that return fake byte array [1, 2, 3]
+func (tr *MockTypeC) Encode() ([]byte, error) {
+	return []byte{1, 2, 3}, nil
+}
+
+// test to confirm EncodeCustom is using type's Encode function
+func TestEncodeCustomMockTypeC(t *testing.T) {
+	test := &MockTypeC{A: "hello"}
+	expected := []byte{1, 2, 3}
+
+	encCust, err := EncodeCustom(test)
+	require.Nil(t, err)
+
+	require.Equal(t, expected, encCust)
+}
+
+// test types for encoding
+type MockTypeD struct {
+	A string
+}
+
+// Encode func for MockTypeD that return an error
+func (tr *MockTypeD) Encode() ([]byte, error) {
+	return nil, errors.New("error encoding")
+}
+
+// test to confirm EncodeCustom is handling errors
+func TestEncodeCustomMockTypeD(t *testing.T) {
+	test := &MockTypeD{A: "hello"}
+
+	_, err := EncodeCustom(test)
+	require.EqualError(t, err, "error encoding")
 }
