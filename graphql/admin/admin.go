@@ -236,7 +236,6 @@ const (
 	}
 
 	input GroupPatch {
-		users: [UserRef]
 		rules: [RuleRef]
 	}
 
@@ -307,11 +306,15 @@ const (
 		addUser(input: [AddUserInput]): AddUserPayload
 		addGroup(input: [AddGroupInput]): AddGroupPayload
 
+		# update user allows updating a user's password or updating their groups. If the group
+		# doesn't exist, then it is created, otherwise linked to the user. If the user filter
+		# doesn't return anything then nothing happens.
 		updateUser(input: UpdateUserInput!): AddUserPayload
+		# update group only allows adding rules to a group.
 		updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
-		deleteGroup(name: String): DeleteGroupPayload
-		deleteUser(name: String): DeleteUserPayload
+		deleteGroup(filter: GroupFilter!): DeleteGroupPayload
+		deleteUser(filter: UserFilter!): DeleteUserPayload
 	}
  `
 )
@@ -680,6 +683,38 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					resolve.DgraphAsQueryExecutor(),
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("updateUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewUpdateRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("updateGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewUpdateRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("deleteUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewDeleteRewriter(),
+					resolve.NoOpQueryExecution(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdDeleteCompletion(m.Name()))
+			}).
+		WithMutationResolver("deleteGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewDeleteRewriter(),
+					resolve.NoOpQueryExecution(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdDeleteCompletion(m.Name()))
 			})
 }
 
