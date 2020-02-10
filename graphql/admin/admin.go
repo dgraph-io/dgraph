@@ -126,7 +126,7 @@ type adminServer struct {
 func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
@@ -153,7 +153,7 @@ func newAdminResolver(
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 
 	rf := newAdminResolverFactory()

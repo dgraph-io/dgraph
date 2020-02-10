@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -192,6 +194,14 @@ func run() {
 	if len(opts.myAddr) == 0 {
 		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
+
+	x.InitSentry(enc.EeBuild)
+	defer x.FlushSentry()
+	x.ConfigureSentryScope("zero")
+	x.WrapPanics()
+	// x.CaptureSentryException(errors.New("zero exception"))
+	// x.PanicWithSentryException(errors.New("zero manual panic will send 2 events"))
+
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	if err != nil {
 		log.Fatal(err)

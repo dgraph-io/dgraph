@@ -139,13 +139,13 @@ type state struct {
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
+		x.PanicWithSentryException(errors.Errorf("Waited for GraphQL test server to become available, but it never did.\n"+
 			"Got last error %+v", err.Error()))
 	}
 
 	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
 	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
+		x.PanicWithSentryException(errors.Errorf("Waited for GraphQL AdminTest server to become available, "+
 			"but it never did.\n Got last error: %+v", err.Error()))
 	}
 
@@ -153,27 +153,27 @@ func BootstrapServer(schema, data []byte) {
 	defer cancel()
 	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 
 	err = populateGraphQLData(client, data)
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 
 	err = checkGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
 	if err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 
 	if err = d.Close(); err != nil {
-		panic(err)
+		x.PanicWithSentryException(err)
 	}
 }
 

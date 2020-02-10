@@ -94,7 +94,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if !gh.isValid() {
-		panic("graphqlHandler not initialised")
+		x.PanicWithSentryException(errors.New("graphqlHandler not initialised"))
 	}
 
 	var res *schema.Response

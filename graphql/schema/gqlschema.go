@@ -258,7 +258,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.PanicWithSentryException(gqlErr)
 	}
 
 	// Cache the interface definitions in a map. They could also be defined after types which
@@ -1280,7 +1280,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// the generated definitions.
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.PanicWithSentryException(gqlErr)
 	}
 	for _, defn := range docExtras.Definitions {
 		printed[defn.Name] = true

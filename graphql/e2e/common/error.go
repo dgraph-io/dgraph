@@ -19,6 +19,7 @@ package common
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -263,12 +264,13 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic(panicMsg)
+	x.PanicWithSentryException(errors.New(panicMsg))
+	return nil, nil
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic(panicMsg)
+	x.PanicWithSentryException(errors.New(panicMsg))
 }
