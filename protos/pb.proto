@@ -436,7 +436,7 @@ message TypeUpdate {
 }
 
 message MapperHeader {
-	repeated MapEntry partition_keys = 1;
+	repeated bytes partition_keys = 1;
 }
 
 // Bulk loader proto.
