@@ -42,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/proto"
 )
 
 type reducer struct {
@@ -153,7 +152,7 @@ type mapIterator struct {
 
 type iteratorEntry struct {
 	partitionKey *pb.MapEntry
-	batch        []*pb.MapEntry
+	batch        [][]byte
 }
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
@@ -165,7 +164,6 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
-	var freelist []*pb.MapEntry
 	for _, key := range partitionsKeys {
 		var ie *iteratorEntry
 		select {
@@ -176,7 +174,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			// }
 		default:
 			ie = &iteratorEntry{
-				batch: make([]*pb.MapEntry, 0, batchAlloc),
+				batch: make([][]byte, 0, batchAlloc),
 			}
 		}
 		ie.partitionKey = key
@@ -184,9 +182,6 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 
 		for {
 			// LOSING one item.
-			for len(freelist) == 0 {
-				freelist = mi.entrylistPool.Get().([]*pb.MapEntry)
-			}
 			r := mi.reader
 			buf, err := r.Peek(binary.MaxVarintLen64)
 			if err == io.EOF {
@@ -199,33 +194,29 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			}
 			x.Check2(r.Discard(n))
 
-			for cap(mi.tmpBuf) < int(sz) {
-				mi.tmpBuf = make([]byte, sz)
-			}
+			eBuf := make([]byte, sz)
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
 			// The "mapentry" should just be a slice pointing to that.
-			x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
+			x.Check2(io.ReadFull(r, eBuf))
 
-			me := freelist[0]
-			freelist = freelist[1:]
 			// TODO: We should not unmarshal here. Instead, find a way to read the key from
 			// marshaled data.
-			x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
-
+			key, err := GetKeyForMapEntry(eBuf)
+			x.Check(err)
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
-			if !less(me, key) {
+			if bytes.Compare(key, ie.partitionKey.GetKey()) < 0 {
 				break
 			}
 			// TODO: The batch should not contain map entry, instead it should contain just the byte
 			// slices.
-			ie.batch = append(ie.batch, me)
+			ie.batch = append(ie.batch, eBuf)
 		}
 		// TODO: Needs to be fixed to ensure we pick all the map entries.
 		mi.batchCh <- ie
 	}
 
 	// Drain the last items.
-	batch := make([]*pb.MapEntry, 0, batchAlloc)
+	batch := make([][]byte, 0, batchAlloc)
 	for {
 		r := mi.reader
 		buf, err := r.Peek(binary.MaxVarintLen64)
@@ -243,10 +234,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			mi.tmpBuf = make([]byte, sz)
 		}
 		x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
-
-		me := &pb.MapEntry{}
-		x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
-		batch = append(batch, me)
+		batch = append(batch, mi.tmpBuf[:sz])
 
 	}
 	mi.batchCh <- &iteratorEntry{
@@ -297,7 +285,7 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterato
 }
 
 type encodeRequest struct {
-	entries []*pb.MapEntry
+	entries [][]byte
 	wg      *sync.WaitGroup
 	list    *bpb.KVList
 }
@@ -323,28 +311,30 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
 	for req := range entryCh {
+		fmt.Println("encoder req", len(req.entries))
 		req.list = &bpb.KVList{}
-		r.toList(req.entries, req.list)
+		entries, _ := r.toList(req.entries, req.list)
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
 			x.AssertTrue(len(pk.Attr) > 0)
 			kv.StreamId = r.streamIdFor(pk.Attr)
 		}
+		fmt.Println("to list len ", len(req.list.Kv))
 		req.wg.Done()
 		atomic.AddInt32(&r.prog.numEncoding, -1)
 
-		for _, me := range req.entries {
+		for _, me := range entries {
 			me.Reset()
 		}
 		// Put in lists of 1000.
 		start, end := 0, 1000
-		for end <= len(req.entries) {
+		for end <= len(entries) {
 			r.entrylistPool.Put(req.entries[start:end])
 			start = end
 			end += 1000
 		}
-		r.entrylistPool.Put(req.entries[start:])
+		r.entrylistPool.Put(entries[start:])
 	}
 }
 
@@ -409,7 +399,7 @@ func (r *reducer) encodeAndWrite_UNUSED(
 		sort.Slice(batch, func(i, j int) bool {
 			return less(batch[i], batch[j])
 		})
-		listSize += r.toList(batch, list)
+		//listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
 				setStreamId(kv)
@@ -448,7 +438,7 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser := y.NewCloser(1)
 	go r.startWriting(ci.writer, writerCh, writerCloser)
 
-	batch := make([]*pb.MapEntry, 0, batchAlloc)
+	batch := make([][]byte, 0, batchAlloc)
 	for i := 0; i < len(partitionKeys); i++ {
 		numInvalid := 0
 		for _, itr := range mapItrs {
@@ -487,10 +477,11 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 		wg.Add(1)
 		req := &encodeRequest{entries: batch, wg: wg}
 		atomic.AddInt32(&r.prog.numEncoding, 1)
+		fmt.Println("sending data with", len(req.entries))
 		encoderCh <- req
 		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
 		writerCh <- req
-		batch = make([]*pb.MapEntry, 0, batchAlloc)
+		batch = make([][]byte, 0, batchAlloc)
 	}
 
 	// for i := 0; i < len(tmpBatch)-1; i++ {
@@ -517,9 +508,18 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
-	sort.Slice(mapEntries, func(i, j int) bool {
-		return less(mapEntries[i], mapEntries[j])
+func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) ([]*pb.MapEntry, int) {
+	entries := make([]*pb.MapEntry, 0, len(mapEntries))
+	fmt.Println("map entries", len(mapEntries))
+	
+	for _, buf := range mapEntries {
+		e:=&pb.MapEntry{}
+		x.Check(e.Unmarshal(buf))
+		entries = append(entries, e)
+	}
+	fmt.Println("entries len ", len(entries))
+	sort.Slice(entries, func(i, j int) bool {
+		return less(entries[i], entries[j])
 	})
 
 	var currentKey []byte
@@ -576,7 +576,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 
 	// TODO: Move the unmarshaling of map entries here.
 	// We could have just one map entry here.
-	for _, mapEntry := range mapEntries {
+	for _, mapEntry := range entries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
 		if !bytes.Equal(mapEntry.Key, currentKey) && currentKey != nil {
@@ -598,5 +598,5 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		}
 	}
 	appendToList()
-	return size
+	return entries, size
 }
