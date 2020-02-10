@@ -221,7 +221,7 @@ func (r *reducer) encodeAndWrite(
 				prevSID = kv.StreamId
 			}
 			addDone(doneStreams, list)
-			x.Check(writer.Write(list))
+			// x.Check(writer.Write(list))
 			doneStreams = doneStreams[:0]
 			list = &bpb.KVList{}
 			listSize = 0
