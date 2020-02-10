@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strconv"
-
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/ast"
+	"strconv"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation
@@ -299,7 +298,7 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		case Typename:
 			ec.writeStringValue("__Schema")
 		case "types":
-			ec.marshalIntrospectionTypeSlice(field.Selections, obj.Types())
+			ec.marshalIntrospectionTypeSlice(field.Selections, getAllTypes(ec.Schema))
 		case "queryType":
 			ec.marshalIntrospectionType(field.Selections, obj.QueryType())
 		case "mutationType":
@@ -466,4 +465,12 @@ func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.T
 		return
 	}
 	ec.handleType(sel, v)
+}
+
+func getAllTypes(s *ast.Schema) []introspection.Type {
+	types := make([]introspection.Type, 0, len(s.Types))
+	for _, typ := range s.Types {
+		types = append(types, *introspection.WrapTypeFromDef(s, typ))
+	}
+	return types
 }
