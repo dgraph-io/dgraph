@@ -201,10 +201,15 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 				mi.arena = make([]byte, 64*1024*1024)
 				bufStartIndex = 0
 			}
+			var eBuf []byte
+			if sz > 64*1024*1024 {
+				eBuf = make([]byte, sz)
+			} else {
+				eBuf = mi.arena[bufStartIndex : bufStartIndex+int(sz)]
+				bufStartIndex += int(sz)
+			}
 			// If sz > 64MB, then just create one slice (don't do anything special to arena, keep it
 			// simple).
-			eBuf := mi.arena[bufStartIndex : bufStartIndex+int(sz)]
-			bufStartIndex += int(sz)
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
 			// The "mapentry" should just be a slice pointing to that.
 			x.Check2(io.ReadFull(r, eBuf))
@@ -326,21 +331,22 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
 	// Create a freelist struct here and pass to every request.
-	var freelist []*pb.MapEntry
+	freelist := make([]*pb.MapEntry, 0, 100)
+	for len(freelist) < cap(freelist) {
+		freelist = append(freelist, &pb.MapEntry{})
+	}
 	for req := range entryCh {
-		idx := 0
 		// Ensure that freelist length is >= len(req.entries).
-		for _, entry := range req.entries {
-			// if idx >= cap(freelist) {
-			// 	freelist = append(freelist, &pb.MapEntry{})
-			// }
-			e := freelist[idx]
-			e.Unmarhal(entry)
-			idx++
+		for {
+			if len(freelist) <= len(req.entries) {
+				freelist = append(freelist, &pb.MapEntry{})
+				continue
+			}
+			break
 		}
-		req.parsed = freelist[:idx]
+
 		req.list = &bpb.KVList{}
-		r.toList(req.entries, req.list)
+		freelist = r.toList(req.entries, req.list, freelist)
 		// r.toList(req) // contains entries, list and freelist struct.
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
@@ -522,15 +528,14 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) int {
-	entries := make([]*pb.MapEntry, 0, len(mapEntries))
-	for _, mapEntry := range mapEntries {
-		e := &pb.MapEntry{}
-		x.Check(e.Unmarshal(mapEntry))
-		entries = append(entries, e)
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		return less(entries[i], entries[j])
+func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.MapEntry) []*pb.MapEntry {
+
+	sort.Slice(bufEntries, func(i, j int) bool {
+		lh, err := GetKeyForMapEntry(bufEntries[i])
+		x.Check(err)
+		rh, err := GetKeyForMapEntry(bufEntries[i])
+		x.Check(err)
+		return bytes.Compare(lh, rh) < 0
 	})
 	// Don't parse to pb.MapEntries. Sort by keys only first.
 	// Then pick all top entries [][]byte with the same key.
@@ -590,28 +595,49 @@ func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) int {
 		uids = uids[:0]
 		pl.Reset()
 	}
-	// TODO: Move the unmarshaling of map entries here.
-	// We could have just one map entry here.
-	for _, entry := range entries {
-		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
-		if !bytes.Equal(entry.Key, currentKey) && currentKey != nil {
-			appendToList()
-		}
-		currentKey = entry.Key
 
-		uid := entry.Uid
-		if entry.Posting != nil {
-			uid = entry.Posting.Uid
+	currentBatch := make([]*pb.MapEntry, 0, 100)
+	for _, entry := range bufEntries {
+		entryKey, err := GetKeyForMapEntry(entry)
+		x.Check(err)
+		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
+			// Now make a list and write it to badger
+			sort.Slice(currentBatch, func(i, j int) bool {
+				return less(currentBatch[i], currentBatch[j])
+			})
+			for _, mapEntry := range currentBatch {
+				uid := mapEntry.Uid
+				if mapEntry.Posting != nil {
+					uid = mapEntry.Uid
+				}
+				if len(uids) > 0 && uids[len(uids)-1] == uid {
+					continue
+				}
+				// TODO: Potentially could be doing codec.Encoding right here.
+				uids = append(uids, uid)
+				if mapEntry.Posting != nil {
+					pl.Postings = append(pl.Postings, mapEntry.Posting)
+				}
+			}
+			appendToList()
+			// Now we have written the list. It's time to reuse the current batch.
+			freelist = append(freelist, currentBatch...)
+			// reset the current batch
+			currentBatch = make([]*pb.MapEntry, 0, 100)
 		}
-		if len(uids) > 0 && uids[len(uids)-1] == uid {
-			continue
+		currentKey = entryKey
+		var mapEntry *pb.MapEntry
+		if len(freelist) == 0 {
+			// Create a new map entry
+			mapEntry = &pb.MapEntry{}
+		} else {
+			// Obtain from free list
+			mapEntry = freelist[0]
+			mapEntry.Reset()
+			freelist = freelist[1:]
 		}
-		// TODO: Potentially could be doing codec.Encoding right here.
-		uids = append(uids, uid)
-		if entry.Posting != nil {
-			pl.Postings = append(pl.Postings, entry.Posting)
-		}
+		x.Check(mapEntry.Unmarshal(entry))
+		currentBatch = append(currentBatch, mapEntry)
 	}
-	appendToList()
-	return size
+	return freelist
 }
