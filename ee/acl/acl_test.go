@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -489,6 +487,87 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 	require.JSONEq(t, expectedOutput, string(b))
 }
 
+type rule struct {
+	Predicate  string `json:"predicate"`
+	Permission int32  `json:"permission"`
+}
+
+func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]) {
+		updateGroup(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				rules: $rules
+			}
+		}) {
+			group {
+				name
+				rules {
+					predicate
+					permission
+				}
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: addRuleToGroup,
+		Variables: map[string]interface{}{
+			"name":  group,
+			"rules": rules,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	expectedOutput := `{
+		"data": {
+		  "updateGroup": {
+			"group": [
+			  {
+				"name": "unusedGroup",
+				"rules": [
+				  {
+					"predicate": "predicate_to_read",
+					"permission": 4
+				  },
+				  {
+					"predicate": "name",
+					"permission": 4
+				  },
+				  {
+					"predicate": "predicate_to_write",
+					"permission": 2
+				  },
+				  {
+					"predicate": "predicate_to_alter",
+					"permission": 1
+				  }
+				]
+			  }
+			]
+		  }
+		}
+	  }`
+	testutil.CompareJSON(t, expectedOutput, string(b))
+}
+
 func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: loginEndpoint,
@@ -506,49 +585,26 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 		addToGroup(t, accessJwt, userid, group)
 	}
 
+	rules := []rule{
+		{
+			predicateToRead, Read.Code,
+		},
+		{
+			queryAttr, Read.Code,
+		},
+		{
+			predicateToWrite, Write.Code,
+		},
+		{
+			predicateToAlter, Modify.Code,
+		},
+	}
+
 	// add READ permission on the predicateToRead to the group
-	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", group, "-p", predicateToRead, "-m", strconv.Itoa(int(Read.Code)), "-x",
-		"password")
-	if errOutput, err := addReadPermCmd1.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s: %v",
-			predicateToRead, group, string(errOutput))
-	}
-
 	// also add read permission to the attribute queryAttr, which is used inside the query block
-	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", group, "-p", queryAttr, "-m", strconv.Itoa(int(Read.Code)), "-x",
-		"password")
-	if errOutput, err := addReadPermCmd2.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s: %v", queryAttr, group,
-			string(errOutput))
-	}
-
 	// add WRITE permission on the predicateToWrite
-	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", group, "-p", predicateToWrite, "-m", strconv.Itoa(int(Write.Code)), "-x",
-		"password")
-	if errOutput, err := addWritePermCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToWrite, group,
-			string(errOutput))
-	}
-
 	// add MODIFY permission on the predicateToAlter
-	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "mod",
-		"-a", dgraphEndpoint,
-		"-g", group, "-p", predicateToAlter, "-m", strconv.Itoa(int(Modify.Code)), "-x",
-		"password")
-	if errOutput, err := addModifyPermCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToAlter, group,
-			string(errOutput))
-	}
+	addRulesToGroup(t, accessJwt, group, rules)
 }
 
 func TestPredicatePermission(t *testing.T) {
