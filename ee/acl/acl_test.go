@@ -13,9 +13,13 @@
 package acl
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -46,31 +50,114 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 	return string(out)
 }
 
+func createUser(t *testing.T, accessToken, username, password string) []byte {
+	addUser := `mutation addUser($name: String!, $pass: String!) {
+		addUser(input: [{name: $name, password: $pass}]) {
+			user {
+				name
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: addUser,
+		Variables: map[string]interface{}{
+			"name": username,
+			"pass": password,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return b
+}
+
+func checkUserCount(t *testing.T, resp []byte, expected int) {
+	type Response struct {
+		Data struct {
+			AddUser struct {
+				User []struct {
+					Name string
+				}
+			}
+		}
+	}
+
+	var r Response
+	err := json.Unmarshal(resp, &r)
+	require.NoError(t, err)
+	require.Equal(t, expected, len(r.Data.AddUser.User))
+}
+
+func deleteUser(t *testing.T, accessToken, username string) {
+	delUser := `mutation deleteUser($name: String!) {
+		deleteUser(filter: {name: {eq: $name}}) {
+			msg
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: delUser,
+		Variables: map[string]interface{}{
+			"name": username,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+}
+
 func TestCreateAndDeleteUsers(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
 	// clean up the user to allow repeated running of this test
-	cleanUserCmd := exec.Command("dgraph", "acl", "del", "-a", dgraphEndpoint,
-		"-u", userid, "-x", "password")
-	cleanUserCmd.Run()
+	deleteUser(t, accessJwt, userid)
 	glog.Infof("cleaned up db user state")
 
-	createUserCmd1 := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "-x", "password")
-	checkOutput(t, createUserCmd1, false)
+	resp := createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 1)
 
-	createUserCmd2 := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "-x", "password")
-	// create the user again should fail
-	checkOutput(t, createUserCmd2, true)
+	// adding the user again should fail
+	resp = createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 0)
 
 	// delete the user
-	deleteUserCmd := exec.Command("dgraph", "acl", "del", "-a", dgraphEndpoint, "-u", userid,
-		"-x", "password")
-	checkOutput(t, deleteUserCmd, false)
+	deleteUser(t, accessJwt, userid)
 
+	resp = createUser(t, accessJwt, userid, userpassword)
 	// now we should be able to create the user again
-	createUserCmd3 := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "-x", "password")
-	checkOutput(t, createUserCmd3, false)
+	checkUserCount(t, resp, 1)
 }
 
 func resetUser(t *testing.T) {
