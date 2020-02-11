@@ -178,9 +178,6 @@ const (
 
 	input AddGroupInput {
 		name: String!
-		# Can't add users to a group in addGroup because users are a reverse edge from a group and
-		# we don't allow mutations along the reverse edge.
-		# users: [UserRef]
 		rules: [RuleRef]
 	}
 
