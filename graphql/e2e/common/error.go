@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	panicMsg = "\n****\nThis test should trap this panic.\n" +
+	panicMsg = "\n****\nthis test should trap this panic.\n" +
 		"It's working as expected if this message is logged with a stack trace.\n****\n"
 )
 

@@ -144,7 +144,8 @@ func BootstrapServer(schema, data []byte) {
 
 	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
 	if err != nil {
-		x.PanicWithSentryException(errors.Errorf("Waited for GraphQL AdminTest server to become available, "+
+		x.PanicWithSentryException(errors.Errorf(
+			"Waited for GraphQL AdminTest server to become available, " +
 			"but it never did.\n Got last error: %+v", err.Error()))
 	}
 

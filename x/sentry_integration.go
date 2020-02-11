@@ -90,7 +90,8 @@ func PanicHandler(out string) {
 	os.Exit(1)
 }
 
-// WrapPanics is a wrapper on panics. We use it to send sentry events about panics and crash right after.
+// WrapPanics is a wrapper on panics. We use it to send sentry events about panics 
+// and crash right after.
 func WrapPanics() {
 	exitStatus, err := panicwrap.BasicWrap(PanicHandler)
 	if err != nil {
