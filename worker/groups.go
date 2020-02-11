@@ -202,9 +202,8 @@ func (g *groupi) proposeInitialTypes() {
 }
 
 func (g *groupi) proposeInitialSchema() {
-	initialSchema := schema.InitialSchema()
+	initialSchema := schema.InitialSchema(x.DefaultNamespace)
 	for _, s := range initialSchema {
-		s.Predicate = x.NamespaceAttr(x.DefaultNamespace, s.Predicate)
 
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",

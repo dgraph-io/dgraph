@@ -166,9 +166,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		if groups().groupId() == 1 {
-			initialSchema := schema.InitialSchema()
+			initialSchema := schema.InitialSchema(x.DefaultNamespace)
 			for _, s := range initialSchema {
-				s.Predicate = x.NamespaceAttr(x.DefaultNamespace, s.Predicate)
 				if err := updateSchema(s); err != nil {
 					return err
 				}

@@ -93,10 +93,7 @@ type Server struct{}
 
 func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	schemas := schema.InitialSchema()
-	for _, schema := range schemas {
-		schema.Predicate = x.NamespaceAttr(namespace, schema.Predicate)
-	}
+	schemas := schema.InitialSchema(namespace)
 	m.Schema = schemas
 	_, err := query.ApplyMutations(ctx, namespace, m)
 	return err
@@ -261,9 +258,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for _, update := range result.Preds {
+		// Set the schema name according to the namespace.
+		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
+
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsReservedPredicateChanged(update.Predicate, update) {
+		if schema.IsReservedPredicateChanged(update.Predicate, op.Namespace, update) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
@@ -272,9 +272,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
-
-		// Set the schema name according to the namespace.
-		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
