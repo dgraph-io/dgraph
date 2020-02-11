@@ -201,6 +201,8 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 				mi.arena = make([]byte, 64*1024*1024)
 				bufStartIndex = 0
 			}
+			// If sz > 64MB, then just create one slice (don't do anything special to arena, keep it
+			// simple).
 			eBuf := mi.arena[bufStartIndex : bufStartIndex+int(sz)]
 			bufStartIndex += int(sz)
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
@@ -323,9 +325,23 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
+	// Create a freelist struct here and pass to every request.
+	var freelist []*pb.MapEntry
 	for req := range entryCh {
+		idx := 0
+		// Ensure that freelist length is >= len(req.entries).
+		for _, entry := range req.entries {
+			// if idx >= cap(freelist) {
+			// 	freelist = append(freelist, &pb.MapEntry{})
+			// }
+			e := freelist[idx]
+			e.Unmarhal(entry)
+			idx++
+		}
+		req.parsed = freelist[:idx]
 		req.list = &bpb.KVList{}
 		r.toList(req.entries, req.list)
+		// r.toList(req) // contains entries, list and freelist struct.
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
@@ -516,6 +532,12 @@ func (r *reducer) toList(mapEntries [][]byte, list *bpb.KVList) int {
 	sort.Slice(entries, func(i, j int) bool {
 		return less(entries[i], entries[j])
 	})
+	// Don't parse to pb.MapEntries. Sort by keys only first.
+	// Then pick all top entries [][]byte with the same key.
+	// Parse them, convert to MapEntries only the ones with the same key, Sort again (no need to
+	// sort by key. Only sort by uid).
+	// Then, appendToList.
+	// Reuse the freelist of map entries somehow. Maybe encode can pass the freelist?
 
 	var currentKey []byte
 	var uids []uint64
