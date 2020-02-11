@@ -56,7 +56,6 @@ func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
-	fmt.Println(r.opt.ReduceShards, r.opt.NumReducers)
 
 	thr := y.NewThrottle(r.opt.NumReducers)
 	for i := 0; i < r.opt.ReduceShards; i++ {
@@ -251,11 +250,8 @@ func (r *reducer) encodeMapEntry(tid int, entryCh chan *encodeRequest, writerCh 
 	closer *y.Closer) {
 	defer closer.Done()
 
-	list := &bpb.KVList{}
 	for req := range entryCh {
-		for _, kv := range req.entries {
-			fmt.Println(tid, req.seqNo, kv.Key)
-		}
+		list := &bpb.KVList{}
 		r.toList(req.entries, list)
 		writerCh <- &writerRequest{
 			list:  list,
@@ -289,18 +285,12 @@ func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *write
 	spew.Config.MaxDepth = 1
 	for req := range writerCh {
 		seqMap[req.seqNo] = req
-		// fmt.Printf("SeqNo: %d First key: %+v Version: %d\nLast Key: %+v Version: %d\n", req.seqNo, req.list.GetKv()[0].Key, req.list.GetKv()[0].GetVersion(), req.list.GetKv()[len(req.list.GetKv())-1].Key, req.list.GetKv()[len(req.list.GetKv())-1].GetVersion())
 		for {
 			nextReq, ok := seqMap[nextIdx]
 			if !ok {
 				break
 			}
-			// fmt.Println("Next SeqNo", nextReq.seqNo, "NextIdx", nextIdx)
-			lastKey := []byte{0}
 			for _, kv := range nextReq.list.Kv {
-				y.AssertTrue(bytes.Compare(lastKey, kv.GetKey()) < 0)
-				lastKey = kv.GetKey()
-				// fmt.Println("SeqNo:", nextReq.seqNo, "Key from dgraph:", kv.GetKey(), "Version: ", kv.GetVersion())
 				setStreamId(kv)
 			}
 			x.Check(writer.Write(nextReq.list))
@@ -392,59 +382,46 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	var lastKey []byte
 	for i := 0; i < len(partitionKeys); i++ {
-		fmt.Println(i, ":", partitionKeys[i])
 		for _, itr := range mapItrs {
 			if !itr.Next() {
 				continue
 			}
 			res := itr.Current()
-			// fmt.Println("Batch first", res.batch[0].Key)
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
 			batch = append(batch, res.batch...)
 		}
-		// fmt.Printf("collected into batch. batchlen: %d\n", len(batch))
 		sort.Slice(batch, func(p, q int) bool {
 			return less(batch[p], batch[q])
 		})
-		fmt.Println("*************paritition key:", partitionKeys[i])
-		// for _, b := range batch {
-		// 	fmt.Println("b", seqNo, b.Key)
-		// }
 		if len(batch) == 0 {
 			continue
 		}
 		y.AssertTrue(bytes.Compare(lastKey, batch[len(batch)-1].Key) < 0)
-		// for _, b := range batch {
-		// 	fmt.Println("key:", b.Key)
-		// }
-		// fmt.Printf("First Key: %+v\nSecondKey: %+v\nLastt Key: %+v\n\n", batch[0].Key, batch[1].Key, batch[(len(batch))-1].Key)
 		seqNo++
 		encoderCh <- &encodeRequest{entries: batch, seqNo: seqNo}
 		batch = make([]*pb.MapEntry, 0, batchAlloc)
 	}
 
-	// // Drain the last batch
-	// var count int
-	// for i := 0; i < 2; i++ {
-	// 	count := 0
-	// 	for _, itr := range mapItrs {
-	// 		itr.Next()
-	// 		res := itr.Current()
-	// 		if res == nil {
-	// 			continue
-	// 		}
-	// 		count++
-	// 		y.AssertTrue(res.partitionKey == nil)
-	// 		batch = append(batch, res.batch...)
-	// 	}
-	// 	seqNo++
-	// 	encoderCh <- &encodeRequest{entries: batch, seqNo: seqNo}
-	// 	fmt.Println("*****************", count)
-	// }
+	// Drain the last batch
+	{
+		count := 0
+		for _, itr := range mapItrs {
+			itr.Next()
+			res := itr.Current()
+			if res == nil {
+				continue
+			}
+			count++
+			y.AssertTrue(res.partitionKey == nil)
+			batch = append(batch, res.batch...)
+		}
+		sort.Slice(batch, func(p, q int) bool {
+			return less(batch[p], batch[q])
+		})
+		seqNo++
+		encoderCh <- &encodeRequest{entries: batch, seqNo: seqNo}
+	}
 
-	// y.AssertTrue(count <= 1)
-
-	// Close the encoders
 	close(encoderCh)
 	encoderCloser.SignalAndWait()
 
