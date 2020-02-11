@@ -42,7 +42,7 @@ import (
 
 const (
 	panicMsg = "\n****\nthis test should trap this panic.\n" +
-		"It's working as expected if this message is logged with a stack trace.\n****\n"
+		"It's working as expected if this message is logged with a stack trace\n****"
 )
 
 type ErrorCase struct {
