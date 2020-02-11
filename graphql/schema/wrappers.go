@@ -48,7 +48,6 @@ const (
 	PasswordQuery        QueryType    = "checkPassword"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
-	PasswordMutation     MutationType = "changePassword"
 	UpdateMutation       MutationType = "update"
 	DeleteMutation       MutationType = "delete"
 	NotSupportedMutation MutationType = "notsupported"
@@ -289,6 +288,43 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return nil
 }
 
+func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
+	if dir.Name != "secret" {
+		return nil
+	}
+
+	name := dir.ArgumentMap(map[string]interface{}{})["field"].(string)
+	pred := dir.ArgumentMap(map[string]interface{}{})["pred"]
+	dirs := ast.DirectiveList{}
+
+	if pred != nil {
+		dirs = ast.DirectiveList{{
+			Name: "dgraph",
+			Arguments: ast.ArgumentList{{
+				Name: "pred",
+				Value: &ast.Value{
+					Raw:  pred.(string),
+					Kind: ast.StringValue,
+				},
+			}},
+			Position: dir.Position,
+		}}
+	}
+
+	fd := &ast.FieldDefinition{
+		Name: name,
+		Type: &ast.Type{
+			NamedType: "Password",
+			NonNull:   true,
+			Position:  dir.Position,
+		},
+		Directives: dirs,
+		Position:   dir.Position,
+	}
+
+	return fd
+}
+
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
 		add     = "Add"
@@ -327,35 +363,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, directive := range inputTyp.Directives {
-			if directive.Name != "secret" {
+			fd := convertPasswordDirective(directive)
+			if fd == nil {
 				continue
-			}
-			name := directive.ArgumentMap(map[string]interface{}{})["field"].(string)
-			pred := directive.ArgumentMap(map[string]interface{}{})["pred"]
-			dirs := ast.DirectiveList{}
-
-			if pred != nil {
-				dirs = ast.DirectiveList{{
-					Name: "dgraph",
-					Arguments: ast.ArgumentList{{
-						Name: "pred",
-						Value: &ast.Value{
-							Raw:  pred.(string),
-							Kind: ast.StringValue,
-						},
-					}},
-					Position: directive.Position,
-				}}
-			}
-			fd := &ast.FieldDefinition{
-				Name: name,
-				Type: &ast.Type{
-					NamedType: "Password",
-					NonNull:   true,
-					Position:  directive.Position,
-				},
-				Directives: dirs,
-				Position:   directive.Position,
 			}
 			inputTyp.Fields = append(inputTyp.Fields, fd)
 		}
@@ -573,15 +583,8 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	idField := f.Type().IDField()
 	passwordField := f.Type().PasswordField()
 	xidArgName := ""
-	// This method is only called for Get queries and check. These queries can accept one of the
-	// combinations as input.
-	// 1. ID only
-	// 2. XID only
-	// 3. ID and XID fields
-	// 4. ID and Password
-	// 5. XID and Password
-	// 6. ID, XID and Password
-	// Therefore, the non ID field and non password is an XID field.
+	// This method is only called for Get queries and check. These queries can accept ID, XID
+	// or Password. Therefore the non ID and Password field is an XID.
 	for _, arg := range f.field.Arguments {
 		if (idField == nil || arg.Name != idField.Name()) &&
 			(passwordField == nil || arg.Name != passwordField.Name()) {
@@ -906,8 +909,6 @@ func mutationType(name string) MutationType {
 		return UpdateMutation
 	case strings.HasPrefix(name, "delete"):
 		return DeleteMutation
-	case strings.HasPrefix(name, "change"):
-		return PasswordMutation
 	default:
 		return NotSupportedMutation
 	}
