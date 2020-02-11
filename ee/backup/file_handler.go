@@ -109,11 +109,9 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 	return h.createFiles(uri, req, backupManifest)
 }
 
-// Load uses tries to load any backup files found.
-// Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+func (h *fileHandler) getManifests(uri *url.URL, backupId string) ([]*Manifest, error) {
 	if !pathExist(uri.Path) {
-		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
@@ -121,27 +119,37 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(paths) == 0 {
-		return 0, errors.Errorf("No manifests found at path: %s", uri.Path)
+		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
 		fmt.Printf("Found backup manifest(s): %v\n", paths)
 	}
 
-	// Read and filter the files to get the list of files to consider
-	// for this restore operation.
+	// Read and filter the files to get the list of files to consider for this restore operation.
 	var manifests []*Manifest
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(path, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", path)
+			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
 	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+
+	return manifests, nil
+}
+
+// Load uses tries to load any backup files found.
+// Returns the maximum value of Since on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+	manifests, err := h.getManifests(uri, backupId)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while retrieving manifests")
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
@@ -177,8 +185,19 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 	return since, nil
 }
 
-func (h *fileHandler) Verify(*url.URL, string, []uint32) error {
-	return nil
+// Verify performs basic checks to decide whether the specified backup can be restored
+// to a live cluster.
+func (h *fileHandler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
+	manifests, err := h.getManifests(uri, backupId)
+	if err != nil {
+		return errors.Wrapf(err, "while retrieving manifests")
+	}
+
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", backupId)
+	}
+
+	return verifyGroupsInBackup(manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.

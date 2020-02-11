@@ -231,17 +231,10 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-// Load creates a new session, scans for backup objects in a bucket, then tries to
-// load any backup objects found.
-// Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
-	mc, err := h.setup(uri)
-	if err != nil {
-		return 0, err
-	}
+func (h *s3Handler) getManifests(
+	uri *url.URL, mc *minio.Client, backupId string) ([]*Manifest, error) {
 
 	var paths []string
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -252,15 +245,12 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 		}
 	}
 	if len(paths) == 0 {
-		return 0, errors.Errorf("No manifests found at: %s", uri.String())
+		return nil, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
 		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, paths)
 	}
-
-	// since is returned with the max manifest Since value found.
-	var since uint64
 
 	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
@@ -268,15 +258,35 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(mc, path, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", path)
+			return nil, errors.Wrapf(err, "while reading %q", path)
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
+	var err error
 	manifests, err = filterManifests(manifests, backupId)
+	if err != nil {
+		return nil, err
+	}
+	return manifests, nil
+}
+
+// Load creates a new session, scans for backup objects in a bucket, then tries to
+// load any backup objects found.
+// Returns nil and the maximum Since value on success, error otherwise.
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+	mc, err := h.setup(uri)
 	if err != nil {
 		return 0, err
 	}
+
+	manifests, err := h.getManifests(uri, mc, backupId)
+	if err != nil {
+		return 0, errors.Wrapf(err, "while retrieving manifests")
+	}
+
+	// since is returned with the max manifest Since value found.
+	var since uint64
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup manifests for each group exist. Each group in manifest must have a backup file,
@@ -319,8 +329,24 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 	return since, nil
 }
 
-func (h *s3Handler) Verify(*url.URL, string, []uint32) error {
-	return nil
+// Verify performs basic checks to decide whether the specified backup can be restored
+// to a live cluster.
+func (h *s3Handler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
+	}
+
+	manifests, err := h.getManifests(uri, mc, backupId)
+	if err != nil {
+		return errors.Wrapf(err, "while retrieving manifests")
+	}
+
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", backupId)
+	}
+
+	return verifyGroupsInBackup(manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.

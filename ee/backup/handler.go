@@ -76,6 +76,9 @@ type UriHandler interface {
 	// and loading the data into a DB. The restore CLI command uses this call.
 	Load(*url.URL, string, loadFn) (uint64, error)
 
+	// Verify checks that the specified backup can be restored to a cluster with the
+	// given groups. The last manifest of that backup should have the same number of
+	// groups as given list of groups.
 	Verify(*url.URL, string, []uint32) error
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
@@ -281,6 +284,30 @@ func verifyManifests(manifests []*Manifest) error {
 		}
 	}
 
+	return nil
+}
+
+// verifyGroupsInBackup checks that the groups in the last manifest match the groups in
+// the current cluster.  If they don't match, the backup cannot be restored to the cluster.
+func verifyGroupsInBackup(manifests []*Manifest, currentGroups []uint32) error {
+	var maxBackupNum uint64
+	var lastManifest *Manifest
+	for _, manifest := range manifests {
+		if manifest.BackupNum > maxBackupNum {
+			lastManifest = manifest
+			maxBackupNum = manifest.BackupNum
+		}
+	}
+
+	if len(currentGroups) != len(lastManifest.Groups) {
+		return errors.Errorf("groups in cluster and latest backup manifest differ")
+	}
+
+	for _, group := range currentGroups {
+		if _, ok := lastManifest.Groups[group]; !ok {
+			return errors.Errorf("groups in cluster and latest backup manifest differ")
+		}
+	}
 	return nil
 }
 
