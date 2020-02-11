@@ -273,4 +273,5 @@ func (dg *panicClient) Mutate(
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 	x.PanicWithSentryException(errors.New(panicMsg))
+	return nil, nil, nil
 }
