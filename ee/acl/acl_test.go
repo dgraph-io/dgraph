@@ -161,15 +161,19 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 }
 
 func resetUser(t *testing.T) {
-	// delete and recreate the user to ensure a clean state
-	deleteUserCmd := exec.Command("dgraph", "acl", "del", "-a", dgraphEndpoint,
-		"-u", userid, "-x", "password")
-	deleteUserCmd.Run()
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// clean up the user to allow repeated running of this test
+	deleteUser(t, accessJwt, userid)
 	glog.Infof("deleted user")
 
-	createUserCmd := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint, "-u",
-		userid, "-p", userpassword, "-x", "password")
-	checkOutput(t, createUserCmd, false)
+	resp := createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 1)
 	glog.Infof("created user")
 }
 
@@ -384,25 +388,122 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, txn.Commit(ctx))
 }
 
-func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
-	// create a new group
-	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "add",
-		"-a", dgraphEndpoint,
-		"-g", group, "-x", "password")
-	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Unable to create group: %v", string(errOutput))
+func createGroup(t *testing.T, accessToken, name string) []byte {
+	addGroup := `mutation addGroup($name: String!) {
+		addGroup(input: [{name: $name}]) {
+			group {
+				name
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: addGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
 	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return b
+}
+
+func checkGroupCount(t *testing.T, resp []byte, expected int) {
+	type Response struct {
+		Data struct {
+			AddGroup struct {
+				Group []struct {
+					Name string
+				}
+			}
+		}
+	}
+
+	var r Response
+	err := json.Unmarshal(resp, &r)
+	require.NoError(t, err)
+	require.Equal(t, expected, len(r.Data.AddGroup.Group))
+}
+
+func addToGroup(t *testing.T, accessToken, userId, group string) {
+	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
+		updateUser(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			set: {
+				groups: [
+					{ name: $group }
+				]
+			}
+		}) {
+			user {
+				name
+				groups {
+					name
+				}
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: addUserToGroup,
+		Variables: map[string]interface{}{
+			"name":  userId,
+			"group": group,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
+		userId, group)
+	require.JSONEq(t, expectedOutput, string(b))
+}
+
+func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// create a new group
+	resp := createGroup(t, accessJwt, group)
+	checkGroupCount(t, resp, 1)
 
 	// add the user to the group
 	if addUserToGroup {
-		addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-			"acl", "mod",
-			"-a", dgraphEndpoint,
-			"-u", userid, "--group_list", group, "-x", "password")
-		if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
-			t.Fatalf("Unable to add user %s to group %s:%v", userid, group, string(errOutput))
-		}
+		addToGroup(t, accessJwt, userid, group)
 	}
 
 	// add READ permission on the predicateToRead to the group
