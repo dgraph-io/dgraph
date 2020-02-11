@@ -27,7 +27,6 @@ import (
 )
 
 var env string
-var subcmd string
 
 // InitSentry intiializes the sentry machinery
 func InitSentry(ee bool) {

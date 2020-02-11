@@ -18,7 +18,7 @@ package zero
 
 import (
 	"context"
-	"errors"
+	//	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -203,13 +203,9 @@ func run() {
 	// x.PanicWithSentryException(errors.New("zero manual panic will send 2 events"))
 
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
