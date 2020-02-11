@@ -192,10 +192,10 @@ const (
 		name: String!
 	}
 
-
 	input RuleRef {
-		predicate: String!
-		permission: Int!
+		id: ID
+		predicate: String
+		permission: Int
 	}
 
 	input UserFilter {
@@ -301,7 +301,8 @@ const (
 		# ACL related endpoints.
 		# 1. If user and group don't exist both are created and linked.
 		# 2. If user doesn't exist but group does, then user is created and both are linked.
-		# 3. If user exists and group doesn't exist, then two errors are returned. User exists and group doesn't exist.
+		# 3. If user exists and group doesn't exist, then two errors are returned i.e. User exists
+		# and group doesn't exist.
 		# 4. If user and group exists, then error that user exists.
 		addUser(input: [AddUserInput]): AddUserPayload
 		addGroup(input: [AddGroupInput]): AddGroupPayload

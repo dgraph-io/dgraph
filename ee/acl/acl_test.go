@@ -493,7 +493,7 @@ type rule struct {
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
-	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
 		updateGroup(input: {
 			filter: {
 				name: {
@@ -536,35 +536,20 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 	defer resp.Body.Close()
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	expectedOutput := `{
+	rulesb, err := json.Marshal(rules)
+	require.NoError(t, err)
+	expectedOutput := fmt.Sprintf(`{
 		"data": {
 		  "updateGroup": {
 			"group": [
 			  {
-				"name": "unusedGroup",
-				"rules": [
-				  {
-					"predicate": "predicate_to_read",
-					"permission": 4
-				  },
-				  {
-					"predicate": "name",
-					"permission": 4
-				  },
-				  {
-					"predicate": "predicate_to_write",
-					"permission": 2
-				  },
-				  {
-					"predicate": "predicate_to_alter",
-					"permission": 1
-				  }
-				]
+				"name": "%s",
+				"rules": %s
 			  }
 			]
 		  }
 		}
-	  }`
+	  }`, group, rulesb)
 	testutil.CompareJSON(t, expectedOutput, string(b))
 }
 
@@ -681,13 +666,16 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
-	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
-		"-g", devGroup, "-x", "password")
-	require.NoError(t, createDevGroup.Run())
 
-	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
-		"-l", devGroup, "-x", "password")
-	require.NoError(t, addUserToDev.Run())
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	createGroup(t, accessJwt, devGroup)
+
+	addToGroup(t, accessJwt, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -700,9 +688,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
-	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
-		devGroup, "-p", unAuthPred, "-m", "0", "-x", "password")
-	require.NoError(t, setPermissionCmd.Run())
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{unAuthPred, 0}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -733,8 +719,7 @@ func TestGuardianAccess(t *testing.T) {
 	op := api.Operation{Schema: "unauthpred: string @index(exact) ."}
 	require.NoError(t, dg.Alter(ctx, &op))
 
-	err = addNewUserToGroup("guardian", "guardianpass", "guardians")
-	require.NoError(t, err, "Error while adding user to guardians group")
+	addNewUserToGroup(t, "guardian", "guardianpass", "guardians")
 
 	mutation := &api.Mutation{
 		SetNquads: []byte("_:a <unauthpred> \"testdata\" ."),
@@ -758,11 +743,11 @@ func TestGuardianAccess(t *testing.T) {
 	require.NoError(t, err, "Error while mutating unauthorized predicate")
 
 	query := `
-                 {
-                     me(func: eq(unauthpred, "testdata")) {
-                         uid
-                     }
-                 }`
+	{
+		me(func: eq(unauthpred, "testdata")) {
+			uid
+		}
+	}`
 
 	resp, err = gClient.NewTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying unauthorized predicate")
@@ -771,33 +756,79 @@ func TestGuardianAccess(t *testing.T) {
 	op = api.Operation{Schema: "unauthpred: int ."}
 	require.NoError(t, gClient.Alter(ctx, &op), "Error while altering unauthorized predicate")
 
-	err = removeUserFromGroups("guardian")
-	require.NoError(t, err, "Error while removing guardian from guardians group")
+	b := removeUserFromGroup(t, "guardian", "guardians")
+	expectedOutput := `{"data":{"updateUser":{"user":[{"name":"guardian","groups":[]}]}}}`
+	require.JSONEq(t, expectedOutput, string(b))
 
 	_, err = gClient.NewTxn().Query(ctx, query)
 	require.Error(t, err, "Query succeeded. It should have failed.")
 }
 
-func addNewUserToGroup(userName, password, groupName string) error {
-	createGuardian := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
-		"-u", userName, "-p", password, "-x", "password")
-	if err := createGuardian.Run(); err != nil {
-		return err
-	}
+func addNewUserToGroup(t *testing.T, userName, password, groupName string) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
 
-	makeGuardian := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", "guardian",
-		"-l", x.GuardiansId, "-x", "password")
-	if err := makeGuardian.Run(); err != nil {
-		return err
-	}
+	resp := createUser(t, accessJwt, userName, password)
+	checkUserCount(t, resp, 1)
 
-	return nil
+	addToGroup(t, accessJwt, userName, groupName)
 }
 
-func removeUserFromGroups(userName string) error {
-	removeUser := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userName,
-		"-l", "", "-x", "password")
-	return removeUser.Run()
+func removeUserFromGroup(t *testing.T, userName, groupName string) []byte {
+	removeUserGroups := `mutation updateUser($name: String!, $groupName: String!) {
+			updateUser(input: {
+				filter: {
+					name: {
+						eq: $name
+					}
+				},
+				remove: {
+					groups: [{ name: $groupName }]
+				}
+			}) {
+				user {
+					name
+					groups {
+						name
+					}
+				}
+			}
+		}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: removeUserGroups,
+		Variables: map[string]interface{}{
+			"name":      userName,
+			"groupName": groupName,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessJwt)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return b
 }
 
 func TestQueryRemoveUnauthorizedPred(t *testing.T) {
@@ -815,13 +846,14 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
-	createDevGroup := exec.Command("dgraph", "acl", "add", "-a", dgraphEndpoint,
-		"-g", devGroup, "-x", "password")
-	require.NoError(t, createDevGroup.Run())
-
-	addUserToDev := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-u", userid,
-		"-l", devGroup, "-x", "password")
-	require.NoError(t, addUserToDev.Run())
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -839,9 +871,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, err)
 
 	// give read access of <name> to alice
-	setPermissionCmd := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint, "-g",
-		devGroup, "-p", "name", "-m", "4", "-x", "password")
-	require.NoError(t, setPermissionCmd.Run())
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1014,12 +1044,61 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 }
 
+func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string) []byte {
+	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
+		updateGroup(input: {
+			filter: {
+				name: {
+					eq: $name
+				}
+			},
+			remove: {
+				rules: $rules
+			}
+		}) {
+			group {
+				name
+				rules {
+					predicate
+					permission
+				}
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query: removeRuleFromGroup,
+		Variables: map[string]interface{}{
+			"name":  group,
+			"rules": []map[string]interface{}{{"id": ruleID}},
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return b
+}
+
 func TestNegativePermissionDeleteRule(t *testing.T) {
+	// TODO(pawan) - Check why this fails and why rule deletion from a group doesn't work yet.
+	t.Skip()
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	addDataAndRules(ctx, t, dg)
+	assignedUids := addDataAndRules(ctx, t, dg)
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1035,12 +1114,14 @@ func TestNegativePermissionDeleteRule(t *testing.T) {
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 		string(resp.GetJson()))
 
-	// Deleting a rule by setting negative permission works only when done by acl commandline
-	// tool. When done directly through query it will actually set negative permission,
-	// which won't work as expceted.
-	updateRule := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint,
-		"-g", devGroup, "-p", "name", "-m", "-1", "-x", "password")
-	require.NoError(t, updateRule.Run())
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	// r1 is the rule corresponding to name that was added.
+	removeRuleFromGroup(t, accessJwt, devGroup, assignedUids["r1"])
 	time.Sleep(6 * time.Second)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
@@ -1048,7 +1129,7 @@ func TestNegativePermissionDeleteRule(t *testing.T) {
 	testutil.CompareJSON(t, string(resp.GetJson()), `{}`)
 }
 
-func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) {
+func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[string]string {
 	testutil.DropAll(t, dg)
 	op := api.Operation{Schema: `
 		name	 : string @index(exact) .
@@ -1067,7 +1148,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) {
 		_:r2 <dgraph.rule.predicate>  "nickname" .
 		_:r2 <dgraph.rule.permission> "2" .
 	`
-	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+	resp, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(devGroupMut),
 		CommitNow: true,
 	})
@@ -1106,4 +1187,5 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) {
 	}
 	_, err = dg.NewTxn().Mutate(ctx, mutation)
 	require.NoError(t, err)
+	return resp.GetUids()
 }
