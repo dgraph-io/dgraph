@@ -387,12 +387,6 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 		for idx, v := range gq.Func.Args {
 			if !v.IsGraphQLVar {
-				// Unquote the variable if it contains quotes.
-				var err error
-				gq.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
-				if err != nil {
-					return err
-				}
 				continue
 			}
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
@@ -481,12 +475,6 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 
 		for idx, v := range f.Func.Args {
 			if !v.IsGraphQLVar {
-				// Skip if this is not graphql variable.
-				var err error
-				f.Func.Args[idx].Value, err = unquoteIfQuoted(v.Value)
-				if err != nil {
-					return err
-				}
 				continue
 			}
 			if f.Func.Name == uidFunc {
@@ -1817,6 +1805,11 @@ L:
 			vname := collectName(it, itemInFunc.Val)
 			// TODO - Move this to a function.
 			v := strings.Trim(vname, " \t")
+			var err error
+			v, err = unquoteIfQuoted(v)
+			if err != nil {
+				return nil, err
+			}
 			val += v
 
 			if isDollar {
