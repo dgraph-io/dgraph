@@ -177,6 +177,10 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 	return since, nil
 }
 
+func (h *fileHandler) Verify(*url.URL, string, []uint32) error {
+	return nil
+}
+
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 	if !pathExist(uri.Path) {

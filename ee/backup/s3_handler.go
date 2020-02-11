@@ -319,6 +319,10 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 	return since, nil
 }
 
+func (h *s3Handler) Verify(*url.URL, string, []uint32) error {
+	return nil
+}
+
 // ListManifests loads the manifests in the locations and returns them.
 func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 	mc, err := h.setup(uri)

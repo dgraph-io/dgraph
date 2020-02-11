@@ -261,6 +261,18 @@ message Snapshot {
 	uint64 since_ts = 5;
 }
 
+message Restore {
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
+}
+
 message Proposal {
 	Mutations mutations    = 2;
 	repeated KV kv         = 4;
@@ -271,6 +283,7 @@ message Proposal {
 	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
 	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
 	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
+  Restore restore = 12;
 }
 
 message KVS {

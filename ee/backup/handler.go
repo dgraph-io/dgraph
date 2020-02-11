@@ -76,6 +76,8 @@ type UriHandler interface {
 	// and loading the data into a DB. The restore CLI command uses this call.
 	Load(*url.URL, string, loadFn) (uint64, error)
 
+	Verify(*url.URL, string, []uint32) error
+
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
 	ListManifests(*url.URL) ([]string, error)

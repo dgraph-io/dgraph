@@ -99,6 +99,16 @@ const (
 		forceFull: Boolean
 	}
 
+	input RestoreInput {
+		location: String!
+		backupId: String!
+		accessKey: String
+		secretKey: String
+		sessionToken: String
+		anonymous: Boolean
+		forceFull: Boolean
+	}
+
 	type Response {
 		code: String
 		message: String
@@ -129,6 +139,10 @@ const (
 	}
 
 	type BackupPayload {
+		response: Response
+	}
+
+	type RestorePayload {
 		response: Response
 	}
 

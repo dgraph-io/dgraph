@@ -51,14 +51,6 @@ func (rr *restoreResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	// err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
-	// 	Destination:  input.Destination,
-	// 	AccessKey:    input.AccessKey,
-	// 	SecretKey:    input.SecretKey,
-	// 	SessionToken: input.SessionToken,
-	// 	Anonymous:    input.Anonymous,
-	// }, input.ForceFull)
-
 	return nil, nil, err
 }
 
