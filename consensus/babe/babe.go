@@ -41,6 +41,7 @@ type Session struct {
 	keypair        *sr25519.Keypair
 	rt             *runtime.Runtime
 	config         *BabeConfiguration
+	randomness     [sr25519.VrfOutputLength]byte
 	authorityIndex uint64
 	authorityData  []*AuthorityData
 	epochThreshold *big.Int // validator threshold for this epoch
@@ -88,6 +89,8 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 
 	log.Info("BABE config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
 
+	babeSession.randomness = [sr25519.VrfOutputLength]byte{babeSession.config.Randomness}
+
 	return babeSession, nil
 }
 
@@ -122,6 +125,11 @@ func (b *Session) PushToTxQueue(vt *tx.ValidTransaction) {
 // PeekFromTxQueue returns ValidTransaction
 func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
 	return b.txQueue.Peek()
+}
+
+func (b *Session) SetEpochData(data *NextEpochDescriptor) {
+	b.authorityData = data.Authorities
+	b.randomness = data.Randomness
 }
 
 func (b *Session) invokeBlockAuthoring() {
