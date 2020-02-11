@@ -1396,10 +1396,6 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 	return fld.Type.Name() == idTypeFor(defn)
 }
 
-func isPasswordField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
-	return fld.Type.Name() == "Password"
-}
-
 func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
