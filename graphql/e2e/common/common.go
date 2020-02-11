@@ -138,8 +138,9 @@ type state struct {
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLLayerStarted(graphqlAdminURL)
 	if err != nil {
-		x.PanicWithSentryException(errors.Errorf("Waited for GraphQL test server to become available, but it never did.\n"+
-			"Got last error %+v", err.Error()))
+		x.PanicWithSentryException(errors.Errorf(
+			"Waited for GraphQL test server to become available, but it never did.\n"+
+				"Got last error %+v", err.Error()))
 	}
 
 	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
