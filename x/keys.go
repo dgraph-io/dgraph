@@ -64,6 +64,9 @@ func NamespaceAttr(namespace, attr string) string {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
+	if len(attr) == 0 {
+		return namespace + string(NamespaceSeparator) + attr
+	}
 	if attr[0] == '~' {
 		attr = attr[1:]
 		// If the attr is reverse we need to convert that into ~namespaceattr so
