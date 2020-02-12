@@ -2205,35 +2205,8 @@ func TestCountFacetsFilteringUidListPredicate(t *testing.T) {
 	query := `{
 		q(func: uid(1, 33)) {
 			name
-			count(friend) @facets(eq(since, "2006-01-02T15:04:05"))
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `
-	{
-		"data": {
-		  "q": [
-			{
-			  "name": "Michonne",
-			  "count(friend)": 2
-			},
-			{
-			  "name": "Michale",
-			  "count(friend)": 1
-			}
-		  ]
-		}
-	}`, js)
-}
-
-func TestCountFacetsFilteringUidPredicate(t *testing.T) {
-	populateClusterWithFacets()
-
-	query := `{
-		q(func: uid(1, 33)) {
-			name
-			count(boss) @facets(eq(company, "company1"))
+			filtered_count: count(friend) @facets(eq(since, "2006-01-02T15:04:05"))
+			full_count: count(friend)
 		}
 	}`
 
@@ -2244,11 +2217,44 @@ func TestCountFacetsFilteringUidPredicate(t *testing.T) {
 			"q": [
 				{
 					"name": "Michonne",
-					"count(boss)": 1
+					"filtered_count": 2,
+					"full_count": 5
 				},
 				{
 					"name": "Michale",
-					"count(boss)": 0
+					"filtered_count": 1,
+					"full_count": 3
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringUidPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			filtered_count: count(boss) @facets(eq(company, "company1"))
+			full_count: count(boss)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"filtered_count": 1,
+					"full_count": 1
+				},
+				{
+					"name": "Michale",
+					"filtered_count": 0,
+					"full_count": 0
 				}
 			]
 		}
@@ -2261,7 +2267,8 @@ func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
 	query := `{
 		q(func: uid(1, 23)) {
 			name
-			count(name) @facets(eq(origin, "french"))
+			filtered_count: count(name) @facets(eq(origin, "french"))
+			full_count: count(name)
 		}
 	}`
 
@@ -2272,11 +2279,13 @@ func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
 			"q": [
 				{
 					"name": "Michonne",
-					"count(name)": 1
+					"filtered_count": 1,
+					"full_count": 2
 				},
 				{
 					"name": "Rick Grimes",
-					"count(name)": 1
+					"filtered_count": 1,
+					"full_count": 1
 				}
 			]
 		}
@@ -2290,7 +2299,8 @@ func TestCountFacetsFilteringScalarListPredicate(t *testing.T) {
 		q(func: uid(1, 12000)) {
 			name
 			alt_name
-			count(alt_name) @facets(eq(origin, "french"))
+			filtered_count: count(alt_name) @facets(eq(origin, "french"))
+			full_count: count(alt_name)
 		}
 	}`
 
@@ -2305,13 +2315,15 @@ func TestCountFacetsFilteringScalarListPredicate(t *testing.T) {
 						"Michelle",
 						"Michelin"
 					],
-					"count(alt_name)": 1
+					"filtered_count": 1,
+					"full_count": 2
 				},
 				{
 					"alt_name": [
 						"Potter"
 					],
-					"count(alt_name)": 0
+					"filtered_count": 0,
+					"full_count": 1
 				}
 			]
 		}
