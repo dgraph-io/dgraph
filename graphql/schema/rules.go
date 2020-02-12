@@ -29,7 +29,8 @@ import (
 func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
-	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation)
+	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
+		passwordDirectiveValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
 
@@ -88,6 +89,30 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 		strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
 	)
 	return fieldNamesString, errLocations
+}
+
+func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
+	dirs := make([]string, 0)
+
+	for _, dir := range typ.Directives {
+		if dir.Name != "secret" {
+			continue
+		}
+		val := dir.Arguments.ForName("field").Value.Raw
+		if val == "" {
+			return gqlerror.ErrorPosf(typ.Position,
+				`Type %s; Argument "field" of secret directive is empty`, typ.Name)
+		}
+		dirs = append(dirs, val)
+	}
+
+	if len(dirs) > 1 {
+		val := strings.Join(dirs, ",")
+		return gqlerror.ErrorPosf(typ.Position,
+			"Type %s; has more than multiple secret fields %s", typ.Name, val)
+	}
+
+	return nil
 }
 
 func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
