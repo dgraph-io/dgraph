@@ -353,8 +353,11 @@ Above command will show information about user `groot`.
 ### Access Data Using a Client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
-first log in through a user. A sample code using the dgo client can be found
-[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go).
+first log in through a user. This is tyically done via the client's `.login(USER_ID, USER_PASSWORD)` method.
+
+A sample code using the dgo client can be found
+[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go). An example using
+dgraph4j can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
 
 ### Access Data Using Curl
 
