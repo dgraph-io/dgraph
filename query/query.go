@@ -1881,8 +1881,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			if typeNamespace != child.Params.Namespace {
 				return out, errors.Errorf(
-					"Expected namespace while expanding subgraph %s but got %s", typeNamespace,
-					child.Params.Namespace)
+					"Expected namespace while expanding subgraph %s but got %s",
+					child.Params.Namespace, typeNamespace)
 			}
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
