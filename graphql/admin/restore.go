@@ -24,6 +24,8 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -38,7 +40,6 @@ type restoreInput struct {
 	SecretKey    string
 	SessionToken string
 	Anonymous    bool
-	ForceFull    bool
 }
 
 func (rr *restoreResolver) Rewrite(
@@ -46,11 +47,19 @@ func (rr *restoreResolver) Rewrite(
 	glog.Info("Got restore request")
 
 	rr.mutation = m
-	_, err := getRestoreInput(m)
+	input, err := getRestoreInput(m)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	req := pb.Restore{
+		Location:     input.Location,
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	}
+	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	return nil, nil, err
 }
 

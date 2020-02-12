@@ -18,6 +18,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+func ProcessRestoreRequest(ctx context.Context, req *pb.Restore) error {
+	return nil
+}
+
 // Restore implements the Worker interface.
 func (w *grpcWorker) Restore(ctx context.Context, req *pb.Restore) (*pb.Status, error) {
 	return nil, nil
