@@ -34,6 +34,10 @@ type backupResolver struct {
 	mutation schema.Mutation
 }
 
+func (br *backupResolver) NumUids() int {
+	return 0
+}
+
 type backupInput struct {
 	Destination  string
 	AccessKey    string

@@ -50,6 +50,10 @@ type updateSchemaResolver struct {
 	baseMutationExecutor resolve.MutationExecutor
 }
 
+func (asr *updateSchemaResolver) NumUids() int {
+	return 0
+}
+
 type getSchemaResolver struct {
 	admin *adminServer
 

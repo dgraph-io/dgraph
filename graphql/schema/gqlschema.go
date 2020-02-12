@@ -145,6 +145,11 @@ type searchTypeIndex struct {
 	dgIndex string
 }
 
+var numUids = &ast.FieldDefinition{
+	Name: "numUids",
+	Type: &ast.Type{NamedType: "Int"},
+}
+
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
 var supportedSearches = map[string]searchTypeIndex{
@@ -836,7 +841,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry},
+		Fields: []*ast.FieldDefinition{qry, numUids},
 	}
 }
 
@@ -869,7 +874,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			qry,
+			qry, numUids,
 		},
 	}
 }
@@ -889,6 +894,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 					NamedType: "String",
 				},
 			},
+			numUids,
 		},
 	}
 }

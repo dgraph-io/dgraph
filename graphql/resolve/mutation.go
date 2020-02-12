@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -90,6 +91,8 @@ type MutationRewriter interface {
 		m schema.Mutation,
 		assigned map[string]string,
 		result map[string]interface{}) (*gql.GraphQuery, error)
+
+	NumUids() int
 }
 
 // A MutationExecutor can execute a mutation and returns the assigned map, the
@@ -173,6 +176,24 @@ func (mr *mutationResolver) Resolve(
 	res, success, err := mr.rewriteAndExecute(ctx, mutation)
 
 	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
+
+	selSets := mutation.SelectionSet()
+	for _, selSet := range selSets {
+		if selSet.Name() != "numUids" {
+			continue
+		}
+
+		s := string(completed)
+		if s[len(s)-1] == '}' {
+			completed = []byte(fmt.Sprintf(`%s, "numUids": %d}`, s[:len(s)-1],
+				mr.mutationRewriter.NumUids()))
+		} else {
+			completed = []byte(fmt.Sprintf(`%s, "numUids": %d`, s,
+				mr.mutationRewriter.NumUids()))
+		}
+		break
+	}
+
 	return &Resolved{
 		Data: completed,
 		Err:  err,
