@@ -1582,7 +1582,7 @@ Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
 HTTPS requests only. Therefore some adjustments need to be made.
 
-If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN`:
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default):
 
 1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
 2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions
