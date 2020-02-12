@@ -358,6 +358,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				backup,
 				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
+		WithMutationResolver("login", func(m schema.Mutation) resolve.MutationResolver {
+			login := &loginResolver{}
+
+			// login implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
+			return resolve.NewMutationResolver(
+				login,
+				login,
+				login,
+				resolve.StdQueryCompletion())
+		}).
 		WithSchemaIntrospection()
 
 	return rf

@@ -32,6 +32,21 @@ const adminTypes = `
 		response: Response
 	}
 
+	input LoginInput {
+		userId: String
+		password: String
+		refreshToken: String
+	}
+
+	type LoginResponse {
+		accessJwt: String
+		refreshJwt: String
+	}
+
+	type LoginPayload {
+		response: LoginResponse
+	}
+
 	type User {
 		name: String! @id @dgraph(pred: "dgraph.xid")
 		# TODO - Update this to actual secret after password PR is merged here.
@@ -159,6 +174,7 @@ const adminTypes = `
 const adminMutations = `
 	backup(input: BackupInput!) : BackupPayload
 
+	login(input: LoginInput!): LoginPayload
 	# ACL related endpoints.
 	# 1. If user and group don't exist both are created and linked.
 	# 2. If user doesn't exist but group does, then user is created and both are linked.
