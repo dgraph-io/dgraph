@@ -392,8 +392,14 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.password"
       },
-      {
-        "predicate": "dgraph.group.acl"
+	  {
+		  "predicate": "dgraph.acl.rule"
+	  },
+	  {
+		  "predicate": "dgraph.rule.predicate"
+	  },
+	  {
+		  "predicate": "dgraph.rule.permission"
 	  },
 	  {
         "predicate": "dgraph.graphql.schema"

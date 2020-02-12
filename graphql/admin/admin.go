@@ -17,6 +17,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -85,6 +86,10 @@ const (
 		schema: String!
 	}
 
+	input ExportInput {
+		format: String
+	}
+
 	input BackupInput {
 		destination: String!
 		accessKey: String
@@ -99,6 +104,30 @@ const (
 		message: String
 	}
 
+	type ExportPayload {
+		response: Response
+	}
+
+	input DrainingInput {
+		enable: Boolean
+	}
+
+	type DrainingPayload {
+		response: Response
+	}
+
+	type ShutdownPayload {
+		response: Response
+	}
+
+	input ConfigInput {
+		lruMb: Float
+	}
+
+	type ConfigPayload {
+		response: Response
+	}
+
 	type BackupPayload {
 		response: Response
 	}
@@ -110,6 +139,10 @@ const (
 
 	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
+		export(input: ExportInput!): ExportPayload
+		draining(input: DrainingInput!): DrainingPayload
+		shutdown: ShutdownPayload
+		config(input: ConfigInput!): ConfigPayload
 		backup(input: BackupInput!) : BackupPayload
 	}
  `
@@ -276,6 +309,50 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
 				})
 		}).
+		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
+			export := &exportResolver{}
+
+			// export implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
+			return resolve.NewMutationResolver(
+				export,
+				export,
+				export,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("draining", func(m schema.Mutation) resolve.MutationResolver {
+			draining := &drainingResolver{}
+
+			// draining implements the mutation rewriter, executor and query executor hence its
+			// passed thrice here.
+			return resolve.NewMutationResolver(
+				draining,
+				draining,
+				draining,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("shutdown", func(m schema.Mutation) resolve.MutationResolver {
+			shutdown := &shutdownResolver{}
+
+			// shutdown implements the mutation rewriter, executor and query executor hence its
+			// passed thrice here.
+			return resolve.NewMutationResolver(
+				shutdown,
+				shutdown,
+				shutdown,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
+		WithMutationResolver("config", func(m schema.Mutation) resolve.MutationResolver {
+			config := &configResolver{}
+
+			// config implements the mutation rewriter, executor and query executor hence its
+			// passed thrice here.
+			return resolve.NewMutationResolver(
+				config,
+				config,
+				config,
+				resolve.StdMutationCompletion(m.ResponseName()))
+		}).
 		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
 			backup := &backupResolver{}
 
@@ -437,4 +514,31 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 
 	as.status = healthy
+}
+
+func writeResponse(m schema.Mutation, code, message string) []byte {
+	var buf bytes.Buffer
+
+	x.Check2(buf.WriteString(`{ "`))
+	x.Check2(buf.WriteString(m.SelectionSet()[0].ResponseName() + `": [{`))
+
+	for i, sel := range m.SelectionSet()[0].SelectionSet() {
+		var val string
+		switch sel.Name() {
+		case "code":
+			val = code
+		case "message":
+			val = message
+		}
+		if i != 0 {
+			x.Check2(buf.WriteString(","))
+		}
+		x.Check2(buf.WriteString(`"`))
+		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(`":`))
+		x.Check2(buf.WriteString(`"` + val + `"`))
+	}
+	x.Check2(buf.WriteString("}]}"))
+
+	return buf.Bytes()
 }
