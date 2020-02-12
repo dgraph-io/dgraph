@@ -433,13 +433,13 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the schema updates to insert at the begining of
 // Dgraph's execution. It looks at the schema state to determine which
 // types to insert.
-func InitialTypes() []*pb.TypeUpdate {
+func InitialTypes(namespace string) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes, &pb.TypeUpdate{
-		TypeName: "dgraph.graphql",
+		TypeName: x.NamespaceAttr(namespace, "dgraph.graphql"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "dgraph.graphql.schema",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
 				ValueType: pb.Posting_STRING,
 			},
 		},
@@ -524,7 +524,7 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 // predicate pred is different than the passed update.
 func IsReservedPredicateChanged(pred string, namespace string, update *pb.SchemaUpdate) bool {
 	// Return false for non-reserved predicates.
-	if !x.IsReservedPredicate(pred) {
+	if !x.IsReservedPredicate(x.ParseAttr(pred)) {
 		return false
 	}
 

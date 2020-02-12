@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"time"
 
@@ -230,7 +229,6 @@ func updateType(typeName string, t pb.TypeUpdate) error {
 	schema.State().SetType(typeName, t)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	fmt.Printf("\n\nsptring type %+v \n\n", t)
 	data, err := t.Marshal()
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{

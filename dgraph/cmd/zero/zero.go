@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -575,7 +574,6 @@ func (s *Server) ShouldServe(
 	if tablet.GroupId == 0 && !tablet.ReadOnly {
 		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
-	fmt.Printf("my predicate %s\n", tablet.Predicate)
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)

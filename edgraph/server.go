@@ -222,9 +222,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
-		if attr == op.DropAttr {
-			attr = x.NamespaceAttr(op.Namespace, attr)
-		}
+		attr = x.NamespaceAttr(op.Namespace, attr)
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   attr,
@@ -265,7 +264,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// if the update is equal to the existing one.
 		if schema.IsReservedPredicateChanged(update.Predicate, op.Namespace, update) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
-				update.Predicate)
+				x.ParseAttr(update.Predicate))
 			return nil, err
 		}
 

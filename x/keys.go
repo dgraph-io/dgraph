@@ -50,8 +50,11 @@ const (
 	ByteSplit = byte(0x01)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
-	//NamespaceSeperator is a constant used as seperator between namespace and attr name.
-	NamespaceSeperator = byte(30)
+	// NamespaceSeparator is a constant used as seperator between namespace and attr name.
+	// byte 30 is chosen beacuse it is ascii separator standard.
+	// refer:
+	// https://theasciicode.com.ar/ascii-control-characters/unit-separator-ascii-code-31.html
+	NamespaceSeparator = byte(30)
 	// DefaultNamespace is the default namespace name.
 	DefaultNamespace = "default"
 )
@@ -61,19 +64,19 @@ func NamespaceAttr(namespace, attr string) string {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
-	return namespace + string(NamespaceSeperator) + attr
+	return namespace + string(NamespaceSeparator) + attr
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
 func ParseNamespaceAttr(attr string) (string, string) {
-	splits := strings.Split(attr, string(NamespaceSeperator))
+	splits := strings.Split(attr, string(NamespaceSeparator))
 	AssertTrue(len(splits) == 2)
 	return splits[0], splits[1]
 }
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	splits := strings.Split(attr, string(NamespaceSeperator))
+	splits := strings.Split(attr, string(NamespaceSeparator))
 	AssertTrue(len(splits) == 2)
 	return splits[1]
 }

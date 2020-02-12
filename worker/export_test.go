@@ -92,7 +92,12 @@ func populateGraphExport(t *testing.T) {
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
-		e, err := rnq.ToEdgeUsing(x.DefaultNamespace, idMap)
+		if rqn.Predicate != x.Star {
+			if rqn.Predicate != x.Star {
+				rqn.Predicate = x.NamespaceAttr(namespace, rqn.Predicate)
+			}
+		}
+		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
 		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
 	}

@@ -146,7 +146,6 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 
 	if groups().ServesGroup(gid) {
-		fmt.Println("Yoo")
 		// No need for a network call, as this should be run from within this instance.
 		return processTask(ctx, q, gid)
 	}
@@ -792,7 +791,6 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	fmt.Println("processing")
 	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
 	defer span.End()
 
@@ -842,7 +840,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		fmt.Printf("\n\n\n help err %+v \n\n\n", err)
 		return &pb.Result{}, err
 	}
-	fmt.Printf("\n\n\n heping %+v\n\n", out)
 	return out, nil
 }
 
@@ -1681,9 +1678,11 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr), required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s",
+				x.ParseAttr(attr), required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args,
+			langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
 		fc.intersectDest = needsIntersect(f)
@@ -1694,7 +1693,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr), required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s",
+				x.ParseAttr(attr), required)
 		}
 		fc.intersectDest = needsIntersect(f)
 		// Max Levenshtein distance
@@ -1705,7 +1705,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Levenshtein distance value must be an int, got %v", s)
 		}
 		if max < 0 {
-			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
+			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v",
+				s)
 		}
 		fc.threshold = int64(max)
 		fc.tokens = q.SrcFunc.Args

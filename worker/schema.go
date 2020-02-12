@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -166,7 +165,6 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
-		fmt.Printf("SCHEMA YOOA %+v \n", schema)
 		ch <- resultErr{result: proto.Clone(schema).(*pb.SchemaResult), err: e}
 		return
 	}

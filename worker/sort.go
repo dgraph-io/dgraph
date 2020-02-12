@@ -194,12 +194,14 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return resultWithError(errors.Errorf("Attribute %s not defined in schema", x.ParseAttr(order.Attr)))
+		return resultWithError(errors.Errorf("Attribute %s not defined in schema",
+			x.ParseAttr(order.Attr)))
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(order.Attr) {
-		return resultWithError(errors.Errorf("Attribute %s is not indexed.", x.ParseAttr(order.Attr)))
+		return resultWithError(errors.Errorf("Attribute %s is not indexed.",
+			x.ParseAttr(order.Attr)))
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)

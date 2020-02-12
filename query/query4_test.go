@@ -1659,4 +1659,40 @@ func TestMultiTenancy(t *testing.T) {
 		   ]
 		}
 	 }`, res)
+
+	createNamespace("emptynamespace")
+	// Trying to query data of default namespace in current namespace.
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name), first: 5){
+		name
+	  }
+	  }`, "emptynamespace")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"me":[]}}`, res)
+
+	// Mutating another namespace.
+	createNamespace("namespace1")
+	setSchema(`
+	name :string @index(term, exact, trigram) @count @lang .
+	`, "dev")
+
+	err = addTriplesToCluster(`
+	<0x888> <name> "vegeta" .`, "namespace1")
+	require.NoError(t, err)
+	// Create another namespace and try to delete the data in namespace1
+	createNamespace("namespace2")
+	setSchema(`
+	name :string @index(term, exact, trigram) @count @lang .
+	`, "namespace2")
+
+	deleteTriplesInClusterWithNamespace(`<0x888> * * .`, "namespace2")
+
+	// Now query the namespace1 and check whether the data is not deleted.
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name), first: 5){
+		name
+	  }
+	  }`, "namespace1")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"me":[{"name":"vegeta"}]}}`, res)
 }

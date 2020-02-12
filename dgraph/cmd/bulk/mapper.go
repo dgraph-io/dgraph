@@ -208,12 +208,15 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid := m.uid(nq.GetSubject())
 	var oid uint64
 	var de *pb.DirectedEdge
+	if nq.Predicate != x.Star {
+		nq.Predicate = x.NamespaceAttr(x.DefaultNamespace, nq.Predicate)
+	}
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
-		de = nq.CreateUidEdge(x.DefaultNamespace, sid, oid)
+		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		var err error
-		de, err = nq.CreateValueEdge(x.DefaultNamespace, sid)
+		de, err = nq.CreateValueEdge(sid)
 		x.Check(err)
 	}
 

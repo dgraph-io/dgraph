@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -36,10 +35,9 @@ import (
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
-func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
-	fmt.Printf("before %+v \n", m.Edges)
+func ApplyMutations(ctx context.Context,
+	namespace string, m *pb.Mutations) (*api.TxnContext, error) {
 	edges, err := expandEdges(ctx, namespace, m)
-	fmt.Printf("expanded edges %+v \n", edges)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
@@ -53,7 +51,8 @@ func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*ap
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+func expandEdges(ctx context.Context,
+	namespace string, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
@@ -189,7 +188,12 @@ func ToDirectedEdges(namespace string, gmuList []*gql.Mutation, newUids map[stri
 		}
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
-		edge, err = wnq.ToEdgeUsing(namespace, newUids)
+		if wnq.Predicate != x.Star {
+			if wnq.Predicate != x.Star {
+				wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
+			}
+		}
+		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return errors.Wrap(err, "")
 		}

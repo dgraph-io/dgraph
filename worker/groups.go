@@ -187,13 +187,8 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) proposeInitialTypes() {
-	initialTypes := schema.InitialTypes()
+	initialTypes := schema.InitialTypes(x.DefaultNamespace)
 	for _, t := range initialTypes {
-		// Convert types for the deafult namespace.
-		t.TypeName = x.NamespaceAttr(x.DefaultNamespace, t.TypeName)
-		for _, field := range t.Fields {
-			field.Predicate = x.NamespaceAttr(x.DefaultNamespace, field.Predicate)
-		}
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
@@ -416,7 +411,6 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	tablet := g.tablets[key]
 	g.RUnlock()
 	if tablet != nil {
-		fmt.Printf("\n\n\n\n\n found tablet %v \n\n\n\n\n\n", tablet)
 		if ts > 0 && ts < tablet.MoveTs {
 			return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
 				ts, tablet.MoveTs, key)

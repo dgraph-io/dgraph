@@ -2793,7 +2793,6 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
 	out := []*pb.TypeUpdate{}
 	for _, update := range types {
-		fmt.Printf("type name %s \n", update.TypeName)
 		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue

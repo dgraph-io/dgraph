@@ -171,6 +171,24 @@ func deleteTriplesInCluster(triples string) {
 	}
 }
 
+func deleteTriplesInClusterWithNamespace(triples string, namespace string) {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Do(ctx, &api.Request{
+		Mutations: []*api.Mutation{
+			&api.Mutation{
+				DelNquads: []byte(triples),
+				CommitNow: true,
+			},
+		},
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
+}
+
 func addGeoPointToCluster(uid uint64, pred string, point []float64) error {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Point', 'coordinates':[%v, %v]}"^^<geo:geojson> .`,

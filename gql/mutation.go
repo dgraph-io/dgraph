@@ -113,11 +113,7 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 
 var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdgePrototype(namespace string, subjectUid uint64) *pb.DirectedEdge {
-	// QUESTION: how do we know the given Entity is belong to the current namespace?
-	if nq.Predicate != x.Star {
-		nq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
-	}
+func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
@@ -128,8 +124,8 @@ func (nq NQuad) createEdgePrototype(namespace string, subjectUid uint64) *pb.Dir
 }
 
 // CreateUidEdge returns a Directed edge connecting the given subject and object UIDs.
-func (nq NQuad) CreateUidEdge(namespace string, subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
-	out := nq.createEdgePrototype(namespace, subjectUid)
+func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
+	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
 	out.ValueType = pb.Posting_UID
 	return out
@@ -137,10 +133,10 @@ func (nq NQuad) CreateUidEdge(namespace string, subjectUid uint64, objectUid uin
 
 // CreateValueEdge returns a DirectedEdge with the given subject. The predicate, label,
 // language, and facet values are derived from the NQuad.
-func (nq NQuad) CreateValueEdge(namespace string, subjectUid uint64) (*pb.DirectedEdge, error) {
+func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	var err error
 
-	out := nq.createEdgePrototype(namespace, subjectUid)
+	out := nq.createEdgePrototype(subjectUid)
 	if err = copyValue(out, nq); err != nil {
 		return &emptyEdge, err
 	}
@@ -173,7 +169,7 @@ func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(namespace string, newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error) {
 	var edge *pb.DirectedEdge
 	sUid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
@@ -193,9 +189,9 @@ func (nq NQuad) ToEdgeUsing(namespace string, newToUid map[string]uint64) (*pb.D
 		if oUid == 0 {
 			return nil, errors.Errorf("ObjectId should be > 0 for nquad: %+v", nq)
 		}
-		edge = nq.CreateUidEdge(namespace, sUid, oUid)
+		edge = nq.CreateUidEdge(sUid, oUid)
 	case x.ValuePlain, x.ValueMulti:
-		edge, err = nq.CreateValueEdge(namespace, sUid)
+		edge, err = nq.CreateValueEdge(sUid)
 
 	default:
 		return &emptyEdge, errors.Errorf("Unknown value type for nquad: %+v", nq)
