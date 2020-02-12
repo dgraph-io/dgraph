@@ -64,14 +64,24 @@ func NamespaceAttr(namespace, attr string) string {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
+	if attr[0] == '~' {
+		attr = attr[1:]
+		// If the attr is reverse we need to convert that into ~namespaceattr so
+		// that predicate will be reverse indexed.
+		namespace = "~" + namespace
+	}
 	return namespace + string(NamespaceSeparator) + attr
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
-func ParseNamespaceAttr(attr string) (string, string) {
+func ParseNamespaceAttr(attr string) (string, string, bool) {
 	splits := strings.Split(attr, string(NamespaceSeparator))
 	AssertTrue(len(splits) == 2)
-	return splits[0], splits[1]
+	reverse := splits[0][0] == '~'
+	if reverse {
+		splits[0] = splits[0][1:]
+	}
+	return splits[0], splits[1], reverse
 }
 
 // ParseAttr returns the attr from the given value.

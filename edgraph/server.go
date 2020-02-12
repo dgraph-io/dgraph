@@ -283,10 +283,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		for _, field := range schemaType.Fields {
 			// Convert the type field according to the current tenant.
-			if field.Predicate[0] == '~' {
-				field.Predicate = ("~" + x.NamespaceAttr(op.Namespace, field.Predicate[1:]))
-				continue
-			}
 			field.Predicate = x.NamespaceAttr(op.Namespace, field.Predicate)
 		}
 	}

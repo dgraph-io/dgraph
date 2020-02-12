@@ -165,7 +165,7 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
-		ch <- resultErr{result: proto.Clone(schema).(*pb.SchemaResult), err: e}
+		ch <- resultErr{result: schema, err: e}
 		return
 	}
 

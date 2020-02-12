@@ -1873,13 +1873,17 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
-			typeNamespace, attr := x.ParseNamespaceAttr(pred)
-			reverse := typeNamespace[0] == '~'
+			typeNamespace, attr, reverse := x.ParseNamespaceAttr(pred)
 			if reverse {
-				typeNamespace = typeNamespace[1:]
+				// Add reverse to the attr so, createTaskQuery will
+				// handle the reverse accordingly.
 				attr = "~" + attr
 			}
-			x.AssertTrue(typeNamespace == child.Params.Namespace)
+			if typeNamespace != child.Params.Namespace {
+				return out, errors.Errorf(
+					"Expected namespace while expanding subgraph %s but got %s", typeNamespace,
+					child.Params.Namespace)
+			}
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
 				Attr:   attr,
@@ -2313,16 +2317,10 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 // createOrderForTask creates namespaced aware order for the task.
 func (sg *SubGraph) createOrderForTask() []*pb.Order {
-	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
-		oc := &pb.Order{
-			Attr:  x.NamespaceAttr(sg.Params.Namespace, o.Attr),
-			Desc:  o.Desc,
-			Langs: o.Langs,
-		}
-		out = append(out, oc)
+		o.Attr = x.NamespaceAttr(sg.Params.Namespace, o.Attr)
 	}
-	return out
+	return sg.Params.Order
 }
 
 func (sg *SubGraph) updateDestUids() {
@@ -2793,7 +2791,8 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
 	out := []*pb.TypeUpdate{}
 	for _, update := range types {
-		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
+		// Type name doesn't have reverse.
+		typeNamespace, typeName, _ := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue
 		}
@@ -2801,13 +2800,7 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 		fields := []*pb.SchemaUpdate{}
 		// Convert field name for the current namespace.
 		for _, field := range update.Fields {
-			reverse := field.Predicate[0] == '~'
-			if reverse {
-				field.Predicate = field.Predicate[1:]
-			}
-			fmt.Printf("predicate yo %s \n", field.Predicate)
-			fieldNamespace, fieldName := x.ParseNamespaceAttr(field.Predicate)
-			x.AssertTrue(fieldNamespace == namespace)
+			_, fieldName, reverse := x.ParseNamespaceAttr(field.Predicate)
 			if reverse {
 				fieldName = "~" + fieldName
 			}
@@ -2825,7 +2818,7 @@ func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*p
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
-		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
+		nodeNamespace, attrName, _ := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
 			continue
 		}

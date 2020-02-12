@@ -58,7 +58,7 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
-		_, attr := x.ParseNamespaceAttr(q.Order[0].Attr)
+		_, attr, _ := x.ParseNamespaceAttr(q.Order[0].Attr)
 		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", attr)
 	}
 
