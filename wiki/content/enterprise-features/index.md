@@ -342,7 +342,7 @@ Users: alice
 ACL  : {friend  7}
 ACL  : {name  7}
 ```
-3. Run ACL commands as another guardian (Member of `guardians` group)
+3. Run ACL commands as another guardian (member of `guardians` group). 
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
 ```bash
