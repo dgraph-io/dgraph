@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -837,7 +836,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
-		fmt.Printf("\n\n\n help err %+v \n\n\n", err)
 		return &pb.Result{}, err
 	}
 	return out, nil
@@ -2111,8 +2109,6 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
-
-	fmt.Printf("\n\n\n\n attr %s \n\n\n\n", q.Attr)
 	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
@@ -2132,7 +2128,6 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	itOpt.AllVersions = true
 	itOpt.Prefix = prefix
 	it := txn.NewIterator(itOpt)
-	fmt.Println("inside")
 	defer it.Close()
 
 	lang := langForFunc(q.Langs)
@@ -2155,7 +2150,6 @@ loop:
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.Valid(); {
-		fmt.Println("iterating")
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()
