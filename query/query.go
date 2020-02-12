@@ -2317,10 +2317,16 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 // createOrderForTask creates namespaced aware order for the task.
 func (sg *SubGraph) createOrderForTask() []*pb.Order {
+	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
-		o.Attr = x.NamespaceAttr(sg.Params.Namespace, o.Attr)
+		oc := &pb.Order{
+			Attr:  x.NamespaceAttr(sg.Params.Namespace, o.Attr),
+			Desc:  o.Desc,
+			Langs: o.Langs,
+		}
+		out = append(out, oc)
 	}
-	return sg.Params.Order
+	return out
 }
 
 func (sg *SubGraph) updateDestUids() {
