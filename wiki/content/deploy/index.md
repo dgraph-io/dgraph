@@ -1585,8 +1585,8 @@ HTTPS requests only. Therefore some adjustments need to be made.
 If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN`:
 
 1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
-2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions.
-(E.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
+2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions
+(e.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
 for `Secure Socket Layer`).
 
 For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
