@@ -2760,7 +2760,7 @@ func testNumUids(t *testing.T) {
 
 func checkUser(t *testing.T, userObj, expectedObj *user) {
 	checkUserParams := &GraphQLParams{
-		Query: `query checkUserPassword($name: ID!, $pwd: Password!) {
+		Query: `query checkUserPassword($name: String!, $pwd: Password!) {
 			checkUserPassword(name: $name, password: $pwd) { name }
 		}`,
 		Variables: map[string]interface{}{
@@ -2799,8 +2799,8 @@ func deleteUser(t *testing.T, userObj user) {
 
 	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
 
-	require.JSONEq(t, `{"deleteUser": {"msg": "Deleted"}}`, string(gqlResponse.Data))
 	requireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, `{"deleteUser": {"msg": "Deleted"}}`, string(gqlResponse.Data))
 }
 
 func passwordTest(t *testing.T) {

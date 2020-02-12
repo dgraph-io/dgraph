@@ -294,16 +294,16 @@ func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
 	}
 
 	name := dir.ArgumentMap(map[string]interface{}{})["field"].(string)
-	pred := dir.ArgumentMap(map[string]interface{}{})["pred"]
+	pred, ok := dir.ArgumentMap(map[string]interface{}{})["pred"].(string)
 	dirs := ast.DirectiveList{}
 
-	if pred != nil {
+	if ok {
 		dirs = ast.DirectiveList{{
 			Name: "dgraph",
 			Arguments: ast.ArgumentList{{
 				Name: "pred",
 				Value: &ast.Value{
-					Raw:  pred.(string),
+					Raw:  pred,
 					Kind: ast.StringValue,
 				},
 			}},
@@ -362,6 +362,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			inputTyp = sch.Types[inputTypeName]
 		}
 
+		// We add password field to the cached type information to be used while opening
+		// resolving and rewriting queries to be sent to dgraph. Otherwise, rewriter won't
+		// know what the password field in AddInputType/ TypePatch/ TypeRef is.
 		for _, directive := range inputTyp.Directives {
 			fd := convertPasswordDirective(directive)
 			if fd == nil {
@@ -410,24 +413,24 @@ func queriedTypeMapping(s *ast.Schema,
 
 	m := make(map[string]*astType, len(s.Query.Fields))
 	for _, field := range s.Query.Fields {
-		mutatedTypeName := ""
+		queriedTypeName := ""
 		switch {
 		case strings.HasPrefix(field.Name, "get"):
-			mutatedTypeName = strings.TrimPrefix(field.Name, "get")
+			queriedTypeName = strings.TrimPrefix(field.Name, "get")
 		case strings.HasPrefix(field.Name, "query"):
-			mutatedTypeName = strings.TrimPrefix(field.Name, "query")
+			queriedTypeName = strings.TrimPrefix(field.Name, "query")
 		case strings.HasPrefix(field.Name, "check"):
-			mutatedTypeName = strings.TrimPrefix(field.Name, "check")
-			mutatedTypeName = strings.TrimSuffix(mutatedTypeName, "Password")
+			queriedTypeName = strings.TrimPrefix(field.Name, "check")
+			queriedTypeName = strings.TrimSuffix(queriedTypeName, "Password")
 		default:
 		}
-		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
-		// for UpdateTPayload and get the type from the first field. There is no direct way to get
+		// This is a convoluted way of getting the type for queriedTypeName. We get the definition
+		// for GetTPayload and get the type from the first field. There is no direct way to get
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
 		var def *ast.Definition
-		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
-			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		if def = s.Types["Update"+queriedTypeName+"Payload"]; def == nil {
+			def = s.Types["Add"+queriedTypeName+"Payload"]
 		}
 
 		if def == nil {
@@ -438,7 +441,7 @@ func queriedTypeMapping(s *ast.Schema,
 		// one or more fields.
 		typ := def.Fields[0].Type
 		// This would contain mapping of mutation field name to the Type()
-		// for e.g. addPost => astType for Post
+		// for e.g. getPost => astType for Post
 		m[field.Name] = &astType{typ, s, dgraphPredicate}
 	}
 	return m
@@ -572,7 +575,8 @@ func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName && (passwordField == nil || arg.Name != passwordField.Name()) {
+		if arg.Name != IDArgName && (passwordField == nil ||
+			arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
 	}
@@ -585,6 +589,7 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	xidArgName := ""
 	// This method is only called for Get queries and check. These queries can accept ID, XID
 	// or Password. Therefore the non ID and Password field is an XID.
+	// TODO maybe there is a better way to do this.
 	for _, arg := range f.field.Arguments {
 		if (idField == nil || arg.Name != idField.Name()) &&
 			(passwordField == nil || arg.Name != passwordField.Name()) {

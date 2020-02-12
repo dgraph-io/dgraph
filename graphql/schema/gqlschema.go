@@ -71,7 +71,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @secret(field: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -982,10 +982,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		Arguments: []*ast.ArgumentDefinition{
 			{
 				Name: idField[0].Name,
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   true,
-				},
+				Type: idField[0].Type,
 			},
 			{
 				Name: passwordField[0].Name,
