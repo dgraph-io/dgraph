@@ -245,7 +245,7 @@ A typical workflow is the following:
 4. Assign the user to the group
 5. Assign predicate permissions to the group
 
-#### Using the command line
+#### Using the Command Line
 
 1. Reset the root password. The example below uses the dgraph endpoint `localhost:9080`
 as a demo, make sure to choose the correct IP and port for your environment:
@@ -306,11 +306,11 @@ a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`)
 dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 ```
 
-### Retrieve Users and Groups information 
+### Retrieve Users and Groups Information 
 
 The following examples show how to retrive information about users and groups.
 
-#### Using the command line
+#### Using the Command Line
 
 1. Check information about a user
 ```bash
