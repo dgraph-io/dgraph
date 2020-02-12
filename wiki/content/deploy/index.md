@@ -1592,7 +1592,7 @@ for `Secure Socket Layer`).
 For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
 also need to install client certificate on your OS / browser:
 
-1. Generate a client certificate: `dgraph -c MyLaptop`.
+1. Generate a client certificate: `dgraph cert -c MyLaptop`.
 2. Convert it to a `.p12` file:
 `openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
 3. Install the generated `MyLaptopCert.p12` file on the client system
