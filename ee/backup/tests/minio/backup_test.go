@@ -93,9 +93,11 @@ func TestBackupMinio(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetState()
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
-			moveOk = true
-			break
+		for _, tablet := range state.Groups["1"].Tablets {
+			if strings.Contains(tablet.Predicate, "movie") {
+				moveOk = true
+				break
+			}
 		}
 	}
 	require.True(t, moveOk)
@@ -271,16 +273,18 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.NamespaceAttr(x.DefaultNamespace, "movie"), commitTs)
 	require.NoError(t, err)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.type", "movie"}, restoredPreds)
+	require.ElementsMatch(t, []string{x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql.schema"),
+		x.NamespaceAttr(x.DefaultNamespace, "dgraph.type"),
+		x.NamespaceAttr(x.DefaultNamespace, "movie")}, restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
+	require.ElementsMatch(t, []string{x.NamespaceAttr(x.DefaultNamespace, "Node")}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)

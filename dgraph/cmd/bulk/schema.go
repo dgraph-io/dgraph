@@ -51,19 +51,19 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// the alpha is started (e.g ACL predicates) might be included but it's
 	// better to include them in case the input data contains triples with these
 	// predicates.
-	for _, update := range schema.CompleteInitialSchema() {
+	for _, update := range schema.CompleteInitialSchema(x.DefaultNamespace) {
 		s.schemaMap[update.Predicate] = update
 	}
 
 	if opt.StoreXids {
-		s.schemaMap["xid"] = &pb.SchemaUpdate{
+		s.schemaMap[x.NamespaceAttr(x.DefaultNamespace, "xid")] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"hash"},
 		}
 	}
 
 	for _, sch := range initial.Preds {
-		p := sch.Predicate
+		p := x.NamespaceAttr(x.DefaultNamespace, sch.Predicate)
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.schemaMap[p]; ok {
 			fmt.Printf("Predicate %q already exists in schema\n", p)
@@ -72,6 +72,12 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		s.schemaMap[p] = sch
 	}
 
+	for _, update := range initial.Types {
+		update.TypeName = x.NamespaceAttr(x.DefaultNamespace, update.TypeName)
+		for _, field := range update.Fields {
+			field.Predicate = x.NamespaceAttr(x.DefaultNamespace, field.Predicate)
+		}
+	}
 	s.types = initial.Types
 
 	return s

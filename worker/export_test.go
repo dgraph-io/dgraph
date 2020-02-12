@@ -48,16 +48,16 @@ import (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: "Person",
+	TypeName: x.NamespaceAttr(x.DefaultNamespace, "Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: "name",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
 		},
 		{
-			Predicate: "friend",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend"),
 		},
 		{
-			Predicate: "friend_not_served",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend_not_served"),
 		},
 	},
 }
@@ -92,6 +92,11 @@ func populateGraphExport(t *testing.T) {
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
+		if rnq.Predicate != x.Star {
+			if rnq.Predicate != x.Star {
+				rnq.Predicate = x.NamespaceAttr(x.DefaultNamespace, rnq.Predicate)
+			}
+		}
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
 		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
@@ -105,7 +110,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
+	require.NoError(t, txn.Set(x.SchemaKey(x.NamespaceAttr(x.DefaultNamespace, "friend")), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
@@ -115,9 +120,9 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	txn.Set(x.SchemaKey(x.NamespaceAttr(x.DefaultNamespace, "http://www.w3.org/2000/01/rdf-schema#range")), val)
 	require.NoError(t, err)
-	txn.Set(x.SchemaKey("friend_not_served"), val)
+	txn.Set(x.SchemaKey(x.NamespaceAttr(x.DefaultNamespace, "friend_not_served")), val)
 	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
 
@@ -125,7 +130,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.TypeKey("Person"), val)
+	txn.Set(x.TypeKey(x.NamespaceAttr(x.DefaultNamespace, "Person")), val)
 	require.NoError(t, err)
 	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
@@ -175,7 +180,14 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
 	require.Equal(t, 1, len(result.Types))
-	require.True(t, proto.Equal(result.Types[0], personType))
+
+	// we need to convert the person to the exported schema format.
+	person := proto.Clone(personType).(*pb.TypeUpdate)
+	person.TypeName = x.ParseAttr(person.TypeName)
+	for _, field := range person.Fields {
+		field.Predicate = x.ParseAttr(field.Predicate)
+	}
+	require.True(t, proto.Equal(result.Types[0], person))
 }
 
 func TestExportRdf(t *testing.T) {

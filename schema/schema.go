@@ -433,13 +433,13 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the schema updates to insert at the begining of
 // Dgraph's execution. It looks at the schema state to determine which
 // types to insert.
-func InitialTypes() []*pb.TypeUpdate {
+func InitialTypes(namespace string) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes, &pb.TypeUpdate{
-		TypeName: "dgraph.graphql",
+		TypeName: x.NamespaceAttr(namespace, "dgraph.graphql"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "dgraph.graphql.schema",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
 				ValueType: pb.Posting_STRING,
 			},
 		},
@@ -451,8 +451,8 @@ func InitialTypes() []*pb.TypeUpdate {
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(false)
+func InitialSchema(namespace string) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, false)
 }
 
 // CompleteInitialSchema returns all the schema updates regardless of the worker
@@ -460,21 +460,21 @@ func InitialSchema() []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(true)
+func CompleteInitialSchema(namespace string) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema, &pb.SchemaUpdate{
-		Predicate: "dgraph.type",
+		Predicate: x.NamespaceAttr(namespace, "dgraph.type"),
 		ValueType: pb.Posting_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 		List:      true,
 	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
+		Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
 		ValueType: pb.Posting_STRING,
 	})
 
@@ -482,36 +482,36 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{
-				Predicate: "dgraph.xid",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{
-				Predicate: "dgraph.password",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
 				ValueType: pb.Posting_PASSWORD,
 			},
 			{
-				Predicate: "dgraph.user.group",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
 				Directive: pb.SchemaUpdate_REVERSE,
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.acl.rule",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.rule.predicate",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Tokenizer: []string{"exact"},
 				Upsert:    true, // Not really sure if this will work.
 			},
 			{
-				Predicate: "dgraph.rule.permission",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.permission"),
 				ValueType: pb.Posting_INT,
 			},
 		}...)
@@ -522,13 +522,13 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 
 // IsReservedPredicateChanged returns true if the initial update for the reserved
 // predicate pred is different than the passed update.
-func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+func IsReservedPredicateChanged(pred string, namespace string, update *pb.SchemaUpdate) bool {
 	// Return false for non-reserved predicates.
-	if !x.IsReservedPredicate(pred) {
+	if !x.IsReservedPredicate(x.ParseAttr(pred)) {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema()
+	initialSchema := CompleteInitialSchema(namespace)
 	for _, original := range initialSchema {
 		if original.Predicate != pred {
 			continue

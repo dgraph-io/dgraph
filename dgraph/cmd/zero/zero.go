@@ -574,7 +574,6 @@ func (s *Server) ShouldServe(
 	if tablet.GroupId == 0 && !tablet.ReadOnly {
 		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
-
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
@@ -595,7 +594,8 @@ func (s *Server) ShouldServe(
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
-	if x.IsReservedPredicate(tablet.Predicate) {
+	_, predicate, _ := x.ParseNamespaceAttr(tablet.Predicate)
+	if x.IsReservedPredicate(predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
 		// since they only need to open one pipeline to receive updates for all

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -257,8 +258,7 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		if !found {
 			continue
 		}
-		out = append(out, &typeUpdate)
+		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
-
 	return out, nil
 }

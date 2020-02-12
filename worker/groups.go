@@ -187,7 +187,7 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) proposeInitialTypes() {
-	initialTypes := schema.InitialTypes()
+	initialTypes := schema.InitialTypes(x.DefaultNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
@@ -197,8 +197,9 @@ func (g *groupi) proposeInitialTypes() {
 }
 
 func (g *groupi) proposeInitialSchema() {
-	initialSchema := schema.InitialSchema()
+	initialSchema := schema.InitialSchema(x.DefaultNamespace)
 	for _, s := range initialSchema {
+
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)

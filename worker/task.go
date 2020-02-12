@@ -346,7 +346,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
 		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
-			"password. Got type: %s", q.Attr, types.TypeID(srcFn.atype).Name())
+			"password. Got type: %s", x.ParseAttr(q.Attr), types.TypeID(srcFn.atype).Name())
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -858,11 +858,11 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 
 	if q.Reverse && !schema.State().IsReversed(attr) {
-		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", attr)
+		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", x.ParseAttr(attr))
 	}
 
 	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(q.Attr) {
-		return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
+		return nil, errors.Errorf("Predicate %s is not indexed", x.ParseAttr(q.Attr))
 	}
 
 	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
@@ -992,7 +992,7 @@ func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	if ok := schema.State().HasCount(attr); !ok {
 		return errors.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
-			attr, arg.srcFn.fname)
+			x.ParseAttr(attr), arg.srcFn.fname)
 	}
 	count := arg.srcFn.threshold
 	cp := countParams{
@@ -1059,7 +1059,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf(
 			"Attribute %v does not have trigram index for regex matching. "+
 				"Please add a trigram index or use has/uid function with regexp() as filter.",
-			attr)
+			x.ParseAttr(attr))
 	}
 
 	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
@@ -1676,9 +1676,11 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s",
+				x.ParseAttr(attr), required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args,
+			langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
 		fc.intersectDest = needsIntersect(f)
@@ -1689,7 +1691,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s",
+				x.ParseAttr(attr), required)
 		}
 		fc.intersectDest = needsIntersect(f)
 		// Max Levenshtein distance
@@ -1700,7 +1703,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Levenshtein distance value must be an int, got %v", s)
 		}
 		if max < 0 {
-			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
+			return nil, errors.Errorf("Levenshtein distance value must be greater than 0, got %v",
+				s)
 		}
 		fc.threshold = int64(max)
 		fc.tokens = q.SrcFunc.Args
@@ -1712,7 +1716,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		tokerName := q.SrcFunc.Args[0]
 		if !verifyCustomIndex(q.Attr, tokerName) {
 			return nil, errors.Errorf("Attribute %s is not indexed with custom tokenizer %s",
-				q.Attr, tokerName)
+				x.ParseAttr(q.Attr), tokerName)
 		}
 		valToTok, err := convertValue(q.Attr, q.SrcFunc.Args[1])
 		if err != nil {
@@ -2105,7 +2109,6 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
-
 	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}

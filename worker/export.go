@@ -333,7 +333,7 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
-	x.Check2(builder.WriteString(update.Predicate))
+	x.Check2(builder.WriteString(x.ParseAttr(update.Predicate)))
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
 }
@@ -457,7 +457,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			readTs: in.ReadTs,
 		}
 		e.uid = pk.Uid
-		e.attr = pk.Attr
+		e.attr = x.ParseAttr(pk.Attr)
 
 		// Schema and type keys should be handled first because schema keys are also
 		// considered data keys.
@@ -472,7 +472,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toSchema(pk.Attr, &update)
+			return toSchema(x.ParseAttr(pk.Attr), &update)
 
 		case pk.IsType():
 			var update pb.TypeUpdate
@@ -484,7 +484,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toType(pk.Attr, update)
+			return toType(x.ParseAttr(pk.Attr), update)
 
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)

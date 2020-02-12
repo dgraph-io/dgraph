@@ -219,7 +219,7 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 	}
 
-	prefix := x.DataKey("dgraph.graphql.schema", 0)
+	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql.schema"), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.

@@ -30,11 +30,11 @@ import (
 
 func TestBigMathValue(t *testing.T) {
 	s1 := testSchema + "\n money: int .\n"
-	setSchema(s1)
+	setSchema(s1, "")
 	triples := `
 		_:user1 <money> "48038396025285290" .
 	`
-	require.NoError(t, addTriplesToCluster(triples))
+	require.NoError(t, addTriplesToCluster(triples, ""))
 
 	t.Run("div", func(t *testing.T) {
 		q1 := `
@@ -139,12 +139,12 @@ func TestFloatConverstion(t *testing.T) {
 func TestDeleteAndReaddIndex(t *testing.T) {
 	// Add new predicate with several indices.
 	s1 := testSchema + "\n numerology: string @index(exact, term, fulltext) .\n"
-	setSchema(s1)
+	setSchema(s1, "")
 	triples := `
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	require.NoError(t, addTriplesToCluster(triples))
+	require.NoError(t, addTriplesToCluster(triples, ""))
 
 	// Verify fulltext index works as expected.
 	q1 := `
@@ -162,7 +162,7 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 
 	// Remove the fulltext index and verify the previous query is no longer supported.
 	s2 := testSchema + "\n numerology: string @index(exact, term) .\n"
-	setSchema(s2)
+	setSchema(s2, "")
 	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute numerology is not indexed with type fulltext")
@@ -182,7 +182,7 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	]}}`, js)
 
 	// Re-add index and verify that the original query works again.
-	setSchema(s1)
+	setSchema(s1, "")
 	js = processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
 		{"uid": "0x666", "numerology": "This number is evil"},
@@ -191,18 +191,18 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("numerology")
-	setSchema(testSchema)
+	setSchema(testSchema, "")
 }
 
 func TestDeleteAndReaddCount(t *testing.T) {
 	// Add new predicate with count index.
 	s1 := testSchema + "\n numerology: string @count .\n"
-	setSchema(s1)
+	setSchema(s1, "")
 	triples := `
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	require.NoError(t, addTriplesToCluster(triples))
+	require.NoError(t, addTriplesToCluster(triples, ""))
 
 	// Verify count index works as expected.
 	q1 := `
@@ -220,13 +220,13 @@ func TestDeleteAndReaddCount(t *testing.T) {
 
 	// Remove the count index and verify the previous query is no longer supported.
 	s2 := testSchema + "\n numerology: string .\n"
-	setSchema(s2)
+	setSchema(s2, "")
 	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Need @count directive in schema for attr: numerology")
 
 	// Re-add count index and verify that the original query works again.
-	setSchema(s1)
+	setSchema(s1, "")
 	js = processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
 		{"uid": "0x666", "numerology": "This number is evil"},
@@ -235,15 +235,15 @@ func TestDeleteAndReaddCount(t *testing.T) {
 
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("numerology")
-	setSchema(testSchema)
+	setSchema(testSchema, "")
 }
 
 func TestDeleteAndReaddReverse(t *testing.T) {
 	// Add new predicate with a reverse edge.
 	s1 := testSchema + "\n child_pred: uid @reverse .\n"
-	setSchema(s1)
+	setSchema(s1, "")
 	triples := `<0x666> <child_pred> <0x777>  .`
-	require.NoError(t, addTriplesToCluster(triples))
+	require.NoError(t, addTriplesToCluster(triples, ""))
 
 	// Verify reverse edges works as expected.
 	q1 := `
@@ -259,19 +259,19 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 
 	// Remove the reverse edges and verify the previous query is no longer supported.
 	s2 := testSchema + "\n child_pred: uid .\n"
-	setSchema(s2)
+	setSchema(s2, "")
 	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate child_pred doesn't have reverse edge")
 
 	// Re-add reverse edges and verify that the original query works again.
-	setSchema(s1)
+	setSchema(s1, "")
 	js = processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [{"~child_pred": [{"uid": "0x666"}]}]}}`, js)
 
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("child_pred")
-	setSchema(testSchema)
+	setSchema(testSchema, "")
 }
 
 func TestSchemaUpdateNoConflict(t *testing.T) {
@@ -315,7 +315,7 @@ func TestNoConflictQuery1(t *testing.T) {
 		name_noconflict: string @noconflict .
 		child: uid .
 	`
-	setSchema(schema)
+	setSchema(schema, "")
 
 	type node struct {
 		ID    string `json:"uid"`
@@ -371,7 +371,7 @@ func TestNoConflictQuery2(t *testing.T) {
 		address_conflict: string .
 		child: uid .
 	`
-	setSchema(schema)
+	setSchema(schema, "")
 
 	type node struct {
 		ID      string `json:"uid"`
@@ -424,12 +424,12 @@ func TestNoConflictQuery2(t *testing.T) {
 func TestDropPredicate(t *testing.T) {
 	// Add new predicate with several indices.
 	s1 := testSchema + "\n numerology: string @index(term) .\n"
-	setSchema(s1)
+	setSchema(s1, "")
 	triples := `
 		<0x666> <numerology> "This number is evil"  .
 		<0x777> <numerology> "This number is good"  .
 	`
-	require.NoError(t, addTriplesToCluster(triples))
+	require.NoError(t, addTriplesToCluster(triples, ""))
 
 	// Verify queries work as expected.
 	q1 := `
@@ -453,7 +453,7 @@ func TestDropPredicate(t *testing.T) {
 	require.Contains(t, err.Error(), "Attribute numerology is not indexed with type term")
 
 	// Finally, restore the schema.
-	setSchema(testSchema)
+	setSchema(testSchema, "")
 }
 
 func TestNestedExpandAll(t *testing.T) {
@@ -1545,4 +1545,154 @@ func TestNumUids(t *testing.T) {
 	metrics := processQueryForMetrics(t, query)
 	require.Equal(t, metrics.NumUids["friend"], uint64(10))
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
+}
+
+func TestMultiTenancy(t *testing.T) {
+	// See the cluster with sample data
+	createNamespace("dev")
+	setSchema(`
+	name :string .
+	`, "dev")
+
+	err := addTriplesToCluster(`
+	_:a <name> "balaji" .`, "dev")
+
+	require.NoError(t, err)
+	res, err := processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name)){
+			name
+		}
+	}`, `dev`)
+	require.JSONEq(t, res, `{"data":{"me":[{"name":"balaji"}]}}`)
+
+	// Test type system.
+	setSchema(`
+	name :string .
+	type Student{
+		name
+	}
+	`, "dev")
+	err = addTriplesToCluster(`
+	_:a <name> "vegeta" .
+	_:a <dgraph.type> "Student" .`, "dev")
+	require.NoError(t, err)
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:type(Student)){
+			name
+		}
+	}`, `dev`)
+	require.NoError(t, err)
+	require.JSONEq(t, res, `{"data":{"me":[{"name":"vegeta"}]}}`)
+
+	// Test schema retrival.
+	res, err = getSchemaWithNamespace(context.Background(), t, `
+		schema {}
+	`, `dev`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"schema":{
+		   "schema":[
+			  {
+				 "predicate":"dgraph.acl.rule",
+				 "type":"uid",
+				 "list":true
+			  },
+			  {
+				 "predicate":"dgraph.graphql.schema",
+				 "type":"string"
+			  },
+			  {
+				 "predicate":"dgraph.password",
+				 "type":"password"
+			  },
+			  {
+				 "predicate":"dgraph.rule.permission",
+				 "type":"int"
+			  },
+			  {
+				 "predicate":"dgraph.rule.predicate",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "upsert":true
+			  },
+			  {
+				 "predicate":"dgraph.type",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "list":true
+			  },
+			  {
+				 "predicate":"dgraph.user.group",
+				 "type":"uid",
+				 "reverse":true,
+				 "list":true
+			  },
+			  {
+				 "predicate":"dgraph.xid",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "upsert":true
+			  },
+			  {
+				 "predicate":"name",
+				 "type":"string"
+			  }
+		   ],
+		   "types":[
+			  {
+				 "fields":[
+					{
+					   "name":"name"
+					}
+				 ],
+				 "name":"Student"
+			  }
+		   ]
+		}
+	 }`, res)
+
+	createNamespace("emptynamespace")
+	// Trying to query data of default namespace in current namespace.
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name), first: 5){
+		name
+	  }
+	  }`, "emptynamespace")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"me":[]}}`, res)
+
+	// Mutating another namespace.
+	createNamespace("namespace1")
+	setSchema(`
+	name :string @index(term, exact, trigram) @count @lang .
+	`, "dev")
+
+	err = addTriplesToCluster(`
+	<0x888> <name> "vegeta" .`, "namespace1")
+	require.NoError(t, err)
+	// Create another namespace and try to delete the data in namespace1
+	createNamespace("namespace2")
+	setSchema(`
+	name :string @index(term, exact, trigram) @count @lang .
+	`, "namespace2")
+
+	deleteTriplesInClusterWithNamespace(`<0x888> * * .`, "namespace2")
+
+	// Now query the namespace1 and check whether the data is not deleted.
+	res, err = processQueryWithNamespace(context.Background(), t, `{
+		me(func:has(name), first: 5){
+		name
+	  }
+	  }`, "namespace1")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"me":[{"name":"vegeta"}]}}`, res)
 }
