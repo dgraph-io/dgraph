@@ -819,7 +819,7 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
-				uidList, fcsList, err := retrieveUidsAndFacets(q, pl, facetsTree, opts)
+				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
 				}
