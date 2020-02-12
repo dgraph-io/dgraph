@@ -983,10 +983,6 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
-func isPassword(fd *ast.FieldDefinition) bool {
-	return fd.Type.Name() == "Password"
-}
-
 func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
 }
