@@ -296,6 +296,10 @@ func expandSchema(doc *ast.SchemaDocument) {
 					fields = append(fields, copyAstFieldDef(field))
 				}
 				defn.Fields = append(fields, defn.Fields...)
+				passwordDirective := i.Directives.ForName("secret")
+				if passwordDirective != nil {
+					defn.Directives = append(defn.Directives, passwordDirective)
+				}
 			}
 		}
 	}

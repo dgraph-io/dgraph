@@ -365,15 +365,17 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		// We add password field to the cached type information to be used while opening
 		// resolving and rewriting queries to be sent to dgraph. Otherwise, rewriter won't
 		// know what the password field in AddInputType/ TypePatch/ TypeRef is.
+		var fields ast.FieldList
+		fields = append(fields, inputTyp.Fields...)
 		for _, directive := range inputTyp.Directives {
 			fd := convertPasswordDirective(directive)
 			if fd == nil {
 				continue
 			}
-			inputTyp.Fields = append(inputTyp.Fields, fd)
+			fields = append(fields, fd)
 		}
 
-		for _, fld := range inputTyp.Fields {
+		for _, fld := range fields {
 			if isID(fld) {
 				// We don't need a mapping for the field, as we the dgraph predicate for them is
 				// fixed i.e. uid.
@@ -1106,15 +1108,15 @@ func (t *astType) PasswordField() FieldDefinition {
 		return nil
 	}
 
-	for _, fd := range def.Fields {
-		if isPassword(fd) {
-			return &fieldDefinition{
-				fieldDef: fd,
-				inSchema: t.inSchema,
-			}
-		}
+	fd := getPasswordField(def)
+	if fd == nil || len(fd) == 0 {
+		return nil
 	}
-	return nil
+
+	return &fieldDefinition{
+		fieldDef: fd[0],
+		inSchema: t.inSchema,
+	}
 }
 
 func (t *astType) XIDField() FieldDefinition {
