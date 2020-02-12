@@ -394,7 +394,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					return err
 				}
 				out.Counts = append(out.Counts, uint32(count))
-				// Add an empty UID list to make later processing consistent
+				// Add an empty UID list to make later processing consistent.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				continue
 			}
@@ -431,8 +431,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					return err
 				}
 
-				// This means we fetched the value directly instead of fetching index key and intersecting.
-				// Lets compare the value and add filter the uid.
+				// This means we fetched the value directly instead of fetching index key and
+				// intersecting. Lets compare the value and add filter the uid.
 				if srcFn.fnType == compareAttrFn {
 					// Lets convert the val to its type.
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
@@ -630,8 +630,9 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func retrieveCountForUidPostings(q *pb.Query, pl *posting.List, facetsTree *facetsTree,
+func retrieveCountForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	opts posting.ListOptions, out *pb.Result) (int, error) {
+	q := args.q
 
 	// If count is needed and there are no facetsFilter, populate count from pl.length().
 	if q.DoCount && facetsTree == nil {
@@ -662,8 +663,10 @@ func retrieveCountForUidPostings(q *pb.Query, pl *posting.List, facetsTree *face
 	return filteredCount, nil
 }
 
-func retrieveUidsAndFacets(q *pb.Query, pl *posting.List, facetsTree *facetsTree,
+func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
+	q := args.q
+
 	var fcsList []*pb.Facets
 	uidList := &pb.List{
 		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
@@ -762,7 +765,7 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "DoCount")
 				}
-				count, err := retrieveCountForUidPostings(q, pl, facetsTree, opts, out)
+				count, err := retrieveCountForUidPostings(args, pl, facetsTree, opts, out)
 				if err != nil {
 					return err
 				}
