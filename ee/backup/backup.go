@@ -217,25 +217,24 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 		if err != nil {
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
-		kvs, err := l.Rollup()
+
+		kv, err := l.SingleListRollup()
 		if err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
 
-		for _, kv := range kvs {
-			backupKey, err := toBackupKey(kv.Key)
-			if err != nil {
-				return nil, err
-			}
-			kv.Key = backupKey
-
-			backupPl, err := toBackupPostingList(kv.Value)
-			if err != nil {
-				return nil, err
-			}
-			kv.Value = backupPl
+		backupKey, err := toBackupKey(kv.Key)
+		if err != nil {
+			return nil, err
 		}
-		list.Kv = append(list.Kv, kvs...)
+		kv.Key = backupKey
+
+		backupPl, err := toBackupPostingList(kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		kv.Value = backupPl
+		list.Kv = append(list.Kv, kv)
 	case posting.BitSchemaPosting:
 		valCopy, err := item.ValueCopy(nil)
 		if err != nil {

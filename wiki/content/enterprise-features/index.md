@@ -402,12 +402,11 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-Here is an example encryption key file of size 16 bytes:
-
-*enc_key_file*
+You can use the following command to create the encryption key file (set _count_ equals to the
+desired key size):
 
 ```
-123456789012345
+dd if=/dev/random bs=1 count=32 of=enc_key_file
 ```
 
 ### Turn on Encryption
@@ -418,6 +417,9 @@ Here is an example that starts one zero server and one alpha server with the enc
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
 dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
+
+If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
+each of the alphas.
 
 ### Bulk loader with Encryption
 
