@@ -500,8 +500,10 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
 		var val interface{}
-		if err := json.Unmarshal(result, &val); err != nil {
-			return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
+		if marshErr := json.Unmarshal(result, &val); marshErr != nil {
+			return nil,
+				schema.AppendGQLErrs(marshErr,
+					schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
 		}
 
 		var aliased interface{}
@@ -515,7 +517,8 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 			aliased, resErr = aliasValue(field, val)
 		}
 
-		res, err := json.Marshal(aliased)
+		res, marshErr := json.Marshal(aliased)
+		err = schema.AppendGQLErrs(err, marshErr)
 
 		return cf(ctx, field, res, schema.AppendGQLErrs(err, resErr))
 	})
