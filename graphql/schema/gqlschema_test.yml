@@ -611,7 +611,7 @@ invalid_schemas:
         f1: String!
       }
     errlist: [
-      {"message": "Type X; has more than multiple secret fields password,psss",
+      {"message": "Type X; has more than one secret fields password,psss",
       "locations":[{"line":1, "column":6}]},
     ]
 

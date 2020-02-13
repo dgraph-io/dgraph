@@ -196,7 +196,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			fd := getPasswordField(def)
 			fields := def.Fields
 			if fd != nil {
-				fields = append(fields, fd...)
+				fields = append(fields, fd)
 			}
 
 			for _, f := range fields {

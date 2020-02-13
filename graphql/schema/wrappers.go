@@ -293,17 +293,17 @@ func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
 		return nil
 	}
 
-	name := dir.ArgumentMap(map[string]interface{}{})["field"].(string)
-	pred, ok := dir.ArgumentMap(map[string]interface{}{})["pred"].(string)
+	name := dir.Arguments.ForName("field").Value.Raw
+	pred := dir.Arguments.ForName("pred")
 	dirs := ast.DirectiveList{}
 
-	if ok {
+	if pred != nil {
 		dirs = ast.DirectiveList{{
 			Name: "dgraph",
 			Arguments: ast.ArgumentList{{
 				Name: "pred",
 				Value: &ast.Value{
-					Raw:  pred,
+					Raw:  pred.Value.Raw,
 					Kind: ast.StringValue,
 				},
 			}},
@@ -1096,12 +1096,12 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 
 	fd := getPasswordField(def)
-	if fd == nil || len(fd) == 0 {
+	if fd == nil {
 		return nil
 	}
 
 	return &fieldDefinition{
-		fieldDef: fd[0],
+		fieldDef: fd,
 		inSchema: t.inSchema,
 	}
 }
