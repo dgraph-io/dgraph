@@ -331,7 +331,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		x.Check(err)
 
 		// Extract tokens.
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
 		// Store index posting.

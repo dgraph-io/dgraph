@@ -227,7 +227,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	if len(order.Langs) > 0 {
 		// Only one languge is allowed.
 		lang := order.Langs[0]
-		tokenizer = tok.GetLangTokenizer(tokenizer, lang)
+		tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
 		langTokenizer, ok := tokenizer.(*tok.ExactTokenizer)
 		if !ok {
 			return resultWithError(errors.Errorf(

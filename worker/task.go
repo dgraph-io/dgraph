@@ -1730,7 +1730,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
 		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
-			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
+			tok.GetTokenizerForLang(tokenizer, langForFunc(q.Langs)))
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case regexFn:

@@ -72,7 +72,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	var tokens []string
 	for _, it := range info.tokenizers {
-		toks, err := tok.BuildTokens(sv.Value, tok.GetLangTokenizer(it, lang))
+		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
 		}
@@ -449,7 +449,7 @@ func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 	if hasLang {
 		// We just need the tokenizer identifier for ExactTokenizer having language.
 		// It will be same for all the language.
-		tokenizer = tok.GetLangTokenizer(tokenizer, "en")
+		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 	if err := pstore.DropPrefix(prefix); err != nil {

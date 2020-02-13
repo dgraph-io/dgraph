@@ -26,8 +26,8 @@ var (
 	enLangTag, _ = language.Parse("en")
 )
 
-// GetLangTokenizer returns the correct full-text tokenizer for the given language.
-func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
+// GetTokenizerForLang returns the correct full-text tokenizer for the given language.
+func GetTokenizerForLang(t Tokenizer, lang string) Tokenizer {
 	if lang == "" {
 		return t
 	}
@@ -42,6 +42,7 @@ func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
 		if err != nil {
 			langTag = enLangTag
 		}
+		// If this gets expensive memory-vise, then convert it to sync.Pool.
 		return ExactTokenizer{langBase: LangBase(lang), cl: collate.New(langTag),
 			buffer: &collate.Buffer{}}
 	default:
