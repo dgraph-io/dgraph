@@ -299,7 +299,9 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		case Typename:
 			ec.writeStringValue("__Schema")
 		case "types":
-			ec.marshalIntrospectionTypeSlice(field.Selections, obj.Types())
+			// obj.Types() does not return all the types in the schema, it ignores the ones
+			// named like __TypeName, so using getAllTypes()
+			ec.marshalIntrospectionTypeSlice(field.Selections, getAllTypes(ec.Schema))
 		case "queryType":
 			ec.marshalIntrospectionType(field.Selections, obj.QueryType())
 		case "mutationType":
@@ -466,4 +468,14 @@ func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.T
 		return
 	}
 	ec.handleType(sel, v)
+}
+
+// Returns all the types associated with the schema, including the ones that are part
+//of introspection system (i.e., the type name begins with __ )
+func getAllTypes(s *ast.Schema) []introspection.Type {
+	types := make([]introspection.Type, 0, len(s.Types))
+	for _, typ := range s.Types {
+		types = append(types, *introspection.WrapTypeFromDef(s, typ))
+	}
+	return types
 }
