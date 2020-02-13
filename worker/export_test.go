@@ -75,7 +75,10 @@ func populateGraphExport(t *testing.T) {
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
+		`<7> <name> "node_to_delete" .`,
 	}
+	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
+	edgeToDelete := `<7> <name> "node_to_delete" .`
 	idMap := map[string]uint64{
 		"1": 1,
 		"2": 2,
@@ -83,10 +86,11 @@ func populateGraphExport(t *testing.T) {
 		"4": 4,
 		"5": 5,
 		"6": 6,
+		"7": 7,
 	}
 
 	l := &lex.Lexer{}
-	for _, edge := range rdfEdges {
+	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
@@ -94,8 +98,17 @@ func populateGraphExport(t *testing.T) {
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
-		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		if set {
+			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		} else {
+			delEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		}
 	}
+
+	for _, edge := range rdfEdges {
+		processEdge(edge, true)
+	}
+	processEdge(edgeToDelete, false)
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
