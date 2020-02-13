@@ -93,33 +93,33 @@ type UriHandler interface {
 // Credentials holds the credentials needed to perform a backup operation.
 // If these credentials are missing the default credentials will be used.
 type Credentials struct {
-	accessKey    string
-	secretKey    string
-	sessionToken string
-	anonymous    bool
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Anonymous    bool
 }
 
 func (creds *Credentials) hasCredentials() bool {
 	if creds == nil {
 		return false
 	}
-	return creds.accessKey != "" && creds.secretKey != ""
+	return creds.AccessKey != "" && creds.SecretKey != ""
 }
 
 func (creds *Credentials) isAnonymous() bool {
 	if creds == nil {
 		return false
 	}
-	return creds.anonymous
+	return creds.Anonymous
 }
 
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{
-		accessKey:    req.GetAccessKey(),
-		secretKey:    req.GetSecretKey(),
-		sessionToken: req.GetSessionToken(),
-		anonymous:    req.GetAnonymous(),
+		AccessKey:    req.GetAccessKey(),
+		SecretKey:    req.GetSecretKey(),
+		SessionToken: req.GetSessionToken(),
+		Anonymous:    req.GetAnonymous(),
 	}
 }
 
@@ -193,6 +193,22 @@ func Load(location, backupId string, fn loadFn) (since uint64, err error) {
 	}
 
 	return h.Load(uri, backupId, fn)
+}
+
+// Verify will access the backup location and verify that the specified backup can
+// be restored to the cluster.
+func Verify(location, backupId string, creds *Credentials, currentGroups []uint32) error {
+	uri, err := url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	h := getHandler(uri.Scheme, creds)
+	if h == nil {
+		return errors.Errorf("Unsupported URI: %v", uri)
+	}
+
+	return h.Verify(uri, backupId, currentGroups)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.

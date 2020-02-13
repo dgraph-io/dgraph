@@ -45,6 +45,42 @@ const (
 	s3AccelerateSubstr = "s3-accelerate"
 )
 
+// FillRestoreCredentials fills the empty values with the default credentials so that
+// a restore request is sent to all the groups with the same credentials.
+func FillRestoreCredentials(location string, req *pb.Restore) error {
+	uri, err := url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	var provider credentials.Provider
+	switch uri.Scheme {
+	case "s3":
+		provider = &credentials.EnvAWS{}
+	case "minio":
+		provider = &credentials.EnvMinio{}
+	default:
+		return nil
+	}
+
+	if req == nil {
+		return nil
+	}
+
+	defaultCreds, _ := provider.Retrieve() // Error is always nil.
+	if len(req.AccessKey) == 0 {
+		req.AccessKey = defaultCreds.AccessKeyID
+	}
+	if len(req.SecretKey) == 0 {
+		req.SecretKey = defaultCreds.SecretAccessKey
+	}
+	if len(req.SessionToken) == 0 {
+		req.SessionToken = defaultCreds.SessionToken
+	}
+
+	return nil
+}
+
 // s3Handler is used for 's3:' and 'minio:' URI schemes.
 type s3Handler struct {
 	bucketName, objectPrefix string
@@ -98,9 +134,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		// with no credentials will be made.
 		creds, _ = provider.Retrieve() // error is always nil
 	default:
-		creds.AccessKeyID = h.creds.accessKey
-		creds.SecretAccessKey = h.creds.secretKey
-		creds.SessionToken = h.creds.sessionToken
+		creds.AccessKeyID = h.creds.AccessKey
+		creds.SecretAccessKey = h.creds.SecretKey
+		creds.SessionToken = h.creds.SessionToken
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
