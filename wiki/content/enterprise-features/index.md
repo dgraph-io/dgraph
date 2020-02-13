@@ -308,7 +308,7 @@ dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 
 ### Retrieve Users and Groups Information 
 
-The following examples show how to retrive information about users and groups.
+The following examples show how to retrieve information about users and groups.
 
 #### Using the Command Line
 
