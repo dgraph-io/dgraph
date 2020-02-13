@@ -7,6 +7,7 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/trie"
+	log "github.com/ChainSafe/log15"
 )
 
 type Service struct {
@@ -92,6 +93,8 @@ func (s *Service) Start() error {
 		return fmt.Errorf("cannot get latest hash: %s", err)
 	}
 
+	log.Trace("state service", "latestHeaderHash", latestHeaderHash)
+
 	blockState, err := NewBlockState(blockDataDir, common.BytesToHash(latestHeaderHash))
 	if err != nil {
 		return fmt.Errorf("cannot make block state: %s", err)
@@ -116,7 +119,12 @@ func (s *Service) Start() error {
 
 // Stop closes each state database
 func (s *Service) Stop() error {
-	err := s.Storage.Db.Db.Close()
+	err := s.Storage.StoreInDB()
+	if err != nil {
+		return err
+	}
+
+	err = s.Storage.Db.Db.Close()
 	if err != nil {
 		return err
 	}

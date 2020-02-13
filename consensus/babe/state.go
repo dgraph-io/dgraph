@@ -28,17 +28,9 @@ type BlockState interface {
 	SetBlock(*types.Block) error
 }
 
-// NetworkState interface for network state methods
-type NetworkState interface {
-	GetHealth() (*common.Health, error)
-	SetHealth(*common.Health) error
-	GetNetworkState() (*common.NetworkState, error)
-	SetNetworkState(*common.NetworkState) error
-	GetPeers() (*[]common.PeerInfo, error)
-	SetPeers(*[]common.PeerInfo) error
-}
-
 // StorageState interface for storage state methods
 type StorageState interface {
 	StorageRoot() (common.Hash, error)
+	SetStorage([]byte, []byte) error
+	SetLatestHeaderHash(hash []byte) error
 }

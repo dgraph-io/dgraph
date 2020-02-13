@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/ChainSafe/gossamer/common"
@@ -44,6 +45,26 @@ func NewStorageState(dataDir string, t *trie.Trie) (*StorageState, error) {
 		trie: t,
 		Db:   stateDb,
 	}, nil
+}
+
+// SetLatestHeaderHash sets the LatestHeaderHashKey in the DB to the given hash
+func (s *StorageState) SetLatestHeaderHash(hash []byte) error {
+	err := s.Db.Db.Put(common.LatestHeaderHashKey, hash)
+	if err != nil {
+		return fmt.Errorf("cannot get latest hash: %s", err)
+	}
+
+	return nil
+}
+
+// GetLatestHeaderHash retrieves the value stored in the DB at LatestHeaderHashKey
+func (s *StorageState) GetLatestHeaderHash() ([]byte, error) {
+	latestHeaderHash, err := s.Db.Db.Get(common.LatestHeaderHashKey)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get latest hash: %s", err)
+	}
+
+	return latestHeaderHash, err
 }
 
 func (s *StorageState) ExistsStorage(key []byte) (bool, error) {

@@ -38,6 +38,7 @@ import (
 // Session contains the VRF keys for the validator, as well as BABE configuation data
 type Session struct {
 	blockState     BlockState
+	storageState   StorageState
 	keypair        *sr25519.Keypair
 	rt             *runtime.Runtime
 	config         *BabeConfiguration
@@ -54,6 +55,7 @@ type Session struct {
 // SessionConfig struct
 type SessionConfig struct {
 	BlockState     BlockState
+	StorageState   StorageState
 	Keypair        *sr25519.Keypair
 	Runtime        *runtime.Runtime
 	NewBlocks      chan<- types.Block
@@ -71,6 +73,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 
 	babeSession := &Session{
 		blockState:     cfg.BlockState,
+		storageState:   cfg.StorageState,
 		keypair:        cfg.Keypair,
 		rt:             cfg.Runtime,
 		txQueue:        new(tx.PriorityQueue),
@@ -146,32 +149,13 @@ func (b *Session) invokeBlockAuthoring() {
 		return
 	}
 
+	if b.storageState == nil {
+		log.Error("BABE block authoring", "error", "storageState is nil")
+		return
+	}
+
 	for ; slotNum < b.config.EpochLength; slotNum++ {
-		parentHeader := b.blockState.LatestHeader()
-		if parentHeader == nil {
-			log.Error("BABE block authoring", "error", "parent header is nil")
-		} else {
-			currentSlot := Slot{
-				start:    uint64(time.Now().Unix()),
-				duration: b.config.SlotDuration,
-				number:   slotNum,
-			}
-
-			block, err := b.buildBlock(parentHeader, currentSlot)
-			if err != nil {
-				log.Error("BABE block authoring", "error", err)
-			} else {
-				hash := block.Header.Hash()
-				log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
-				log.Debug("BABE built block", "header", block.Header, "body", block.Body)
-				b.newBlocks <- *block
-				err = b.blockState.AddBlock(block)
-				if err != nil {
-					log.Error("BABE block authoring", "error", err)
-				}
-			}
-		}
-
+		b.handleSlot(slotNum)
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
 
@@ -182,6 +166,41 @@ func (b *Session) invokeBlockAuthoring() {
 	if b.done != nil {
 		close(b.done)
 	}
+}
+
+func (b *Session) handleSlot(slotNum uint64) {
+	parentHeader := b.blockState.LatestHeader()
+	if parentHeader == nil {
+		log.Error("BABE block authoring", "error", "parent header is nil")
+	} else {
+		currentSlot := Slot{
+			start:    uint64(time.Now().Unix()),
+			duration: b.config.SlotDuration,
+			number:   slotNum,
+		}
+
+		block, err := b.buildBlock(parentHeader, currentSlot)
+		if err != nil {
+			log.Error("BABE block authoring", "error", err)
+		} else {
+			hash := block.Header.Hash()
+			log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
+			log.Debug("BABE built block", "header", block.Header, "body", block.Body)
+
+			b.newBlocks <- *block
+			err = b.blockState.AddBlock(block)
+			if err != nil {
+				log.Error("BABE block authoring", "error", err)
+			}
+
+			err = b.storageState.SetLatestHeaderHash(hash[:])
+			if err != nil {
+				log.Error("BABE block authoring", "error", err)
+			}
+
+		}
+	}
+
 }
 
 // runLottery runs the lottery for a specific slot number

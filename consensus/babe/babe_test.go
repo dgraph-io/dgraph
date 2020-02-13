@@ -383,10 +383,11 @@ func TestBabeAnnounceMessage(t *testing.T) {
 	}()
 
 	cfg := &SessionConfig{
-		Runtime:    rt,
-		Keypair:    kp,
-		NewBlocks:  newBlocks,
-		BlockState: dbSrv.Block,
+		Runtime:      rt,
+		Keypair:      kp,
+		NewBlocks:    newBlocks,
+		BlockState:   dbSrv.Block,
+		StorageState: dbSrv.Storage,
 	}
 
 	babesession, err := NewSession(cfg)
