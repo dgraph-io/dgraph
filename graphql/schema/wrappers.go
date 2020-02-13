@@ -774,7 +774,7 @@ func (m *mutation) QueryField() Field {
 	// TODO: All our mutations currently have exactly 1 field, but that will change
 	// - need a better way to get the right field by convention.
 	for _, i := range m.SelectionSet() {
-		if i.Name() == "numUids" {
+		if i.Name() == NumUid {
 			continue
 		}
 		return i

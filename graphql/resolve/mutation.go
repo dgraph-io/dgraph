@@ -180,21 +180,23 @@ func (mr *mutationResolver) Resolve(
 
 	selSets := mutation.SelectionSet()
 	for _, selSet := range selSets {
-		if selSet.Name() != "numUids" {
+		if selSet.Name() != schema.NumUid {
 			continue
 		}
 
 		s := string(completed)
-		if strings.Contains(s, "numUids") {
-			s = strings.ReplaceAll(s, `"numUids": null`, fmt.Sprintf(`"numUids": %d`,
-				mr.mutationRewriter.NumUids()))
-			completed = []byte(s)
+		if strings.Contains(s, schema.NumUid) {
+			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
+				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
+				mr.mutationRewriter.NumUids())))
+
 		} else if s[len(s)-1] == '}' {
-			completed = []byte(fmt.Sprintf(`%s, "numUids": %d}`, s[:len(s)-1],
-				mr.mutationRewriter.NumUids()))
+			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
+				schema.NumUid, mr.mutationRewriter.NumUids()))
+
 		} else {
-			completed = []byte(fmt.Sprintf(`%s, "numUids": %d`, s,
-				mr.mutationRewriter.NumUids()))
+			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
+				schema.NumUid, mr.mutationRewriter.NumUids()))
 		}
 		break
 	}
@@ -247,6 +249,6 @@ func deleteCompletion() CompletionFunc {
 			return []byte(`{ "msg": "Deleted" }`), err
 		}
 
-		return []byte(`{ "numUids": null }`), err
+		return []byte(fmt.Sprintf(`{ "%s": null }`, schema.NumUid)), err
 	})
 }

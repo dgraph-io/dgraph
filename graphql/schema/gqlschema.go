@@ -40,6 +40,7 @@ const (
 	idDirective     = "id"
 
 	deprecatedDirective = "deprecated"
+	NumUid              = "numUid"
 
 	Typename = "__typename"
 
@@ -146,7 +147,7 @@ type searchTypeIndex struct {
 }
 
 var numUids = &ast.FieldDefinition{
-	Name: "numUids",
+	Name: NumUid,
 	Type: &ast.Type{NamedType: "Int"},
 }
 
