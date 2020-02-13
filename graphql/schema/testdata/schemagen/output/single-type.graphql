@@ -92,14 +92,17 @@ input StringHashFilter {
 
 type AddMessagePayload {
 	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	numUids: Int
 }
 
 type DeleteMessagePayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateMessagePayload {
 	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	numUids: Int
 }
 
 #######################

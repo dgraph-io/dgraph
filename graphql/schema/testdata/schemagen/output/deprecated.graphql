@@ -90,6 +90,7 @@ input StringHashFilter {
 
 type AddAtypePayload {
 	atype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+	numUids: Int
 }
 
 #######################

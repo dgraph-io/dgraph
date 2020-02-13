@@ -104,34 +104,42 @@ input StringHashFilter {
 
 type AddDirectorPayload {
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	numUids: Int
 }
 
 type AddOscarMoviePayload {
 	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	numUids: Int
 }
 
 type DeleteDirectorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteMoviePayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteOscarMoviePayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateDirectorPayload {
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	numUids: Int
 }
 
 type UpdateMoviePayload {
 	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	numUids: Int
 }
 
 type UpdateOscarMoviePayload {
 	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	numUids: Int
 }
 
 #######################
