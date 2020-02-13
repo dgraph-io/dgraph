@@ -105,7 +105,7 @@ func deleteUser(t *testing.T, accessToken, username string) {
 
 func TestCreateAndDeleteUsers(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -132,7 +132,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 
 func resetUser(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -504,7 +504,7 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 
 func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -617,7 +617,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	resetUser(t)
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -715,7 +715,7 @@ func TestGuardianAccess(t *testing.T) {
 
 func addNewUserToGroup(t *testing.T, userName, password, groupName string) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -757,7 +757,7 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) []byte {
 	}
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -782,7 +782,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	resetUser(t)
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -1034,7 +1034,7 @@ func TestNegativePermissionDeleteRule(t *testing.T) {
 		string(resp.GetJson()))
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
@@ -1122,7 +1122,7 @@ func TestNonExistentGroup(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})

@@ -39,8 +39,8 @@ const adminTypes = `
 	}
 
 	type LoginResponse {
-		accessJwt: String
-		refreshJwt: String
+		accessJWT: String
+		refreshJWT: String
 	}
 
 	type LoginPayload {

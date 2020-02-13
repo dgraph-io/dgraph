@@ -94,9 +94,9 @@ func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 	for i, sel := range lr.mutation.SelectionSet()[0].SelectionSet() {
 		var val string
 		switch sel.Name() {
-		case "accessJwt":
+		case "accessJWT":
 			val = lr.accessJwt
-		case "refreshJwt":
+		case "refreshJWT":
 			val = lr.refreshJwt
 		}
 		if i != 0 {
