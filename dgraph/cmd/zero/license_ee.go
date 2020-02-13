@@ -83,14 +83,17 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 			timeToExpire := expiry.Sub(time.Now().UTC())
 			// We only want to print this log once a day.
 			if counter%intervalsInDay == 0 && timeToExpire > 0 && timeToExpire < humanize.Week {
-				glog.Warningf("Enterprise license is going to expire in %s.", humanize.Time(expiry))
+				glog.Warningf("Your enterprise license will expire in %s. To continue using enterprise "+
+					"features after %s, apply a valid license. To get a new license, contact us at "+
+					"https://dgraph.io/contact.", humanize.Time(expiry), humanize.Time(expiry))
 			}
 
 			active := time.Now().UTC().Before(expiry)
 			if !active {
 				n.server.expireLicense()
-				glog.Warningf("Enterprise license has expired and enterprise features would be " +
-					"disabled now. Talk to us at contact@dgraph.io to get a new license.")
+				glog.Warningf("Your enterprise license has expired and enterprise features are " +
+					"disabled. To continue using enterprise features, apply a valid license. To receive " +
+					"a new license, contact us at https://dgraph.io/contact.")
 			}
 		case <-closer.HasBeenClosed():
 			return
