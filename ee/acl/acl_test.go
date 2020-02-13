@@ -57,7 +57,6 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: addUser,
 		Variables: map[string]interface{}{
@@ -65,21 +64,7 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 			"pass": password,
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
+	b := makeRequest(t, accessToken, params)
 	return b
 }
 
@@ -101,33 +86,20 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 }
 
 func deleteUser(t *testing.T, accessToken, username string) {
+	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
 	delUser := `mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
 			msg
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: delUser,
 		Variables: map[string]interface{}{
 			"name": username,
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
+	b := makeRequest(t, accessToken, params)
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
 }
 
@@ -395,28 +367,13 @@ func createGroup(t *testing.T, accessToken, name string) []byte {
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: addGroup,
 		Variables: map[string]interface{}{
 			"name": name,
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
+	b := makeRequest(t, accessToken, params)
 	return b
 }
 
@@ -460,7 +417,6 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: addUserToGroup,
 		Variables: map[string]interface{}{
@@ -468,6 +424,20 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 			"group": group,
 		},
 	}
+	b := makeRequest(t, accessToken, params)
+	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
+		userId, group)
+	require.JSONEq(t, expectedOutput, string(b))
+}
+
+type rule struct {
+	Predicate  string `json:"predicate"`
+	Permission int32  `json:"permission"`
+}
+
+func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams) []byte {
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
@@ -482,14 +452,7 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 	defer resp.Body.Close()
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
-		userId, group)
-	require.JSONEq(t, expectedOutput, string(b))
-}
-
-type rule struct {
-	Predicate  string `json:"predicate"`
-	Permission int32  `json:"permission"`
+	return b
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
@@ -514,7 +477,6 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: addRuleToGroup,
 		Variables: map[string]interface{}{
@@ -522,20 +484,7 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 			"rules": rules,
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
+	b := makeRequest(t, accessToken, params)
 	rulesb, err := json.Marshal(rules)
 	require.NoError(t, err)
 	expectedOutput := fmt.Sprintf(`{
@@ -799,7 +748,6 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) []byte {
 			}
 		}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: removeUserGroups,
 		Variables: map[string]interface{}{
@@ -807,8 +755,6 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) []byte {
 			"groupName": groupName,
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: loginEndpoint,
@@ -816,18 +762,7 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) []byte {
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessJwt)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
+	b := makeRequest(t, accessJwt, params)
 	return b
 }
 
@@ -1066,7 +1001,6 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: removeRuleFromGroup,
 		Variables: map[string]interface{}{
@@ -1074,20 +1008,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 			"rules": []map[string]interface{}{{"id": ruleID}},
 		},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
+	b := makeRequest(t, accessToken, params)
 	return b
 }
 
@@ -1119,10 +1040,6 @@ func TestNegativePermissionDeleteRule(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	removeRuleFromGroup(t, accessJwt, devGroup, assigned["r1"])
-
-	// updateRule := exec.Command("dgraph", "acl", "mod", "-a", dgraphEndpoint,
-	// 	"-g", devGroup, "-p", "name", "-m", "-1", "-x", "password")
-	// require.NoError(t, updateRule.Run())
 	time.Sleep(6 * time.Second)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
@@ -1139,6 +1056,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
+
 	// TODO - We should be adding this data using the GraphQL API.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
