@@ -183,8 +183,9 @@ func admin(t *testing.T) {
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = checkGraphQLHealth(graphqlAdminTestAdminURL, []string{"NoGraphQLSchema"})
+	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
 	require.NoError(t, err)
+	require.False(t, hasSchema)
 
 	schemaIsInInitialState(t, client)
 	addGQLSchema(t, client)
