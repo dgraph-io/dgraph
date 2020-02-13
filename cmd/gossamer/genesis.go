@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ChainSafe/gossamer/cmd/utils"
 	"github.com/ChainSafe/gossamer/common"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
@@ -25,8 +24,8 @@ func loadGenesis(ctx *cli.Context) error {
 	// read genesis file
 	genesisPath := getGenesisPath(ctx)
 	dataDir := expandTildeOrDot(currentConfig.Global.DataDir)
-	if ctx.String(utils.DataDirFlag.Name) != "" {
-		dataDir = expandTildeOrDot(ctx.String(utils.DataDirFlag.Name))
+	if ctx.String(DataDirFlag.Name) != "" {
+		dataDir = expandTildeOrDot(ctx.String(DataDirFlag.Name))
 	}
 
 	log.Debug("Loading genesis", "genesisPath", genesisPath, "dataDir", dataDir)
@@ -110,9 +109,9 @@ func initializeGenesisState(gen genesis.GenesisFields) (*trie.Trie, *types.Heade
 // getGenesisPath gets the path to the genesis file
 func getGenesisPath(ctx *cli.Context) string {
 	// Check local string genesis flags first
-	if file := ctx.String(utils.GenesisFlag.Name); file != "" {
+	if file := ctx.String(GenesisFlag.Name); file != "" {
 		return file
-	} else if file := ctx.GlobalString(utils.GenesisFlag.Name); file != "" {
+	} else if file := ctx.GlobalString(GenesisFlag.Name); file != "" {
 		return file
 	} else {
 		return cfg.DefaultGenesisPath

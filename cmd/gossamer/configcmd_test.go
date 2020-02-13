@@ -249,7 +249,7 @@ func TestSetP2pConfig(t *testing.T) {
 		},
 		{
 			"port",
-			[]string{"p2pport"},
+			[]string{"port"},
 			[]interface{}{uint(1337)},
 			cfg.P2pCfg{
 				Bootnodes:   cfg.DefaultP2PBootnodes,

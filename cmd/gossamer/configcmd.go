@@ -25,7 +25,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ChainSafe/gossamer/cmd/utils"
 	"github.com/ChainSafe/gossamer/common"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
@@ -69,7 +68,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	// load all static keys from keystore directory
 	ks := keystore.NewKeystore()
 	// unlock keys, if specified
-	if keyindices := ctx.String(utils.UnlockFlag.Name); keyindices != "" {
+	if keyindices := ctx.String(UnlockFlag.Name); keyindices != "" {
 		err = unlockKeys(ctx, dataDir, ks)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not unlock keys: %s", err)
@@ -139,8 +138,8 @@ func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtim
 func getConfig(ctx *cli.Context) (*cfg.Config, error) {
 	currentConfig := cfg.DefaultConfig()
 	// Load config file.
-	if file := ctx.GlobalString(utils.ConfigFileFlag.Name); file != "" {
-		configFile := ctx.GlobalString(utils.ConfigFileFlag.Name)
+	if file := ctx.GlobalString(ConfigFileFlag.Name); file != "" {
+		configFile := ctx.GlobalString(ConfigFileFlag.Name)
 		err := loadConfig(configFile, currentConfig)
 		if err != nil {
 			log.Warn("err loading toml file", "err", err.Error())
@@ -180,13 +179,13 @@ func loadConfig(file string, config *cfg.Config) error {
 
 func setGlobalConfig(ctx *cli.Context, currentConfig *cfg.GlobalConfig) {
 	newDataDir := currentConfig.DataDir
-	if dir := ctx.GlobalString(utils.DataDirFlag.Name); dir != "" {
+	if dir := ctx.GlobalString(DataDirFlag.Name); dir != "" {
 		newDataDir = expandTildeOrDot(dir)
 	}
 	currentConfig.DataDir, _ = filepath.Abs(newDataDir)
 
 	newRoles := currentConfig.Roles
-	if roles := ctx.GlobalString(utils.RolesFlag.Name); roles != "" {
+	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
 		b, err := strconv.Atoi(roles)
 		if err != nil {
 			log.Debug("Failed to convert to byte", "roles", roles)
@@ -199,25 +198,25 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *cfg.GlobalConfig) {
 
 func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 	// Bootnodes
-	if bnodes := ctx.GlobalString(utils.BootnodesFlag.Name); bnodes != "" {
-		fig.Bootnodes = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
+	if bnodes := ctx.GlobalString(BootnodesFlag.Name); bnodes != "" {
+		fig.Bootnodes = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
 	}
 
-	if protocol := ctx.GlobalString(utils.ProtocolIDFlag.Name); protocol != "" {
+	if protocol := ctx.GlobalString(ProtocolIDFlag.Name); protocol != "" {
 		fig.ProtocolID = protocol
 	}
 
-	if port := ctx.GlobalUint(utils.P2pPortFlag.Name); port != 0 {
+	if port := ctx.GlobalUint(P2pPortFlag.Name); port != 0 {
 		fig.Port = uint32(port)
 	}
 
 	// NoBootstrap
-	if off := ctx.GlobalBool(utils.NoBootstrapFlag.Name); off {
+	if off := ctx.GlobalBool(NoBootstrapFlag.Name); off {
 		fig.NoBootstrap = true
 	}
 
 	// NoMdns
-	if off := ctx.GlobalBool(utils.NoMdnsFlag.Name); off {
+	if off := ctx.GlobalBool(NoMdnsFlag.Name); off {
 		fig.NoMdns = true
 	}
 }
@@ -276,24 +275,24 @@ func createCoreService(coreConfig *core.Config) *core.Service {
 
 func setRPCConfig(ctx *cli.Context, fig *cfg.RPCCfg) {
 	// Modules
-	if mods := ctx.GlobalString(utils.RPCModuleFlag.Name); mods != "" {
-		fig.Modules = strToMods(strings.Split(ctx.GlobalString(utils.RPCModuleFlag.Name), ","))
+	if mods := ctx.GlobalString(RPCModuleFlag.Name); mods != "" {
+		fig.Modules = strToMods(strings.Split(ctx.GlobalString(RPCModuleFlag.Name), ","))
 	}
 
 	// Host
-	if host := ctx.GlobalString(utils.RPCHostFlag.Name); host != "" {
+	if host := ctx.GlobalString(RPCHostFlag.Name); host != "" {
 		fig.Host = host
 	}
 
 	// Port
-	if port := ctx.GlobalUint(utils.RPCPortFlag.Name); port != 0 {
+	if port := ctx.GlobalUint(RPCPortFlag.Name); port != 0 {
 		fig.Port = uint32(port)
 	}
 
 }
 
 func startRPC(ctx *cli.Context, fig cfg.RPCCfg, apiSrvc *api.Service) *rpc.HTTPServer {
-	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
+	if ctx.GlobalBool(RPCEnabledFlag.Name) {
 		return rpc.NewHTTPServer(apiSrvc.API, &json2.Codec{}, fig.Host, fig.Port, fig.Modules)
 	}
 	return nil

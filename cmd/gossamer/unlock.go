@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ChainSafe/gossamer/cmd/utils"
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/urfave/cli"
@@ -38,7 +37,7 @@ func unlockKeys(ctx *cli.Context, datadir string, ks *keystore.Keystore) error {
 	}
 
 	// indices of keys to unlock
-	if keyindices := ctx.String(utils.UnlockFlag.Name); keyindices != "" {
+	if keyindices := ctx.String(UnlockFlag.Name); keyindices != "" {
 		indices, err = common.StringToInts(keyindices)
 		if err != nil {
 			return err
@@ -46,7 +45,7 @@ func unlockKeys(ctx *cli.Context, datadir string, ks *keystore.Keystore) error {
 	}
 
 	// passwords corresponding to the keys
-	if passwordsStr := ctx.String(utils.PasswordFlag.Name); passwordsStr != "" {
+	if passwordsStr := ctx.String(PasswordFlag.Name); passwordsStr != "" {
 		passwords = strings.Split(passwordsStr, ",")
 	} else {
 		// no passwords specified, prompt user

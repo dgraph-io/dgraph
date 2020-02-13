@@ -21,7 +21,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ChainSafe/gossamer/cmd/utils"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -29,45 +28,45 @@ import (
 var (
 	app       = cli.NewApp()
 	nodeFlags = []cli.Flag{
-		utils.DataDirFlag,
-		utils.RolesFlag,
-		utils.ConfigFileFlag,
-		utils.UnlockFlag,
-		utils.PasswordFlag,
+		DataDirFlag,
+		RolesFlag,
+		ConfigFileFlag,
+		UnlockFlag,
+		PasswordFlag,
 	}
 	p2pFlags = []cli.Flag{
-		utils.BootnodesFlag,
-		utils.P2pPortFlag,
-		utils.ProtocolIDFlag,
-		utils.NoBootstrapFlag,
-		utils.NoMdnsFlag,
+		BootnodesFlag,
+		P2pPortFlag,
+		ProtocolIDFlag,
+		NoBootstrapFlag,
+		NoMdnsFlag,
 	}
 	rpcFlags = []cli.Flag{
-		utils.RPCEnabledFlag,
-		utils.RPCHostFlag,
-		utils.RPCPortFlag,
-		utils.RPCModuleFlag,
+		RPCEnabledFlag,
+		RPCHostFlag,
+		RPCPortFlag,
+		RPCModuleFlag,
 	}
 	genesisFlags = []cli.Flag{
-		utils.GenesisFlag,
+		GenesisFlag,
 	}
 	cliFlags = []cli.Flag{
-		utils.VerbosityFlag,
+		VerbosityFlag,
 	}
 	accountFlags = []cli.Flag{
-		utils.GenerateFlag,
-		utils.Sr25519Flag,
-		utils.Ed25519Flag,
-		utils.Secp256k1Flag,
-		utils.ImportFlag,
-		utils.ListFlag,
-		utils.PasswordFlag,
+		GenerateFlag,
+		Sr25519Flag,
+		Ed25519Flag,
+		Secp256k1Flag,
+		ImportFlag,
+		ListFlag,
+		PasswordFlag,
 	}
 )
 
 var (
 	dumpConfigCommand = cli.Command{
-		Action:      utils.FixFlagOrder(dumpConfig),
+		Action:      FixFlagOrder(dumpConfig),
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
@@ -76,24 +75,24 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 	initCommand = cli.Command{
-		Action:    utils.FixFlagOrder(initNode),
+		Action:    FixFlagOrder(initNode),
 		Name:      "init",
 		Usage:     "Initialize node genesis state",
 		ArgsUsage: "",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.GenesisFlag,
-			utils.VerbosityFlag,
-			utils.ConfigFileFlag,
+			DataDirFlag,
+			GenesisFlag,
+			VerbosityFlag,
+			ConfigFileFlag,
 		},
 		Category:    "INITIALIZATION",
 		Description: `The init command initializes the node with a genesis state. Usage: gossamer init --genesis genesis.json`,
 	}
 	accountCommand = cli.Command{
-		Action:   utils.FixFlagOrder(handleAccounts),
+		Action:   FixFlagOrder(handleAccounts),
 		Name:     "account",
 		Usage:    "manage gossamer keystore",
-		Flags:    append(append(accountFlags, utils.DataDirFlag), utils.VerbosityFlag),
+		Flags:    append(append(accountFlags, DataDirFlag), VerbosityFlag),
 		Category: "KEYSTORE",
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
@@ -137,9 +136,9 @@ func startLogger(ctx *cli.Context) error {
 	handler := logger.GetHandler()
 	var lvl log.Lvl
 
-	if lvlToInt, err := strconv.Atoi(ctx.String(utils.VerbosityFlag.Name)); err == nil {
+	if lvlToInt, err := strconv.Atoi(ctx.String(VerbosityFlag.Name)); err == nil {
 		lvl = log.Lvl(lvlToInt)
-	} else if lvl, err = log.LvlFromString(ctx.String(utils.VerbosityFlag.Name)); err != nil {
+	} else if lvl, err = log.LvlFromString(ctx.String(VerbosityFlag.Name)); err != nil {
 		return err
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(lvl, handler))

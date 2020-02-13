@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package main
 
 import (
 	log "github.com/ChainSafe/log15"
@@ -64,7 +64,7 @@ var (
 	}
 	// P2pPortFlag Set P2P listening port
 	P2pPortFlag = cli.UintFlag{
-		Name:  "p2pport",
+		Name:  "port",
 		Usage: "Set P2P listening port",
 	}
 	// ProtocolIDFlag Set protocol id

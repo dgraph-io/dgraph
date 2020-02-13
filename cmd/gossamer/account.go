@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/crypto"
 	"github.com/ChainSafe/gossamer/crypto/ed25519"
@@ -35,7 +34,7 @@ func handleAccounts(ctx *cli.Context) error {
 
 	// key directory is datadir/keystore/
 	var datadir string
-	if dir := ctx.String(utils.DataDirFlag.Name); dir != "" {
+	if dir := ctx.String(DataDirFlag.Name); dir != "" {
 		datadir, err = filepath.Abs(dir)
 		if err != nil {
 			log.Error("invalid datadir", "error", err)
@@ -46,22 +45,22 @@ func handleAccounts(ctx *cli.Context) error {
 	// check if we want to generate a new keypair
 	// can specify key type using --ed25519, --sr25519, --secp256k1
 	// otherwise defaults to sr25519
-	if keygen := ctx.Bool(utils.GenerateFlag.Name); keygen {
+	if keygen := ctx.Bool(GenerateFlag.Name); keygen {
 		log.Info("generating keypair...")
 
 		// check if --ed25519, --sr25519, --secp256k1 is set
 		keytype := crypto.Sr25519Type
-		if flagtype := ctx.Bool(utils.Sr25519Flag.Name); flagtype {
+		if flagtype := ctx.Bool(Sr25519Flag.Name); flagtype {
 			keytype = crypto.Sr25519Type
-		} else if flagtype := ctx.Bool(utils.Ed25519Flag.Name); flagtype {
+		} else if flagtype := ctx.Bool(Ed25519Flag.Name); flagtype {
 			keytype = crypto.Ed25519Type
-		} else if flagtype := ctx.Bool(utils.Secp256k1Flag.Name); flagtype {
+		} else if flagtype := ctx.Bool(Secp256k1Flag.Name); flagtype {
 			keytype = crypto.Secp256k1Type
 		}
 
 		// check if --password is set
 		var password []byte = nil
-		if pwdflag := ctx.String(utils.PasswordFlag.Name); pwdflag != "" {
+		if pwdflag := ctx.String(PasswordFlag.Name); pwdflag != "" {
 			password = []byte(pwdflag)
 		}
 
@@ -73,7 +72,7 @@ func handleAccounts(ctx *cli.Context) error {
 	}
 
 	// import key
-	if keyimport := ctx.String(utils.ImportFlag.Name); keyimport != "" {
+	if keyimport := ctx.String(ImportFlag.Name); keyimport != "" {
 		log.Info("importing key...")
 		_, err = importKey(keyimport, datadir)
 		if err != nil {
@@ -83,7 +82,7 @@ func handleAccounts(ctx *cli.Context) error {
 	}
 
 	// list keys
-	if keylist := ctx.Bool(utils.ListFlag.Name); keylist {
+	if keylist := ctx.Bool(ListFlag.Name); keylist {
 		_, err = listKeys(datadir)
 		if err != nil {
 			log.Error("list error", "error", err)
