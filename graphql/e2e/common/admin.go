@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -255,6 +256,7 @@ func health(t *testing.T) {
           address
           status
           group
+          version
           uptime
           lastEcho
         }
@@ -278,7 +280,13 @@ func health(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(healthRes, &health))
 
-	if diff := cmp.Diff(health, result.Health); diff != "" {
+	// Uptime and LastEcho might have changed between the GraphQL and /health calls.
+	// If we don't remove them, the test would be flakey.
+	opts := []cmp.Option{
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+	}
+	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }
