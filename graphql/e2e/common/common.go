@@ -42,6 +42,7 @@ const (
 	graphqlAdminURL = "http://localhost:8180/admin"
 	alphagRPC       = "localhost:9180"
 
+	adminDgraphURL           = "http://localhost:8280"
 	graphqlAdminTestURL      = "http://localhost:8280/graphql"
 	graphqlAdminTestAdminURL = "http://localhost:8280/admin"
 	alphaAdminTestgRPC       = "localhost:9280"
@@ -187,6 +188,7 @@ func BootstrapServer(schema, data []byte) {
 func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
+	t.Run("health", health)
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)

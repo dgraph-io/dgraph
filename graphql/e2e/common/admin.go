@@ -18,10 +18,16 @@ package common
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -239,4 +245,42 @@ func introspect(t *testing.T, expected string) {
 	requireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
+
+// The GraphQL /admin health result should be the same as /health
+func health(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+        health {
+          instance
+          address
+          status
+          group
+          uptime
+          lastEcho
+        }
+      }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		Health []pb.HealthInfo
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	var health []pb.HealthInfo
+	url := fmt.Sprintf("%s/health?all", adminDgraphURL)
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	healthRes, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(healthRes, &health))
+
+	if diff := cmp.Diff(health, result.Health); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
