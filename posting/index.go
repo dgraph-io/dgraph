@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -511,7 +512,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// All the temp indexes go into the following directory. We delete the whole
 	// directory after the indexing step is complete. This deletes any other temp
 	// indexes that may have been left around in case defer wasn't executed.
-	tmpParentDir := "dgraph_index"
+	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
