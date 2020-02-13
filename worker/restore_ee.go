@@ -38,7 +38,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.Restore) error {
 		return errors.Wrapf(err, "failed to verify backup")
 	}
 
-	backup.FillRestoreCredentials(req.Location, &req)
+	backup.FillRestoreCredentials(req.Location, req)
 
 	return nil
 }
