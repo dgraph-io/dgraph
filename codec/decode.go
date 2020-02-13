@@ -347,24 +347,19 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 	for i := 0; i < int(length); i++ {
 		arrayValue := sl.Index(i)
 
-		switch sl.Index(i).Interface().(type) {
-		case []byte:
-			o, err = sd.DecodeByteArray()
-			if err != nil {
-				break
+		switch ptr := arrayValue.Addr().Interface().(type) {
+		case *[]byte:
+			if o, err = sd.DecodeByteArray(); err == nil {
+				// get the pointer to the value and set the value
+				*ptr = o.([]byte)
 			}
-
-			// get the pointer to the value and set the value
-			ptr := arrayValue.Addr().Interface().(*[]byte)
-			*ptr = o.([]byte)
-		case [32]byte:
+		case *[32]byte:
 			buf := make([]byte, 32)
-			ptr := arrayValue.Addr().Interface().(*[32]byte)
-			_, err = sd.Reader.Read(buf)
-
-			var arr = [32]byte{}
-			copy(arr[:], buf)
-			*ptr = arr
+			if _, err = sd.Reader.Read(buf); err == nil {
+				var arr = [32]byte{}
+				copy(arr[:], buf)
+				*ptr = arr
+			}
 		default:
 			err = errors.New("could not decode invalid slice or array")
 		}
@@ -409,144 +404,81 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 		if field.CanInterface() {
 			fieldValue := field.Addr().Interface()
 
-			switch v.Field(i).Interface().(type) {
-			case byte:
+			switch ptr := fieldValue.(type) {
+			case *byte:
 				b := make([]byte, 1)
-				_, err = sd.Reader.Read(b)
-
-				ptr := fieldValue.(*byte)
-				*ptr = b[0]
-			case []byte:
-				o, err = sd.DecodeByteArray()
-				if err != nil {
-					break
+				if _, err = sd.Reader.Read(b); err == nil {
+					*ptr = b[0]
 				}
-
-				// get the pointer to the value and set the value
-				ptr := fieldValue.(*[]byte)
-				*ptr = o.([]byte)
-			case [][]byte:
-				o, err = sd.DecodeArray([][]byte{})
-				if err != nil {
-					break
+			case *[]byte:
+				if o, err = sd.DecodeByteArray(); err == nil {
+					// get the pointer to the value and set the value
+					*ptr = o.([]byte)
 				}
-
-				ptr := fieldValue.(*[][]byte)
-				*ptr = o.([][]byte)
-			case int8:
-				o, err = sd.DecodeFixedWidthInt(int8(0))
-				if err != nil {
-					break
+			case *[][]byte:
+				if o, err = sd.DecodeArray([][]byte{}); err == nil {
+					*ptr = o.([][]byte)
 				}
-
-				ptr := fieldValue.(*int8)
-				*ptr = o.(int8)
-			case int16:
-				o, err = sd.DecodeFixedWidthInt(int16(0))
-				if err != nil {
-					break
+			case *int8:
+				if o, err = sd.DecodeFixedWidthInt(int8(0)); err == nil {
+					*ptr = o.(int8)
 				}
-
-				ptr := fieldValue.(*int16)
-				*ptr = o.(int16)
-			case int32:
-				o, err = sd.DecodeFixedWidthInt(int32(0))
-				if err != nil {
-					break
+			case *int16:
+				if o, err = sd.DecodeFixedWidthInt(int16(0)); err == nil {
+					*ptr = o.(int16)
 				}
-
-				ptr := fieldValue.(*int32)
-				*ptr = o.(int32)
-			case int64:
-				o, err = sd.DecodeFixedWidthInt(int64(0))
-				if err != nil {
-					break
+			case *int32:
+				if o, err = sd.DecodeFixedWidthInt(int32(0)); err == nil {
+					*ptr = o.(int32)
 				}
-
-				ptr := fieldValue.(*int64)
-				*ptr = o.(int64)
-			case uint16:
-				o, err = sd.DecodeFixedWidthInt(uint16(0))
-				if err != nil {
-					break
+			case *int64:
+				if o, err = sd.DecodeFixedWidthInt(int64(0)); err == nil {
+					*ptr = o.(int64)
 				}
-
-				ptr := fieldValue.(*uint16)
-				*ptr = o.(uint16)
-			case uint32:
-				o, err = sd.DecodeFixedWidthInt(uint32(0))
-				if err != nil {
-					break
+			case *uint16:
+				if o, err = sd.DecodeFixedWidthInt(uint16(0)); err == nil {
+					*ptr = o.(uint16)
 				}
-
-				ptr := fieldValue.(*uint32)
-				*ptr = o.(uint32)
-			case uint64:
-				o, err = sd.DecodeFixedWidthInt(uint64(0))
-				if err != nil {
-					break
+			case *uint32:
+				if o, err = sd.DecodeFixedWidthInt(uint32(0)); err == nil {
+					*ptr = o.(uint32)
 				}
-
-				ptr := fieldValue.(*uint64)
-				*ptr = o.(uint64)
-			case int:
-				o, err = sd.DecodeFixedWidthInt(int(0))
-				if err != nil {
-					break
+			case *uint64:
+				if o, err = sd.DecodeFixedWidthInt(uint64(0)); err == nil {
+					*ptr = o.(uint64)
 				}
-
-				ptr := fieldValue.(*int)
-				*ptr = o.(int)
-			case uint:
-				o, err = sd.DecodeFixedWidthInt(uint(0))
-				if err != nil {
-					break
+			case *int:
+				if o, err = sd.DecodeFixedWidthInt(int(0)); err == nil {
+					*ptr = o.(int)
 				}
-
-				ptr := fieldValue.(*uint)
-				*ptr = o.(uint)
-			case bool:
-				o, err = sd.DecodeBool()
-				if err != nil {
-					break
+			case *uint:
+				if o, err = sd.DecodeFixedWidthInt(uint(0)); err == nil {
+					*ptr = o.(uint)
 				}
-
-				ptr := fieldValue.(*bool)
-				*ptr = o.(bool)
-			case *big.Int:
-				o, err = sd.DecodeBigInt()
-				if err != nil {
-					break
+			case *bool:
+				if o, err = sd.DecodeBool(); err == nil {
+					*ptr = o.(bool)
 				}
-
-				ptr := fieldValue.(**big.Int)
-				*ptr = o.(*big.Int)
-			case common.Hash:
+			case **big.Int:
+				if o, err = sd.DecodeBigInt(); err == nil {
+					*ptr = o.(*big.Int)
+				}
+			case *common.Hash:
 				b := make([]byte, 32)
-				_, err = sd.Reader.Read(b)
-
-				ptr := fieldValue.(*common.Hash)
-				*ptr = common.NewHash(b)
-			case string:
-				o, err = sd.DecodeByteArray()
-				if err != nil {
-					break
+				if _, err = sd.Reader.Read(b); err == nil {
+					*ptr = common.NewHash(b)
 				}
-
-				// get the pointer to the value and set the value
-				ptr := fieldValue.(*string)
-				*ptr = string(o.([]byte))
-			case []string:
-				o, err = sd.DecodeStringArray()
-				if err != nil {
-					break
+			case *string:
+				if o, err = sd.DecodeByteArray(); err == nil {
+					// get the pointer to the value and set the value
+					*ptr = string(o.([]byte))
 				}
-				ptr := fieldValue.(*[]string)
-				*ptr = o.([]string)
+			case *[]string:
+				if o, err = sd.DecodeStringArray(); err == nil {
+					*ptr = o.([]string)
+				}
 			default:
-				_, err = sd.Decode(v.Field(i).Interface())
-				if err != nil {
-					break
+				if _, err = sd.Decode(v.Field(i).Interface()); err == nil {
 				}
 			}
 
