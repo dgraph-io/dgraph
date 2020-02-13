@@ -58,26 +58,26 @@ func (r *MockRuntimeAPI) Version() string {
 }
 
 // Mock network API
-type MockP2pAPI struct{}
+type MockNetworkAPI struct{}
 
-func (n *MockP2pAPI) Health() common.Health {
+func (n *MockNetworkAPI) Health() common.Health {
 	return testHealth
 }
 
-func (n *MockP2pAPI) NetworkState() common.NetworkState {
+func (n *MockNetworkAPI) NetworkState() common.NetworkState {
 	return testNetworkState
 }
 
-func (n *MockP2pAPI) Peers() []common.PeerInfo {
+func (n *MockNetworkAPI) Peers() []common.PeerInfo {
 	return testPeers
 }
 
 func newMockAPI() *api.API {
-	p2pAPI := &MockP2pAPI{}
+	networkAPI := &MockNetworkAPI{}
 	runtimeAPI := &MockRuntimeAPI{}
 
 	return &api.API{
-		P2pModule:     module.NewP2pModule(p2pAPI),
+		NetworkModule: module.NewNetworkModule(networkAPI),
 		RuntimeModule: module.NewRuntimeModule(runtimeAPI),
 	}
 }

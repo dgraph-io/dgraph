@@ -27,7 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/keystore"
-	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/network"
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/tests"
 )
@@ -40,8 +40,8 @@ func TestStartService(t *testing.T) {
 	cfg := &Config{
 		Runtime:  rt,
 		Keystore: keystore.NewKeystore(),
-		MsgRec:   make(chan p2p.Message),
-		MsgSend:  make(chan p2p.Message),
+		MsgRec:   make(chan network.Message),
+		MsgSend:  make(chan network.Message),
 	}
 
 	s, err := NewService(cfg)
@@ -123,12 +123,12 @@ func TestValidateTransaction(t *testing.T) {
 func TestAnnounceBlock(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
-	msgSend := make(chan p2p.Message)
+	msgSend := make(chan network.Message)
 	newBlocks := make(chan types.Block)
 
 	cfg := &Config{
 		Runtime:   rt,
-		MsgSend:   msgSend, // message channel from core service to p2p service
+		MsgSend:   msgSend, // message channel from core service to network service
 		Keystore:  keystore.NewKeystore(),
 		NewBlocks: newBlocks,
 	}
@@ -154,10 +154,10 @@ func TestAnnounceBlock(t *testing.T) {
 	select {
 	case msg := <-msgSend:
 		msgType := msg.GetType()
-		if !reflect.DeepEqual(msgType, p2p.BlockAnnounceMsgType) {
+		if !reflect.DeepEqual(msgType, network.BlockAnnounceMsgType) {
 			t.Error(
 				"received unexpected message type",
-				"\nexpected:", p2p.BlockAnnounceMsgType,
+				"\nexpected:", network.BlockAnnounceMsgType,
 				"\nreceived:", msgType,
 			)
 		}
@@ -169,8 +169,8 @@ func TestAnnounceBlock(t *testing.T) {
 func TestProcessBlockAnnounceMessage(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
-	msgRec := make(chan p2p.Message)
-	msgSend := make(chan p2p.Message)
+	msgRec := make(chan network.Message)
+	msgSend := make(chan network.Message)
 
 	cfg := &Config{
 		Runtime:  rt,
@@ -190,20 +190,20 @@ func TestProcessBlockAnnounceMessage(t *testing.T) {
 	}
 	defer s.Stop()
 
-	blockAnnounce := &p2p.BlockAnnounceMessage{
+	blockAnnounce := &network.BlockAnnounceMessage{
 		Number: big.NewInt(1),
 	}
 
-	// simulate mssage sent from p2p service
+	// simulate mssage sent from network service
 	msgRec <- blockAnnounce
 
 	select {
 	case msg := <-msgSend:
 		msgType := msg.GetType()
-		if msgType != p2p.BlockRequestMsgType {
+		if msgType != network.BlockRequestMsgType {
 			t.Error(
 				"received unexpected message type",
-				"\nexpected:", p2p.BlockRequestMsgType,
+				"\nexpected:", network.BlockRequestMsgType,
 				"\nreceived:", msgType,
 			)
 		}
@@ -278,7 +278,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blockResponse := &p2p.BlockResponseMessage{Data: data}
+	blockResponse := &network.BlockResponseMessage{Data: data}
 
 	err = s.ProcessBlockResponseMessage(blockResponse)
 	if err != nil {
@@ -303,7 +303,7 @@ func TestProcessTransactionMessage(t *testing.T) {
 	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
 	ext := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
 
-	msg := &p2p.TransactionMessage{Extrinsics: []types.Extrinsic{ext}}
+	msg := &network.TransactionMessage{Extrinsics: []types.Extrinsic{ext}}
 
 	err = s.ProcessTransactionMessage(msg)
 	if err != nil {

@@ -201,13 +201,13 @@ func TestSetGlobalConfig(t *testing.T) {
 	}
 }
 
-func TestCreateP2PService(t *testing.T) {
+func TestCreateNetworkService(t *testing.T) {
 	stateSrv := state.NewService(TestDataDir)
-	srv, _, _ := createP2PService(cfg.DefaultConfig(), &genesis.GenesisData{}, stateSrv)
-	require.NotNil(t, srv, "failed to create p2p service")
+	srv, _, _ := createNetworkService(cfg.DefaultConfig(), &genesis.GenesisData{}, stateSrv)
+	require.NotNil(t, srv, "failed to create network service")
 }
 
-func TestSetP2pConfig(t *testing.T) {
+func TestSetNetworkConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
 	app := cli.NewApp()
 	app.Writer = ioutil.Discard
@@ -215,22 +215,22 @@ func TestSetP2pConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    cfg.P2pCfg
+		expected    cfg.NetworkCfg
 	}{
 		{
 			"config file",
 			[]string{"config"},
 			[]interface{}{tempFile.Name()},
-			cfgClone.P2p,
+			cfgClone.Network,
 		},
 		{
 			"no bootstrap, no mdns",
 			[]string{"nobootstrap", "nomdns"},
 			[]interface{}{true, true},
-			cfg.P2pCfg{
-				Bootnodes:   cfg.DefaultP2PBootnodes,
-				ProtocolID:  cfg.DefaultP2PProtocolID,
-				Port:        cfg.DefaultP2PPort,
+			cfg.NetworkCfg{
+				Bootnodes:   cfg.DefaultNetworkBootnodes,
+				ProtocolID:  cfg.DefaultNetworkProtocolID,
+				Port:        cfg.DefaultNetworkPort,
 				NoBootstrap: true,
 				NoMdns:      true,
 			},
@@ -239,10 +239,10 @@ func TestSetP2pConfig(t *testing.T) {
 			"bootstrap nodes",
 			[]string{"bootnodes"},
 			[]interface{}{strings.Join(TestBootnodes[:], ",")},
-			cfg.P2pCfg{
+			cfg.NetworkCfg{
 				Bootnodes:   TestBootnodes,
-				ProtocolID:  cfg.DefaultP2PProtocolID,
-				Port:        cfg.DefaultP2PPort,
+				ProtocolID:  cfg.DefaultNetworkProtocolID,
+				Port:        cfg.DefaultNetworkPort,
 				NoBootstrap: false,
 				NoMdns:      false,
 			},
@@ -251,9 +251,9 @@ func TestSetP2pConfig(t *testing.T) {
 			"port",
 			[]string{"port"},
 			[]interface{}{uint(1337)},
-			cfg.P2pCfg{
-				Bootnodes:   cfg.DefaultP2PBootnodes,
-				ProtocolID:  cfg.DefaultP2PProtocolID,
+			cfg.NetworkCfg{
+				Bootnodes:   cfg.DefaultNetworkBootnodes,
+				ProtocolID:  cfg.DefaultNetworkProtocolID,
 				Port:        1337,
 				NoBootstrap: false,
 				NoMdns:      false,
@@ -263,9 +263,9 @@ func TestSetP2pConfig(t *testing.T) {
 			"protocol id",
 			[]string{"protocol"},
 			[]interface{}{TestProtocolID},
-			cfg.P2pCfg{
-				Bootnodes:   cfg.DefaultP2PBootnodes,
-				Port:        cfg.DefaultP2PPort,
+			cfg.NetworkCfg{
+				Bootnodes:   cfg.DefaultNetworkBootnodes,
+				Port:        cfg.DefaultNetworkPort,
 				ProtocolID:  TestProtocolID,
 				NoBootstrap: false,
 				NoMdns:      false,
@@ -281,9 +281,9 @@ func TestSetP2pConfig(t *testing.T) {
 
 			input := cfg.DefaultConfig()
 			// Must call global setup to set data dir
-			setP2pConfig(context, &input.P2p)
+			setNetworkConfig(context, &input.Network)
 
-			require.Equal(t, c.expected, input.P2p)
+			require.Equal(t, c.expected, input.Network)
 		})
 	}
 }

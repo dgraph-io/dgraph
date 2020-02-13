@@ -81,7 +81,7 @@ func loadGenesis(ctx *cli.Context) error {
 		return fmt.Errorf("cannot store genesis hash in db: %s", err)
 	}
 
-	// store node name, ID, p2p protocol, bootnodes in DB
+	// store node name, ID, network protocol, bootnodes in state database
 	return t.Db().StoreGenesisData(gen.GenesisData())
 }
 

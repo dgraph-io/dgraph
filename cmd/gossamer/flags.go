@@ -55,32 +55,32 @@ var (
 	}
 )
 
-// P2P flags
+// Network flags
 var (
-	// BootnodesFlag P2P service settings
+	// BootnodesFlag Network service settings
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
+		Usage: "Comma separated enode URLs for network discovery bootstrap",
 	}
-	// P2pPortFlag Set P2P listening port
-	P2pPortFlag = cli.UintFlag{
+	// PortFlag Set network listening port
+	PortFlag = cli.UintFlag{
 		Name:  "port",
-		Usage: "Set P2P listening port",
+		Usage: "Set network listening port",
 	}
 	// ProtocolIDFlag Set protocol id
 	ProtocolIDFlag = cli.StringFlag{
 		Name:  "protocol",
 		Usage: "Set protocol id",
 	}
-	// NoBootstrapFlag Disables p2p bootstrapping
+	// NoBootstrapFlag Disables network bootstrapping
 	NoBootstrapFlag = cli.BoolFlag{
 		Name:  "nobootstrap",
-		Usage: "Disables p2p bootstrapping (mdns still enabled)",
+		Usage: "Disables network bootstrapping (mdns still enabled)",
 	}
-	// NoMdnsFlag Disables p2p mdns
+	// NoMdnsFlag Disables network mdns
 	NoMdnsFlag = cli.BoolFlag{
 		Name:  "nomdns",
-		Usage: "Disables p2p mdns discovery",
+		Usage: "Disables network mdns discovery",
 	}
 )
 

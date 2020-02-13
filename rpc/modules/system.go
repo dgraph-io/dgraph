@@ -93,20 +93,20 @@ func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringR
 // Health returns the information about the health of the network
 func (sm *SystemModule) Health(r *http.Request, req *EmptyRequest, res *SystemHealthResponse) error {
 	// TODO: migrate from api to network state
-	res.Health = sm.api.P2pModule.Health()
+	res.Health = sm.api.NetworkModule.Health()
 	return nil
 }
 
 // NetworkState returns the network state (basic information about the host)
 func (sm *SystemModule) NetworkState(r *http.Request, req *EmptyRequest, res *SystemNetworkStateResponse) error {
 	// TODO: migrate from api to network state
-	res.NetworkState = sm.api.P2pModule.NetworkState()
+	res.NetworkState = sm.api.NetworkModule.NetworkState()
 	return nil
 }
 
 // Peers returns peer information for each connected and confirmed peer
 func (sm *SystemModule) Peers(r *http.Request, req *EmptyRequest, res *SystemPeersResponse) error {
 	// TODO: migrate from api to network state
-	res.Peers = sm.api.P2pModule.Peers()
+	res.Peers = sm.api.NetworkModule.Peers()
 	return nil
 }

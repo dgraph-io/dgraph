@@ -33,7 +33,7 @@ import (
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/keystore"
-	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/network"
 	"github.com/ChainSafe/gossamer/rpc"
 	"github.com/ChainSafe/gossamer/rpc/json2"
 	"github.com/ChainSafe/gossamer/runtime"
@@ -50,7 +50,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		return nil, nil, err
 	}
 
-	log.Info("🕸\t Configuring node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.P2p.ProtocolID, "bootnodes", currentConfig.P2p.Bootnodes)
+	log.Info("🕸\t Configuring node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.Network.ProtocolID, "bootnodes", currentConfig.Network.Bootnodes)
 
 	var srvcs []services.Service
 
@@ -89,9 +89,9 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	// TODO: Configure node based on Roles #601
 
-	// P2P
-	p2pSrvc, p2pMsgSend, p2pMsgRec := createP2PService(currentConfig, gendata, stateSrv)
-	srvcs = append(srvcs, p2pSrvc)
+	// Network
+	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(currentConfig, gendata, stateSrv)
+	srvcs = append(srvcs, networkSrvc)
 
 	// Core
 	coreConfig := &core.Config{
@@ -99,14 +99,14 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 		StorageState: stateSrv.Storage,
 		Keystore:     ks,
 		Runtime:      rt,
-		MsgRec:       p2pMsgSend, // message channel from p2p service to core service
-		MsgSend:      p2pMsgRec,  // message channel from core service to p2p service
+		MsgRec:       networkMsgSend, // message channel from network service to core service
+		MsgSend:      networkMsgRec,  // message channel from core service to network service
 	}
 	coreSrvc := createCoreService(coreConfig)
 	srvcs = append(srvcs, coreSrvc)
 
 	// API
-	apiSrvc := api.NewAPIService(p2pSrvc, nil)
+	apiSrvc := api.NewAPIService(networkSrvc, nil)
 	srvcs = append(srvcs, apiSrvc)
 
 	// RPC
@@ -155,7 +155,7 @@ func getConfig(ctx *cli.Context) (*cfg.Config, error) {
 
 	// Parse CLI flags
 	setGlobalConfig(ctx, &currentConfig.Global)
-	setP2pConfig(ctx, &currentConfig.P2p)
+	setNetworkConfig(ctx, &currentConfig.Network)
 	setRPCConfig(ctx, &currentConfig.RPC)
 	return currentConfig, nil
 }
@@ -196,7 +196,7 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *cfg.GlobalConfig) {
 	currentConfig.Roles = newRoles
 }
 
-func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
+func setNetworkConfig(ctx *cli.Context, fig *cfg.NetworkCfg) {
 	// Bootnodes
 	if bnodes := ctx.GlobalString(BootnodesFlag.Name); bnodes != "" {
 		fig.Bootnodes = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
@@ -206,7 +206,7 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 		fig.ProtocolID = protocol
 	}
 
-	if port := ctx.GlobalUint(P2pPortFlag.Name); port != 0 {
+	if port := ctx.GlobalUint(PortFlag.Name); port != 0 {
 		fig.Port = uint32(port)
 	}
 
@@ -221,46 +221,45 @@ func setP2pConfig(ctx *cli.Context, fig *cfg.P2pCfg) {
 	}
 }
 
-// createP2PService creates a p2p service from the command configuration and genesis data
-func createP2PService(fig *cfg.Config, gendata *genesis.GenesisData, stateService *state.Service) (*p2p.Service, chan p2p.Message, chan p2p.Message) {
-
+// createNetworkService creates a network service from the command configuration and genesis data
+func createNetworkService(fig *cfg.Config, gendata *genesis.GenesisData, stateService *state.Service) (*network.Service, chan network.Message, chan network.Message) {
 	// Default bootnodes and protocol from genesis file
 	bootnodes := common.BytesToStringArray(gendata.Bootnodes)
 	protocolID := gendata.ProtocolID
 
 	// If bootnodes flag has one or more bootnodes, overwrite genesis bootnodes
-	if len(fig.P2p.Bootnodes) > 0 {
-		bootnodes = fig.P2p.Bootnodes
+	if len(fig.Network.Bootnodes) > 0 {
+		bootnodes = fig.Network.Bootnodes
 	}
 
 	// If protocol id flag is not an empty string, overwrite
-	if fig.P2p.ProtocolID != "" {
-		protocolID = fig.P2p.ProtocolID
+	if fig.Network.ProtocolID != "" {
+		protocolID = fig.Network.ProtocolID
 	}
 
-	// p2p service configuation
-	p2pConfig := p2p.Config{
+	// network service configuation
+	networkConfig := network.Config{
 		BlockState:   stateService.Block,
 		StorageState: stateService.Storage,
 		NetworkState: stateService.Network,
 		DataDir:      fig.Global.DataDir,
 		Roles:        fig.Global.Roles,
-		Port:         fig.P2p.Port,
+		Port:         fig.Network.Port,
 		Bootnodes:    bootnodes,
 		ProtocolID:   protocolID,
-		NoBootstrap:  fig.P2p.NoBootstrap,
-		NoMdns:       fig.P2p.NoMdns,
+		NoBootstrap:  fig.Network.NoBootstrap,
+		NoMdns:       fig.Network.NoMdns,
 	}
 
-	p2pMsgRec := make(chan p2p.Message)
-	p2pMsgSend := make(chan p2p.Message)
+	networkMsgRec := make(chan network.Message)
+	networkMsgSend := make(chan network.Message)
 
-	p2pService, err := p2p.NewService(&p2pConfig, p2pMsgSend, p2pMsgRec)
+	networkService, err := network.NewService(&networkConfig, networkMsgSend, networkMsgRec)
 	if err != nil {
-		log.Error("Failed to create new p2p service", "err", err)
+		log.Error("Failed to create new network service", "err", err)
 	}
 
-	return p2pService, p2pMsgSend, p2pMsgRec
+	return networkService, networkMsgSend, networkMsgRec
 }
 
 // createCoreService creates the core service from the provided core configuration

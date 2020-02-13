@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package p2p
+package network
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 	"github.com/ipfs/go-datastore/sync"
 	"github.com/libp2p/go-libp2p"
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
+	libp2pnetwork "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -34,7 +34,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-// host wraps libp2p host with host services and information
+// host wraps libp2p host with network host configuration and services
 type host struct {
 	ctx        context.Context
 	h          libp2phost.Host
@@ -119,12 +119,12 @@ func (h *host) close() error {
 }
 
 // registerConnHandler registers the connection handler (see handleConn)
-func (h *host) registerConnHandler(handler func(network.Conn)) {
+func (h *host) registerConnHandler(handler func(libp2pnetwork.Conn)) {
 	h.h.Network().SetConnHandler(handler)
 }
 
 // registerStreamHandler registers the stream handler (see handleStream)
-func (h *host) registerStreamHandler(handler func(network.Stream)) {
+func (h *host) registerStreamHandler(handler func(libp2pnetwork.Stream)) {
 	h.h.SetStreamHandler(h.protocolID, handler)
 }
 
@@ -218,7 +218,7 @@ func (h *host) broadcast(msg Message) {
 // getStream returns the outbound message stream for the given peer or returns
 // nil if no outbound message stream exists. For each peer, each host opens an
 // outbound message stream and writes to the same stream until closed or reset.
-func (h *host) getStream(p peer.ID) (stream network.Stream) {
+func (h *host) getStream(p peer.ID) (stream libp2pnetwork.Stream) {
 	conns := h.h.Network().ConnsToPeer(p)
 
 	// loop through connections (only one for now)
@@ -229,7 +229,7 @@ func (h *host) getStream(p peer.ID) (stream network.Stream) {
 		for _, stream := range streams {
 
 			// return stream with matching host protocol id and stream direction outbound
-			if stream.Protocol() == h.protocolID && stream.Stat().Direction == network.DirOutbound {
+			if stream.Protocol() == h.protocolID && stream.Stat().Direction == libp2pnetwork.DirOutbound {
 				return stream
 			}
 		}

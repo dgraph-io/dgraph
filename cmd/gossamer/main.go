@@ -34,9 +34,9 @@ var (
 		UnlockFlag,
 		PasswordFlag,
 	}
-	p2pFlags = []cli.Flag{
+	networkFlags = []cli.Flag{
 		BootnodesFlag,
-		P2pPortFlag,
+		PortFlag,
 		ProtocolIDFlag,
 		NoBootstrapFlag,
 		NoMdnsFlag,
@@ -117,7 +117,7 @@ func init() {
 		accountCommand,
 	}
 	app.Flags = append(app.Flags, nodeFlags...)
-	app.Flags = append(app.Flags, p2pFlags...)
+	app.Flags = append(app.Flags, networkFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, genesisFlags...)
 	app.Flags = append(app.Flags, cliFlags...)

@@ -55,23 +55,25 @@ func (r *MockRuntimeAPI) Version() string {
 	return testVersion
 }
 
-// MockP2pAPI Mock P2pAPI
-type MockP2pAPI struct{}
+// MockNetworkAPI Mock NetworkAPI
+type MockNetworkAPI struct{}
 
-func (n *MockP2pAPI) Health() common.Health {
+func (n *MockNetworkAPI) Health() common.Health {
 	return testHealth
 }
 
-func (n *MockP2pAPI) NetworkState() common.NetworkState {
+// NetworkState is the Mock for NetworkState
+func (n *MockNetworkAPI) NetworkState() common.NetworkState {
 	return testNetworkState
 }
 
-func (n *MockP2pAPI) Peers() []common.PeerInfo {
+// Peers is the Mock for Peers
+func (n *MockNetworkAPI) Peers() []common.PeerInfo {
 	return testPeers
 }
 
 func TestSystemModule(t *testing.T) {
-	s := NewAPIService(&MockP2pAPI{}, &MockRuntimeAPI{})
+	s := NewAPIService(&MockNetworkAPI{}, &MockRuntimeAPI{})
 
 	// Runtime Module
 
@@ -102,19 +104,19 @@ func TestSystemModule(t *testing.T) {
 	// Network Module
 
 	// System.Health
-	health := s.API.P2pModule.Health()
+	health := s.API.NetworkModule.Health()
 	if health != testHealth {
 		t.Fatalf("System.Health - expected %+v got: %+v\n", testHealth, health)
 	}
 
 	// System.NetworkState
-	networkState := s.API.P2pModule.NetworkState()
+	networkState := s.API.NetworkModule.NetworkState()
 	if networkState != testNetworkState {
 		t.Fatalf("System.NetworkState - expected %+v got: %+v\n", testNetworkState, networkState)
 	}
 
 	// System.Peers
-	peers := s.API.P2pModule.Peers()
+	peers := s.API.NetworkModule.Peers()
 	if len(peers) != len(testPeers) {
 		t.Fatalf("System.Peers - expected %+v got: %+v\n", testPeers, peers)
 	}
