@@ -974,7 +974,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		idField = getXIDField(defn)
 	}
 	passwordField := getPasswordField(defn)
-	if len(passwordField) == 0 {
+	if passwordField == nil {
 		return
 	}
 
@@ -989,7 +989,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 				Type: idField[0].Type,
 			},
 			{
-				Name: passwordField[0].Name,
+				Name: passwordField.Name,
 				Type: &ast.Type{
 					NamedType: "Password",
 					NonNull:   true,
@@ -1134,7 +1134,11 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 		fldList = append(fldList, createField(schema, fld))
 	}
 
-	return append(fldList, getPasswordField(defn)...)
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
@@ -1153,7 +1157,11 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 		fldList = append(fldList, createField(schema, fld))
 	}
 
-	return append(fldList, getPasswordField(defn)...)
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getIDField(defn *ast.Definition) ast.FieldList {
@@ -1170,14 +1178,14 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	return fldList
 }
 
-func getPasswordField(defn *ast.Definition) ast.FieldList {
-	fldList := make([]*ast.FieldDefinition, 0)
+func getPasswordField(defn *ast.Definition) *ast.FieldDefinition {
+	var fldList *ast.FieldDefinition
 	for _, directive := range defn.Directives {
 		fd := convertPasswordDirective(directive)
 		if fd == nil {
 			continue
 		}
-		fldList = append(fldList, fd)
+		fldList = fd
 	}
 	return fldList
 }

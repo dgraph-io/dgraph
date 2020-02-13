@@ -109,7 +109,7 @@ func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	if len(dirs) > 1 {
 		val := strings.Join(dirs, ",")
 		return gqlerror.ErrorPosf(typ.Position,
-			"Type %s; has more than multiple secret fields %s", typ.Name, val)
+			"Type %s; has more than one secret fields %s", typ.Name, val)
 	}
 
 	return nil
