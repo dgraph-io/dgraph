@@ -54,7 +54,7 @@ const (
 		generatedSchema: String!
 	}
 	  
-	"""Node state is the state of an individual node int he Dgraph cluster """
+	"""Node state is the state of an individual node in the Dgraph cluster """
 	type NodeState {
 		"""node type : either 'alpha' or 'zero'"""
 		instance: String
