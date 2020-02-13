@@ -2606,3 +2606,141 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 
 	cleanupMovieAndDirector(t, newMovie.ID, movieDirectorID)
 }
+
+func testNumUids(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+
+	auth := &author{
+		Name:    "New Author",
+		Country: newCountry,
+		Posts: []*post{
+			{
+				Title:    "A New Post for testing numUids",
+				Text:     "Text of new post",
+				Tags:     []string{},
+				Category: &category{Name: "A Category"},
+			},
+			{
+				Title: "Another New Post for testing numUids",
+				Text:  "Text of other new post",
+				Tags:  []string{},
+			},
+		},
+	}
+
+	addAuthorParams := &GraphQLParams{
+		Query: `mutation addAuthor($author: [AddAuthorInput!]!) {
+			addAuthor(input: $author) {
+				numUids
+				author {
+					id
+					posts {
+						postID
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"author": []*author{auth}},
+	}
+
+	var result struct {
+		AddAuthor struct {
+			Author  []*author
+			NumUids int
+		}
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addAuthorParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	t.Run("Test numUID in add", func(t *testing.T) {
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+		require.Equal(t, result.AddAuthor.NumUids, 4)
+	})
+
+	t.Run("Test numUID in update", func(t *testing.T) {
+		updatePostParams := &GraphQLParams{
+			Query: `mutation updatePosts($posts: UpdatePostInput!) {
+			updatePost(input: $posts) {
+				post {
+					postID
+				}
+				numUids
+			}
+		}`,
+			Variables: map[string]interface{}{"posts": map[string]interface{}{
+				"filter": map[string]interface{}{
+					"title": map[string]interface{}{
+						"anyofterms": "numUids",
+					},
+				},
+				"set": map[string]interface{}{
+					"numLikes": 999,
+				},
+			}},
+		}
+
+		gqlResponse = postExecutor(t, graphqlURL, updatePostParams)
+		requireNoGQLErrors(t, gqlResponse)
+
+		var updateResult struct {
+			UpdatePost struct {
+				Post    []*post
+				NumUids int
+			}
+		}
+
+		err := json.Unmarshal([]byte(gqlResponse.Data), &updateResult)
+		require.NoError(t, err)
+		require.Equal(t, updateResult.UpdatePost.NumUids, 2)
+	})
+
+	t.Run("Test numUID in delete", func(t *testing.T) {
+		deleteAuthorParams := &GraphQLParams{
+			Query: `mutation deleteItems($authorFilter: AuthorFilter!,
+			$postFilter: PostFilter!) {
+
+			deleteAuthor(filter: $authorFilter) {
+				numUids
+			}
+
+			deletePost(filter: $postFilter) {
+				numUids
+				msg
+			}
+		}`,
+			Variables: map[string]interface{}{
+				"postFilter": map[string]interface{}{
+					"title": map[string]interface{}{
+						"anyofterms": "numUids",
+					},
+				},
+				"authorFilter": map[string]interface{}{
+					"id": []string{result.AddAuthor.Author[0].ID},
+				},
+			},
+		}
+		gqlResponse = postExecutor(t, graphqlURL, deleteAuthorParams)
+		requireNoGQLErrors(t, gqlResponse)
+
+		var deleteResult struct {
+			DeleteAuthor struct {
+				Msg     string
+				NumUids int
+			}
+			DeletePost struct {
+				Msg     string
+				NumUids int
+			}
+		}
+
+		err := json.Unmarshal([]byte(gqlResponse.Data), &deleteResult)
+		require.NoError(t, err)
+		require.Equal(t, deleteResult.DeleteAuthor.NumUids, 1)
+		require.Equal(t, deleteResult.DeletePost.NumUids, 2)
+	})
+
+	cleanUp(t, []*country{newCountry}, result.AddAuthor.Author,
+		result.AddAuthor.Author[0].Posts)
+}

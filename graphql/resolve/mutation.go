@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -184,7 +185,12 @@ func (mr *mutationResolver) Resolve(
 		}
 
 		s := string(completed)
-		if s[len(s)-1] == '}' {
+
+		if strings.Contains(s, "numUids") {
+			s = strings.ReplaceAll(s, `"numUids": null`, fmt.Sprintf(`"numUids": %d`,
+				mr.mutationRewriter.NumUids()))
+			completed = []byte(s)
+		} else if s[len(s)-1] == '}' {
 			completed = []byte(fmt.Sprintf(`%s, "numUids": %d}`, s[:len(s)-1],
 				mr.mutationRewriter.NumUids()))
 		} else {
