@@ -47,11 +47,6 @@ const (
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
 	// GraphQL schema for /admin endpoint.
-	//
-	// Eventually we should generate this from just the types definition.
-	// But for now, that would add too much into the schema, so this is
-	// hand crafted to be one of our schemas so we can pass it into the
-	// pipeline.
 	graphqlAdminSchema = `
 	type GQLSchema @dgraph(type: "dgraph.graphql") {
 		id: ID!
@@ -59,18 +54,17 @@ const (
 		generatedSchema: String!
 	}
 
-	type Health {
-		message: String!
-		status: HealthStatus!
+	"""Node state is the state of an individual node int he Dgraph cluster """
+	type NodeState {
+		"""node type : either 'alpha' or 'zero'"""
+		instance: String
+		address: String
+		"""node health status : either 'healthy' or 'unhealthy'"""
+		status: String
+		group: Int
+		uptime: Int
+		lastEcho: Int
 	}
-
-	enum HealthStatus {
-		ErrNoConnection
-		NoGraphQLSchema
-		Healthy
-	}
-
-	scalar DateTime
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 
@@ -134,7 +128,7 @@ const (
 
 	type Query {
 		getGQLSchema: GQLSchema
-		health: Health
+		health: [NodeState]
 	}
 
 	type Mutation {
