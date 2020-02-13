@@ -62,6 +62,7 @@ const (
 		"""node health status : either 'healthy' or 'unhealthy'"""
 		status: String
 		group: Int
+		version: String
 		uptime: Int
 		lastEcho: Int
 	}
