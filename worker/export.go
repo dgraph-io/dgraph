@@ -520,6 +520,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
+			// Skip nodes that have no data. Otherwise, the exported data could have
+			// formatting and/or syntax errors.
+			if len(kv.Value) == 0 {
+				continue
+			}
+
 			var writer *fileWriter
 			switch kv.Version {
 			case 1: // data
