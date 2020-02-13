@@ -40,7 +40,7 @@ const (
 	idDirective     = "id"
 
 	deprecatedDirective = "deprecated"
-	NumUid              = "numUid"
+	NumUid              = "numUids"
 
 	Typename = "__typename"
 
