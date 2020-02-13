@@ -631,7 +631,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 }
 
 func retrieveCountForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	opts posting.ListOptions, out *pb.Result) (int, error) {
+	opts posting.ListOptions) (int, error) {
 	q := args.q
 
 	// If count is needed and there are no facetsFilter, populate count from pl.length().
@@ -765,7 +765,7 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "DoCount")
 				}
-				count, err := retrieveCountForUidPostings(args, pl, facetsTree, opts, out)
+				count, err := retrieveCountForUidPostings(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
 				}
