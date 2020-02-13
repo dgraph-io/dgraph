@@ -185,7 +185,6 @@ func (mr *mutationResolver) Resolve(
 		}
 
 		s := string(completed)
-
 		if strings.Contains(s, "numUids") {
 			s = strings.ReplaceAll(s, `"numUids": null`, fmt.Sprintf(`"numUids": %d`,
 				mr.mutationRewriter.NumUids()))
@@ -244,6 +243,10 @@ func deleteCompletion() CompletionFunc {
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
-		return []byte(`{ "msg": "Deleted" }`), err
+		if field.Name() == "msg" {
+			return []byte(`{ "msg": "Deleted" }`), err
+		}
+
+		return []byte(`{ "numUids": null }`), err
 	})
 }

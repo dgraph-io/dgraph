@@ -1527,23 +1527,27 @@ func deletePost(
 }
 
 func deleteWrongID(t *testing.T) {
-	t.Skip()
-	// Skipping the test for now because wrong type of node while deleting is not an error.
-	// After Dgraph returns the number of nodes modified from upsert, modify this test to check
-	// count of nodes modified is 0.
-	//
-	// FIXME: Test cases : with a wrongID, a malformed ID "blah", and maybe a filter that
-	// doesn't match anything.
 	newCountry := addCountry(t, postExecutor)
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
-	expectedData := `{ "deleteCountry": null }`
-	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: `input: couldn't complete deleteCountry because ` +
-			fmt.Sprintf(`input: Node with id %s is not of type Country`, newAuthor.ID)}}
+	expectedData := `{ "deleteCountry": {
+		"msg": "Deleted",
+		"numUids": 0
+	} }`
 
 	filter := map[string]interface{}{"id": []string{newAuthor.ID}}
-	deleteCountry(t, filter, expectedData, expectedErrors)
+	deleteCountryParams := &GraphQLParams{
+		Query: `mutation deleteCountry($filter: CountryFilter!) {
+			deleteCountry(filter: $filter) {
+				msg
+				numUids
+			}
+		}`,
+		Variables: map[string]interface{}{"filter": filter},
+	}
+
+	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
+	require.JSONEq(t, expectedData, string(gqlResponse.Data))
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
 }
@@ -2738,7 +2742,9 @@ func testNumUids(t *testing.T) {
 		err := json.Unmarshal([]byte(gqlResponse.Data), &deleteResult)
 		require.NoError(t, err)
 		require.Equal(t, deleteResult.DeleteAuthor.NumUids, 1)
+		require.Equal(t, deleteResult.DeleteAuthor.Msg, "")
 		require.Equal(t, deleteResult.DeletePost.NumUids, 2)
+		require.Equal(t, deleteResult.DeletePost.Msg, "Deleted")
 	})
 
 	cleanUp(t, []*country{newCountry}, result.AddAuthor.Author,
