@@ -453,7 +453,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
-	mainServer, adminServer := admin.NewServers(introspection, closer)
+	mainServer, adminServer, updateGQLSchemaServer := admin.NewServers(introspection, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 
 	whitelist := func(h http.Handler) http.Handler {
@@ -468,6 +468,7 @@ func setupServer(closer *y.Closer) {
 		})
 	}
 	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+	http.Handle("/admin/updateGQLSchema", updateGQLSchemaServer.HTTPHandler())
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)

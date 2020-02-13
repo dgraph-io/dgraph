@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"mime"
 	"net/http"
 	"strings"
@@ -44,6 +45,9 @@ type IServeGraphQL interface {
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
+
+	// Resolver returns a *resolve.RequestResolver that is being used to resolve requests
+	Resolver() *resolve.RequestResolver
 }
 
 type graphqlHandler struct {
@@ -64,6 +68,10 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 	gh.resolver = resolver
+}
+
+func (gh *graphqlHandler) Resolver() *resolve.RequestResolver {
+	return gh.resolver
 }
 
 // write chooses between the http response writer and gzip writer
@@ -184,6 +192,135 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	}
 
 	return gqlReq, nil
+}
+
+type UpdateGQLSchemaServer struct {
+	adminServer IServeGraphQL
+	handler     http.Handler
+}
+
+func NewUpdateGQLSchemaServer(adminServer IServeGraphQL) *UpdateGQLSchemaServer {
+	uh := &UpdateGQLSchemaServer{adminServer: adminServer}
+	uh.handler = recoveryHandler(commonHeaders(uh))
+	return uh
+}
+
+func (uh *UpdateGQLSchemaServer) HTTPHandler() http.Handler {
+	return uh.handler
+}
+
+func (uh *UpdateGQLSchemaServer) isValid() bool {
+	return !(uh == nil || uh.adminServer == nil)
+}
+
+func (uh *UpdateGQLSchemaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "UpdateGQLSchemaServer")
+	defer span.End()
+
+	if !uh.isValid() {
+		panic("UpdateGQLSchemaServer not initialised")
+	}
+
+	gqlReq, err := getUpdateGQLSchemaRequest(r)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
+		md := metadata.New(nil)
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+
+	response := uh.adminServer.Resolver().Resolve(ctx, gqlReq)
+	if len(response.Errors) > 0 {
+		x.SetStatus(w, x.Error, response.Errors.Error())
+		return
+	}
+
+	res := map[string]interface{}{}
+	data := map[string]interface{}{}
+	data["code"] = x.Success
+	data["message"] = "Done"
+	res["data"] = data
+
+	js, err := json.Marshal(res)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	_, _ = writeResponse(w, r, js)
+}
+
+// Write response body, transparently compressing if necessary.
+func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out.Write(b)
+}
+
+func getUpdateGQLSchemaRequest(r *http.Request) (*schema.Request, error) {
+	gqlReq := &schema.Request{}
+
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			return nil, errors.Wrap(err, "Unable to parse gzip")
+		}
+		r.Body = gzreadCloser{zr, r.Body}
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to parse media type")
+		}
+
+		switch mediaType {
+		case "text/plain":
+			b, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				return nil, errors.Wrap(err, "Not a valid UpdateGQLSchema request body")
+			}
+			gqlReq.Query = "" +
+				"mutation {\n" +
+				"	updateGQLSchema(input: {\n" +
+				"		set: {\n" +
+				"			schema: \"" + unescape(string(b)) + "\"\n" +
+				"		}\n" +
+				"	}) {\n" +
+				"		gqlSchema {\n" +
+				"			id\n" +
+				"		}\n" +
+				"	}\n" +
+				"}"
+		default:
+			return nil, errors.New(
+				"Unrecognised Content-Type.  Please use text/plain for UpdateGQLSchema requests")
+		}
+	default:
+		return nil,
+			errors.New("Unrecognised request method.  Please use POST for UpdateGQLSchema requests")
+	}
+
+	return gqlReq, nil
+}
+
+func unescape(str string) string {
+	str = strings.ReplaceAll(str, "\r", "\\r")
+	str = strings.ReplaceAll(str, "\n", "\\n")
+	str = strings.ReplaceAll(str, "\t", "\\t")
+	return str
 }
 
 func commonHeaders(next http.Handler) http.Handler {
