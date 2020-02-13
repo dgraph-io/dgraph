@@ -19,7 +19,6 @@ package common
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -272,8 +271,7 @@ func health(t *testing.T) {
 	require.NoError(t, err)
 
 	var health []pb.HealthInfo
-	url := fmt.Sprintf("%s/health?all", adminDgraphURL)
-	resp, err := http.Get(url)
+	resp, err := http.Get(adminDgraphHealthURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	healthRes, err := ioutil.ReadAll(resp.Body)

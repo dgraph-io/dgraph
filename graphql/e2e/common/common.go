@@ -42,7 +42,7 @@ const (
 	graphqlAdminURL = "http://localhost:8180/admin"
 	alphagRPC       = "localhost:9180"
 
-	adminDgraphURL           = "http://localhost:8280"
+	adminDgraphHealthURL     = "http://localhost:8280/health?all"
 	graphqlAdminTestURL      = "http://localhost:8280/graphql"
 	graphqlAdminTestAdminURL = "http://localhost:8280/admin"
 	alphaAdminTestgRPC       = "localhost:9280"
