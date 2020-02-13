@@ -999,6 +999,58 @@ func TestLanguageOrderIndexed4(t *testing.T) {
 		js)
 }
 
+func TestLanguageOrderIndexed5(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderdesc: name_lang_index@de)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}, {
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}]
+			}
+		}`,
+		js)
+}
+
+func TestLanguageOrderIndexed6(t *testing.T) {
+	query := `
+	{
+		q(func:eq(lang_type, "Test"), orderdesc: name_lang_index@sv)  {
+			name_lang_index@de
+			name_lang_index@sv
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{
+			"data": {
+				"q": [{
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}, {
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}]
+			}
+		}`,
+		js)
+}
+
 func TestLanguageOrderIndexedPaginationOffset(t *testing.T) {
 	query := `
 	{
