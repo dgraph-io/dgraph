@@ -170,7 +170,7 @@ type matchExport struct {
 
 func matchExportCount(opts matchExport) error {
 	// Now try and export data from second server.
-	adminUrl := "http://" + opts.port + "/admin"
+	adminUrl := fmt.Sprintf("http://localhost:%d/admin", opts.port)
 	params := testutil.GraphQLParams{
 		Query: testutil.ExportRequest,
 	}
