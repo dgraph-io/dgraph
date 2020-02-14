@@ -178,7 +178,7 @@ message MembershipState {
 message ConnectionState {
 	Member member = 1;
 	MembershipState state = 2;
-	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+	map<string,uint64> max_pending = 4; // Used to determine the timstamp for reading after bulk load
 }
 
 message HealthInfo {
@@ -233,6 +233,7 @@ message Mutations {
 	string drop_value = 8;
 
 	Metadata metadata = 9;
+	string namespace  = 10;
 }
 
 message Metadata {
@@ -459,13 +460,15 @@ message TxnStatus {
 
 message OracleDelta {
 	repeated TxnStatus txns             = 1;
-	uint64 max_assigned                 = 2;
+	uint64				 max_assigned 	= 2;
 	map<uint32, uint64> group_checksums = 3;
+	string namespace	    			= 4;
 	// implement tmax.
 }
 
 message TxnTimestamps {
 	repeated uint64 ts = 1;
+	string namespace   = 2;
 }
 
 message PeerResponse {
@@ -524,6 +527,7 @@ message Num {
 	uint64 val = 1;
 	bool read_only = 2;
 	bool forwarded = 3; // True if this request was forwarded by a peer.
+	string namespace = 4;
 }
 
 message AssignedIds {

@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -40,28 +41,33 @@ type syncMark struct {
 // Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
 	x.SafeMutex
-	commits map[uint64]uint64 // startTs -> commitTs
+	commits map[string]map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
 	keyCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
-	maxAssigned uint64            // max transaction assigned by us.
+	maxAssigned map[string]uint64 // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
-	startTxnTs  uint64
-	subscribers map[int]chan pb.OracleDelta
-	updates     chan *pb.OracleDelta
-	doneUntil   y.WaterMark
-	syncMarks   []syncMark
+	startTxnTs     uint64
+	subscribers    map[int]chan pb.OracleDelta
+	updates        chan *pb.OracleDelta
+	doneUntilMutex sync.Mutex
+	doneUntil      map[string]*y.WaterMark
+	syncMarks      []syncMark
 }
 
 // Init initializes the oracle.
 func (o *Oracle) Init() {
-	o.commits = make(map[uint64]uint64)
+	o.commits = make(map[string]map[uint64]uint64)
 	o.keyCommit = make(map[string]uint64)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
-	o.doneUntil.Init(nil, true)
+	o.doneUntil = make(map[string]*y.WaterMark)
+	o.maxAssigned = make(map[string]uint64)
+	wm := &y.WaterMark{}
+	wm.Init(nil, true)
+	o.doneUntil[x.DefaultNamespace] = wm
 	go o.sendDeltasToSubscribers()
 }
 
@@ -91,9 +97,11 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	defer o.Unlock()
 
 	// Dropping would be cheaper if abort/commits map is sharded
-	for ts := range o.commits {
-		if ts < minTs {
-			delete(o.commits, ts)
+	for _, timeStamps := range o.commits {
+		for _, commitTs := range timeStamps {
+			if commitTs < minTs {
+				delete(timeStamps, commitTs)
+			}
 		}
 	}
 	// There is no transaction running with startTs less than minTs
@@ -122,15 +130,21 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	return nil
 }
 
-func (o *Oracle) currentState() *pb.OracleDelta {
+func (o *Oracle) currentState() []*pb.OracleDelta {
 	o.AssertRLock()
-	resp := &pb.OracleDelta{}
-	for start, commit := range o.commits {
-		resp.Txns = append(resp.Txns,
-			&pb.TxnStatus{StartTs: start, CommitTs: commit})
+	out := []*pb.OracleDelta{}
+	for namespace, commits := range o.commits {
+		delta := &pb.OracleDelta{
+			Namespace:   namespace,
+			MaxAssigned: o.maxAssigned[namespace],
+		}
+		for startTs, commitTs := range commits {
+			delta.Txns = append(delta.Txns,
+				&pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
+		}
+		out = append(out, delta)
 	}
-	resp.MaxAssigned = o.maxAssigned
-	return resp
+	return out
 }
 
 func (o *Oracle) newSubscriber() (<-chan pb.OracleDelta, int) {
@@ -148,7 +162,10 @@ func (o *Oracle) newSubscriber() (<-chan pb.OracleDelta, int) {
 	// modify it by setting the group checksums. Passing a pointer previously
 	// resulted in a race condition.
 	ch := make(chan pb.OracleDelta, 1000)
-	ch <- *o.currentState() // Queue up the full state as the first entry.
+	states := o.currentState()
+	for _, state := range states {
+		ch <- *state // Queue up the full state as the first entry.
+	}
 	o.subscribers[id] = ch
 	return ch, id
 }
@@ -159,6 +176,22 @@ func (o *Oracle) removeSubscriber(id int) {
 	delete(o.subscribers, id)
 }
 
+// streamDeltaToSubscriber will send orcle delta to all the listening subcriber.
+func (o *Oracle) streamDeltasToSubscriber(deltas []*pb.OracleDelta) {
+	o.Lock()
+	for _, delta := range deltas {
+		for id, ch := range o.subscribers {
+			select {
+			case ch <- *delta:
+			default:
+				close(ch)
+				delete(o.subscribers, id)
+			}
+		}
+	}
+	o.Unlock()
+}
+
 // sendDeltasToSubscribers reads updates from the o.updates
 // constructs a delta object containing transactions from one or more updates
 // and sends the delta object to each subscriber's channel
@@ -167,8 +200,27 @@ func (o *Oracle) sendDeltasToSubscribers() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	deltas := make(map[string]*pb.OracleDelta)
+
+	// updateDelta will batch the incoming delta for the given namespace.
+	updateDelta := func(update *pb.OracleDelta) {
+		y.AssertTrue(update.Namespace != "")
+		delta, ok := deltas[update.GetNamespace()]
+		if !ok {
+			delta = update
+		}
+		delta.MaxAssigned = x.Max(delta.MaxAssigned, update.MaxAssigned)
+		delta.Txns = append(delta.Txns, update.Txns...)
+		deltas[update.GetNamespace()] = delta
+	}
+
 	// waitFor calculates the maximum value of delta.MaxAssigned and all the CommitTs of delta.Txns
-	waitFor := func() uint64 {
+	//
+	waitForNamespace := func(namespace string) uint64 {
+		delta, ok := deltas[namespace]
+		if !ok {
+			return 0
+		}
 		w := delta.MaxAssigned
 		for _, txn := range delta.Txns {
 			w = x.Max(w, txn.CommitTs)
@@ -181,20 +233,30 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		var update *pb.OracleDelta
 		select {
 		case update = <-o.updates:
+			updateDelta(delta)
 		case <-ticker.C:
-			wait := waitFor()
-			if wait == 0 || o.doneUntil.DoneUntil() < wait {
+			// progressed will tell any of the namespace is progressed for the periodic tick.
+			progressed := false
+			o.doneUntilMutex.Lock()
+			for namespace := range deltas {
+				if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
+					continue
+				}
+				progressed = true
+				break
+			}
+			o.doneUntilMutex.Unlock()
+			if !progressed {
+				// None of the namespaces are progressed. so, block for the next update or
+				// the next peridic tick.
 				goto get_update
 			}
-			// Send empty update.
-			update = &pb.OracleDelta{}
 		}
 	slurp_loop:
 		for {
-			delta.MaxAssigned = x.Max(delta.MaxAssigned, update.MaxAssigned)
-			delta.Txns = append(delta.Txns, update.Txns...)
 			select {
 			case update = <-o.updates:
+				updateDelta(update)
 			default:
 				break slurp_loop
 			}
@@ -205,39 +267,45 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		// Let's ensure that we have all the commits up until the max here.
 		// Otherwise, we'll be sending commit timestamps out of order, which
 		// would cause Alphas to drop some of them, during writes to Badger.
-		if o.doneUntil.DoneUntil() < waitFor() {
-			continue // The for loop doing blocking reads from o.updates.
-			// We need at least one entry from the updates channel to pick up a missing update.
-			// Don't goto slurp_loop, because it would break from select immediately.
-		}
-
-		if glog.V(3) {
-			glog.Infof("DoneUntil: %d. Sending delta: %+v\n", o.doneUntil.DoneUntil(), delta)
-		}
-		o.Lock()
-		for id, ch := range o.subscribers {
-			select {
-			case ch <- *delta:
-			default:
-				close(ch)
-				delete(o.subscribers, id)
+		batch := []*pb.OracleDelta{}
+		o.doneUntilMutex.Lock()
+		for namespace, delta := range deltas {
+			if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
+				continue
 			}
+			// every transaction are done for the current timestamp so send out the
+			// delta for this namespace.
+			batch = append(batch, delta)
+			if glog.V(3) {
+				glog.Infof(
+					"DoneUntil: %d. Sending delta: %+v\n", o.doneUntil[namespace].DoneUntil(), delta)
+			}
+			delete(deltas, namespace)
 		}
-		o.Unlock()
-		delta = &pb.OracleDelta{}
+		o.doneUntilMutex.Unlock()
+		if len(batch) != 0 {
+			// stream all the batched deltas to the subscribers
+			o.streamDeltasToSubscriber(batch)
+		}
+		// The for loop doing blocking reads from o.updates.
+		// We need at least one entry from the updates channel to pick up a missing update.
+		// Don't goto slurp_loop, because it would break from select immediately.
 	}
 }
 
 func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
-	if _, ok := o.commits[src.StartTs]; ok {
+	if _, ok := o.commits[src.GetNamespace()]; !ok {
+		o.commits[src.GetNamespace()] = make(map[uint64]uint64)
+	}
+	if _, ok := o.commits[src.GetNamespace()][src.StartTs]; ok {
 		return false
 	}
 	if src.Aborted {
-		o.commits[src.StartTs] = 0
+		o.commits[src.GetNamespace()][src.StartTs] = 0
 	} else {
-		o.commits[src.StartTs] = src.CommitTs
+		o.commits[src.GetNamespace()][src.StartTs] = src.CommitTs
 	}
 	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
@@ -249,35 +317,38 @@ func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 		delta := new(pb.OracleDelta)
 		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  src.StartTs,
-			CommitTs: o.commitTs(src.StartTs),
+			CommitTs: o.commitTs(src.Namespace, src.StartTs),
 		})
 		o.updates <- delta
 	}
 }
 
-func (o *Oracle) commitTs(startTs uint64) uint64 {
+func (o *Oracle) commitTs(namespace string, startTs uint64) uint64 {
 	o.RLock()
 	defer o.RUnlock()
-	return o.commits[startTs]
+	return o.commits[namespace][startTs]
 }
 
-func (o *Oracle) storePending(ids *pb.AssignedIds) {
+func (o *Oracle) storePending(namespace string, ids *pb.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	max := x.Max(ids.EndId, ids.ReadOnly)
-	if err := o.doneUntil.WaitForMark(context.Background(), max); err != nil {
+
+	o.doneUntilMutex.Lock()
+	wm := o.doneUntil[namespace]
+	o.doneUntilMutex.Unlock()
+	if err := wm.WaitForMark(context.Background(), max); err != nil {
 		glog.Errorf("Error while waiting for mark: %+v", err)
 	}
 
 	// Now send it out to updates.
-	o.updates <- &pb.OracleDelta{MaxAssigned: max}
-
+	o.updates <- &pb.OracleDelta{MaxAssigned: max, Namespace: namespace}
 	o.Lock()
 	defer o.Unlock()
-	o.maxAssigned = x.Max(o.maxAssigned, max)
+	o.maxAssigned[namespace] = x.Max(o.maxAssigned[namespace], max)
 }
 
 // MaxPending returns the maximum assigned timestamp.
-func (o *Oracle) MaxPending() uint64 {
+func (o *Oracle) MaxPending() map[string]uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	return o.maxAssigned
@@ -316,7 +387,7 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	// with both proposing their respective states, only one can succeed after
 	// the proposal is done. So, check again to see the fate of the transaction
 	// here.
-	src.CommitTs = s.orc.commitTs(src.StartTs)
+	src.CommitTs = s.orc.commitTs(src.Namespace, src.StartTs)
 	if src.CommitTs == 0 {
 		src.Aborted = true
 	}
@@ -378,14 +449,18 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	num := pb.Num{Val: 1}
+	num := pb.Num{Val: 1, Namespace: src.GetNamespace()}
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
 		return err
 	}
 	src.CommitTs = assigned.StartId
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	defer s.orc.doneUntil.Done(src.CommitTs)
+	defer func() {
+		s.orc.doneUntilMutex.Lock()
+		s.orc.doneUntil[src.Namespace].Done(src.CommitTs)
+		s.orc.doneUntilMutex.Unlock()
+	}()
 	span.Annotatef([]otrace.Attribute{otrace.Int64Attribute("commitTs", int64(src.CommitTs))},
 		"Node Id: %d. Proposing TxnContext: %+v", s.Node.Id, src)
 
@@ -484,16 +559,18 @@ func (s *Server) SyncedUntil() uint64 {
 func (s *Server) TryAbort(ctx context.Context,
 	txns *pb.TxnTimestamps) (*pb.OracleDelta, error) {
 	delta := &pb.OracleDelta{}
+	y.AssertTrue(txns.Namespace != "")
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
-		tctx := &api.TxnContext{StartTs: startTs, Aborted: true}
+		tctx := &api.TxnContext{StartTs: startTs, Aborted: true, Namespace: txns.Namespace}
 		if err := s.proposeTxn(ctx, tctx); err != nil {
 			return delta, err
 		}
 		// Txn should be aborted if not already committed.
+		delta.Namespace = txns.Namespace
 		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  startTs,
-			CommitTs: s.orc.commitTs(startTs)})
+			CommitTs: s.orc.commitTs(txns.Namespace, startTs)})
 	}
 	return delta, nil
 }
@@ -513,8 +590,10 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 	switch err {
 	case nil:
-		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
-		go s.orc.storePending(reply)
+		s.orc.doneUntilMutex.Lock()
+		s.orc.doneUntil[num.Namespace].Done(x.Max(reply.EndId, reply.ReadOnly))
+		s.orc.doneUntilMutex.Unlock()
+		go s.orc.storePending(num.Namespace, reply)
 	case errServedFromMemory:
 		// Avoid calling doneUntil.Done, and storePending.
 		err = nil

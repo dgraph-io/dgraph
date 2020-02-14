@@ -145,7 +145,9 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 			s.nextTxnTs++
 			out.ReadOnly = s.readOnlyTs
 		}
-		s.orc.doneUntil.Begin(x.Max(out.EndId, out.ReadOnly))
+		s.orc.doneUntilMutex.Lock()
+		s.orc.doneUntil[num.Namespace].Begin(x.Max(out.EndId, out.ReadOnly))
+		s.orc.doneUntilMutex.Unlock()
 	} else {
 		out.StartId = s.nextLeaseId
 		out.EndId = out.StartId + num.Val - 1
