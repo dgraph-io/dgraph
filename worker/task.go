@@ -1883,7 +1883,6 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		return true, nil
 	}
 	if ftree.function != nil {
-		fname := strings.ToLower(ftree.function.name)
 		var fc *api.Facet
 		for _, fci := range postingFacets {
 			if fci.Key == ftree.function.key {
@@ -1894,8 +1893,8 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		if fc == nil { // facet is not there
 			return false, nil
 		}
-		fnType, fname := parseFuncTypeHelper(fname)
-		switch fnType {
+
+		switch ftree.function.fnType {
 		case compareAttrFn: // lt, gt, le, ge, eq
 			fVal, err := facets.ValFor(fc)
 			if err != nil {
@@ -1908,7 +1907,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 				return false, nil
 			}
 
-			return types.CompareVals(fname, fVal, v), nil
+			return types.CompareVals(ftree.function.name, fVal, v), nil
 
 		case standardFn: // allofterms, anyofterms
 			facetType, err := facets.TypeIDFor(fc)
@@ -1918,9 +1917,9 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 			if facetType != types.StringID {
 				return false, nil
 			}
-			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
+			return filterOnStandardFn(ftree.function.name, fc.Tokens, ftree.function.tokens)
 		}
-		return false, errors.Errorf("Fn %s not supported in facets filtering.", fname)
+		return false, errors.Errorf("Fn %s not supported in facets filtering.", ftree.function.name)
 	}
 
 	res := make([]bool, 0, 2)
@@ -1933,7 +1932,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 	}
 
 	// we have already checked for number of children in preprocessFilter
-	switch strings.ToLower(ftree.op) {
+	switch ftree.op {
 	case "not":
 		return !res[0], nil
 	case "and":
@@ -1991,6 +1990,7 @@ type facetsFunc struct {
 	args   []string
 	tokens []string
 	val    types.Val
+	fnType FuncType
 }
 type facetsTree struct {
 	op       string
@@ -2003,18 +2003,20 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		return nil, nil
 	}
 	ftree := &facetsTree{}
-	ftree.op = tree.Op
+	ftree.op = strings.ToLower(tree.Op)
 	if tree.Func != nil {
 		ftree.function = &facetsFunc{}
-		ftree.function.name = tree.Func.Name
 		ftree.function.key = tree.Func.Key
 		ftree.function.args = tree.Func.Args
 
-		fnType, fname := parseFuncTypeHelper(ftree.function.name)
+		fnType, fname := parseFuncTypeHelper(tree.Func.Name)
 		if len(tree.Func.Args) != 1 {
 			return nil, errors.Errorf("One argument expected in %s, but got %d.",
 				fname, len(tree.Func.Args))
 		}
+
+		ftree.function.name = fname
+		ftree.function.fnType = fnType
 
 		switch fnType {
 		case compareAttrFn:
@@ -2041,7 +2043,7 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	}
 
 	numChild := len(tree.Children)
-	switch strings.ToLower(tree.Op) {
+	switch ftree.op {
 	case "not":
 		if numChild != 1 {
 			return nil, errors.Errorf("Expected 1 child for not but got %d.", numChild)
