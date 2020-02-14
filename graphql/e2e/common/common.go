@@ -42,9 +42,10 @@ const (
 	graphqlAdminURL = "http://localhost:8180/admin"
 	alphagRPC       = "localhost:9180"
 
-	graphqlAdminTestURL      = "http://localhost:8280/graphql"
-	graphqlAdminTestAdminURL = "http://localhost:8280/admin"
-	alphaAdminTestgRPC       = "localhost:9280"
+	graphqlAdminTestURL            = "http://localhost:8280/graphql"
+	graphqlAdminTestAdminURL       = "http://localhost:8280/admin"
+	graphqlAdminTestAdminSchemaURL = "http://localhost:8280/admin/schema"
+	alphaAdminTestgRPC             = "localhost:9280"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -685,6 +686,36 @@ func addSchema(url string, schema string) error {
 	}
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
+		return errors.New("GraphQL schema mutation failed")
+	}
+
+	return nil
+}
+
+func addSchemaThroughAdminSchemaEndpt(url string, schema string) error {
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(schema))
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
+
+	resp, err := runGQLRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
+
+	var addResult struct {
+		Data struct {
+			Code    string
+			Message string
+		}
+	}
+
+	err = json.Unmarshal(resp, &addResult)
+	if err != nil {
+		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if addResult.Data.Code != "Success" && addResult.Data.Message != "Done" {
 		return errors.New("GraphQL schema mutation failed")
 	}
 
