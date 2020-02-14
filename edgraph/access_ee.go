@@ -846,7 +846,7 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 			Func: &gql.Function{
 				Attr: "dgraph.xid",
 				Name: "eq",
-				Args: []gql.Arg{gql.Arg{Value: userId}},
+				Args: []gql.Arg{{Value: userId}},
 			},
 		}
 	}

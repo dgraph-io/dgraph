@@ -1143,9 +1143,8 @@ func TestQueryUserInfo(t *testing.T) {
 		Passwd:   userpassword,
 	})
 	require.NoError(t, err, "login failed")
-	// time.Sleep(6 * time.Second)
 
-	query := `
+	gqlQuery := `
 	query {
 		queryUser {
 			name
@@ -1161,7 +1160,7 @@ func TestQueryUserInfo(t *testing.T) {
 	`
 
 	params := testutil.GraphQLParams{
-		Query: query,
+		Query: gqlQuery,
 	}
 	b := makeRequest(t, accessJwt, params)
 
@@ -1190,4 +1189,30 @@ func TestQueryUserInfo(t *testing.T) {
 		  ]
 		}
 	}`, string(b))
+
+	query := `
+	{
+		me(func: type(User)) {
+			dgraph.xid
+			dgraph.user.group {
+				dgraph.xid
+				dgraph.acl.rule {
+					dgraph.rule.predicate
+					dgraph.rule.permission
+				}
+			}
+		}
+	}
+	`
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying ACL")
+
+	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
 }
