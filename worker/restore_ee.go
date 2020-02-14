@@ -21,11 +21,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
 func ProcessRestoreRequest(ctx context.Context, req *pb.Restore) error {
+	if req == nil {
+		return errors.Errorf("Restore request cannot be nil")
+	}
+
+	UpdateMembershipState(ctx)
 	memState := GetMembershipState()
-	current_groups := make([]uint32, 0)
-	for gid, _ := range memState.GetGroups() {
-		current_groups = append(current_groups, gid)
+
+	currentGroups := make([]uint32, 0)
+	for gid := range memState.GetGroups() {
+		currentGroups = append(currentGroups, gid)
 	}
 
 	creds := backup.Credentials{
@@ -34,11 +41,16 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.Restore) error {
 		SessionToken: req.SessionToken,
 		Anonymous:    req.Anonymous,
 	}
-	if err := backup.Verify(req.Location, req.BackupId, &creds, current_groups); err != nil {
+	if err := backup.Verify(req.Location, req.BackupId, &creds, currentGroups); err != nil {
 		return errors.Wrapf(err, "failed to verify backup")
 	}
 
 	backup.FillRestoreCredentials(req.Location, req)
+	req.RestoreTs = State.GetTimestamp(false)
+
+	for _, gid := range currentGroups {
+
+	}
 
 	return nil
 }
