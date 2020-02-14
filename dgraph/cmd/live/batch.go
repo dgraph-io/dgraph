@@ -306,7 +306,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		if err != nil {
 			errs = append(errs, err.Error())
 		}
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(token, nq.Lang))
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token, nq.Lang))
 		if err != nil {
 			errs = append(errs, err.Error())
 		}
