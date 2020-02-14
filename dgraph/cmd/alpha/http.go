@@ -567,19 +567,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := map[string]interface{}{}
-	data := map[string]interface{}{}
-	data["code"] = x.Success
-	data["message"] = "Done"
-	res["data"] = data
-
-	js, err := json.Marshal(res)
-	if err != nil {
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-
-	_, _ = x.WriteResponse(w, r, js)
+	writeSuccessResponse(w, r)
 }
 
 func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
@@ -619,6 +607,10 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 		return
 	}
 
+	writeSuccessResponse(w, r)
+}
+
+func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {
 	res := map[string]interface{}{}
 	data := map[string]interface{}{}
 	data["code"] = x.Success
