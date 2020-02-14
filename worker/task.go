@@ -543,9 +543,12 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	}
 
 	// Retrieve the posting that matches the language preferences.
-	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
-	if err != nil && err != posting.ErrNoValue {
-		return nil, nil, err
+	var langMatch *pb.Posting
+	if !(listType && len(q.Langs) == 0) {
+		langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
+		if err != nil && err != posting.ErrNoValue {
+			return nil, nil, err
+		}
 	}
 	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
 		if listType && len(q.Langs) == 0 {
