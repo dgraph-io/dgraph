@@ -384,16 +384,16 @@ func isEmptyIneqFnWithVar(sg *SubGraph) bool {
 // is already set in api.Value
 func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
-	v, _ := getValue(tv)
-	if !v.Tid.IsScalar() {
-		return v, errors.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+	tid := types.TypeID(tv.ValType)
+	if !tid.IsScalar() {
+		return types.Val{}, errors.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
 
 	// creates appropriate type from binary format
-	sv, err := types.Convert(v, v.Tid)
+	sv, err := types.Convert(types.Val{Tid: types.BinaryID, Value: tv.Val}, tid)
 	if err != nil {
 		// This can happen when a mutation ingests corrupt data into the database.
-		return v, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
+		return types.Val{}, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
 	}
 	return sv, nil
 }
