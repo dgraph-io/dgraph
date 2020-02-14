@@ -41,26 +41,28 @@ var _ services.Service = &Service{}
 // BABE session, and network service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
-	blockState   BlockState
-	storageState StorageState
-	rt           *runtime.Runtime
-	bs           *babe.Session
-	keys         []crypto.Keypair
-	blkRec       <-chan types.Block     // receive blocks from BABE session
-	msgRec       <-chan network.Message // receive messages from network service
-	epochDone    <-chan struct{}        // receive from this channel when BABE epoch changes
-	msgSend      chan<- network.Message // send messages to network service
+	blockState    BlockState
+	storageState  StorageState
+	rt            *runtime.Runtime
+	bs            *babe.Session
+	keys          []crypto.Keypair
+	blkRec        <-chan types.Block     // receive blocks from BABE session
+	msgRec        <-chan network.Message // receive messages from network service
+	epochDone     <-chan struct{}        // receive from this channel when BABE epoch changes
+	msgSend       chan<- network.Message // send messages to network service
+	babeAuthority bool
 }
 
 // Config holds the config obj
 type Config struct {
-	BlockState   BlockState
-	StorageState StorageState
-	Keystore     *keystore.Keystore
-	Runtime      *runtime.Runtime
-	MsgRec       <-chan network.Message
-	MsgSend      chan<- network.Message
-	NewBlocks    chan types.Block // only used for testing purposes
+	BlockState    BlockState
+	StorageState  StorageState
+	Keystore      *keystore.Keystore
+	Runtime       *runtime.Runtime
+	MsgRec        <-chan network.Message
+	MsgSend       chan<- network.Message
+	NewBlocks     chan types.Block // only used for testing purposes
+	BabeAuthority bool
 }
 
 // NewService returns a new core service that connects the runtime, BABE
@@ -86,48 +88,63 @@ func NewService(cfg *Config) (*Service, error) {
 		cfg.NewBlocks = make(chan types.Block)
 	}
 
-	epochDone := make(chan struct{})
+	var srv *Service
+	if cfg.BabeAuthority {
+		epochDone := make(chan struct{})
 
-	srv := &Service{
-		rt:           cfg.Runtime,
-		keys:         keys,
-		blkRec:       cfg.NewBlocks, // becomes block receive channel in core service
-		msgRec:       cfg.MsgRec,
-		msgSend:      cfg.MsgSend,
-		blockState:   cfg.BlockState,
-		storageState: cfg.StorageState,
-		epochDone:    epochDone,
+		srv = &Service{
+			rt:            cfg.Runtime,
+			keys:          keys,
+			blkRec:        cfg.NewBlocks, // becomes block receive channel in core service
+			msgRec:        cfg.MsgRec,
+			msgSend:       cfg.MsgSend,
+			blockState:    cfg.BlockState,
+			storageState:  cfg.StorageState,
+			epochDone:     epochDone,
+			babeAuthority: true,
+		}
+
+		authData, err := srv.retrieveAuthorityData()
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: our authority index should be in authData, if it isn't, we aren't authorities
+		// need to add our authority data to storage
+		index := uint64(len(authData))
+
+		// BABE session configuration
+		bsConfig := &babe.SessionConfig{
+			Keypair:        keys[0].(*sr25519.Keypair),
+			Runtime:        cfg.Runtime,
+			NewBlocks:      cfg.NewBlocks, // becomes block send channel in BABE session
+			BlockState:     cfg.BlockState,
+			StorageState:   cfg.StorageState,
+			AuthorityIndex: index,
+			AuthData:       append(authData, babe.NewAuthorityData(keys[0].Public().(*sr25519.PublicKey), index)),
+			EpochThreshold: big.NewInt(0),
+			Done:           epochDone,
+		}
+
+		// create a new BABE session
+		bs, err := babe.NewSession(bsConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		srv.bs = bs
+	} else {
+		srv = &Service{
+			rt:            cfg.Runtime,
+			keys:          keys,
+			blkRec:        cfg.NewBlocks, // becomes block receive channel in core service
+			msgRec:        cfg.MsgRec,
+			msgSend:       cfg.MsgSend,
+			blockState:    cfg.BlockState,
+			storageState:  cfg.StorageState,
+			babeAuthority: false,
+		}
 	}
-
-	authData, err := srv.retrieveAuthorityData()
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: our authority index should be in authData, if it isn't, we aren't authorities
-	// need to add our authority data to storage
-	index := uint64(len(authData))
-
-	// BABE session configuration
-	bsConfig := &babe.SessionConfig{
-		Keypair:        keys[0].(*sr25519.Keypair),
-		Runtime:        cfg.Runtime,
-		NewBlocks:      cfg.NewBlocks, // becomes block send channel in BABE session
-		BlockState:     cfg.BlockState,
-		StorageState:   cfg.StorageState,
-		AuthorityIndex: index,
-		AuthData:       append(authData, babe.NewAuthorityData(keys[0].Public().(*sr25519.PublicKey), index)),
-		EpochThreshold: big.NewInt(0),
-		Done:           epochDone,
-	}
-
-	// create a new BABE session
-	bs, err := babe.NewSession(bsConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	srv.bs = bs
 
 	// core service
 	return srv, nil
@@ -142,15 +159,19 @@ func (s *Service) Start() error {
 	// start receiving messages from network service
 	go s.receiveMessages()
 
-	// monitor babe session for epoch changes
-	go s.handleBabeSession()
+	if s.babeAuthority {
+		// monitor babe session for epoch changes
+		go s.handleBabeSession()
 
-	err := s.bs.Start()
-	if err != nil {
-		log.Error("core could not start BABE", "error", err)
+		err := s.bs.Start()
+		if err != nil {
+			log.Error("core could not start BABE", "error", err)
+		}
+
+		return err
 	}
 
-	return err
+	return nil
 }
 
 // Stop stops the core service
@@ -405,8 +426,10 @@ func (s *Service) ProcessTransactionMessage(msg network.Message) error {
 		// create new valid transaction
 		vtx := transaction.NewValidTransaction(tx, val)
 
-		// push to the transaction queue of BABE session
-		s.bs.PushToTxQueue(vtx)
+		if s.babeAuthority {
+			// push to the transaction queue of BABE session
+			s.bs.PushToTxQueue(vtx)
+		}
 	}
 
 	return nil
@@ -439,8 +462,10 @@ func (s *Service) handleConsensusDigest(header *types.Header) (err error) {
 		return err
 	}
 
-	// TODO: if this block isn't the first in the epoch, and it has a consensus digest, this is an error
-	s.bs.SetEpochData(epochData)
+	if s.babeAuthority {
+		// TODO: if this block isn't the first in the epoch, and it has a consensus digest, this is an error
+		s.bs.SetEpochData(epochData)
+	}
 
 	return nil
 }

@@ -93,14 +93,24 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(currentConfig, gendata, stateSrv)
 	srvcs = append(srvcs, networkSrvc)
 
+	// BABE authority configuration; flag overwrites config option
+	if auth := ctx.GlobalBool(AuthorityFlag.Name); auth && !currentConfig.Global.Authority {
+		currentConfig.Global.Authority = true
+	} else if ctx.IsSet(AuthorityFlag.Name) && !auth && currentConfig.Global.Authority {
+		currentConfig.Global.Authority = false
+	}
+
+	log.Info("node", "authority", currentConfig.Global.Authority)
+
 	// Core
 	coreConfig := &core.Config{
-		BlockState:   stateSrv.Block,
-		StorageState: stateSrv.Storage,
-		Keystore:     ks,
-		Runtime:      rt,
-		MsgRec:       networkMsgSend, // message channel from network service to core service
-		MsgSend:      networkMsgRec,  // message channel from core service to network service
+		BlockState:    stateSrv.Block,
+		StorageState:  stateSrv.Storage,
+		Keystore:      ks,
+		Runtime:       rt,
+		MsgRec:        networkMsgSend, // message channel from network service to core service
+		MsgSend:       networkMsgRec,  // message channel from core service to network service
+		BabeAuthority: currentConfig.Global.Authority,
 	}
 	coreSrvc := createCoreService(coreConfig)
 	srvcs = append(srvcs, coreSrvc)
@@ -109,7 +119,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	apiSrvc := api.NewAPIService(networkSrvc, nil)
 	srvcs = append(srvcs, apiSrvc)
 
-	// RPC
+	// TODO: check rpc flag
 	rpcSrvr := startRPC(ctx, currentConfig.RPC, apiSrvc)
 
 	return dot.NewDot(gendata.Name, srvcs, rpcSrvr), currentConfig, nil

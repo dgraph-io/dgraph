@@ -53,6 +53,10 @@ var (
 		Name:  "unlock",
 		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
 	}
+	AuthorityFlag = cli.BoolFlag{
+		Name:  "authority",
+		Usage: "Set to true if node is a BABE authority, false otherwise.",
+	}
 )
 
 // Network flags

@@ -290,8 +290,9 @@ func TestProcessTransactionMessage(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
-		Runtime:  rt,
-		Keystore: keystore.NewKeystore(),
+		Runtime:       rt,
+		Keystore:      keystore.NewKeystore(),
+		BabeAuthority: true,
 	}
 
 	s, err := NewService(cfg)
@@ -319,5 +320,21 @@ func TestProcessTransactionMessage(t *testing.T) {
 			"\nexpected:", ext,
 			"\nreceived:", bsTxExt,
 		)
+	}
+}
+
+func TestService_NotAuthority(t *testing.T) {
+	cfg := &Config{
+		Keystore:      keystore.NewKeystore(),
+		BabeAuthority: false,
+	}
+
+	s, err := NewService(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s.bs != nil {
+		t.Fatal("Fail: should not have babe session")
 	}
 }

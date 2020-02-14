@@ -33,6 +33,7 @@ var (
 		ConfigFileFlag,
 		UnlockFlag,
 		PasswordFlag,
+		AuthorityFlag,
 	}
 	networkFlags = []cli.Flag{
 		BootnodesFlag,
