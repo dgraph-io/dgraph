@@ -327,6 +327,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	srcFn := args.srcFn
 	q := args.q
 
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return err
+	}
+
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleValuePostings")
 	defer stop()
@@ -382,7 +387,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			vals, fcs, err := retrieveValuesAndFacets(args, pl, listType)
+			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
 			case err == posting.ErrNoValue || len(vals) == 0:
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
@@ -502,7 +507,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
+func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree, listType bool) (
 	[]types.Val, *pb.FacetsList, error) {
 	q := args.q
 	var err error
@@ -535,12 +540,6 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 		}
 
 		return vals, &pb.FacetsList{FacetsList: fcs}, nil
-	}
-
-	// Retrieve values when facet filtering is being requested.
-	facetsTree, err := preprocessFilter(q.FacetsFilter)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	// Retrieve the posting that matches the language preferences.
@@ -1844,20 +1843,15 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		fnType, fname := parseFuncTypeHelper(fname)
 		switch fnType {
 		case compareAttrFn: // lt, gt, le, ge, eq
-			var err error
-			typId, err := facets.TypeIDFor(fc)
+			fVal, err := facets.ValFor(fc)
 			if err != nil {
 				return false, err
 			}
 
-			v, err := types.Convert(ftree.function.val, typId)
+			v, err := types.Convert(ftree.function.val, fVal.Tid)
 			if err != nil {
 				// ignore facet if not of appropriate type
 				return false, nil
-			}
-			fVal, err := facets.ValFor(fc)
-			if err != nil {
-				return false, err
 			}
 
 			return types.CompareVals(fname, fVal, v), nil
@@ -1875,7 +1869,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		return false, errors.Errorf("Fn %s not supported in facets filtering.", fname)
 	}
 
-	var res []bool
+	res := make([]bool, 0, 2)
 	for _, c := range ftree.children {
 		r, err := applyFacetsTree(postingFacets, c)
 		if err != nil {
