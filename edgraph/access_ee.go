@@ -920,8 +920,7 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 		return nil
 	}
 
-	if filter.Func != nil && gql.IsInequalityFn(filter.Func.Name) &&
-		filter.Func.Attr == "dgraph.type" {
+	if filter.Func != nil && filter.Func.Name == "type" {
 
 		// type function supports only one argument
 		if len(filter.Func.Args) != 1 {

@@ -1154,6 +1154,9 @@ func TestQueryUserInfo(t *testing.T) {
 					predicate
 					permission
 				}
+				users {
+					name
+				}
 			}
 		}
 	}
@@ -1182,6 +1185,11 @@ func TestQueryUserInfo(t *testing.T) {
 					  "predicate": "nickname",
 					  "permission": 2
 					}
+				  ],
+				  "users": [
+					  {
+						  "name": "alice"
+					  }
 				  ]
 				}
 			  ]
@@ -1215,4 +1223,25 @@ func TestQueryUserInfo(t *testing.T) {
 	require.NoError(t, err, "Error while querying ACL")
 
 	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+
+	gqlQuery = `
+	query {
+		getGroup(name: "guardians") {
+			name
+			rules {
+				predicate
+				permission
+			}
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
 }
