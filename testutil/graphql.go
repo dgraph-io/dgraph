@@ -25,6 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const ExportRequest = `mutation {
+	export(input: {format: "json"}) {
+		response {
+			code
+			message
+		}
+	}
+}`
+
 type GraphQLParams struct {
 	Query     string                 `json:"query"`
 	Variables map[string]interface{} `json:"variables"`
