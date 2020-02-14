@@ -234,8 +234,18 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 ### Set up ACL Rules
 
-Now that your cluster is running with the ACL feature turned on, let's set up the ACL
-rules. A typical workflow is the following:
+Now that your cluster is running with the ACL feature turned on, you can set up the ACL
+rules. This can be done using the web UI Ratel or from the command line.
+
+A typical workflow is the following:
+
+1. Reset the root password
+2. Create a regular user
+3. Create a group
+4. Assign the user to the group
+5. Assign predicate permissions to the group
+
+#### Using the Command Line
 
 1. Reset the root password. The example below uses the dgraph endpoint `localhost:9080`
 as a demo, make sure to choose the correct IP and port for your environment:
@@ -295,7 +305,14 @@ a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`)
 ```bash
 dgraph acl mod -a localhost:9080 -g dev -p name -m 7
 ```
-6. Check information about a user
+
+### Retrieve Users and Groups Information 
+
+The following examples show how to retrieve information about users and groups.
+
+#### Using the Command Line
+
+1. Check information about a user
 ```bash
 dgraph acl info -a localhost:9080 -u alice
 ```
@@ -308,7 +325,7 @@ UID   : 0x3
 Group : dev
 Group : sre
 ```
-7. Check information about a group
+2. Check information about a group
 ```bash
 dgraph acl info -a localhost:9080 -g dev
 ```
@@ -325,19 +342,22 @@ Users: alice
 ACL  : {friend  7}
 ACL  : {name  7}
 ```
-
-8. Run ACL commands as another guardian (Member of `guardians` group)
+3. Run ACL commands as another guardian (member of `guardians` group). 
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
 ```bash
 dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
 ```
 Above command will show information about user `groot`.
+
 ### Access Data Using a Client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
-first log in through a user. A sample code using the dgo client can be found
-[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go).
+first log in through a user. This is tyically done via the client's `.login(USER_ID, USER_PASSWORD)` method.
+
+A sample code using the dgo client can be found
+[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go). An example using
+dgraph4j can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
 
 ### Access Data Using Curl
 
