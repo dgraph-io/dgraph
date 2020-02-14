@@ -105,23 +105,27 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
-	var res *schema.Response
-	gqlReq, err := getRequest(ctx, r)
-
 	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
 		md := metadata.New(nil)
 		md.Append("accessJwt", accessJwt)
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 
-	if err != nil {
-		res = schema.ErrorResponse(err)
+	var res *schema.Response
+
+	if r.URL.Path == "/admin/schema" {
+		handleAdminSchemaRequest(w, r, gh, ctx)
 	} else {
-		res = gh.resolver.Resolve(ctx, gqlReq)
+		gqlReq, err := getRequest(ctx, r)
+
+		if err != nil {
+			res = schema.ErrorResponse(err)
+		} else {
+			res = gh.resolver.Resolve(ctx, gqlReq)
+		}
+
+		write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 	}
-
-	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-
 }
 
 func (gh *graphqlHandler) isValid() bool {
@@ -194,46 +198,52 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	return gqlReq, nil
 }
 
-type UpdateGQLSchemaServer struct {
-	adminServer IServeGraphQL
-	handler     http.Handler
-}
+// special handler for handling requests to /admin/schema in /alter like fashion
+func handleAdminSchemaRequest(w http.ResponseWriter, r *http.Request, gh *graphqlHandler, ctx context.Context) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
 
-func NewUpdateGQLSchemaServer(adminServer IServeGraphQL) *UpdateGQLSchemaServer {
-	uh := &UpdateGQLSchemaServer{adminServer: adminServer}
-	uh.handler = recoveryHandler(commonHeaders(uh))
-	return uh
-}
-
-func (uh *UpdateGQLSchemaServer) HTTPHandler() http.Handler {
-	return uh.handler
-}
-
-func (uh *UpdateGQLSchemaServer) isValid() bool {
-	return !(uh == nil || uh.adminServer == nil)
-}
-
-func (uh *UpdateGQLSchemaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "UpdateGQLSchemaServer")
-	defer span.End()
-
-	if !uh.isValid() {
-		panic("UpdateGQLSchemaServer not initialised")
-	}
-
-	gqlReq, err := getUpdateGQLSchemaRequest(r)
-	if err != nil {
-		x.SetStatus(w, x.Error, err.Error())
+	if r.Method == http.MethodOptions {
+		return
+	} else if !(r.Method == http.MethodPost || r.Method == http.MethodPut) {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
-	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			x.SetStatus(w, x.Error, "Unable to create decompressor")
+			return
+		}
+		r.Body = gzreadCloser{zr, r.Body}
 	}
 
-	response := uh.adminServer.Resolver().Resolve(ctx, gqlReq)
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	gqlReq := &schema.Request{}
+	gqlReq.Query = `
+		mutation updateGqlSchema($sch: String!) {
+			updateGQLSchema(input: {
+				set: {
+					schema: $sch
+				}
+			}) {
+				gqlSchema {
+					id
+				}
+			}
+		}`
+	gqlReq.Variables = map[string]interface{}{
+		"sch": string(b),
+	}
+
+	response := gh.Resolver().Resolve(ctx, gqlReq)
 	if len(response.Errors) > 0 {
 		x.SetStatus(w, x.Error, response.Errors.Error())
 		return
@@ -266,61 +276,6 @@ func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 	}
 
 	return out.Write(b)
-}
-
-func getUpdateGQLSchemaRequest(r *http.Request) (*schema.Request, error) {
-	gqlReq := &schema.Request{}
-
-	if r.Header.Get("Content-Encoding") == "gzip" {
-		zr, err := gzip.NewReader(r.Body)
-		if err != nil {
-			return nil, errors.Wrap(err, "Unable to parse gzip")
-		}
-		r.Body = gzreadCloser{zr, r.Body}
-	}
-
-	switch r.Method {
-	case http.MethodPost:
-		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to parse media type")
-		}
-
-		switch mediaType {
-		case "text/plain":
-			b, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				return nil, errors.Wrap(err, "Not a valid UpdateGQLSchema request body")
-			}
-			gqlReq.Query = "" +
-				"mutation {\n" +
-				"	updateGQLSchema(input: {\n" +
-				"		set: {\n" +
-				"			schema: \"" + unescape(string(b)) + "\"\n" +
-				"		}\n" +
-				"	}) {\n" +
-				"		gqlSchema {\n" +
-				"			id\n" +
-				"		}\n" +
-				"	}\n" +
-				"}"
-		default:
-			return nil, errors.New(
-				"Unrecognised Content-Type.  Please use text/plain for UpdateGQLSchema requests")
-		}
-	default:
-		return nil,
-			errors.New("Unrecognised request method.  Please use POST for UpdateGQLSchema requests")
-	}
-
-	return gqlReq, nil
-}
-
-func unescape(str string) string {
-	str = strings.ReplaceAll(str, "\r", "\\r")
-	str = strings.ReplaceAll(str, "\n", "\\n")
-	str = strings.ReplaceAll(str, "\t", "\\t")
-	return str
 }
 
 func commonHeaders(next http.Handler) http.Handler {
