@@ -80,7 +80,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 		resp, err = client.Do(req)
 		if err != nil && strings.Contains(err.Error(), "Token is expired") {
 			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-				Endpoint:   addr + "/login",
+				Endpoint:   addr + "/admin",
 				RefreshJwt: grootRefreshJwt,
 			})
 
@@ -270,7 +270,7 @@ func runWithRetries(method, contentType, url string, body string) (
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/login",
+			Endpoint:   addr + "/admin",
 			RefreshJwt: grootRefreshJwt,
 		})
 		if err != nil {

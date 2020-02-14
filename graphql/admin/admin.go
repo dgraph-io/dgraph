@@ -73,6 +73,8 @@ const (
 	scalar DateTime
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+	directive @id on FIELD_DEFINITION
+
 
 	type UpdateGQLSchemaPayload {
 		gqlSchema: GQLSchema
@@ -88,15 +90,6 @@ const (
 
 	input ExportInput {
 		format: String
-	}
-
-	input BackupInput {
-		destination: String!
-		accessKey: String
-		secretKey: String
-		sessionToken: String
-		anonymous: Boolean
-		forceFull: Boolean
 	}
 
 	type Response {
@@ -128,13 +121,13 @@ const (
 		response: Response
 	}
 
-	type BackupPayload {
-		response: Response
-	}
+	` + adminTypes + `
 
 	type Query {
 		getGQLSchema: GQLSchema
 		health: Health
+
+		` + adminQueries + `
 	}
 
 	type Mutation {
@@ -143,7 +136,8 @@ const (
 		draining(input: DrainingInput!): DrainingPayload
 		shutdown: ShutdownPayload
 		config(input: ConfigInput!): ConfigPayload
-		backup(input: BackupInput!) : BackupPayload
+
+		` + adminMutations + `
 	}
  `
 )
@@ -364,6 +358,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				backup,
 				resolve.StdMutationCompletion(m.ResponseName()))
 		}).
+		WithMutationResolver("login", func(m schema.Mutation) resolve.MutationResolver {
+			login := &loginResolver{}
+
+			// login implements the mutation rewriter, executor and query executor hence its passed
+			// thrice here.
+			return resolve.NewMutationResolver(
+				login,
+				login,
+				login,
+				resolve.StdQueryCompletion())
+		}).
 		WithSchemaIntrospection()
 
 	return rf
@@ -468,6 +473,82 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					getResolver,
 					getResolver,
 					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("queryGroup",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("queryUser",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("getGroup",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("getUser",
+			func(q schema.Query) resolve.QueryResolver {
+				return resolve.NewQueryResolver(
+					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithMutationResolver("addUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewAddRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("addGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewAddRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("updateUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewUpdateRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("updateGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewUpdateRewriter(),
+					resolve.DgraphAsQueryExecutor(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdMutationCompletion(m.Name()))
+			}).
+		WithMutationResolver("deleteUser",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewDeleteRewriter(),
+					resolve.NoOpQueryExecution(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdDeleteCompletion(m.Name()))
+			}).
+		WithMutationResolver("deleteGroup",
+			func(m schema.Mutation) resolve.MutationResolver {
+				return resolve.NewMutationResolver(
+					resolve.NewDeleteRewriter(),
+					resolve.NoOpQueryExecution(),
+					resolve.DgraphAsMutationExecutor(),
+					resolve.StdDeleteCompletion(m.Name()))
 			})
 }
 
