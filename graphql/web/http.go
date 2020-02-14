@@ -107,7 +107,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if r.URL.Path == "/admin/schema" {
-		handleAdminSchemaRequest(w, r, gh, ctx)
+		handleAdminSchemaRequest(ctx, w, r, gh)
 	} else {
 		var res *schema.Response
 		gqlReq, err := getRequest(ctx, r)
@@ -193,7 +193,7 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 }
 
 // special handler for handling requests to /admin/schema in /alter like fashion
-func handleAdminSchemaRequest(w http.ResponseWriter, r *http.Request, gh *graphqlHandler, ctx context.Context) {
+func handleAdminSchemaRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, gh *graphqlHandler) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
