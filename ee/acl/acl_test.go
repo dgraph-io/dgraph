@@ -1137,52 +1137,57 @@ func TestQueryUserInfo(t *testing.T) {
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	userClient, err := testutil.DgraphClient(testutil.SockAddr)
-	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
-
-	err = userClient.Login(ctx, userid, userpassword)
-	require.NoError(t, err)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+	// time.Sleep(6 * time.Second)
 
 	query := `
-	{
-		me(func: type(User)) {
-			dgraph.xid
-			dgraph.user.group {
-				dgraph.xid
-				dgraph.acl.rule {
-					dgraph.rule.predicate
-					dgraph.rule.permission
+	query {
+		queryUser {
+			name
+			groups {
+				name
+				rules {
+					predicate
+					permission
 				}
 			}
 		}
 	}
 	`
 
-	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
-	require.NoError(t, err)
+	params := testutil.GraphQLParams{
+		Query: query,
+	}
+	b := makeRequest(t, accessJwt, params)
 
 	testutil.CompareJSON(t, `
 	{
-		"me": [
-		  {
-			"dgraph.xid": "alice",
-			"dgraph.user.group": [
-			  {
-				"dgraph.xid": "dev",
-				"dgraph.acl.rule": [
-				  {
-					"dgraph.rule.predicate": "name",
-					"dgraph.rule.permission": 4
-				  },
-				  {
-					"dgraph.rule.predicate": "nickname",
-					"dgraph.rule.permission": 2
-				  }
-				]
-			  }
-			]
-		  }
-		]
-	}`, string(resp.Json))
+		"data": {
+		  "queryUser": [
+			{
+			  "name": "alice",
+			  "groups": [
+				{
+				  "name": "dev",
+				  "rules": [
+					{
+					  "predicate": "name",
+					  "permission": 4
+					},
+					{
+					  "predicate": "nickname",
+					  "permission": 2
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	}`, string(b))
 }

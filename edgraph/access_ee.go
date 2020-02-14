@@ -739,7 +739,7 @@ func logAccess(log *accessEntry) {
 
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -783,11 +783,13 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	if len(blockedPreds) != 0 {
-		for _, gq := range parsedReq.Query {
-			addUserFilterToQuery(gq, userId, groupIds)
-		}
-		for _, pred := range x.AllACLPredicates() {
-			delete(blockedPreds, pred)
+		if graphql {
+			for _, gq := range parsedReq.Query {
+				addUserFilterToQuery(gq, userId, groupIds)
+			}
+			for _, pred := range x.AllACLPredicates() {
+				delete(blockedPreds, pred)
+			}
 		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 	}
@@ -828,7 +830,7 @@ func authorizeGroot(ctx context.Context) error {
 // addUserFilterToQuery applies makes sure that a user can access only its own
 // acl info by applying filter of userid and groupid to acl predicates
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
-	addNewFilter := func(newFilter, filter *gql.FilterTree) *gql.FilterTree {
+	parentFilter := func(newFilter, filter *gql.FilterTree) *gql.FilterTree {
 		if filter == nil {
 			return newFilter
 		}
@@ -839,43 +841,17 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 		return parentFilter
 	}
 
-	if gq.Func != nil && gq.Func.Name == "type" {
-		for _, arg := range gq.Func.Args {
-			// The case where value of some varialble v (say) is "Group" and a
-			// query comes like `eq(dgraph.type, val(v))`, will be ingored here.
-			if arg.Value == "User" {
-				newFilter := &gql.FilterTree{
-					Func: &gql.Function{
-						Attr: "dgraph.xid",
-						Name: "eq",
-						Args: []gql.Arg{
-							gql.Arg{Value: userId},
-						},
-					},
-				}
-				gq.Filter = addNewFilter(newFilter, gq.Filter)
-			} else if arg.Value == "Group" {
-				child := &gql.FilterTree{
-					Func: &gql.Function{
-						Attr: "dgraph.xid",
-						Name: "eq",
-					},
-				}
-				for _, gid := range groupIds {
-					child.Func.Args = append(child.Func.Args,
-						gql.Arg{Value: gid})
-				}
-				newFilter := &gql.FilterTree{
-					Op:    "OR",
-					Child: []*gql.FilterTree{child},
-				}
-				gq.Filter = addNewFilter(newFilter, gq.Filter)
-			}
+	userFilter := func(userId string) *gql.FilterTree {
+		return &gql.FilterTree{
+			Func: &gql.Function{
+				Attr: "dgraph.xid",
+				Name: "eq",
+				Args: []gql.Arg{gql.Arg{Value: userId}},
+			},
 		}
 	}
 
-	switch gq.Attr {
-	case "dgraph.user.group":
+	groupFilter := func(groupIds []string) *gql.FilterTree {
 		child := &gql.FilterTree{
 			Func: &gql.Function{
 				Attr: "dgraph.xid",
@@ -883,24 +859,36 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 			},
 		}
 		for _, gid := range groupIds {
-			child.Func.Args = append(child.Func.Args, gql.Arg{Value: gid})
+			child.Func.Args = append(child.Func.Args,
+				gql.Arg{Value: gid})
 		}
-		newFilter := &gql.FilterTree{
+		return &gql.FilterTree{
 			Op:    "OR",
 			Child: []*gql.FilterTree{child},
 		}
-		gq.Filter = addNewFilter(newFilter, gq.Filter)
-	case "~dgraph.user.group":
-		newFilter := &gql.FilterTree{
-			Func: &gql.Function{
-				Attr: "dgraph.xid",
-				Name: "eq",
-				Args: []gql.Arg{
-					gql.Arg{Value: userId},
-				},
-			},
+	}
+
+	if gq.Func != nil && gq.Func.Name == "type" {
+		for _, arg := range gq.Func.Args {
+			// The case where value of some varialble v (say) is "Group" and a
+			// query comes like `eq(dgraph.type, val(v))`, will be ingored here.
+			if arg.Value == "User" {
+				newFilter := userFilter(userId)
+				gq.Filter = parentFilter(newFilter, gq.Filter)
+			} else if arg.Value == "Group" {
+				newFilter := groupFilter(groupIds)
+				gq.Filter = parentFilter(newFilter, gq.Filter)
+			}
 		}
-		gq.Filter = addNewFilter(newFilter, gq.Filter)
+	}
+
+	switch gq.Attr {
+	case "dgraph.user.group":
+		newFilter := groupFilter(groupIds)
+		gq.Filter = parentFilter(newFilter, gq.Filter)
+	case "~dgraph.user.group":
+		newFilter := userFilter(userId)
+		gq.Filter = parentFilter(newFilter, gq.Filter)
 	}
 
 	for _, ch := range gq.Children {
