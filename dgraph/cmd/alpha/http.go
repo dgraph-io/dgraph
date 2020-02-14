@@ -21,6 +21,8 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -562,6 +564,58 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	res := map[string]interface{}{}
+	data := map[string]interface{}{}
+	data["code"] = x.Success
+	data["message"] = "Done"
+	res["data"] = data
+
+	js, err := json.Marshal(res)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	_, _ = x.WriteResponse(w, r, js)
+}
+
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	if commonHandler(w, r) {
+		return
+	}
+
+	b := readRequest(w, r)
+	if b == nil {
+		return
+	}
+
+	md := metadata.New(nil)
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = x.AttachAccessJwt(ctx, r)
+
+	gqlReq := &schema.Request{}
+	gqlReq.Query = `
+		mutation updateGqlSchema($sch: String!) {
+			updateGQLSchema(input: {
+				set: {
+					schema: $sch
+				}
+			}) {
+				gqlSchema {
+					id
+				}
+			}
+		}`
+	gqlReq.Variables = map[string]interface{}{
+		"sch": string(b),
+	}
+
+	response := adminServer.Resolve(ctx, gqlReq)
+	if len(response.Errors) > 0 {
+		x.SetStatus(w, x.Error, response.Errors.Error())
 		return
 	}
 
