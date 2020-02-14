@@ -72,7 +72,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	var tokens []string
 	for _, it := range info.tokenizers {
-		toks, err := tok.BuildTokens(sv.Value, tok.GetLangTokenizer(it, lang))
+		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
 		}
@@ -439,12 +439,17 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 }
 
 // deleteTokensFor deletes the index for the given attribute and token.
-func deleteTokensFor(attr, tokenizerName string) error {
+func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
 		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+	}
+	if hasLang {
+		// We just need the tokenizer identifier for ExactTokenizer having language.
+		// It will be same for all the language.
+		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 	if err := pstore.DropPrefix(prefix); err != nil {
@@ -785,7 +790,13 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
+			return err
+		}
+		if tokenizer != "exact" {
+			continue
+		}
+		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
 			return err
 		}
 	}
@@ -804,7 +815,13 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
+			return err
+		}
+		if tokenizer != "exact" {
+			continue
+		}
+		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
 			return err
 		}
 	}
@@ -824,6 +841,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
+			edge.Lang = string(p.LangTag)
 
 			for {
 				err := txn.addIndexMutations(ctx, &indexMutationInfo{

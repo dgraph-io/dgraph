@@ -204,7 +204,24 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		loginPayload.Password = params.Passwd
 	}
 
-	body, err := json.Marshal(&loginPayload)
+	login := `mutation login($userId: String, $password: String, $refreshToken: String) {
+		login(input: { userId: $userId, password: $password, refreshToken: $refreshToken}) {
+			response {
+				accessJWT
+				refreshJWT
+			}
+		}
+	}`
+
+	gqlParams := GraphQLParams{
+		Query: login,
+		Variables: map[string]interface{}{
+			"userId":       params.UserID,
+			"password":     params.Passwd,
+			"refreshToken": params.RefreshJwt,
+		},
+	}
+	body, err := json.Marshal(gqlParams)
 	if err != nil {
 		return "", "", errors.Wrapf(err, "unable to marshal body")
 	}
@@ -213,6 +230,7 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	if err != nil {
 		return "", "", errors.Wrapf(err, "unable to create request")
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -226,7 +244,7 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
 
-	var outputJson map[string]map[string]string
+	var outputJson map[string]interface{}
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
 		var errOutputJson map[string]interface{}
 		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
@@ -237,16 +255,21 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		return "", "", errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
 	}
 
-	data, found := outputJson["data"]
+	data, found := outputJson["data"].(map[string]interface{})
 	if !found {
 		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
-	newAccessJwt, found := data["accessJWT"]
+	response, found := data["response"].(map[string]interface{})
+	if !found {
+		return "", "", errors.Wrapf(err, "data entry found in the output")
+	}
+
+	newAccessJwt, found := response["accessJWT"].(string)
 	if !found {
 		return "", "", errors.Errorf("no access JWT found in the output")
 	}
-	newRefreshJwt, found := data["refreshJWT"]
+	newRefreshJwt, found := response["refreshJWT"].(string)
 	if !found {
 		return "", "", errors.Errorf("no refresh JWT found in the output")
 	}

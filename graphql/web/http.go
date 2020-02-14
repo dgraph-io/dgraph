@@ -28,7 +28,6 @@ import (
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -105,17 +104,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
-	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
-
-	var res *schema.Response
+	ctx = x.AttachAccessJwt(ctx, r)
 
 	if r.URL.Path == "/admin/schema" {
 		handleAdminSchemaRequest(w, r, gh, ctx)
 	} else {
+		var res *schema.Response
 		gqlReq, err := getRequest(ctx, r)
 
 		if err != nil {
