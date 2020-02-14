@@ -19,10 +19,12 @@ package x
 import (
 	"bufio"
 	"bytes"
+	builtinGzip "compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net"
@@ -336,6 +338,20 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx
+}
+
+// Write response body, transparently compressing if necessary.
+func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := builtinGzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out.Write(b)
 }
 
 // Min returns the minimum of the two given numbers.

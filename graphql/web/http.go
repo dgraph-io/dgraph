@@ -255,21 +255,7 @@ func handleAdminSchemaRequest(ctx context.Context, w http.ResponseWriter, r *htt
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
-}
-
-// Write response body, transparently compressing if necessary.
-func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
-	var out io.Writer = w
-
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
-	return out.Write(b)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func commonHeaders(next http.Handler) http.Handler {

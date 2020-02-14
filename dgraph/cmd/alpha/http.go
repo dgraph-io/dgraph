@@ -143,20 +143,6 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	return durationValue, nil
 }
 
-// Write response body, transparently compressing if necessary.
-func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
-	var out io.Writer = w
-
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
-	return out.Write(b)
-}
-
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +263,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	x.Check2(out.WriteRune('}'))
 
-	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+	if _, err := x.WriteResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,
 		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
@@ -432,7 +418,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +466,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func handleAbort(startTs uint64) (map[string]interface{}, error) {
@@ -591,7 +577,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
