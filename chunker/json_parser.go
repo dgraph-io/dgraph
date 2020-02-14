@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"unicode"
 	"time"
+	"unicode"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
