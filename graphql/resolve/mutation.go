@@ -209,13 +209,11 @@ func (mr *mutationResolver) Resolve(
 
 func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
 	result map[string]interface{}) {
-
 	switch mr.mutationRewriter.(type) {
 	case *addRewriter:
-		mr.numUids = len(result)
+		mr.numUids = len(assigned)
 
-	case *updateRewriter:
-	case *deleteRewriter:
+	default:
 		mutated := extractMutated(result, mutation.ResponseName())
 		mr.numUids = len(mutated)
 	}
