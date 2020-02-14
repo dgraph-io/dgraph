@@ -43,6 +43,9 @@ type IServeGraphQL interface {
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
+
+	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
+	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
 }
 
 type graphqlHandler struct {
@@ -63,6 +66,10 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 	gh.resolver = resolver
+}
+
+func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+	return gh.resolver.Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
@@ -96,10 +103,10 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
+	ctx = x.AttachAccessJwt(ctx, r)
+
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
-
-	ctx = x.AttachAccessJwt(ctx, r)
 
 	if err != nil {
 		res = schema.ErrorResponse(err)
@@ -108,7 +115,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-
 }
 
 func (gh *graphqlHandler) isValid() bool {

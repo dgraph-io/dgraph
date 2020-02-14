@@ -181,6 +181,82 @@ const (
         ]
     }
 }`
+
+	adminSchemaEndptTypes = `
+	type A {
+		b: String
+		c: Int
+		d: Float
+	}`
+	adminSchemaEndptSchema = `{
+    "schema": [
+        {
+            "predicate": "A.b",
+            "type": "string"
+        },
+        {
+            "predicate": "A.c",
+            "type": "int"
+        },
+        {
+            "predicate": "A.d",
+            "type": "float"
+        },
+        {
+            "predicate": "dgraph.graphql.schema",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.type",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true
+        }
+    ],
+    "types": [
+        {
+            "fields": [
+                {
+                    "name": "A.b"
+                },
+                {
+                    "name": "A.c"
+                },
+                {
+                    "name": "A.d"
+                }
+            ],
+            "name": "A"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema"
+                }
+            ],
+            "name": "dgraph.graphql"
+        }
+    ]
+}`
+	adminSchemaEndptGQLSchema = `{
+    "__type": {
+        "name": "A",
+        "fields": [
+            {
+                "name": "b"
+            },
+            {
+                "name": "c"
+            },
+            {
+                "name": "d"
+            }
+        ]
+    }
+}`
 )
 
 func admin(t *testing.T) {
@@ -196,6 +272,7 @@ func admin(t *testing.T) {
 	schemaIsInInitialState(t, client)
 	addGQLSchema(t, client)
 	updateSchema(t, client)
+	updateSchemaThroughAdminSchemaEndpt(t, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -227,6 +304,18 @@ func updateSchema(t *testing.T, client *dgo.Dgraph) {
 	require.JSONEq(t, updatedSchema, string(resp.GetJson()))
 
 	introspect(t, updatedGQLSchema)
+}
+
+func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
+	err := addSchemaThroughAdminSchemaEndpt(graphqlAdminTestAdminSchemaURL, adminSchemaEndptTypes)
+	require.NoError(t, err)
+
+	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
+	require.NoError(t, err)
+
+	require.JSONEq(t, adminSchemaEndptSchema, string(resp.GetJson()))
+
+	introspect(t, adminSchemaEndptGQLSchema)
 }
 
 func introspect(t *testing.T, expected string) {

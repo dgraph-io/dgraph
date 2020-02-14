@@ -463,6 +463,9 @@ func setupServer(closer *y.Closer) {
 		})
 	}
 	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+	http.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
+		adminSchemaHandler(w, r, adminServer)
+	})
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
