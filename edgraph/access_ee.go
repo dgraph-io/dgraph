@@ -783,10 +783,14 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	}
 
 	if len(blockedPreds) != 0 {
+		// For GraphQL requests, we allow filtered access to the ACL predicates.
+		// Filter for user_id and group_id is applied for the currently logged in user.
 		if graphql {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
+			// blockedPreds might have acl predicates which we want to allow access through
+			// graphql, so deleting those from here.
 			for _, pred := range x.AllACLPredicates() {
 				delete(blockedPreds, pred)
 			}
@@ -829,8 +833,14 @@ func authorizeGroot(ctx context.Context) error {
 	return doAuthorizeGroot()
 }
 
-// addUserFilterToQuery applies makes sure that a user can access only its own
-// acl info by applying filter of userid and groupid to acl predicates
+/*
+	addUserFilterToQuery applies makes sure that a user can access only its own
+	acl info by applying filter of userid and groupid to acl predicates. A query like
+	Conversion pattern:
+	* me(func: type(Group)) -> me(func: type(Group)) @filter(eq("dgraph.xid", groupIds...))
+	* me(func: type(User)) -> me(func: type(User)) @filter(eq("dgraph.xid", userId))
+
+*/
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
 	if gq.Func != nil && gq.Func.Name == "type" {
 		// type function only supports one argument
