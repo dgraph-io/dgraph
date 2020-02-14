@@ -95,26 +95,32 @@ input StringHashFilter {
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddPostPayload {
 	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 #######################

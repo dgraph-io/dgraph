@@ -266,6 +266,7 @@ func RunAll(t *testing.T) {
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
+	t.Run("numUids test", testNumUids)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
