@@ -100,3 +100,31 @@ func TestGQLAdminHealthWithClientCert(t *testing.T) {
 	require.NoError(t, err, "Error while reading http response: %v", err)
 	require.Contains(t, string(body), "Dgraph connection established")
 }
+
+func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
+	// Read the root cert file.
+	caCert, err := ioutil.ReadFile("../tls/ca.crt")
+	require.NoError(t, err, "Unable to read root cert file : %v", err)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := tls.Config{
+		RootCAs: pool,
+	}
+	transport := http.Transport{
+		TLSClientConfig: &tlsConfig,
+	}
+	client := http.Client{
+		Timeout:   time.Second * 10,
+		Transport: &transport,
+	}
+
+	healthCheckQuery := []byte(`{"query":"query {\n  health {\n    message\n    status\n  }\n}"}`)
+	gqlAdminEndpoint := "https://localhost:8180/admin"
+	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
+	require.NoError(t, err, "Failed to create request : %v", err)
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err = client.Do(req)
+	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
+}
