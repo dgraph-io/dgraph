@@ -443,7 +443,7 @@ func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams
 
 	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
 	require.NoError(t, err)
-	req.Header.Set("accessJwt", accessToken)
+	req.Header.Set("X-Dgraph-AccessToken", accessToken)
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)

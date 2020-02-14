@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -321,6 +322,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
+func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // Min returns the minimum of the two given numbers.

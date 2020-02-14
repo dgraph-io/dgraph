@@ -18,10 +18,16 @@ package common
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -183,8 +189,9 @@ func admin(t *testing.T) {
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = checkGraphQLHealth(graphqlAdminTestAdminURL, []string{"NoGraphQLSchema"})
+	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
 	require.NoError(t, err)
+	require.False(t, hasSchema)
 
 	schemaIsInInitialState(t, client)
 	addGQLSchema(t, client)
@@ -238,4 +245,48 @@ func introspect(t *testing.T, expected string) {
 	requireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
+}
+
+// The GraphQL /admin health result should be the same as /health
+func health(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+        health {
+          instance
+          address
+          status
+          group
+          version
+          uptime
+          lastEcho
+        }
+      }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		Health []pb.HealthInfo
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	var health []pb.HealthInfo
+	resp, err := http.Get(adminDgraphHealthURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	healthRes, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(healthRes, &health))
+
+	// Uptime and LastEcho might have changed between the GraphQL and /health calls.
+	// If we don't remove them, the test would be flakey.
+	opts := []cmp.Option{
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+	}
+	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
