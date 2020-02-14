@@ -1129,3 +1129,119 @@ func TestNonExistentGroup(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
 }
+
+func TestQueryUserInfo(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	gqlQuery := `
+	query {
+		queryUser {
+			name
+			groups {
+				name
+				rules {
+					predicate
+					permission
+				}
+				users {
+					name
+				}
+			}
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+
+	testutil.CompareJSON(t, `
+	{
+		"data": {
+		  "queryUser": [
+			{
+			  "name": "alice",
+			  "groups": [
+				{
+				  "name": "dev",
+				  "rules": [
+					{
+					  "predicate": "name",
+					  "permission": 4
+					},
+					{
+					  "predicate": "nickname",
+					  "permission": 2
+					}
+				  ],
+				  "users": [
+					  {
+						  "name": "alice"
+					  }
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	}`, string(b))
+
+	query := `
+	{
+		me(func: type(User)) {
+			dgraph.xid
+			dgraph.user.group {
+				dgraph.xid
+				dgraph.acl.rule {
+					dgraph.rule.predicate
+					dgraph.rule.permission
+				}
+			}
+		}
+	}
+	`
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying ACL")
+
+	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+
+	gqlQuery = `
+	query {
+		getGroup(name: "guardians") {
+			name
+			rules {
+				predicate
+				permission
+			}
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
+}
