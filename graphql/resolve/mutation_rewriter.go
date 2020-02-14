@@ -38,12 +38,10 @@ const (
 type addRewriter struct {
 	frags [][]*mutationFragment
 }
-
 type updateRewriter struct {
 	setFrags []*mutationFragment
 	delFrags []*mutationFragment
 }
-
 type deleteRewriter struct{}
 
 // A mutationFragment is a partially built Dgraph mutation.  Given a GraphQL

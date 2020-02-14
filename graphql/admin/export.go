@@ -66,10 +66,6 @@ func (er *exportResolver) FromMutationResult(
 	return nil, nil
 }
 
-func (er *exportResolver) NumUids() int {
-	return 0
-}
-
 func (er *exportResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
