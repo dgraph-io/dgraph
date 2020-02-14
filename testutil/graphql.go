@@ -29,6 +29,7 @@ const ExportRequest = `mutation {
 	export(input: {format: "json"}) {
 		response {
 			code
+			message
 		}
 	}
 }`
