@@ -689,6 +689,12 @@ _:blank-1 <name> "Daryl" .
 _:blank-1 <dgraph.type> "Person" .
 ```
 
+Facets do not contain type information but Dgraph will try to guess a type from the input.
+If the value of a facet can be parsed to a number, it will be converted to either a float
+or an int. If it can be parsed as a boolean, it will be stored as a boolean. If the value
+is a string, it will be stored as a datetime if the string matches the RFC3339 format or
+as a double-quoted string otherwise.
+
 ### Creating a list with JSON and interacting with
 
 Schema:
