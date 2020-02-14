@@ -60,7 +60,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
 	// always allow access
 	return nil
 }
