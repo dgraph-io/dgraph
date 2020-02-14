@@ -877,3 +877,60 @@ func TestNonExistentGroup(t *testing.T) {
 	require.Error(t, err, "Setting permission for non-existent group should return error")
 	require.Contains(t, string(resp), `Unable to modify: Group <dev> doesn't exist`)
 }
+
+func TestQueryUserInfo(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	query := `
+	{
+		me(func: type(User)) {
+			dgraph.xid
+			dgraph.user.group {
+				dgraph.xid
+				dgraph.acl.rule {
+					dgraph.rule.predicate
+					dgraph.rule.permission
+				}
+			}
+		}
+	}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+
+	testutil.CompareJSON(t, `
+	{
+		"me": [
+		  {
+			"dgraph.xid": "alice",
+			"dgraph.user.group": [
+			  {
+				"dgraph.xid": "dev",
+				"dgraph.acl.rule": [
+				  {
+					"dgraph.rule.predicate": "name",
+					"dgraph.rule.permission": 4
+				  },
+				  {
+					"dgraph.rule.predicate": "nickname",
+					"dgraph.rule.permission": 2
+				  }
+				]
+			  }
+			]
+		  }
+		]
+	}`, string(resp.Json))
+}
