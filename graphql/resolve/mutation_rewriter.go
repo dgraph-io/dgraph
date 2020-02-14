@@ -36,17 +36,15 @@ const (
 )
 
 type addRewriter struct {
-	frags   [][]*mutationFragment
-	numUids int
+	frags [][]*mutationFragment
 }
+
 type updateRewriter struct {
 	setFrags []*mutationFragment
 	delFrags []*mutationFragment
-	numUids  int
 }
-type deleteRewriter struct {
-	numUids int
-}
+
+type deleteRewriter struct{}
 
 // A mutationFragment is a partially built Dgraph mutation.  Given a GraphQL
 // mutation input, we traverse the input data and build a Dgraph mutation.  That
@@ -286,12 +284,7 @@ func (mrw *addRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	mrw.numUids += len(assigned)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
-}
-
-func (mrw *addRewriter) NumUids() int {
-	return mrw.numUids
 }
 
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
@@ -415,12 +408,7 @@ func (urw *updateRewriter) FromMutationResult(
 		}
 	}
 
-	urw.numUids += len(mutated)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
-}
-
-func (urw *updateRewriter) NumUids() int {
-	return urw.numUids
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {
@@ -562,17 +550,8 @@ func (drw *deleteRewriter) FromMutationResult(
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
-	drw.numUids = 0
-	for _, i := range result {
-		drw.numUids += len(i.([]interface{}))
-	}
-
 	// There's no query that follows a delete
 	return nil, nil
-}
-
-func (drw *deleteRewriter) NumUids() int {
-	return drw.numUids
 }
 
 func asUID(val interface{}) (uint64, error) {

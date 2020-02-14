@@ -1032,6 +1032,7 @@ func filterInUpdate(t *testing.T) {
 					id
 					name
 				}
+				numUids
 			}
 		}`,
 				Variables: map[string]interface{}{
@@ -1047,6 +1048,7 @@ func filterInUpdate(t *testing.T) {
 			var result struct {
 				UpdateCountry struct {
 					Country []*country
+					NumUids int
 				}
 			}
 
@@ -1054,6 +1056,7 @@ func filterInUpdate(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, len(result.UpdateCountry.Country), test.Expected)
+			require.Equal(t, result.UpdateCountry.NumUids, test.Expected)
 			for i := 0; i < test.Expected; i++ {
 				require.Equal(t, result.UpdateCountry.Country[i].Name, "updatedValue")
 			}
@@ -2667,9 +2670,6 @@ func testNumUids(t *testing.T) {
 		updatePostParams := &GraphQLParams{
 			Query: `mutation updatePosts($posts: UpdatePostInput!) {
 			updatePost(input: $posts) {
-				post {
-					postID
-				}
 				numUids
 			}
 		}`,

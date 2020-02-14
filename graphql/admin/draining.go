@@ -37,10 +37,6 @@ type drainingInput struct {
 	Enable bool
 }
 
-func (dr *drainingResolver) NumUids() int {
-	return 0
-}
-
 func (dr *drainingResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got draining request through GraphQL admin API")

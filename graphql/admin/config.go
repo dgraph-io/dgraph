@@ -35,10 +35,6 @@ type configInput struct {
 	LruMB float64
 }
 
-func (cr *configResolver) NumUids() int {
-	return 0
-}
-
 func (cr *configResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got config request through GraphQL admin API")

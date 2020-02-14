@@ -92,8 +92,6 @@ type MutationRewriter interface {
 		m schema.Mutation,
 		assigned map[string]string,
 		result map[string]interface{}) (*gql.GraphQuery, error)
-
-	NumUids() int
 }
 
 // A MutationExecutor can execute a mutation and returns the assigned map, the
@@ -161,6 +159,8 @@ type mutationResolver struct {
 	queryExecutor    QueryExecutor
 	mutationExecutor MutationExecutor
 	resultCompleter  ResultCompleter
+
+	numUids int
 }
 
 func (mr *mutationResolver) Resolve(
@@ -188,15 +188,15 @@ func (mr *mutationResolver) Resolve(
 		if strings.Contains(s, schema.NumUid) {
 			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
 				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
-				mr.mutationRewriter.NumUids())))
+				mr.numUids)))
 
 		} else if s[len(s)-1] == '}' {
 			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
-				schema.NumUid, mr.mutationRewriter.NumUids()))
+				schema.NumUid, mr.numUids))
 
 		} else {
 			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
-				schema.NumUid, mr.mutationRewriter.NumUids()))
+				schema.NumUid, mr.numUids))
 		}
 		break
 	}
@@ -205,6 +205,20 @@ func (mr *mutationResolver) Resolve(
 		Data: completed,
 		Err:  err,
 	}, success
+}
+
+func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
+	result map[string]interface{}) {
+
+	switch mr.mutationRewriter.(type) {
+	case *addRewriter:
+		mr.numUids = len(result)
+
+	case *updateRewriter:
+	case *deleteRewriter:
+		mutated := extractMutated(result, mutation.ResponseName())
+		mr.numUids = len(mutated)
+	}
 }
 
 func (mr *mutationResolver) rewriteAndExecute(
@@ -222,6 +236,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
+	mr.getNumUids(mutation, assigned, result)
 	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
