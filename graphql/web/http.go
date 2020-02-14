@@ -193,7 +193,8 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 }
 
 // special handler for handling requests to /admin/schema in /alter like fashion
-func handleAdminSchemaRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, gh *graphqlHandler) {
+func handleAdminSchemaRequest(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	gh *graphqlHandler) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
