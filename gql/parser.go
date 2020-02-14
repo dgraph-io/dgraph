@@ -1613,7 +1613,7 @@ func getValueArg(val string) (string, error) {
 }
 
 func validFuncName(name string) bool {
-	if isGeoFunc(name) || isInequalityFn(name) {
+	if isGeoFunc(name) || IsInequalityFn(name) {
 		return true
 	}
 
@@ -1714,7 +1714,7 @@ L:
 						return nil,
 							itemInFunc.Errorf("Multiple variables not allowed in len function")
 					}
-					if !isInequalityFn(function.Name) {
+					if !IsInequalityFn(function.Name) {
 						return nil,
 							itemInFunc.Errorf("len function only allowed inside inequality" +
 								" function")
@@ -1763,7 +1763,7 @@ L:
 				case isGeoFunc(function.Name):
 					err = parseGeoArgs(it, function)
 
-				case isInequalityFn(function.Name):
+				case IsInequalityFn(function.Name):
 					err = parseIneqArgs(it, function)
 
 				default:
@@ -3225,7 +3225,7 @@ func isGeoFunc(name string) bool {
 	return name == "near" || name == "contains" || name == "within" || name == "intersects"
 }
 
-func isInequalityFn(name string) bool {
+func IsInequalityFn(name string) bool {
 	switch name {
 	case "eq", "le", "ge", "gt", "lt":
 		return true
