@@ -1897,20 +1897,15 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		fnType, fname := parseFuncTypeHelper(fname)
 		switch fnType {
 		case compareAttrFn: // lt, gt, le, ge, eq
-			var err error
-			typId, err := facets.TypeIDFor(fc)
+			fVal, err := facets.ValFor(fc)
 			if err != nil {
 				return false, err
 			}
 
-			v, err := types.Convert(ftree.function.val, typId)
+			v, err := types.Convert(ftree.function.val, fVal.Tid)
 			if err != nil {
 				// ignore facet if not of appropriate type
 				return false, nil
-			}
-			fVal, err := facets.ValFor(fc)
-			if err != nil {
-				return false, err
 			}
 
 			return types.CompareVals(fname, fVal, v), nil
@@ -1928,7 +1923,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		return false, errors.Errorf("Fn %s not supported in facets filtering.", fname)
 	}
 
-	var res []bool
+	res := make([]bool, 0, 2)
 	for _, c := range ftree.children {
 		r, err := applyFacetsTree(postingFacets, c)
 		if err != nil {
