@@ -69,7 +69,7 @@ func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 }
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
-	return gh.Resolve(ctx, gqlReq)
+	return gh.resolver.Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
