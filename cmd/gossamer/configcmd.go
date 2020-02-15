@@ -104,13 +104,13 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 
 	// Core
 	coreConfig := &core.Config{
-		BlockState:    stateSrv.Block,
-		StorageState:  stateSrv.Storage,
-		Keystore:      ks,
-		Runtime:       rt,
-		MsgRec:        networkMsgSend, // message channel from network service to core service
-		MsgSend:       networkMsgRec,  // message channel from core service to network service
-		BabeAuthority: currentConfig.Global.Authority,
+		BlockState:      stateSrv.Block,
+		StorageState:    stateSrv.Storage,
+		Keystore:        ks,
+		Runtime:         rt,
+		MsgRec:          networkMsgSend, // message channel from network service to core service
+		MsgSend:         networkMsgRec,  // message channel from core service to network service
+		IsBabeAuthority: currentConfig.Global.Authority,
 	}
 	coreSrvc := createCoreService(coreConfig)
 	srvcs = append(srvcs, coreSrvc)

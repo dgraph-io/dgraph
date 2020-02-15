@@ -17,9 +17,11 @@
 package babe
 
 import (
+	"bytes"
 	"encoding/binary"
-	"errors"
+	"io"
 
+	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
@@ -30,7 +32,7 @@ type BabeConfiguration struct {
 	EpochLength        uint64 // duration of epoch in slots
 	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
 	C2                 uint64
-	GenesisAuthorities []AuthorityDataRaw
+	GenesisAuthorities []*AuthorityDataRaw
 	Randomness         byte // TODO: change to [VrfOutputLength]byte when updating to new runtime
 	SecondarySlots     bool
 }
@@ -41,17 +43,35 @@ type AuthorityDataRaw struct {
 	Weight uint64
 }
 
+func (a *AuthorityDataRaw) Decode(r io.Reader) (*AuthorityDataRaw, error) {
+	id, err := common.Read32Bytes(r)
+	if err != nil {
+		return nil, err
+	}
+
+	weight, err := common.ReadUint64(r)
+	if err != nil {
+		return nil, err
+	}
+
+	a = new(AuthorityDataRaw)
+	a.ID = id
+	a.Weight = weight
+
+	return a, nil
+}
+
 //AuthorityData struct
 type AuthorityData struct {
-	id     *sr25519.PublicKey
-	weight uint64
+	ID     *sr25519.PublicKey
+	Weight uint64
 }
 
 // NewAuthorityData returns AuthorityData with the given id and weight
 func NewAuthorityData(pub *sr25519.PublicKey, weight uint64) *AuthorityData {
 	return &AuthorityData{
-		id:     pub,
-		weight: weight,
+		ID:     pub,
+		Weight: weight,
 	}
 }
 
@@ -59,10 +79,10 @@ func NewAuthorityData(pub *sr25519.PublicKey, weight uint64) *AuthorityData {
 func (a *AuthorityData) ToRaw() *AuthorityDataRaw {
 	raw := new(AuthorityDataRaw)
 
-	id := a.id.Encode()
+	id := a.ID.Encode()
 	copy(raw.ID[:], id)
 
-	raw.Weight = a.weight
+	raw.Weight = a.Weight
 	return raw
 }
 
@@ -74,8 +94,8 @@ func (a *AuthorityData) FromRaw(raw *AuthorityDataRaw) error {
 		return err
 	}
 
-	a.id = id
-	a.weight = raw.Weight
+	a.ID = id
+	a.Weight = raw.Weight
 	return nil
 }
 
@@ -92,15 +112,16 @@ func (a *AuthorityData) Encode() []byte {
 }
 
 // Decode sets the AuthorityData to the SCALE decoded input.
-func (a *AuthorityData) Decode(in []byte) error {
-	if len(in) < 40 {
-		return errors.New("length of input <40 bytes")
+func (a *AuthorityData) Decode(r io.Reader) error {
+	id, err := common.Read32Bytes(r)
+	if err != nil {
+		return err
 	}
 
-	weight := binary.LittleEndian.Uint64(in[32:40])
-
-	id := [32]byte{}
-	copy(id[:], in[:32])
+	weight, err := common.ReadUint64(r)
+	if err != nil {
+		return err
+	}
 
 	raw := &AuthorityDataRaw{
 		ID:     id,
@@ -148,13 +169,19 @@ func (n *NextEpochDescriptor) Encode() []byte {
 }
 
 // Decode sets the NextEpochDescriptor to the SCALE decoded input.
+// TODO: change to io.Reader
 func (n *NextEpochDescriptor) Decode(in []byte) error {
 	n.Authorities = []*AuthorityData{}
 
 	i := 0
 	for i = 0; i < (len(in)-32)/40; i++ {
 		auth := new(AuthorityData)
-		err := auth.Decode(in[i*40 : (i+1)*40])
+		buf := &bytes.Buffer{}
+		_, err := buf.Write(in[i*40 : (i+1)*40])
+		if err != nil {
+			return err
+		}
+		err = auth.Decode(buf)
 		if err != nil {
 			return err
 		}

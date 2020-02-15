@@ -70,6 +70,7 @@ func removeTestDataDir() {
 
 func createTempConfigFile() (*os.File, *cfg.Config) {
 	testConfig := cfg.DefaultConfig()
+	testConfig.Global.Authority = false
 	testConfig.Global.DataDir = TestDataDir
 
 	tmpFile, err := ioutil.TempFile(os.TempDir(), "prefix-")
@@ -113,9 +114,11 @@ func createTempGenesisFile(t *testing.T) string {
 	require.Nil(t, err)
 
 	testHex := hex.EncodeToString(testBytes)
-	testRaw := [2]map[string]string{}
-	testRaw[0] = map[string]string{"0x3a636f6465": "0x" + testHex}
-	TestGenesis.Genesis = genesis.GenesisFields{Raw: testRaw}
+	TestGenesis.Genesis.Raw = [2]map[string]string{}
+	if TestGenesis.Genesis.Raw[0] == nil {
+		TestGenesis.Genesis.Raw[0] = make(map[string]string)
+	}
+	TestGenesis.Genesis.Raw[0]["0x3a636f6465"] = "0x" + testHex
 
 	// Create temp file
 	file, err := ioutil.TempFile(os.TempDir(), "genesis-test")
@@ -351,7 +354,6 @@ func TestStrToMods(t *testing.T) {
 }
 
 func TestMakeNode(t *testing.T) {
-	t.Skip()
 	tempFile, cfgClone := createTempConfigFile()
 	defer teardown(tempFile)
 	defer removeTestDataDir()

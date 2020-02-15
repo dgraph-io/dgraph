@@ -6,17 +6,23 @@ import (
 
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/tests"
+	"github.com/ChainSafe/gossamer/trie"
 	"github.com/stretchr/testify/require"
 )
 
 // NewTestRuntime will create a new runtime (polkadot/test)
 func NewTestRuntime(t *testing.T, targetRuntime string) *Runtime {
+	return NewTestRuntimeWithTrie(t, targetRuntime, nil)
+}
+
+// NewTestRuntimeWithTrie will create a new runtime (polkadot/test) with the supplied trie as the storage
+func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *Runtime {
 	testRuntimeFilePath, testRuntimeURL := tests.GetRuntimeVars(targetRuntime)
 
 	_, err := tests.GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
 	require.Nil(t, err, "Fail: could not get runtime", "targetRuntime", targetRuntime)
 
-	rs := tests.NewTestRuntimeStorage(nil)
+	rs := tests.NewTestRuntimeStorage(tt)
 
 	fp, err := filepath.Abs(testRuntimeFilePath)
 	require.Nil(t, err, "could not create testRuntimeFilePath", "targetRuntime", targetRuntime)

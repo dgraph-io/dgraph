@@ -18,8 +18,8 @@ func TestDecodeNextEpochDescriptor(t *testing.T) {
 		}
 
 		auth := &AuthorityData{
-			id:     kp.Public().(*sr25519.PublicKey),
-			weight: 1,
+			ID:     kp.Public().(*sr25519.PublicKey),
+			Weight: 1,
 		}
 
 		auths = append(auths, auth)

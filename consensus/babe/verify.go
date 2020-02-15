@@ -14,7 +14,7 @@ func (b *Session) verifySlotWinner(slot uint64, header *babetypes.BabeHeader) (b
 		return false, fmt.Errorf("no authority data for index %d", header.BlockProducerIndex)
 	}
 
-	pub := b.authorityData[header.BlockProducerIndex].id
+	pub := b.authorityData[header.BlockProducerIndex].ID
 
 	slotBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slotBytes, slot)
@@ -65,7 +65,7 @@ func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool
 		return false, fmt.Errorf("no authority data for index %d", babeHeader.BlockProducerIndex)
 	}
 
-	authorPub := b.authorityData[babeHeader.BlockProducerIndex].id
+	authorPub := b.authorityData[babeHeader.BlockProducerIndex].ID
 	// remove seal before verifying
 	header.Digest = header.Digest[:len(header.Digest)-1]
 	encHeader, err := header.Encode()

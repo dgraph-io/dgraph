@@ -28,9 +28,9 @@ func DecodeCustom(in []byte, t interface{}) error {
 	someType := reflect.TypeOf(t)
 	_, ok := someType.MethodByName("Decode")
 	if ok {
-		meth := reflect.ValueOf(t).MethodByName("Decode")
+		method := reflect.ValueOf(t).MethodByName("Decode")
 		inVal := []reflect.Value{reflect.ValueOf(in)}
-		res := meth.Call(inVal)
+		res := method.Call(inVal)
 		err := res[0].Interface()
 		if err != nil {
 			return err.(error)
@@ -38,6 +38,25 @@ func DecodeCustom(in []byte, t interface{}) error {
 		return nil
 	}
 	return DecodePtr(in, t)
+}
+
+// DecodeCustom check if interface has method Decode(io.Reader), if so use that, otherwise use regular scale decoding
+func (sd *Decoder) DecodeCustom(t interface{}) (interface{}, error) {
+	someType := reflect.TypeOf(t)
+	_, ok := someType.MethodByName("Decode")
+	if ok {
+		meth := reflect.ValueOf(t).MethodByName("Decode")
+		inVal := []reflect.Value{reflect.ValueOf(sd.Reader)}
+		res := meth.Call(inVal)
+		err := res[1].Interface()
+		if err != nil {
+			return nil, err.(error)
+		}
+		t = res[0].Interface()
+		return t, nil
+	}
+
+	return nil, errors.New("cannot decode custom type")
 }
 
 // DecodePtr is the high level function wrapping the specific type decoding functions

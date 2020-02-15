@@ -59,7 +59,6 @@ type SessionConfig struct {
 	Keypair        *sr25519.Keypair
 	Runtime        *runtime.Runtime
 	NewBlocks      chan<- types.Block
-	AuthorityIndex uint64
 	AuthData       []*AuthorityData
 	EpochThreshold *big.Int // should only be used for testing
 	Done           chan<- struct{}
@@ -79,7 +78,6 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		txQueue:        new(tx.PriorityQueue),
 		slotToProof:    make(map[uint64]*VrfOutputAndProof),
 		newBlocks:      cfg.NewBlocks,
-		authorityIndex: cfg.AuthorityIndex,
 		authorityData:  cfg.AuthData,
 		epochThreshold: cfg.EpochThreshold,
 		done:           cfg.Done,
@@ -94,6 +92,13 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 
 	babeSession.randomness = [sr25519.VrfOutputLength]byte{babeSession.config.Randomness}
 
+	err = babeSession.setAuthorityIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Trace("BABE session", "authority index", babeSession.authorityIndex)
+
 	return babeSession, nil
 }
 
@@ -105,6 +110,8 @@ func (b *Session) Start() error {
 			return err
 		}
 	}
+
+	log.Trace("BABE", "epochThreshold", b.epochThreshold)
 
 	var i uint64 = 0
 	var err error
@@ -130,9 +137,27 @@ func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
 	return b.txQueue.Peek()
 }
 
-func (b *Session) SetEpochData(data *NextEpochDescriptor) {
+func (b *Session) AuthorityData() []*AuthorityData {
+	return b.authorityData
+}
+
+func (b *Session) SetEpochData(data *NextEpochDescriptor) error {
 	b.authorityData = data.Authorities
 	b.randomness = data.Randomness
+	return b.setAuthorityIndex()
+}
+
+func (b *Session) setAuthorityIndex() error {
+	pub := b.keypair.Public()
+
+	for i, auth := range b.authorityData {
+		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
+			b.authorityIndex = uint64(i)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("key not in BABE authority data")
 }
 
 func (b *Session) invokeBlockAuthoring() {
@@ -229,6 +254,7 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 		copy(outbytes[:], output)
 		proofbytes := [sr25519.VrfProofLength]byte{}
 		copy(proofbytes[:], proof)
+		log.Trace("BABE lottery", "won slot", slot)
 		return &VrfOutputAndProof{
 			output: outbytes,
 			proof:  proofbytes,
@@ -260,7 +286,7 @@ func (b *Session) setEpochThreshold() error {
 func (b *Session) authorityWeights() []uint64 {
 	weights := make([]uint64, len(b.authorityData))
 	for i, auth := range b.authorityData {
-		weights[i] = auth.weight
+		weights[i] = auth.Weight
 	}
 	return weights
 }

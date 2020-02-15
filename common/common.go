@@ -176,3 +176,15 @@ func ReadUint64(r io.Reader) (uint64, error) {
 	}
 	return binary.LittleEndian.Uint64(buf), nil
 }
+
+// Read32Bytes reads 32 bytes from the reader and returns it
+func Read32Bytes(r io.Reader) ([32]byte, error) {
+	buf := make([]byte, 32)
+	_, err := r.Read(buf)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	h := [32]byte{}
+	copy(h[:], buf)
+	return h, nil
+}

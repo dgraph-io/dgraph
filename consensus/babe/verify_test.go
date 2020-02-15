@@ -5,28 +5,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ChainSafe/gossamer/runtime"
-	"github.com/ChainSafe/gossamer/tests"
-
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 )
 
 func TestVerifySlotWinner(t *testing.T) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cfg := &SessionConfig{
-		Runtime: rt,
 		Keypair: kp,
 	}
 
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	babesession := createTestSession(t, cfg)
 	err = babesession.configurationFromRuntime()
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +54,7 @@ func TestVerifySlotWinner(t *testing.T) {
 
 	babesession.authorityData = make([]*AuthorityData, 1)
 	babesession.authorityData[0] = &AuthorityData{
-		id: kp.Public().(*sr25519.PublicKey),
+		ID: kp.Public().(*sr25519.PublicKey),
 	}
 
 	ok, err := babesession.verifySlotWinner(slot.number, babeHeader)
@@ -76,30 +68,10 @@ func TestVerifySlotWinner(t *testing.T) {
 }
 
 func TestVerifyAuthorshipRight(t *testing.T) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
-	kp, err := sr25519.GenerateKeypair()
+	babesession := createTestSession(t, nil)
+	err := babesession.configurationFromRuntime()
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	cfg := &SessionConfig{
-		Runtime: rt,
-		Keypair: kp,
-	}
-
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	babesession.authorityData = make([]*AuthorityData, 1)
-	babesession.authorityData[0] = &AuthorityData{
-		id:     kp.Public().(*sr25519.PublicKey),
-		weight: 1,
 	}
 
 	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468

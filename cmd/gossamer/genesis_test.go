@@ -95,6 +95,7 @@ func TestGenesisStateLoading(t *testing.T) {
 	set := flag.NewFlagSet("config", 0)
 	set.String("config", tempFile.Name(), "TOML configuration file")
 	set.String("genesis", genesisPath, "path to genesis file")
+	set.Bool("authority", false, "")
 	context := cli.NewContext(nil, set, nil)
 
 	err = loadGenesis(context)
@@ -116,7 +117,18 @@ func TestGenesisStateLoading(t *testing.T) {
 
 	mgr := d.Services.Get(&core.Service{})
 
-	stateRoot, err := mgr.(*core.Service).StorageRoot()
+	var coreSrv *core.Service
+	var ok bool
+
+	if coreSrv, ok = mgr.(*core.Service); !ok {
+		t.Fatal("could not find core service")
+	}
+
+	if coreSrv == nil {
+		t.Fatal("core service is nil")
+	}
+
+	stateRoot, err := coreSrv.StorageRoot()
 	require.Nil(t, err)
 
 	if !bytes.Equal(expectedRoot[:], stateRoot[:]) {

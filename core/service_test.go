@@ -26,10 +26,12 @@ import (
 	"github.com/ChainSafe/gossamer/common/optional"
 	"github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
+	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/network"
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/tests"
+	"github.com/ChainSafe/gossamer/trie"
 )
 
 var TestMessageTimeout = 2 * time.Second
@@ -38,10 +40,11 @@ func TestStartService(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
-		Runtime:  rt,
-		Keystore: keystore.NewKeystore(),
-		MsgRec:   make(chan network.Message),
-		MsgSend:  make(chan network.Message),
+		Runtime:         rt,
+		Keystore:        keystore.NewKeystore(),
+		MsgRec:          make(chan network.Message),
+		MsgSend:         make(chan network.Message),
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -61,8 +64,9 @@ func TestValidateBlock(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
-		Runtime:  rt,
-		Keystore: keystore.NewKeystore(),
+		Runtime:         rt,
+		Keystore:        keystore.NewKeystore(),
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -84,8 +88,9 @@ func TestValidateTransaction(t *testing.T) {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
 	cfg := &Config{
-		Runtime:  rt,
-		Keystore: keystore.NewKeystore(),
+		Runtime:         rt,
+		Keystore:        keystore.NewKeystore(),
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -127,10 +132,11 @@ func TestAnnounceBlock(t *testing.T) {
 	newBlocks := make(chan types.Block)
 
 	cfg := &Config{
-		Runtime:   rt,
-		MsgSend:   msgSend, // message channel from core service to network service
-		Keystore:  keystore.NewKeystore(),
-		NewBlocks: newBlocks,
+		Runtime:         rt,
+		MsgSend:         msgSend, // message channel from core service to network service
+		Keystore:        keystore.NewKeystore(),
+		NewBlocks:       newBlocks,
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -173,10 +179,11 @@ func TestProcessBlockAnnounceMessage(t *testing.T) {
 	msgSend := make(chan network.Message)
 
 	cfg := &Config{
-		Runtime:  rt,
-		MsgRec:   msgRec,
-		MsgSend:  msgSend,
-		Keystore: keystore.NewKeystore(),
+		Runtime:         rt,
+		MsgRec:          msgRec,
+		MsgSend:         msgSend,
+		Keystore:        keystore.NewKeystore(),
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -213,11 +220,27 @@ func TestProcessBlockAnnounceMessage(t *testing.T) {
 }
 
 func TestProcessBlockResponseMessage(t *testing.T) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+	tt := trie.NewEmptyTrie(nil)
+	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubkey := kp.Public().Encode()
+	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ks := keystore.NewKeystore()
+	ks.Insert(kp)
 
 	cfg := &Config{
-		Runtime:  rt,
-		Keystore: keystore.NewKeystore(),
+		Runtime:         rt,
+		Keystore:        ks,
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)
@@ -287,12 +310,27 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 }
 
 func TestProcessTransactionMessage(t *testing.T) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+	tt := trie.NewEmptyTrie(nil)
+	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+
+	kp, err := sr25519.GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubkey := kp.Public().Encode()
+	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ks := keystore.NewKeystore()
+	ks.Insert(kp)
 
 	cfg := &Config{
-		Runtime:       rt,
-		Keystore:      keystore.NewKeystore(),
-		BabeAuthority: true,
+		Runtime:         rt,
+		Keystore:        ks,
+		IsBabeAuthority: true,
 	}
 
 	s, err := NewService(cfg)
@@ -325,8 +363,8 @@ func TestProcessTransactionMessage(t *testing.T) {
 
 func TestService_NotAuthority(t *testing.T) {
 	cfg := &Config{
-		Keystore:      keystore.NewKeystore(),
-		BabeAuthority: false,
+		Keystore:        keystore.NewKeystore(),
+		IsBabeAuthority: false,
 	}
 
 	s, err := NewService(cfg)

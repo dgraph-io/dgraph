@@ -62,8 +62,29 @@ func (s *Service) grandpaAuthorities() ([]*babe.AuthorityData, error) {
 		return nil, err
 	}
 
-	auths := []*babe.AuthorityData{}
-	_, err = scale.Decode(ret, auths)
+	decodedKeys, err := scale.Decode(ret, [][32]byte{})
+	if err != nil {
+		return nil, err
+	}
+
+	keys := decodedKeys.([][32]byte)
+	authsRaw := make([]*babe.AuthorityDataRaw, len(keys))
+
+	for i, key := range keys {
+		authsRaw[i] = &babe.AuthorityDataRaw{
+			ID:     key,
+			Weight: 1,
+		}
+	}
+
+	auths := make([]*babe.AuthorityData, len(keys))
+	for i, auth := range authsRaw {
+		auths[i] = new(babe.AuthorityData)
+		err = auths[i].FromRaw(auth)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return auths, err
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/keystore"
+	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
@@ -88,6 +89,7 @@ func unlockKeys(ctx *cli.Context, datadir string, ks *keystore.Keystore) error {
 		}
 
 		ks.Insert(kp)
+		log.Info("[cmd] unlocked key", "key", kp.Public().Hex())
 	}
 
 	return nil
