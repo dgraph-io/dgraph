@@ -44,7 +44,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Fixed
  
 - Avoid running GC frequently. Only run for every 2GB of increase. Small optimizations in Bulk.reduce.
-- Check response status when posting telemtry data. ([#4726][])
+- Check response status when posting telemetry data. ([#4726][])
 - Add support for $ in quoted string. Fixes [#4695][]. ([#4702][])
 - Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][]) 
 - **Breaking changes**
