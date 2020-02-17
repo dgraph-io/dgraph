@@ -140,6 +140,57 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	return db
 }
 
+var allocator *MemAllocator
+
+var allocatorLock sync.Mutex
+
+func init() {
+	allocator = NewAllocator()
+}
+
+// func ResetAllocator() {
+// 	done := atomic.LoadUint64(&allocator.done)
+// 	if done != 1 {
+// 		return
+// 	}
+// 	allocatorLock.Lock()
+// 	defer allocatorLock.Unlock()
+// 	done = atomic.LoadUint64(&allocator.done)
+// 	if done != 1 {
+// 		return
+// 	}
+// 	// Some reset allocator have made the new allocation so move forward
+// 	allocator = NewAllocator()
+// }
+
+type MemAllocator struct {
+	sync.Mutex
+	index int
+	data  []byte
+}
+
+func NewAllocator() *MemAllocator {
+	return &MemAllocator{
+		index: 0,
+		data:  make([]byte, 64*1024*1024),
+	}
+}
+
+func (m *MemAllocator) Allocate(n int) []byte {
+	if n > 64*1024*1024 {
+		return make([]byte, n)
+	}
+	m.Lock()
+	defer m.Unlock()
+	if m.index+n > len(m.data) {
+		m.data = make([]byte, 64*1024*1024)
+		m.index = 0
+	}
+	eBuf := m.data[m.index : m.index+n]
+	m.index += n
+	return eBuf
+}
+
 type mapIterator struct {
 	fd            *os.File
 	reader        *bufio.Reader
@@ -201,13 +252,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 				mi.arena = make([]byte, 64*1024*1024)
 				bufStartIndex = 0
 			}
-			var eBuf []byte
-			if sz > 64*1024*1024 {
-				eBuf = make([]byte, sz)
-			} else {
-				eBuf = mi.arena[bufStartIndex : bufStartIndex+int(sz)]
-				bufStartIndex += int(sz)
-			}
+			eBuf := allocator.Allocate(int(sz))
 			// If sz > 64MB, then just create one slice (don't do anything special to arena, keep it
 			// simple).
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
