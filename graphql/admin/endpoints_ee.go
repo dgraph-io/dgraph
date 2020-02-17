@@ -203,7 +203,7 @@ const adminQueries = `
 	getGroup(name: String!): Group
 
 	# TODO - This needs a custom handler. Implement this later.
-	# getCurrentUser: User
+	getCurrentUser: User
 
 	queryUser(filter: UserFilter): [User]
 	queryGroup(filter: GroupFilter): [Group]`

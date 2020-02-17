@@ -438,6 +438,10 @@ func (f *field) SetArgTo(arg string, val interface{}) {
 	if f.arguments == nil {
 		f.arguments = make(map[string]interface{})
 	}
+	argument := f.field.Arguments.ForName(arg)
+	if argument == nil {
+		f.field.Arguments = append(f.field.Arguments, &ast.Argument{Name: arg})
+	}
 	f.arguments[arg] = val
 }
 

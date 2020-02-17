@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -35,7 +36,8 @@ func NewQueryRewriter() QueryRewriter {
 }
 
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
-func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
+func (qr *queryRewriter) Rewrite(ctx context.Context,
+	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:

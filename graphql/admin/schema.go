@@ -151,10 +151,11 @@ func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuer
 	return doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
 }
 
-func (gsr *getSchemaResolver) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
+func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
+	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
 	gqlQuery.Rename("queryGQLSchema")
-	return gsr.baseRewriter.Rewrite(gqlQuery)
+	return gsr.baseRewriter.Rewrite(ctx, gqlQuery)
 }
 
 func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
