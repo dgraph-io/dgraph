@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/stretchr/testify/require"
-	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
+	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 
