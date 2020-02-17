@@ -62,7 +62,7 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func (asr *updateSchemaResolver) Rewrite(
+func (asr *updateSchemaResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	glog.Info("Got updateGQLSchema request")
@@ -90,7 +90,7 @@ func (asr *updateSchemaResolver) Rewrite(
 		// There's never been a GraphQL schema in this Dgraph before so rewrite this into
 		// an add
 		m.SetArgTo(schema.InputArgName, map[string]interface{}{"schema": asr.newSchema.Schema})
-		return asr.baseAddRewriter.Rewrite(m)
+		return asr.baseAddRewriter.Rewrite(ctx, m)
 	}
 
 	// there's already a value, just continue with the GraphQL update
@@ -99,7 +99,7 @@ func (asr *updateSchemaResolver) Rewrite(
 			"filter": map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}},
 			"set":    map[string]interface{}{"schema": asr.newSchema.Schema},
 		})
-	return asr.baseMutationRewriter.Rewrite(m)
+	return asr.baseMutationRewriter.Rewrite(ctx, m)
 }
 
 func (asr *updateSchemaResolver) FromMutationResult(

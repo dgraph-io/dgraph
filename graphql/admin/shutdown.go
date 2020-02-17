@@ -30,7 +30,7 @@ type shutdownResolver struct {
 	mutation schema.Mutation
 }
 
-func (sr *shutdownResolver) Rewrite(
+func (sr *shutdownResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got shutdown request through GraphQL admin API")
 

@@ -35,7 +35,7 @@ type configInput struct {
 	LruMB float64
 }
 
-func (cr *configResolver) Rewrite(
+func (cr *configResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got config request through GraphQL admin API")
 

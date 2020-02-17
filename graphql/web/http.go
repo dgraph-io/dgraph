@@ -109,7 +109,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		// add remote addr as peer info so that the remote address can be logged inside Server.Login
+		// Add remote addr as peer info so that the remote address can be logged
+		// inside Server.Login
 		if intPort, convErr := strconv.Atoi(port); convErr == nil {
 			ctx = peer.NewContext(ctx, &peer.Peer{
 				Addr: &net.TCPAddr{

@@ -43,7 +43,7 @@ type backupInput struct {
 	ForceFull    bool
 }
 
-func (br *backupResolver) Rewrite(
+func (br *backupResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got backup request")
 

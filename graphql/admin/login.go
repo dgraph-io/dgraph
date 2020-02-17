@@ -33,7 +33,6 @@ type loginResolver struct {
 	mutation   schema.Mutation
 	accessJwt  string
 	refreshJwt string
-	context    context.Context
 }
 
 type loginInput struct {
@@ -42,11 +41,7 @@ type loginInput struct {
 	RefreshToken string
 }
 
-func (lr *loginResolver) SetLoginContext(context context.Context) {
-	lr.context = context
-}
-
-func (lr *loginResolver) Rewrite(
+func (lr *loginResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got login request")
 
@@ -56,7 +51,7 @@ func (lr *loginResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	resp, err := (&edgraph.Server{}).Login(lr.context, &dgoapi.LoginRequest{
+	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
 		RefreshToken: input.RefreshToken,
