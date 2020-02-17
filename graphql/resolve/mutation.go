@@ -107,6 +107,11 @@ type MutationExecutor interface {
 		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
 }
 
+// An ExecutorContext adds context to the request.
+type ExecutorContext interface {
+	SetLoginContext(context context.Context)
+}
+
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
 // a function.  Based on the http.HandlerFunc pattern.
 type MutationResolverFunc func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool)
@@ -221,6 +226,11 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
+
+	loginResolver, ok := mr.mutationRewriter.(ExecutorContext)
+	if ok {
+		loginResolver.SetLoginContext(ctx)
+	}
 
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {

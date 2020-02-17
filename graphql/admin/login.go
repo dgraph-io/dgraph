@@ -33,12 +33,17 @@ type loginResolver struct {
 	mutation   schema.Mutation
 	accessJwt  string
 	refreshJwt string
+	context    context.Context
 }
 
 type loginInput struct {
 	UserId       string
 	Password     string
 	RefreshToken string
+}
+
+func (lr *loginResolver) SetLoginContext(context context.Context) {
+	lr.context = context
 }
 
 func (lr *loginResolver) Rewrite(
@@ -51,8 +56,7 @@ func (lr *loginResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	// TODO - Fix this context to log the IP as it does in the other request.
-	resp, err := (&edgraph.Server{}).Login(context.Background(), &dgoapi.LoginRequest{
+	resp, err := (&edgraph.Server{}).Login(lr.context, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
 		RefreshToken: input.RefreshToken,
