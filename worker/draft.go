@@ -537,7 +537,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
+		txn := posting.Oracle().GetTxn(delta.Namespace, start)
 		if txn == nil {
 			return
 		}

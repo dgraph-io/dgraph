@@ -201,7 +201,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
-	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
+	if err := posting.Oracle().WaitForAllNamespace(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
 

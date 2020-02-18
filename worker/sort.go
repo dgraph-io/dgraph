@@ -418,7 +418,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	defer stop()
 
 	span.Annotatef(nil, "Waiting for startTs: %d", ts.ReadTs)
-	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, ts.Namespace, ts.ReadTs); err != nil {
 		return nil, err
 	}
 	span.Annotatef(nil, "Waiting for checksum match")

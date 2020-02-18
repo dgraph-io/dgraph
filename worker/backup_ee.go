@@ -46,7 +46,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 			g.groupId(), req.GroupId)
 	}
 
-	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForAllNamespace(ctx, req.ReadTs); err != nil {
 		return nil, err
 	}
 

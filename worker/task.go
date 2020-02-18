@@ -798,7 +798,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	span.Annotatef(nil, "Waiting for startTs: %d at node: %d, gid: %d",
 		q.ReadTs, groups().Node.Id, gid)
-	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, q.Namespace, q.ReadTs); err != nil {
 		return &pb.Result{}, err
 	}
 	if span != nil {

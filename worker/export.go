@@ -381,7 +381,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	glog.Infof("Export requested at %d.", in.ReadTs)
 
 	// Let's wait for this server to catch up to all the updates until this ts.
-	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForAllNamespace(ctx, in.ReadTs); err != nil {
 		return err
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)

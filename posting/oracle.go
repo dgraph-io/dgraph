@@ -182,7 +182,6 @@ type OlderTxn struct {
 func (o *oracle) TxnOlderThan(dur time.Duration) (oldTxns []*OlderTxn) {
 	o.RLock()
 	defer o.RUnlock()
-	oldTxns := []*OlderTxn{}
 	cutoff := time.Now().Add(-dur)
 	for namespace, txns := range o.pendingTxns {
 		oldTxn := &OlderTxn{
@@ -199,11 +198,9 @@ func (o *oracle) TxnOlderThan(dur time.Duration) (oldTxns []*OlderTxn) {
 }
 
 func (o *oracle) addToWaiters(namespace string, startTs uint64) (chan struct{}, bool) {
-	o.Lock()
-	defer o.Unlock()
 	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
 	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
-	// moved past startTs.
+	// moved past startTs. Caller should take care of thread safety.
 	if startTs <= o.MaxAssigned(namespace) {
 		return nil, false
 	}
@@ -223,6 +220,8 @@ func (o *oracle) MaxAssigned(namespace string) uint64 {
 }
 
 func (o *oracle) WaitForTs(ctx context.Context, namespace string, startTs uint64) error {
+	o.Lock()
+	defer o.Unlock()
 	ch, ok := o.addToWaiters(namespace, startTs)
 	if !ok {
 		return nil
@@ -233,6 +232,24 @@ func (o *oracle) WaitForTs(ctx context.Context, namespace string, startTs uint64
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (o *oracle) WaitForAllNamespace(ctx context.Context, startTs uint64) error {
+	o.Lock()
+	defer o.Unlock()
+	for namespace := range o.waiters {
+		ch, ok := o.addToWaiters(namespace, startTs)
+		if !ok {
+			continue
+		}
+		select {
+		case <-ch:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
@@ -279,10 +296,10 @@ func (o *oracle) ResetTxns() {
 	o.pendingTxns = make(map[string]map[uint64]*Txn)
 }
 
-func (o *oracle) GetTxn(startTs uint64) *Txn {
+func (o *oracle) GetTxn(namespace string, startTs uint64) *Txn {
 	o.RLock()
 	defer o.RUnlock()
-	return o.pendingTxns[startTs]
+	return o.pendingTxns[namespace][startTs]
 }
 
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
