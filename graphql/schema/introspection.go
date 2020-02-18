@@ -112,7 +112,7 @@ func (ec *executionContext) writeStringSlice(v []string) {
 // graphql.requestContext to work correctly.
 func collectFields(reqCtx *requestContext, selSet ast.SelectionSet,
 	satisfies []string) []graphql.CollectedField {
-	ctx := &graphql.RequestContext{
+	ctx := &graphql.OperationContext{
 		RawQuery:  reqCtx.RawQuery,
 		Variables: reqCtx.Variables,
 		Doc:       reqCtx.Doc,
