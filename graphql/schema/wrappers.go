@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
