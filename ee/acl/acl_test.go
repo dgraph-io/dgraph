@@ -1131,7 +1131,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1244,4 +1244,51 @@ func TestQueryUserInfo(t *testing.T) {
 	}
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
+}
+
+func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
+	// Create a new user without any groups, queryGroup should return an empty result.
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryGroup": []}}`, string(b))
+
+	gqlQuery = `
+	query {
+		queryUser {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryUser": [{ "groups": [], "name": "alice"}]}}`,
+		string(b))
 }
