@@ -150,11 +150,11 @@ const adminTypes = `
 	}
 
 	type AddUserPayload {
-		user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+		user: [User]
 	}
 
 	type AddGroupPayload {
-		group(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+		group: [Group]
 	}
 
 	type DeleteUserPayload {
@@ -199,5 +199,5 @@ const adminQueries = `
 	# TODO - This needs a custom handler. Implement this later.
 	# getCurrentUser: User
 
-	queryUser(filter: UserFilter): [User]
-	queryGroup(filter: GroupFilter): [Group]`
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`
