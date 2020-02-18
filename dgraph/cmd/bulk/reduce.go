@@ -362,24 +362,10 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
-
-	// Create a freelist struct here and pass to every request.
-	freelist := make([]*pb.MapEntry, 0, 100)
-	for len(freelist) < cap(freelist) {
-		freelist = append(freelist, &pb.MapEntry{})
-	}
 	for req := range entryCh {
-		// Ensure that freelist length is >= len(req.entries).
-		for {
-			if len(freelist) <= len(req.entries) {
-				freelist = append(freelist, &pb.MapEntry{})
-				continue
-			}
-			break
-		}
 
 		req.list = &bpb.KVList{}
-		freelist = r.toList(req.entries, req.list, freelist)
+		r.toList(req.entries, req.list)
 		// r.toList(req) // contains entries, list and freelist struct.
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
@@ -561,7 +547,7 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.MapEntry) []*pb.MapEntry {
+func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) {
 
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
@@ -630,6 +616,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.M
 	}
 
 	currentBatch := make([]*pb.MapEntry, 0, 100)
+	freelist := make([]*pb.MapEntry, 0)
 	for _, entry := range bufEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 		entryKey, err := GetKeyForMapEntry(entry)
@@ -674,5 +661,4 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.M
 		entry = nil
 		currentBatch = append(currentBatch, mapEntry)
 	}
-	return freelist
 }
