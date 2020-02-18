@@ -82,7 +82,7 @@ type MutationRewriter interface {
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
-	Rewrite(ctx context.Context, m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error)
+	Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error)
 
 	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
 	// mutation and constructs a Dgraph query.  It's used to find the return
@@ -221,7 +221,7 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
-	query, mutations, err := mr.mutationRewriter.Rewrite(ctx, mutation)
+	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
