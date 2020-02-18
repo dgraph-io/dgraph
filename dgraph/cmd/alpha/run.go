@@ -58,7 +58,7 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
-	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
+	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
 const (
@@ -289,7 +289,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		ctx := attachAccessJwt(context.Background(), r)
+		ctx := x.AttachAccessJwt(context.Background(), r)
 		var resp *api.Response
 		if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
 			x.SetStatus(w, x.Error, err.Error())
@@ -335,7 +335,7 @@ func stateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	ctx := context.Background()
-	ctx = attachAccessJwt(ctx, r)
+	ctx = x.AttachAccessJwt(ctx, r)
 
 	var aResp *api.Response
 	if aResp, err = (&edgraph.Server{}).State(ctx); err != nil {
@@ -447,11 +447,6 @@ func setupServer(closer *y.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
-	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
-
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 	mainServer, adminServer := admin.NewServers(introspection, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
@@ -468,6 +463,9 @@ func setupServer(closer *y.Closer) {
 		})
 	}
 	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+	http.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
+		adminSchemaHandler(w, r, adminServer)
+	})
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)

@@ -5,7 +5,7 @@ go 1.12
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
-	github.com/99designs/gqlgen v0.10.1
+	github.com/99designs/gqlgen v0.11.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.4 // indirect
@@ -50,17 +50,17 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
 	github.com/twpayne/go-geom v1.0.5
-	github.com/vektah/gqlparser v1.1.2
+	github.com/vektah/gqlparser/v2 v2.0.1
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
-	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
-	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449
+	golang.org/x/sys v0.0.0-20200116001909-b77594299b42
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.2.4
 )

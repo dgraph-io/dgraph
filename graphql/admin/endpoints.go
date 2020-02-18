@@ -1,7 +1,7 @@
 // +build oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,10 @@
  * limitations under the License.
  */
 
-package acl
+package admin
 
-import (
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
-)
+const adminTypes = ``
 
-var CmdAcl x.SubCommand
+const adminMutations = ``
 
-func init() {
-	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Enterprise feature. Not supported in oss version",
-	}
-}
+const adminQueries = ``

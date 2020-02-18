@@ -89,14 +89,17 @@ input StringHashFilter {
 
 type AddPostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 #######################

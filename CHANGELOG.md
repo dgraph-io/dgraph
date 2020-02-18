@@ -12,26 +12,65 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
-## [2.0.0-beta1] - 2020-01-30
-[2.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v2.0.0-beta1
+## [2.0.0-rc1] - 2020-02-14
+[2.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v2.0.0-rc1
+** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
+
+### Removed
+- Remove HTTP admin endpoints. The same functionality is available via GraphQL Admin API.  Please see below. ([#4754][])
 
 ### Changed
 
 - Report GraphQL stats from alpha. ([#4607][])
+- During backup, collapse split posting lists into a single list. ([#4682][]) 
+- Enterprise features
+  - **Breaking changes**
+    - [BREAKING] Underlying schema for ACL has changed. ([#4725][])
 
 ### Added
 
 - Add GraphQL API for Dgraph accessible via the `/graphql` and `/admin` HTTP endpoints on Dgraph Alpha. ([#933][])
 - Add support for sorting on multiple facets. Fixes [#3638][]. ([#4579][])
+- Expose Badger Compression Level option in Bulk Loader. ([#4669][])
+- GraphQL Admin API: Support Backup operation. ([#4706][])
+- GraphQL Admin API: Support export, draining, shutdown and setting lrumb operations. ([#4739][])
+- GraphQL Admin API: duplicate `/health` in GraphQL `/admin` ([#4768][])
+- GraphQL Admin API: Add `/admin/schema` endpoint ([#4777][]) 
+
+- Enterprise features
+  - ACL: Allow users to query data for their groups ([#4774][])
+  - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
 
 ### Fixed
  
 - Avoid running GC frequently. Only run for every 2GB of increase. Small optimizations in Bulk.reduce.
+- Check response status when posting telemetry data. ([#4726][])
+- Add support for $ in quoted string. Fixes [#4695][]. ([#4702][])
+- Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][]) 
+- **Breaking changes**
+  - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][]) 
 
+[#4777]: https://github.com/dgraph-io/dgraph/issues/4777
+[#4768]: https://github.com/dgraph-io/dgraph/issues/4768
+[#4760]: https://github.com/dgraph-io/dgraph/issues/4760
+[#4739]: https://github.com/dgraph-io/dgraph/issues/4739
+[#4706]: https://github.com/dgraph-io/dgraph/issues/4706
 [#4607]: https://github.com/dgraph-io/dgraph/issues/4607
 [#933]: https://github.com/dgraph-io/dgraph/issues/933
 [#3638]: https://github.com/dgraph-io/dgraph/issues/3638
 [#4579]: https://github.com/dgraph-io/dgraph/issues/4579
+[#4682]: https://github.com/dgraph-io/dgraph/issues/4682
+[#4725]: https://github.com/dgraph-io/dgraph/issues/4725
+[#4669]: https://github.com/dgraph-io/dgraph/issues/4669
+[#4774]: https://github.com/dgraph-io/dgraph/issues/4774
+[#4726]: https://github.com/dgraph-io/dgraph/issues/4726
+[#4695]: https://github.com/dgraph-io/dgraph/issues/4695
+[#4702]: https://github.com/dgraph-io/dgraph/issues/4702
+[#3610]: https://github.com/dgraph-io/dgraph/issues/3610
+[#4773]: https://github.com/dgraph-io/dgraph/issues/4773
+[#4005]: https://github.com/dgraph-io/dgraph/issues/4005
+[#4316]: https://github.com/dgraph-io/dgraph/issues/4316
+[#4754]: https://github.com/dgraph-io/dgraph/issues/4754
 
 ## [1.2.1] - 2020-02-06
 [1.2.1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v1.2.1

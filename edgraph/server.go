@@ -993,7 +993,7 @@ func parseRequest(qc *queryContext) error {
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
-	if err := authorizeQuery(ctx, &qc.gqlRes); err != nil {
+	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
 		return err
 	}
 

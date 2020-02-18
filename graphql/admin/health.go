@@ -17,49 +17,40 @@
 package admin
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
-
-const (
-	errNoConnection healthStatus = "ErrNoConnection"
-	noGraphQLSchema healthStatus = "NoGraphQLSchema"
-	healthy         healthStatus = "Healthy"
-)
-
-type healthStatus string
 
 type healthResolver struct {
-	status healthStatus
-	format string
-}
-
-var statusMessage = map[healthStatus]string{
-	errNoConnection: "Unable to contact Dgraph",
-	noGraphQLSchema: "Dgraph connection established but there's no GraphQL schema.",
-	healthy:         "Dgraph connection established and serving GraphQL schema.",
 }
 
 func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
-	msg := "message"
-	status := "status"
-
-	for _, f := range q.SelectionSet() {
-		if f.Name() == "message" {
-			msg = f.ResponseName()
-		}
-		if f.Name() == "status" {
-			status = f.ResponseName()
-		}
-	}
-
-	hr.format = fmt.Sprintf(`{"%s":[{"%s":"%%s","%s":"%%s"}]}`, q.ResponseName(), msg, status)
 	return nil, nil
 }
 
 func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return []byte(fmt.Sprintf(hr.format, statusMessage[hr.status], string(hr.status))), nil
+	var err error
+
+	var resp *api.Response
+	var respErr error
+	if resp, respErr = (&edgraph.Server{}).Health(ctx, true); respErr != nil {
+		err = errors.Errorf("%s: %s", x.Error, respErr.Error())
+	}
+	if resp == nil {
+		err = errors.Errorf("%s: %s", x.ErrorNoData, "No state information available.")
+	}
+
+	var buf bytes.Buffer
+	x.Check2(buf.WriteString(`{ "health":`))
+	x.Check2(buf.Write(resp.Json))
+	x.Check2(buf.WriteString(`}`))
+
+	return buf.Bytes(), err
 }

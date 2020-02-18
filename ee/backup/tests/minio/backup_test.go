@@ -16,12 +16,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,17 +217,29 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
-	forceFullStr := "false"
-	if forceFull {
-		forceFullStr = "true"
-	}
 
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{backupDst},
-		"force_full":  []string{forceFullStr},
-	})
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDst,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "Backup completed.")

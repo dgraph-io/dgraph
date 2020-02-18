@@ -106,14 +106,17 @@ input StringHashFilter {
 
 type AddTPayload {
 	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	numUids: Int
 }
 
 type DeleteTPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateTPayload {
 	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	numUids: Int
 }
 
 #######################
