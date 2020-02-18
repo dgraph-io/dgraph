@@ -605,6 +605,11 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+	// As ID maps to uid in dgraph, so it is not stored as an edge, hence does not appear in
+	// f.op.inSchema.dgraphPredicate map. So, always include the queried field if it is of ID type.
+	if f.Type().Name() == IDType {
+		return true
+	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
