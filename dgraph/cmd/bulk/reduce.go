@@ -140,13 +140,13 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	return db
 }
 
-var allocator *MemAllocator
+// var allocator *MemAllocator
 
-var allocatorLock sync.Mutex
+// var allocatorLock sync.Mutex
 
-func init() {
-	allocator = NewAllocator()
-}
+// func init() {
+// 	allocator = NewAllocator()
+// }
 
 // func ResetAllocator() {
 // 	done := atomic.LoadUint64(&allocator.done)
@@ -163,33 +163,33 @@ func init() {
 // 	allocator = NewAllocator()
 // }
 
-type MemAllocator struct {
-	sync.Mutex
-	index int
-	data  []byte
-}
+// type MemAllocator struct {
+// 	sync.Mutex
+// 	index int
+// 	data  []byte
+// }
 
-func NewAllocator() *MemAllocator {
-	return &MemAllocator{
-		index: 0,
-		data:  make([]byte, 64*1024*1024),
-	}
-}
+// func NewAllocator() *MemAllocator {
+// 	return &MemAllocator{
+// 		index: 0,
+// 		data:  make([]byte, 64*1024*1024),
+// 	}
+// }
 
-func (m *MemAllocator) Allocate(n int) []byte {
-	if n > 64*1024*1024 {
-		return make([]byte, n)
-	}
-	m.Lock()
-	defer m.Unlock()
-	if m.index+n > len(m.data) {
-		m.data = make([]byte, 64*1024*1024)
-		m.index = 0
-	}
-	eBuf := m.data[m.index : m.index+n]
-	m.index += n
-	return eBuf
-}
+// func (m *MemAllocator) Allocate(n int) []byte {
+// 	if n > 64*1024*1024 {
+// 		return make([]byte, n)
+// 	}
+// 	m.Lock()
+// 	defer m.Unlock()
+// 	if m.index+n > len(m.data) {
+// 		m.data = make([]byte, 64*1024*1024)
+// 		m.index = 0
+// 	}
+// 	eBuf := m.data[m.index : m.index+n]
+// 	m.index += n
+// 	return eBuf
+// }
 
 type mapIterator struct {
 	fd            *os.File
@@ -246,7 +246,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			}
 			x.Check2(r.Discard(n))
 
-			eBuf := allocator.Allocate(int(sz))
+			eBuf := make([]byte, sz)
 			// If sz > 64MB, then just create one slice (don't do anything special to arena, keep it
 			// simple).
 			// We should allocate a bigger chunk of memory (arena) and just read over that.
@@ -284,7 +284,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		}
 		x.Check2(r.Discard(n))
 
-		eBuf := allocator.Allocate(int(sz))
+		eBuf := make([]byte, sz)
 		bufStartIndex += int(sz)
 		x.Check2(io.ReadFull(r, eBuf))
 		batch = append(batch, eBuf)
