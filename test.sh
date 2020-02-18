@@ -7,7 +7,7 @@
 #   - bash
 #   - curl
 #   - coreutils
-#   - gnu-getop
+#   - gnu-getopt
 #   - findutils
 #
 # Your $PATH must have all required packages in .bashrc:

@@ -90,8 +90,8 @@ func SetConfiguration(newConfig *Options) {
 	newConfig.validate()
 	Config = *newConfig
 
-	posting.Config.Mu.Lock()
-	defer posting.Config.Mu.Unlock()
+	posting.Config.Lock()
+	defer posting.Config.Unlock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
 }
 

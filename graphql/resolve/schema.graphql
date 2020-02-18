@@ -82,3 +82,16 @@ type Owner {
         id: ID!
         house: House
 }
+
+# for testing ~reverse predicate in @dgraph directive
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie] @dgraph(pred: "directed.movies")
+}

@@ -186,13 +186,35 @@ func fieldName(def *ast.FieldDefinition, typName string) string {
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
+	type dgPred struct {
+		typ     string
+		index   string
+		upsert  string
+		reverse string
+	}
+
+	type field struct {
+		name string
+		// true if the field was inherited from an interface, we don't add the predicate schema
+		// for it then as the it would already have been added with the interface.
+		inherited bool
+	}
+
+	type dgType struct {
+		name   string
+		fields []field
+	}
+
+	dgTypes := make([]dgType, 0, len(definitions))
+	dgPreds := make(map[string]dgPred)
+
 	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
 			typName := typeName(def)
-			var typeDef, preds strings.Builder
-			fmt.Fprintf(&typeDef, "type %s {\n", typName)
+
+			typ := dgType{name: typName}
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
@@ -219,10 +241,20 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
-					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s .\n", fname, typStr)
+						if strings.HasPrefix(fname, "~") {
+							// remove ~
+							forwardEdge := fname[1:]
+							forwardPred := dgPreds[forwardEdge]
+							forwardPred.reverse = "@reverse "
+							dgPreds[forwardEdge] = forwardPred
+						} else {
+							edge := dgPreds[fname]
+							edge.typ = typStr
+							dgPreds[fname] = edge
+						}
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
@@ -250,10 +282,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						indexStr = fmt.Sprintf(" @index(hash)")
 					}
 
-					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s%s %s.\n", fname, typStr, indexStr, upsertStr)
+						dgPreds[fname] = dgPred{
+							typ:    typStr,
+							index:  indexStr,
+							upsert: upsertStr,
+						}
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
 					typStr = fmt.Sprintf("%s%s%s", prefix, "string", suffix)
 
@@ -266,19 +302,38 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 						}
 					}
-					fmt.Fprintf(&typeDef, "  %s\n", fname)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
+						dgPreds[fname] = dgPred{
+							typ:   typStr,
+							index: indexStr,
+						}
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
 			}
-			fmt.Fprintf(&typeDef, "}\n")
-
-			typeStrings = append(
-				typeStrings,
-				fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
-			)
+			dgTypes = append(dgTypes, typ)
 		}
+	}
+
+	for _, typ := range dgTypes {
+		var typeDef, preds strings.Builder
+		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
+		for _, fld := range typ.fields {
+			f, ok := dgPreds[fld.name]
+			if !ok {
+				continue
+			}
+			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
+			if !fld.inherited {
+				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, f.index, f.upsert,
+					f.reverse)
+			}
+		}
+		fmt.Fprintf(&typeDef, "}\n")
+		typeStrings = append(
+			typeStrings,
+			fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
+		)
 	}
 
 	return strings.Join(typeStrings, "")
