@@ -199,7 +199,6 @@ type mapIterator struct {
 	batchCh       chan *iteratorEntry
 	freelist      chan *iteratorEntry
 	entrylistPool *sync.Pool
-	arena         []byte
 }
 
 type iteratorEntry struct {
@@ -247,11 +246,6 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			}
 			x.Check2(r.Discard(n))
 
-			if bufStartIndex+int(sz) >= len(mi.arena) {
-				// arena is filled reallocate.
-				mi.arena = make([]byte, 64*1024*1024)
-				bufStartIndex = 0
-			}
 			eBuf := allocator.Allocate(int(sz))
 			// If sz > 64MB, then just create one slice (don't do anything special to arena, keep it
 			// simple).
@@ -344,7 +338,6 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterato
 		batchCh:       make(chan *iteratorEntry, 3),
 		freelist:      make(chan *iteratorEntry, 3),
 		entrylistPool: r.entrylistPool,
-		arena:         make([]byte, 64*1024*1024),
 	}
 	return header, itr
 }
@@ -643,6 +636,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.M
 
 	currentBatch := make([]*pb.MapEntry, 0, 100)
 	for _, entry := range bufEntries {
+		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 		entryKey, err := GetKeyForMapEntry(entry)
 		x.Check(err)
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
