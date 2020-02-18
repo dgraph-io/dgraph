@@ -700,9 +700,10 @@ func rewriteObject(
 		}
 	}
 
-	var newObj map[string]interface{}
-	var myUID string
-	if !atTopLevel || topLevelAdd {
+	newObj := make(map[string]interface{}, len(obj))
+	myUID := srcUID
+
+	if (!atTopLevel || topLevelAdd) && withAdditionalDeletes {
 		newObj = make(map[string]interface{}, len(obj)+3)
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
@@ -710,10 +711,6 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		addInverseLink(newObj, srcField, srcUID)
-
-	} else { // it's the top level of an update add/remove
-		newObj = make(map[string]interface{}, len(obj))
-		myUID = srcUID
 	}
 	newObj["uid"] = myUID
 
