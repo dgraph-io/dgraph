@@ -44,9 +44,24 @@ type loginInput struct {
 func (lr *loginResolver) Rewrite(ctx context.Context,
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got login request")
-
 	lr.mutation = m
-	input, err := getLoginInput(m)
+	return nil, nil, nil
+}
+
+func (lr *loginResolver) FromMutationResult(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) (*gql.GraphQuery, error) {
+
+	return nil, nil
+}
+
+func (lr *loginResolver) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+
+	input, err := getLoginInput(lr.mutation)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,22 +80,6 @@ func (lr *loginResolver) Rewrite(ctx context.Context,
 	}
 	lr.accessJwt = jwt.AccessJwt
 	lr.refreshJwt = jwt.RefreshJwt
-	return nil, nil, nil
-}
-
-func (lr *loginResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (lr *loginResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
 	return nil, nil, nil
 }
 
