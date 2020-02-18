@@ -314,6 +314,7 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
+		6
 		delta := new(pb.OracleDelta)
 		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  src.StartTs,

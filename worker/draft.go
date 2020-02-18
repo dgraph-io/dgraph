@@ -1284,7 +1284,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := posting.Oracle().MinPendingStartTs()
+	minPendingStart, minNamespace := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
@@ -1357,9 +1357,10 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 
 	result := &pb.Snapshot{
-		Context: n.RaftContext,
-		Index:   snapshotIdx,
-		ReadTs:  maxCommitTs,
+		Context:   n.RaftContext,
+		Index:     snapshotIdx,
+		ReadTs:    maxCommitTs,
+		Namespace: minNamespace,
 	}
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
