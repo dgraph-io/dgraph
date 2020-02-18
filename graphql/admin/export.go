@@ -36,7 +36,7 @@ type exportInput struct {
 	Format string
 }
 
-func (er *exportResolver) Rewrite(ctx context.Context,
+func (er *exportResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got export request through GraphQL admin API")
 

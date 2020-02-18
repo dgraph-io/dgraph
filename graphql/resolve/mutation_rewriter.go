@@ -17,7 +17,6 @@
 package resolve
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -172,7 +171,7 @@ func NewDeleteRewriter() MutationRewriter {
 //   } ],
 //   "Author.friends":[ {"uid":"0x123"} ],
 // }
-func (mrw *addRewriter) Rewrite(ctx context.Context,
+func (mrw *addRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
@@ -308,7 +307,7 @@ func (mrw *addRewriter) FromMutationResult(
 // - Nulls in remove become like delete * for the corresponding predicate.
 //
 // See addRewriter for how the set and remove fragments get created.
-func (urw *updateRewriter) Rewrite(ctx context.Context,
+func (urw *updateRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
@@ -493,7 +492,7 @@ func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	return dgQuery
 }
 
-func (drw *deleteRewriter) Rewrite(ctx context.Context, m schema.Mutation) (
+func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 	*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	if m.MutationType() != schema.DeleteMutation {
 		return nil, nil, errors.Errorf(

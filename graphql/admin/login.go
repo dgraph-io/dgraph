@@ -41,7 +41,7 @@ type loginInput struct {
 	RefreshToken string
 }
 
-func (lr *loginResolver) Rewrite(ctx context.Context,
+func (lr *loginResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got login request")
 	lr.mutation = m
