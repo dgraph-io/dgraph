@@ -671,6 +671,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList, freelist []*pb.M
 			freelist = freelist[1:]
 		}
 		x.Check(mapEntry.Unmarshal(entry))
+		entry = nil
 		currentBatch = append(currentBatch, mapEntry)
 	}
 	return freelist
