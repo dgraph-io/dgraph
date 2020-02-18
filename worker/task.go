@@ -1901,10 +1901,14 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 				return false, err
 			}
 
-			v, err := types.Convert(ftree.function.val, fVal.Tid)
-			if err != nil {
-				// ignore facet if not of appropriate type
-				return false, nil
+			v, ok := ftree.function.typesToValMap[fVal.Tid]
+			if !ok {
+				// Not found in map and hence convert is here.
+				v, err = types.Convert(ftree.function.val, fVal.Tid)
+				if err != nil {
+					// ignore facet if not of appropriate type.
+					return false, nil
+				}
 			}
 
 			return types.CompareVals(ftree.function.name, fVal, v), nil
@@ -1985,12 +1989,13 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 }
 
 type facetsFunc struct {
-	name   string
-	key    string
-	args   []string
-	tokens []string
-	val    types.Val
-	fnType FuncType
+	name          string
+	key           string
+	args          []string
+	tokens        []string
+	val           types.Val
+	fnType        FuncType
+	typesToValMap map[types.TypeID]types.Val
 }
 type facetsTree struct {
 	op       string
@@ -2021,6 +2026,19 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		switch fnType {
 		case compareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
+			ftree.function.typesToValMap = make(map[types.TypeID]types.Val)
+			typeIDs := []types.TypeID{types.StringID, types.IntID, types.FloatID,
+				types.DateTimeID, types.BoolID, types.DefaultID}
+			for _, typeID := range typeIDs {
+				// TODO: if conversion is not possible we are not putting anything to map. In
+				// applyFacetsTree we check if entry for a type is not present, we try to convert
+				// it. This double conversion can be avoided.
+				cv, err := types.Convert(ftree.function.val, typeID)
+				if err != nil {
+					continue
+				}
+				ftree.function.typesToValMap[typeID] = cv
+			}
 		case standardFn:
 			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
