@@ -544,6 +544,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// indexes that may have been left around in case defer wasn't executed.
 	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
 	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
+	if err := os.MkdirAll(tmpParentDir, os.ModePerm); err != nil {
+		return errors.Wrap(err, "error in creating temp base dir for reindexing")
+	}
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
