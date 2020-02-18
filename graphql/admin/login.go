@@ -19,7 +19,6 @@ package admin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -46,10 +45,7 @@ func (lr *loginResolver) Rewrite(
 	glog.Info("Got login request")
 
 	lr.mutation = m
-	input, err := getLoginInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
+	input := getLoginInput(m)
 
 	// TODO - Fix this context to log the IP as it does in the other request.
 	resp, err := (&edgraph.Server{}).Login(context.Background(), &dgoapi.LoginRequest{
@@ -112,14 +108,16 @@ func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 	return buf.Bytes(), nil
 }
 
-func getLoginInput(m schema.Mutation) (*loginInput, error) {
-	inputArg := m.ArgValue(schema.InputArgName)
-	inputByts, err := json.Marshal(inputArg)
-	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't get input argument")
-	}
+func getLoginInput(m schema.Mutation) *loginInput {
+	// We should be able to convert these to string as GraphQL schema validation should ensure this.
+	// If the input wasn't specified, then the arg value would be nil and the string value empty.
+	userID, _ := m.ArgValue("userId").(string)
+	password, _ := m.ArgValue("password").(string)
+	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
-	var input loginInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+	return &loginInput{
+		userID,
+		password,
+		refreshToken,
+	}
 }

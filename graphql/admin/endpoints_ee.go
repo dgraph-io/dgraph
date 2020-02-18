@@ -32,12 +32,6 @@ const adminTypes = `
 		response: Response
 	}
 
-	input LoginInput {
-		userId: String
-		password: String
-		refreshToken: String
-	}
-
 	type LoginResponse {
 		accessJWT: String
 		refreshJWT: String
@@ -174,7 +168,7 @@ const adminTypes = `
 const adminMutations = `
 	backup(input: BackupInput!) : BackupPayload
 
-	login(input: LoginInput!): LoginPayload
+	login(userId: String, password: String, refreshToken: String): LoginPayload
 	# ACL related endpoints.
 	# 1. If user and group don't exist both are created and linked.
 	# 2. If user doesn't exist but group does, then user is created and both are linked.
