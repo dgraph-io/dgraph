@@ -284,12 +284,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		}
 		x.Check2(r.Discard(n))
 
-		if bufStartIndex+int(sz) >= len(mi.arena) {
-			// arena is filled reallocate.
-			mi.arena = make([]byte, 64*1024*1024)
-			bufStartIndex = 0
-		}
-		eBuf := mi.arena[bufStartIndex : bufStartIndex+int(sz)]
+		eBuf := allocator.Allocate(int(sz))
 		bufStartIndex += int(sz)
 		x.Check2(io.ReadFull(r, eBuf))
 		batch = append(batch, eBuf)
