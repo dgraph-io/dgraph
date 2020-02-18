@@ -99,22 +99,27 @@ input StringHashFilter {
 
 type AddBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 type AddLibraryPayload {
 	library(first: Int, offset: Int): [Library]
+	numUids: Int
 }
 
 type DeleteBookPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteLibraryItemPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 #######################

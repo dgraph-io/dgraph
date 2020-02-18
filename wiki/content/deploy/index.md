@@ -700,7 +700,9 @@ docker stack rm dgraph
 1. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph alphas or use `-p` & `-w` to configure data directories.
 2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
-## Using Kubernetes (v1.8.4)
+## Using Kubernetes
+
+The following section covers running Dgraph with Kubernetes v1.8.4.
 
 {{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS config.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
@@ -1582,17 +1584,17 @@ Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
 HTTPS requests only. Therefore some adjustments need to be made.
 
-If the `--tls_client_auth` option is set to `REQUEST` (default) or
-`VERIFYIFGIVEN`:
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default):
+
 1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
-2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions.
-(E.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
+2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions
+(e.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
 for `Secure Socket Layer`).
 
 For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
 also need to install client certificate on your OS / browser:
 
-1. Generate a client certificate: `dgraph -c MyLaptop`.
+1. Generate a client certificate: `dgraph cert -c MyLaptop`.
 2. Convert it to a `.p12` file:
 `openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
 3. Install the generated `MyLaptopCert.p12` file on the client system

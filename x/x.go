@@ -19,10 +19,12 @@ package x
 import (
 	"bufio"
 	"bytes"
+	builtinGzip "compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net"
@@ -49,6 +51,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -108,10 +111,12 @@ const (
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
-{"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
+{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
 {"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
-{"predicate":"dgraph.group.acl","type":"string"}
+{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
+{"predicate":"dgraph.acl.rule","type":"uid","list":true},
+{"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
+{"predicate":"dgraph.rule.permission","type":"int"}
 `
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -319,6 +324,34 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
+func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
+// Write response body, transparently compressing if necessary.
+func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := builtinGzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out.Write(b)
 }
 
 // Min returns the minimum of the two given numbers.

@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 const (
@@ -40,6 +40,7 @@ const (
 	idDirective     = "id"
 
 	deprecatedDirective = "deprecated"
+	NumUid              = "numUids"
 
 	Typename = "__typename"
 
@@ -143,6 +144,11 @@ type directiveValidator func(
 type searchTypeIndex struct {
 	gqlType string
 	dgIndex string
+}
+
+var numUids = &ast.FieldDefinition{
+	Name: NumUid,
+	Type: &ast.Type{NamedType: "Int"},
 }
 
 // search arg -> supported GraphQL type
@@ -836,7 +842,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry},
+		Fields: []*ast.FieldDefinition{qry, numUids},
 	}
 }
 
@@ -869,7 +875,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			qry,
+			qry, numUids,
 		},
 	}
 }
@@ -889,6 +895,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 					NamedType: "String",
 				},
 			},
+			numUids,
 		},
 	}
 }

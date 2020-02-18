@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -605,6 +605,11 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+	// As ID maps to uid in dgraph, so it is not stored as an edge, hence does not appear in
+	// f.op.inSchema.dgraphPredicate map. So, always include the queried field if it is of ID type.
+	if f.Type().Name() == IDType {
+		return true
+	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
@@ -771,8 +776,12 @@ func (m *mutation) SelectionSet() []Field {
 }
 
 func (m *mutation) QueryField() Field {
-	// TODO: All our mutations currently have exactly 1 field, but that will change
-	// - need a better way to get the right field by convention.
+	for _, i := range m.SelectionSet() {
+		if i.Name() == NumUid {
+			continue
+		}
+		return i
+	}
 	return m.SelectionSet()[0]
 }
 

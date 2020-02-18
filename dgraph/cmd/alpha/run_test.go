@@ -1665,7 +1665,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/login")
+	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/admin")
 
 	r := m.Run()
 	os.Exit(r)

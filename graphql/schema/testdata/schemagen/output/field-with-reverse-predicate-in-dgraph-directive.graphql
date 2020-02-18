@@ -97,26 +97,32 @@ input StringHashFilter {
 
 type AddMovieDirectorPayload {
 	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+	numUids: Int
 }
 
 type AddMoviePayload {
 	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	numUids: Int
 }
 
 type DeleteMovieDirectorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteMoviePayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateMovieDirectorPayload {
 	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+	numUids: Int
 }
 
 type UpdateMoviePayload {
 	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	numUids: Int
 }
 
 #######################

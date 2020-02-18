@@ -27,7 +27,6 @@ import (
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -44,6 +43,9 @@ type IServeGraphQL interface {
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
+
+	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
+	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
 }
 
 type graphqlHandler struct {
@@ -64,6 +66,10 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 	gh.resolver = resolver
+}
+
+func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+	return gh.resolver.Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
@@ -97,14 +103,10 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.PanicWithSentryException(errors.New("graphqlHandler not initialised"))
 	}
 
+	ctx = x.AttachAccessJwt(ctx, r)
+
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
-
-	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
 
 	if err != nil {
 		res = schema.ErrorResponse(err)
@@ -113,7 +115,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-
 }
 
 func (gh *graphqlHandler) isValid() bool {
