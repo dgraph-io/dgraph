@@ -199,6 +199,8 @@ func run() {
 	defer x.FlushSentry()
 	x.ConfigureSentryScope("zero")
 	x.WrapPanics()
+
+	// Simulate a Sentry exception or panic event as shown below.
 	// x.CaptureSentryException(errors.New("zero exception"))
 	// x.PanicWithSentryException(errors.New("zero manual panic will send 2 events"))
 

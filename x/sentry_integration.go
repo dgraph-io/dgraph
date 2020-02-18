@@ -28,7 +28,7 @@ import (
 
 var env string
 
-// InitSentry intiializes the sentry machinery
+// InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
 	if ee {
 		env = "enterprise"
@@ -51,12 +51,12 @@ func initSentry() {
 	}
 }
 
-// FlushSentry flushes the buffered events/errors
+// FlushSentry flushes the buffered events/errors.
 func FlushSentry() {
 	sentry.Flush(time.Second * 2)
 }
 
-// ConfigureSentryScope configure the scope on the global hub of Sentry.
+// ConfigureSentryScope configures the scope on the global hub of Sentry.
 func ConfigureSentryScope(subcmd string) {
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("dgraph", subcmd)
@@ -80,12 +80,11 @@ func CaptureSentryException(err error) {
 }
 
 // PanicHandler is the callback function when a panic happens. It does not recover and is
-// only used to log panics. (in our case send an event to sentry)
+// only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
-	// output contains the full output (including stack traces) of the
-	// panic.
+	// Output contains the full output (including stack traces) of the panic.
 	sentry.CaptureException(errors.New(out))
-	FlushSentry() // need to flush asap. Dont defer here.
+	FlushSentry() // Need to flush asap. Don't defer here.
 
 	os.Exit(1)
 }

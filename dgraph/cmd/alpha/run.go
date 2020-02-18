@@ -593,7 +593,7 @@ func run() {
 	x.ConfigureSentryScope("alpha")
 	x.WrapPanics()
 
-	// Simulate exception, panic....
+	// Simulate a Sentry exception or panic event as shown below.
 	// x.CaptureSentryException(errors.New("alpha exception"))
 	// x.PanicWithSentryException(errors.New("alpha manual panic will send 2 events"))
 
