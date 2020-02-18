@@ -36,21 +36,19 @@ func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
 }
 
 func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var err error
+	var buf bytes.Buffer
+	x.Check2(buf.WriteString(`{ "health":`))
 
 	var resp *api.Response
 	var respErr error
 	if resp, respErr = (&edgraph.Server{}).Health(ctx, true); respErr != nil {
-		err = errors.Errorf("%s: %s", x.Error, respErr.Error())
-	}
-	if resp == nil {
-		err = errors.Errorf("%s: %s", x.ErrorNoData, "No state information available.")
+		respErr = errors.Errorf("%s: %s", x.Error, respErr.Error())
+		x.Check2(buf.Write([]byte(` null `)))
+	} else {
+		x.Check2(buf.Write(resp.GetJson()))
 	}
 
-	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "health":`))
-	x.Check2(buf.Write(resp.Json))
 	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), err
+	return buf.Bytes(), respErr
 }

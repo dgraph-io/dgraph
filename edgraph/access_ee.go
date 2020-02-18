@@ -803,6 +803,30 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
+// authorizeGuardians authorizes the operation for users which belong to Guardians group.
+func authorizeGuardians(ctx context.Context) error {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	userData, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	userId := userData[0]
+	groupIds := userData[1:]
+
+	if !x.IsGuardian(groupIds) {
+		// Deny access for members of non-guardian groups
+		return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
+			"allowed access. User '%v' is not a member of guardians group.", userId))
+	}
+
+	return nil
+}
+
 // authorizeGroot authorizes the operation for Groot users.
 func authorizeGroot(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
