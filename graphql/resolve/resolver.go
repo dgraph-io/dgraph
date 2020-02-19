@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -547,36 +546,6 @@ func completeResult(ctx context.Context, field schema.Field, result []byte, e er
 		return completeObject(path, field.Type(), []schema.Field{field}, val)
 	}
 	return completeValue(path, field, val)
-}
-
-func passwordCompleter(ctx context.Context, field schema.Field, dgResult []byte, e error) (
-	[]byte, error) {
-
-	type pwdContainer struct {
-		Pwd bool `json:"pwd,omitempty"`
-	}
-
-	var result struct {
-		Q []*pwdContainer `json:"q,omitempty"`
-	}
-
-	err := json.Unmarshal(dgResult, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(result.Q) == 0 {
-		return nil, fmt.Errorf("No such UID or predicate")
-	}
-
-	res := `{"msg": "%s"}`
-	if result.Q[0].Pwd {
-		res = fmt.Sprintf(res, "Correct Password")
-	} else {
-		res = fmt.Sprintf(res, "Wrong Password")
-	}
-
-	return []byte(res), nil
 }
 
 // Once a result has been returned from Dgraph, that result needs to be worked

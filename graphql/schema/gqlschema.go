@@ -49,7 +49,6 @@ const (
 	// capability into the schema.
 	schemaExtras = `
 scalar DateTime
-scalar Password
 
 enum DgraphIndex {
 	int
@@ -71,7 +70,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @secret(field: String!, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -991,7 +990,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: passwordField.Name,
 				Type: &ast.Type{
-					NamedType: "Password",
+					NamedType: "String",
 					NonNull:   true,
 				},
 			},

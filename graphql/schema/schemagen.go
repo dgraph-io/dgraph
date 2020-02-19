@@ -218,12 +218,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			var typeDef strings.Builder
 			fmt.Fprintf(&typeDef, "type %s {\n", typName)
 			fd := getPasswordField(def)
-			fields := def.Fields
-			if fd != nil {
-				fields = append(fields, fd)
-			}
 
-			for _, f := range fields {
+			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
 				}
@@ -318,6 +314,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
+			}
+			if fd != nil {
+				parentInt := parentInterface(gqlSch, def, fd.Name)
+				if parentInt != nil {
+					typName = typeName(parentInt)
+				}
+				fname := fieldName(fd, typName)
+
+				if parentInt == nil {
+					dgPreds[fname] = dgPred{typ: "password"}
+				}
+
+				typ.fields = append(typ.fields, field{fname, parentInt != nil})
 			}
 			dgTypes = append(dgTypes, typ)
 		}

@@ -2760,7 +2760,7 @@ func testNumUids(t *testing.T) {
 
 func checkUser(t *testing.T, userObj, expectedObj *user) {
 	checkUserParams := &GraphQLParams{
-		Query: `query checkUserPassword($name: String!, $pwd: Password!) {
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
 			checkUserPassword(name: $name, password: $pwd) { name }
 		}`,
 		Variables: map[string]interface{}{

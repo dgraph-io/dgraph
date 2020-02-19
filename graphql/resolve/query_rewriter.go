@@ -76,7 +76,7 @@ func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
 
 	dgQuery := rewriteAsGet(m, uid, xid)
 
-	queriedType := m.QueriedType()
+	queriedType := m.Type()
 	name := queriedType.PasswordField().Name()
 	predicate := queriedType.DgraphPredicate(name)
 	password := m.ArgValue(name).(string)

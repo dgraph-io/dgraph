@@ -47,6 +47,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -165,6 +166,7 @@ enum OscarMovieOrderable {
 
 input AddDirectorInput {
 	name: String!
+	directed: [OscarMovieRef]
 }
 
 input AddOscarMovieInput {
@@ -191,6 +193,7 @@ input DirectorPatch {
 input DirectorRef {
 	id: ID
 	name: String
+	directed: [OscarMovieRef]
 }
 
 input MovieFilter {
