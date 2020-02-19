@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -448,16 +447,10 @@ func ResetAcl() {
 
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the list of groups
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, x.ErrNoJwt
+	accessJwt, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return nil, err
 	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return nil, x.ErrNoJwt
-	}
-
 	return validateToken(accessJwt[0])
 }
 

@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/metadata"
 )
 
 type currentUserResolver struct {
@@ -35,13 +34,9 @@ type currentUserResolver struct {
 }
 
 func extractName(ctx context.Context) (string, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return "", x.ErrNoJwt
-	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return "", x.ErrNoJwt
+	accessJwt, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return "", err
 	}
 
 	token, err := jwt.Parse(accessJwt[0], func(token *jwt.Token) (interface{}, error) {

@@ -225,6 +225,20 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+func ExtractJwt(ctx context.Context) ([]string, error) {
+	// extract the jwt and unmarshal the jwt to get the list of groups
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, ErrNoJwt
+	}
+	accessJwt := md.Get("accessJwt")
+	if len(accessJwt) == 0 {
+		return nil, ErrNoJwt
+	}
+
+	return accessJwt, nil
+}
+
 // WithLocations adds a list of locations to a GqlError and returns the same
 // GqlError (fluent style).
 func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
