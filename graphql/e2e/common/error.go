@@ -25,20 +25,19 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"google.golang.org/grpc/peer"
-
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
 )
 
@@ -276,7 +275,7 @@ func (dg *panicClient) Mutate(
 	panic(panicMsg)
 }
 
-// clientInfoLogin check whether client info(IP address) is propagated in the request.
+// clientInfoLogin check whether the client info(IP address) is propagated in the request.
 // It mocks Dgraph like panicCatcher.
 func clientInfoLogin(t *testing.T) {
 	tests := map[string]*GraphQLParams{
