@@ -374,10 +374,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
+			if i%100 == 0 {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
 			}
 			key := x.DataKey(q.Attr, q.UidList.Uids[i])
 
