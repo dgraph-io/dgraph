@@ -390,6 +390,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if err = types.Marshal(dst, &b); err != nil {
 		return err
 	}
+
+	if edge.GetAttr() == "dgraph.rule.permission" {
+		perm, ok := dst.Value.(int64)
+		if !ok {
+			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
+		}
+		if perm < 0 || perm > 7 {
+			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be between 0 and 7")
+		}
+	}
+
 	edge.ValueType = schemaType.Enum()
 	edge.Value = b.Value.([]byte)
 	return nil
