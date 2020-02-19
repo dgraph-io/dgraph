@@ -1266,7 +1266,7 @@ func TestWrongPermission(t *testing.T) {
 	})
 
 	require.Error(t, err, "Setting permission to 9 shouldn't have returned error")
-	require.Contains(t, err.Error(), "Value for predicate <dgraph.rule.permission> should be between 0 and 7")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 
 	ruleMutation = `
 		_:dev <dgraph.type> "Group" .
@@ -1282,5 +1282,5 @@ func TestWrongPermission(t *testing.T) {
 	})
 
 	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
-	require.Contains(t, err.Error(), "Value for predicate <dgraph.rule.permission> should be between 0 and 7")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
