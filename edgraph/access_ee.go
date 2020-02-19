@@ -898,7 +898,7 @@ func userFilter(userId string) *gql.FilterTree {
 }
 
 func groupFilter(groupIds []string) *gql.FilterTree {
-	// The user doesn't have any groups, so lets an empty filter @filter(uid([])) so that all
+	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
 	// groups are filtered out.
 	if len(groupIds) == 0 {
 		filter := &gql.FilterTree{

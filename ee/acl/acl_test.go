@@ -1058,9 +1058,14 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	resetUser(t)
 
 	// TODO - We should be adding this data using the GraphQL API.
+	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
+		_:g1  <dgraph.xid>        "dev-a" .
+		_:g1  <dgraph.type>       "Group" .
+		_:g2  <dgraph.xid>        "dev-b" .
+		_:g2  <dgraph.type>       "Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
 		_:r1 <dgraph.type> "Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
@@ -1079,9 +1084,10 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	idQuery := fmt.Sprintf(`
 	{
 		userid as var(func: eq(dgraph.xid, "%s"))
-		gid as var(func: eq(dgraph.xid, "dev"))
+		gid as var(func: eq(dgraph.type, "Group")) @filter(eq(dgraph.xid, "dev") OR
+			eq(dgraph.xid, "dev-a"))
 	}`, userid)
-	addAliceToDevMutation := &api.NQuad{
+	addAliceToGroups := &api.NQuad{
 		Subject:   "uid(userid)",
 		Predicate: "dgraph.user.group",
 		ObjectId:  "uid(gid)",
@@ -1091,7 +1097,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 		Query:     idQuery,
 		Mutations: []*api.Mutation{
 			{
-				Set: []*api.NQuad{addAliceToDevMutation},
+				Set: []*api.NQuad{addAliceToGroups},
 			},
 		},
 	})
@@ -1191,7 +1197,16 @@ func TestQueryUserInfo(t *testing.T) {
 						  "name": "alice"
 					  }
 				  ]
-				}
+				},
+				{
+					"name": "dev-a",
+					"rules": [],
+					"users": [
+						{
+							"name": "alice"
+						}
+					]
+				  }
 			  ]
 			}
 		  ]
@@ -1223,6 +1238,61 @@ func TestQueryUserInfo(t *testing.T) {
 	require.NoError(t, err, "Error while querying ACL")
 
 	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+
+	gqlQuery = `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+			rules {
+				predicate
+				permission
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	// The user should only be able to see their group dev and themselves as the user.
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "dev",
+			  "users": [
+				{
+				  "name": "alice"
+				}
+			  ],
+			  "rules": [
+				{
+				  "predicate": "name",
+				  "permission": 4
+				},
+				{
+				  "predicate": "nickname",
+				  "permission": 2
+				}
+			  ]
+			},
+			{
+				"name": "dev-a",
+				"users": [
+				  {
+					"name": "alice"
+				  }
+				],
+				"rules": []
+			  }
+
+		  ]
+		}
+	  }`, string(b))
 
 	gqlQuery = `
 	query {
