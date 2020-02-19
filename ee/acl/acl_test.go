@@ -1012,7 +1012,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 	return b
 }
 
-func TestNegativePermissionDeleteRule(t *testing.T) {
+func TestDeleteRule(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
@@ -1244,4 +1244,43 @@ func TestQueryUserInfo(t *testing.T) {
 	}
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
+}
+
+func TestWrongPermission(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ruleMutation := `
+		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.xid> "dev" .
+		_:dev <dgraph.acl.rule> _:rule1 .
+		_:rule1 <dgraph.rule.predicate> "name" .
+		_:rule1 <dgraph.rule.permission> "9" .
+	`
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(ruleMutation),
+		CommitNow: true,
+	})
+
+	require.Error(t, err, "Setting permission to 9 shouldn't have returned error")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+
+	ruleMutation = `
+		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.xid> "dev" .
+		_:dev <dgraph.acl.rule> _:rule1 .
+		_:rule1 <dgraph.rule.predicate> "name" .
+		_:rule1 <dgraph.rule.permission> "-1" .
+	`
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(ruleMutation),
+		CommitNow: true,
+	})
+
+	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
