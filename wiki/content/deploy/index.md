@@ -11,6 +11,7 @@ For a single server setup, recommended for new users, please see [Get Started](/
 {{% /notice %}}
 
 ## Install Dgraph
+
 ### Docker
 
 ```sh
@@ -41,7 +42,7 @@ Other instalation options:
 
 `-s | --systemd`: Automatically create Dgraph's installation as Systemd services (default: "n").
 
-`-v | --version`: Choose Dgraph's version manually (default: The latest stable release, you can do tag combinations e.g 2.0.0-beta1 or -rc1).
+`-v | --version`: Choose Dgraph's version manually (default: The latest stable release, you can do tag combinations e.g v2.0.0-beta1 or -rc1).
 
 >Installing Dgraph and requesting the automatic creation of systemd service. e.g:
 
@@ -58,7 +59,7 @@ Using Environment variables:
 `VERSION`: Choose Dgraph's version manually (default: The latest stable release).
 
 ```sh
-curl https://get.dgraph.io -sSf | VERSION=2.0.0-beta1 bash
+curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
 ### Manual download [optional]
