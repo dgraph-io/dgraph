@@ -1705,6 +1705,27 @@ func testSelectionInAddObject(t *testing.T) {
 
 }
 
+func mutationEmptyDelete(t *testing.T) {
+	//Try to delete a node that doesn't exists.
+	updatePostParams := &GraphQLParams{
+		Query: `mutation{
+			updatePost(input:{
+				filter:{title:{allofterms:"Random"}},
+				remove:{author:{name:"Non Existent"}}
+		  }) {
+		    post {
+		    title
+		    }
+		  }
+		}`,
+	}
+
+	gqlResponse := updatePostParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Equal(t, string(gqlResponse.Data),
+		`{"updatePost":{"post":[{"title":"Random post"}]}}`)
+}
+
 // After a successful mutation, the following query is executed.  That query can
 // contain any depth or filtering that makes sense for the schema.
 //
