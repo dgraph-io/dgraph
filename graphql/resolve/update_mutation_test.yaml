@@ -322,6 +322,44 @@
     }
 
 -
+  name: "Update remove values"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "remove": {
+          "posts": [{"title": "hi"}]
+        }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        { 
+                "Author.posts": [{
+                        "Post.title": "hi",
+                        "uid" : "uid(x)"
+                }],
+                "uid" : "uid(x)"
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+
+
+-
   name: "Update remove reference"
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
