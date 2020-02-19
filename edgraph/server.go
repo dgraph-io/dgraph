@@ -694,7 +694,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeGroot(ctx); err != nil {
+	if err := authorizeGuardians(ctx); err != nil {
 		return nil, err
 	}
 

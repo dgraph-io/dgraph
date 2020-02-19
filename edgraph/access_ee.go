@@ -827,36 +827,6 @@ func authorizeGuardians(ctx context.Context) error {
 	return nil
 }
 
-// authorizeGroot authorizes the operation for Groot users.
-func authorizeGroot(ctx context.Context) error {
-	if len(worker.Config.HmacSecret) == 0 {
-		// the user has not turned on the acl feature
-		return nil
-	}
-
-	var userID string
-	// doAuthorizeState checks if the user is authorized to perform this API request
-	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			return status.Error(codes.PermissionDenied, err.Error())
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userID = userData[0]
-			if userID == x.GrootId {
-				return nil
-			}
-			// Deny non groot users.
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-				"Only User '%v' is authorized.", userID, x.GrootId))
-		}
-	}
-
-	return doAuthorizeGroot()
-}
-
 /*
 	addUserFilterToQuery applies makes sure that a user can access only its own
 	acl info by applying filter of userid and groupid to acl predicates. A query like
