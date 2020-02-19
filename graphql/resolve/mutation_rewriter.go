@@ -704,6 +704,8 @@ func rewriteObject(
 	myUID := srcUID
 
 	if (!atTopLevel || topLevelAdd) && withAdditionalDeletes {
+		// In case of a delete query (withAdditionalDeletes), we don't need to create a
+		// blank node.
 		newObj = make(map[string]interface{}, len(obj)+3)
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
