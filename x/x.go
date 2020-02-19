@@ -59,6 +59,7 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNoJwt        = errors.New("no accessJwt available")
 )
 
 const (

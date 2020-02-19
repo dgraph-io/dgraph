@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -33,16 +34,14 @@ type currentUserResolver struct {
 	baseRewriter resolve.QueryRewriter
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
 func extractName(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return "", errNoJwt
+		return "", x.ErrNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return "", errNoJwt
+		return "", x.ErrNoJwt
 	}
 
 	token, err := jwt.Parse(accessJwt[0], func(token *jwt.Token) (interface{}, error) {

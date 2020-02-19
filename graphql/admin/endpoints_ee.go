@@ -202,7 +202,6 @@ const adminQueries = `
 	getUser(name: String!): User
 	getGroup(name: String!): Group
 
-	# TODO - This needs a custom handler. Implement this later.
 	getCurrentUser: User
 
 	queryUser(filter: UserFilter): [User]

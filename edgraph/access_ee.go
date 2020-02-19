@@ -446,18 +446,16 @@ func ResetAcl() {
 	}
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, errNoJwt
+		return nil, x.ErrNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return nil, errNoJwt
+		return nil, x.ErrNoJwt
 	}
 
 	return validateToken(accessJwt[0])
@@ -815,7 +813,7 @@ func authorizeGroot(ctx context.Context) error {
 	doAuthorizeGroot := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		switch {
-		case err == errNoJwt:
+		case err == x.ErrNoJwt:
 			return status.Error(codes.PermissionDenied, err.Error())
 		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())

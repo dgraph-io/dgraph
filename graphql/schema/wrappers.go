@@ -438,11 +438,14 @@ func (f *field) SetArgTo(arg string, val interface{}) {
 	if f.arguments == nil {
 		f.arguments = make(map[string]interface{})
 	}
+	f.arguments[arg] = val
+
+	// If the argument doesn't exists, add it to the list. It is used later on to get
+	// parameters. Value isn't required because it's fetched using the arguments map.
 	argument := f.field.Arguments.ForName(arg)
 	if argument == nil {
 		f.field.Arguments = append(f.field.Arguments, &ast.Argument{Name: arg})
 	}
-	f.arguments[arg] = val
 }
 
 func (f *field) ArgValue(name string) interface{} {
