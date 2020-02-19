@@ -664,7 +664,7 @@ E.g. to link two existing nodes:
 
 Will be converted to:
 
-```JSON
+```RDF
 <0x123> <link> <0x456> .
 ```
 
@@ -765,7 +765,7 @@ _:blank-1 <dgraph.type> "Person" .
 
 Schema:
 
-```JSON
+```sh
 testList: [string] .
 ```
 
@@ -831,7 +831,7 @@ Add another fruit:
 
 Schema:
 
-```RDF
+```sh
 <name>: string @index(exact).
 <nickname>: [string] .
 ```
@@ -861,7 +861,7 @@ To create a List-type you need to create it by inserting multiple nodes. You can
 }
 ```
 
-Above you see that we have three values ​​to enter the list. They are separated into three blocks in the mutation. They are related to each other via the blank-node `"uid": "_:Julian",`.
+Above you see that we have three values ​​to enter the list. They are separated into three blocks in the mutation. They are related to each other via the blank-node `"uid": "_:Julian"`.
 
 You can run this query to check the list with facets:
 
@@ -940,6 +940,7 @@ This syntax can be used in the most current version of Ratel, in the [dgraph-js-
 You can also [download the Ratel UI for Linux, macOS, or Windows](https://discuss.dgraph.io/t/ratel-installer-for-linux-macos-and-windows-preview-version-ratel-update-from-v1-0-6/2884/).
 
 Mutate:
+
 ```JSON
 {
   "set": [
