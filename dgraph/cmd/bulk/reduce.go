@@ -101,6 +101,10 @@ func (r *reducer) run() error {
 				}
 				result = append(result, entry)
 			}
+			sort.Slice(result, func(i, j int) bool {
+				return bytes.Compare(result[i].GetKey(), result[j].GetKey()) < 0
+			})
+
 			// Start bactching for the given keys
 			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
@@ -221,30 +225,21 @@ type iteratorEntry struct {
 }
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	ie.batch = ie.batch[:0]
-	select {
-	case mi.freelist <- ie:
-	default:
-	}
+	// ie.batch = ie.batch[:0]
+	// select {
+	// case mi.freelist <- ie:
+	// default:
+	// }
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
+	i := 1
 	var bufStartIndex int
 	for _, key := range partitionsKeys {
-		var ie *iteratorEntry
-		select {
-		case ie = <-mi.freelist:
-			// picks++
-			// if picks%10 == 0 {
-			// 	fmt.Printf("Picked from freelist: %d\n", picks)
-			// }
-		default:
-			ie = &iteratorEntry{
-				batch: make([][]byte, 0, batchAlloc),
-			}
+		ie := &iteratorEntry{
+			batch: make([][]byte, 0, batchAlloc),
 		}
 		ie.partitionKey = key
-		ie.batch = ie.batch[:0]
 
 		for {
 			// LOSING one item.
@@ -272,15 +267,19 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 			key, err := GetKeyForMapEntry(eBuf)
 			x.Check(err)
 			//	fmt.Printf(" me %x key %x \n", me.GetKey(), key.GetKey())
-			if !(bytes.Compare(key, ie.partitionKey.GetKey()) < 0) {
-				break
+			if bytes.Compare(key, ie.partitionKey.GetKey()) < 0 {
+				//	if i == 4 {
+				//	}
+				ie.batch = append(ie.batch, eBuf)
+				continue
 			}
 			// TODO: The batch should not contain map entry, instead it should contain just the byte
 			// slices.
-			ie.batch = append(ie.batch, eBuf)
+			break
 		}
 		// TODO: Needs to be fixed to ensure we pick all the map entries.
 		mi.batchCh <- ie
+		i++
 	}
 
 	// Drain the last items.
@@ -494,8 +493,8 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	writerCloser := y.NewCloser(1)
 	go r.startWriting(ci.writer, writerCh, writerCloser)
 
-	batch := make([][]byte, 0, batchAlloc)
 	for i := 0; i < len(partitionKeys); i++ {
+		batch := make([][]byte, 0, batchAlloc)
 		numInvalid := 0
 		for _, itr := range mapItrs {
 			itr.Next()
@@ -512,9 +511,8 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 			if len(batch) == 0 {
 				break
 			}
-		} else if len(batch) < 1000 {
-			continue
 		}
+
 		// fmt.Println("collected into batch. batchlen: %d", len(batch))
 		// tmpBatch = append(tmpBatch, batch...)
 		// batch = []*pb.MapEntry{}
@@ -536,7 +534,6 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 		encoderCh <- req
 		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
 		writerCh <- req
-		batch = batch[:0]
 	}
 
 	// for i := 0; i < len(tmpBatch)-1; i++ {
@@ -568,7 +565,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) {
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
-		rh, err := GetKeyForMapEntry(bufEntries[i])
+		rh, err := GetKeyForMapEntry(bufEntries[j])
 		x.Check(err)
 		return bytes.Compare(lh, rh) < 0
 	})
@@ -660,7 +657,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) {
 			// Now we have written the list. It's time to reuse the current batch.
 			freelist = append(freelist, currentBatch...)
 			// reset the current batch
-			currentBatch = currentBatch[0:]
+			currentBatch = currentBatch[:0]
 		}
 		currentKey = append(currentKey[:0], entryKey...)
 		var mapEntry *pb.MapEntry
