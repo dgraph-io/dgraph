@@ -225,19 +225,24 @@ type iteratorEntry struct {
 }
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	// ie.batch = ie.batch[:0]
-	// select {
-	// case mi.freelist <- ie:
-	// default:
-	// }
+	ie.batch = ie.batch[:0]
+	select {
+	case mi.freelist <- ie:
+	default:
+	}
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 	i := 1
 	var bufStartIndex int
+	var ie *iteratorEntry
 	for _, key := range partitionsKeys {
-		ie := &iteratorEntry{
-			batch: make([][]byte, 0, batchAlloc),
+		select {
+		case ie = <-mi.freelist:
+		default:
+			ie = &iteratorEntry{
+				batch: make([][]byte, 0, batchAlloc),
+			}
 		}
 		ie.partitionKey = key
 
