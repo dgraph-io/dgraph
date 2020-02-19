@@ -278,28 +278,19 @@ func (dg *panicClient) Mutate(
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
 // It mocks Dgraph like panicCatcher.
 func clientInfoLogin(t *testing.T) {
-	tests := map[string]*GraphQLParams{
-		"mutation": {
-			Query: `mutation {
+	loginQuery := &GraphQLParams{
+		Query: `mutation {
   						login(input: {userId: "groot", password: "password"}) {
     						response {
       							accessJWT
     						}
   						}
 					}`,
-		},
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	fns := &resolve.ResolverFns{
-		Qrw: resolve.NewQueryRewriter(),
-		Arw: resolve.NewAddRewriter,
-		Urw: resolve.NewUpdateRewriter,
-		Drw: resolve.NewDeleteRewriter(),
-		Qe:  resolve.DgraphAsQueryExecutor(),
-		Me:  resolve.DgraphAsMutationExecutor()}
-
+	fns := &resolve.ResolverFns{}
 	var loginCtx context.Context
 	errFunc := func(name string) error { return nil }
 	mErr := resolve.MutationResolverFunc(
@@ -317,13 +308,9 @@ func clientInfoLogin(t *testing.T) {
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			_ = test.ExecuteAsPost(t, ts.URL)
-			require.NotNil(t, loginCtx)
-			peerInfo, found := peer.FromContext(loginCtx)
-			require.True(t, found)
-			require.NotNil(t, peerInfo.Addr.String())
-		})
-	}
+	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	require.NotNil(t, loginCtx)
+	peerInfo, found := peer.FromContext(loginCtx)
+	require.True(t, found)
+	require.NotNil(t, peerInfo.Addr.String())
 }
