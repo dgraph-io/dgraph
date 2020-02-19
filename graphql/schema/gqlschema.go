@@ -48,79 +48,79 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
-scalar DateTime
-
-enum DgraphIndex {
-	int
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-}
-
-directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
-directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
-
-input IntFilter {
-	eq: Int
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-}
-
-input FloatFilter {
-	eq: Float
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-}
-
-input DateTimeFilter {
-	eq: DateTime
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-}
-
-input StringTermFilter {
-	allofterms: String
-	anyofterms: String
-}
-
-input StringRegExpFilter {
-	regexp: String
-}
-
-input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
-}
-
-input StringExactFilter {
-	eq: String
-	le: String
-	lt: String
-	ge: String
-	gt: String
-}
-
-input StringHashFilter {
-	eq: String
-}
-`
+ scalar DateTime
+ 
+ enum DgraphIndex {
+	 int
+	 float
+	 bool
+	 hash
+	 exact
+	 term
+	 fulltext
+	 trigram
+	 regexp
+	 year
+	 month
+	 day
+	 hour
+ }
+ 
+ directive @hasInverse(field: String!) on FIELD_DEFINITION
+ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+ directive @id on FIELD_DEFINITION
+ 
+ input IntFilter {
+	 eq: Int
+	 le: Int
+	 lt: Int
+	 ge: Int
+	 gt: Int
+ }
+ 
+ input FloatFilter {
+	 eq: Float
+	 le: Float
+	 lt: Float
+	 ge: Float
+	 gt: Float
+ }
+ 
+ input DateTimeFilter {
+	 eq: DateTime
+	 le: DateTime
+	 lt: DateTime
+	 ge: DateTime
+	 gt: DateTime
+ }
+ 
+ input StringTermFilter {
+	 allofterms: String
+	 anyofterms: String
+ }
+ 
+ input StringRegExpFilter {
+	 regexp: String
+ }
+ 
+ input StringFullTextFilter {
+	 alloftext: String
+	 anyoftext: String
+ }
+ 
+ input StringExactFilter {
+	 eq: String
+	 le: String
+	 lt: String
+	 ge: String
+	 gt: String
+ }
+ 
+ input StringHashFilter {
+	 eq: String
+ }
+ `
 )
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
@@ -336,6 +336,9 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
+				if directiveValidators[dir.Name] == nil {
+					continue
+				}
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
@@ -1177,6 +1180,9 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	direcArgs := make([]string, len(direcs))
 
 	for idx, dir := range direcs {
+		if directiveValidators[dir.Name] == nil {
+			continue
+		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
 	}
 
