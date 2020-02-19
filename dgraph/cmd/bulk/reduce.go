@@ -143,7 +143,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile))
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).WithCompression(bo.None)
 
 	// TOOD(Ibrahim): Remove this once badger is updated.
 	opt.ZSTDCompressionLevel = 1
