@@ -301,7 +301,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 			Tid:   types.TypeID(de.GetValueType()),
 			Value: de.GetValue(),
 		}
-		// If the value type is not already set according to the schema, we set it to string and
+		// If the value type is not already set according to the schema, set it to string and
 		// then convert it to the type as declared in the schema.
 		if storageVal.Tid != pred.ValueType {
 			storageVal.Tid = types.StringID
