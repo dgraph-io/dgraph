@@ -129,7 +129,8 @@ var errHasPendingTxns = errors.New("Pending transactions found. Please retry ope
 // transactions. We're now applying all updates serially, so blocking for one
 // operation is not an option.
 func detectPendingTxns(attr string) error {
-	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
+	namespace, _, _ := x.ParseNamespaceAttr(attr)
+	tctxs := posting.Oracle().IterateTxns(namespace, func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
 			return false
@@ -268,7 +269,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	txn := posting.Oracle().RegisterStartTs(m.Namespace, m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return zero.ErrConflict
@@ -1188,14 +1189,17 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
-	if len(starts) == 0 {
-		return
+	oldTxns := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
+
+	for _, oldTxn := range oldTxns {
+		if len(oldTxn.StartTs) == 0 {
+			continue
+		}
+		glog.Infof("Found %d old transactions. Acting to abort them.\n", len(oldTxn.StartTs))
+		req := &pb.TxnTimestamps{Ts: oldTxn.StartTs, Namespace: oldTxn.Namespace}
+		err := n.blockingAbort(req)
+		glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 	}
-	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
-	req := &pb.TxnTimestamps{Ts: starts}
-	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:

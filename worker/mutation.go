@@ -422,7 +422,7 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 }
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
-	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
+	if txn := posting.Oracle().GetTxn(tctx.Namespace, startTs); txn != nil {
 		txn.FillContext(tctx, groups().groupId())
 	}
 	// We do not need to fill linread mechanism anymore, because transaction

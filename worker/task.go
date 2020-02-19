@@ -802,7 +802,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		return &pb.Result{}, err
 	}
 	if span != nil {
-		maxAssigned := posting.Oracle().MaxAssigned()
+		maxAssigned := posting.Oracle().MaxAssigned(q.Namespace)
 		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
 			q.Attr, q.ReadTs, maxAssigned)
 	}
@@ -829,7 +829,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	var qs queryState
 	if q.Cache == UseTxnCache {
-		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
+		qs.cache = posting.Oracle().CacheAt(q.Namespace, q.ReadTs)
 	}
 	// For now, remove the query level cache. It is causing contention for queries with high
 	// fan-out.

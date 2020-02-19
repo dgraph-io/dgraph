@@ -20,7 +20,6 @@ import (
 	"context"
 	"math"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -175,7 +174,7 @@ func (o *oracle) NumPendingTxns() int {
 // OlderTxn contain all the pending start timestamp of a namespace
 type OlderTxn struct {
 	Namespace string
-	startTs   []uint64
+	StartTs   []uint64
 }
 
 // TxnOlderThan will give older txn of all the namespace
@@ -189,7 +188,7 @@ func (o *oracle) TxnOlderThan(dur time.Duration) (oldTxns []*OlderTxn) {
 		}
 		for startTs, txn := range txns {
 			if txn.lastUpdate.Before(cutoff) {
-				oldTxn.startTs = append(oldTxn.startTs, startTs)
+				oldTxn.StartTs = append(oldTxn.StartTs, startTs)
 			}
 		}
 		oldTxns = append(oldTxns, oldTxn)
@@ -268,24 +267,24 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
+		delete(o.pendingTxns[delta.Namespace], txn.StartTs)
 	}
-	curMax := o.MaxAssigned()
+	curMax := o.MaxAssigned(delta.GetNamespace())
 	if delta.MaxAssigned < curMax {
 		return
 	}
 
 	// Notify the waiting cattle.
-	for startTs, toNotify := range o.waiters {
+	for startTs, toNotify := range o.waiters[delta.GetNamespace()] {
 		if startTs > delta.MaxAssigned {
 			continue
 		}
 		for _, ch := range toNotify {
 			close(ch)
 		}
-		delete(o.waiters, startTs)
+		delete(o.waiters[delta.GetNamespace()], startTs)
 	}
-	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
+	o.maxAssigned[delta.GetNamespace()] = delta.GetMaxAssigned()
 	ostats.Record(context.Background(),
 		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.
 }
@@ -315,11 +314,11 @@ func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
 
 // IterateTxns returns a list of start timestamps for currently pending transactions, which match
 // the provided function.
-func (o *oracle) IterateTxns(ok func(key []byte) bool) []uint64 {
+func (o *oracle) IterateTxns(namespace string, ok func(key []byte) bool) []uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	var timestamps []uint64
-	for startTs, txn := range o.pendingTxns {
+	for startTs, txn := range o.pendingTxns[namespace] {
 		if txn.matchesDelta(ok) {
 			timestamps = append(timestamps, startTs)
 		}
