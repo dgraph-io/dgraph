@@ -85,14 +85,28 @@ func (r *reducer) run() error {
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			sort.Slice(partitionKeys, func(i, j int) bool {
-				return less(partitionKeys[i], partitionKeys[j])
+				return bytes.Compare(partitionKeys[i].GetKey(), partitionKeys[j].GetKey()) < 0
 			})
+
+			// remove duplicate
+			result := []*pb.MapEntry{}
+
+			for _, entry := range partitionKeys {
+				if len(result) == 0 {
+					result = append(result, entry)
+					continue
+				}
+				if bytes.Equal(result[len(result)-1].GetKey(), entry.Key) {
+					continue
+				}
+				result = append(result, entry)
+			}
 			// Start bactching for the given keys
 			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
-				go itr.startBatchingForKeys(partitionKeys)
+				go itr.startBatchingForKeys(result)
 			}
-			r.reduce(partitionKeys, mapItrs, ci)
+			r.reduce(result, mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -386,6 +400,8 @@ func (r *reducer) startWriting(writer *badger.StreamWriter, writerCh chan *encod
 		// Wait for it to be encoded.
 		start := time.Now()
 		req.wg.Wait()
+
+		writer.Write(req.list)
 		// writer.Write(listBatch[0].list)
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
 			fmt.Printf("writeCh: Time taken to write req %d: %v\n", idx, time.Since(start).Round(time.Millisecond))
@@ -471,9 +487,9 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 	encoderCloser := y.NewCloser(cpu)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		// Start listening to encode entries
+		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
 	}
-
 	// Start lisenting to write the badger list.
 	writerCloser := y.NewCloser(1)
 	go r.startWriting(ci.writer, writerCh, writerCloser)
@@ -520,7 +536,7 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 		encoderCh <- req
 		// This would ensure that we don't have too many pending requests. Avoid memory explosion.
 		writerCh <- req
-		batch = make([][]byte, 0, batchAlloc)
+		batch = batch[:0]
 	}
 
 	// for i := 0; i < len(tmpBatch)-1; i++ {
@@ -644,9 +660,9 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) {
 			// Now we have written the list. It's time to reuse the current batch.
 			freelist = append(freelist, currentBatch...)
 			// reset the current batch
-			currentBatch = make([]*pb.MapEntry, 0, 100)
+			currentBatch = currentBatch[0:]
 		}
-		currentKey = entryKey
+		currentKey = append(currentKey[:0], entryKey...)
 		var mapEntry *pb.MapEntry
 		if len(freelist) == 0 {
 			// Create a new map entry

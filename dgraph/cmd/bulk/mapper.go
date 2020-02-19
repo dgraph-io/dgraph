@@ -103,7 +103,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
 
 	sort.Slice(entries, func(i, j int) bool {
-		return less(entries[i], entries[j])
+		return bytes.Compare(entries[i].GetKey(), entries[j].GetKey()) < 0
 	})
 
 	f, err := m.openOutputFile(shardIdx)
