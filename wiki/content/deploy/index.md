@@ -62,6 +62,10 @@ Using Environment variables:
 curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
+{{% notice "note" %}}
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#export-database) before running this script and reimported to the new cluster running the updated version.
+{{% /notice %}}
+
 ### Manual download [optional]
 
 If you don't want to follow the automatic installation method, you could manually download the appropriate tar for your platform from **[Dgraph releases](https://github.com/dgraph-io/dgraph/releases)**. After downloading the tar for your platform from Github, extract the binary to `/usr/local/bin` like so.
