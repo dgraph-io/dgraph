@@ -1245,3 +1245,83 @@ func TestQueryUserInfo(t *testing.T) {
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
 }
+
+func TestHealthForAcl(t *testing.T) {
+	resetUser(t)
+
+	gqlQuery := `
+	query {
+		health {
+			instance
+			address
+			lastEcho
+			status
+			version
+			uptime
+			group
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+
+	// assert errors for non-guardians
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	b := makeRequest(t, accessJwt, params)
+	var nonGuardianResp map[string]interface{}
+	err = json.Unmarshal(b, &nonGuardianResp)
+
+	require.NoError(t, err, "health request failed")
+	require.NotContains(t, nonGuardianResp, "data")
+	require.Contains(t, nonGuardianResp, "errors")
+	require.True(t, len(nonGuardianResp["errors"].([]interface{})) > 0)
+
+	// assert data for guardians
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "groot login failed")
+
+	b = makeRequest(t, accessJwt, params)
+	var guardianResp struct {
+		Data struct {
+			Health []struct {
+				Instance string
+				Address  string
+				LastEcho int64
+				Status   string
+				Version  string
+				UpTime   int64
+				Group    string
+			}
+		}
+		Errors []struct {
+			Message string
+		}
+	}
+	err = json.Unmarshal(b, &guardianResp)
+
+	require.NoError(t, err, "health request failed")
+	require.NotNil(t, guardianResp.Data)
+	require.Nil(t, guardianResp.Errors)
+	require.NotNil(t, guardianResp.Data.Health)
+	require.True(t, len(guardianResp.Data.Health) > 0)
+	for _, v := range guardianResp.Data.Health {
+		require.NotNil(t, v.Instance)
+		require.NotNil(t, v.Address)
+		require.NotNil(t, v.LastEcho)
+		require.NotNil(t, v.Status)
+		require.NotNil(t, v.Version)
+		require.NotNil(t, v.UpTime)
+		require.NotNil(t, v.Group)
+	}
+}
