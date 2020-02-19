@@ -336,6 +336,9 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
+				if directiveValidators[dir.Name] == nil {
+					continue
+				}
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
@@ -1170,15 +1173,25 @@ func genArgumentsString(args ast.ArgumentList) string {
 }
 
 func genDirectivesString(direcs ast.DirectiveList) string {
-	if len(direcs) == 0 {
+	direcsLen := len(direcs)
+	if direcsLen == 0 {
 		return ""
 	}
 
-	direcArgs := make([]string, len(direcs))
+	direcArgs := make([]string, direcsLen)
+	skipCount := 0
 
 	for idx, dir := range direcs {
+		if directiveValidators[dir.Name] == nil {
+			skipCount = skipCount + 1
+			continue
+		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
 	}
+	if skipCount == direcsLen {
+		return ""
+	}
+	direcArgs = direcArgs[:direcsLen-skipCount]
 
 	return " " + strings.Join(direcArgs, " ")
 }
