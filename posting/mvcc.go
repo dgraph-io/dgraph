@@ -135,7 +135,7 @@ func ResetCache() {
 
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
-	lCache.Del(key)
+	lCache.Set(key, nil, 0)
 }
 
 // RemoveCachedKeys will delete the cached list by this txn.
@@ -145,7 +145,7 @@ func (txn *Txn) RemoveCachedKeys() {
 	}
 
 	for key := range txn.cache.deltas {
-		lCache.Del(key)
+		lCache.Set(key, nil, 0)
 	}
 }
 
