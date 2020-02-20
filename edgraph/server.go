@@ -794,14 +794,24 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
+	var startTs uint64
 	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
+		startTs = worker.State.GetTimestamp(false)
+		if !x.WorkerConfig.LudicrousMode {
+			req.StartTs = startTs
+		} else {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
 		return
+	}
+
+	if x.WorkerConfig.LudicrousMode {
+		req.StartTs = startTs
 	}
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
@@ -856,7 +866,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
+		if !x.WorkerConfig.LudicrousMode {
+			qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
+		} else {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
