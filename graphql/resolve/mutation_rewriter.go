@@ -682,10 +682,15 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen)
+		} else if !withAdditionalDeletes {
+			// In case of delete, id/xid is required
+			return invalidObjectFragment(fmt.Errorf("%s is not provided", xid.Name()),
+				xidFrag, variable, xidString)
 		}
 	}
 
-	if !atTopLevel { // top level mutations are fully checked by GraphQL validation
+	if !atTopLevel && withAdditionalDeletes {
+		// top level mutations are fully checked by GraphQL validation
 		exclude := ""
 		if srcField != nil {
 			invField := srcField.Inverse()
@@ -700,12 +705,16 @@ func rewriteObject(
 		}
 	}
 
-	newObj := make(map[string]interface{}, len(obj))
-	myUID := srcUID
-
-	if (!atTopLevel || topLevelAdd) && withAdditionalDeletes {
-		// In case of a delete query (withAdditionalDeletes), we don't need to create a
+	if !atTopLevel && !withAdditionalDeletes {
+		// For remove op (!withAdditionalDeletes), we don't need to generate a new
 		// blank node.
+		return []*mutationFragment{xidFrag}
+	}
+
+	var myUID string
+	newObj := make(map[string]interface{}, len(obj))
+
+	if !atTopLevel || topLevelAdd {
 		newObj = make(map[string]interface{}, len(obj)+3)
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
@@ -713,7 +722,10 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		addInverseLink(newObj, srcField, srcUID)
+	} else {
+		myUID = srcUID
 	}
+
 	newObj["uid"] = myUID
 
 	frag := newFragment(newObj)
