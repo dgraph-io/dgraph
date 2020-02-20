@@ -38,6 +38,7 @@ const (
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
+	secretDirective = "secret"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -235,6 +236,7 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:  searchValidation,
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
+	secretDirective:  passwordValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
