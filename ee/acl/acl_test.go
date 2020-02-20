@@ -1547,7 +1547,7 @@ func TestHealthForAcl(t *testing.T) {
 	testutil.CompareJSON(t, `{
 		"errors": [
 			{
-				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User 'alice' is not a member of guardians group."
+				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
 			}
 		]
 	}`, string(b))
