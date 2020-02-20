@@ -113,6 +113,12 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
 }
 
+func TestInvalidGetUser(t *testing.T) {
+	require.Equal(t, string(getCurrentUser(t, "invalid token")),
+		`{"errors":[{"message":"couldn't rewrite query getCurrentUser because unable to`+
+			` parse jwt token:token contains an invalid number of segments"}]}`)
+}
+
 func TestGetCurrentUser(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,

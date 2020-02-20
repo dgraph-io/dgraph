@@ -39,6 +39,8 @@ func extractName(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	// Code copied from access_ee.go. Couldn't put the code in x, because of dependency on
+	// worker. (worker.Config.HmacSecret)
 	token, err := jwt.Parse(accessJwt[0], func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v",
@@ -48,7 +50,7 @@ func extractName(ctx context.Context) (string, error) {
 	})
 
 	if err != nil {
-		return "", errors.Errorf("unable to parse jwt token:%v", err)
+		return "", errors.Wrapf(err, "unable to parse jwt token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
@@ -72,7 +74,6 @@ func (gsr *currentUserResolver) Rewrite(ctx context.Context,
 		return nil, err
 	}
 
-	gsr.gqlQuery = gqlQuery
 	gqlQuery.Rename("getUser")
 	gqlQuery.SetArgTo("name", name)
 
