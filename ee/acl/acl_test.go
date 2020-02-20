@@ -68,6 +68,16 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 	return b
 }
 
+func getCurrentUser(t *testing.T, accessToken string) []byte {
+	query := `query {
+		getCurrentUser {
+			name
+		}
+	}`
+
+	return makeRequest(t, accessToken, testutil.GraphQLParams{Query: query})
+}
+
 func checkUserCount(t *testing.T, resp []byte, expected int) {
 	type Response struct {
 		Data struct {
@@ -101,6 +111,42 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	}
 	b := makeRequest(t, accessToken, params)
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+}
+
+func TestInvalidGetUser(t *testing.T) {
+	require.Equal(t, string(getCurrentUser(t, "invalid token")),
+		`{"errors":[{"message":"couldn't rewrite query getCurrentUser because unable to`+
+			` parse jwt token: token contains an invalid number of segments"}]}`)
+}
+
+func TestGetCurrentUser(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, accessJwt)),
+		`{"data":{"getCurrentUser":{"name":"groot"}}}`)
+
+	// clean up the user to allow repeated running of this test
+	userid := "hamilton"
+	deleteUser(t, accessJwt, userid)
+	glog.Infof("cleaned up db user state")
+
+	resp := createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 1)
+
+	newJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, newJwt)),
+		`{"data":{"getCurrentUser":{"name":"hamilton"}}}`)
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {

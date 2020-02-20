@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -446,20 +445,12 @@ func ResetAcl() {
 	}
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the list of groups
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, errNoJwt
+	accessJwt, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return nil, err
 	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return nil, errNoJwt
-	}
-
 	return validateToken(accessJwt[0])
 }
 
@@ -815,7 +806,7 @@ func authorizeGroot(ctx context.Context) error {
 	doAuthorizeGroot := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		switch {
-		case err == errNoJwt:
+		case err == x.ErrNoJwt:
 			return status.Error(codes.PermissionDenied, err.Error())
 		case err != nil:
 			return status.Error(codes.Unauthenticated, err.Error())

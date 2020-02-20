@@ -59,6 +59,7 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNoJwt        = errors.New("no accessJwt available")
 )
 
 const (
@@ -222,6 +223,20 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	return &GqlError{
 		Message: fmt.Sprintf(message, args...),
 	}
+}
+
+func ExtractJwt(ctx context.Context) ([]string, error) {
+	// extract the jwt and unmarshal the jwt to get the list of groups
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, ErrNoJwt
+	}
+	accessJwt := md.Get("accessJwt")
+	if len(accessJwt) == 0 {
+		return nil, ErrNoJwt
+	}
+
+	return accessJwt, nil
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
