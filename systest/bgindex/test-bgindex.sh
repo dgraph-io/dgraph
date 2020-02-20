@@ -16,6 +16,9 @@ DockerCompose down -v
 Info "bringing up dgraph cluster"
 DockerCompose up -d
 
+Info "waiting for zero to become leader"
+DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
+
 if [[ ! -z "$TEAMCITY_VERSION" ]]; then
     # Make TeamCity aware of Go tests
     export GOFLAGS="-json"
