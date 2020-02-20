@@ -17,7 +17,9 @@
 package alpha
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -184,4 +186,55 @@ func TestReindexReverseCount(t *testing.T) {
       ]
     }
   }`, res)
+}
+
+func checkSchema(t *testing.T, query, key string) {
+	for i := 0; i < 10; i++ {
+		res, _, err := queryWithTs(query, "application/graphql+-", "", 0)
+		require.NoError(t, err)
+		if strings.Contains(res, key) {
+			return
+		}
+		time.Sleep(time.Second)
+
+		if i == 9 {
+			t.Fatalf("expected %v, got schema: %v", key, res)
+		}
+	}
+}
+
+func TestBgIndexSchemaReverse(t *testing.T) {
+	require.NoError(t, dropAll())
+	q1 := `schema(pred: [value]) {}`
+	require.NoError(t, alterSchema(`value: [uid] .`))
+	checkSchema(t, q1, "list")
+	require.NoError(t, alterSchema(`value: [uid] @count @reverse .`))
+	checkSchema(t, q1, "reverse")
+}
+
+func TestBgIndexSchemaTokenizers(t *testing.T) {
+	require.NoError(t, dropAll())
+	q1 := `schema(pred: [value]) {}`
+	require.NoError(t, alterSchema(`value: string @index(fulltext, hash) .`))
+	checkSchema(t, q1, "fulltext")
+	require.NoError(t, alterSchema(`value: string @index(term, hash) @upsert .`))
+	checkSchema(t, q1, "term")
+}
+
+func TestBgIndexSchemaCount(t *testing.T) {
+	require.NoError(t, dropAll())
+	q1 := `schema(pred: [value]) {}`
+	require.NoError(t, alterSchema(`value: [uid] @count .`))
+	checkSchema(t, q1, "count")
+	require.NoError(t, alterSchema(`value: [uid] @reverse .`))
+	checkSchema(t, q1, "reverse")
+}
+
+func TestBgIndexSchemaReverseAndCount(t *testing.T) {
+	require.NoError(t, dropAll())
+	q1 := `schema(pred: [value]) {}`
+	require.NoError(t, alterSchema(`value: [uid] @reverse .`))
+	checkSchema(t, q1, "reverse")
+	require.NoError(t, alterSchema(`value: [uid] @count .`))
+	checkSchema(t, q1, "count")
 }
