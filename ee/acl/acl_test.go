@@ -1540,8 +1540,6 @@ func TestHealthForAcl(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	b := makeRequest(t, accessJwt, params)
-	var nonGuardianResp map[string]interface{}
-	err = json.Unmarshal(b, &nonGuardianResp)
 
 	require.NoError(t, err, "health request failed")
 	testutil.CompareJSON(t, `{
