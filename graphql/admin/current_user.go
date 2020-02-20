@@ -29,7 +29,6 @@ import (
 )
 
 type currentUserResolver struct {
-	gqlQuery     schema.Query
 	baseRewriter resolve.QueryRewriter
 }
 
