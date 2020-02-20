@@ -274,6 +274,7 @@ func RunAll(t *testing.T) {
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
 	t.Run("numUids test", testNumUids)
+	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
 
 	// error tests

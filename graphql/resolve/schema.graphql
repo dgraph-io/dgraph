@@ -96,6 +96,18 @@ type MovieDirector {
         directed: [Movie] @dgraph(pred: "directed.movies")
 }
 
+# just for testing XID remove in list
+type Computer {
+	owners: [ComputerOwner!]
+	name: String! @id
+}
+
+type ComputerOwner {
+	name: String! @id
+	nickName: String
+	computers: Computer! @hasInverse(field: owners)
+}
+
 type User @secret(field: "pwd") {
 	name: String! @id
 }
