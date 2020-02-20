@@ -721,7 +721,6 @@ func rewriteObject(
 	newObj := make(map[string]interface{}, len(obj))
 
 	if !atTopLevel || topLevelAdd {
-		newObj = make(map[string]interface{}, len(obj)+3)
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
 		newObj["dgraph.type"] = dgraphTypes

@@ -1706,7 +1706,7 @@ func testSelectionInAddObject(t *testing.T) {
 }
 
 func mutationEmptyDelete(t *testing.T) {
-	//Try to delete a node that doesn't exists.
+	// Try to delete a node that doesn't exists.
 	updatePostParams := &GraphQLParams{
 		Query: `mutation{
 			updatePost(input:{

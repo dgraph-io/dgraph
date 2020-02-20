@@ -410,7 +410,7 @@
           "id": ["0x123"]
         },
         "remove": {
-          "posts": [{"postID": "0x124"}]
+          "posts": [{"postID": "0x124", "title": "random title"}]
         }
       }
     }
