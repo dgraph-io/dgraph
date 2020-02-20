@@ -1318,7 +1318,7 @@ func TestHealthForAcl(t *testing.T) {
 	require.NotNil(t, guardianResp.Data)
 	require.Nil(t, guardianResp.Errors)
 	require.NotNil(t, guardianResp.Data.Health)
-	require.Len(t, guardianResp.Data.Health, 6)
+	require.Len(t, guardianResp.Data.Health, 9)
 	for _, v := range guardianResp.Data.Health {
 		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
 		require.NotNil(t, v.Address)
