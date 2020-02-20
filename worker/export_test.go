@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -335,53 +334,26 @@ func TestExportJson(t *testing.T) {
 	checkExportSchema(t, schemaFileList)
 }
 
-const exportRequest = `mutation export($format: String!) {
-	export(input: {format: $format}) {
-		response {
-			code
-		}
-	}
-}`
-
 func TestExportFormat(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	params := testutil.GraphQLParams{
-		Query:     exportRequest,
-		Variables: map[string]interface{}{"format": "json"},
-	}
-	b, err := json.Marshal(params)
+	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
 	require.NoError(t, err)
-	testutil.RequireNoGraphQLErrors(t, resp)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	params.Variables["format"] = "rdf"
-	b, err = json.Marshal(params)
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
 	require.NoError(t, err)
+	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
 	require.NoError(t, err)
-	testutil.RequireNoGraphQLErrors(t, resp)
-
-	params.Variables["format"] = "xml"
-	b, err = json.Marshal(params)
-	require.NoError(t, err)
-	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var result *testutil.GraphQLResponse
-	err = json.Unmarshal(b, &result)
-	require.NoError(t, err)
-	require.NotNil(t, result.Errors)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 type skv struct {
