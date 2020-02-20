@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -42,13 +41,10 @@ func (dr *drainingResolver) Rewrite(
 	glog.Info("Got draining request through GraphQL admin API")
 
 	dr.mutation = m
-	input, err := getDrainingInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
+	enable := getDrainingInput(m)
 
-	dr.enable = input.Enable
-	x.UpdateDrainingMode(input.Enable)
+	dr.enable = enable
+	x.UpdateDrainingMode(enable)
 	return nil, nil, nil
 }
 
@@ -74,14 +70,7 @@ func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([
 	return buf, nil
 }
 
-func getDrainingInput(m schema.Mutation) (*drainingInput, error) {
-	inputArg := m.ArgValue(schema.InputArgName)
-	inputByts, err := json.Marshal(inputArg)
-	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't get input argument")
-	}
-
-	var input drainingInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+func getDrainingInput(m schema.Mutation) bool {
+	enable, _ := m.ArgValue("enable").(bool)
+	return enable
 }

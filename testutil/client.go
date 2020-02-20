@@ -205,7 +205,7 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	}
 
 	login := `mutation login($userId: String, $password: String, $refreshToken: String) {
-		login(input: { userId: $userId, password: $password, refreshToken: $refreshToken}) {
+		login(userId: $userId, password: $password, refreshToken: $refreshToken) {
 			response {
 				accessJWT
 				refreshJWT
