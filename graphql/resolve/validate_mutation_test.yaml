@@ -57,7 +57,6 @@
   gqlvariables: |
     { "auth": [
       { "name": "A.N. Author",
-        "pwd" : "Password",
         "posts": []
       },
       { "posts": []

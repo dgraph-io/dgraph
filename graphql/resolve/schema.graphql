@@ -13,7 +13,7 @@ type State {
         name: String!
 }
 
-type Author @secret(field: "pwd") {
+type Author {
         id: ID!
         name: String! @search(by: [hash])
         dob: DateTime @search
@@ -94,4 +94,8 @@ type MovieDirector {
         id: ID!
         name: String!
         directed: [Movie] @dgraph(pred: "directed.movies")
+}
+
+type User @secret(field: "pwd") {
+	name: String! @id
 }

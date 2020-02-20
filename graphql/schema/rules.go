@@ -112,6 +112,19 @@ func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 			"Type %s; has more than one secret fields %s", typ.Name, val)
 	}
 
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	val := dirs[0]
+	for _, f := range typ.Fields {
+		if f.Name == val {
+			return gqlerror.ErrorPosf(typ.Position,
+				"Type %s; has a secret directive and field of the same name %s",
+				typ.Name, val)
+		}
+	}
+
 	return nil
 }
 

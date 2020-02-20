@@ -696,6 +696,17 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
+  -
+    name: "Conflicting secret directive and field"
+    input: |
+      type X @secret(field:"f1"){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; has a secret directive and field of the same name f1",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
 
 
 valid_schemas:
