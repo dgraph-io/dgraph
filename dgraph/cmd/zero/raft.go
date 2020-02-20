@@ -675,14 +675,16 @@ func (n *node) Run() {
 				}
 			}
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
-			timer.Record("disk")
-			if rd.MustSync {
-				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %v", err)
+			if !x.WorkerConfig.LudicrousMode {
+				timer.Record("disk")
+				if rd.MustSync {
+					if err := n.Store.Sync(); err != nil {
+						glog.Errorf("Error while calling Store.Sync: %v", err)
+					}
+					timer.Record("sync")
 				}
-				timer.Record("sync")
+				span.Annotatef(nil, "Saved to storage")
 			}
-			span.Annotatef(nil, "Saved to storage")
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
