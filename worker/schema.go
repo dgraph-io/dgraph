@@ -94,15 +94,15 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 		case "type":
 			schemaNode.Type = typ.Name()
 		case "index":
-			schemaNode.Index = schema.State().IsIndexed(attr)
+			schemaNode.Index = schema.State().IsIndexed(schema.ReadCtx, attr)
 		case "tokenizer":
-			if schema.State().IsIndexed(attr) {
-				schemaNode.Tokenizer = schema.State().TokenizerNames(attr)
+			if schema.State().IsIndexed(schema.ReadCtx, attr) {
+				schemaNode.Tokenizer = schema.State().TokenizerNames(schema.ReadCtx, attr)
 			}
 		case "reverse":
-			schemaNode.Reverse = schema.State().IsReversed(attr)
+			schemaNode.Reverse = schema.State().IsReversed(schema.ReadCtx, attr)
 		case "count":
-			schemaNode.Count = schema.State().HasCount(attr)
+			schemaNode.Count = schema.State().HasCount(schema.ReadCtx, attr)
 		case "list":
 			schemaNode.List = schema.State().IsList(attr)
 		case "upsert":
