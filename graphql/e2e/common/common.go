@@ -113,6 +113,11 @@ type author struct {
 	Posts      []*post    `json:"posts,omitempty"`
 }
 
+type user struct {
+	Name     string `json:"name,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
 type post struct {
 	PostID      string    `json:"postID,omitempty"`
 	Title       string    `json:"title,omitempty"`
@@ -269,6 +274,7 @@ func RunAll(t *testing.T) {
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
 	t.Run("numUids test", testNumUids)
+	t.Run("password in mutation", passwordTest)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

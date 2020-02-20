@@ -95,3 +95,7 @@ type MovieDirector {
         name: String!
         directed: [Movie] @dgraph(pred: "directed.movies")
 }
+
+type User @secret(field: "pwd") {
+	name: String! @id
+}

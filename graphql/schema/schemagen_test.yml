@@ -31,6 +31,22 @@ schemas:
       X.names: [string] .
 
   -
+    name: "Password type"
+    input: |
+      type X @secret(field: "pwd"){
+        id: ID!
+        names: [String!]
+      }
+    output: |
+      type X {
+        X.names
+        X.pwd
+      }
+      X.names: [string] .
+      X.pwd: password .
+
+
+  -
     name: "Object list"
     input: |
       type X {

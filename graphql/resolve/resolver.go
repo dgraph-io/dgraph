@@ -207,9 +207,11 @@ func (rf *resolverFactory) WithConventionResolvers(
 	s schema.Schema, fns *ResolverFns) ResolverFactory {
 
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
+	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe, StdQueryCompletion())
+			return NewQueryResolver(fns.Qrw, fns.Qe,
+				StdQueryCompletion())
 		})
 	}
 
