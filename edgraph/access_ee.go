@@ -840,7 +840,7 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 		}
 		arg := gq.Func.Args[0]
 		// The case where value of some varialble v (say) is "Group" and a
-		// query comes like `eq(dgraph.type, val(v))`, will be ingored here.
+		// query comes like `eq(dgraph.type, val(v))`, will be ignored here.
 		if arg.Value == "User" {
 			newFilter := userFilter(userId)
 			gq.Filter = parentFilter(newFilter, gq.Filter)
@@ -878,6 +878,7 @@ func parentFilter(newFilter, filter *gql.FilterTree) *gql.FilterTree {
 }
 
 func userFilter(userId string) *gql.FilterTree {
+	// A logged in user should always have a userId.
 	return &gql.FilterTree{
 		Func: &gql.Function{
 			Attr: "dgraph.xid",
@@ -888,12 +889,25 @@ func userFilter(userId string) *gql.FilterTree {
 }
 
 func groupFilter(groupIds []string) *gql.FilterTree {
+	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
+	// groups are filtered out.
+	if len(groupIds) == 0 {
+		filter := &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				UID:  []uint64{},
+			},
+		}
+		return filter
+	}
+
 	filter := &gql.FilterTree{
 		Func: &gql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
 		},
 	}
+
 	for _, gid := range groupIds {
 		filter.Func.Args = append(filter.Func.Args,
 			gql.Arg{Value: gid})
