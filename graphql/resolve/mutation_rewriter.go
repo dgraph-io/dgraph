@@ -684,7 +684,13 @@ func rewriteObject(
 				variable, withAdditionalDeletes, varGen)
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
-			return invalidObjectFragment(fmt.Errorf("%s is not provided", xid.Name()),
+			var name string
+			if xid != nil {
+				name = xid.Name()
+			} else {
+				name = id.Name()
+			}
+			return invalidObjectFragment(fmt.Errorf("%s is not provided", name),
 				xidFrag, variable, xidString)
 		}
 	}

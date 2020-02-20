@@ -1721,9 +1721,9 @@ func mutationEmptyDelete(t *testing.T) {
 	}
 
 	gqlResponse := updatePostParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
-	require.Equal(t, string(gqlResponse.Data),
-		`{"updatePost":{"post":[{"title":"Random post"}]}}`)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Equal(t, gqlResponse.Errors[0].Error(), "couldn't rewrite mutation updatePost"+
+		" because failed to rewrite mutation payload because id is not provided")
 }
 
 // After a successful mutation, the following query is executed.  That query can
