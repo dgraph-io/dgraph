@@ -2051,6 +2051,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
 			queryCharacter {
+			  id
 			  name
 			  appearsIn
 			  ... on Human {
@@ -2070,9 +2071,10 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
 
-		expected := `{
+		expected := fmt.Sprintf(`{
 			"queryCharacter": [
 			  {
+				"id": "%s",
 				"name": "Han Solo",
 				"appearsIn": ["EMPIRE"],
 				"starships": [
@@ -2084,12 +2086,13 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 				"totalCredits": 10
 			  },
 			  {
+				"id": "%s",
 				"name": "R2-D2",
 				"appearsIn": ["EMPIRE"],
 				"primaryFunction": "Robot"
 			  }
 			]
-		  }`
+		  }`, humanID, droidID)
 
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
@@ -2098,6 +2101,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		queryCharacterByNameParams := &GraphQLParams{
 			Query: `query {
 		queryCharacter(filter: { name: { eq: "Han Solo" } }) {
+		  id
 		  name
 		  appearsIn
 		  ... on Human {
@@ -2117,9 +2121,10 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
 
-		expected := `{
+		expected := fmt.Sprintf(`{
 		"queryCharacter": [
 		  {
+			"id": "%s",
 			"name": "Han Solo",
 			"appearsIn": ["EMPIRE"],
 			"starships": [
@@ -2131,7 +2136,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 			"totalCredits": 10
 		  }
 		]
-	  }`
+	  }`, humanID)
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
@@ -2139,6 +2144,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		queryHumanParams := &GraphQLParams{
 			Query: `query {
 		queryHuman {
+		  id
 		  name
 		  appearsIn
 		  starships {
@@ -2153,9 +2159,10 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
 
-		expected := `{
+		expected := fmt.Sprintf(`{
 		"queryHuman": [
 		  {
+			"id": "%s",
 			"name": "Han Solo",
 			"appearsIn": ["EMPIRE"],
 			"starships": [
@@ -2167,7 +2174,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 			"totalCredits": 10
 		  }
 		]
-	  }`
+	  }`, humanID)
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
@@ -2175,6 +2182,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		queryHumanParamsByName := &GraphQLParams{
 			Query: `query {
 		queryHuman(filter: { name: { eq: "Han Solo" } }) {
+		  id
 		  name
 		  appearsIn
 		  starships {
@@ -2189,9 +2197,10 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, graphqlURL)
 		requireNoGQLErrors(t, gqlResponse)
 
-		expected := `{
+		expected := fmt.Sprintf(`{
 		"queryHuman": [
 		  {
+			"id": "%s",
 			"name": "Han Solo",
 			"appearsIn": ["EMPIRE"],
 			"starships": [
@@ -2203,7 +2212,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 			"totalCredits": 10
 		  }
 		]
-	  }`
+	  }`, humanID)
 
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})

@@ -68,6 +68,16 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 	return b
 }
 
+func getCurrentUser(t *testing.T, accessToken string) []byte {
+	query := `query {
+		getCurrentUser {
+			name
+		}
+	}`
+
+	return makeRequest(t, accessToken, testutil.GraphQLParams{Query: query})
+}
+
 func checkUserCount(t *testing.T, resp []byte, expected int) {
 	type Response struct {
 		Data struct {
@@ -101,6 +111,60 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	}
 	b := makeRequest(t, accessToken, params)
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+}
+
+func deleteGroup(t *testing.T, accessToken, name string) {
+	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
+	delGroup := `mutation deleteUser($name: String!) {
+		deleteGroup(filter: {name: {eq: $name}}) {
+			msg
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: delGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	b := makeRequest(t, accessToken, params)
+	require.JSONEq(t, `{"data":{"deleteGroup":{"msg":"Deleted"}}}`, string(b))
+}
+
+func TestInvalidGetUser(t *testing.T) {
+	require.Equal(t, string(getCurrentUser(t, "invalid token")),
+		`{"errors":[{"message":"couldn't rewrite query getCurrentUser because unable to`+
+			` parse jwt token: token contains an invalid number of segments"}]}`)
+}
+
+func TestGetCurrentUser(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, accessJwt)),
+		`{"data":{"getCurrentUser":{"name":"groot"}}}`)
+
+	// clean up the user to allow repeated running of this test
+	userid := "hamilton"
+	deleteUser(t, accessJwt, userid)
+	glog.Infof("cleaned up db user state")
+
+	resp := createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 1)
+
+	newJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, newJwt)),
+		`{"data":{"getCurrentUser":{"name":"hamilton"}}}`)
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {
@@ -1012,7 +1076,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 	return b
 }
 
-func TestNegativePermissionDeleteRule(t *testing.T) {
+func TestDeleteRule(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
@@ -1062,10 +1126,10 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
-		_:g1  <dgraph.xid>        "dev-a" .
-		_:g1  <dgraph.type>       "Group" .
-		_:g2  <dgraph.xid>        "dev-b" .
-		_:g2  <dgraph.type>       "Group" .
+		_:g1  <dgraph.xid>       "dev-a" .
+		_:g1  <dgraph.type>      "Group" .
+		_:g2  <dgraph.xid>       "dev-b" .
+		_:g2  <dgraph.type>      "Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
 		_:r1 <dgraph.type> "Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
@@ -1361,4 +1425,191 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"queryUser": [{ "groups": [], "name": "alice"}]}}`,
 		string(b))
+}
+
+func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteUser(t, accessJwt, userid)
+
+	gqlQuery := `
+	query {
+		queryUser {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	require.JSONEq(t, `{"data":{"queryUser":[{"name":"groot"}]}}`, string(b))
+
+	// The user should also be deleted from the dev group.
+	gqlQuery = `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians",
+			  "users": [
+				{
+				  "name": "groot"
+				}
+			  ]
+			},
+			{
+			  "name": "dev",
+			  "users": []
+			},
+			{
+				"name": "dev-a",
+				"users": []
+			},
+			{
+				"name": "dev-b",
+				"users": []
+			}
+		  ]
+		}
+	  }`, string(b))
+}
+
+func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteGroup(t, accessJwt, "dev-a")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians"
+			},
+			{
+			  "name": "dev"
+			},
+			{
+			  "name": "dev-b"
+			}
+		  ]
+		}
+	  }`, string(b))
+
+	gqlQuery = `
+	query {
+		getUser(name: "alice") {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+			"getUser": {
+			"name": "alice",
+			"groups": [
+				{
+					"name": "dev"
+				}
+			]
+		}
+	}}`, string(b))
+}
+
+func TestWrongPermission(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	ruleMutation := `
+		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.xid> "dev" .
+		_:dev <dgraph.acl.rule> _:rule1 .
+		_:rule1 <dgraph.rule.predicate> "name" .
+		_:rule1 <dgraph.rule.permission> "9" .
+	`
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(ruleMutation),
+		CommitNow: true,
+	})
+
+	require.Error(t, err, "Setting permission to 9 shouldn't have returned error")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+
+	ruleMutation = `
+		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.xid> "dev" .
+		_:dev <dgraph.acl.rule> _:rule1 .
+		_:rule1 <dgraph.rule.predicate> "name" .
+		_:rule1 <dgraph.rule.permission> "-1" .
+	`
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(ruleMutation),
+		CommitNow: true,
+	})
+
+	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
+	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }

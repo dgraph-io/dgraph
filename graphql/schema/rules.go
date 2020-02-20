@@ -21,9 +21,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 func init() {
@@ -543,6 +543,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 					)
 				}
 				forwardFound = true
+				break
 			}
 		}
 		if !forwardFound {

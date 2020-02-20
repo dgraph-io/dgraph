@@ -17,8 +17,8 @@
 package schema
 
 import (
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {

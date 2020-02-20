@@ -196,8 +196,7 @@ const adminQueries = `
 	getUser(name: String!): User
 	getGroup(name: String!): Group
 
-	# TODO - This needs a custom handler. Implement this later.
-	# getCurrentUser: User
+	getCurrentUser: User
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`

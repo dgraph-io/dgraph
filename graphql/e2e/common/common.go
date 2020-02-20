@@ -190,6 +190,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("propagate client remote ip", clientInfoLogin)
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
