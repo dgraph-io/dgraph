@@ -389,7 +389,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			// If count is being requested, there is no need to populate value and facets matrix.
 			if q.DoCount {
-				count, err := retriveCountForValuePostings(args, pl, facetsTree, listType)
+				count, err := countForValuePostings(args, pl, facetsTree, listType)
 				if err != nil && err != posting.ErrNoValue {
 					return err
 				}
@@ -507,27 +507,27 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func retriveCountForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	listType bool) (int, error) {
+func facestFilterValuesPostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool, fn func(p *pb.Posting)) error {
 	q := args.q
 
-	var filteredCount int
-	// We want count and there are not facets filter.
-	if q.FacetsFilter == nil && q.DoCount {
-		filteredCount = pl.Length(args.q.ReadTs, 0)
-		if filteredCount == -1 {
-			return 0, posting.ErrTsTooOld
+	var langMatch *pb.Posting
+	var err error
+	// Retrieve the posting that matches the language preferences. We need to do this in below
+	// cases only: 1. Attr type is not list and ExpandAll is false.
+	// 2. Attr type is list and len(q.Langs)>0. Just checking len(q.Langs)>0 is not enough, because
+	// in case of "*", len(q.Langs)>0 && q.ExpandAll is true.
+	if (listType && len(q.Langs) > 0) || !listType || !q.ExpandAll {
+		langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
+		if err != nil && err != posting.ErrNoValue {
+			return err
 		}
-		return filteredCount, nil
 	}
 
-	// Retrieve the posting that matches the language preferences.
-	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
-	if err != nil && err != posting.ErrNoValue {
-		return 0, err
-	}
-	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		if listType && len(q.Langs) == 0 {
+	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+		if q.ExpandAll {
+			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
+		} else if listType && len(q.Langs) == 0 {
 			// Don't retrieve tagged values unless explicitly asked.
 			if len(p.LangTag) > 0 {
 				return nil
@@ -539,14 +539,31 @@ func retriveCountForValuePostings(args funcArgs, pl *posting.List, facetsTree *f
 			}
 		}
 
+		// If filterTree is nil, applyFacetsTree returns true and nil error.
 		picked, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
 		}
 		if picked {
-			filteredCount++
+			fn(p)
 		}
-		return nil // continue iteration.
+
+		// We can stop iterating posting list in the following cases:
+		// 1. Attribute type is not list and ExpandAll is false.
+		// 2. Attribute type is list and We found the posting for lang. Just checking
+		// len(q.Langs)>0 is not enough. In case of "*", len(q.Langs) is >0 and q.ExpandAll is true.
+		if (!listType && !q.ExpandAll) || (listType && len(q.Langs) > 0 && !q.ExpandAll) {
+			return posting.ErrStopIteration
+		}
+		return nil
+	})
+}
+
+func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool) (int, error) {
+	var filteredCount int
+	err := facestFilterValuesPostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+		filteredCount++
 	})
 	if err != nil {
 		return 0, err
@@ -558,70 +575,17 @@ func retriveCountForValuePostings(args funcArgs, pl *posting.List, facetsTree *f
 func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	listType bool) ([]types.Val, *pb.FacetsList, error) {
 	q := args.q
-	var err error
 	var vals []types.Val
 	var fcs []*pb.Facets
 
-	// Retrieve values when facet filtering is not being requested.
-	if q.FacetsFilter == nil {
-		// Retrieve values.
-		switch {
-		case q.ExpandAll:
-			vals, err = pl.AllValues(args.q.ReadTs)
-		case listType && len(q.Langs) == 0:
-			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-		default:
-			var val types.Val
-			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
-			vals = append(vals, val)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Retrieve facets.
+	err := facestFilterValuesPostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+		vals = append(vals, types.Val{
+			Tid:   types.TypeID(p.ValType),
+			Value: p.Value,
+		})
 		if q.FacetParam != nil {
-			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs, listType)
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return vals, &pb.FacetsList{FacetsList: fcs}, nil
-	}
-
-	// Retrieve the posting that matches the language preferences.
-	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
-	if err != nil && err != posting.ErrNoValue {
-		return nil, nil, err
-	}
-	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		if listType && len(q.Langs) == 0 {
-			// Don't retrieve tagged values unless explicitly asked.
-			if len(p.LangTag) > 0 {
-				return nil
-			}
-		} else {
-			// Only consider the posting that matches our language preferences.
-			if !proto.Equal(p, langMatch) {
-				return nil
-			}
-		}
-
-		picked, err := applyFacetsTree(p.Facets, facetsTree)
-		if err != nil {
-			return err
-		}
-		if picked {
-			vals = append(vals, types.Val{
-				Tid:   types.TypeID(p.ValType),
-				Value: p.Value,
-			})
-			if q.FacetParam != nil {
-				fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-			}
-		}
-		return nil // continue iteration.
 	})
 	if err != nil {
 		return nil, nil, err
@@ -630,31 +594,28 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func retrieveCountForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	opts posting.ListOptions) (int, error) {
-	q := args.q
+func facetsFilterUidPostingLIst(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
+	fn func(*pb.Posting)) error {
 
-	// If count is needed and there are no facetsFilter, populate count from pl.length().
-	if q.DoCount && facetsTree == nil {
-		len := pl.Length(q.ReadTs, 0)
-		if len == -1 {
-			return 0, posting.ErrTsTooOld
-		}
-		return len, nil
-	}
-
-	filteredCount := 0
-	err := pl.Postings(opts, func(p *pb.Posting) error {
+	return pl.Postings(opts, func(p *pb.Posting) error {
+		// If filterTree is nil, applyFacetsTree returns true and nil error.
 		pick, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
 		}
 		if pick {
-			// TODO: This way of picking Uids differs from how pl.Uids works. So, have a
-			// look to see if we're catching all the edge cases here.
-			filteredCount++
+			fn(p)
 		}
-		return nil // continue iteration.
+		return nil
+	})
+}
+
+func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	opts posting.ListOptions) (int, error) {
+
+	var filteredCount int
+	err := facetsFilterUidPostingLIst(pl, facetsTree, opts, func(p *pb.Posting) {
+		filteredCount++
 	})
 	if err != nil {
 		return 0, err
@@ -672,22 +633,13 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
 	}
 
-	err := pl.Postings(opts, func(p *pb.Posting) error {
-		pick, err := applyFacetsTree(p.Facets, facetsTree)
-		if err != nil {
-			return err
+	err := facetsFilterUidPostingLIst(pl, facetsTree, opts, func(p *pb.Posting) {
+		uidList.Uids = append(uidList.Uids, p.Uid)
+		if q.FacetParam != nil {
+			fcsList = append(fcsList, &pb.Facets{
+				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+			})
 		}
-		if pick {
-			// TODO: This way of picking Uids differs from how pl.Uids works. So, have a
-			// look to see if we're catching all the edge cases here.
-			uidList.Uids = append(uidList.Uids, p.Uid)
-			if q.FacetParam != nil {
-				fcsList = append(fcsList, &pb.Facets{
-					Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-				})
-			}
-		}
-		return nil // continue iteration.
 	})
 	if err != nil {
 		return nil, nil, err
@@ -765,7 +717,7 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "DoCount")
 				}
-				count, err := retrieveCountForUidPostings(args, pl, facetsTree, opts)
+				count, err := countForUidPostings(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
 				}

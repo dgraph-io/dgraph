@@ -2267,7 +2267,8 @@ func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
 	query := `{
 		q(func: uid(1, 23)) {
 			name
-			filtered_count: count(name) @facets(eq(origin, "french"))
+			french_origin_count: count(name) @facets(eq(origin, "french"))
+			french_spanish_count: count(name) @facets(eq(origin, "spanish"))
 			full_count: count(name)
 		}
 	}`
@@ -2279,12 +2280,14 @@ func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
 			"q": [
 				{
 					"name": "Michonne",
-					"filtered_count": 1,
-					"full_count": 2
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
+					"full_count": 1
 				},
 				{
 					"name": "Rick Grimes",
-					"filtered_count": 1,
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
 					"full_count": 1
 				}
 			]
