@@ -509,7 +509,12 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 	for _, fld := range m.MutatedType().Fields() {
 		invField := fld.Inverse()
 		if invField == nil {
-			continue
+			// This field be a reverse edge, in that case we need to delete the incoming connections
+			// to this node via its forward edges.
+			invField = fld.ForwardEdge()
+			if invField == nil {
+				continue
+			}
 		}
 		varName := varGen.next(fld.Type())
 

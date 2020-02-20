@@ -103,6 +103,24 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
 }
 
+func deleteGroup(t *testing.T, accessToken, name string) {
+	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
+	delGroup := `mutation deleteUser($name: String!) {
+		deleteGroup(filter: {name: {eq: $name}}) {
+			msg
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: delGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	b := makeRequest(t, accessToken, params)
+	require.JSONEq(t, `{"data":{"deleteGroup":{"msg":"Deleted"}}}`, string(b))
+}
+
 func TestCreateAndDeleteUsers(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
@@ -1061,6 +1079,10 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
+		_:g1  <dgraph.xid>       "dev-a" .
+		_:g1  <dgraph.type>      "Group" .
+		_:g2  <dgraph.xid>       "dev-b" .
+		_:g2  <dgraph.type>      "Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
 		_:r1 <dgraph.type> "Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
@@ -1079,9 +1101,10 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	idQuery := fmt.Sprintf(`
 	{
 		userid as var(func: eq(dgraph.xid, "%s"))
-		gid as var(func: eq(dgraph.xid, "dev"))
+		gid as var(func: eq(dgraph.type, "Group")) @filter(eq(dgraph.xid, "dev") OR
+			eq(dgraph.xid, "dev-a"))
 	}`, userid)
-	addAliceToDevMutation := &api.NQuad{
+	addAliceToGroups := &api.NQuad{
 		Subject:   "uid(userid)",
 		Predicate: "dgraph.user.group",
 		ObjectId:  "uid(gid)",
@@ -1091,7 +1114,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 		Query:     idQuery,
 		Mutations: []*api.Mutation{
 			{
-				Set: []*api.NQuad{addAliceToDevMutation},
+				Set: []*api.NQuad{addAliceToGroups},
 			},
 		},
 	})
@@ -1191,7 +1214,16 @@ func TestQueryUserInfo(t *testing.T) {
 						  "name": "alice"
 					  }
 				  ]
-				}
+				},
+				{
+					"name": "dev-a",
+					"rules": [],
+					"users": [
+						{
+							"name": "alice"
+						}
+					]
+				  }
 			  ]
 			}
 		  ]
@@ -1246,7 +1278,7 @@ func TestQueryUserInfo(t *testing.T) {
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
 }
 
-func TestUserAndGroupDeleteShouldDeleteLinkedEdges(t *testing.T) {
+func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	resetUser(t)
 
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
@@ -1262,9 +1294,23 @@ func TestUserAndGroupDeleteShouldDeleteLinkedEdges(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	deleteUser(t, accessJwt, userid)
-	// The user should also be deleted from the dev group.
 
 	gqlQuery := `
+	query {
+		queryUser {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	require.JSONEq(t, `{"data":{"queryUser":[{"name":"groot"}]}}`, string(b))
+
+	// The user should also be deleted from the dev group.
+	gqlQuery = `
 	query {
 		queryGroup {
 			name
@@ -1275,10 +1321,10 @@ func TestUserAndGroupDeleteShouldDeleteLinkedEdges(t *testing.T) {
 	}
 	`
 
-	params := testutil.GraphQLParams{
+	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	b := makeRequest(t, accessJwt, params)
+	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{
 		"data": {
 		  "queryGroup": [
@@ -1293,8 +1339,89 @@ func TestUserAndGroupDeleteShouldDeleteLinkedEdges(t *testing.T) {
 			{
 			  "name": "dev",
 			  "users": []
+			},
+			{
+				"name": "dev-a",
+				"users": []
+			},
+			{
+				"name": "dev-b",
+				"users": []
 			}
 		  ]
 		}
 	  }`, string(b))
+}
+
+func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteGroup(t, accessJwt, "dev-a")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians"
+			},
+			{
+			  "name": "dev"
+			},
+			{
+			  "name": "dev-b"
+			}
+		  ]
+		}
+	  }`, string(b))
+
+	gqlQuery = `
+	query {
+		getUser(name: "alice") {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+			"getUser": {
+			"name": "alice",
+			"groups": [
+				{
+					"name": "dev"
+				}
+			]
+		}
+	}`, string(b))
 }
