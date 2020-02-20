@@ -1245,3 +1245,56 @@ func TestQueryUserInfo(t *testing.T) {
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
 }
+
+func TestUserAndGroupDeleteShouldDeleteLinkedEdges(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteUser(t, accessJwt, userid)
+	// The user should also be deleted from the dev group.
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians",
+			  "users": [
+				{
+				  "name": "groot"
+				}
+			  ]
+			},
+			{
+			  "name": "dev",
+			  "users": []
+			}
+		  ]
+		}
+	  }`, string(b))
+}

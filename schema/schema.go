@@ -445,6 +445,7 @@ func InitialTypes() []*pb.TypeUpdate {
 				},
 			},
 		})
+
 	if x.WorkerConfig.AclEnabled {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
