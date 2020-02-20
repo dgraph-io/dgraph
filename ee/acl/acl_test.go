@@ -1279,9 +1279,13 @@ func TestHealthForAcl(t *testing.T) {
 	err = json.Unmarshal(b, &nonGuardianResp)
 
 	require.NoError(t, err, "health request failed")
-	require.NotContains(t, nonGuardianResp, "data")
-	require.Contains(t, nonGuardianResp, "errors")
-	require.True(t, len(nonGuardianResp["errors"].([]interface{})) > 0)
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User 'alice' is not a member of guardians group."
+			}
+		]
+	}`, string(b))
 
 	// assert data for guardians
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1314,12 +1318,12 @@ func TestHealthForAcl(t *testing.T) {
 	require.NotNil(t, guardianResp.Data)
 	require.Nil(t, guardianResp.Errors)
 	require.NotNil(t, guardianResp.Data.Health)
-	require.True(t, len(guardianResp.Data.Health) > 0)
+	require.Len(t, guardianResp.Data.Health, 6)
 	for _, v := range guardianResp.Data.Health {
-		require.NotNil(t, v.Instance)
+		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
 		require.NotNil(t, v.Address)
 		require.NotNil(t, v.LastEcho)
-		require.NotNil(t, v.Status)
+		require.Equal(t, "healthy", v.Status)
 		require.NotNil(t, v.Version)
 		require.NotNil(t, v.UpTime)
 		require.NotNil(t, v.Group)

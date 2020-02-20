@@ -40,9 +40,9 @@ func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 	x.Check2(buf.WriteString(`{ "health":`))
 
 	var resp *api.Response
-	var respErr error
-	if resp, respErr = (&edgraph.Server{}).Health(ctx, true); respErr != nil {
-		respErr = errors.Errorf("%s: %s", x.Error, respErr.Error())
+	var err error
+	if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
+		err = errors.Errorf("%s: %s", x.Error, err.Error())
 		x.Check2(buf.Write([]byte(` null `)))
 	} else {
 		x.Check2(buf.Write(resp.GetJson()))
@@ -50,5 +50,5 @@ func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 
 	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), respErr
+	return buf.Bytes(), err
 }

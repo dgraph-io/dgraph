@@ -811,17 +811,20 @@ func authorizeGuardians(ctx context.Context) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	if err != nil {
+	switch {
+	case err == errNoJwt:
+		return status.Error(codes.PermissionDenied, err.Error())
+	case err != nil:
 		return status.Error(codes.Unauthenticated, err.Error())
-	}
+	default:
+		userId := userData[0]
+		groupIds := userData[1:]
 
-	userId := userData[0]
-	groupIds := userData[1:]
-
-	if !x.IsGuardian(groupIds) {
-		// Deny access for members of non-guardian groups
-		return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
-			"allowed access. User '%v' is not a member of guardians group.", userId))
+		if !x.IsGuardian(groupIds) {
+			// Deny access for members of non-guardian groups
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
+				"allowed access. User '%v' is not a member of guardians group.", userId))
+		}
 	}
 
 	return nil
