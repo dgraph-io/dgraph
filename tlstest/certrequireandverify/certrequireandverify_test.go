@@ -86,7 +86,7 @@ func TestGQLAdminHealthWithClientCert(t *testing.T) {
 		Transport: &transport,
 	}
 
-	healthCheckQuery := []byte(`{"query":"query {\n health {\n message\n status\n }\n}"}`)
+	healthCheckQuery := []byte(`{"query":"query {\n health {\n status\n }\n}"}`)
 	gqlAdminEndpoint := "https://localhost:8180/admin"
 	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
 	require.NoError(t, err, "Failed to create request : %v", err)
@@ -98,7 +98,7 @@ func TestGQLAdminHealthWithClientCert(t *testing.T) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err, "Error while reading http response: %v", err)
-	require.Contains(t, string(body), "Dgraph connection established")
+	require.Contains(t, string(body), `"status":"healthy"`)
 }
 
 func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
