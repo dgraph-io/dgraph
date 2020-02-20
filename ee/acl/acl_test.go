@@ -1583,6 +1583,7 @@ func TestHealthForAcl(t *testing.T) {
 	require.NotNil(t, guardianResp.Data)
 	require.Nil(t, guardianResp.Errors)
 	require.NotNil(t, guardianResp.Data.Health)
+	// we have 9 instances of alphas/zeros in teamcity environment
 	require.Len(t, guardianResp.Data.Health, 9)
 	for _, v := range guardianResp.Data.Health {
 		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
