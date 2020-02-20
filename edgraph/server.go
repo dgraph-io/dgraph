@@ -905,7 +905,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
+		if !x.WorkerConfig.LudicrousMode {
+			qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
+		} else {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
