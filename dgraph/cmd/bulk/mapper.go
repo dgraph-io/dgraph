@@ -103,7 +103,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
 
 	sort.Slice(entries, func(i, j int) bool {
-		return bytes.Compare(entries[i].GetKey(), entries[j].GetKey()) < 0
+		return less(entries[i], entries[j])
 	})
 
 	f, err := m.openOutputFile(shardIdx)
@@ -128,6 +128,10 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	}
 	shardPartioionNo := len(entries) / 8
 	for i := range entries {
+		if shardPartioionNo == 0 {
+			// we have only less entries so need for partition keys.
+			break
+		}
 		if i%shardPartioionNo == 0 {
 			header.PartitionKeys = append(header.PartitionKeys, entries[i])
 		}
