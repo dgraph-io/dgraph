@@ -501,6 +501,10 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
+		if len(result) == 0 {
+			return nil, schema.AsGQLErrors(err)
+		}
+
 		var val interface{}
 		if marshErr := json.Unmarshal(result, &val); marshErr != nil {
 			return nil,

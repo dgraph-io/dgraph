@@ -1613,3 +1613,86 @@ func TestWrongPermission(t *testing.T) {
 	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
+
+func TestHealthForAcl(t *testing.T) {
+	resetUser(t)
+
+	gqlQuery := `
+	query {
+		health {
+			instance
+			address
+			lastEcho
+			status
+			version
+			uptime
+			group
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+
+	// assert errors for non-guardians
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	b := makeRequest(t, accessJwt, params)
+
+	require.NoError(t, err, "health request failed")
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
+			}
+		]
+	}`, string(b))
+
+	// assert data for guardians
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "groot login failed")
+
+	b = makeRequest(t, accessJwt, params)
+	var guardianResp struct {
+		Data struct {
+			Health []struct {
+				Instance string
+				Address  string
+				LastEcho int64
+				Status   string
+				Version  string
+				UpTime   int64
+				Group    string
+			}
+		}
+		Errors []struct {
+			Message string
+		}
+	}
+	err = json.Unmarshal(b, &guardianResp)
+
+	require.NoError(t, err, "health request failed")
+	require.NotNil(t, guardianResp.Data)
+	require.Nil(t, guardianResp.Errors)
+	require.NotNil(t, guardianResp.Data.Health)
+	// we have 9 instances of alphas/zeros in teamcity environment
+	require.Len(t, guardianResp.Data.Health, 9)
+	for _, v := range guardianResp.Data.Health {
+		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
+		require.NotNil(t, v.Address)
+		require.NotNil(t, v.LastEcho)
+		require.Equal(t, "healthy", v.Status)
+		require.NotNil(t, v.Version)
+		require.NotNil(t, v.UpTime)
+		require.NotNil(t, v.Group)
+	}
+}

@@ -658,7 +658,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 	var healthAll []pb.HealthInfo
 	if all {
-		if err := authorizeGroot(ctx); err != nil {
+		if err := authorizeGuardians(ctx); err != nil {
 			return nil, err
 		}
 		pool := conn.GetPools().GetAll()
@@ -694,7 +694,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeGroot(ctx); err != nil {
+	if err := authorizeGuardians(ctx); err != nil {
 		return nil, err
 	}
 

@@ -794,34 +794,31 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
-// authorizeGroot authorizes the operation for Groot users.
-func authorizeGroot(ctx context.Context) error {
+// authorizeGuardians authorizes the operation for users which belong to Guardians group.
+func authorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	var userID string
-	// doAuthorizeState checks if the user is authorized to perform this API request
-	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == x.ErrNoJwt:
-			return status.Error(codes.PermissionDenied, err.Error())
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userID = userData[0]
-			if userID == x.GrootId {
-				return nil
-			}
-			// Deny non groot users.
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-				"Only User '%v' is authorized.", userID, x.GrootId))
+	userData, err := extractUserAndGroups(ctx)
+	switch {
+	case err == x.ErrNoJwt:
+		return status.Error(codes.PermissionDenied, err.Error())
+	case err != nil:
+		return status.Error(codes.Unauthenticated, err.Error())
+	default:
+		userId := userData[0]
+		groupIds := userData[1:]
+
+		if !x.IsGuardian(groupIds) {
+			// Deny access for members of non-guardian groups
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
+				"allowed access. User '%v' is not a member of guardians group.", userId))
 		}
 	}
 
-	return doAuthorizeGroot()
+	return nil
 }
 
 /*
