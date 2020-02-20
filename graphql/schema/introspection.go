@@ -9,7 +9,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation
@@ -112,7 +112,7 @@ func (ec *executionContext) writeStringSlice(v []string) {
 // graphql.requestContext to work correctly.
 func collectFields(reqCtx *requestContext, selSet ast.SelectionSet,
 	satisfies []string) []graphql.CollectedField {
-	ctx := &graphql.RequestContext{
+	ctx := &graphql.OperationContext{
 		RawQuery:  reqCtx.RawQuery,
 		Variables: reqCtx.Variables,
 		Doc:       reqCtx.Doc,

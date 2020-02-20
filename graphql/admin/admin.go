@@ -475,6 +475,17 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					qryExec,
 					resolve.StdQueryCompletion())
 			}).
+		WithQueryResolver("getCurrentUser",
+			func(q schema.Query) resolve.QueryResolver {
+				cuResolver := &currentUserResolver{
+					baseRewriter: qryRw,
+				}
+
+				return resolve.NewQueryResolver(
+					cuResolver,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(

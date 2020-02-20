@@ -7,10 +7,10 @@ import (
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 const introspectionQuery = `
@@ -183,18 +183,11 @@ func TestIntrospectionQuery(t *testing.T) {
 			filepath.Join(iprefix, "enum_withdeprecated.txt"),
 			filepath.Join(oprefix, "enum_withdeprecated.json"),
 		},
-		// TODO: There's a bug in the gqlparser lib that needs fixing for enums
-		// Fields(includeDeprecated bool) for a type respects the includeDeprecated arg:
-		// https://github.com/99designs/gqlgen/blob/
-		//    f7a67722a6baf2612fa429bd21ceb9c6b9cbed1c/graphql/introspection/type.go#L73-L75
-		// but EnumValues does not
-		// https://github.com/99designs/gqlgen/blob/
-		//    f7a67722a6baf2612fa429bd21ceb9c6b9cbed1c/graphql/introspection/type.go#L148
-		// {"Deprecated directive on enum without deprecated",
-		// 	simpleSchema + deprecatedSchema,
-		// 	filepath.Join(iprefix, "enum_withoutdeprecated.txt"),
-		// 	filepath.Join(oprefix, "enum_withoutdeprecated.json"),
-		// },
+		{"Deprecated directive on enum without deprecated",
+			simpleSchema + deprecatedSchema,
+			filepath.Join(iprefix, "enum_withoutdeprecated.txt"),
+			filepath.Join(oprefix, "enum_withoutdeprecated.json"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -228,6 +221,32 @@ func TestIntrospectionQuery(t *testing.T) {
 			testutil.CompareJSON(t, string(expectedBuf), string(resp))
 		})
 	}
+}
+
+func TestIntrospectionQueryMissingNameArg(t *testing.T) {
+	sch := gqlparser.MustLoadSchema(
+		&ast.Source{Name: "schema.graphql", Input: `
+		schema {
+			query: TestType
+		}
+	
+		type TestType {
+			testField: String
+		}
+	`})
+	missingNameArgQuery := `
+	{
+    	__type {
+	        name
+    	}
+	}`
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: missingNameArgQuery})
+	require.Nil(t, gqlErr)
+
+	listErr := validator.Validate(sch, doc)
+	require.Equal(t, 1, len(listErr))
+	require.Equal(t, "Field \"__type\" argument \"name\" of type \"String!\" is required but not provided.", listErr[0].Message)
 }
 
 func TestIntrospectionQueryWithVars(t *testing.T) {
@@ -288,8 +307,6 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 }
 
 func TestFullIntrospectionQuery(t *testing.T) {
-	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
-	// https://github.com/graphql/graphql-js/blob/master/src/type/__tests__/introspection-test.js#L35
 	sch := gqlparser.MustLoadSchema(
 		&ast.Source{Name: "schema.graphql", Input: `
 	schema {

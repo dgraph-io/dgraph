@@ -31,7 +31,7 @@ import (
 type healthResolver struct {
 }
 
-func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+func (hr *healthResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
 	return nil, nil
 }
 

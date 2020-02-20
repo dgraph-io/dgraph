@@ -107,3 +107,7 @@ type ComputerOwner {
 	nickName: String
 	computers: Computer! @hasInverse(field: owners)
 }
+
+type User @secret(field: "pwd") {
+	name: String! @id
+}

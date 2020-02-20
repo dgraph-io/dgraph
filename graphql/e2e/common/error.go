@@ -30,12 +30,14 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
 )
 
@@ -271,4 +273,44 @@ func (dg *panicClient) Mutate(
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 	panic(panicMsg)
+}
+
+// clientInfoLogin check whether the client info(IP address) is propagated in the request.
+// It mocks Dgraph like panicCatcher.
+func clientInfoLogin(t *testing.T) {
+	loginQuery := &GraphQLParams{
+		Query: `mutation {
+  						login(input: {userId: "groot", password: "password"}) {
+    						response {
+      							accessJWT
+    						}
+  						}
+					}`,
+	}
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	fns := &resolve.ResolverFns{}
+	var loginCtx context.Context
+	errFunc := func(name string) error { return nil }
+	mErr := resolve.MutationResolverFunc(
+		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
+			loginCtx = ctx
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+		})
+
+	resolverFactory := resolve.NewResolverFactory(nil, mErr).
+		WithConventionResolvers(gqlSchema, fns)
+
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
+	defer ts.Close()
+
+	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	require.NotNil(t, loginCtx)
+	peerInfo, found := peer.FromContext(loginCtx)
+	require.True(t, found)
+	require.NotNil(t, peerInfo.Addr.String())
 }
