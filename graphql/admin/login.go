@@ -44,28 +44,7 @@ type loginInput struct {
 func (lr *loginResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got login request")
-
 	lr.mutation = m
-	input, err := getLoginInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO - Fix this context to log the IP as it does in the other request.
-	resp, err := (&edgraph.Server{}).Login(context.Background(), &dgoapi.LoginRequest{
-		Userid:       input.UserId,
-		Password:     input.Password,
-		RefreshToken: input.RefreshToken,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	jwt := &dgoapi.Jwt{}
-	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
-		return nil, nil, err
-	}
-	lr.accessJwt = jwt.AccessJwt
-	lr.refreshJwt = jwt.RefreshJwt
 	return nil, nil, nil
 }
 
@@ -82,6 +61,25 @@ func (lr *loginResolver) Mutate(
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
 
+	input, err := getLoginInput(lr.mutation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
+		Userid:       input.UserId,
+		Password:     input.Password,
+		RefreshToken: input.RefreshToken,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	jwt := &dgoapi.Jwt{}
+	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
+		return nil, nil, err
+	}
+	lr.accessJwt = jwt.AccessJwt
+	lr.refreshJwt = jwt.RefreshJwt
 	return nil, nil, nil
 }
 

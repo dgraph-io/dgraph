@@ -37,11 +37,13 @@
       }
     }
   gqlvariables: |
-    { "auth": [
-      { "name": "A.N. Author"
-      },
-      { "name": "Different Author"
-      }
+    {
+      "auth": [{
+          "name": "A.N. Author"
+        },
+        {
+          "name": "Different Author"
+        }
       ]
     }
   explanation: "A uid and type should get injected and all data transformed to
@@ -79,32 +81,40 @@
         }
 
 -
-  name: "Add Mutation with mixed vars and embedded value"
+  name: "Add Mutation with Password field"
   gqlmutation: |
-    mutation addAuthor($name: String!) {
-      addAuthor(input: [{ name: $name, posts: []}]) {
-        author {
+    mutation addUser($name: String!, $pwd: String!) {
+      addUser(input: [{ name: $name, pwd: $pwd}]) {
+        user {
           name
         }
       }
     }
   gqlvariables: |
-    { "name":  "A.N. Author" }
+    { "name":  "A.N. Author", "pwd": "Password" }
   explanation: "The input and variables should be used for the mutation, with a uid and type
     getting injected and all data transformed to underlying Dgraph edge names"
   dgmutations:
     - setjson: |
-        { "uid":"_:Author1",
-          "dgraph.type":["Author"],
-          "Author.name":"A.N. Author",
-          "Author.posts":[]
+        { "uid":"_:User1",
+          "dgraph.type":["User"],
+          "User.name":"A.N. Author",
+          "User.pwd":"Password"
         }
+      cond: "@if(eq(len(User1), 0))"
+  dgquery: |-
+    query {
+      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
+        uid
+      }
+    }
 
 -
   name: "Add Multiple Mutations with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}, {name: "Different Author", posts: []}]) {
+      addAuthor(input: [{ name: "A.N. Author", posts: []}, 
+                        { name: "Different Author", posts: []}]) {
         author {
           name
         }
@@ -475,6 +485,7 @@
         { "uid": "_:Author1",
           "dgraph.type": [ "Author" ],
           "Author.name": "A.N. Author",
+          "Author.dob": "2000-01-01",
           "Author.dob": "2000-01-01",
           "Author.posts": [
             {

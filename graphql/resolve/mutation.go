@@ -221,7 +221,6 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
-
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
 		return nil, resolverFailed,

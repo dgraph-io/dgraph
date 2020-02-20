@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			dgQuery, err := testRewriter.Rewrite(gqlQuery)
+			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
