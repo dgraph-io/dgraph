@@ -39,12 +39,12 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 		requiredTokenizer = tok.TermTokenizer{}
 	}
 
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(schema.ReadCtx, attr) {
 		return requiredTokenizer.Name(), false
 	}
 
 	id := requiredTokenizer.Identifier()
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(schema.ReadCtx, attr) {
 		if t.Identifier() == id {
 			return requiredTokenizer.Name(), true
 		}
@@ -53,10 +53,10 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 }
 
 func verifyCustomIndex(attr string, tokenizerName string) bool {
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(schema.ReadCtx, attr) {
 		return false
 	}
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(schema.ReadCtx, attr) {
 		if t.Identifier() >= tok.IdentCustom && t.Name() == tokenizerName {
 			return true
 		}
@@ -78,11 +78,11 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 
 func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(schema.ReadCtx, attr) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
+	tokenizers := schema.State().Tokenizer(schema.ReadCtx, attr)
 	for _, t := range tokenizers {
 		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
 		switch f {
