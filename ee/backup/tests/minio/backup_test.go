@@ -293,7 +293,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)

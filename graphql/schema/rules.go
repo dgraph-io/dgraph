@@ -543,6 +543,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 					)
 				}
 				forwardFound = true
+				break
 			}
 		}
 		if !forwardFound {

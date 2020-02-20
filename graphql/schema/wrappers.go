@@ -139,6 +139,8 @@ type FieldDefinition interface {
 	Type() Type
 	IsID() bool
 	Inverse() FieldDefinition
+	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
+	ForwardEdge() FieldDefinition
 }
 
 type astType struct {
@@ -913,6 +915,53 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
+
+	return &fieldDefinition{
+		fieldDef:        fld,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate}
+}
+
+// ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
+// i.e. if it has a dgraph directive like
+// @dgraph(name: "~movies")
+func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
+	dd := fd.fieldDef.Directives.ForName(dgraphDirective)
+	if dd == nil {
+		return nil
+	}
+
+	arg := dd.Arguments.ForName(dgraphPredArg)
+	if arg == nil {
+		return nil // really not possible
+	}
+	name := arg.Value.Raw
+
+	if !strings.HasPrefix(name, "~") && !strings.HasPrefix(name, "<~") {
+		return nil
+	}
+
+	fedge := strings.Trim(name, "<~>")
+	// typ must exist if the schema passed GQL validation
+	typ := fd.inSchema.Types[fd.Type().Name()]
+
+	var fld *ast.FieldDefinition
+	// Have to range through all the fields and find the correct forward edge. This would be
+	// expensive and should ideally be cached on schema update.
+	for _, field := range typ.Fields {
+		dir := field.Directives.ForName(dgraphDirective)
+		if dir == nil {
+			continue
+		}
+		predArg := dir.Arguments.ForName(dgraphPredArg)
+		if predArg == nil || predArg.Value.Raw == "" {
+			continue
+		}
+		if predArg.Value.Raw == fedge {
+			fld = field
+			break
+		}
+	}
 
 	return &fieldDefinition{
 		fieldDef:        fld,
