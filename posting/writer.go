@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -113,6 +114,9 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 // Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
+	if x.WorkerConfig.LudicrousMode {
+		return nil
+	}
 	defer func() {
 		if err := w.db.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
