@@ -207,9 +207,11 @@ func (rf *resolverFactory) WithConventionResolvers(
 	s schema.Schema, fns *ResolverFns) ResolverFactory {
 
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
+	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe, StdQueryCompletion())
+			return NewQueryResolver(fns.Qrw, fns.Qe,
+				StdQueryCompletion())
 		})
 	}
 
@@ -498,6 +500,10 @@ func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+
+		if len(result) == 0 {
+			return nil, schema.AsGQLErrors(err)
+		}
 
 		var val interface{}
 		if marshErr := json.Unmarshal(result, &val); marshErr != nil {

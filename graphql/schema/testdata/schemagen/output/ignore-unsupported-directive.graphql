@@ -2,25 +2,16 @@
 # Input Schema
 #######################
 
-"""Desc"""
-interface I {
-	"""Desc"""
-	s: String!
+enum Role {
+	Admin
+	User
 }
 
-"""Desc"""
-type T implements I {
-	s: String!
+type Product {
 	id: ID!
-	"""Desc"""
-	i: Int
-}
-
-"""Desc"""
-enum AnEnum {
-	AVal
-	"""Desc"""
-	AnotherVal
+	price: Float! @search
+	name: String! @search @dgraph(pred: "p")
+	name2: String! @search @dgraph(pred: "p")
 }
 
 #######################
@@ -105,18 +96,18 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddTPayload {
-	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+type AddProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	numUids: Int
 }
 
-type DeleteTPayload {
+type DeleteProductPayload {
 	msg: String
 	numUids: Int
 }
 
-type UpdateTPayload {
-	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+type UpdateProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	numUids: Int
 }
 
@@ -124,59 +115,55 @@ type UpdateTPayload {
 # Generated Enums
 #######################
 
-enum IOrderable {
-	s
-}
-
-enum TOrderable {
-	s
-	i
+enum ProductOrderable {
+	price
+	name
+	name2
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddTInput {
-	s: String!
-	"""Desc"""
-	i: Int
+input AddProductInput {
+	price: Float!
+	name: String!
+	name2: String!
 }
 
-input IOrder {
-	asc: IOrderable
-	desc: IOrderable
-	then: IOrder
-}
-
-input TFilter {
+input ProductFilter {
 	id: [ID!]
-	not: TFilter
+	price: FloatFilter
+	name: StringTermFilter
+	name2: StringTermFilter
+	and: ProductFilter
+	or: ProductFilter
+	not: ProductFilter
 }
 
-input TOrder {
-	asc: TOrderable
-	desc: TOrderable
-	then: TOrder
+input ProductOrder {
+	asc: ProductOrderable
+	desc: ProductOrderable
+	then: ProductOrder
 }
 
-input TPatch {
-	s: String
-	"""Desc"""
-	i: Int
+input ProductPatch {
+	price: Float
+	name: String
+	name2: String
 }
 
-input TRef {
+input ProductRef {
 	id: ID
-	s: String
-	"""Desc"""
-	i: Int
+	price: Float
+	name: String
+	name2: String
 }
 
-input UpdateTInput {
-	filter: TFilter!
-	set: TPatch
-	remove: TPatch
+input UpdateProductInput {
+	filter: ProductFilter!
+	set: ProductPatch
+	remove: ProductPatch
 }
 
 #######################
@@ -184,9 +171,8 @@ input UpdateTInput {
 #######################
 
 type Query {
-	queryI(order: IOrder, first: Int, offset: Int): [I]
-	getT(id: ID!): T
-	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	getProduct(id: ID!): Product
+	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 }
 
 #######################
@@ -194,7 +180,7 @@ type Query {
 #######################
 
 type Mutation {
-	addT(input: [AddTInput!]!): AddTPayload
-	updateT(input: UpdateTInput!): UpdateTPayload
-	deleteT(filter: TFilter!): DeleteTPayload
+	addProduct(input: [AddProductInput!]!): AddProductPayload
+	updateProduct(input: UpdateProductInput!): UpdateProductPayload
+	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }

@@ -31,25 +31,23 @@ import (
 type healthResolver struct {
 }
 
-func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+func (hr *healthResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
 	return nil, nil
 }
 
 func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var err error
-
-	var resp *api.Response
-	var respErr error
-	if resp, respErr = (&edgraph.Server{}).Health(ctx, true); respErr != nil {
-		err = errors.Errorf("%s: %s", x.Error, respErr.Error())
-	}
-	if resp == nil {
-		err = errors.Errorf("%s: %s", x.ErrorNoData, "No state information available.")
-	}
-
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "health":`))
-	x.Check2(buf.Write(resp.Json))
+
+	var resp *api.Response
+	var err error
+	if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
+		err = errors.Errorf("%s: %s", x.Error, err.Error())
+		x.Check2(buf.Write([]byte(` null `)))
+	} else {
+		x.Check2(buf.Write(resp.GetJson()))
+	}
+
 	x.Check2(buf.WriteString(`}`))
 
 	return buf.Bytes(), err

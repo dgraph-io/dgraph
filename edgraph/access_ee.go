@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -446,20 +445,12 @@ func ResetAcl() {
 	}
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the list of groups
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, errNoJwt
+	accessJwt, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return nil, err
 	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return nil, errNoJwt
-	}
-
 	return validateToken(accessJwt[0])
 }
 
@@ -803,34 +794,31 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
-// authorizeGroot authorizes the operation for Groot users.
-func authorizeGroot(ctx context.Context) error {
+// authorizeGuardians authorizes the operation for users which belong to Guardians group.
+func authorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	var userID string
-	// doAuthorizeState checks if the user is authorized to perform this API request
-	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			return status.Error(codes.PermissionDenied, err.Error())
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userID = userData[0]
-			if userID == x.GrootId {
-				return nil
-			}
-			// Deny non groot users.
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-				"Only User '%v' is authorized.", userID, x.GrootId))
+	userData, err := extractUserAndGroups(ctx)
+	switch {
+	case err == x.ErrNoJwt:
+		return status.Error(codes.PermissionDenied, err.Error())
+	case err != nil:
+		return status.Error(codes.Unauthenticated, err.Error())
+	default:
+		userId := userData[0]
+		groupIds := userData[1:]
+
+		if !x.IsGuardian(groupIds) {
+			// Deny access for members of non-guardian groups
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
+				"allowed access. User '%v' is not a member of guardians group.", userId))
 		}
 	}
 
-	return doAuthorizeGroot()
+	return nil
 }
 
 /*
@@ -849,7 +837,7 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 		}
 		arg := gq.Func.Args[0]
 		// The case where value of some varialble v (say) is "Group" and a
-		// query comes like `eq(dgraph.type, val(v))`, will be ingored here.
+		// query comes like `eq(dgraph.type, val(v))`, will be ignored here.
 		if arg.Value == "User" {
 			newFilter := userFilter(userId)
 			gq.Filter = parentFilter(newFilter, gq.Filter)
@@ -887,6 +875,7 @@ func parentFilter(newFilter, filter *gql.FilterTree) *gql.FilterTree {
 }
 
 func userFilter(userId string) *gql.FilterTree {
+	// A logged in user should always have a userId.
 	return &gql.FilterTree{
 		Func: &gql.Function{
 			Attr: "dgraph.xid",
@@ -897,12 +886,25 @@ func userFilter(userId string) *gql.FilterTree {
 }
 
 func groupFilter(groupIds []string) *gql.FilterTree {
+	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
+	// groups are filtered out.
+	if len(groupIds) == 0 {
+		filter := &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				UID:  []uint64{},
+			},
+		}
+		return filter
+	}
+
 	filter := &gql.FilterTree{
 		Func: &gql.Function{
 			Attr: "dgraph.xid",
 			Name: "eq",
 		},
 	}
+
 	for _, gid := range groupIds {
 		filter.Func.Args = append(filter.Func.Args,
 			gql.Arg{Value: gid})

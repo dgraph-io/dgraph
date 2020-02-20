@@ -53,7 +53,7 @@ const (
 		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 		generatedSchema: String!
 	}
-	  
+
 	"""Node state is the state of an individual node in the Dgraph cluster """
 	type NodeState {
 		"""node type : either 'alpha' or 'zero'"""
@@ -96,10 +96,6 @@ const (
 		response: Response
 	}
 
-	input DrainingInput {
-		enable: Boolean
-	}
-
 	type DrainingPayload {
 		response: Response
 	}
@@ -128,7 +124,7 @@ const (
 	type Mutation {
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
 		export(input: ExportInput!): ExportPayload
-		draining(input: DrainingInput!): DrainingPayload
+		draining(enable: Boolean): DrainingPayload
 		shutdown: ShutdownPayload
 		config(input: ConfigInput!): ConfigPayload
 
@@ -472,6 +468,17 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
+					qryExec,
+					resolve.StdQueryCompletion())
+			}).
+		WithQueryResolver("getCurrentUser",
+			func(q schema.Query) resolve.QueryResolver {
+				cuResolver := &currentUserResolver{
+					baseRewriter: qryRw,
+				}
+
+				return resolve.NewQueryResolver(
+					cuResolver,
 					qryExec,
 					resolve.StdQueryCompletion())
 			}).

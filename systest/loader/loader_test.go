@@ -17,8 +17,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -63,40 +61,12 @@ func TestLoaderXidmap(t *testing.T) {
 	liveCmd.Stderr = os.Stdout
 	require.NoError(t, liveCmd.Run())
 
-	exportRequest := `mutation {
-		export(input: {format: "rdf"}) {
-			response {
-				code
-				message
-			}
-		}
-	}`
-
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	params := testutil.GraphQLParams{
-		Query:     exportRequest,
-		Variables: map[string]interface{}{"format": "json"},
-	}
-	b, err := json.Marshal(params)
+	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", testutil.SockAddrHttp))
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	expected := `{
-		"data": {
-		  "export": {
-			"response": {
-			  "code": "Success",
-			  "message": "Export completed."
-			}
-		  }
-		}
-	  }`
-	require.JSONEq(t, expected, string(b))
+	b, _ := ioutil.ReadAll(resp.Body)
+	expected := `{"code": "Success", "message": "Export completed."}`
+	require.Equal(t, expected, string(b))
 
 	require.NoError(t, copyExportFiles(tmpDir))
 

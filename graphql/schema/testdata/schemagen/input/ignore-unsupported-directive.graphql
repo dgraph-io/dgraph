@@ -1,0 +1,15 @@
+enum Role {
+  Admin
+  User
+}
+
+directive @auth(r: Role = User) on FIELD_DEFINITION
+directive @auth2(r: Role = User, b: Role = User) on FIELD_DEFINITION
+directive @auth3(r: Role = User, b: Role = User) on FIELD_DEFINITION
+
+type Product @auth {
+  id: ID!
+  price: Float! @search @auth(r: Admin) @auth2(r: User, b: Admin)
+  name: String! @auth(r: Admin) @search @auth2 @auth3 @dgraph(pred: "p")
+  name2: String! @auth(r: Admin) @search @auth2 @dgraph(pred: "p") @auth3
+}

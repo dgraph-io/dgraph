@@ -68,6 +68,16 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 	return b
 }
 
+func getCurrentUser(t *testing.T, accessToken string) []byte {
+	query := `query {
+		getCurrentUser {
+			name
+		}
+	}`
+
+	return makeRequest(t, accessToken, testutil.GraphQLParams{Query: query})
+}
+
 func checkUserCount(t *testing.T, resp []byte, expected int) {
 	type Response struct {
 		Data struct {
@@ -101,6 +111,60 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	}
 	b := makeRequest(t, accessToken, params)
 	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+}
+
+func deleteGroup(t *testing.T, accessToken, name string) {
+	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
+	delGroup := `mutation deleteUser($name: String!) {
+		deleteGroup(filter: {name: {eq: $name}}) {
+			msg
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: delGroup,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	b := makeRequest(t, accessToken, params)
+	require.JSONEq(t, `{"data":{"deleteGroup":{"msg":"Deleted"}}}`, string(b))
+}
+
+func TestInvalidGetUser(t *testing.T) {
+	require.Equal(t, string(getCurrentUser(t, "invalid token")),
+		`{"errors":[{"message":"couldn't rewrite query getCurrentUser because unable to`+
+			` parse jwt token: token contains an invalid number of segments"}]}`)
+}
+
+func TestGetCurrentUser(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, accessJwt)),
+		`{"data":{"getCurrentUser":{"name":"groot"}}}`)
+
+	// clean up the user to allow repeated running of this test
+	userid := "hamilton"
+	deleteUser(t, accessJwt, userid)
+	glog.Infof("cleaned up db user state")
+
+	resp := createUser(t, accessJwt, userid, userpassword)
+	checkUserCount(t, resp, 1)
+
+	newJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	require.Equal(t, string(getCurrentUser(t, newJwt)),
+		`{"data":{"getCurrentUser":{"name":"hamilton"}}}`)
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {
@@ -1058,9 +1122,14 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	resetUser(t)
 
 	// TODO - We should be adding this data using the GraphQL API.
+	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
+		_:g1  <dgraph.xid>       "dev-a" .
+		_:g1  <dgraph.type>      "Group" .
+		_:g2  <dgraph.xid>       "dev-b" .
+		_:g2  <dgraph.type>      "Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
 		_:r1 <dgraph.type> "Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
@@ -1079,9 +1148,10 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	idQuery := fmt.Sprintf(`
 	{
 		userid as var(func: eq(dgraph.xid, "%s"))
-		gid as var(func: eq(dgraph.xid, "dev"))
+		gid as var(func: eq(dgraph.type, "Group")) @filter(eq(dgraph.xid, "dev") OR
+			eq(dgraph.xid, "dev-a"))
 	}`, userid)
-	addAliceToDevMutation := &api.NQuad{
+	addAliceToGroups := &api.NQuad{
 		Subject:   "uid(userid)",
 		Predicate: "dgraph.user.group",
 		ObjectId:  "uid(gid)",
@@ -1091,7 +1161,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 		Query:     idQuery,
 		Mutations: []*api.Mutation{
 			{
-				Set: []*api.NQuad{addAliceToDevMutation},
+				Set: []*api.NQuad{addAliceToGroups},
 			},
 		},
 	})
@@ -1131,7 +1201,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1191,7 +1261,16 @@ func TestQueryUserInfo(t *testing.T) {
 						  "name": "alice"
 					  }
 				  ]
-				}
+				},
+				{
+					"name": "dev-a",
+					"rules": [],
+					"users": [
+						{
+							"name": "alice"
+						}
+					]
+				  }
 			  ]
 			}
 		  ]
@@ -1226,6 +1305,61 @@ func TestQueryUserInfo(t *testing.T) {
 
 	gqlQuery = `
 	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+			rules {
+				predicate
+				permission
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	// The user should only be able to see their group dev and themselves as the user.
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "dev",
+			  "users": [
+				{
+				  "name": "alice"
+				}
+			  ],
+			  "rules": [
+				{
+				  "predicate": "name",
+				  "permission": 4
+				},
+				{
+				  "predicate": "nickname",
+				  "permission": 2
+				}
+			  ]
+			},
+			{
+				"name": "dev-a",
+				"users": [
+				  {
+					"name": "alice"
+				  }
+				],
+				"rules": []
+			  }
+
+		  ]
+		}
+	  }`, string(b))
+
+	gqlQuery = `
+	query {
 		getGroup(name: "guardians") {
 			name
 			rules {
@@ -1244,6 +1378,201 @@ func TestQueryUserInfo(t *testing.T) {
 	}
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
+}
+
+func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
+	// Create a new user without any groups, queryGroup should return an empty result.
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryGroup": []}}`, string(b))
+
+	gqlQuery = `
+	query {
+		queryUser {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryUser": [{ "groups": [], "name": "alice"}]}}`,
+		string(b))
+}
+
+func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteUser(t, accessJwt, userid)
+
+	gqlQuery := `
+	query {
+		queryUser {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	require.JSONEq(t, `{"data":{"queryUser":[{"name":"groot"}]}}`, string(b))
+
+	// The user should also be deleted from the dev group.
+	gqlQuery = `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians",
+			  "users": [
+				{
+				  "name": "groot"
+				}
+			  ]
+			},
+			{
+			  "name": "dev",
+			  "users": []
+			},
+			{
+				"name": "dev-a",
+				"users": []
+			},
+			{
+				"name": "dev-b",
+				"users": []
+			}
+		  ]
+		}
+	  }`, string(b))
+}
+
+func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
+	resetUser(t)
+
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	deleteGroup(t, accessJwt, "dev-a")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "guardians"
+			},
+			{
+			  "name": "dev"
+			},
+			{
+			  "name": "dev-b"
+			}
+		  ]
+		}
+	  }`, string(b))
+
+	gqlQuery = `
+	query {
+		getUser(name: "alice") {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+			"getUser": {
+			"name": "alice",
+			"groups": [
+				{
+					"name": "dev"
+				}
+			]
+		}
+	}}`, string(b))
 }
 
 func TestWrongPermission(t *testing.T) {
@@ -1283,4 +1612,87 @@ func TestWrongPermission(t *testing.T) {
 
 	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+}
+
+func TestHealthForAcl(t *testing.T) {
+	resetUser(t)
+
+	gqlQuery := `
+	query {
+		health {
+			instance
+			address
+			lastEcho
+			status
+			version
+			uptime
+			group
+		}
+	}`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+
+	// assert errors for non-guardians
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	b := makeRequest(t, accessJwt, params)
+
+	require.NoError(t, err, "health request failed")
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
+			}
+		]
+	}`, string(b))
+
+	// assert data for guardians
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "groot login failed")
+
+	b = makeRequest(t, accessJwt, params)
+	var guardianResp struct {
+		Data struct {
+			Health []struct {
+				Instance string
+				Address  string
+				LastEcho int64
+				Status   string
+				Version  string
+				UpTime   int64
+				Group    string
+			}
+		}
+		Errors []struct {
+			Message string
+		}
+	}
+	err = json.Unmarshal(b, &guardianResp)
+
+	require.NoError(t, err, "health request failed")
+	require.NotNil(t, guardianResp.Data)
+	require.Nil(t, guardianResp.Errors)
+	require.NotNil(t, guardianResp.Data.Health)
+	// we have 9 instances of alphas/zeros in teamcity environment
+	require.Len(t, guardianResp.Data.Health, 9)
+	for _, v := range guardianResp.Data.Health {
+		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
+		require.NotNil(t, v.Address)
+		require.NotNil(t, v.LastEcho)
+		require.Equal(t, "healthy", v.Status)
+		require.NotNil(t, v.Version)
+		require.NotNil(t, v.UpTime)
+		require.NotNil(t, v.Group)
+	}
 }
