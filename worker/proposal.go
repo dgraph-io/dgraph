@@ -163,7 +163,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			if err := checkTablet(edge.Attr); err != nil {
 				return err
 			}
-			su, ok := schema.State().Get(edge.Attr)
+			su, ok := schema.State().Get(schema.WriteCtx, edge.Attr)
 			if !ok {
 				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {
