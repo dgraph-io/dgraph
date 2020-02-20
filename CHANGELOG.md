@@ -13,7 +13,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Fixed
 
 ## [2.0.0-beta] - 2020-02-20
-[2.0.0-beta]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v2.0.0
+[2.0.0-beta]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...release/v2.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
 
 ### Changed
