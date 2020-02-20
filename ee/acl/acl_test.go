@@ -1122,6 +1122,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	resetUser(t)
 
 	// TODO - We should be adding this data using the GraphQL API.
+	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
 		_:g  <dgraph.type>       "Group" .
@@ -1200,7 +1201,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1304,6 +1305,61 @@ func TestQueryUserInfo(t *testing.T) {
 
 	gqlQuery = `
 	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+			rules {
+				predicate
+				permission
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	// The user should only be able to see their group dev and themselves as the user.
+	testutil.CompareJSON(t, `{
+		"data": {
+		  "queryGroup": [
+			{
+			  "name": "dev",
+			  "users": [
+				{
+				  "name": "alice"
+				}
+			  ],
+			  "rules": [
+				{
+				  "predicate": "name",
+				  "permission": 4
+				},
+				{
+				  "predicate": "nickname",
+				  "permission": 2
+				}
+			  ]
+			},
+			{
+				"name": "dev-a",
+				"users": [
+				  {
+					"name": "alice"
+				  }
+				],
+				"rules": []
+			  }
+
+		  ]
+		}
+	  }`, string(b))
+
+	gqlQuery = `
+	query {
 		getGroup(name: "guardians") {
 			name
 			rules {
@@ -1322,6 +1378,53 @@ func TestQueryUserInfo(t *testing.T) {
 	}
 	b = makeRequest(t, accessJwt, params)
 	testutil.CompareJSON(t, `{"data": {"getGroup": null}}`, string(b))
+}
+
+func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
+	// Create a new user without any groups, queryGroup should return an empty result.
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+
+	gqlQuery := `
+	query {
+		queryGroup {
+			name
+			users {
+				name
+			}
+		}
+	}
+	`
+
+	params := testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryGroup": []}}`, string(b))
+
+	gqlQuery = `
+	query {
+		queryUser {
+			name
+			groups {
+				name
+			}
+		}
+	}
+	`
+
+	params = testutil.GraphQLParams{
+		Query: gqlQuery,
+	}
+	b = makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{"data": {"queryUser": [{ "groups": [], "name": "alice"}]}}`,
+		string(b))
 }
 
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
