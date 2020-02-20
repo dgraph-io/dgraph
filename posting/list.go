@@ -24,6 +24,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/algo"
@@ -34,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 var (
