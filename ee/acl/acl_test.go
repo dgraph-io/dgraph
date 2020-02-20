@@ -1423,7 +1423,7 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 				}
 			]
 		}
-	}`, string(b))
+	}}`, string(b))
 }
 
 func TestWrongPermission(t *testing.T) {
