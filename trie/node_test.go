@@ -143,8 +143,8 @@ func TestLeafHeader(t *testing.T) {
 }
 
 func TestBranchEncode(t *testing.T) {
-	randKeys := generateRand(100)
-	randVals := generateRand(100)
+	randKeys := generateRand(101)
+	randVals := generateRand(101)
 
 	for i, testKey := range randKeys {
 		b := &branch{key: testKey, children: [16]node{}, value: randVals[i]}
@@ -182,7 +182,7 @@ func TestBranchEncode(t *testing.T) {
 			}
 		}
 
-		res, err := b.Encode()
+		res, err := b.encode()
 		if !bytes.Equal(res, expected) {
 			t.Errorf("Fail when encoding node: got %x expected %x", res, expected)
 		} else if err != nil {
@@ -215,7 +215,7 @@ func TestLeafEncode(t *testing.T) {
 
 		expected = append(expected, buf.Bytes()...)
 
-		res, err := l.Encode()
+		res, err := l.encode()
 		if !bytes.Equal(res, expected) {
 			t.Errorf("Fail when encoding node: got %x expected %x", res, expected)
 		} else if err != nil {
@@ -242,7 +242,7 @@ func TestEncodeRoot(t *testing.T) {
 				t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, val)
 			}
 
-			_, err = Encode(trie.root)
+			_, err = encode(trie.root)
 			if err != nil {
 				t.Errorf("Fail to encode trie root: %s", err)
 			}
@@ -268,7 +268,7 @@ func TestBranchDecode(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		enc, err := test.Encode()
+		enc, err := test.encode()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -280,7 +280,7 @@ func TestBranchDecode(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = res.Decode(r, 0)
+		err = res.decode(r, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -304,7 +304,7 @@ func TestLeafDecode(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		enc, err := test.Encode()
+		enc, err := test.encode()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,7 +316,7 @@ func TestLeafDecode(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = res.Decode(r, 0)
+		err = res.decode(r, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -347,7 +347,7 @@ func TestDecode(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		enc, err := test.Encode()
+		enc, err := test.encode()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -358,7 +358,7 @@ func TestDecode(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		res, err := Decode(r)
+		res, err := decode(r)
 		if err != nil {
 			t.Fatal(err)
 		}

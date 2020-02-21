@@ -99,7 +99,7 @@ func TestHashShort(t *testing.T) {
 	}
 
 	n := &leaf{key: generateRandBytes(2), value: generateRandBytes(3)}
-	expected, err := n.Encode()
+	expected, err := n.encode()
 	if err != nil {
 		t.Fatal(err)
 	}

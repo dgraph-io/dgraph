@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/core/types"
 )
 
+//nolint
 const (
 	StatusMsgType = iota
 	BlockRequestMsgType
@@ -280,6 +281,7 @@ func (bm *BlockAnnounceMessage) String() string {
 		bm.Digest)
 }
 
+// Encode a BlockAnnounce Msg Type containing the BlockAnnounceMessage using scale.Encode
 func (bm *BlockAnnounceMessage) Encode() ([]byte, error) {
 	enc, err := scale.Encode(bm)
 	if err != nil {
@@ -361,18 +363,22 @@ func (bm *BlockResponseMessage) IDString() string {
 	return string(bm.ID)
 }
 
+// TransactionMessage is a struct that holds reference to Extrinsics
 type TransactionMessage struct {
 	Extrinsics []types.Extrinsic
 }
 
+// GetType returns the TransactionMsgType
 func (tm *TransactionMessage) GetType() int {
 	return TransactionMsgType
 }
 
+// String returns the TransactionMessage extrinsics
 func (tm *TransactionMessage) String() string {
 	return fmt.Sprintf("TransactionMessage extrinsics=%x", tm.Extrinsics)
 }
 
+// Encode will encode TransactionMessage using scale.Encode
 func (tm *TransactionMessage) Encode() ([]byte, error) {
 	// scale encode each extrinsic
 	var encodedExtrinsics = make([]byte, 0)

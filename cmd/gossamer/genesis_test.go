@@ -57,7 +57,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 	gendata, err := dbSrv.Storage.LoadGenesisData()
 	require.Nil(t, err)
 
-	expected := &genesis.GenesisData{
+	expected := &genesis.Data{
 		Name:       TestGenesis.Name,
 		ID:         TestGenesis.ID,
 		Bootnodes:  common.StringArrayToBytes(TestGenesis.Bootnodes),

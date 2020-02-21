@@ -29,8 +29,8 @@ import (
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
-// RuntimeCtx struct
-type RuntimeCtx struct {
+// Ctx struct
+type Ctx struct {
 	storage   Storage
 	allocator *allocator.FreeingBumpHeapAllocator
 	keystore  *keystore.Keystore
@@ -75,7 +75,7 @@ func NewRuntime(code []byte, s Storage, ks *keystore.Keystore) (*Runtime, error)
 
 	memAllocator := allocator.NewAllocator(instance.Memory, 0)
 
-	runtimeCtx := RuntimeCtx{
+	runtimeCtx := Ctx{
 		storage:   s,
 		allocator: memAllocator,
 		keystore:  ks,

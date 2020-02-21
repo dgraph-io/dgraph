@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ChainSafe/gossamer/common"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/db"
@@ -46,6 +48,7 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 	}
 
 	bt := NewBlockTreeFromGenesis(createGenesisBlock(), d)
+	require.NotNil(t, bt)
 
 	previousHash := bt.head.hash
 	previousAT := bt.head.arrivalTime

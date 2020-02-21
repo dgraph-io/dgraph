@@ -23,34 +23,44 @@ import (
 	"github.com/ChainSafe/gossamer/internal/api"
 )
 
+// AuthorModule holds a pointer to the API
 type AuthorModule struct {
 	api *api.API
 }
 
+// KeyInsertRequest is used as model for the JSON
 type KeyInsertRequest struct {
 	KeyType   string `json:"keyType"`
 	Suri      string `json:"suri"`
 	PublicKey []byte `json:"publicKey"`
 }
 
+// Extrinsic is a array of bytes
 type Extrinsic []byte
 
+// ExtrinsicOrHash is a type for Hash and Extrinsic array of bytes
 type ExtrinsicOrHash struct {
 	Hash      common.Hash
 	Extrinsic []byte
 }
+
+// ExtrinsicOrHashRequest is a array of ExtrinsicOrHash
 type ExtrinsicOrHashRequest []ExtrinsicOrHash
 
 // KeyInsertResponse []byte
 // TODO: Waiting on Block type defined here https://github.com/ChainSafe/gossamer/pull/233
 type KeyInsertResponse []byte
 
+// PendingExtrinsicsResponse is a bi-dimensional array of bytes for allocating the pending extrisics
 type PendingExtrinsicsResponse [][]byte
 
+// RemoveExtrinsicsResponse is a array of hash used to Remove extrinsics
 type RemoveExtrinsicsResponse []common.Hash
 
+// KeyRotateResponse is a byte array used to rotate
 type KeyRotateResponse []byte
 
+// ExtrinsicStatus holds the actual valid statuses
 type ExtrinsicStatus struct {
 	IsFuture    bool
 	IsReady     bool
@@ -64,6 +74,7 @@ type ExtrinsicStatus struct {
 	IsInvalid   bool
 }
 
+// ExtrinsicHashResponse is used as Extrinsic hash response
 type ExtrinsicHashResponse common.Hash
 
 // NewAuthorModule creates a new Author module.

@@ -1,5 +1,6 @@
 package common
 
+//nolint
 var (
 	// LatestHeaderHashKey is the db location the hash of the latest block header.
 	LatestHeaderHashKey = []byte("latest_hash")

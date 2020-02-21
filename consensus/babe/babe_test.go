@@ -336,7 +336,7 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babesession.config = &BabeConfiguration{
+	babesession.config = &Configuration{
 		SlotDuration:       1,
 		EpochLength:        6,
 		C1:                 1,

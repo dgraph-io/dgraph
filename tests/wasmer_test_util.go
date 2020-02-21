@@ -10,6 +10,7 @@ import (
 	"github.com/ChainSafe/gossamer/trie"
 )
 
+//nolint
 const (
 	POLKADOT_RUNTIME     = "polkadot_runtime"
 	POLKADOT_RUNTIME_FP  = "../substrate_test_runtime.compact.wasm"

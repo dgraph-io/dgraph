@@ -29,3 +29,4 @@ test_data/
 chaindata/
 *.wasm
 node.key
+bin/golangci-lint

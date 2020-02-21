@@ -21,7 +21,7 @@ var TestGenesis = &Genesis{
 	ID:         "gossamer",
 	Bootnodes:  TestBootnodes,
 	ProtocolID: TestProtocolID,
-	Genesis:    GenesisFields{},
+	Genesis:    Fields{},
 }
 
 func TestParseGenesisJson(t *testing.T) {
@@ -42,7 +42,7 @@ func TestParseGenesisJson(t *testing.T) {
 	testRaw[0] = map[string]string{"0x3a636f6465": "0x" + testHex}
 
 	expected := TestGenesis
-	expected.Genesis = GenesisFields{Raw: testRaw}
+	expected.Genesis = Fields{Raw: testRaw}
 
 	// Grab json encoded bytes
 	bz, err := json.Marshal(expected)

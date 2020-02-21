@@ -87,7 +87,7 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 	log.Trace("[ext_malloc] executing...", "size", size)
 	instanceContext := wasm.IntoInstanceContext(context)
 	data := instanceContext.Data()
-	runtimeCtx, ok := data.(*RuntimeCtx)
+	runtimeCtx, ok := data.(*Ctx)
 	if !ok {
 		panic(fmt.Sprintf("%#v", data))
 	}
@@ -106,7 +106,7 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 func ext_free(context unsafe.Pointer, addr int32) {
 	log.Trace("[ext_free] executing...", "addr", addr)
 	instanceContext := wasm.IntoInstanceContext(context)
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	// Deallocate memory
 	err := runtimeCtx.allocator.Deallocate(uint32(addr))
@@ -143,7 +143,7 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
@@ -175,7 +175,7 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
@@ -194,7 +194,7 @@ func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
@@ -213,7 +213,7 @@ func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageK
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
@@ -236,7 +236,7 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	root, err := s.StorageRoot()
@@ -263,7 +263,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
@@ -314,7 +314,7 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
@@ -331,7 +331,7 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
 	prefix := memory[prefixData : prefixData+prefixLen]
@@ -483,7 +483,7 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	// TODO: key types not yet implemented
 	// id := memory[idData:idData+4]
@@ -508,7 +508,7 @@ func ext_ed25519_public_keys(context unsafe.Pointer, idData, resultLen int32) in
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	keys := runtimeCtx.keystore.Ed25519PublicKeys()
 	// TODO: when do deallocate?
@@ -534,7 +534,7 @@ func ext_sr25519_public_keys(context unsafe.Pointer, idData, resultLen int32) in
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	keys := runtimeCtx.keystore.Sr25519PublicKeys()
 
@@ -560,7 +560,7 @@ func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
 	pubkey, err := ed25519.NewPublicKey(pubkeyBytes)
@@ -594,7 +594,7 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
 	pubkey, err := sr25519.NewPublicKey(pubkeyBytes)
@@ -650,7 +650,7 @@ func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*RuntimeCtx)
+	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	// TODO: key types not yet implemented
 	// id := memory[idData:idData+4]

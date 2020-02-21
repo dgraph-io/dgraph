@@ -209,6 +209,7 @@ func (bs *BlockState) SetHeader(header *types.Header) error {
 	return err
 }
 
+// SetBlock will set a block using BlockState SetBlockData method
 func (bs *BlockState) SetBlock(block *types.Block) error {
 	blockData := &types.BlockData{
 		Hash:   block.Header.Hash(),

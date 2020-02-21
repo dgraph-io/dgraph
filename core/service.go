@@ -278,6 +278,8 @@ func (s *Service) receiveMessages() {
 }
 
 // handleReceivedBlock handles blocks from the BABE session
+//TODO: remove nolint after `(*Service).handleReceivedBlock` - result `err` is no longer always `nil`
+//nolint
 func (s *Service) handleReceivedBlock(block types.Block) (err error) {
 	msg := &network.BlockAnnounceMessage{
 		ParentHash:     block.Header.ParentHash,

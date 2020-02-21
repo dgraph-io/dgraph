@@ -24,7 +24,8 @@ import (
 	"github.com/ChainSafe/gossamer/rpc"
 )
 
-var JSONVersion = "2.0"
+// JSONVersion defines the actual supported json version
+const JSONVersion = "2.0"
 
 type serverRequest struct {
 	// JSON-RPC Version
@@ -143,4 +144,5 @@ func (c *CodecRequest) writeServerResponse(w http.ResponseWriter, res *serverRes
 	}
 }
 
+// EmptyResponse is a generic type struct used for empty responses
 type EmptyResponse struct{}

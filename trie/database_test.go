@@ -132,13 +132,13 @@ func TestEncodeAndDecodeFromDB(t *testing.T) {
 		}
 	}
 
-	enc, err := trie.Encode()
+	enc, err := trie.encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testTrie := &Trie{}
-	err = testTrie.Decode(enc)
+	err = testTrie.decode(enc)
 	if err != nil {
 		testTrie.Print()
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestStoreAndLoadGenesisData(t *testing.T) {
 		"/ip4/127.0.0.1/tcp/7001/p2p/12D3KooWHHzSeKaY8xuZVzkLbKFfvNgPPeKhFBGrMbNzbm5akpqu",
 	})
 
-	expected := &genesis.GenesisData{
+	expected := &genesis.Data{
 		Name:       "gossamer",
 		ID:         "gossamer",
 		Bootnodes:  bootnodes,

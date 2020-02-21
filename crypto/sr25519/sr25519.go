@@ -9,12 +9,15 @@ import (
 	"github.com/ChainSafe/gossamer/crypto"
 )
 
-const PublicKeyLength int = 32
-const SeedLength int = 32
-const PrivateKeyLength int = 32
-const SignatureLength int = 64
-const VrfOutputLength int = 32
-const VrfProofLength int = 64
+//nolint
+const (
+	PublicKeyLength  int = 32
+	SeedLength       int = 32
+	PrivateKeyLength int = 32
+	SignatureLength  int = 64
+	VrfOutputLength  int = 32
+	VrfProofLength   int = 64
+)
 
 // SigningContext is the context for signatures used or created with substrate
 var SigningContext = []byte("substrate")
@@ -25,10 +28,12 @@ type Keypair struct {
 	private *PrivateKey
 }
 
+// PublicKey holds reference to a sr25519.PublicKey
 type PublicKey struct {
 	key *sr25519.PublicKey
 }
 
+// PrivateKey holds reference to a sr25519.SecretKey
 type PrivateKey struct {
 	key *sr25519.SecretKey
 }

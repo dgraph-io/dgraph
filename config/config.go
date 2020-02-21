@@ -32,12 +32,14 @@ type Config struct {
 	RPC     RPCCfg       `toml:"rpc"`
 }
 
+// GlobalConfig is to marshal/unmarshal toml global config vars
 type GlobalConfig struct {
 	DataDir   string `toml:"data-dir"`
 	Roles     byte   `toml:"roles"`
 	Authority bool   `toml:"authority"`
 }
 
+// NetworkCfg is to marshal/unmarshal toml p2p vars
 type NetworkCfg struct {
 	Bootnodes   []string `toml:"bootstrap-nodes"`
 	ProtocolID  string   `toml:"protocol-id"`
@@ -46,12 +48,14 @@ type NetworkCfg struct {
 	NoMdns      bool     `toml:"no-mdns"`
 }
 
+// RPCCfg is to marshal/unmarshal toml RPC vars
 type RPCCfg struct {
 	Port    uint32       `toml:"port"`
 	Host    string       `toml:"host"`
 	Modules []api.Module `toml:"modules"`
 }
 
+// String will return the json representation for a Config
 func (c *Config) String() string {
 	out, _ := json.MarshalIndent(c, "", "\t")
 	return string(out)

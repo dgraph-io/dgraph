@@ -25,29 +25,29 @@ import (
 	"github.com/disiqueira/gotree"
 )
 
-// node is an element in the BlockTree
-type node struct {
+// Node is an element in the BlockTree
+type Node struct {
 	hash        common.Hash // Block hash
-	parent      *node       // Parent node
+	parent      *Node       // Parent Node
 	number      *big.Int    // Block Number
-	children    []*node     // Nodes of children blocks
+	children    []*Node     // Nodes of children blocks
 	depth       *big.Int    // Depth within the tree
 	arrivalTime uint64      // Arrival time of the block
 }
 
-// addChild appends node to n's list of children
-func (n *node) addChild(node *node) {
+// addChild appends Node to n's list of children
+func (n *Node) addChild(node *Node) {
 	n.children = append(n.children, node)
 }
 
 // String returns stringified hash and depth of node
-func (n *node) String() string {
+func (n *Node) String() string {
 	return fmt.Sprintf("{h: %s, d: %s}", n.hash.String(), n.depth)
 }
 
 // createTree adds all the nodes children to the existing printable tree.
 // Note: this is strictly for BlockTree.String()
-func (n *node) createTree(tree gotree.Tree) {
+func (n *Node) createTree(tree gotree.Tree) {
 	for _, child := range n.children {
 		sub := tree.Add(child.String())
 		child.createTree(sub)
@@ -55,7 +55,7 @@ func (n *node) createTree(tree gotree.Tree) {
 }
 
 // getNode recursively searches for a node with a given hash
-func (n *node) getNode(h common.Hash) *node {
+func (n *Node) getNode(h common.Hash) *Node {
 	if n.hash == h {
 		return n
 	} else if len(n.children) == 0 {
@@ -71,7 +71,7 @@ func (n *node) getNode(h common.Hash) *node {
 }
 
 // getNodeFromBlockNumber recursively searches for a node with a given Number
-func (n *node) getNodeFromBlockNumber(b *big.Int) *node {
+func (n *Node) getNodeFromBlockNumber(b *big.Int) *Node {
 	if b.Cmp(n.number) == 0 {
 		return n
 	} else if len(n.children) == 0 {
@@ -86,7 +86,7 @@ func (n *node) getNodeFromBlockNumber(b *big.Int) *node {
 	return nil
 }
 
-func (n *node) getBlockFromNode() *types.Block {
+func (n *Node) getBlockFromNode() *types.Block {
 	bh := types.Header{
 		ParentHash: n.parent.hash,
 		Number:     n.number,
@@ -103,13 +103,13 @@ func (n *node) getBlockFromNode() *types.Block {
 }
 
 // subChain recursively searches for a chain with head n and end descendant
-func (n *node) subChain(descendant *node) []*node {
+func (n *Node) subChain(descendant *Node) []*Node {
 	if descendant == nil {
 		return nil
 	}
-	var path []*node
+	var path []*Node
 	for curr := descendant; ; curr = curr.parent {
-		path = append([]*node{curr}, path...)
+		path = append([]*Node{curr}, path...)
 		if curr == n {
 			return path
 		}
@@ -119,7 +119,7 @@ func (n *node) subChain(descendant *node) []*node {
 // TODO: This would improved by using parent in node struct and searching child -> parent
 // TODO: verify that parent and child exist in the DB
 // isDescendantOf traverses the tree following all possible paths until it determines if n is a descendant of parent
-func (n *node) isDescendantOf(parent *node) bool {
+func (n *Node) isDescendantOf(parent *Node) bool {
 	if parent == nil {
 		return false
 	}

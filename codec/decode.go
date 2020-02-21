@@ -453,7 +453,7 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 					*ptr = o.(uint64)
 				}
 			case *int:
-				if o, err = sd.DecodeFixedWidthInt(int(0)); err == nil {
+				if o, err = sd.DecodeFixedWidthInt(0); err == nil {
 					*ptr = o.(int)
 				}
 			case *uint:

@@ -29,6 +29,7 @@ type BlockState interface {
 }
 
 // NetworkState interface for network state methods
+//nolint
 type NetworkState interface {
 	GetHealth() (*common.Health, error)
 	SetHealth(*common.Health) error

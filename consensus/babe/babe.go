@@ -41,7 +41,7 @@ type Session struct {
 	storageState   StorageState
 	keypair        *sr25519.Keypair
 	rt             *runtime.Runtime
-	config         *BabeConfiguration
+	config         *Configuration
 	randomness     [sr25519.VrfOutputLength]byte
 	authorityIndex uint64
 	authorityData  []*AuthorityData
@@ -137,10 +137,12 @@ func (b *Session) PeekFromTxQueue() *tx.ValidTransaction {
 	return b.txQueue.Peek()
 }
 
+// AuthorityData returns the data related to the authority
 func (b *Session) AuthorityData() []*AuthorityData {
 	return b.authorityData
 }
 
+// SetEpochData will set the authorityData and randomness
 func (b *Session) SetEpochData(data *NextEpochDescriptor) error {
 	b.authorityData = data.Authorities
 	b.randomness = data.Randomness

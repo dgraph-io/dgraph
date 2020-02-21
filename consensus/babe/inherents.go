@@ -9,21 +9,26 @@ import (
 	scale "github.com/ChainSafe/gossamer/codec"
 )
 
-var Timstap0 = []byte("timstap0")
-var Babeslot = []byte("babeslot")
+//nolint
+var (
+	Timstap0 = []byte("timstap0")
+	Babeslot = []byte("babeslot")
+)
 
 // InherentsData contains a mapping of inherent keys to values
-// Keys must be 8 bytes, values are a variable-length byte array
+// keys must be 8 bytes, values are a variable-length byte array
 type InherentsData struct {
 	data map[[8]byte]([]byte)
 }
 
+// NewInherentsData returns InherentsData
 func NewInherentsData() *InherentsData {
 	return &InherentsData{
 		data: make(map[[8]byte]([]byte)),
 	}
 }
 
+// SetInt64Inherent set the Int64 scale.Encode for a given data
 func (d *InherentsData) SetInt64Inherent(key []byte, data uint64) error {
 	if len(key) != 8 {
 		return errors.New("inherent key must be 8 bytes")
@@ -44,6 +49,7 @@ func (d *InherentsData) SetInt64Inherent(key []byte, data uint64) error {
 	return nil
 }
 
+// Encode will encode a given []byte using scale.Encode
 func (d *InherentsData) Encode() ([]byte, error) {
 	length := big.NewInt(int64(len(d.data)))
 

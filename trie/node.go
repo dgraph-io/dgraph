@@ -26,7 +26,7 @@
 // least significant six bits of `NodeHeader`: if len(key) > 62, 0x3f, otherwise len(key)
 // `Extra partial key length` is included if len(key) > 63 and consists of the remaining key length
 // `Partial Key` is the branch's key
-// `Value` is: Children Bitmap | SCALE Branch Node Value | Hash(Enc(Child[i_1])) | Hash(Enc(Child[i_2])) | ... | Hash(Enc(Child[i_n]))
+// `Value` is: Children Bitmap | SCALE Branch node Value | Hash(Enc(Child[i_1])) | Hash(Enc(Child[i_2])) | ... | Hash(Enc(Child[i_n]))
 //
 // Leaf encoding:
 // NodeHeader | Extra partial key length | Partial Key | Value
@@ -48,9 +48,10 @@ import (
 	"github.com/ChainSafe/gossamer/common"
 )
 
+// node is the interface for trie methods
 type node interface {
-	Encode() ([]byte, error)
-	Decode(r io.Reader, h byte) error
+	encode() ([]byte, error)
+	decode(r io.Reader, h byte) error
 	isDirty() bool
 	setDirty(dirty bool)
 	setKey(key []byte)
@@ -118,12 +119,12 @@ func (b *branch) setKey(key []byte) {
 // Encode is the high-level function wrapping the encoding for different node types
 // encoding has the following format:
 // NodeHeader | Extra partial key length | Partial Key | Value
-func Encode(n node) ([]byte, error) {
+func encode(n node) ([]byte, error) {
 	switch n := n.(type) {
 	case *branch:
-		return n.Encode()
+		return n.encode()
 	case *leaf:
-		return n.Encode()
+		return n.encode()
 	case nil:
 		return []byte{0}, nil
 	}
@@ -132,7 +133,7 @@ func Encode(n node) ([]byte, error) {
 }
 
 // Encode encodes a branch with the encoding specified at the top of this package
-func (b *branch) Encode() ([]byte, error) {
+func (b *branch) encode() ([]byte, error) {
 	encoding, err := b.header()
 	if err != nil {
 		return nil, err
@@ -174,7 +175,7 @@ func (b *branch) Encode() ([]byte, error) {
 }
 
 // Encode encodes a leaf with the encoding specified at the top of this package
-func (l *leaf) Encode() ([]byte, error) {
+func (l *leaf) encode() ([]byte, error) {
 	encoding, err := l.header()
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (l *leaf) Encode() ([]byte, error) {
 }
 
 // Decode wraps the decoding of different node types back into a node
-func Decode(r io.Reader) (node, error) {
+func decode(r io.Reader) (node, error) {
 	header, err := readByte(r)
 	if err != nil {
 		return nil, err
@@ -203,11 +204,11 @@ func Decode(r io.Reader) (node, error) {
 	nodeType := header >> 6
 	if nodeType == 1 {
 		l := new(leaf)
-		err := l.Decode(r, header)
+		err := l.decode(r, header)
 		return l, err
 	} else if nodeType == 2 || nodeType == 3 {
 		b := new(branch)
-		err := b.Decode(r, header)
+		err := b.decode(r, header)
 		return b, err
 	}
 
@@ -217,7 +218,7 @@ func Decode(r io.Reader) (node, error) {
 // Decode decodes a byte array with the encoding specified at the top of this package into a branch node
 // Note that since the encoded branch stores the hash of the children nodes, we aren't able to reconstruct the child
 // nodes from the encoding. This function instead stubs where the children are known to be with an empty leaf.
-func (b *branch) Decode(r io.Reader, header byte) (err error) {
+func (b *branch) decode(r io.Reader, header byte) (err error) {
 	if header == 0 {
 		header, err = readByte(r)
 		if err != nil {
@@ -264,7 +265,7 @@ func (b *branch) Decode(r io.Reader, header byte) (err error) {
 }
 
 // Decode decodes a byte array with the encoding specified at the top of this package into a leaf node
-func (l *leaf) Decode(r io.Reader, header byte) (err error) {
+func (l *leaf) decode(r io.Reader, header byte) (err error) {
 	if header == 0 {
 		header, err = readByte(r)
 		if err != nil {

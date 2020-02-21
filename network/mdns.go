@@ -25,6 +25,7 @@ import (
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
+// MdnsPeriod is 1 minute
 const MdnsPeriod = time.Minute
 
 // Notifee See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee

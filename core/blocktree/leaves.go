@@ -23,19 +23,19 @@ import (
 )
 
 // leafMap provides quick lookup for existing leaves
-type leafMap map[common.Hash]*node
+type leafMap map[common.Hash]*Node
 
 // Replace deletes the old node from the map and inserts the new one
-func (ls leafMap) Replace(old, new *node) {
+func (ls leafMap) Replace(old, new *Node) {
 	delete(ls, old.hash)
 	ls[new.hash] = new
 }
 
 // DeepestLeaf searches the stored leaves to the find the one with the greatest depth.
 // TODO: Select left-most
-func (ls leafMap) DeepestLeaf() *node {
+func (ls leafMap) DeepestLeaf() *Node {
 	max := big.NewInt(-1)
-	var dLeaf *node
+	var dLeaf *Node
 	for _, n := range ls {
 		if max.Cmp(n.depth) < 0 {
 			max = n.depth

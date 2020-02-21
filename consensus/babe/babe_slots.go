@@ -66,7 +66,7 @@ func median(l []uint64) (uint64, error) {
 	m := len(l)
 	med := uint64(0)
 	if m == 0 {
-		return 0, errors.New("Arrival times list is empty!")
+		return 0, errors.New("arrival times list is empty! ")
 	} else if m%2 == 0 {
 		med = (l[(m/2)-1] + l[(m/2)+1]) / 2
 	} else {
@@ -79,7 +79,7 @@ func median(l []uint64) (uint64, error) {
 func slotOffset(start uint64, end uint64) (uint64, error) {
 	os := end - start
 	if end < start {
-		return 0, errors.New("Cannot have negative Slot Offset!")
+		return 0, errors.New("cannot have negative Slot Offset! ")
 	}
 	return os, nil
 }

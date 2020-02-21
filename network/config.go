@@ -25,13 +25,25 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
+// DefaultKeyFile KeyFile key
 const DefaultKeyFile = "node.key"
-const DefaultDataDir = "~/.gossamer"
-const DefaultPort = uint32(7000)
-const DefaultRandSeed = int64(0) // random key
-const DefaultProtocolID = "/gossamer/dot/0"
-const DefaultRoles = byte(1) // full node
 
+// DefaultDataDir for the gossamer database and related blockchain files
+const DefaultDataDir = "~/.gossamer"
+
+// DefaultPort is the default por const
+const DefaultPort = uint32(7000)
+
+// DefaultRandSeed is a random key
+const DefaultRandSeed = int64(0)
+
+// DefaultProtocolID ID
+const DefaultProtocolID = "/gossamer/dot/0"
+
+// DefaultRoles full node
+const DefaultRoles = byte(1)
+
+// DefaultBootnodes holds the default bootnodes the client will always have
 var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service

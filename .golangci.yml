@@ -111,7 +111,7 @@ linters-settings:
     #local-prefixes: github.com/org/project
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 10
+    min-complexity: 30
   maligned:
     # print struct with more effective memory layout or not, false by default
     suggest-new: true
@@ -203,15 +203,16 @@ linters:
     - goprintffuncname
     - golint
     - depguard
+    - gocyclo
+    - unparam
+#    - maligned
+#    - prealloc
   enable-all: false
   disable:
-    - maligned
-    - prealloc
-    - unparam
+
   disable-all: false
   presets:
-    - bugs
-    - unused
+
   fast: false
 
 
@@ -257,24 +258,13 @@ issues:
       text: "don't use underscores in Go names;"
 
     - linters:
-        - golint
-      text: "which can be annoying to use"
+        - gocyclo
+      text: "cyclomatic complexity 36 of func " #runtime/imports.go: registerImports
 
     - linters:
-        - golint
-      text: "and that stutters; consider calling this"
+        - gocyclo
+      text: "cyclomatic complexity 42 of func " # codec/decode.go: (*Decoder).DecodeTuple
 
-    - linters:
-        - golint
-      text: "should have comment or be unexported"
-
-    - linters:
-        - golint
-      text: "or a comment on this block"
-
-    - linters:
-        - golint
-      text: "error strings should not be capitalized or end with punctuation or a newline"
 
     # Exclude lll issues for long lines with go:generate
     - linters:

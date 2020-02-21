@@ -39,7 +39,7 @@ func (t *Trie) string(str string, current node, prefix []byte, withEncoding bool
 	var encoding []byte
 	var hash []byte
 	if withEncoding && current != nil {
-		encoding, err = current.Encode()
+		encoding, err = current.encode()
 		if err != nil {
 			return ""
 		}

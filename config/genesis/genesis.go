@@ -14,19 +14,19 @@ type Genesis struct {
 	ID         string
 	Bootnodes  []string
 	ProtocolID string
-	Genesis    GenesisFields
+	Genesis    Fields
 }
 
-// GenesisData defines the genesis file data formatted for trie storage
-type GenesisData struct {
+// Data defines the genesis file data formatted for trie storage
+type Data struct {
 	Name       string
 	ID         string
 	Bootnodes  [][]byte
 	ProtocolID string
 }
 
-// GenesisFields stores genesis raw data
-type GenesisFields struct {
+// Fields stores genesis raw data
+type Fields struct {
 	Raw [2]map[string]string
 }
 
@@ -48,8 +48,8 @@ func LoadGenesisFromJSON(file string) (*Genesis, error) {
 }
 
 // GenesisData formats genesis for trie storage
-func (g *Genesis) GenesisData() *GenesisData {
-	return &GenesisData{
+func (g *Genesis) GenesisData() *Data {
+	return &Data{
 		Name:       g.Name,
 		ID:         g.ID,
 		Bootnodes:  common.StringArrayToBytes(g.Bootnodes),
@@ -58,6 +58,6 @@ func (g *Genesis) GenesisData() *GenesisData {
 }
 
 // GenesisFields returns the genesis fields including genesis raw data
-func (g *Genesis) GenesisFields() GenesisFields {
+func (g *Genesis) GenesisFields() Fields {
 	return g.Genesis
 }

@@ -51,10 +51,12 @@ func NewAPIService(networkAPI apiModule.NetworkAPI, runtimeAPI apiModule.Runtime
 	}
 }
 
+// Start does nothing
 func (s *Service) Start() error {
 	return nil
 }
 
+// Stop does nothing
 func (s *Service) Stop() error {
 	return nil
 }

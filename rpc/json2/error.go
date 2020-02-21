@@ -16,6 +16,7 @@
 
 package json2
 
+// ErrCode is a int type used for the rpc error codes
 type ErrCode int
 
 // Official JSON-RPC 2.0 Error codes
@@ -29,11 +30,13 @@ const (
 	// -32000 to -32099 are reserved for implementation specific errors
 )
 
+// Error is a struct that holds the error message and the error code for a error
 type Error struct {
 	Message   string
 	ErrorCode ErrCode
 }
 
+// Error returns the error Message string
 func (e *Error) Error() string {
 	return e.Message
 }

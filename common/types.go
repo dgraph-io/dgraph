@@ -70,10 +70,12 @@ func (h Hash) ToBytes() []byte {
 	return b[:]
 }
 
+// Equal compares two hashes
 func (h Hash) Equal(g Hash) bool {
 	return bytes.Equal(h[:], g[:])
 }
 
+// String returns the hex string for the hash
 func (h Hash) String() string {
 	return fmt.Sprintf("0x%x", h[:])
 }

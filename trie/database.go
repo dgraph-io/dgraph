@@ -70,7 +70,7 @@ func (db *Database) LoadLatestStorageHash() (common.Hash, error) {
 }
 
 // StoreGenesisData stores the given genesis data at the known GenesisDataKey.
-func (db *Database) StoreGenesisData(gen *genesis.GenesisData) error {
+func (db *Database) StoreGenesisData(gen *genesis.Data) error {
 	enc, err := scale.Encode(gen)
 	if err != nil {
 		return fmt.Errorf("cannot scale encode genesis data: %s", err)
@@ -80,31 +80,31 @@ func (db *Database) StoreGenesisData(gen *genesis.GenesisData) error {
 }
 
 // LoadGenesisData retrieves the genesis data stored at the known GenesisDataKey.
-func (db *Database) LoadGenesisData() (*genesis.GenesisData, error) {
+func (db *Database) LoadGenesisData() (*genesis.Data, error) {
 	enc, err := db.Load(common.GenesisDataKey)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := scale.Decode(enc, &genesis.GenesisData{})
+	data, err := scale.Decode(enc, &genesis.Data{})
 	if err != nil {
 		return nil, err
 	}
 
-	return data.(*genesis.GenesisData), nil
+	return data.(*genesis.Data), nil
 }
 
 // Encode traverses the trie recursively, encodes each node, SCALE encodes the encoded node, and appends them all together
-func (t *Trie) Encode() ([]byte, error) {
-	return encode(t.root, []byte{})
+func (t *Trie) encode() ([]byte, error) {
+	return encodeRecursive(t.root, []byte{})
 }
 
-func encode(n node, enc []byte) ([]byte, error) {
+func encodeRecursive(n node, enc []byte) ([]byte, error) {
 	if n == nil {
 		return []byte{}, nil
 	}
 
-	nenc, err := n.Encode()
+	nenc, err := n.encode()
 	if err != nil {
 		return enc, err
 	}
@@ -120,7 +120,7 @@ func encode(n node, enc []byte) ([]byte, error) {
 	case *branch:
 		for _, child := range n.children {
 			if child != nil {
-				enc, err = encode(child, enc)
+				enc, err = encodeRecursive(child, enc)
 				if err != nil {
 					return enc, err
 				}
@@ -133,7 +133,7 @@ func encode(n node, enc []byte) ([]byte, error) {
 
 // Decode decodes a trie from the DB and sets the receiver to it
 // The encoded trie must have been encoded with t.Encode
-func (t *Trie) Decode(enc []byte) error {
+func (t *Trie) decode(enc []byte) error {
 	if bytes.Equal(enc, []byte{}) {
 		return nil
 	}
@@ -156,15 +156,15 @@ func (t *Trie) Decode(enc []byte) error {
 		return err
 	}
 
-	t.root, err = Decode(n)
+	t.root, err = decode(n)
 	if err != nil {
 		return err
 	}
 
-	return decode(r, t.root)
+	return decodeRecursive(r, t.root)
 }
 
-func decode(r io.Reader, prev node) error {
+func decodeRecursive(r io.Reader, prev node) error {
 	sd := &scale.Decoder{Reader: r}
 
 	if b, ok := prev.(*branch); ok {
@@ -186,12 +186,12 @@ func decode(r io.Reader, prev node) error {
 					return err
 				}
 
-				b.children[i], err = Decode(n)
+				b.children[i], err = decode(n)
 				if err != nil {
 					return fmt.Errorf("could not decode child at %d: %s", i, err)
 				}
 
-				err = decode(r, b.children[i])
+				err = decodeRecursive(r, b.children[i])
 				if err != nil {
 					return err
 				}
@@ -205,7 +205,7 @@ func decode(r io.Reader, prev node) error {
 // StoreInDB encodes the entire trie and writes it to the DB
 // The key to the DB entry is the root hash of the trie
 func (t *Trie) StoreInDB() error {
-	enc, err := t.Encode()
+	enc, err := t.encode()
 	if err != nil {
 		return err
 	}
@@ -225,7 +225,7 @@ func (t *Trie) LoadFromDB(root common.Hash) error {
 		return err
 	}
 
-	return t.Decode(enctrie)
+	return t.decode(enctrie)
 }
 
 // StoreHash stores the current root hash in the database at `LatestHashKey`

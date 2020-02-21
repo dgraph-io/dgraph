@@ -59,7 +59,7 @@ func loadGenesis(ctx *cli.Context) error {
 	}
 
 	defer func() {
-		err = stateDb.Db.Db.Close()
+		err = stateDb.DB.DB.Close()
 		if err != nil {
 			log.Error("Loading genesis: cannot close stateDB", "error", err)
 		}
@@ -67,7 +67,7 @@ func loadGenesis(ctx *cli.Context) error {
 
 	// set up trie database
 	t.SetDb(&trie.Database{
-		DB: stateDb.Db.Db,
+		DB: stateDb.DB.DB,
 	})
 
 	// write initial genesis data to DB
@@ -86,7 +86,7 @@ func loadGenesis(ctx *cli.Context) error {
 }
 
 // initializeGenesisState given raw genesis state data, return the initialized state trie and genesis block header.
-func initializeGenesisState(gen genesis.GenesisFields) (*trie.Trie, *types.Header, error) {
+func initializeGenesisState(gen genesis.Fields) (*trie.Trie, *types.Header, error) {
 	t := trie.NewEmptyTrie(nil)
 	err := t.Load(gen.Raw[0])
 	if err != nil {

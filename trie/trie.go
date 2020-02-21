@@ -20,9 +20,12 @@ import (
 	"bytes"
 	"errors"
 
+	log "github.com/ChainSafe/log15"
+
 	"github.com/ChainSafe/gossamer/common"
 )
 
+//nolint
 var EmptyHash, _ = NewEmptyTrie(nil).Hash()
 
 // Trie is a Merkle Patricia Trie.
@@ -53,7 +56,7 @@ func NewTrie(db *Database, root node) *Trie {
 }
 
 // Root returns the root of the trie
-func (t *Trie) Root() node {
+func (t *Trie) rootNode() node {
 	return t.root
 }
 
@@ -69,7 +72,7 @@ func (t *Trie) SetDb(db *Database) {
 
 // EncodeRoot returns the encoded root of the trie
 func (t *Trie) EncodeRoot() ([]byte, error) {
-	return Encode(t.root)
+	return encode(t.rootNode())
 }
 
 // Hash returns the hashed root of the trie
@@ -116,15 +119,19 @@ func (t *Trie) Put(key, value []byte) error {
 func (t *Trie) tryPut(key, value []byte) (err error) {
 	k := keyToNibbles(key)
 	var n node
+	var ok bool
 
 	if len(value) > 0 {
-		_, n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
+		ok, n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
 	} else {
-		_, n, err = t.delete(t.root, k)
+		ok, n, err = t.delete(t.root, k)
 	}
 
 	if err != nil {
 		return err
+	}
+	if !ok {
+		log.Warn("tryPut returned not ok for operation insert/delete")
 	}
 
 	t.root = n
@@ -217,7 +224,9 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 
 		switch c := p.children[key[length]].(type) {
 		case *branch, *leaf:
-			_, n, err = t.insert(c, key[length+1:], value)
+			if ok, n, err = t.insert(c, key[length+1:], value); !ok {
+				log.Warn("updateBranch returned not ok for operation 1 insert")
+			}
 			p.children[key[length]] = n
 			n = p
 		case nil:
@@ -235,7 +244,9 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	br := &branch{key: key[:length], dirty: true}
 
 	parentIndex := p.key[length]
-	_, br.children[parentIndex], err = t.insert(nil, p.key[length+1:], p)
+	if ok, br.children[parentIndex], err = t.insert(nil, p.key[length+1:], p); !ok {
+		log.Warn("updateBranch returned not ok for operation 2 insert")
+	}
 	if err != nil {
 		return false, nil, err
 	}
@@ -243,7 +254,9 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	if len(key) <= length {
 		br.value = value.(*leaf).value
 	} else {
-		_, br.children[key[length]], err = t.insert(nil, key[length+1:], value)
+		if ok, br.children[key[length]], err = t.insert(nil, key[length+1:], value); !ok {
+			log.Warn("updateBranch returned not ok for operation insert")
+		}
 		if err == nil {
 			ok = true
 		}
@@ -352,7 +365,7 @@ func (t *Trie) delete(parent node, key []byte) (ok bool, n node, err error) {
 			n = p
 		}
 
-		ok, n, err = handleDeletion(p, n, key)
+		ok, n = handleDeletion(p, n, key)
 	case *leaf:
 		if bytes.Equal(key, p.key) || len(key) == 0 {
 			ok = true
@@ -369,7 +382,7 @@ func (t *Trie) delete(parent node, key []byte) (ok bool, n node, err error) {
 // handleDeletion is called when a value is deleted from a branch
 // if the updated branch only has 1 child, it should be combined with that child
 // if the upated branch only has a value, it should be turned into a leaf
-func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node, err error) {
+func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node) {
 	nn = n
 	length := lenCommonPrefix(p.key, key)
 	bitmap := p.childrenBitmap()
@@ -412,7 +425,7 @@ func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node, err error)
 		ok = true
 	}
 
-	return ok, nn, err
+	return ok, nn
 }
 
 // lenCommonPrefix returns the length of the common prefix between two keys

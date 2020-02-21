@@ -37,26 +37,26 @@ type Database struct {
 
 // BlockTree represents the current state with all possible blocks
 type BlockTree struct {
-	head            *node
+	head            *Node
 	leaves          leafMap
-	finalizedBlocks []*node
+	finalizedBlocks []*Node
 	Db              *Database
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
 // Currently passes in arrival time as a parameter instead of setting it as time of instanciation
 func NewBlockTreeFromGenesis(genesis types.Block, db *Database) *BlockTree {
-	head := &node{
+	head := &Node{
 		hash:        genesis.Header.Hash(),
 		number:      genesis.Header.Number,
 		parent:      nil,
-		children:    []*node{},
+		children:    []*Node{},
 		depth:       big.NewInt(0),
 		arrivalTime: genesis.GetBlockArrivalTime(),
 	}
 	return &BlockTree{
 		head:            head,
-		finalizedBlocks: []*node{},
+		finalizedBlocks: []*Node{},
 		leaves:          leafMap{head.hash: head},
 		Db:              db,
 	}
@@ -80,11 +80,11 @@ func (bt *BlockTree) AddBlock(block types.Block) {
 	depth := big.NewInt(0)
 	depth.Add(parent.depth, big.NewInt(1))
 
-	n = &node{
+	n = &Node{
 		hash:        block.Header.Hash(),
 		number:      block.Header.Number,
 		parent:      parent,
-		children:    []*node{},
+		children:    []*Node{},
 		depth:       depth,
 		arrivalTime: block.GetBlockArrivalTime(),
 	}
@@ -94,7 +94,7 @@ func (bt *BlockTree) AddBlock(block types.Block) {
 }
 
 // GetNode finds and returns a node based on its Hash. Returns nil if not found.
-func (bt *BlockTree) GetNode(h Hash) *node {
+func (bt *BlockTree) GetNode(h Hash) *Node {
 	if bt.head.hash == h {
 		return bt.head
 	}
@@ -116,7 +116,7 @@ func (bt *BlockTree) GetBlockFromBlockNumber(b *big.Int) *types.Block {
 }
 
 // GetBNodeFromBlockNumber finds and returns a node from its number
-func (bt *BlockTree) getNodeFromBlockNumber(b *big.Int) *node {
+func (bt *BlockTree) getNodeFromBlockNumber(b *big.Int) *Node {
 	if b.Cmp(bt.head.number) == 0 {
 		return bt.head
 	}
@@ -152,11 +152,11 @@ func (bt *BlockTree) String() string {
 }
 
 // LongestPath returns the path from the root to leftmost deepest leaf in BlockTree BT
-func (bt *BlockTree) LongestPath() []*node {
+func (bt *BlockTree) LongestPath() []*Node {
 	dl := bt.DeepestLeaf()
-	var path []*node
+	var path []*Node
 	for curr := dl; ; curr = curr.parent {
-		path = append([]*node{curr}, path...)
+		path = append([]*Node{curr}, path...)
 		if curr.parent == nil {
 			return path
 		}
@@ -164,7 +164,7 @@ func (bt *BlockTree) LongestPath() []*node {
 }
 
 // SubChain returns the path from the node with Hash start to the node with Hash end
-func (bt *BlockTree) SubChain(start Hash, end Hash) []*node {
+func (bt *BlockTree) SubChain(start Hash, end Hash) []*Node {
 	sn := bt.GetNode(start)
 	en := bt.GetNode(end)
 	return sn.subChain(en)
@@ -184,7 +184,7 @@ func (bt *BlockTree) SubBlockchain(start *big.Int, end *big.Int) []*types.Block 
 }
 
 // DeepestLeaf returns leftmost deepest leaf in BlockTree BT
-func (bt *BlockTree) DeepestLeaf() *node {
+func (bt *BlockTree) DeepestLeaf() *Node {
 	return bt.leaves.DeepestLeaf()
 }
 
