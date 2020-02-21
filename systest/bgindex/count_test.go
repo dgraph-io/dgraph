@@ -39,7 +39,7 @@ import (
 )
 
 func TestCountIndex(t *testing.T) {
-	total := 100000
+	total := 10000
 	numAccts := uint64(total)
 	acctsBal := make([]int, total+100000)
 	acctsLock := make([]sync.Mutex, total+100000)

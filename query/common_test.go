@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,11 +48,22 @@ func dropPredicate(pred string) {
 	}
 }
 
-func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
-	txn := client.NewTxn()
-	defer txn.Discard(ctx)
+func runQueryWithRetry(ctx context.Context, query string) (
+	*api.Response, error) {
 
-	res, err := txn.Query(ctx, query)
+	for {
+		response, err := client.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+
+		return response, err
+	}
+}
+
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
+	res, err := runQueryWithRetry(ctx, query)
 	if err != nil {
 		return "", err
 	}
