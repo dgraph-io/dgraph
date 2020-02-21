@@ -1078,6 +1078,11 @@ func (n *node) Run() {
 					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
+						if x.WorkerConfig.LudicrousMode {
+							// Assuming that there will be no error
+							// while proposing.
+							n.Proposals.Done(proposal.Key, nil)
+						}
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
