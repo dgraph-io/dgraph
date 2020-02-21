@@ -268,14 +268,22 @@ func runWithRetries(method, contentType, url string, body string) (
 	}
 
 	qr, respBody, err := runRequest(req)
-	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/admin",
-			RefreshJwt: grootRefreshJwt,
-		})
-		if err != nil {
+	retried := false
+	for err != nil {
+		if strings.Contains(err.Error(), "Token is expired") {
+			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+				Endpoint:   addr + "/admin",
+				RefreshJwt: grootRefreshJwt,
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if retried && !strings.Contains(err.Error(), "is not indexed") {
 			return nil, nil, err
 		}
+		retried = true
 
 		// create a new request since the previous request would have been closed upon the err
 		retryReq, err := createRequest(method, contentType, url, body)
