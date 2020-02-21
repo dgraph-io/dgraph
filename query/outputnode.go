@@ -129,6 +129,12 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
+var (
+	TrueBoolBytes    = []byte("true")
+	FalseBoolBytes   = []byte("false")
+	EmptyStringBytes = []byte(`""`)
+)
+
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.StringID, types.DefaultID:
@@ -136,19 +142,24 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
-		return []byte(fmt.Sprintf("%d", v.Value)), nil
+		switch v.Value.(type) {
+		case int64: // In types.Convert(), we always convert to int64.
+			return []byte(strconv.Itoa(int(v.Value.(int64)))), nil
+		default:
+			return []byte(strconv.Itoa(v.Value.(int))), nil
+		}
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
-			return []byte("true"), nil
+			return TrueBoolBytes, nil
 		}
-		return []byte("false"), nil
+		return FalseBoolBytes, nil
 	case types.DateTimeID:
 		// Return empty string instead of zero-time value string - issue#3166
 		t := v.Value.(time.Time)
 		if t.IsZero() {
-			return []byte(`""`), nil
+			return EmptyStringBytes, nil
 		}
 		return t.MarshalJSON()
 	case types.GeoID:
