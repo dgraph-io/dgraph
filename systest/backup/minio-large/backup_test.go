@@ -159,7 +159,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	_, err := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	_, _, err := worker.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)

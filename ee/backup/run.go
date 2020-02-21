@@ -185,7 +185,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := worker.RunRestore(opt.pdir, opt.location, opt.backupId)
+	version, maxUid, err := worker.RunRestore(opt.pdir, opt.location, opt.backupId)
 	if err != nil {
 		return err
 	}
@@ -193,14 +193,25 @@ func runRestoreCmd() error {
 		return errors.Errorf("Failed to obtain a restore version")
 	}
 	fmt.Printf("Restore version: %d\n", version)
+	fmt.Printf("Restore max uid: %d\n", maxUid)
 
 	if zc != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelTs()
 
 		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
 		if err != nil {
 			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
+			return err
+		}
+
+		ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelUid()
+
+		_, err := zc.AssignUids(ctx, &pb.Num{Val: maxUid})
+		if err != nil {
+			fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", maxUid, err)
+			return err
 		}
 	}
 

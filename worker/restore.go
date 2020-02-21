@@ -15,7 +15,6 @@ package worker
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -35,15 +34,15 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) (uint64, error) {
+func RunRestore(pdir, location, backupId string) (uint64, uint64, error) {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	since, maxUid, err := Load(location, backupId,
+	return Load(location, backupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -71,15 +70,6 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 
 			return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
-	if err != nil {
-		return 0, err
-	}
-
-	if _, err := AssignUidsOverNetwork(context.Background(), &pb.Num{Val: maxUid}); err != nil {
-		return 0, err
-	}
-
-	return since, nil
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,

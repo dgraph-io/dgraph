@@ -294,7 +294,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	_, err := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	_, _, err := worker.RunRestore("./data/restore", backupLocation, lastDir)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
 }
