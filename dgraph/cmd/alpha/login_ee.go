@@ -80,7 +80,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := writeResponse(w, r, js); err != nil {
+	if _, err := x.WriteResponse(w, r, js); err != nil {
 		glog.Errorf("Error while writing response: %v", err)
 	}
 }

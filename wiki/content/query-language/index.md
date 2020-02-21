@@ -182,11 +182,23 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
+{{% notice "note" %}}
+
+In functions, language lists (including the `@*` notation) are not allowed.
+Untagged predicates, Single language tags, and `.` notation work as described
+above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
+In [full-text search functions]({{< relref "#full-text-search" >}})
+(`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
+the default (English) full-text tokenizer is used. This does not mean that
+the value with the `en` tag will be searched when querying the untagged value,
+but that untagged values will be treated as English text. If you don't want that
+to be the case, use the appropriate tag for the desired language, both for
+mutating and querying the value.
+
+{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.

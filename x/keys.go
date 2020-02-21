@@ -595,8 +595,16 @@ func IsAclPredicate(pred string) bool {
 // ReservedPredicates returns the complete list of reserved predicates that needs to
 // be expanded when * is given as a predicate.
 func ReservedPredicates() []string {
-	var preds []string
+	preds := make([]string, 0, len(reservedPredicateMap))
 	for pred := range reservedPredicateMap {
+		preds = append(preds, pred)
+	}
+	return preds
+}
+
+func AllACLPredicates() []string {
+	preds := make([]string, 0, len(aclPredicateMap))
+	for pred := range aclPredicateMap {
 		preds = append(preds, pred)
 	}
 	return preds

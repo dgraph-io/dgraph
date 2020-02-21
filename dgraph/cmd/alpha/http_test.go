@@ -80,7 +80,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 		resp, err = client.Do(req)
 		if err != nil && strings.Contains(err.Error(), "Token is expired") {
 			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-				Endpoint:   addr + "/login",
+				Endpoint:   addr + "/admin",
 				RefreshJwt: grootRefreshJwt,
 			})
 
@@ -270,7 +270,7 @@ func runWithRetries(method, contentType, url string, body string) (
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/login",
+			Endpoint:   addr + "/admin",
 			RefreshJwt: grootRefreshJwt,
 		})
 		if err != nil {
@@ -736,14 +736,29 @@ func TestHealth(t *testing.T) {
 }
 
 func setDrainingMode(t *testing.T, enable bool) {
-	url := fmt.Sprintf("%s/admin/draining?enable=%v", addr, enable)
-	req, err := http.NewRequest("POST", url, nil)
-	require.NoError(t, err, "Error while creating post request for %s", url)
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err, "Error while sending post request to %s", url)
-	status := resp.StatusCode
-	require.Equal(t, http.StatusOK, status, "Unexpected status code: %v", status)
+	drainingRequest := `mutation drain($enable: Boolean) {
+		draining(enable: $enable) {
+			response {
+				code
+			}
+		}
+	}`
+	adminUrl := fmt.Sprintf("%s/admin", addr)
+	params := testutil.GraphQLParams{
+		Query:     drainingRequest,
+		Variables: map[string]interface{}{"enable": enable},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"draining":{"response":{"code":"Success"}}}}`,
+		string(b))
 }
 
 func TestDrainingMode(t *testing.T) {

@@ -1619,8 +1619,15 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 				// In case of non-indexed predicate we won't have any tokens.
 				continue
 			}
+
+			var lang string
+			if len(q.Langs) > 0 {
+				// Only one language is allowed.
+				lang = q.Langs[0]
+			}
+
 			// Get tokens ge / le ineqValueToken.
-			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f,
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f, lang,
 				fc.ineqValue); err != nil {
 				return nil, err
 			}
@@ -1723,7 +1730,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
 		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
-			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
+			tok.GetTokenizerForLang(tokenizer, langForFunc(q.Langs)))
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case regexFn:
