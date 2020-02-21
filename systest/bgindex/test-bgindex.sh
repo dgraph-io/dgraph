@@ -17,7 +17,7 @@ Info "bringing up dgraph cluster"
 DockerCompose up -d
 
 Info "waiting for zero to become leader"
-DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
+DockerCompose logs -f alpha1 | grep -q -m1 "Successfully upserted groot account"
 
 if [[ ! -z "$TEAMCITY_VERSION" ]]; then
     # Make TeamCity aware of Go tests
