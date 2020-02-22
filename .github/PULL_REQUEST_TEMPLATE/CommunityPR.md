@@ -6,9 +6,9 @@
 
 ### Motivation
 
-<!-- Besides the motivation itself, if applicable, you should add references. e.g public conversations (URL) in the community. This helps reviewers with context. And also you should advocate for the PR if needed. You can ping Daniel, Michel or Santo if you need help. -->
+<!-- Besides the motivation itself, if applicable, you should add references. e.g public conversations (URL) in the community. This helps reviewers with context. You should also advocate for the PR if needed. You can ping Daniel, Michel or Santo if you need help. -->
 
-### What gonna be affected? <!-- (Optional) -->
+### Components affected by this PR <!-- (Optional) -->
 
 <!-- Please, take a minute to think about what or who this PR affects. Does it need help for doing documentation? Does it affect third parties (Open Source or not) applications? Make it clear so we can track and fix it. -->
 
@@ -22,4 +22,4 @@
 
 <!-- Add here TODOS, testing results, additional notes, consolidated discussion points, personal signs and etc. -->
 
-<!-- You can always ping us (Daniel, Michel or Santo) if you need help about filling those sections. -->
+<!-- You can always ping us (Daniel, Micheldiz or Santo in Slack or via DM at http://discuss.dgraph.io/) if you need help about filling those sections. -->
