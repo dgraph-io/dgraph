@@ -507,7 +507,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func facestFilterValuesPostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	listType bool, fn func(p *pb.Posting)) error {
 	q := args.q
 
@@ -548,21 +548,22 @@ func facestFilterValuesPostingList(args funcArgs, pl *posting.List, facetsTree *
 			fn(p)
 		}
 
-		// We can stop iterating posting list in the following cases:
-		// 1. Attribute type is not list and ExpandAll is false.
-		// 2. Attribute type is list and We found the posting for lang. Just checking
-		// len(q.Langs)>0 is not enough. In case of "*", len(q.Langs) is >0 and q.ExpandAll is true.
-		if (!listType && !q.ExpandAll) || (listType && len(q.Langs) > 0 && !q.ExpandAll) {
-			return posting.ErrStopIteration
+		// We need to continue iteration, only in two cases:
+		// 1. ExpandAll is true.
+		// 2. Attribute type is of list type and no lang tag is specified in query.
+		if q.ExpandAll || (listType && len(q.Langs) == 0) {
+			return nil
 		}
-		return nil
+
+		// We have picked the right posting, we can stop iteration now.
+		return posting.ErrStopIteration
 	})
 }
 
 func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	listType bool) (int, error) {
 	var filteredCount int
-	err := facestFilterValuesPostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
 		filteredCount++
 	})
 	if err != nil {
@@ -578,7 +579,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	var vals []types.Val
 	var fcs []*pb.Facets
 
-	err := facestFilterValuesPostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
@@ -594,7 +595,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func facetsFilterUidPostingLIst(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
+func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
 	fn func(*pb.Posting)) error {
 
 	return pl.Postings(opts, func(p *pb.Posting) error {
@@ -614,7 +615,7 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 	opts posting.ListOptions) (int, error) {
 
 	var filteredCount int
-	err := facetsFilterUidPostingLIst(pl, facetsTree, opts, func(p *pb.Posting) {
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
 		filteredCount++
 	})
 	if err != nil {
@@ -633,7 +634,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
 	}
 
-	err := facetsFilterUidPostingLIst(pl, facetsTree, opts, func(p *pb.Posting) {
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
 		uidList.Uids = append(uidList.Uids, p.Uid)
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
