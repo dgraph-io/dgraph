@@ -171,12 +171,39 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 	i := 1
-	var bufStartIndex int
 	var ie *iteratorEntry
 	prevKeyExist := false
 	eof := false
 	var buf, eBuf, key []byte
 	var err error
+
+	// readKey reads the next map entry key.
+	readKey := func() {
+		if eof {
+			return
+		}
+		if !prevKeyExist {
+			r := mi.reader
+			buf, err = r.Peek(binary.MaxVarintLen64)
+			if err == io.EOF {
+				eof = true
+				return
+			}
+			x.Check(err)
+			sz, n := binary.Uvarint(buf)
+			if n <= 0 {
+				log.Fatalf("Could not read uvarint: %d", n)
+			}
+			x.Check2(r.Discard(n))
+
+			eBuf = make([]byte, sz)
+			x.Check2(io.ReadFull(r, eBuf))
+
+			key, err = GetKeyForMapEntry(eBuf)
+			x.Check(err)
+		}
+	}
+
 	for _, pKey := range partitionsKeys {
 		select {
 		case ie = <-mi.freelist:
@@ -186,30 +213,10 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 			}
 		}
 		ie.partitionKey = pKey
-
 		for {
+			readKey()
 			if eof {
 				break
-			}
-			if !prevKeyExist {
-				r := mi.reader
-				buf, err = r.Peek(binary.MaxVarintLen64)
-				if err == io.EOF {
-					eof = true
-					break
-				}
-				x.Check(err)
-				sz, n := binary.Uvarint(buf)
-				if n <= 0 {
-					log.Fatalf("Could not read uvarint: %d", n)
-				}
-				x.Check2(r.Discard(n))
-
-				eBuf = make([]byte, sz)
-				x.Check2(io.ReadFull(r, eBuf))
-
-				key, err = GetKeyForMapEntry(eBuf)
-				x.Check(err)
 			}
 			if bytes.Compare(key, ie.partitionKey) < 0 {
 				prevKeyExist = false
@@ -227,25 +234,9 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 	// Drain the last items.
 	batch := make([][]byte, 0, batchAlloc)
 	for {
+		readKey()
 		if eof {
 			break
-		}
-		if !prevKeyExist {
-			r := mi.reader
-			buf, err = r.Peek(binary.MaxVarintLen64)
-			if err == io.EOF {
-				break
-			}
-			x.Check(err)
-			sz, n := binary.Uvarint(buf)
-			if n <= 0 {
-				log.Fatalf("Could not read uvarint: %d", n)
-			}
-			x.Check2(r.Discard(n))
-
-			eBuf = make([]byte, sz)
-			bufStartIndex += int(sz)
-			x.Check2(io.ReadFull(r, eBuf))
 		}
 		prevKeyExist = false
 		batch = append(batch, eBuf)
@@ -433,12 +424,6 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		x.Check(err)
 		return bytes.Compare(lh, rh) < 0
 	})
-	// Don't parse to pb.MapEntries. Sort by keys only first.
-	// Then pick all top entries [][]byte with the same key.
-	// Parse them, convert to MapEntries only the ones with the same key, Sort again (no need to
-	// sort by key. Only sort by uid).
-	// Then, appendToList.
-	// Reuse the freelist of map entries somehow. Maybe encode can pass the freelist?
 
 	var currentKey []byte
 	var uids []uint64

@@ -122,7 +122,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		x.Check(gzWriter.Close())
 	}()
 
-	// Create partition keys.
+	// Create partition keys for the map file.
 	header := &pb.MapHeader{
 		PartitionKeys: [][]byte{},
 	}
@@ -136,7 +136,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
 		}
 	}
-	// Write it to mapper file.
+	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
 	lenBuf := make([]byte, 8)
