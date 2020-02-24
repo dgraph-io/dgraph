@@ -513,11 +513,14 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 
 	var langMatch *pb.Posting
 	var err error
-	// Retrieve the posting that matches the language preferences. We need to do this in below
-	// cases only: 1. Attr type is not list and ExpandAll is false.
-	// 2. Attr type is list and len(q.Langs)>0. Just checking len(q.Langs)>0 is not enough, because
-	// in case of "*", len(q.Langs)>0 && q.ExpandAll is true.
-	if (listType && len(q.Langs) > 0) || !listType || !q.ExpandAll {
+
+	// We need to pick multiple postings only in two cases:
+	// 1. ExpandAll is true.
+	// 2. Attribute type is of list type and no lang tag is specified in query.
+	pickMultiplePostings := q.ExpandAll || (listType && len(q.Langs) == 0)
+
+	if !pickMultiplePostings {
+		// Retrieve the posting that matches the language preferences.
 		langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
 		if err != nil && err != posting.ErrNoValue {
 			return err
@@ -548,11 +551,8 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 			fn(p)
 		}
 
-		// We need to continue iteration, only in two cases:
-		// 1. ExpandAll is true.
-		// 2. Attribute type is of list type and no lang tag is specified in query.
-		if q.ExpandAll || (listType && len(q.Langs) == 0) {
-			return nil
+		if pickMultiplePostings {
+			return nil // Continue iteration.
 		}
 
 		// We have picked the right posting, we can stop iteration now.
