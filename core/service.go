@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/ChainSafe/gossamer/common"
@@ -125,7 +124,7 @@ func NewService(cfg *Config) (*Service, error) {
 		if err != nil {
 			log.Error("[core] could not start babe session", "error", err)
 			srv.isBabeAuthority = false
-			return nil, nil
+			return srv, nil
 		}
 
 		srv.bs = bs
@@ -346,17 +345,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 // chain by calling `core_execute_block`. Valid blocks are stored in the block
 // database to become part of the canonical chain.
 func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
-	data := msg.(*network.BlockResponseMessage).Data
-	buf := &bytes.Buffer{}
-	_, err := buf.Write(data)
-	if err != nil {
-		return err
-	}
-
-	blockData, err := types.DecodeBlockDataArray(buf)
-	if err != nil {
-		return err
-	}
+	blockData := msg.(*network.BlockResponseMessage).BlockData
 
 	for _, bd := range blockData {
 		if bd.Header.Exists() {
@@ -397,12 +386,66 @@ func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
 				log.Error("Failed to validate block", "err", err)
 				return err
 			}
+
+			// get block header; if exists, return
+			existingHeader, err := s.blockState.GetHeader(bd.Hash)
+			if err == nil && existingHeader != nil {
+				// header exists, return
+				// TODO: store this block in the blocktree
+				return nil
+			}
+
+			err = s.blockState.SetHeader(header)
+			if err != nil {
+				return err
+			}
 		}
 
-		// TODO: set BlockData
+		err := s.compareAndSetBlockData(bd)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func (s *Service) compareAndSetBlockData(bd *types.BlockData) error {
+	if s.blockState == nil {
+		return fmt.Errorf("no blockState")
+	}
+
+	existingData, err := s.blockState.GetBlockData(bd.Hash)
+	if err != nil {
+		// no block data exists, ok
+		return s.blockState.SetBlockData(bd)
+	}
+
+	if existingData == nil {
+		return s.blockState.SetBlockData(bd)
+	}
+
+	if existingData.Header == nil || (!existingData.Header.Exists() && bd.Header.Exists()) {
+		existingData.Header = bd.Header
+	}
+
+	if existingData.Body == nil || (!existingData.Body.Exists && bd.Body.Exists) {
+		existingData.Body = bd.Body
+	}
+
+	if existingData.Receipt == nil || (!existingData.Receipt.Exists() && bd.Receipt.Exists()) {
+		existingData.Receipt = bd.Receipt
+	}
+
+	if existingData.MessageQueue == nil || (!existingData.MessageQueue.Exists() && bd.MessageQueue.Exists()) {
+		existingData.MessageQueue = bd.MessageQueue
+	}
+
+	if existingData.Justification == nil || (!existingData.Justification.Exists() && bd.Justification.Exists()) {
+		existingData.Justification = bd.Justification
+	}
+
+	return s.blockState.SetBlockData(existingData)
 }
 
 // ProcessTransactionMessage validates each transaction in the message and

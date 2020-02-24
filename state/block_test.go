@@ -103,7 +103,7 @@ func TestGetBlockByNumber(t *testing.T) {
 	err = stateService.Block.SetHeader(blockHeader)
 	require.Nil(t, err)
 
-	err = stateService.Block.SetBlockData(hash, blockData)
+	err = stateService.Block.SetBlockData(blockData)
 	require.Nil(t, err)
 
 	// Get block & check if it's the same as the expectedBlock

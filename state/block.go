@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/common/optional"
 	babetypes "github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/core/blocktree"
 	"github.com/ChainSafe/gossamer/core/types"
@@ -140,8 +141,31 @@ func (bs *BlockState) GetBlockData(hash common.Hash) (*types.BlockData, error) {
 	}
 
 	err = json.Unmarshal(data, result)
+	if err != nil {
+		return result, err
+	}
 
-	return result, err
+	if result.Header == nil {
+		result.Header = optional.NewHeader(false, nil)
+	}
+
+	if result.Body == nil {
+		result.Body = optional.NewBody(false, nil)
+	}
+
+	if result.Receipt == nil {
+		result.Receipt = optional.NewBytes(false, nil)
+	}
+
+	if result.MessageQueue == nil {
+		result.MessageQueue = optional.NewBytes(false, nil)
+	}
+
+	if result.Justification == nil {
+		result.Justification = optional.NewBytes(false, nil)
+	}
+
+	return result, nil
 }
 
 // LatestHeader returns the latest block available on BlockState
@@ -216,20 +240,21 @@ func (bs *BlockState) SetBlock(block *types.Block) error {
 		Header: block.Header.AsOptional(),
 		Body:   block.Body.AsOptional(),
 	}
-	return bs.SetBlockData(block.Header.Hash(), blockData)
+	return bs.SetBlockData(blockData)
 }
 
 // SetBlockData will set the block data using given hash and blockData into DB
-func (bs *BlockState) SetBlockData(hash common.Hash, blockData *types.BlockData) error {
+func (bs *BlockState) SetBlockData(blockData *types.BlockData) error {
 	bs.lock.Lock()
 	defer bs.lock.Unlock()
+
 	// Write the encoded header
 	bh, err := json.Marshal(blockData)
 	if err != nil {
 		return err
 	}
 
-	err = bs.db.Db.Put(blockDataKey(hash), bh)
+	err = bs.db.Db.Put(blockDataKey(blockData.Hash), bh)
 	return err
 }
 
@@ -254,7 +279,7 @@ func (bs *BlockState) AddBlock(newBlock *types.Block) error {
 		Header: newBlock.Header.AsOptional(),
 		Body:   newBlock.Body.AsOptional(),
 	}
-	err = bs.SetBlockData(hash, bd)
+	err = bs.SetBlockData(bd)
 	return err
 }
 

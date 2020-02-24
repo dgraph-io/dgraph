@@ -119,7 +119,7 @@ func TestDecodeMessageBlockRequest(t *testing.T) {
 }
 
 func TestDecodeMessageBlockResponse(t *testing.T) {
-	encMsg, err := common.HexToBytes("0x02070000000000000000")
+	encMsg, err := common.HexToBytes("0x02070000000000000001000000000000000000000000000000000000000000000000000000000000000000000001000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04080e0f00000000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,9 +132,29 @@ func TestDecodeMessageBlockResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	hash := common.NewHash([]byte{0})
+	testHash := common.NewHash([]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf})
+
+	header := &optional.CoreHeader{
+		ParentHash:     testHash,
+		Number:         big.NewInt(1),
+		StateRoot:      testHash,
+		ExtrinsicsRoot: testHash,
+		Digest:         [][]byte{{0xe, 0xf}},
+	}
+
+	bd := &types.BlockData{
+		Hash:          hash,
+		Header:        optional.NewHeader(true, header),
+		Body:          optional.NewBody(false, nil),
+		Receipt:       optional.NewBytes(false, nil),
+		MessageQueue:  optional.NewBytes(false, nil),
+		Justification: optional.NewBytes(false, nil),
+	}
+
 	expected := &BlockResponseMessage{
-		ID:   7,
-		Data: []byte{0},
+		ID:        7,
+		BlockData: []*types.BlockData{bd},
 	}
 
 	bm := m.(*BlockResponseMessage)
@@ -377,15 +397,35 @@ func TestDecodeBlockRequestMessage_NoOptionals(t *testing.T) {
 }
 
 func TestEncodeBlockResponseMessage(t *testing.T) {
-	expected, err := common.HexToBytes("0x02070000000000000000")
+	expected, err := common.HexToBytes("0x02070000000000000001000000000000000000000000000000000000000000000000000000000000000000000001000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04080e0f00000000")
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	hash := common.NewHash([]byte{0})
+	testHash := common.NewHash([]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf})
+
+	header := &optional.CoreHeader{
+		ParentHash:     testHash,
+		Number:         big.NewInt(1),
+		StateRoot:      testHash,
+		ExtrinsicsRoot: testHash,
+		Digest:         [][]byte{{0xe, 0xf}},
+	}
+
+	bd := &types.BlockData{
+		Hash:          hash,
+		Header:        optional.NewHeader(true, header),
+		Body:          optional.NewBody(false, nil),
+		Receipt:       optional.NewBytes(false, nil),
+		MessageQueue:  optional.NewBytes(false, nil),
+		Justification: optional.NewBytes(false, nil),
+	}
+
 	bm := &BlockResponseMessage{
-		ID:   7,
-		Data: []byte{0},
+		ID:        7,
+		BlockData: []*types.BlockData{bd},
 	}
 
 	encMsg, err := bm.Encode()
@@ -399,7 +439,7 @@ func TestEncodeBlockResponseMessage(t *testing.T) {
 }
 
 func TestDecodeBlockResponseMessage(t *testing.T) {
-	encMsg, err := common.HexToBytes("0x070000000000000000")
+	encMsg, err := common.HexToBytes("0x070000000000000001000000000000000000000000000000000000000000000000000000000000000000000001000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f04080e0f00000000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -413,9 +453,29 @@ func TestDecodeBlockResponseMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	hash := common.NewHash([]byte{0})
+	testHash := common.NewHash([]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf})
+
+	header := &optional.CoreHeader{
+		ParentHash:     testHash,
+		Number:         big.NewInt(1),
+		StateRoot:      testHash,
+		ExtrinsicsRoot: testHash,
+		Digest:         [][]byte{{0xe, 0xf}},
+	}
+
+	bd := &types.BlockData{
+		Hash:          hash,
+		Header:        optional.NewHeader(true, header),
+		Body:          optional.NewBody(false, nil),
+		Receipt:       optional.NewBytes(false, nil),
+		MessageQueue:  optional.NewBytes(false, nil),
+		Justification: optional.NewBytes(false, nil),
+	}
+
 	expected := &BlockResponseMessage{
-		ID:   7,
-		Data: []byte{0},
+		ID:        7,
+		BlockData: []*types.BlockData{bd},
 	}
 
 	if !reflect.DeepEqual(m, expected) {

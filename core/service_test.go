@@ -17,6 +17,7 @@
 package core
 
 import (
+	"io/ioutil"
 	"math/big"
 	"reflect"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/network"
 	"github.com/ChainSafe/gossamer/runtime"
+	"github.com/ChainSafe/gossamer/state"
 	"github.com/ChainSafe/gossamer/tests"
 	"github.com/ChainSafe/gossamer/trie"
 )
@@ -237,9 +239,25 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
 
+	datadir, err := ioutil.TempDir("", "./test_data")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
+	blockState, err := state.NewBlockStateFromGenesis(datadir, header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := &Config{
 		Runtime:         rt,
 		Keystore:        ks,
+		BlockState:      blockState,
 		IsBabeAuthority: false,
 	}
 
@@ -272,7 +290,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	header := &types.Header{
+	header = &types.Header{
 		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
@@ -296,16 +314,22 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 		Justification: optional.NewBytes(true, []byte("qwerty")),
 	}}
 
-	data, err := types.EncodeBlockDataArray(bds)
+	blockResponse := &network.BlockResponseMessage{
+		BlockData: bds,
+	}
+
+	err = s.ProcessBlockResponseMessage(blockResponse)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	blockResponse := &network.BlockResponseMessage{Data: data}
-
-	err = s.ProcessBlockResponseMessage(blockResponse)
+	res, err := blockState.GetHeader(header.Hash())
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, header) {
+		t.Fatalf("Fail: got %v expected %v", res, header)
 	}
 }
 
