@@ -46,11 +46,9 @@ import (
 
 type reducer struct {
 	*state
-	streamId uint32
-
-	entrylistPool *sync.Pool
-	mu            *sync.RWMutex
-	streamIds     map[string]uint32
+	streamId  uint32
+	mu        *sync.RWMutex
+	streamIds map[string]uint32
 }
 
 const batchSize = 10000
@@ -141,65 +139,12 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	return db
 }
 
-// var allocator *MemAllocator
-
-// var allocatorLock sync.Mutex
-
-// func init() {
-// 	allocator = NewAllocator()
-// }
-
-// func ResetAllocator() {
-// 	done := atomic.LoadUint64(&allocator.done)
-// 	if done != 1 {
-// 		return
-// 	}
-// 	allocatorLock.Lock()
-// 	defer allocatorLock.Unlock()
-// 	done = atomic.LoadUint64(&allocator.done)
-// 	if done != 1 {
-// 		return
-// 	}
-// 	// Some reset allocator have made the new allocation so move forward
-// 	allocator = NewAllocator()
-// }
-
-// type MemAllocator struct {
-// 	sync.Mutex
-// 	index int
-// 	data  []byte
-// }
-
-// func NewAllocator() *MemAllocator {
-// 	return &MemAllocator{
-// 		index: 0,
-// 		data:  make([]byte, 64*1024*1024),
-// 	}
-// }
-
-// func (m *MemAllocator) Allocate(n int) []byte {
-// 	if n > 64*1024*1024 {
-// 		return make([]byte, n)
-// 	}
-// 	m.Lock()
-// 	defer m.Unlock()
-// 	if m.index+n > len(m.data) {
-// 		m.data = make([]byte, 64*1024*1024)
-// 		m.index = 0
-// 	}
-// 	eBuf := m.data[m.index : m.index+n]
-// 	m.index += n
-// 	return eBuf
-// }
-
 type mapIterator struct {
-	fd            *os.File
-	reader        *bufio.Reader
-	tmpBuf        []byte
-	current       *iteratorEntry
-	batchCh       chan *iteratorEntry
-	freelist      chan *iteratorEntry
-	entrylistPool *sync.Pool
+	fd       *os.File
+	reader   *bufio.Reader
+	current  *iteratorEntry
+	batchCh  chan *iteratorEntry
+	freelist chan *iteratorEntry
 }
 
 type iteratorEntry struct {
@@ -334,11 +279,10 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterato
 	x.Check(err)
 
 	itr := &mapIterator{
-		fd:            fd,
-		reader:        reader,
-		batchCh:       make(chan *iteratorEntry, 3),
-		freelist:      make(chan *iteratorEntry, 3),
-		entrylistPool: r.entrylistPool,
+		fd:       fd,
+		reader:   reader,
+		batchCh:  make(chan *iteratorEntry, 3),
+		freelist: make(chan *iteratorEntry, 3),
 	}
 	return header, itr
 }
@@ -396,88 +340,23 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 	idx := 0
 	for req := range writerCh {
+		req.wg.Wait()
+
 		for _, countKey := range req.countKeys {
 			ci.addUid(countKey.key, countKey.count)
 		}
 		// Wait for it to be encoded.
 		start := time.Now()
-		req.wg.Wait()
 
-		ci.writer.Write(req.list)
-		// writer.Write(listBatch[0].list)
+		x.Check(ci.writer.Write(req.list))
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
-			fmt.Printf("writeCh: Time taken to write req %d: %v\n", idx, time.Since(start).Round(time.Millisecond))
+			fmt.Printf("writeCh: Time taken to write req %d: %v\n",
+				idx, time.Since(start).Round(time.Millisecond))
 		}
 		idx++
 		if idx%100 == 0 {
 			fmt.Printf("Wrote req: %d\n", idx)
 		}
-	}
-}
-
-func (r *reducer) encodeAndWrite_UNUSED(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
-	defer closer.Done()
-
-	var listSize int
-	list := &bpb.KVList{}
-
-	preds := make(map[string]uint32)
-	setStreamId := func(kv *bpb.KV) {
-		pk, err := x.Parse(kv.Key)
-		x.Check(err)
-		x.AssertTrue(len(pk.Attr) > 0)
-
-		// We don't need to consider the data prefix, count prefix, etc. because each predicate
-		// contains sorted keys, the way they are produced.
-		streamId := preds[pk.Attr]
-		if streamId == 0 {
-			streamId = atomic.AddUint32(&r.streamId, 1)
-			preds[pk.Attr] = streamId
-		}
-
-		kv.StreamId = streamId
-	}
-
-	// Once we have processed all records from single stream, we can mark that stream as done.
-	// This will close underlying table builder in Badger for stream. Since we preallocate 1 MB
-	// of memory for each table builder, this can result in memory saving in case we have large
-	// number of streams.
-	// This change limits maximum number of open streams to number of streams created in a single
-	// write call. This can also be optimised if required.
-	// addDone := func(doneSteams []uint32, l *bpb.KVList) {
-	// 	for _, streamId := range doneSteams {
-	// 		l.Kv = append(l.Kv, &bpb.KV{StreamId: streamId, StreamDone: true})
-	// 	}
-	// }
-
-	// var doneStreams []uint32
-	// var prevSID uint32
-	for batch := range entryCh {
-		sort.Slice(batch, func(i, j int) bool {
-			return less(batch[i], batch[j])
-		})
-		//listSize += r.toList(batch, list)
-		if listSize > 4<<20 {
-			for _, kv := range list.Kv {
-				setStreamId(kv)
-				// if prevSID != 0 && (prevSID != kv.StreamId) {
-				// 	doneStreams = append(doneStreams, prevSID)
-				// }
-				// prevSID = kv.StreamId
-			}
-			// addDone(doneStreams, list)
-			x.Check(writer.Write(list))
-			//doneStreams = doneStreams[:0]
-			list = &bpb.KVList{}
-			listSize = 0
-		}
-	}
-	if len(list.Kv) > 0 {
-		for _, kv := range list.Kv {
-			setStreamId(kv)
-		}
-		x.Check(writer.Write(list))
 	}
 }
 
@@ -498,22 +377,11 @@ func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, c
 
 	for i := 0; i < len(partitionKeys); i++ {
 		batch := make([][]byte, 0, batchAlloc)
-		numInvalid := 0
 		for _, itr := range mapItrs {
 			itr.Next()
 			res := itr.Current()
-			if res == nil {
-				numInvalid++
-				continue
-			}
-			y.AssertTrue(bytes.Compare(res.partitionKey.GetKey(), partitionKeys[i].GetKey()) == 0)
 			batch = append(batch, res.batch...)
 			itr.release(res)
-		}
-		if len(mapItrs) == numInvalid {
-			if len(batch) == 0 {
-				break
-			}
 		}
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
@@ -668,7 +536,6 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 			freelist = freelist[1:]
 		}
 		x.Check(mapEntry.Unmarshal(entry))
-		entry = nil
 		currentBatch = append(currentBatch, mapEntry)
 	}
 	appendToList()

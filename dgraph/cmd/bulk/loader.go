@@ -229,15 +229,6 @@ func (ld *loader) reduceStage() {
 		state:     ld.state,
 		mu:        new(sync.RWMutex),
 		streamIds: make(map[string]uint32),
-		entrylistPool: &sync.Pool{
-			New: func() interface{} {
-				result := make([]*pb.MapEntry, 1000)
-				for i := 0; i < 1000; i++ {
-					result[i] = &pb.MapEntry{}
-				}
-				return result
-			},
-		},
 	}
 	x.Check(r.run())
 }

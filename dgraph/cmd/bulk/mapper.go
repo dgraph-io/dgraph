@@ -126,10 +126,10 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	header := &pb.MapperHeader{
 		PartitionKeys: []*pb.MapEntry{},
 	}
-	shardPartioionNo := len(entries) / 8
+	shardPartioionNo := len(entries) / partitionKeyShard
 	for i := range entries {
 		if shardPartioionNo == 0 {
-			// we have only less entries so need for partition keys.
+			// we have only less entries so no need for partition keys.
 			break
 		}
 		if i%shardPartioionNo == 0 {
@@ -141,8 +141,10 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	x.Check(err)
 	lenBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(lenBuf, uint64(len(headerBuf)))
-	w.Write(lenBuf)
-	w.Write(headerBuf)
+	_, err = w.Write(lenBuf)
+	x.Check(err)
+	_, err = w.Write(headerBuf)
+	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	for _, me := range entries {
