@@ -86,7 +86,7 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
-			// Start bactching for the given keys
+			// Start batching for the given keys
 			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
 				go itr.startBatchingForKeys(partitionKeys)
@@ -170,38 +170,32 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 }
 
 func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
-	i := 1
 	var ie *iteratorEntry
 	prevKeyExist := false
-	eof := false
 	var buf, eBuf, key []byte
 	var err error
 
 	// readKey reads the next map entry key.
-	readKey := func() {
-		if eof {
-			return
+	readMapEntry := func() error {
+		if prevKeyExist {
+			return nil
 		}
-		if !prevKeyExist {
-			r := mi.reader
-			buf, err = r.Peek(binary.MaxVarintLen64)
-			if err == io.EOF {
-				eof = true
-				return
-			}
-			x.Check(err)
-			sz, n := binary.Uvarint(buf)
-			if n <= 0 {
-				log.Fatalf("Could not read uvarint: %d", n)
-			}
-			x.Check2(r.Discard(n))
-
-			eBuf = make([]byte, sz)
-			x.Check2(io.ReadFull(r, eBuf))
-
-			key, err = GetKeyForMapEntry(eBuf)
-			x.Check(err)
+		r := mi.reader
+		buf, err = r.Peek(binary.MaxVarintLen64)
+		if err != nil {
+			return err
 		}
+		sz, n := binary.Uvarint(buf)
+		if n <= 0 {
+			log.Fatalf("Could not read uvarint: %d", n)
+		}
+		x.Check2(r.Discard(n))
+
+		eBuf = make([]byte, sz)
+		x.Check2(io.ReadFull(r, eBuf))
+
+		key, err = GetKeyForMapEntry(eBuf)
+		return err
 	}
 
 	for _, pKey := range partitionsKeys {
@@ -214,10 +208,11 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 		}
 		ie.partitionKey = pKey
 		for {
-			readKey()
-			if eof {
+			err := readMapEntry()
+			if err == io.EOF {
 				break
 			}
+			x.Check(err)
 			if bytes.Compare(key, ie.partitionKey) < 0 {
 				prevKeyExist = false
 				ie.batch = append(ie.batch, eBuf)
@@ -228,16 +223,16 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 			break
 		}
 		mi.batchCh <- ie
-		i++
 	}
 
 	// Drain the last items.
 	batch := make([][]byte, 0, batchAlloc)
 	for {
-		readKey()
-		if eof {
+		err := readMapEntry()
+		if err == io.EOF {
 			break
 		}
+		x.Check(err)
 		prevKeyExist = false
 		batch = append(batch, eBuf)
 	}
@@ -250,13 +245,8 @@ func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
-func (mi *mapIterator) Current() *iteratorEntry {
-	return mi.current
-}
-
-func (mi *mapIterator) Next() bool {
-	mi.current = <-mi.batchCh
-	return true
+func (mi *mapIterator) Next() *iteratorEntry {
+	return <-mi.batchCh
 }
 
 func (r *reducer) newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
@@ -371,15 +361,15 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
 	}
-	// Start lisenting to write the badger list.
+	// Start listening to write the badger list.
 	writerCloser := y.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
 	for i := 0; i < len(partitionKeys); i++ {
 		batch := make([][]byte, 0, batchAlloc)
 		for _, itr := range mapItrs {
-			itr.Next()
-			res := itr.Current()
+			res := itr.Next()
+			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
 			batch = append(batch, res.batch...)
 			itr.release(res)
 		}
@@ -394,8 +384,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	// Drain the last batch
 	batch := make([][]byte, 0, batchAlloc)
 	for _, itr := range mapItrs {
-		itr.Next()
-		res := itr.Current()
+		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
 		batch = append(batch, res.batch...)
 	}
