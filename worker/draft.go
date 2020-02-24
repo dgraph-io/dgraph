@@ -347,6 +347,16 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
+		if x.WorkerConfig.LudicrousMode {
+			txnTimeStamp := proposal.Mutations.StartTs
+			maxTs := posting.Oracle().MaxAssigned()
+			n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+				Txns: []*pb.TxnStatus{
+					{StartTs: txnTimeStamp, CommitTs: maxTs},
+				},
+			})
+			fmt.Println("maxTs: ", maxTs, " txnTs: ", txnTimeStamp)
+		}
 		span.Annotate(nil, "Done")
 		return nil
 	}

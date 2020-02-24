@@ -323,11 +323,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
-	/*
-		if x.WorkerConfig.LudicrousMode {
-			return err
-		}
-	*/
+
+	if x.WorkerConfig.LudicrousMode {
+		return err
+	}
 
 	// what are the cases in which a transaction could be aborted. Doesn it make sense
 	// to abort txn in ludicrous mode ??
