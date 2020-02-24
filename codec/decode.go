@@ -46,25 +46,12 @@ func Decode(in []byte, t interface{}) (interface{}, error) {
 	return output, err
 }
 
-// DecodePtr a byte array into a interface pointer
-func DecodePtr(in []byte, t interface{}) error {
-	buf := &bytes.Buffer{}
-	sd := Decoder{Reader: buf}
-	_, err := buf.Write(in)
-	if err != nil {
-		return err
-	}
-
-	err = sd.DecodePtr(t)
-	return err
-}
-
 // Decode is the high level function wrapping the specific type decoding functions
 func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	switch t.(type) {
 	case *big.Int:
 		out, err = sd.DecodeBigInt()
-	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+	case int, uint, int8, uint8, int16, uint16, int32, uint32, int64, uint64:
 		out, err = sd.DecodeFixedWidthInt(t)
 	case []byte, string:
 		out, err = sd.DecodeByteArray()
@@ -76,10 +63,12 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 		out, err = sd.DecodeBoolArray()
 	case []*big.Int:
 		out, err = sd.DecodeBigIntArray()
-	case common.Hash, [32]byte:
+	case common.Hash:
 		b := make([]byte, 32)
 		_, err = sd.Reader.Read(b)
-		out = b
+		out = common.NewHash(b)
+	case [][32]byte, [][]byte:
+		out, err = sd.DecodeArray(t)
 	case interface{}:
 		out, err = sd.DecodeInterface(t)
 	default:
@@ -322,14 +311,7 @@ func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
 
 // DecodeArray will decode array to interface
 func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
-	var v reflect.Value
-	switch reflect.ValueOf(t).Kind() {
-	case reflect.Ptr:
-		v = reflect.ValueOf(t).Elem()
-	case reflect.Slice, reflect.Array:
-		v = reflect.ValueOf(t)
-	}
-
+	v := reflect.ValueOf(t)
 	var err error
 	var o interface{}
 

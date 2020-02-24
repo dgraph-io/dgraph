@@ -21,6 +21,8 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/common"
 )
 
 var byteArray32 = [32]byte{}
@@ -53,6 +55,12 @@ type decodeTupleTest struct {
 }
 
 type decodeArrayTest struct {
+	val    []byte
+	t      interface{}
+	output interface{}
+}
+
+type decodeHashTest struct {
 	val    []byte
 	t      interface{}
 	output interface{}
@@ -330,6 +338,10 @@ var decodeArrayTests = []decodeArrayTest{
 	{val: []byte{0x4, 0x04, 0x01}, t: [][]byte{{}}, output: [][]byte{{0x01}}},
 }
 
+var decodeHashTests = []decodeHashTest{
+	{val: []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, t: common.NewHash([]byte{0xff}), output: common.NewHash([]byte{0xff})}, // common Hash
+}
+
 var reverseByteTests = []reverseByteTest{
 	{val: []byte{0x00, 0x01, 0x02}, output: []byte{0x02, 0x01, 0x00}},
 	{val: []byte{0x04, 0x05, 0x06, 0x07}, output: []byte{0x07, 0x06, 0x05, 0x04}},
@@ -429,6 +441,23 @@ func TestDecodeFixedWidthInts(t *testing.T) {
 			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
 		}
 	}
+	for _, test := range decodeFixedWidthIntTestsInt {
+		output, err := Decode(test.val, int(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != test.output {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsUint {
+		output, err := Decode(test.val, uint(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(uint) != test.output {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
 }
 
 func TestDecodeBigInts(t *testing.T) {
@@ -503,11 +532,21 @@ func TestDecodeArrays(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else if !reflect.DeepEqual(output, test.output) {
-			t.Errorf("Fail: got %d expected %d", output, test.output)
+			t.Errorf("Fail: got %v expected %v", output, test.output)
 		}
 	}
 }
 
+func TestDecodeHashes(t *testing.T) {
+	for _, test := range decodeHashTests {
+		output, err := Decode(test.val, test.t)
+		if err != nil {
+			t.Error(err)
+		} else if !reflect.DeepEqual(output, test.output) {
+			t.Errorf("Fail: got %v expected %v", output, test.output)
+		}
+	}
+}
 func TestDecodeEmptyArray(t *testing.T) {
 	expected := &struct {
 		Number *big.Int

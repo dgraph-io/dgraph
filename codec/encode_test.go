@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/common"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +55,26 @@ var encodeTests = []encodeTest{
 	{val: uint32(16383), output: []byte{0xff, 0x3f, 0, 0}, bytesEncoded: 4},
 	{val: uint32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
 
+	{val: int64(1), output: []byte{0x01, 0, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int64(16383), output: []byte{0xff, 0x3f, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int64(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int64(9223372036854775807), output: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, bytesEncoded: 8},
+
+	{val: uint64(1), output: []byte{0x01, 0, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint64(16383), output: []byte{0xff, 0x3f, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint64(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint64(9223372036854775807), output: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, bytesEncoded: 8},
+
+	{val: int(1), output: []byte{0x01, 0, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int(16383), output: []byte{0xff, 0x3f, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: int(9223372036854775807), output: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, bytesEncoded: 8},
+
+	{val: uint(1), output: []byte{0x01, 0, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint(16383), output: []byte{0xff, 0x3f, 0, 0, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f, 0, 0, 0, 0}, bytesEncoded: 8},
+	{val: uint(9223372036854775807), output: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, bytesEncoded: 8},
+
 	// compact integers
 	{val: big.NewInt(0), output: []byte{0x00}, bytesEncoded: 1},
 	{val: big.NewInt(1), output: []byte{0x04}, bytesEncoded: 1},
@@ -68,8 +90,13 @@ var encodeTests = []encodeTest{
 	{val: []byte{0xff}, output: []byte{0x04, 0xff}, bytesEncoded: 2},
 	{val: []byte{0x01, 0x01}, output: []byte{0x08, 0x01, 0x01}, bytesEncoded: 3},
 	{val: []byte{0x01, 0x01}, output: []byte{0x08, 0x01, 0x01}, bytesEncoded: 3},
+	{val: byteArray(32), output: append([]byte{0x80}, byteArray(32)...), bytesEncoded: 33},
 	{val: byteArray(64), output: append([]byte{0x01, 0x01}, byteArray(64)...), bytesEncoded: 66},
 	{val: byteArray(16384), output: append([]byte{0x02, 0x00, 0x01, 0x00}, byteArray(16384)...), bytesEncoded: 16388},
+
+	// common.Hash
+	{val: common.BytesToHash([]byte{0xff}), output: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff}, bytesEncoded: 32},
+	{val: common.Hash{0xff}, output: []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, bytesEncoded: 32},
 
 	// booleans
 	{val: true, output: []byte{0x01}, bytesEncoded: 1},
@@ -102,6 +129,7 @@ var encodeTests = []encodeTest{
 	{val: []bool{true, false, true}, output: []byte{0x0c, 0x01, 0x00, 0x01}, bytesEncoded: 4},
 	{val: [][]int{{0, 1}, {1, 0}}, output: []byte{0x08, 0x08, 0x00, 0x04, 0x08, 0x04, 0x00}, bytesEncoded: 7},
 	{val: []*big.Int{big.NewInt(0), big.NewInt(1)}, output: []byte{0x08, 0x00, 0x04}, bytesEncoded: 3},
+	{val: [][]byte{{0x00, 0x01}, {0x01, 0x00}}, output: []byte{0x08, 0x08, 0x00, 0x01, 0x08, 0x01, 0x00}, bytesEncoded: 7},
 }
 
 // Test strings for various values of n & mode. Also test strings with special characters
@@ -161,7 +189,7 @@ func TestEncode(t *testing.T) {
 			t.Error(err)
 		} else if !bytes.Equal(output, test.output) {
 			if len(test.output) < 1<<15 {
-				t.Errorf("Fail: input %x got %x expected %x", test.val, output, test.output)
+				t.Errorf("Fail: input %v got %v expected %v", test.val, output, test.output)
 			} else {
 				//Only prints first 10 bytes of a failed test if output is > 2^15 bytes
 				t.Errorf("Failed test with large output. First 10 bytes: got %x... expected %x...", output[0:10], test.output[0:10])

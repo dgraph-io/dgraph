@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/common"
+
 	"github.com/ChainSafe/gossamer/consensus/babe/types"
 	"github.com/ChainSafe/gossamer/crypto/sr25519"
 	"github.com/stretchr/testify/require"
@@ -210,6 +212,15 @@ func TestDecodePtrArrays(t *testing.T) {
 			t.Errorf("Fail: got %d expected %d", test.t, test.output)
 		}
 	}
+}
+
+func TestDecodePtr_DecodeCommonHash(t *testing.T) {
+	in := []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	decodedHash := common.NewHash([]byte{})
+	expectedHash := common.NewHash([]byte{0xff})
+	err := DecodePtr(in, &decodedHash)
+	require.Nil(t, err)
+	require.Equal(t, expectedHash, decodedHash)
 }
 
 // test decoding with DecodeCustom on BabeHeader type

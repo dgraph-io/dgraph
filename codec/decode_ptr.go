@@ -16,11 +16,14 @@
 package codec
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
+
+	"github.com/ChainSafe/gossamer/common"
 )
 
 // DecodeCustom check if interface has method Decode, if so use that, otherwise use regular scale decoding
@@ -38,6 +41,19 @@ func DecodeCustom(in []byte, t interface{}) error {
 		return nil
 	}
 	return DecodePtr(in, t)
+}
+
+// DecodePtr a byte array into a interface pointer
+func DecodePtr(in []byte, t interface{}) error {
+	buf := &bytes.Buffer{}
+	sd := Decoder{Reader: buf}
+	_, err := buf.Write(in)
+	if err != nil {
+		return err
+	}
+
+	err = sd.DecodePtr(t)
+	return err
 }
 
 // DecodeCustom check if interface has method Decode(io.Reader), if so use that, otherwise use regular scale decoding
@@ -78,6 +94,12 @@ func (sd *Decoder) DecodePtr(t interface{}) (err error) {
 		err = sd.DecodePtrBoolArray(t)
 	case []*big.Int:
 		err = sd.DecodePtrBigIntArray(t)
+	case *common.Hash:
+		b := make([]byte, 32)
+		_, err = sd.Reader.Read(b)
+		*t = common.NewHash(b)
+	case [][32]byte, [][]byte:
+		_, err = sd.DecodeArray(t)
 	case interface{}:
 		_, err = sd.DecodeInterface(t)
 	default:
