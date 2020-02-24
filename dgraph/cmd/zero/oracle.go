@@ -196,7 +196,6 @@ func (o *Oracle) streamDeltasToSubscriber(deltas []*pb.OracleDelta) {
 // constructs a delta object containing transactions from one or more updates
 // and sends the delta object to each subscriber's channel
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &pb.OracleDelta{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -230,10 +229,9 @@ func (o *Oracle) sendDeltasToSubscribers() {
 
 	for {
 	get_update:
-		var update *pb.OracleDelta
 		select {
-		case update = <-o.updates:
-			updateDelta(delta)
+		case update := <-o.updates:
+			updateDelta(update)
 		case <-ticker.C:
 			// progressed will tell any of the namespace is progressed for the periodic tick.
 			progressed := false
@@ -255,7 +253,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 	slurp_loop:
 		for {
 			select {
-			case update = <-o.updates:
+			case update := <-o.updates:
 				updateDelta(update)
 			default:
 				break slurp_loop
@@ -315,6 +313,7 @@ func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
 		delta := new(pb.OracleDelta)
+		delta.Namespace = src.Namespace
 		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  src.StartTs,
 			CommitTs: o.commitTs(src.Namespace, src.StartTs),

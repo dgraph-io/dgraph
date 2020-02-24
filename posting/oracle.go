@@ -112,6 +112,7 @@ type oracle struct {
 func (o *oracle) init() {
 	o.waiters = make(map[string]map[uint64][]chan struct{})
 	o.pendingTxns = make(map[string]map[uint64]*Txn)
+	o.maxAssigned = make(map[string]uint64)
 }
 
 func (o *oracle) RegisterStartTs(namespace string, ts uint64) *Txn {
