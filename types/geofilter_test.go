@@ -246,6 +246,16 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
+
+	// Test with a different polygon (Sudan)
+	sudan, err := loadPolygon("testdata/sudan.json")
+	require.NoError(t, err)
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{0, 0})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(sudan))
 }
 
 /*
