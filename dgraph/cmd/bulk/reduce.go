@@ -88,29 +88,12 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i].GetKey(), partitionKeys[j].GetKey()) < 0
 			})
 
-			// remove duplicate
-			result := []*pb.MapEntry{}
-
-			for _, entry := range partitionKeys {
-				if len(result) == 0 {
-					result = append(result, entry)
-					continue
-				}
-				if bytes.Equal(result[len(result)-1].GetKey(), entry.Key) {
-					continue
-				}
-				result = append(result, entry)
-			}
-			sort.Slice(result, func(i, j int) bool {
-				return bytes.Compare(result[i].GetKey(), result[j].GetKey()) < 0
-			})
-
 			// Start bactching for the given keys
 			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
-				go itr.startBatchingForKeys(result)
+				go itr.startBatchingForKeys(partitionKeys)
 			}
-			r.reduce(result, mapItrs, ci)
+			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -237,6 +220,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 	var bufStartIndex int
 	var ie *iteratorEntry
 	prevKeyExist := false
+	eof := false
 	var buf, eBuf, key []byte
 	var err error
 	for _, pKey := range partitionsKeys {
@@ -250,10 +234,14 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 		ie.partitionKey = pKey
 
 		for {
+			if eof {
+				break
+			}
 			if !prevKeyExist {
 				r := mi.reader
 				buf, err = r.Peek(binary.MaxVarintLen64)
 				if err == io.EOF {
+					eof = true
 					break
 				}
 				x.Check(err)
@@ -285,6 +273,9 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 	// Drain the last items.
 	batch := make([][]byte, 0, batchAlloc)
 	for {
+		if eof {
+			break
+		}
 		if !prevKeyExist {
 			r := mi.reader
 			buf, err = r.Peek(binary.MaxVarintLen64)
