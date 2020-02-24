@@ -19,10 +19,12 @@ package x
 import (
 	"bufio"
 	"bytes"
+	builtinGzip "compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net"
@@ -35,6 +37,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -47,6 +51,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -54,6 +59,7 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNoJwt        = errors.New("no accessJwt available")
 )
 
 const (
@@ -106,11 +112,19 @@ const (
 	// AclPredicates is the JSON representation of the predicates reserved for use
 	// by the ACL system.
 	AclPredicates = `
-{"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
+{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
 {"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
-{"predicate":"dgraph.group.acl","type":"string"}
+{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
+{"predicate":"dgraph.acl.rule","type":"uid","list":true},
+{"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
+{"predicate":"dgraph.rule.permission","type":"int"}
 `
+
+	InitialTypes = `
+	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
+{"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
+{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"}]`
+
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
 	// group the first time an Alpha comes up with data from a restored backup or a
@@ -217,6 +231,20 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+func ExtractJwt(ctx context.Context) ([]string, error) {
+	// extract the jwt and unmarshal the jwt to get the list of groups
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, ErrNoJwt
+	}
+	accessJwt := md.Get("accessJwt")
+	if len(accessJwt) == 0 {
+		return nil, ErrNoJwt
+	}
+
+	return accessJwt, nil
+}
+
 // WithLocations adds a list of locations to a GqlError and returns the same
 // GqlError (fluent style).
 func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
@@ -317,6 +345,34 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
+func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
+// Write response body, transparently compressing if necessary.
+func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := builtinGzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out.Write(b)
 }
 
 // Min returns the minimum of the two given numbers.
@@ -814,4 +870,43 @@ func IsGuardian(groups []string) bool {
 	}
 
 	return false
+}
+
+// RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
+// Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
+func RunVlogGC(store *badger.DB, closer *y.Closer) {
+	defer closer.Done()
+	// Get initial size on start.
+	_, lastVlogSize := store.Size()
+	const GB = int64(1 << 30)
+
+	// Runs every 1m, checks size of vlog and runs GC conditionally.
+	vlogTicker := time.NewTicker(1 * time.Minute)
+	defer vlogTicker.Stop()
+	// Runs vlog GC unconditionally every 10 minutes.
+	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
+	defer mandatoryVlogTicker.Stop()
+
+	runGC := func() {
+		for err := error(nil); err == nil; {
+			// If a GC is successful, immediately run it again.
+			err = store.RunValueLogGC(0.7)
+		}
+		_, lastVlogSize = store.Size()
+	}
+
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case <-vlogTicker.C:
+			_, currentVlogSize := store.Size()
+			if currentVlogSize < lastVlogSize+GB {
+				continue
+			}
+			runGC()
+		case <-mandatoryVlogTicker.C:
+			runGC()
+		}
+	}
 }

@@ -123,8 +123,8 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	}()
 
 	// Create partition keys.
-	header := &pb.MapperHeader{
-		PartitionKeys: []*pb.MapEntry{},
+	header := &pb.MapHeader{
+		PartitionKeys: [][]byte{},
 	}
 	shardPartioionNo := len(entries) / partitionKeyShard
 	for i := range entries {
@@ -133,7 +133,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 			break
 		}
 		if i%shardPartioionNo == 0 {
-			header.PartitionKeys = append(header.PartitionKeys, entries[i])
+			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
 		}
 	}
 	// Write it to mapper file.
@@ -357,7 +357,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		x.Check(err)
 
 		// Extract tokens.
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
 		// Store index posting.

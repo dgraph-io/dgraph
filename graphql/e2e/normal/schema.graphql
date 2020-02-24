@@ -57,6 +57,10 @@ type Category {
         posts: [Post]
 }
 
+type User @secret(field: "password") {
+	name: String! @id
+}
+
 """
 GraphQL descriptions can be on enums.  They should work in the input
 schema and should make their way into the generated schema.
@@ -105,4 +109,16 @@ type Starship {
         id: ID!
         name: String! @search(by: [term])
         length: Float
+}
+
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @hasInverse(field: directed)
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie]
 }

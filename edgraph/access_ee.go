@@ -33,7 +33,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -345,9 +344,12 @@ func RefreshAcls(closer *y.Closer) {
 
 const queryAcls = `
 {
-  allAcls(func: has(dgraph.group.acl)) {
+  allAcls(func: type(Group)) {
     dgraph.xid
-    dgraph.group.acl
+	dgraph.acl.rule {
+		dgraph.rule.predicate
+		dgraph.rule.permission
+	}
   }
 }
 `
@@ -443,20 +445,12 @@ func ResetAcl() {
 	}
 }
 
-var errNoJwt = errors.New("no accessJwt available")
-
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the list of groups
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, errNoJwt
+	accessJwt, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return nil, err
 	}
-	accessJwt := md.Get("accessJwt")
-	if len(accessJwt) == 0 {
-		return nil, errNoJwt
-	}
-
 	return validateToken(accessJwt[0])
 }
 
@@ -736,7 +730,7 @@ func logAccess(log *accessEntry) {
 
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
-func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -780,42 +774,192 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	if len(blockedPreds) != 0 {
+		// For GraphQL requests, we allow filtered access to the ACL predicates.
+		// Filter for user_id and group_id is applied for the currently logged in user.
+		if graphql {
+			for _, gq := range parsedReq.Query {
+				addUserFilterToQuery(gq, userId, groupIds)
+			}
+			// blockedPreds might have acl predicates which we want to allow access through
+			// graphql, so deleting those from here.
+			for _, pred := range x.AllACLPredicates() {
+				delete(blockedPreds, pred)
+			}
+			// In query context ~predicate and predicate are considered different.
+			delete(blockedPreds, "~dgraph.user.group")
+		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 	}
 
 	return nil
 }
 
-// authorizeGroot authorizes the operation for Groot users.
-func authorizeGroot(ctx context.Context) error {
+// authorizeGuardians authorizes the operation for users which belong to Guardians group.
+func authorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	var userID string
-	// doAuthorizeState checks if the user is authorized to perform this API request
-	doAuthorizeGroot := func() error {
-		userData, err := extractUserAndGroups(ctx)
-		switch {
-		case err == errNoJwt:
-			return status.Error(codes.PermissionDenied, err.Error())
-		case err != nil:
-			return status.Error(codes.Unauthenticated, err.Error())
-		default:
-			userID = userData[0]
-			if userID == x.GrootId {
-				return nil
-			}
-			// Deny non groot users.
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("User is '%v'. "+
-				"Only User '%v' is authorized.", userID, x.GrootId))
+	userData, err := extractUserAndGroups(ctx)
+	switch {
+	case err == x.ErrNoJwt:
+		return status.Error(codes.PermissionDenied, err.Error())
+	case err != nil:
+		return status.Error(codes.Unauthenticated, err.Error())
+	default:
+		userId := userData[0]
+		groupIds := userData[1:]
+
+		if !x.IsGuardian(groupIds) {
+			// Deny access for members of non-guardian groups
+			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
+				"allowed access. User '%v' is not a member of guardians group.", userId))
 		}
 	}
 
-	return doAuthorizeGroot()
+	return nil
 }
 
+/*
+	addUserFilterToQuery applies makes sure that a user can access only its own
+	acl info by applying filter of userid and groupid to acl predicates. A query like
+	Conversion pattern:
+	* me(func: type(Group)) -> me(func: type(Group)) @filter(eq("dgraph.xid", groupIds...))
+	* me(func: type(User)) -> me(func: type(User)) @filter(eq("dgraph.xid", userId))
+
+*/
+func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
+	if gq.Func != nil && gq.Func.Name == "type" {
+		// type function only supports one argument
+		if len(gq.Func.Args) != 1 {
+			return
+		}
+		arg := gq.Func.Args[0]
+		// The case where value of some varialble v (say) is "Group" and a
+		// query comes like `eq(dgraph.type, val(v))`, will be ignored here.
+		if arg.Value == "User" {
+			newFilter := userFilter(userId)
+			gq.Filter = parentFilter(newFilter, gq.Filter)
+		} else if arg.Value == "Group" {
+			newFilter := groupFilter(groupIds)
+			gq.Filter = parentFilter(newFilter, gq.Filter)
+		}
+	}
+
+	gq.Filter = addUserFilterToFilter(gq.Filter, userId, groupIds)
+
+	switch gq.Attr {
+	case "dgraph.user.group":
+		newFilter := groupFilter(groupIds)
+		gq.Filter = parentFilter(newFilter, gq.Filter)
+	case "~dgraph.user.group":
+		newFilter := userFilter(userId)
+		gq.Filter = parentFilter(newFilter, gq.Filter)
+	}
+
+	for _, ch := range gq.Children {
+		addUserFilterToQuery(ch, userId, groupIds)
+	}
+}
+
+func parentFilter(newFilter, filter *gql.FilterTree) *gql.FilterTree {
+	if filter == nil {
+		return newFilter
+	}
+	parentFilter := &gql.FilterTree{
+		Op:    "AND",
+		Child: []*gql.FilterTree{filter, newFilter},
+	}
+	return parentFilter
+}
+
+func userFilter(userId string) *gql.FilterTree {
+	// A logged in user should always have a userId.
+	return &gql.FilterTree{
+		Func: &gql.Function{
+			Attr: "dgraph.xid",
+			Name: "eq",
+			Args: []gql.Arg{{Value: userId}},
+		},
+	}
+}
+
+func groupFilter(groupIds []string) *gql.FilterTree {
+	// The user doesn't have any groups, so add an empty filter @filter(uid([])) so that all
+	// groups are filtered out.
+	if len(groupIds) == 0 {
+		filter := &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				UID:  []uint64{},
+			},
+		}
+		return filter
+	}
+
+	filter := &gql.FilterTree{
+		Func: &gql.Function{
+			Attr: "dgraph.xid",
+			Name: "eq",
+		},
+	}
+
+	for _, gid := range groupIds {
+		filter.Func.Args = append(filter.Func.Args,
+			gql.Arg{Value: gid})
+	}
+
+	return filter
+}
+
+/*
+ addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
+ If the *filter* have type(Group) or type(User) functions, it generate a *newFilter* with function
+ like eq(dgraph.xid, userId) or eq(dgraph.xid, groupId...) and return a filter of the form
+
+		&gql.FilterTree{
+			Op: "AND",
+			Child: []gql.FilterTree{
+				{filter, newFilter}
+			}
+		}
+*/
+func addUserFilterToFilter(filter *gql.FilterTree, userId string,
+	groupIds []string) *gql.FilterTree {
+
+	if filter == nil {
+		return nil
+	}
+
+	if filter.Func != nil && filter.Func.Name == "type" {
+
+		// type function supports only one argument
+		if len(filter.Func.Args) != 1 {
+			return nil
+		}
+		arg := filter.Func.Args[0]
+		var newFilter *gql.FilterTree
+		switch arg.Value {
+		case "User":
+			newFilter = userFilter(userId)
+		case "Group":
+			newFilter = groupFilter(groupIds)
+		}
+
+		// If filter have function, it can't have children.
+		return parentFilter(newFilter, filter)
+	}
+
+	for idx, child := range filter.Child {
+		filter.Child[idx] = addUserFilterToFilter(child, userId, groupIds)
+	}
+
+	return filter
+}
+
+// removePredsFromQuery removes all the predicates in blockedPreds
+// from all the queries in gqs.
 func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 

@@ -69,7 +69,7 @@ func (r *reducer) run() error {
 
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
-			partitionKeys := []*pb.MapEntry{}
+			partitionKeys := [][]byte{}
 			for _, mapFile := range mapFiles {
 				header, itr := r.newMapIterator(mapFile)
 				partitionKeys = append(partitionKeys, header.PartitionKeys...)
@@ -83,7 +83,7 @@ func (r *reducer) run() error {
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			sort.Slice(partitionKeys, func(i, j int) bool {
-				return bytes.Compare(partitionKeys[i].GetKey(), partitionKeys[j].GetKey()) < 0
+				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
 			// Start bactching for the given keys
@@ -126,8 +126,8 @@ func (r *reducer) createBadger(i int) *badger.DB {
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).WithCompression(bo.None)
 
-	// TOOD(Ibrahim): Remove this once badger is updated.
-	opt.ZSTDCompressionLevel = 1
+	// Over-write badger options based on the options provided by the user.
+	r.setBadgerOptions(&opt)
 
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
@@ -139,6 +139,15 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	return db
 }
 
+func (r *reducer) setBadgerOptions(opt *badger.Options) {
+	// Set the compression level.
+	opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
+	if r.state.opt.BadgerCompressionLevel < 1 {
+		x.Fatalf("Invalid compression level: %d. It should be greater than zero",
+			r.state.opt.BadgerCompressionLevel)
+	}
+}
+
 type mapIterator struct {
 	fd       *os.File
 	reader   *bufio.Reader
@@ -148,7 +157,7 @@ type mapIterator struct {
 }
 
 type iteratorEntry struct {
-	partitionKey *pb.MapEntry
+	partitionKey []byte
 	batch        [][]byte
 }
 
@@ -160,7 +169,7 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 	}
 }
 
-func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
+func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 	i := 1
 	var bufStartIndex int
 	var ie *iteratorEntry
@@ -202,7 +211,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys []*pb.MapEntry) {
 				key, err = GetKeyForMapEntry(eBuf)
 				x.Check(err)
 			}
-			if bytes.Compare(key, ie.partitionKey.GetKey()) < 0 {
+			if bytes.Compare(key, ie.partitionKey) < 0 {
 				prevKeyExist = false
 				ie.batch = append(ie.batch, eBuf)
 				continue
@@ -259,7 +268,7 @@ func (mi *mapIterator) Next() bool {
 	return true
 }
 
-func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterator) {
+func (r *reducer) newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
@@ -274,7 +283,7 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapperHeader, *mapIterato
 	headerBuf := make([]byte, headerLen)
 
 	x.Check2(io.ReadFull(reader, headerBuf))
-	header := &pb.MapperHeader{}
+	header := &pb.MapHeader{}
 	err = header.Unmarshal(headerBuf)
 	x.Check(err)
 
@@ -360,7 +369,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	}
 }
 
-func (r *reducer) reduce(partitionKeys []*pb.MapEntry, mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := runtime.NumCPU()
 	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)

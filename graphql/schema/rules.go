@@ -21,15 +21,16 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
-	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation)
+	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
+		passwordDirectiveValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList)
 
@@ -88,6 +89,43 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 		strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
 	)
 	return fieldNamesString, errLocations
+}
+
+func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
+	dirs := make([]string, 0)
+
+	for _, dir := range typ.Directives {
+		if dir.Name != "secret" {
+			continue
+		}
+		val := dir.Arguments.ForName("field").Value.Raw
+		if val == "" {
+			return gqlerror.ErrorPosf(typ.Position,
+				`Type %s; Argument "field" of secret directive is empty`, typ.Name)
+		}
+		dirs = append(dirs, val)
+	}
+
+	if len(dirs) > 1 {
+		val := strings.Join(dirs, ",")
+		return gqlerror.ErrorPosf(typ.Position,
+			"Type %s; has more than one secret fields %s", typ.Name, val)
+	}
+
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	val := dirs[0]
+	for _, f := range typ.Fields {
+		if f.Name == val {
+			return gqlerror.ErrorPosf(typ.Position,
+				"Type %s; has a secret directive and field of the same name %s",
+				typ.Name, val)
+		}
+	}
+
+	return nil
 }
 
 func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
@@ -480,13 +518,89 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		)
 	}
 	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s: reverse pred argument for @dgraph directive is not supported.",
-			typ.Name, field.Name,
-		)
+		if sch.Types[typ.Name].Kind == ast.Interface {
+			// We don't want to consider the field of an interface but only the fields with
+			// ~ in concrete types.
+			return nil
+		}
+		// The inverse directive is not required on this field as given that the dgraph field name
+		// starts with ~ we already know this field has to be a reverse edge of some other field.
+		invDirective := field.Directives.ForName(inverseDirective)
+		if invDirective != nil {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @hasInverse directive is not allowed when pred argument in "+
+					"@dgraph directive starts with a ~.",
+				typ.Name, field.Name,
+			)
+		}
+
+		forwardEdgePred := strings.Trim(predArg.Value.Raw, "<~>")
+		invTypeName := field.Type.Name()
+		if sch.Types[invTypeName].Kind != ast.Object &&
+			sch.Types[invTypeName].Kind != ast.Interface {
+			return gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s is of type %s, but reverse predicate in @dgraph"+
+					" directive only applies to fields with object types.", typ.Name, field.Name,
+				invTypeName)
+		}
+
+		if field.Type.NamedType != "" {
+			return gqlerror.ErrorPosf(dir.Position,
+				"Type %s; Field %s: with a dgraph directive that starts with ~ should be of type "+
+					"list.", typ.Name, field.Name)
+		}
+
+		invType := sch.Types[invTypeName]
+		forwardFound := false
+		// We need to loop through all the fields of the invType and see if we find a field which
+		// is a forward edge field for this reverse field.
+		for _, fld := range invType.Fields {
+			dir := fld.Directives.ForName(dgraphDirective)
+			if dir == nil {
+				continue
+			}
+			predArg := dir.Arguments.ForName(dgraphPredArg)
+			if predArg == nil || predArg.Value.Raw == "" {
+				continue
+			}
+			if predArg.Value.Raw == forwardEdgePred {
+				if fld.Type.Name() != typ.Name {
+					return gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
+						" type %s to be compatible with @dgraph reverse directive but is of"+
+						" type %s.", invTypeName, fld.Name, typ.Name, fld.Type.Name())
+				}
+				invDirective := fld.Directives.ForName(inverseDirective)
+				if invDirective != nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s: @hasInverse directive is not allowed is not allowed "+
+							"because field is forward edge of another field with reverse directive.",
+						invType.Name, fld.Name,
+					)
+				}
+				forwardFound = true
+				break
+			}
+		}
+		if !forwardFound {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: pred argument: %s is not supported as forward edge doesn't "+
+					"exist for type %s.", typ.Name, field.Name, predArg.Value.Raw, invTypeName,
+			)
+		}
 	}
 	return nil
+}
+
+func passwordValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	return passwordDirectiveValidation(typ)
 }
 
 func idValidation(sch *ast.Schema,

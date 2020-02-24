@@ -352,7 +352,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
           "exact"
         ]
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -392,8 +392,14 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.password"
       },
-      {
-        "predicate": "dgraph.group.acl"
+	  {
+		  "predicate": "dgraph.acl.rule"
+	  },
+	  {
+		  "predicate": "dgraph.rule.predicate"
+	  },
+	  {
+		  "predicate": "dgraph.rule.permission"
 	  },
 	  {
         "predicate": "dgraph.graphql.schema"
@@ -413,7 +419,7 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "age"
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -556,7 +562,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
           "exact"
         ]
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(m["data"]))
 }

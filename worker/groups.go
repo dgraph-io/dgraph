@@ -280,7 +280,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return errors.Errorf("Don't have the address of any dgraphzero server")
+		return errors.Errorf("don't have the address of any dgraph zero leader")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -1081,6 +1081,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group
 				&pb.SubscriptionRequest{Prefixes: prefixes})
 			if err != nil {
 				glog.Errorf("Error from alpha client subscribe: %v", err)
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 		receiver:

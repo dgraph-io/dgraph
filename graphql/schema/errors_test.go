@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/stretchr/testify/assert"
 )
