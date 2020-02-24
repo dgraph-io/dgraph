@@ -312,25 +312,60 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
-	if numGo == 1 {
+	if numGo == -1 {
 		return process(m.Edges)
 	}
 	errCh := make(chan error, numGo)
+	var wg sync.WaitGroup
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
 		if end > len(m.Edges) {
 			end = len(m.Edges)
 		}
-		go func(start, end int) {
-			errCh <- process(m.Edges[start:end])
-		}(start, end)
+		wg.Add(1)
+		go func(start, end int, wg *sync.WaitGroup) {
+			if !x.WorkerConfig.LudicrousMode {
+				errCh <- process(m.Edges[start:end])
+			} else {
+				// TODO: Log error if any.
+				process(m.Edges[start:end])
+				wg.Done()
+			}
+		}(start, end, &wg)
 	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
+
+	if !x.WorkerConfig.LudicrousMode {
+		for i := 0; i < numGo; i++ {
+			if err := <-errCh; err != nil {
+				return err
+			}
 		}
+		return nil
 	}
+
+	go func(wg *sync.WaitGroup) {
+		wg.Wait()
+		writer := posting.NewTxnWriter(pstore)
+		toDisk := func(start, commit uint64) {
+			txn := posting.Oracle().GetTxn(start)
+			if txn == nil {
+				return
+			}
+			txn.Update()
+			err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
+				return txn.CommitToDisk(writer, commit)
+			})
+
+			if err != nil {
+				glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+					start, commit, err)
+			}
+		}
+
+		toDisk(proposal.Mutations.StartTs, proposal.Mutations.StartTs)
+
+	}(&wg)
 	return nil
 }
 
@@ -346,16 +381,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		if err := n.applyMutations(ctx, proposal); err != nil {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
-		}
-		if x.WorkerConfig.LudicrousMode {
-			txnTimeStamp := proposal.Mutations.StartTs
-			maxTs := posting.Oracle().MaxAssigned()
-			n.commitOrAbort(proposal.Key, &pb.OracleDelta{
-				Txns: []*pb.TxnStatus{
-					{StartTs: txnTimeStamp, CommitTs: maxTs},
-				},
-			})
-			fmt.Println("maxTs: ", maxTs, " txnTs: ", txnTimeStamp)
 		}
 		span.Annotate(nil, "Done")
 		return nil
