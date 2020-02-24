@@ -21,10 +21,10 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -215,6 +215,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			typName := typeName(def)
 
 			typ := dgType{name: typName}
+			var typeDef strings.Builder
+			fmt.Fprintf(&typeDef, "type %s {\n", typName)
+			fd := getPasswordField(def)
+
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
@@ -310,6 +314,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
+			}
+			if fd != nil {
+				parentInt := parentInterface(gqlSch, def, fd.Name)
+				if parentInt != nil {
+					typName = typeName(parentInt)
+				}
+				fname := fieldName(fd, typName)
+
+				if parentInt == nil {
+					dgPreds[fname] = dgPred{typ: "password"}
+				}
+
+				typ.fields = append(typ.fields, field{fname, parentInt != nil})
 			}
 			dgTypes = append(dgTypes, typ)
 		}

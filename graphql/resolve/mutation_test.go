@@ -94,6 +94,7 @@ func mutationValidation(t *testing.T, file string, rewriterFactory func() Mutati
 					Query:     tcase.GQLMutation,
 					Variables: vars,
 				})
+
 			require.NotNil(t, err)
 			require.Equal(t, err.Error(), tcase.ValidationError.Error())
 		})

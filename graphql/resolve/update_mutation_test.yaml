@@ -322,6 +322,122 @@
     }
 
 -
+  name: "Update remove without XID or ID"
+  gqlmutation: |
+    mutation updateComputer($patch: UpdateComputerInput!) {
+      updateComputer(input: $patch) {
+        computer {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+              "name": {"eq": "computerName"}
+        },
+        "remove": {
+                "owners": [{
+                        "nickName": "temp"
+                }]
+        }
+      }
+    }
+  explanation: "Remove requires an XID or ID"
+  error:
+    { "message":
+      "failed to rewrite mutation payload because name is not provided" }
+
+-
+  name: "Update remove with XID"
+  gqlmutation: |
+    mutation updateComputer($patch: UpdateComputerInput!) {
+      updateComputer(input: $patch) {
+        computer {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+              "name": {"eq": "computerName"}
+        },
+        "remove": {
+                "owners": [{
+                        "name": "computerOwnerName",
+                        "nickName": "temp"
+                }]
+        }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        {
+                "Computer.owners": [{
+                        "uid" : "uid(ComputerOwner2)",
+                        "ComputerOwner.computers": {
+                                "uid": "uid(x)"
+                        }
+                }],
+                "uid" : "uid(x)"
+        }
+      cond: "@if(eq(len(ComputerOwner2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateComputer(func: type(Computer)) @filter(eq(Computer.name, "computerName")) {
+        uid
+      }
+      ComputerOwner2 as ComputerOwner2(func: eq(ComputerOwner.name, "computerOwnerName")) @filter(type(ComputerOwner)) {
+        uid
+      }
+    }
+
+
+-
+  name: "Update remove with ID"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "remove": {
+          "posts": [{"postID": "0x124", "title": "random title"}]
+        }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        { 
+                "Author.posts": [{
+                        "uid" : "0x124",
+                        "Post.author": {
+                                "uid": "uid(x)"
+                        }
+                }],
+                "uid" : "uid(x)"
+        }
+      cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+        uid
+      }
+      Post2 as Post2(func: uid(0x124)) @filter(type(Post)) {
+        uid
+      }
+    }
+
+
+-
   name: "Update remove reference"
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
