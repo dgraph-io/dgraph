@@ -119,19 +119,15 @@ func (t *Trie) Put(key, value []byte) error {
 func (t *Trie) tryPut(key, value []byte) (err error) {
 	k := keyToNibbles(key)
 	var n node
-	var ok bool
 
 	if len(value) > 0 {
-		ok, n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
+		n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
 	} else {
-		ok, n, err = t.delete(t.root, k)
+		n, err = t.delete(t.root, k)
 	}
 
 	if err != nil {
 		return err
-	}
-	if !ok {
-		log.Warn("tryPut returned not ok for operation insert/delete")
 	}
 
 	t.root = n
@@ -139,26 +135,24 @@ func (t *Trie) tryPut(key, value []byte) (err error) {
 }
 
 // TryPut attempts to insert a key with value into the trie
-func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err error) {
+func (t *Trie) insert(parent node, key []byte, value node) (n node, err error) {
 	switch p := parent.(type) {
 	case *branch:
-		ok, n, err = t.updateBranch(p, key, value)
+		n, err = t.updateBranch(p, key, value)
 	case nil:
 		switch v := value.(type) {
 		case *branch:
 			v.key = key
 			n = v
-			ok = true
 		case *leaf:
 			v.key = key
 			n = v
-			ok = true
 		}
 	case *leaf:
 		// if a value already exists in the trie at this key, overwrite it with the new value
 		if p.value != nil && bytes.Equal(p.key, key) {
 			p.value = value.(*leaf).value
-			return true, p, nil
+			return p, nil
 		}
 
 		// need to convert this leaf into a branch
@@ -178,7 +172,7 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 				br.children[parentKey[length]] = p
 			}
 
-			return true, br, nil
+			return br, nil
 		}
 
 		value.setKey(key[length+1:])
@@ -195,18 +189,18 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 			br.children[key[length]] = value
 		}
 
-		return ok, br, nil
+		return br, nil
 	default:
 		err = errors.New("put error: invalid node")
 	}
 
-	return ok, n, err
+	return n, err
 }
 
 // updateBranch attempts to add the value node to a branch
 // inserts the value node as the branch's child at the index that's
 // the first nibble of the key
-func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node, err error) {
+func (t *Trie) updateBranch(p *branch, key []byte, value node) (n node, err error) {
 	length := lenCommonPrefix(key, p.key)
 
 	// whole parent key matches
@@ -219,13 +213,14 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 			case *leaf:
 				p.value = v.value
 			}
-			return true, p, nil
+			return p, nil
 		}
 
 		switch c := p.children[key[length]].(type) {
 		case *branch, *leaf:
-			if ok, n, err = t.insert(c, key[length+1:], value); !ok {
-				log.Warn("updateBranch returned not ok for operation 1 insert")
+			if n, err = t.insert(c, key[length+1:], value); err != nil {
+				log.Warn("updateBranch returned err for operation insert")
+				break
 			}
 			p.children[key[length]] = n
 			n = p
@@ -236,7 +231,7 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 			n = p
 		}
 
-		return true, n, err
+		return n, err
 	}
 
 	// we need to branch out at the point where the keys diverge
@@ -244,25 +239,22 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	br := &branch{key: key[:length], dirty: true}
 
 	parentIndex := p.key[length]
-	if ok, br.children[parentIndex], err = t.insert(nil, p.key[length+1:], p); !ok {
+	if br.children[parentIndex], err = t.insert(nil, p.key[length+1:], p); err != nil {
 		log.Warn("updateBranch returned not ok for operation 2 insert")
 	}
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	if len(key) <= length {
 		br.value = value.(*leaf).value
 	} else {
-		if ok, br.children[key[length]], err = t.insert(nil, key[length+1:], value); !ok {
+		if br.children[key[length]], err = t.insert(nil, key[length+1:], value); err != nil {
 			log.Warn("updateBranch returned not ok for operation insert")
-		}
-		if err == nil {
-			ok = true
 		}
 	}
 
-	return ok, br, err
+	return br, err
 }
 
 // Load data into trie
@@ -339,7 +331,7 @@ func (t *Trie) retrieve(parent node, key []byte) (value *leaf, err error) {
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) error {
 	k := keyToNibbles(key)
-	_, n, err := t.delete(t.root, k)
+	n, err := t.delete(t.root, k)
 	if err != nil {
 		return err
 	}
@@ -347,7 +339,7 @@ func (t *Trie) Delete(key []byte) error {
 	return nil
 }
 
-func (t *Trie) delete(parent node, key []byte) (ok bool, n node, err error) {
+func (t *Trie) delete(parent node, key []byte) (n node, err error) {
 	switch p := parent.(type) {
 	case *branch:
 		length := lenCommonPrefix(p.key, key)
@@ -357,32 +349,30 @@ func (t *Trie) delete(parent node, key []byte) (ok bool, n node, err error) {
 			p.value = nil
 			n = p
 		} else {
-			_, n, err = t.delete(p.children[key[length]], key[length+1:])
+			n, err = t.delete(p.children[key[length]], key[length+1:])
 			if err != nil {
-				return false, p, err
+				return p, err
 			}
 			p.children[key[length]] = n
 			n = p
 		}
 
-		ok, n = handleDeletion(p, n, key)
+		n = handleDeletion(p, n, key)
 	case *leaf:
-		if bytes.Equal(key, p.key) || len(key) == 0 {
-			ok = true
-		} else {
-			ok = true
+		if !bytes.Equal(key, p.key) && len(key) != 0 {
 			n = p
 		}
 	case nil:
 		// do nothing
 	}
-	return ok, n, err
+
+	return n, err
 }
 
 // handleDeletion is called when a value is deleted from a branch
 // if the updated branch only has 1 child, it should be combined with that child
-// if the upated branch only has a value, it should be turned into a leaf
-func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node) {
+// if the updated branch only has a value, it should be turned into a leaf
+func handleDeletion(p *branch, n node, key []byte) (nn node) {
 	nn = n
 	length := lenCommonPrefix(p.key, key)
 	bitmap := p.childrenBitmap()
@@ -422,10 +412,9 @@ func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node) {
 			// do nothing
 		}
 
-		ok = true
 	}
 
-	return ok, nn
+	return nn
 }
 
 // lenCommonPrefix returns the length of the common prefix between two keys
