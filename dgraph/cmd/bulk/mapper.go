@@ -139,8 +139,8 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
-	lenBuf := make([]byte, 8)
-	binary.BigEndian.PutUint64(lenBuf, uint64(len(headerBuf)))
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))
 	_, err = w.Write(lenBuf)
 	x.Check(err)
 	_, err = w.Write(headerBuf)

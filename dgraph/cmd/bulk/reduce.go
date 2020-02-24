@@ -267,9 +267,9 @@ func (r *reducer) newMapIterator(filename string) (*pb.MapHeader, *mapIterator) 
 
 	// Read the header size.
 	reader := bufio.NewReaderSize(gzReader, 16<<10)
-	headerLenBuf := make([]byte, 8)
+	headerLenBuf := make([]byte, 4)
 	x.Check2(io.ReadFull(reader, headerLenBuf))
-	headerLen := binary.BigEndian.Uint64(headerLenBuf)
+	headerLen := binary.BigEndian.Uint32(headerLenBuf)
 	// Reader the map header.
 	headerBuf := make([]byte, headerLen)
 
