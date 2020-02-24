@@ -230,11 +230,7 @@ func (ld *loader) mapStage() {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	r := reducer{
-		state:     ld.state,
-		mu:        new(sync.RWMutex),
-		streamIds: make(map[string]uint32),
-	}
+	r := reducer{state: ld.state}
 	x.Check(r.run())
 }
 
