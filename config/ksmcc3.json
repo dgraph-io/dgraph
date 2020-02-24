@@ -2,15 +2,15 @@
   "name": "Kusama CC3",
   "id": "ksmcc3",
   "bootNodes": [
-    "/dns4/p2p.cc3-0.kusama.network/tcp/30100/p2p/QmeCit3Nif4VfNqrEJsdYHZGcKzRCnZvGxg6hha1iNj4mk",
-    "/dns4/p2p.cc3-1.kusama.network/tcp/30100/p2p/QmchDJtEGiEWf7Ag58HNoTg9jSGzxkSZ23VgmF6xiLKKsZ",
-    "/dns4/p2p.cc3-2.kusama.network/tcp/30100/p2p/QmYG1YUekKETmD68yFKbjXDRbSAFULRRJpb1SbQPuSKA87",
-    "/dns4/p2p.cc3-3.kusama.network/tcp/30100/p2p/QmQv5EXUAfVt4gbupiuLDZP2Gd7ykK6YuXoYPkyLfLtJch",
-    "/dns4/p2p.cc3-4.kusama.network/tcp/30100/p2p/QmP3zYRhAxxw4fDf6Vq5agM8AZt1m2nKpPAEDmyEHPK5go",
-    "/dns4/p2p.cc3-5.kusama.network/tcp/30100/p2p/QmdePe9MiAJT4yHT2tEwmazCsckAZb19uaoSUgRDffPq3G",
-    "/dns4/kusama-bootnode-0.paritytech.net/tcp/30333/p2p/QmTFUXWi98EADXdsUxvv7t9fhJG1XniRijahDXxdv1EbAW",
-    "/dns4/kusama-bootnode-0.paritytech.net/tcp/30334/ws/p2p/QmTFUXWi98EADXdsUxvv7t9fhJG1XniRijahDXxdv1EbAW",
-    "/dns4/kusama-bootnode-1.paritytech.net/tcp/30333/p2p/Qmf58BhdDSkHxGy1gX5YUuHCpdYYGACxQM3nGWa7xJa5an"
+    "/dns4/p2p.cc3-0.kusama.network/tcp/30100/p2p/12D3KooWDgtynm4S9M3m6ZZhXYu2RrWKdvkCSScc25xKDVSg1Sjd",
+    "/dns4/p2p.cc3-1.kusama.network/tcp/30100/p2p/12D3KooWNpGriWPmf621Lza9UWU9eLLBdCFaErf6d4HSK7Bcqnv4",
+    "/dns4/p2p.cc3-2.kusama.network/tcp/30100/p2p/12D3KooWLmLiB4AenmN2g2mHbhNXbUcNiGi99sAkSk1kAQedp8uE",
+    "/dns4/p2p.cc3-3.kusama.network/tcp/30100/p2p/12D3KooWEGHw84b4hfvXEfyq4XWEmWCbRGuHMHQMpby4BAtZ4xJf",
+    "/dns4/p2p.cc3-4.kusama.network/tcp/30100/p2p/12D3KooWF9KDPRMN8WpeyXhEeURZGP8Dmo7go1tDqi7hTYpxV9uW",
+    "/dns4/p2p.cc3-5.kusama.network/tcp/30100/p2p/12D3KooWDiwMeqzvgWNreS9sV1HW3pZv1PA7QGA7HUCo7FzN5gcA",
+    "/dns4/kusama-bootnode-0.paritytech.net/tcp/30333/p2p/12D3KooWSueCPH3puP2PcvqPJdNaDNF3jMZjtJtDiSy35pWrbt5h",
+    "/dns4/kusama-bootnode-0.paritytech.net/tcp/30334/ws/p2p/12D3KooWSueCPH3puP2PcvqPJdNaDNF3jMZjtJtDiSy35pWrbt5h",
+    "/dns4/kusama-bootnode-1.paritytech.net/tcp/30333/p2p/12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw"
   ],
   "telemetryEndpoints": [
     [
