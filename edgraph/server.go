@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -370,7 +371,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		// ignoring any error that might occur during the abort (the user would
 		// care more about the previous error).
 		if resp.Txn == nil {
-			resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
+			resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs, Namespace: m.Namespace}
 		}
 
 		resp.Txn.Aborted = true
@@ -758,6 +759,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+	fmt.Printf("req %+v \n\n", req)
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
@@ -907,7 +909,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	qr.ReadTs = qc.req.StartTs
-	resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs}
+	resp.Txn = &api.TxnContext{StartTs: qc.req.StartTs, Namespace: qc.namespace}
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
@@ -1081,6 +1083,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
+	tctx.Namespace = tc.Namespace
 	tctx.StartTs = tc.StartTs
 	tctx.CommitTs = commitTs
 	return tctx, err

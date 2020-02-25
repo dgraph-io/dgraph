@@ -544,7 +544,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
 	defer span.End()
 
-	tctx := &api.TxnContext{StartTs: m.StartTs}
+	tctx := &api.TxnContext{StartTs: m.StartTs, Namespace: m.Namespace}
 	if err := verifyTypes(ctx, m); err != nil {
 		return tctx, err
 	}
@@ -708,7 +708,7 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	// might be wrong because we might be missing out a commit which has updated the value. This
 	// wait here ensures that the proposal would only be registered after seeing txn status of all
 	// pending transactions. Thus, the ordering would be correct.
-	if err := posting.Oracle().WaitForTs(ctx, txnCtx.Namespace, m.StartTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, m.Namespace, m.StartTs); err != nil {
 		return err
 	}
 

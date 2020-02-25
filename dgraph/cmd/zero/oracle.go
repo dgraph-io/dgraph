@@ -365,9 +365,10 @@ var ErrConflict = errors.New("Transaction conflict")
 func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	var zp pb.ZeroProposal
 	zp.Txn = &api.TxnContext{
-		StartTs:  src.StartTs,
-		CommitTs: src.CommitTs,
-		Aborted:  src.Aborted,
+		StartTs:   src.StartTs,
+		CommitTs:  src.CommitTs,
+		Aborted:   src.Aborted,
+		Namespace: src.Namespace,
 	}
 
 	// NOTE: It is important that we continue retrying proposeTxn until we succeed. This should
@@ -398,6 +399,7 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
+	fmt.Printf("conmtext %+v \n", src)
 	span := otrace.FromContext(ctx)
 	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(src.StartTs))}, "")
 	if src.Aborted {

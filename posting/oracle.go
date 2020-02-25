@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -255,6 +256,7 @@ func (o *oracle) WaitForAllNamespace(ctx context.Context, startTs uint64) error 
 }
 
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
+	fmt.Printf("processing delta %+v \n", delta)
 	if glog.V(3) {
 		glog.Infof("ProcessDelta: Max Assigned: %d", delta.MaxAssigned)
 		glog.Infof("ProcessDelta: Group checksum: %v", delta.GroupChecksums)
