@@ -148,6 +148,12 @@ func TestLargeDecodePtrByteArrays(t *testing.T) {
 	if testing.Short() {
 		t.Skip("\033[33mSkipping memory intesive test for TestDecodePtrByteArrays in short mode\033[0m")
 	} else {
+		// Causes memory leaks with the CI's
+		var largeDecodeByteArrayTests = []decodeByteArrayTest{
+			{val: append([]byte{0xfe, 0xff, 0xff, 0xff}, byteArray(1073741823)...), output: byteArray(1073741823)},
+			{val: append([]byte{0x03, 0x00, 0x00, 0x00, 0x40}, byteArray(1073741824)...), output: byteArray(1073741824)},
+		}
+
 		for _, test := range largeDecodeByteArrayTests {
 			var result = make([]byte, len(test.output))
 			err := DecodePtr(test.val, result)
