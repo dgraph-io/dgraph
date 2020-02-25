@@ -132,7 +132,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 			// we have very few entries so no need for partition keys.
 			break
 		}
-		if i%shardPartitionNo == 0 {
+		if (i+1)%shardPartitionNo == 0 {
 			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
 		}
 	}

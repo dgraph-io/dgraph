@@ -47,7 +47,7 @@ import (
 type reducer struct {
 	*state
 	streamId  uint32
-	mu        *sync.RWMutex
+	mu        sync.RWMutex
 	streamIds map[string]uint32
 }
 
@@ -71,7 +71,7 @@ func (r *reducer) run() error {
 			var mapItrs []*mapIterator
 			partitionKeys := [][]byte{}
 			for _, mapFile := range mapFiles {
-				header, itr := r.newMapIterator(mapFile)
+				header, itr := newMapIterator(mapFile)
 				partitionKeys = append(partitionKeys, header.PartitionKeys...)
 				mapItrs = append(mapItrs, itr)
 			}
@@ -87,9 +87,8 @@ func (r *reducer) run() error {
 			})
 
 			// Start batching for the given keys
-			fmt.Printf("Num map iterators: %d\n", len(mapItrs))
 			for _, itr := range mapItrs {
-				go itr.startBatchingForKeys(partitionKeys)
+				go itr.startBatching(partitionKeys)
 			}
 			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
@@ -151,7 +150,6 @@ func (r *reducer) setBadgerOptions(opt *badger.Options) {
 type mapIterator struct {
 	fd       *os.File
 	reader   *bufio.Reader
-	current  *iteratorEntry
 	batchCh  chan *iteratorEntry
 	freelist chan *iteratorEntry
 }
@@ -169,7 +167,7 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 	}
 }
 
-func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
+func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
 	var buf, eBuf, key []byte
@@ -218,7 +216,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 				ie.batch = append(ie.batch, eBuf)
 				continue
 			}
-			// present key is not part of this batch so, track that we have already read the key.
+			// present key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
 			break
 		}
@@ -242,6 +240,7 @@ func (mi *mapIterator) startBatchingForKeys(partitionsKeys [][]byte) {
 	}
 }
 func (mi *mapIterator) Close() error {
+
 	return mi.fd.Close()
 }
 
@@ -249,7 +248,7 @@ func (mi *mapIterator) Next() *iteratorEntry {
 	return <-mi.batchCh
 }
 
-func (r *reducer) newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
+func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
@@ -312,7 +311,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 
 		req.list = &bpb.KVList{}
 		countKeys := r.toList(req.entries, req.list)
-		// r.toList(req) // contains entries, list and freelist struct.
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
@@ -327,8 +325,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
-
-	idx := 0
 	for req := range writerCh {
 		req.wg.Wait()
 
@@ -340,12 +336,8 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 		x.Check(ci.writer.Write(req.list))
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
-			fmt.Printf("writeCh: Time taken to write req %d: %v\n",
-				idx, time.Since(start).Round(time.Millisecond))
-		}
-		idx++
-		if idx%100 == 0 {
-			fmt.Printf("Wrote req: %d\n", idx)
+			fmt.Printf("writeCh: Time taken to write req: %v\n",
+				time.Since(start).Round(time.Millisecond))
 		}
 	}
 }
@@ -356,7 +348,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
 	encoderCloser := y.NewCloser(cpu)
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for cpu := 0; cpu < runtime.NumCPU(); cpu++ {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)

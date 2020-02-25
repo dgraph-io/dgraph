@@ -232,7 +232,6 @@ func (ld *loader) reduceStage() {
 
 	r := reducer{
 		state:     ld.state,
-		mu:        new(sync.RWMutex),
 		streamIds: make(map[string]uint32),
 	}
 	x.Check(r.run())
