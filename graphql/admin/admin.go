@@ -165,7 +165,7 @@ const (
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
-		state: [MembershipState]
+		state: MembershipState
 
 		` + adminQueries + `
 	}
