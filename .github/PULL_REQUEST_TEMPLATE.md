@@ -26,4 +26,4 @@
 
 <!-- Add here TODOS, testing results, additional notes, consolidated discussion points, personal signs and etc. -->
 
-<!-- You can always ping us (Daniel, Micheldiz or Santo in Slack or via DM at http://discuss.dgraph.io/) if you need help about filling those sections. -->
+<!-- You can always ping us (Daniel, Karthic, Micheldiz or Santo in Slack or via DM at http://discuss.dgraph.io/) if you need help about filling those sections. -->
