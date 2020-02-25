@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -167,11 +170,20 @@ type matchExport struct {
 
 func matchExportCount(opts matchExport) error {
 	// Now try and export data from second server.
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", opts.port))
+	adminUrl := fmt.Sprintf("http://localhost:%d/admin", opts.port)
+	params := testutil.GraphQLParams{
+		Query: testutil.ExportRequest,
+	}
+	b, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	if err != nil {
+		return err
+	}
+
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
