@@ -196,7 +196,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
-	num := 10
+	num := 100
 
 	n := &node{
 		Node: m,
@@ -260,7 +260,9 @@ func detectPendingTxns(attr string) error {
 	if len(tctxs) == 0 {
 		return nil
 	}
-	go tryAbortTransactions(tctxs)
+	if !x.WorkerConfig.LudicrousMode {
+		go tryAbortTransactions(tctxs)
+	}
 	return errHasPendingTxns
 }
 
@@ -269,6 +271,7 @@ func detectPendingTxns(attr string) error {
 // involving the predicate are aborted until schema mutations are done.
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
+	fmt.Println(proposal.Mutations.StartTs)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -1298,6 +1301,9 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
+	if x.WorkerConfig.LudicrousMode {
+		return
+	}
 	// Aborts if not already committed.
 	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
