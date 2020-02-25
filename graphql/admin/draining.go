@@ -32,10 +32,6 @@ type drainingResolver struct {
 	enable   bool
 }
 
-type drainingInput struct {
-	Enable bool
-}
-
 func (dr *drainingResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got draining request through GraphQL admin API")
