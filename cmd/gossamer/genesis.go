@@ -1,3 +1,19 @@
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -5,12 +21,13 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ChainSafe/gossamer/common"
-	cfg "github.com/ChainSafe/gossamer/config"
-	"github.com/ChainSafe/gossamer/config/genesis"
-	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/state"
-	"github.com/ChainSafe/gossamer/trie"
+	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/node"
+
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -114,6 +131,6 @@ func getGenesisPath(ctx *cli.Context) string {
 	} else if file := ctx.GlobalString(GenesisFlag.Name); file != "" {
 		return file
 	} else {
-		return cfg.DefaultGenesisPath
+		return node.DefaultGenesisPath
 	}
 }

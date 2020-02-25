@@ -24,7 +24,6 @@ WORKDIR $GOPATH/src/github.com/ChainSafe/gossamer
 # Add go mod lock files and gossamer default config
 COPY go.mod .
 COPY go.sum .
-COPY config.toml .
 
 # Get go mods
 RUN go mod download
@@ -33,15 +32,15 @@ RUN go mod download
 COPY . $GOPATH/src/github.com/ChainSafe/gossamer
 
 # Build
-RUN GOBIN=$GOPATH/src/github.com/ChainSafe/gossamer/build/bin go run scripts/ci.go install
+RUN GOBIN=$GOPATH/src/github.com/ChainSafe/gossamer/bin go run scripts/ci.go install
 
 # Create symlink
-RUN ln -s $GOPATH/src/github.com/ChainSafe/gossamer/build/bin/gossamer /usr/local/gossamer
+RUN ln -s $GOPATH/src/github.com/ChainSafe/gossamer/bin/gossamer /usr/local/gossamer
 
 # Give permissions
 RUN chmod +x $GOPATH/src/github.com/ChainSafe/gossamer/scripts/docker-entrypoint.sh
 
-# Expose cmd and port
+# Expose gossamer command and port
 ENTRYPOINT ["/gocode/src/github.com/ChainSafe/gossamer/scripts/docker-entrypoint.sh"]
 CMD ["/usr/local/gossamer"]
 EXPOSE 7001

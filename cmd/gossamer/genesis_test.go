@@ -1,3 +1,19 @@
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -8,13 +24,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/config/genesis"
-	"github.com/ChainSafe/gossamer/core"
-	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/dot"
-	"github.com/ChainSafe/gossamer/state"
-	"github.com/ChainSafe/gossamer/trie"
+	"github.com/ChainSafe/gossamer/dot/core"
+	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/node"
+
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 )
@@ -104,8 +121,8 @@ func TestGenesisStateLoading(t *testing.T) {
 	d, _, err := makeNode(context)
 	require.Nil(t, err)
 
-	if reflect.TypeOf(d) != reflect.TypeOf(&dot.Dot{}) {
-		t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d), reflect.TypeOf(&dot.Dot{}))
+	if reflect.TypeOf(d) != reflect.TypeOf(&node.Node{}) {
+		t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(d), reflect.TypeOf(&node.Node{}))
 	}
 
 	expected := &trie.Trie{}

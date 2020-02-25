@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Copyright 2019 ChainSafe Systems (ON) Corp.
 # This file is part of gossamer.
 #
@@ -18,9 +19,14 @@
 set -e
 
 echo ">> Running tests..."
-go test -short -coverprofile c.out ./...
+go test -short -coverprofile c.out ./cmd/...
+# go test -short -coverprofile c.out ./dot/core
+go test -short -coverprofile c.out ./dot/network
+go test -short -coverprofile c.out ./dot/rpc
+go test -short -coverprofile c.out ./dot/state
+go test -short -coverprofile c.out ./lib/...
 ./cc-test-reporter after-build --exit-code $?
-#echo ">> Running race condition test on runtime"	
-#go test -short -race ./runtime	
+# echo ">> Running race condition test on runtime"
+# go test -short -race ./lib/runtime
 echo ">> Running race condition test on priority queue"
-go test -short -race ./common/transaction/
+go test -short -race ./lib/transaction/

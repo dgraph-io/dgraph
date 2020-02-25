@@ -22,10 +22,10 @@ $(GOLANGCI):
 ## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint` on project files.
 .PHONY: lint
 lint: $(GOLANGCI)
-	GOBIN=$(PWD)/build/bin go run scripts/ci.go lint
+	GOBIN=$(PWD)/bin go run scripts/ci.go lint
 
 clean:
-	rm -fr ./build
+	rm -fr ./bin
 
 format:
 	./scripts/goimports.sh
@@ -33,12 +33,12 @@ format:
 ## test: Runs `go test` on project test files.
 test:
 	@echo "  >  \033[32mRunning tests...\033[0m "
-	GOBIN=$(PWD)/build/bin go run scripts/ci.go test
+	GOBIN=$(PWD)/bin go run scripts/ci.go test
 
 ## test: Runs `go test -race` on project test files.
 test-state-race:
 	@echo "  >  \033[32mRunning race tests...\033[0m "
-	go test ./state/... -race -timeout=5m
+	go test ./dot/state/... -race -timeout=5m
 
 ## install: Install missing dependencies. Runs `go mod download` internally.
 install:
@@ -48,16 +48,16 @@ install:
 ## build: Builds application binary and stores it in `./bin/gossamer`
 build:
 	@echo "  >  \033[32mBuilding binary...\033[0m "
-	GOBIN=$(PWD)/build/bin go run scripts/ci.go install
+	GOBIN=$(PWD)/bin go run scripts/ci.go install
 
-# init: Init the gossamer folder using  gssmr0.json genesis file and default config file
+# init: Initialize gossamer using the default genesis and toml configuration files
 init:
-	./build/bin/gossamer init --genesis config/gssmr0.json --verbosity debug --config ./config.toml
+	./bin/gossamer init --verbosity debug
 
 ## start: Starts application from binary executable in `./bin/gossamer`
 start:
 	@echo "  >  \033[32mStarting server...\033[0m "
-	./build/bin/gossamer
+	./bin/gossamer
 
 $(ADDLICENSE):
 	go get -u github.com/google/addlicense
@@ -81,4 +81,4 @@ docker-build:
 	docker build -t $(FULLDOCKERNAME) -f Dockerfile.dev .
 
 gossamer: clean
-	GOBIN=$(PWD)/build/bin go run scripts/ci.go install
+	GOBIN=$(PWD)/bin go run scripts/ci.go install
