@@ -92,7 +92,7 @@ var (
 type Server struct{}
 
 func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(namespace, false)}
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(namespace, false), Namespace: namespace}
 	schemas := schema.InitialSchema(namespace)
 	m.Schema = schemas
 	m.Namespace = namespace

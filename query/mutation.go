@@ -23,6 +23,7 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -37,6 +38,7 @@ import (
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context,
 	m *pb.Mutations) (*api.TxnContext, error) {
+	y.AssertTrue(m.Namespace != "")
 	edges, err := expandEdges(ctx, m.Namespace, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -220,9 +221,10 @@ func (o *oracle) MaxAssigned(namespace string) uint64 {
 }
 
 func (o *oracle) WaitForTs(ctx context.Context, namespace string, startTs uint64) error {
+	y.AssertTrue(namespace != "")
 	o.Lock()
-	defer o.Unlock()
 	ch, ok := o.addToWaiters(namespace, startTs)
+	o.Unlock()
 	if !ok {
 		return nil
 	}
@@ -235,10 +237,10 @@ func (o *oracle) WaitForTs(ctx context.Context, namespace string, startTs uint64
 }
 
 func (o *oracle) WaitForAllNamespace(ctx context.Context, startTs uint64) error {
-	o.Lock()
-	defer o.Unlock()
 	for namespace := range o.waiters {
+		o.Lock()
 		ch, ok := o.addToWaiters(namespace, startTs)
+		o.Unlock()
 		if !ok {
 			continue
 		}

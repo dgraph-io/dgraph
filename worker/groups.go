@@ -222,6 +222,7 @@ func (g *groupi) proposeInitialSchema() {
 func (g *groupi) upsertSchema(namespace string, sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
+	m.Namespace = namespace
 	// schema for a reserved predicate is not changed once set.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	ts, err := Timestamps(ctx, &pb.Num{Val: 1, Namespace: namespace})
@@ -910,6 +911,8 @@ func (g *groupi) processOracleDeltaStream() {
 			batchCount := make(map[string]uint64)
 			select {
 			case delta := <-deltaCh:
+
+				fmt.Printf("deltas 2 %+v \n", delta)
 				if delta == nil {
 					return
 				}
@@ -992,7 +995,6 @@ func (g *groupi) processOracleDeltaStream() {
 					glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
 						" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 				}
-				delete(deltas, namespace)
 			}
 
 		}

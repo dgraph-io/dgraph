@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -434,7 +435,9 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		res.ctx = &api.TxnContext{}
+		res.ctx = &api.TxnContext{
+			Namespace: m.Namespace,
+		}
 		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
 		chr <- res
 		return
@@ -481,7 +484,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 
 		mu := mm[gid]
 		if mu == nil {
-			mu = &pb.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
@@ -496,7 +499,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 
 		mu := mm[gid]
 		if mu == nil {
-			mu = &pb.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 			mm[gid] = mu
 		}
 		mu.Schema = append(mu.Schema, schema)
@@ -506,7 +509,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
-				mu = &pb.Mutations{GroupId: gid}
+				mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 				mm[gid] = mu
 			}
 			mu.DropOp = src.DropOp
@@ -519,7 +522,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
-				mu = &pb.Mutations{GroupId: gid}
+				mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 				mm[gid] = mu
 			}
 			mu.Types = src.Types
@@ -537,6 +540,7 @@ type res struct {
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	y.AssertTrue(m.Namespace != "")
 	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
 	defer span.End()
 

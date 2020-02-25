@@ -69,6 +69,7 @@ func (o *Oracle) Init() {
 	wm := &y.WaterMark{}
 	wm.Init(nil, true)
 	o.doneUntil[x.DefaultNamespace] = wm
+	o.maxAssigned[x.DefaultNamespace] = 0
 	go o.sendDeltasToSubscribers()
 }
 
@@ -134,14 +135,14 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 func (o *Oracle) currentState() []*pb.OracleDelta {
 	o.AssertRLock()
 	out := []*pb.OracleDelta{}
-	for namespace, commits := range o.commits {
+	for namespace, maxAssigned := range o.maxAssigned {
 		delta := &pb.OracleDelta{
 			Namespace:   namespace,
-			MaxAssigned: o.maxAssigned[namespace],
+			MaxAssigned: maxAssigned,
 		}
-		for startTs, commitTs := range commits {
+		for start, commit := range o.commits[namespace] {
 			delta.Txns = append(delta.Txns,
-				&pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
+				&pb.TxnStatus{StartTs: start, CommitTs: commit})
 		}
 		out = append(out, delta)
 	}
