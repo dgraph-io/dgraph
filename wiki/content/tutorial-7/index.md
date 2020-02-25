@@ -7,8 +7,8 @@ title = "Getting started with Dgraph - Fuzzy Search on Social Graphs"
 In the [previous tutorial]({{< relref "tutorial-6/index.md" >}}), we learned about
 building advanced text searches on social graphs in Dgraph, by modeling tweets
 as an example.
-We queried the tweets using the `full-text` and `trigram` indices and implemented
-`full-text` and `regular-expression` based search on the tweets.
+We queried the tweets using the `fulltext` and `trigram` indices and implemented
+full-text and regular expression search on the tweets.
 
 In this tutorial, we'll continue exploring Dgraph's string querying
 capabilities using the twitter model from [the fifth]({{< relref "tutorial-5/index.md" >}})
@@ -276,10 +276,10 @@ effectiveness of fuzzy search.
 At Dgraph, we're committed to improving the all-round capabilities of the distributed Graph
 database. As part of one of our recent efforts to improve the database features, we've taken
 note of the [request on Github](https://github.com/dgraph-io/dgraph/issues/3211) by one of
-our community members to integrate a `tf-df` score based text search. This integration will
+our community members to integrate a `tf-idf` score based text search. This integration will
 further enhance the search capabilities of Dgraph.
 
-We've prioritized this issue for the upcoming v1.2 release of Dgraph.
+We've prioritized the resolve of the issue in our product roadmap.
 We would like to take this opportunity to say thank you to our community
 of users for helping us make the product better.
 
