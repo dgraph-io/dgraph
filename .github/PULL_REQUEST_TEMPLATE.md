@@ -1,5 +1,5 @@
 <!-- Please, fill up the PR details. -->
-<!-- If you are a Dgraph engineer, please add this param at the end of your URL query `&template=DgraphPR`.md-->
+<!-- If you are a Dgraph engineer, please add this param at the end of your URL query `&template=DgraphPR.md` -->
 <!-- e.g: https://github.com/dgraph-io/dgraph/compare/$YOURBRANCH?expand=1&template=DgraphPR.md -->
 
 ### Dear contributor, what does this PR do?
