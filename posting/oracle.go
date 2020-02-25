@@ -75,7 +75,7 @@ func NewTxn(startTs uint64) *Txn {
 func (txn *Txn) ClearCache() {
 	txn.Lock()
 	defer txn.Unlock()
-	txn.cache.plists = nil
+	txn.cache.plists = make(map[string]*List)
 }
 
 // Get retrieves the posting list for the given list from the local cache.

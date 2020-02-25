@@ -196,7 +196,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
-	num := 100
+	num := 10
 
 	n := &node{
 		Node: m,
@@ -205,10 +205,12 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []*pb.Proposal, 1000),
-		rollupCh: make(chan uint64, 3),
-		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
+		applyCh:    make(chan []*pb.Proposal, 1000),
+		rollupCh:   make(chan uint64, 3),
+		proposalCh: make(chan batch, num),
+		commitCh:   make(chan commitBatch, num*20),
+		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:     y.NewCloser(3), // Matches CLOSER:1
 	}
 	if x.WorkerConfig.LudicrousMode {
 		n.ex = newExecutor()
