@@ -51,6 +51,18 @@ import (
 	"golang.org/x/net/trace"
 )
 
+type commitBatch struct {
+	wg *sync.WaitGroup
+	ts uint64
+}
+
+type batch struct {
+	data []*pb.DirectedEdge
+	ctx  context.Context
+	txn  *posting.Txn
+	wg   *sync.WaitGroup
+}
+
 type node struct {
 	*conn.Node
 
@@ -60,6 +72,9 @@ type node struct {
 	ctx      context.Context
 	gid      uint32
 	closer   *y.Closer
+
+	proposalCh chan batch
+	commitCh   chan commitBatch
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -82,6 +97,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
+	num := 100
+
 	n := &node{
 		Node: m,
 		ctx:  context.Background(),
@@ -89,11 +106,72 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []*pb.Proposal, 1000),
-		rollupCh: make(chan uint64, 3),
-		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
+		applyCh:    make(chan []*pb.Proposal, 1000),
+		rollupCh:   make(chan uint64, 3),
+		proposalCh: make(chan batch, num),
+		commitCh:   make(chan commitBatch, num),
+		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:     y.NewCloser(3), // Matches CLOSER:1
 	}
+
+	process := func(b batch) error {
+		var retries int
+		for _, edge := range b.data {
+			for {
+				err := runMutation(b.ctx, edge, b.txn)
+				if err == nil {
+					break
+				}
+				if err != posting.ErrRetry {
+					return err
+				}
+				retries++
+			}
+		}
+		b.wg.Done()
+		return nil
+	}
+
+	commit := func(b commitBatch) {
+		b.wg.Wait()
+		writer := posting.NewTxnWriter(pstore)
+		toDisk := func(start, commit uint64) {
+			txn := posting.Oracle().GetTxn(start)
+			if txn == nil {
+				return
+			}
+			txn.Update()
+			err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
+				return txn.CommitToDisk(writer, commit)
+			})
+
+			if err != nil {
+				glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+					start, commit, err)
+			}
+
+			txn.ClearCache()
+		}
+
+		toDisk(b.ts, b.ts)
+	}
+
+	for i := 0; i < num; i++ {
+		go func() {
+			for j := range n.proposalCh {
+				process(j)
+			}
+		}()
+	}
+
+	for i := 0; i < 1; i++ {
+		go func() {
+			for j := range n.commitCh {
+				commit(j)
+			}
+		}()
+	}
+
 	return n
 }
 
@@ -309,6 +387,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return nil
 	}
+
+	processL := func(edges []*pb.DirectedEdge, wg *sync.WaitGroup) error {
+		n.proposalCh <- batch{data: edges, ctx: ctx, txn: txn, wg: wg}
+		return nil
+	}
+
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
@@ -324,15 +408,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			end = len(m.Edges)
 		}
 		wg.Add(1)
-		go func(start, end int, wg *sync.WaitGroup) {
-			if !x.WorkerConfig.LudicrousMode {
+		if !x.WorkerConfig.LudicrousMode {
+			go func(start, end int, wg *sync.WaitGroup) {
 				errCh <- process(m.Edges[start:end])
-			} else {
-				// TODO: Log error if any.
-				process(m.Edges[start:end])
-				wg.Done()
-			}
-		}(start, end, &wg)
+			}(start, end, &wg)
+		} else {
+			processL(m.Edges[start:end], &wg)
+		}
 	}
 
 	if !x.WorkerConfig.LudicrousMode {
@@ -344,28 +426,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	go func(wg *sync.WaitGroup) {
-		wg.Wait()
-		writer := posting.NewTxnWriter(pstore)
-		toDisk := func(start, commit uint64) {
-			txn := posting.Oracle().GetTxn(start)
-			if txn == nil {
-				return
-			}
-			txn.Update()
-			err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-				return txn.CommitToDisk(writer, commit)
-			})
-
-			if err != nil {
-				glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-					start, commit, err)
-			}
-		}
-
-		toDisk(proposal.Mutations.StartTs, proposal.Mutations.StartTs)
-
-	}(&wg)
+	n.commitCh <- commitBatch{wg: &wg, ts: proposal.Mutations.StartTs}
 	return nil
 }
 
