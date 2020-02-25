@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -203,6 +204,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 
 	// updateDelta will batch the incoming delta for the given namespace.
 	updateDelta := func(update *pb.OracleDelta) {
+		fmt.Printf("update %+v \n", update)
 		y.AssertTrue(update.Namespace != "")
 		delta, ok := deltas[update.GetNamespace()]
 		if !ok {
@@ -313,6 +315,7 @@ func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
 		delta := new(pb.OracleDelta)
+		y.AssertTrue(src.Namespace != "")
 		delta.Namespace = src.Namespace
 		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  src.StartTs,

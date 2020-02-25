@@ -92,10 +92,11 @@ var (
 type Server struct{}
 
 func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(namespace, false)}
 	schemas := schema.InitialSchema(namespace)
 	m.Schema = schemas
-	_, err := query.ApplyMutations(ctx, namespace, m)
+	m.Namespace = namespace
+	_, err := query.ApplyMutations(ctx, m)
 	return err
 }
 
@@ -176,14 +177,17 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	m := &pb.Mutations{
+		StartTs:   worker.State.GetTimestamp(op.Namespace, false),
+		Namespace: op.Namespace,
+	}
 	if isDropAll(op) {
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
 
 		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
 		ResetAcl()
@@ -196,7 +200,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop data operation
 		ResetAcl()
@@ -236,7 +240,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, op.Namespace, m)
+		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
@@ -247,7 +251,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = x.NamespaceAttr(op.Namespace, op.DropValue)
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
@@ -287,7 +291,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 	}
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, op.Namespace, m)
+	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
 
@@ -346,10 +350,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		Metadata: &pb.Metadata{
 			PredHints: predHints,
 		},
+		Namespace: qc.namespace,
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, qc.namespace, m)
+	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 	if !qc.req.CommitNow {
 		if err == zero.ErrConflict {
@@ -836,7 +841,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
+		req.StartTs = worker.State.GetTimestamp(qc.namespace, false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
@@ -897,7 +902,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
+		qc.req.StartTs = worker.State.GetTimestamp(qc.namespace, qc.req.ReadOnly)
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 

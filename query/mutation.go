@@ -36,8 +36,8 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context,
-	namespace string, m *pb.Mutations) (*api.TxnContext, error) {
-	edges, err := expandEdges(ctx, namespace, m)
+	m *pb.Mutations) (*api.TxnContext, error) {
+	edges, err := expandEdges(ctx, m.Namespace, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}

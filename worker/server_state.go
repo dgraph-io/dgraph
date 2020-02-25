@@ -176,8 +176,10 @@ func (s *ServerState) Dispose() {
 	}
 }
 
-func (s *ServerState) GetTimestamp(readOnly bool) uint64 {
-	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
+func (s *ServerState) GetTimestamp(namespace string, readOnly bool) uint64 {
+	// We can get timestamp only for transaction, so namespace is mandatory.
+	y.AssertTrue(namespace != "")
+	tr := tsReq{readOnly: readOnly, ch: make(chan uint64), namespace: namespace}
 	s.needTs <- tr
 	return <-tr.ch
 }
@@ -188,16 +190,18 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
-	var reqs []tsReq
+	batchedReqs := make(map[string][]tsReq)
 	for {
 		// Reset variables.
-		reqs = reqs[:0]
+		for namespace, reqs := range batchedReqs {
+			batchedReqs[namespace] = reqs[:0]
+		}
 		delay := initDelay
 
 		req := <-s.needTs
 	slurpLoop:
 		for {
-			reqs = append(reqs, req)
+			batchedReqs[req.namespace] = append(batchedReqs[req.namespace], req)
 			select {
 			case req = <-s.needTs:
 			default:
@@ -205,46 +209,53 @@ func (s *ServerState) fillTimestampRequests() {
 			}
 		}
 
-		// Generate the request.
-		num := &pb.Num{}
-		for _, r := range reqs {
-			if r.readOnly {
-				num.ReadOnly = true
-			} else {
-				num.Val++
+		// TODO: Now we are creating seperate request for each timestamp. But, we can batch all the
+		// namespaces in a single request. I'm ignoring because, we can opmimize this later.
+		for namespace, reqs := range batchedReqs {
+			// Generate the request.
+			num := &pb.Num{
+				Namespace: namespace,
 			}
-		}
+			for _, r := range reqs {
+				if r.readOnly {
+					num.ReadOnly = true
+				} else {
+					num.Val++
+				}
+			}
 
-		// Execute the request with infinite retries.
-	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ts, err := Timestamps(ctx, num)
-		cancel()
-		if err != nil {
-			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
-				" Will retry...\n", err, delay)
-			time.Sleep(delay)
-			delay *= 2
-			if delay > maxDelay {
-				delay = maxDelay
+			// Execute the request with infinite retries.
+		retry:
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ts, err := Timestamps(ctx, num)
+			cancel()
+			if err != nil {
+				glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
+					" Will retry...\n", err, delay)
+				time.Sleep(delay)
+				delay *= 2
+				if delay > maxDelay {
+					delay = maxDelay
+				}
+				goto retry
 			}
-			goto retry
-		}
-		var offset uint64
-		for _, req := range reqs {
-			if req.readOnly {
-				req.ch <- ts.ReadOnly
-			} else {
-				req.ch <- ts.StartId + offset
-				offset++
+			var offset uint64
+			for _, req := range reqs {
+				if req.readOnly {
+					req.ch <- ts.ReadOnly
+				} else {
+					req.ch <- ts.StartId + offset
+					offset++
+				}
 			}
+			x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
 		}
-		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
 	}
 }
 
 type tsReq struct {
 	readOnly bool
 	// A one-shot chan which we can send a txn timestamp upon.
-	ch chan uint64
+	ch        chan uint64
+	namespace string
 }
