@@ -134,10 +134,16 @@ func saveKey(priv crypto.PrivKey, fp string) (err error) {
 	return f.Close()
 }
 
-// encodeMessageLEB128 applies leb128 variable-length encoding
-func encodeMessageLEB128(encMsg []byte) []byte {
-	out := leb128.FromUInt64(uint64(len(encMsg)))
-	return append(out, encMsg...)
+// uint64ToLEB128 applies leb128 variable-length encoding to a uint64
+//nolint:deadcode
+func uint64ToLEB128(in uint64) []byte { //nolint:unused
+	return leb128.FromUInt64(in)
+}
+
+// LEB128ToUint64 decodes a leb128 variable-length encoded byte array into a uint64
+//nolint:deadcode
+func LEB128ToUint64(in []byte) uint64 { //nolint:unused
+	return leb128.ToUInt64(in)
 }
 
 // decodeMessage decodes the message based on message type

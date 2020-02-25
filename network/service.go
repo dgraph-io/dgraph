@@ -135,7 +135,7 @@ func (s *Service) receiveCoreMessages() {
 		// receive message from core service
 		msg := <-s.msgRec
 
-		log.Trace(
+		log.Debug(
 			"Broadcasting message from core service",
 			"host", s.host.id(),
 			"type", msg.GetType(),
@@ -183,12 +183,7 @@ func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 	r := bufio.NewReader(stream)
 
 	for {
-		// read leb128 variable-length encoding
-		_, err := common.ReadByte(r)
-		if err != nil {
-			log.Error("Failed to read message encoding", "peer", peer, "err", err)
-			return // exit
-		}
+		// TODO: re-add leb128 variable-length encoding #484
 
 		// decode message based on message type
 		msg, err := decodeMessage(r)

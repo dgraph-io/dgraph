@@ -142,6 +142,10 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 
 	encMsg = append(encMsg, bm.RequestedData)
 
+	if len(bm.StartingBlock) == 0 {
+		return nil, fmt.Errorf("invalid BlockRequestMessage")
+	}
+
 	if bm.StartingBlock[0] == 1 {
 		encMsg = append(encMsg, bm.StartingBlock[0])
 		num := bm.StartingBlock[1:]

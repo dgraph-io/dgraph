@@ -152,6 +152,8 @@ func (b *Session) SetEpochData(data *NextEpochDescriptor) error {
 func (b *Session) setAuthorityIndex() error {
 	pub := b.keypair.Public()
 
+	log.Debug("[babe]", "authority key", pub.Hex(), "authorities", b.authorityData)
+
 	for i, auth := range b.authorityData {
 		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
 			b.authorityIndex = uint64(i)

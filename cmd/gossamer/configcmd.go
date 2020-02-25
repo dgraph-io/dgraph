@@ -273,7 +273,8 @@ func createNetworkService(fig *cfg.Config, gendata *genesis.Data, stateService *
 func createCoreService(coreConfig *core.Config) *core.Service {
 	coreService, err := core.NewService(coreConfig)
 	if err != nil {
-		log.Error("Failed to create new core service", "err", err)
+		log.Crit("Failed to create new core service", "err", err)
+		os.Exit(0)
 	}
 
 	return coreService

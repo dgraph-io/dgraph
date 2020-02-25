@@ -18,12 +18,14 @@ package core
 
 import (
 	"errors"
+	"fmt"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/runtime"
+	log "github.com/ChainSafe/log15"
 )
 
 // runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction
@@ -71,6 +73,7 @@ func (s *Service) grandpaAuthorities() ([]*babe.AuthorityData, error) {
 	authsRaw := make([]*babe.AuthorityDataRaw, len(keys))
 
 	for i, key := range keys {
+		log.Debug("[core] babe authority", "key", fmt.Sprintf("0x%x", key))
 		authsRaw[i] = &babe.AuthorityDataRaw{
 			ID:     key,
 			Weight: 1,
