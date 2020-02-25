@@ -1,5 +1,5 @@
 +++
-title = "Getting started with Dgraph - Advanced text search on social graphs"
+title = "Getting started with Dgraph - Advanced Text Search on Social Graphs"
 +++
 
 **Welcome to the sixth tutorial of getting started with Dgraph.**
