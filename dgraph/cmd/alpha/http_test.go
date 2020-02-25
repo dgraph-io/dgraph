@@ -737,7 +737,7 @@ func TestHealth(t *testing.T) {
 
 func setDrainingMode(t *testing.T, enable bool) {
 	drainingRequest := `mutation drain($enable: Boolean) {
-		draining(input: {enable: $enable}) {
+		draining(enable: $enable) {
 			response {
 				code
 			}

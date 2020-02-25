@@ -158,3 +158,33 @@
         Category2 as Post.category
       }
     }
+
+-
+  name: "Delete mutation on a type with a field with reverse predicate"
+  gqlmutation: |
+    mutation deleteMovie($filter: MovieFilter!) {
+      deleteMovie(filter: $filter) {
+        msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(MovieDirector1)",
+            "directed.movies": [{ "uid": "uid(x)" }]
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteMovie(func: uid(0x1, 0x2)) @filter(type(Movie)) {
+        uid
+        MovieDirector1 as ~directed.movies
+      }
+    }

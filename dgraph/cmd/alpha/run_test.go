@@ -229,12 +229,13 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
+
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]}}`, output)
+			"list":true}],`+x.InitialTypes+`}}`, output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -1065,7 +1066,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
-			"list":true}]}}`, res)
+			"list":true}],`+x.InitialTypes+`}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1312,7 +1313,7 @@ func TestDropAll(t *testing.T) {
 		`{"data":{"schema":[`+
 			x.AclPredicates+","+x.GraphqlPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
-				"list":true}]}}`, output)
+				"list":true}],`+x.InitialTypes+`}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)

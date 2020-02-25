@@ -18,11 +18,17 @@ package alpha
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"strconv"
 
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
@@ -38,6 +44,114 @@ func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[stri
 		return false
 	}
 	return true
+}
+
+func drainingHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut, http.MethodPost:
+		enableStr := r.URL.Query().Get("enable")
+
+		enable, err := strconv.ParseBool(enableStr)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Found invalid value for the enable parameter")
+			return
+		}
+
+		x.UpdateDrainingMode(enable)
+		_, err = w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
+			`"message": "draining mode has been set to %v"}`, enable)))
+		if err != nil {
+			glog.Errorf("Failed to write response: %v", err)
+		}
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodGet: true,
+	}) {
+		return
+	}
+
+	close(worker.ShutdownCh)
+	w.Header().Set("Content-Type", "application/json")
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
+}
+
+func exportHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodGet: true,
+	}) {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
+		return
+	}
+
+	format := worker.DefaultExportFormat
+	if vals, ok := r.Form["format"]; ok {
+		if len(vals) > 1 {
+			x.SetHttpStatus(w, http.StatusBadRequest,
+				"Only one export format may be specified.")
+			return
+		}
+		format = worker.NormalizeExportFormat(vals[0])
+		if format == "" {
+			x.SetHttpStatus(w, http.StatusBadRequest, "Invalid export format.")
+			return
+		}
+	}
+	if err := worker.ExportOverNetwork(context.Background(), format); err != nil {
+		x.SetStatus(w, err.Error(), "Export failed.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
+}
+
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		memoryLimitGetHandler(w, r)
+	case http.MethodPut:
+		memoryLimitPutHandler(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	memoryMB, err := strconv.ParseFloat(string(body), 64)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := worker.UpdateLruMb(memoryMB); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
+	posting.Config.Lock()
+	memoryMB := posting.Config.AllottedMemory
+	posting.Config.Unlock()
+
+	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func ipInIPWhitelistRanges(ipString string) bool {

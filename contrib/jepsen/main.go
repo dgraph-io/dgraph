@@ -63,8 +63,8 @@ type jepsenTest struct {
 }
 
 var (
-	errTestFail       = errors.New("Test Failed")
-	errTestIncomplete = errors.New("Test Incomplete")
+	errTestFail       = errors.New("test failed")
+	errTestIncomplete = errors.New("test incomplete")
 )
 
 var (
@@ -247,6 +247,7 @@ func jepsenServe() error {
 					return
 				}
 			default:
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()

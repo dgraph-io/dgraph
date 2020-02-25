@@ -13,6 +13,7 @@
 package cmd
 
 import (
+	acl "github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/ee/backup"
 )
 
@@ -21,5 +22,6 @@ func init() {
 	subcommands = append(subcommands,
 		&backup.Restore,
 		&backup.LsBackup,
+		&acl.CmdAcl,
 	)
 }
