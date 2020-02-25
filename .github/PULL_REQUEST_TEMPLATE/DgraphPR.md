@@ -8,7 +8,7 @@
 
 <!-- Add here. -->
 
-### Other components affected. (or regression areas)
+### Other components or 3rd party tools affected (or regression areas).
 
 <!-- Add here. -->
 
@@ -24,14 +24,20 @@
 
 <!-- Add here. -->
 
-### breaking change?
+### Please indicate if this is a breaking change.
 
 <!-- Add here. -->
 
-### enterprise?
+### Please indicate if this is an enterprise feature.
 
 <!-- Add here. -->
 
-### Did you update the changelog?
+### Please indicate if documentation needs to be updated.
 
-<!-- Add here. -->
+<!-- If yes indicate the documentation issue number. Add here. -->
+<!--or create one and add the number here -->
+
+### Please indicate if end to end testing is needed.
+
+<!-- if yes indicate the testing issue number -->
+<!--or create one and add the number here -->

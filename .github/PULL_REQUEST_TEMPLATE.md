@@ -1,4 +1,6 @@
 <!-- Please, fill up the PR details. -->
+<!-- If you are a Dgraph engineer, please add this param at the end of your URL query `&template=DgraphPR`.md-->
+<!-- e.g: https://github.com/dgraph-io/dgraph/compare/$YOURBRANCH?expand=1&template=DgraphPR.md -->
 
 ### Dear contributor, what does this PR do?
 
@@ -6,13 +8,15 @@
 
 ### Motivation
 
-<!-- Besides the motivation itself, if applicable, you should add references. e.g public conversations (URL) in the community. This helps reviewers with context. You should also advocate for the PR if needed. You can ping Daniel, Michel or Santo if you need help. -->
+<!-- Besides the motivation itself, if applicable, you should add references. e.g public conversations (URL) in the community. This helps reviewers with context. You should also advocate for the PR if needed. You can ping Daniel, Karthic, Michel or Santo if you need help. -->
 
 ### Components affected by this PR <!-- (Optional) -->
 
 <!-- Please, take a minute to think about what or who this PR affects. Does it need help for doing documentation? Does it affect third parties (Open Source or not) applications? Make it clear so we can track and fix it. -->
 
-<!-- Does this PR break backwards compatibility? (Optional) -->
+### Does this PR break backwards compatibility?  <!-- (Optional) -->
+
+<!-- Yes/no, and details if needed. -->
 
 ### Fixes <!-- (Optional) -->
 
