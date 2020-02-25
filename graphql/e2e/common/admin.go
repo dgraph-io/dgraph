@@ -17,8 +17,10 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/gogo/protobuf/jsonpb"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -378,4 +380,165 @@ func health(t *testing.T) {
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// The GraphQL /admin state result should be the same as /state
+func adminState(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+			state {
+				counter
+				groups {
+					id
+					members {
+						id
+						groupId
+						addr
+						leader
+						amDead
+						lastUpdate
+						clusterInfoOnly
+						forceGroupId
+					}
+					tablets {
+						groupId
+						predicate
+						force
+						space
+						remove
+						readOnly
+						moveTs
+					}
+					snapshotTs
+					checksum
+				}
+				zeros {
+					id
+					groupId
+					addr
+					leader
+					amDead
+					lastUpdate
+					clusterInfoOnly
+					forceGroupId
+				}
+				maxLeaseId
+				maxTxnTs
+				maxRaftId
+				removed {
+					id
+					groupId
+					addr
+					leader
+					amDead
+					lastUpdate
+					clusterInfoOnly
+					forceGroupId
+				}
+				cid
+				license {
+					user
+					expiryTs
+					enabled
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		State struct {
+			Counter uint64
+			Groups  []struct {
+				Id         uint32
+				Members    []*pb.Member
+				Tablets    []*pb.Tablet
+				SnapshotTs uint64
+				Checksum   uint64
+			}
+			Zeros      []*pb.Member
+			MaxLeaseId uint64
+			MaxTxnTs   uint64
+			MaxRaftId  uint64
+			Removed    []*pb.Member
+			Cid        string
+			License    struct {
+				User     string
+				ExpiryTs int64
+				Enabled  bool
+			}
+		}
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	var state pb.MembershipState
+	resp, err := http.Get(adminDgraphStateURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	healthRes, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(healthRes), &state))
+
+	require.Equal(t, state.Counter, result.State.Counter)
+	for _, group := range result.State.Groups {
+		require.Contains(t, state.Groups, group.Id)
+		expectedGroup := state.Groups[group.Id]
+
+		for _, member := range group.Members {
+			require.Contains(t, expectedGroup.Members, member.Id)
+			expectedMember := expectedGroup.Members[member.Id]
+
+			require.Equal(t, expectedMember.Id, member.Id)
+			require.Equal(t, expectedMember.GroupId, member.GroupId)
+			require.Equal(t, expectedMember.Addr, member.Addr)
+			require.Equal(t, expectedMember.Leader, member.Leader)
+			require.Equal(t, expectedMember.AmDead, member.AmDead)
+			require.Equal(t, expectedMember.LastUpdate, member.LastUpdate)
+			require.Equal(t, expectedMember.ClusterInfoOnly, member.ClusterInfoOnly)
+			require.Equal(t, expectedMember.ForceGroupId, member.ForceGroupId)
+		}
+
+		for _, tablet := range group.Tablets {
+			require.Contains(t, expectedGroup.Tablets, tablet.Predicate)
+			expectedTablet := expectedGroup.Tablets[tablet.Predicate]
+
+			require.Equal(t, expectedTablet.GroupId, tablet.GroupId)
+			require.Equal(t, expectedTablet.Predicate, tablet.Predicate)
+			require.Equal(t, expectedTablet.Force, tablet.Force)
+			require.Equal(t, expectedTablet.Space, tablet.Space)
+			require.Equal(t, expectedTablet.Remove, tablet.Remove)
+			require.Equal(t, expectedTablet.ReadOnly, tablet.ReadOnly)
+			require.Equal(t, expectedTablet.MoveTs, tablet.MoveTs)
+		}
+
+		require.Equal(t, expectedGroup.SnapshotTs, group.SnapshotTs)
+		//require.Equal(t, expectedGroup.Checksum, group.Checksum)
+	}
+	for _, zero := range result.State.Zeros {
+		require.Contains(t, state.Zeros, zero.Id)
+		expectedZero := state.Zeros[zero.Id]
+
+		require.Equal(t, expectedZero.Id, zero.Id)
+		require.Equal(t, expectedZero.GroupId, zero.GroupId)
+		require.Equal(t, expectedZero.Addr, zero.Addr)
+		require.Equal(t, expectedZero.Leader, zero.Leader)
+		require.Equal(t, expectedZero.AmDead, zero.AmDead)
+		require.Equal(t, expectedZero.LastUpdate, zero.LastUpdate)
+		require.Equal(t, expectedZero.ClusterInfoOnly, zero.ClusterInfoOnly)
+		require.Equal(t, expectedZero.ForceGroupId, zero.ForceGroupId)
+	}
+	require.Equal(t, state.MaxLeaseId, result.State.MaxLeaseId)
+	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)
+	require.Equal(t, state.MaxRaftId, result.State.MaxRaftId)
+	require.True(t, len(state.Removed) == len(result.State.Removed))
+	if len(state.Removed) != 0 {
+		require.Equal(t, state.Removed, result.State.Removed)
+	}
+	require.Equal(t, state.Cid, result.State.Cid)
+	require.Equal(t, state.License.User, result.State.License.User)
+	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
+	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
 }
