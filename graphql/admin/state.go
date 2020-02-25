@@ -37,7 +37,7 @@ type clusterGroup struct {
 	Checksum   uint64       `json:"checksum,omitempty"`
 }
 
-func (hr *stateResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
+func (hr *stateResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
 	return nil, nil
 }
 
