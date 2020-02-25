@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/rpc/modules"
 	log "github.com/ChainSafe/log15"
 )
@@ -40,11 +39,23 @@ type CodecRequest interface {
 	WriteError(w http.ResponseWriter, status int, err error)
 }
 
+// ServerConfig configures the server
+type ServerConfig struct {
+	BlockAPI   modules.BlockAPI
+	StorageAPI modules.StorageAPI
+	NetworkAPI modules.NetworkAPI
+	CoreAPI    modules.CoreAPI
+	Modules    []string
+}
+
 // Server is an RPC server.
 type Server struct {
-	codec    Codec       // Codec for requests/responses (default JSON)
-	services *serviceMap // Maps requests to actual procedure calls
-	api      *api.API    // API interface for system internals
+	codec      Codec       // Codec for requests/responses (default JSON)
+	services   *serviceMap // Maps requests to actual procedure calls
+	blockAPI   modules.BlockAPI
+	storageAPI modules.StorageAPI
+	networkAPI modules.NetworkAPI
+	coreAPI    modules.CoreAPI
 }
 
 // NewServer creates a new Server.
@@ -54,26 +65,29 @@ func NewServer() *Server {
 	}
 }
 
-// NewAPIServer creates a new Server.
-func NewAPIServer(mods []api.Module, api *api.API) *Server {
+// NewStateServer creates a new Server that interfaces with the state service.
+func NewStateServer(cfg *ServerConfig) *Server {
 	s := &Server{
-		services: new(serviceMap),
-		api:      api,
+		services:   new(serviceMap),
+		blockAPI:   cfg.BlockAPI,
+		storageAPI: cfg.StorageAPI,
+		networkAPI: cfg.NetworkAPI,
+		coreAPI:    cfg.CoreAPI,
 	}
 
-	s.RegisterModules(mods)
+	s.RegisterModules(cfg.Modules)
 
 	return s
 }
 
 // RegisterModules registers the RPC services associated with the given API modules
-func (s *Server) RegisterModules(mods []api.Module) {
+func (s *Server) RegisterModules(mods []string) {
 	for _, mod := range mods {
 		log.Debug("[rpc] Enabling rpc module", "module", mod)
 		var srvc interface{}
 		switch mod {
 		case "system":
-			srvc = modules.NewSystemModule(s.api)
+			srvc = modules.NewSystemModule(s.networkAPI)
 		default:
 			log.Warn("[rpc] Unrecognized module", "module", mod)
 			continue
@@ -94,8 +108,8 @@ func (s *Server) RegisterCodec(codec Codec) {
 }
 
 // RegisterService adds a service to the servers service map.
-func (s *Server) RegisterService(receiver interface{}, name api.Module) error {
-	return s.services.register(receiver, string(name))
+func (s *Server) RegisterService(receiver interface{}, name string) error {
+	return s.services.register(receiver, name)
 }
 
 // ServeHTTP handles http requests to the RPC server.

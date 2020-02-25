@@ -17,74 +17,45 @@
 package modules
 
 import (
+	"os"
+	"path"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/internal/api"
-	module "github.com/ChainSafe/gossamer/internal/api/modules"
+	"github.com/ChainSafe/gossamer/network"
+	"github.com/ChainSafe/gossamer/state"
 )
 
 var (
-	testRuntimeChain      = "Chain"
-	testRuntimeName       = "Gossamer"
-	testRuntimeProperties = "Properties"
-	testRuntimeVersion    = "0.0.1"
-	testHealth            = common.Health{}
-	testNetworkState      = common.NetworkState{}
-	testPeers             = append([]common.PeerInfo{}, common.PeerInfo{})
+	testHealth = common.Health{
+		Peers:           0,
+		IsSyncing:       false,
+		ShouldHavePeers: true,
+	}
+	testPeers = []common.PeerInfo{}
 )
 
-// Mock runtime API
-type MockRuntimeAPI struct{}
+func newNetworkService(t *testing.T) *network.Service {
+	testDir := path.Join(os.TempDir(), "test_data")
 
-// Chain is a mock func that returns testRuntimeChain
-func (r *MockRuntimeAPI) Chain() string {
-	return testRuntimeChain
-}
-
-// Name is a mock func that returns testRuntimeName
-func (r *MockRuntimeAPI) Name() string {
-	return testRuntimeName
-}
-
-// Properties is a mock func that returns testRuntimeProperties
-func (r *MockRuntimeAPI) Properties() string {
-	return testRuntimeProperties
-}
-
-// Version is a mock func that returns testRuntimeVersion
-func (r *MockRuntimeAPI) Version() string {
-	return testRuntimeVersion
-}
-
-// Mock network API
-type MockNetworkAPI struct{}
-
-func (n *MockNetworkAPI) Health() common.Health {
-	return testHealth
-}
-
-func (n *MockNetworkAPI) NetworkState() common.NetworkState {
-	return testNetworkState
-}
-
-func (n *MockNetworkAPI) Peers() []common.PeerInfo {
-	return testPeers
-}
-
-func newMockAPI() *api.API {
-	networkAPI := &MockNetworkAPI{}
-	runtimeAPI := &MockRuntimeAPI{}
-
-	return &api.API{
-		NetworkModule: module.NewNetworkModule(networkAPI),
-		RuntimeModule: module.NewRuntimeModule(runtimeAPI),
+	cfg := &network.Config{
+		NoStatus:     true,
+		NetworkState: &state.NetworkState{},
+		DataDir:      testDir,
 	}
+
+	srv, err := network.NewService(cfg, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return srv
 }
 
 // Test RPC's System.Health() response
 func TestSystemModule_Health(t *testing.T) {
-	sys := NewSystemModule(newMockAPI())
+	net := newNetworkService(t)
+	sys := NewSystemModule(net)
 
 	res := &SystemHealthResponse{}
 	sys.Health(nil, nil, res)
@@ -96,19 +67,23 @@ func TestSystemModule_Health(t *testing.T) {
 
 // Test RPC's System.NetworkState() response
 func TestSystemModule_NetworkState(t *testing.T) {
-	sys := NewSystemModule(newMockAPI())
+	net := newNetworkService(t)
+	sys := NewSystemModule(net)
 
 	res := &SystemNetworkStateResponse{}
 	sys.NetworkState(nil, nil, res)
 
-	if res.NetworkState != testNetworkState {
+	testNetworkState := net.NetworkState()
+
+	if res.NetworkState != *testNetworkState {
 		t.Errorf("System.NetworkState: expected: %+v got: %+v\n", testNetworkState, res.NetworkState)
 	}
 }
 
 // Test RPC's System.Peers() response
 func TestSystemModule_Peers(t *testing.T) {
-	sys := NewSystemModule(newMockAPI())
+	net := newNetworkService(t)
+	sys := NewSystemModule(net)
 
 	res := &SystemPeersResponse{}
 	sys.Peers(nil, nil, res)

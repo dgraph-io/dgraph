@@ -23,18 +23,8 @@ import (
 	"github.com/ChainSafe/gossamer/core/types"
 )
 
-// MockBlockState
+// MockBlockState ...
 type MockBlockState struct{}
-
-// AddBlock for MockBlockState
-func (mbs *MockBlockState) AddBlock(*types.Block) error {
-	return nil
-}
-
-// SetBlock for MockBlockState
-func (mbs *MockBlockState) SetBlock(*types.Block) error {
-	return nil
-}
 
 // LatestHeader for MockBlockState
 func (mbs *MockBlockState) LatestHeader() *types.Header {
@@ -60,43 +50,5 @@ func (mbs *MockBlockState) LatestHeader() *types.Header {
 	}
 }
 
-// MockNetworkState
+// MockNetworkState ...
 type MockNetworkState struct{}
-
-// GetHealth for MockNetworkState
-func (mbs *MockNetworkState) GetHealth() (*common.Health, error) {
-	return &common.Health{}, nil
-}
-
-// GetNetworkState for MockNetworkState
-func (mbs *MockNetworkState) GetNetworkState() (*common.NetworkState, error) {
-	return &common.NetworkState{}, nil
-}
-
-// GetPeers for MockNetworkState
-func (mbs *MockNetworkState) GetPeers() (*[]common.PeerInfo, error) {
-	return &[]common.PeerInfo{}, nil
-}
-
-// SetHealth for MockNetworkState
-func (mbs *MockNetworkState) SetHealth(val *common.Health) error {
-	return nil
-}
-
-// SetNetworkState for MockNetworkState
-func (mbs *MockNetworkState) SetNetworkState(val *common.NetworkState) error {
-	return nil
-}
-
-// SetPeers for MockNetworkState
-func (mbs *MockNetworkState) SetPeers(val *[]common.PeerInfo) error {
-	return nil
-}
-
-// MockStorageState
-type MockStorageState struct{}
-
-// StorageRoot for MockStorageState
-func (mbs *MockStorageState) StorageRoot() (common.Hash, error) {
-	return common.Hash{}, nil
-}

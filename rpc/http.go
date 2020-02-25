@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ChainSafe/gossamer/internal/api"
+	"github.com/ChainSafe/gossamer/rpc/modules"
 	log "github.com/ChainSafe/log15"
 )
 
@@ -31,22 +31,42 @@ type HTTPServer struct {
 	rpcServer *Server // Actual RPC call handler
 }
 
+// HTTPServerConfig configures the HTTPServer
+type HTTPServerConfig struct {
+	BlockAPI   modules.BlockAPI
+	StorageAPI modules.StorageAPI
+	NetworkAPI modules.NetworkAPI
+	CoreAPI    modules.CoreAPI
+	Codec      Codec
+	Host       string
+	Port       uint32
+	Modules    []string
+}
+
 // NewHTTPServer creates a new http server and registers an associated rpc server
-func NewHTTPServer(api *api.API, codec Codec, host string, port uint32, modules []api.Module) *HTTPServer {
-	server := &HTTPServer{
-		Port:      port,
-		Host:      host,
-		rpcServer: NewAPIServer(modules, api),
+func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
+	stateServerCfg := &ServerConfig{
+		BlockAPI:   cfg.BlockAPI,
+		StorageAPI: cfg.StorageAPI,
+		NetworkAPI: cfg.NetworkAPI,
+		CoreAPI:    cfg.CoreAPI,
+		Modules:    cfg.Modules,
 	}
 
-	server.rpcServer.RegisterCodec(codec)
+	server := &HTTPServer{
+		Port:      cfg.Port,
+		Host:      cfg.Host,
+		rpcServer: NewStateServer(stateServerCfg),
+	}
+
+	server.rpcServer.RegisterCodec(cfg.Codec)
 
 	return server
 }
 
 // Start registers the rpc handler function and starts the server listening on `h.port`
-func (h *HTTPServer) Start() {
-	log.Debug("[rpc] Starting HTTP Server...", "port", h.Port)
+func (h *HTTPServer) Start() error {
+	log.Debug("[rpc] Starting HTTP Server...", "host", h.Host, "port", h.Port)
 	http.HandleFunc("/rpc", h.rpcServer.ServeHTTP)
 
 	go func() {
@@ -55,4 +75,11 @@ func (h *HTTPServer) Start() {
 			log.Error("[rpc] http error", "err", err)
 		}
 	}()
+
+	return nil
+}
+
+// Stop stops the server
+func (h *HTTPServer) Stop() error {
+	return nil
 }

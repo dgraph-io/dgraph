@@ -21,8 +21,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-
-	"github.com/ChainSafe/gossamer/internal/api"
 )
 
 const (
@@ -44,7 +42,7 @@ var (
 	// DefaultNetworkBootnodes Must be non-nil to match toml parsing semantics
 	DefaultNetworkBootnodes = []string{}
 	// DefaultRPCModules holds defaults RPC modules
-	DefaultRPCModules = []api.Module{"system"}
+	DefaultRPCModules = []string{"system"}
 )
 
 var (

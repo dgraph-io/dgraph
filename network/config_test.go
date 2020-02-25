@@ -67,14 +67,12 @@ func TestBuild(t *testing.T) {
 
 	testBlockState := &state.BlockState{}
 	testNetworkState := &state.NetworkState{}
-	testStorageState := &state.StorageState{}
 
 	testRandSeed := int64(1)
 
 	cfg := &Config{
 		BlockState:   testBlockState,
 		NetworkState: testNetworkState,
-		StorageState: testStorageState,
 		DataDir:      testDataDir,
 		RandSeed:     testRandSeed,
 	}
@@ -86,7 +84,6 @@ func TestBuild(t *testing.T) {
 
 	require.Equal(t, testBlockState, cfg.BlockState)
 	require.Equal(t, testNetworkState, cfg.NetworkState)
-	require.Equal(t, testStorageState, cfg.StorageState)
 	require.Equal(t, testDataDir, cfg.DataDir)
 	require.Equal(t, DefaultRoles, cfg.Roles)
 	require.Equal(t, DefaultPort, cfg.Port)

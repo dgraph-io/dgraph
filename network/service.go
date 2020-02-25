@@ -73,6 +73,7 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 		msgSend:     msgSend,
 		noBootstrap: cfg.NoBootstrap,
 		noMdns:      cfg.NoMdns,
+		noStatus:    cfg.NoStatus,
 	}
 
 	return network, err
@@ -240,8 +241,8 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 }
 
 // Health returns information about host needed for the rpc server
-func (s *Service) Health() common.Health {
-	return common.Health{
+func (s *Service) Health() *common.Health {
+	return &common.Health{
 		Peers:           s.host.peerCount(),
 		IsSyncing:       false, // TODO
 		ShouldHavePeers: !s.noBootstrap,
@@ -249,8 +250,8 @@ func (s *Service) Health() common.Health {
 }
 
 // NetworkState returns information about host needed for the rpc server and the runtime
-func (s *Service) NetworkState() common.NetworkState {
-	return common.NetworkState{
+func (s *Service) NetworkState() *common.NetworkState {
+	return &common.NetworkState{
 		PeerID: s.host.id().String(),
 	}
 }

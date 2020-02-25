@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/core/types"
-	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/network"
 	"github.com/ChainSafe/gossamer/state"
@@ -36,12 +35,11 @@ func createTestDot(t *testing.T, testDir string) *Dot {
 
 	// Network
 	networkCfg := &network.Config{
-		BlockState:   &state.BlockState{},   // required
-		NetworkState: &state.NetworkState{}, // required
-		StorageState: &state.StorageState{}, // required
-		DataDir:      testDir,               // default "~/.gossamer"
-		Roles:        1,                     // required
-		RandSeed:     1,                     // default 0
+		BlockState:   &state.BlockState{}, // required
+		NetworkState: &state.NetworkState{},
+		DataDir:      testDir, // default "~/.gossamer"
+		Roles:        1,       // required
+		RandSeed:     1,       // default 0
 	}
 	networkSrvc, err := network.NewService(networkCfg, nil, nil)
 	if err != nil {
@@ -60,11 +58,7 @@ func createTestDot(t *testing.T, testDir string) *Dot {
 	}
 	services = append(services, dbSrv)
 
-	// API
-	apiSrvc := api.NewAPIService(networkSrvc, nil)
-	services = append(services, apiSrvc)
-
-	return NewDot("gossamer", services, nil)
+	return NewDot("gossamer", services)
 }
 
 func TestDot_Start(t *testing.T) {
@@ -73,7 +67,6 @@ func TestDot_Start(t *testing.T) {
 
 	availableServices := [...]services.Service{
 		&network.Service{},
-		&api.Service{},
 		&state.Service{},
 	}
 

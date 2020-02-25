@@ -20,7 +20,6 @@ import (
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/internal/api"
 )
 
 // NOT_IMPLEMENTED used as placeholder for not implemented yet funcs
@@ -28,7 +27,7 @@ const NOT_IMPLEMENTED = "not yet implemented"
 
 // SystemModule is an RPC module providing access to core API points
 type SystemModule struct {
-	api *api.API // TODO: migrate to network state
+	networkAPI NetworkAPI
 }
 
 // EmptyRequest represents an RPC request with no fields
@@ -60,9 +59,9 @@ type SystemPropertiesResponse struct {
 }
 
 // NewSystemModule creates a new API instance
-func NewSystemModule(api *api.API) *SystemModule {
+func NewSystemModule(net NetworkAPI) *SystemModule {
 	return &SystemModule{
-		api: api, // TODO: migrate to network state
+		networkAPI: net, // TODO: migrate to network state
 	}
 }
 
@@ -74,7 +73,7 @@ func (sm *SystemModule) Chain(r *http.Request, req *EmptyRequest, res *StringRes
 
 // Name returns the runtime name
 func (sm *SystemModule) Name(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = NOT_IMPLEMENTED
+	*res = "gossamer v0.0"
 	return nil
 }
 
@@ -92,21 +91,21 @@ func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringR
 
 // Health returns the information about the health of the network
 func (sm *SystemModule) Health(r *http.Request, req *EmptyRequest, res *SystemHealthResponse) error {
-	// TODO: migrate from api to network state
-	res.Health = sm.api.NetworkModule.Health()
+	health := sm.networkAPI.Health()
+	res.Health = *health
 	return nil
 }
 
 // NetworkState returns the network state (basic information about the host)
 func (sm *SystemModule) NetworkState(r *http.Request, req *EmptyRequest, res *SystemNetworkStateResponse) error {
-	// TODO: migrate from api to network state
-	res.NetworkState = sm.api.NetworkModule.NetworkState()
+	networkState := sm.networkAPI.NetworkState()
+	res.NetworkState = *networkState
 	return nil
 }
 
 // Peers returns peer information for each connected and confirmed peer
 func (sm *SystemModule) Peers(r *http.Request, req *EmptyRequest, res *SystemPeersResponse) error {
-	// TODO: migrate from api to network state
-	res.Peers = sm.api.NetworkModule.Peers()
+	peers := sm.networkAPI.Peers()
+	res.Peers = peers
 	return nil
 }

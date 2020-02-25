@@ -24,13 +24,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/config/genesis"
-	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/runtime"
 	"github.com/ChainSafe/gossamer/state"
 	"github.com/ChainSafe/gossamer/tests"
@@ -325,7 +323,7 @@ func TestSetRPCConfig(t *testing.T) {
 			cfg.RPCCfg{
 				Port:    cfg.DefaultRPCHTTPPort,
 				Host:    cfg.DefaultRPCHTTPHost,
-				Modules: []api.Module{"system", "state"},
+				Modules: []string{"system", "state"},
 			},
 		},
 	}
@@ -341,15 +339,6 @@ func TestSetRPCConfig(t *testing.T) {
 
 			require.Equal(t, c.expected, input.RPC)
 		})
-	}
-}
-
-func TestStrToMods(t *testing.T) {
-	strs := []string{"test1", "test2"}
-	mods := strToMods(strs)
-	rv := reflect.ValueOf(mods)
-	if rv.Kind() == reflect.Ptr {
-		t.Fatalf("test failed: got %v expected %v", mods, &[]api.Module{})
 	}
 }
 

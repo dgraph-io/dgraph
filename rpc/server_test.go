@@ -185,19 +185,4 @@ func TestServeHTTP(t *testing.T) {
 	if w.Body != strconv.Itoa(10) {
 		t.Errorf("unexpected body content. got: %s expected %s", w.Body, strconv.Itoa(10))
 	}
-
-	// Invalid content-type
-	r, err = http.NewRequest("POST", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.Header.Set("Content-Type", "www-url-encoded")
-	w = NewMockResponseWriter()
-	s.ServeHTTP(w, r)
-	if w.Status != 415 {
-		t.Errorf("unexpected status. got: %d expected: %d", w.Status, 415)
-	}
-	if w.Body != strconv.Itoa(10) {
-		t.Errorf("unexpected body content. got: %s expected %s", w.Body, strconv.Itoa(10))
-	}
 }

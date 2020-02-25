@@ -20,12 +20,11 @@ import (
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/internal/api"
 )
 
 // AuthorModule holds a pointer to the API
 type AuthorModule struct {
-	api *api.API
+	coreAPI CoreAPI
 }
 
 // KeyInsertRequest is used as model for the JSON
@@ -78,33 +77,33 @@ type ExtrinsicStatus struct {
 type ExtrinsicHashResponse common.Hash
 
 // NewAuthorModule creates a new Author module.
-func NewAuthorModule(api *api.API) *AuthorModule {
+func NewAuthorModule(api CoreAPI) *AuthorModule {
 	return &AuthorModule{
-		api: api,
+		coreAPI: api,
 	}
 }
 
-// InsertKey Insert a key into the keystore
+// InsertKey inserts a key into the keystore
 func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *KeyInsertResponse) {
-	_ = cm.api
+	_ = cm.coreAPI
 }
 
-// PendingExtrinsics Returns all pending extrinsics
+// PendingExtrinsics returns all pending extrinsics
 func (cm *AuthorModule) PendingExtrinsics(r *http.Request, req *EmptyRequest, res *PendingExtrinsicsResponse) {
 }
 
-// RemoveExtrinsic Remove given extrinsic from the pool and temporarily ban it to prevent reimporting
+// RemoveExtrinsic removes given extrinsic from the pool and temporarily ban it to prevent reimporting
 func (cm *AuthorModule) RemoveExtrinsic(r *http.Request, req *ExtrinsicOrHashRequest, res *RemoveExtrinsicsResponse) {
 }
 
-// RotateKeys Generate new session keys and returns the corresponding public keys
+// RotateKeys generates new session keys and returns the corresponding public keys
 func (cm *AuthorModule) RotateKeys(r *http.Request, req *EmptyRequest, res *KeyRotateResponse) {
 }
 
-// SubmitAndWatchExtrinsic Submit and subscribe to watch an extrinsic until unsubscribed
+// SubmitAndWatchExtrinsic submits an extrinsic and watches it
 func (cm *AuthorModule) SubmitAndWatchExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicStatus) {
 }
 
-// SubmitExtrinsic Submit a fully formatted extrinsic for block inclusion
+// SubmitExtrinsic submits a fully formatted extrinsic for block inclusion
 func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicHashResponse) {
 }

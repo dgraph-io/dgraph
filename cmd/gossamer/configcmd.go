@@ -30,7 +30,6 @@ import (
 	"github.com/ChainSafe/gossamer/config/genesis"
 	"github.com/ChainSafe/gossamer/core"
 	"github.com/ChainSafe/gossamer/dot"
-	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/internal/services"
 	"github.com/ChainSafe/gossamer/keystore"
 	"github.com/ChainSafe/gossamer/network"
@@ -115,14 +114,13 @@ func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	coreSrvc := createCoreService(coreConfig)
 	srvcs = append(srvcs, coreSrvc)
 
-	// API
-	apiSrvc := api.NewAPIService(networkSrvc, nil)
-	srvcs = append(srvcs, apiSrvc)
+	// RPC
+	if ctx.GlobalBool(RPCEnabledFlag.Name) {
+		rpcSrvr := setupRPC(currentConfig.RPC, stateSrv, networkSrvc)
+		srvcs = append(srvcs, rpcSrvr)
+	}
 
-	// TODO: check rpc flag
-	rpcSrvr := startRPC(ctx, currentConfig.RPC, apiSrvc)
-
-	return dot.NewDot(gendata.Name, srvcs, rpcSrvr), currentConfig, nil
+	return dot.NewDot(gendata.Name, srvcs), currentConfig, nil
 }
 
 func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
@@ -250,7 +248,6 @@ func createNetworkService(fig *cfg.Config, gendata *genesis.Data, stateService *
 	// network service configuation
 	networkConfig := network.Config{
 		BlockState:   stateService.Block,
-		StorageState: stateService.Storage,
 		NetworkState: stateService.Network,
 		DataDir:      fig.Global.DataDir,
 		Roles:        fig.Global.Roles,
@@ -285,7 +282,7 @@ func createCoreService(coreConfig *core.Config) *core.Service {
 func setRPCConfig(ctx *cli.Context, fig *cfg.RPCCfg) {
 	// Modules
 	if mods := ctx.GlobalString(RPCModuleFlag.Name); mods != "" {
-		fig.Modules = strToMods(strings.Split(ctx.GlobalString(RPCModuleFlag.Name), ","))
+		fig.Modules = strings.Split(ctx.GlobalString(RPCModuleFlag.Name), ",")
 	}
 
 	// Host
@@ -300,20 +297,18 @@ func setRPCConfig(ctx *cli.Context, fig *cfg.RPCCfg) {
 
 }
 
-func startRPC(ctx *cli.Context, fig cfg.RPCCfg, apiSrvc *api.Service) *rpc.HTTPServer {
-	if ctx.GlobalBool(RPCEnabledFlag.Name) {
-		return rpc.NewHTTPServer(apiSrvc.API, &json2.Codec{}, fig.Host, fig.Port, fig.Modules)
+func setupRPC(fig cfg.RPCCfg, stateSrv *state.Service, networkSrvc *network.Service) *rpc.HTTPServer {
+	cfg := &rpc.HTTPServerConfig{
+		BlockAPI:   stateSrv.Block,
+		StorageAPI: stateSrv.Storage,
+		NetworkAPI: networkSrvc,
+		Codec:      &json2.Codec{},
+		Host:       fig.Host,
+		Port:       fig.Port,
+		Modules:    fig.Modules,
 	}
-	return nil
-}
 
-// strToMods casts a []strings to []api.Module
-func strToMods(strs []string) []api.Module {
-	var res []api.Module
-	for _, str := range strs {
-		res = append(res, api.Module(str))
-	}
-	return res
+	return rpc.NewHTTPServer(cfg)
 }
 
 // dumpConfig is the dumpconfig command.

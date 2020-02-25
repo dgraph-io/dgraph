@@ -20,7 +20,6 @@ import (
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/common"
-	"github.com/ChainSafe/gossamer/internal/api"
 )
 
 // StateCallRequest holds json fields
@@ -109,19 +108,22 @@ type StateRuntimeVersionResponse string
 
 // StateModule is an RPC module providing access to storage API points.
 type StateModule struct {
-	api *api.API
+	networkAPI NetworkAPI
+	storageAPI StorageAPI
 }
 
 // NewStateModule creates a new State module.
-func NewStateModule(api *api.API) *SystemModule {
-	return &SystemModule{
-		api: api,
+func NewStateModule(net NetworkAPI, storage StorageAPI) *StateModule {
+	return &StateModule{
+		networkAPI: net,
+		storageAPI: storage,
 	}
 }
 
 // Call isn't implemented properly yet.
 func (sm *StateModule) Call(r *http.Request, req *StateCallRequest, res *StateCallResponse) {
-	_ = sm.api
+	_ = sm.networkAPI
+	_ = sm.storageAPI
 }
 
 // GetChildKeys isn't implemented properly yet.

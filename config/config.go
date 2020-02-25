@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/ChainSafe/gossamer/internal/api"
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 )
@@ -50,9 +49,9 @@ type NetworkCfg struct {
 
 // RPCCfg is to marshal/unmarshal toml RPC vars
 type RPCCfg struct {
-	Port    uint32       `toml:"port"`
-	Host    string       `toml:"host"`
-	Modules []api.Module `toml:"modules"`
+	Port    uint32   `toml:"port"`
+	Host    string   `toml:"host"`
+	Modules []string `toml:"modules"`
 }
 
 // String will return the json representation for a Config
