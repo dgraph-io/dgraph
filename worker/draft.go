@@ -97,7 +97,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
-	num := 10
+	num := 100
 
 	n := &node{
 		Node: m,
@@ -132,28 +132,23 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		return nil
 	}
 
-	commit := func(b commitBatch) {
-		b.wg.Wait()
+	toDisk := func(start, commit uint64) {
 		writer := posting.NewTxnWriter(pstore)
-		toDisk := func(start, commit uint64) {
-			txn := posting.Oracle().GetTxn(start)
-			if txn == nil {
-				return
-			}
-			txn.Update()
-			err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-				return txn.CommitToDisk(writer, commit)
-			})
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil {
+			return
+		}
+		txn.Update()
+		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
+			return txn.CommitToDisk(writer, commit)
+		})
 
-			if err != nil {
-				glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-					start, commit, err)
-			}
-
-			txn.ClearCache()
+		if err != nil {
+			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
 		}
 
-		toDisk(b.ts, b.ts)
+		txn.ClearCache()
 	}
 
 	for i := 0; i < num; i++ {
@@ -164,13 +159,12 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		}()
 	}
 
-	for i := 0; i < num*10; i++ {
-		go func() {
-			for j := range n.commitCh {
-				commit(j)
-			}
-		}()
-	}
+	go func() {
+		for b := range n.commitCh {
+			b.wg.Wait()
+			toDisk(b.ts, b.ts)
+		}
+	}()
 
 	return n
 }
@@ -217,7 +211,9 @@ func detectPendingTxns(attr string) error {
 	if len(tctxs) == 0 {
 		return nil
 	}
-	go tryAbortTransactions(tctxs)
+	if !x.WorkerConfig.LudicrousMode {
+		go tryAbortTransactions(tctxs)
+	}
 	return errHasPendingTxns
 }
 
@@ -226,6 +222,7 @@ func detectPendingTxns(attr string) error {
 // involving the predicate are aborted until schema mutations are done.
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
+	fmt.Println(proposal.Mutations.StartTs)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -1289,6 +1286,9 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
+	if x.WorkerConfig.LudicrousMode {
+		return
+	}
 	// Aborts if not already committed.
 	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
