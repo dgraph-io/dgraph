@@ -97,7 +97,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
-	num := 100
+	num := 10
 
 	n := &node{
 		Node: m,
@@ -109,7 +109,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		applyCh:    make(chan []*pb.Proposal, 1000),
 		rollupCh:   make(chan uint64, 3),
 		proposalCh: make(chan batch, num),
-		commitCh:   make(chan commitBatch, num),
+		commitCh:   make(chan commitBatch, num*20),
 		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:     y.NewCloser(3), // Matches CLOSER:1
 	}
@@ -164,7 +164,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		}()
 	}
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < num*10; i++ {
 		go func() {
 			for j := range n.commitCh {
 				commit(j)
