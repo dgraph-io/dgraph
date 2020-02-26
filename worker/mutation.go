@@ -116,6 +116,14 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 }
 
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
+	// wait until schema modification for this predicate is complete.
+	for {
+		if !schema.State().IsBeingModified(update.Predicate) {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+
 	if tablet, err := groups().Tablet(update.Predicate); err != nil {
 		return err
 	} else if tablet.GetGroupId() != groups().groupId() {
@@ -148,6 +156,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 	}
 
 	go func() {
+		// TODO
 		time.Sleep(time.Second * 5)
 		complete := false
 		defer func() {

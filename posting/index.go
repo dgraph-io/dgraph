@@ -454,7 +454,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(schema.WriteCtx, edge.Attr) {
+	if (pstore != nil) && (edge.ValueId != 0) &&
+		schema.State().IsReversed(schema.WriteCtx, edge.Attr) {
+
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}

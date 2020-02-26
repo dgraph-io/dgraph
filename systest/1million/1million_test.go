@@ -9262,6 +9262,20 @@ var tc = []struct {
 	},
 }
 
+func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (
+	*api.Response, error) {
+
+	for {
+		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+
+		return response, err
+	}
+}
+
 func Test1Million(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	if err != nil {
@@ -9270,7 +9284,7 @@ func Test1Million(t *testing.T) {
 
 	for _, tt := range tc {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		resp, err := dg.NewTxn().Query(ctx, tt.query)
+		resp, err := runQueryWithRetry(ctx, dg, tt.query)
 		cancel()
 
 		if ctx.Err() == context.DeadlineExceeded {
