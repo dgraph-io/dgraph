@@ -40,7 +40,6 @@ import (
 
 func TestReverseIndex(t *testing.T) {
 	total := 100000
-
 	dg, err := getClient()
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
@@ -54,7 +53,7 @@ func TestReverseIndex(t *testing.T) {
 	}
 
 	if err := testutil.AssignUids(uint64(total * 10)); err != nil {
-		t.Fatalf("error in assignig UIDs :: %v", err)
+		t.Fatalf("error in assigning UIDs :: %v", err)
 	}
 
 	// first insert bank accounts
@@ -116,8 +115,7 @@ func TestReverseIndex(t *testing.T) {
 		case 3:
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
-				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> <%v> .
-											  <%v> <balance> <%v> .`,
+				SetNquads: []byte(fmt.Sprintf("<%v> <balance> <%v> .\n<%v> <balance> <%v> .",
 					uid+1, uid, uid-2, uid)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
 				log.Fatalf("error in mutation :: %v\n", err)

@@ -418,9 +418,9 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	require.NoError(t, txn.Commit(context.Background()))
 	require.NoError(t, txn2.Commit(context.Background()))
 
-	txn = s.dg.NewTxn()
+	txn3 := s.dg.NewTxn()
 	q := `{ me(func: eq(name, "Manish")) { uid }}`
-	resp, err := runQueryWithRetry(context.Background(), txn, q)
+	resp, err := runQueryWithRetry(context.Background(), txn3, q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
