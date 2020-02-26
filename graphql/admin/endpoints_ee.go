@@ -55,7 +55,6 @@ const adminTypes = `
 	}
 
 	type Rule {
-		id: ID!
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
 		# TODO - Change permission to enum type once we figure out how to map enum strings to Int
 		# while storing it in Dgraph.
@@ -97,9 +96,8 @@ const adminTypes = `
 	}
 
 	input RuleRef {
-		id: ID
-		predicate: String
-		permission: Int
+		predicate: String!
+		permission: Int!
 	}
 
 	input UserFilter {
@@ -139,14 +137,18 @@ const adminTypes = `
 		not: UserFilter
 	}
 
-	input GroupPatch {
+	input SetGroupPatch {
 		rules: [RuleRef]
+	}
+
+	input RemoveGroupPatch {
+		rules: [String]
 	}
 
 	input UpdateGroupInput {
 		filter: GroupFilter!
-		set: GroupPatch
-		remove: GroupPatch
+		set: SetGroupPatch
+		remove: RemoveGroupPatch
 	}
 
 	type AddUserPayload {

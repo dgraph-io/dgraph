@@ -38,10 +38,12 @@ const (
 type addRewriter struct {
 	frags [][]*mutationFragment
 }
+type addGroupRewriter addRewriter
 type updateRewriter struct {
 	setFrags []*mutationFragment
 	delFrags []*mutationFragment
 }
+type updateGroupRewriter updateRewriter
 type deleteRewriter struct{}
 
 // A mutationFragment is a partially built Dgraph mutation.  Given a GraphQL
@@ -84,9 +86,17 @@ func NewAddRewriter() MutationRewriter {
 	return &addRewriter{}
 }
 
+func NewAddGroupRewriter() MutationRewriter {
+	return &addGroupRewriter{}
+}
+
 // NewUpdateRewriter returns new MutationRewriter for add & update mutations.
 func NewUpdateRewriter() MutationRewriter {
 	return &updateRewriter{}
+}
+
+func NewUpdateGroupRewriter() MutationRewriter {
+	return &updateGroupRewriter{}
 }
 
 // NewDeleteRewriter returns new MutationRewriter for delete mutations..
@@ -285,6 +295,44 @@ func (mrw *addRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
 }
 
+func (mrw *addGroupRewriter) Rewrite(
+	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	addGroupInput, _ := m.ArgValue(schema.InputArgName).([]interface{})
+
+	// remove rules with same predicate name for each group input
+	for i, groupInput := range addGroupInput {
+		rules, _ := groupInput.(map[string]interface{})["rules"].([]interface{})
+		predicateMap := make(map[string]bool, len(rules))
+		j := 0
+
+		for _, rule := range rules {
+			predicate, _ := rule.(map[string]interface{})["predicate"].(string)
+
+			if !predicateMap[predicate] {
+				predicateMap[predicate] = true
+				rules[j] = rule
+				j++
+			}
+		}
+
+		rules = rules[:j]
+		addGroupInput[i].(map[string]interface{})["rules"] = rules
+	}
+
+	m.SetArgTo(schema.InputArgName, addGroupInput)
+
+	return ((*addRewriter)(mrw)).Rewrite(m)
+}
+
+// FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
+func (mrw *addGroupRewriter) FromMutationResult(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) (*gql.GraphQuery, error) {
+
+	return ((*addRewriter)(mrw)).FromMutationResult(mutation, assigned, result)
+}
+
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
 // The GraphQL updates look like:
 //
@@ -407,6 +455,157 @@ func (urw *updateRewriter) FromMutationResult(
 	}
 
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
+}
+
+func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.GraphQuery {
+	ruleQuery := rewriteUpsertQueryFromMutation(m)
+	ruleQuery.Attr = variable
+	ruleQuery.Var = ""
+	ruleQuery.Children = append(ruleQuery.Children, &gql.GraphQuery{
+		Attr: "dgraph.acl.rule",
+		Var:  variable,
+		Filter: &gql.FilterTree{
+			Op:    "",
+			Child: nil,
+			Func: &gql.Function{
+				Name: "eq",
+				Args: []gql.Arg{
+					{
+						Value: "dgraph.rule.predicate",
+					},
+					{
+						Value: predicate,
+					},
+				},
+			},
+		},
+	})
+
+	return ruleQuery
+}
+
+func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	mutatedType := m.MutatedType()
+
+	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	setArg := inp["set"]
+	delArg := inp["remove"]
+
+	if setArg == nil && delArg == nil {
+		return nil, nil, nil
+	}
+
+	upsertQuery := rewriteUpsertQueryFromMutation(m)
+	srcUID := mutationQueryVarUID
+
+	var errSet, errDel error
+	var mutSet, mutDel []*dgoapi.Mutation
+	varGen := variableGenerator(0)
+
+	queries := []*gql.GraphQuery{upsertQuery}
+	ruleField := mutatedType.Field("rules")
+	ruleType := ruleField.Type()
+
+	if setArg != nil {
+		rules := setArg.(map[string]interface{})["rules"].([]interface{})
+		for _, ruleI := range rules {
+			rule := ruleI.(map[string]interface{})
+			variable := varGen.next(ruleType)
+			predicate := rule["predicate"]
+			permission := rule["permission"]
+
+			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
+			queries = append(queries, ruleQuery)
+
+			nonExistentFrag := newFragment(map[string]interface{}{
+				"uid": srcUID,
+				"dgraph.acl.rule": []map[string]interface{}{
+					{
+						"uid":                    fmt.Sprintf("_:%s", variable),
+						"dgraph.type":            ruleType.DgraphName(),
+						"dgraph.rule.predicate":  predicate,
+						"dgraph.rule.permission": permission,
+					},
+				},
+			})
+			nonExistentFrag.conditions = append(nonExistentFrag.conditions, "eq(len("+variable+"),0)")
+
+			existsFrag := newFragment(map[string]interface{}{
+				"uid":                    `uid(` + variable + `)`,
+				"dgraph.rule.permission": permission,
+			})
+			existsFrag.conditions = append(existsFrag.conditions, "gt(len("+variable+"),0)")
+			urw.setFrags = append(urw.setFrags, nonExistentFrag, existsFrag)
+		}
+		addUpdateCondition(urw.setFrags)
+		mutSet, errSet = mutationsFromFragments(
+			urw.setFrags,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+	}
+
+	if delArg != nil {
+		rules := delArg.(map[string]interface{})["rules"].([]interface{})
+		for _, predicate := range rules {
+			variable := varGen.next(ruleType)
+
+			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
+			queries = append(queries, ruleQuery)
+
+			delFrag := newFragment(map[string]interface{}{
+				"uid": srcUID,
+				"dgraph.acl.rule": []map[string]interface{}{
+					{
+						"uid":                    `uid(` + variable + `)`,
+						"dgraph.type":            "",
+						"dgraph.rule.predicate":  "",
+						"dgraph.rule.permission": "",
+					},
+				},
+			})
+			delFrag.conditions = append(delFrag.conditions, "gt(len("+variable+"),0)")
+			urw.delFrags = append(urw.delFrags, delFrag)
+		}
+		addUpdateCondition(urw.delFrags)
+		mutDel, errDel = mutationsFromFragments(
+			urw.delFrags,
+			func(frag *mutationFragment) ([]byte, error) {
+				return nil, nil
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			})
+	}
+
+	q1 := queryFromFragments(urw.setFrags)
+	if q1 != nil {
+		queries = append(queries, q1.Children...)
+	}
+
+	q2 := queryFromFragments(urw.delFrags)
+	if q2 != nil {
+		queries = append(queries, q2.Children...)
+	}
+
+	return &gql.GraphQuery{Children: queries},
+		append(mutSet, mutDel...),
+		schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
+}
+
+// FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
+func (urw *updateGroupRewriter) FromMutationResult(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) (*gql.GraphQuery, error) {
+
+	return ((*updateRewriter)(urw)).FromMutationResult(mutation, assigned, result)
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {

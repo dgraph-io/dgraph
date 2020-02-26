@@ -500,7 +500,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					resolve.NewAddRewriter(),
+					resolve.NewAddGroupRewriter(),
 					resolve.DgraphAsQueryExecutor(),
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
@@ -516,7 +516,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					resolve.NewUpdateRewriter(),
+					resolve.NewUpdateGroupRewriter(),
 					resolve.DgraphAsQueryExecutor(),
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
