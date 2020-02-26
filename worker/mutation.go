@@ -723,7 +723,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	ctx, span := otrace.StartSpan(ctx, "worker.Mutate")
 	defer span.End()
 
-	txnCtx := &api.TxnContext{}
+	txnCtx := &api.TxnContext{
+		Namespace: m.Namespace,
+	}
 	if ctx.Err() != nil {
 		return txnCtx, ctx.Err()
 	}
