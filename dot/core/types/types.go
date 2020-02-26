@@ -29,6 +29,11 @@ import (
 // Extrinsic is a generic transaction whose format is verified in the runtime
 type Extrinsic []byte
 
+// NewExtrinsic creates a new Extrinsic given a byte slice
+func NewExtrinsic(e []byte) Extrinsic {
+	return Extrinsic(e)
+}
+
 // Block defines a state block
 type Block struct {
 	Header      *Header

@@ -42,21 +42,23 @@ type CodecRequest interface {
 
 // ServerConfig configures the server
 type ServerConfig struct {
-	BlockAPI   modules.BlockAPI
-	StorageAPI modules.StorageAPI
-	NetworkAPI modules.NetworkAPI
-	CoreAPI    modules.CoreAPI
-	Modules    []string
+	BlockAPI            modules.BlockAPI
+	StorageAPI          modules.StorageAPI
+	NetworkAPI          modules.NetworkAPI
+	CoreAPI             modules.CoreAPI
+	TransactionQueueAPI modules.TransactionQueueAPI
+	Modules             []string
 }
 
 // Server is an RPC server.
 type Server struct {
-	codec      Codec       // Codec for requests/responses (default JSON)
-	services   *serviceMap // Maps requests to actual procedure calls
-	blockAPI   modules.BlockAPI
-	storageAPI modules.StorageAPI
-	networkAPI modules.NetworkAPI
-	coreAPI    modules.CoreAPI
+	codec               Codec       // Codec for requests/responses (default JSON)
+	services            *serviceMap // Maps requests to actual procedure calls
+	blockAPI            modules.BlockAPI
+	storageAPI          modules.StorageAPI
+	networkAPI          modules.NetworkAPI
+	coreAPI             modules.CoreAPI
+	transactionQueueAPI modules.TransactionQueueAPI
 }
 
 // NewServer creates a new Server.
@@ -69,11 +71,12 @@ func NewServer() *Server {
 // NewStateServer creates a new Server that interfaces with the state service.
 func NewStateServer(cfg *ServerConfig) *Server {
 	s := &Server{
-		services:   new(serviceMap),
-		blockAPI:   cfg.BlockAPI,
-		storageAPI: cfg.StorageAPI,
-		networkAPI: cfg.NetworkAPI,
-		coreAPI:    cfg.CoreAPI,
+		services:            new(serviceMap),
+		blockAPI:            cfg.BlockAPI,
+		storageAPI:          cfg.StorageAPI,
+		networkAPI:          cfg.NetworkAPI,
+		coreAPI:             cfg.CoreAPI,
+		transactionQueueAPI: cfg.TransactionQueueAPI,
 	}
 
 	s.RegisterModules(cfg.Modules)
@@ -89,6 +92,8 @@ func (s *Server) RegisterModules(mods []string) {
 		switch mod {
 		case "system":
 			srvc = modules.NewSystemModule(s.networkAPI)
+		case "author":
+			srvc = modules.NewAuthorModule(s.coreAPI, s.transactionQueueAPI)
 		default:
 			log.Warn("[rpc] Unrecognized module", "module", mod)
 			continue

@@ -19,12 +19,16 @@ package modules
 import (
 	"net/http"
 
+	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/transaction"
+	log "github.com/ChainSafe/log15"
 )
 
 // AuthorModule holds a pointer to the API
 type AuthorModule struct {
-	coreAPI CoreAPI
+	coreAPI    CoreAPI
+	txQueueAPI TransactionQueueAPI
 }
 
 // KeyInsertRequest is used as model for the JSON
@@ -34,8 +38,8 @@ type KeyInsertRequest struct {
 	PublicKey []byte `json:"publicKey"`
 }
 
-// Extrinsic is a array of bytes
-type Extrinsic []byte
+// Extrinsic represents a hex-encoded extrinsic
+type Extrinsic string
 
 // ExtrinsicOrHash is a type for Hash and Extrinsic array of bytes
 type ExtrinsicOrHash struct {
@@ -77,33 +81,77 @@ type ExtrinsicStatus struct {
 type ExtrinsicHashResponse common.Hash
 
 // NewAuthorModule creates a new Author module.
-func NewAuthorModule(api CoreAPI) *AuthorModule {
+func NewAuthorModule(coreAPI CoreAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
 	return &AuthorModule{
-		coreAPI: api,
+		coreAPI:    coreAPI,
+		txQueueAPI: txQueueAPI,
 	}
 }
 
 // InsertKey inserts a key into the keystore
-func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *KeyInsertResponse) {
+func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *KeyInsertResponse) error {
 	_ = cm.coreAPI
+	return nil
 }
 
-// PendingExtrinsics returns all pending extrinsics
-func (cm *AuthorModule) PendingExtrinsics(r *http.Request, req *EmptyRequest, res *PendingExtrinsicsResponse) {
+// PendingExtrinsics Returns all pending extrinsics
+func (cm *AuthorModule) PendingExtrinsics(r *http.Request, req *EmptyRequest, res *PendingExtrinsicsResponse) error {
+	pending := cm.txQueueAPI.Pending()
+	resp := [][]byte{}
+	for _, tx := range pending {
+		enc, err := tx.Encode()
+		if err != nil {
+			return err
+		}
+		resp = append(resp, enc)
+	}
+
+	*res = PendingExtrinsicsResponse(resp)
+	return nil
 }
 
-// RemoveExtrinsic removes given extrinsic from the pool and temporarily ban it to prevent reimporting
-func (cm *AuthorModule) RemoveExtrinsic(r *http.Request, req *ExtrinsicOrHashRequest, res *RemoveExtrinsicsResponse) {
+// RemoveExtrinsic Remove given extrinsic from the pool and temporarily ban it to prevent reimporting
+func (cm *AuthorModule) RemoveExtrinsic(r *http.Request, req *ExtrinsicOrHashRequest, res *RemoveExtrinsicsResponse) error {
+	return nil
 }
 
-// RotateKeys generates new session keys and returns the corresponding public keys
-func (cm *AuthorModule) RotateKeys(r *http.Request, req *EmptyRequest, res *KeyRotateResponse) {
+// RotateKeys Generate new session keys and returns the corresponding public keys
+func (cm *AuthorModule) RotateKeys(r *http.Request, req *EmptyRequest, res *KeyRotateResponse) error {
+	return nil
 }
 
-// SubmitAndWatchExtrinsic submits an extrinsic and watches it
-func (cm *AuthorModule) SubmitAndWatchExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicStatus) {
+// SubmitAndWatchExtrinsic Submit and subscribe to watch an extrinsic until unsubscribed
+func (cm *AuthorModule) SubmitAndWatchExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicStatus) error {
+	return nil
 }
 
-// SubmitExtrinsic submits a fully formatted extrinsic for block inclusion
-func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicHashResponse) {
+// SubmitExtrinsic Submit a fully formatted extrinsic for block inclusion
+func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *ExtrinsicHashResponse) error {
+	extBytes, err := common.HexToBytes(string(*req))
+	if err != nil {
+		return err
+	}
+
+	log.Trace("[rpc]", "extrinsic", extBytes)
+
+	// TODO: validate transaction before submitting to tx queue
+
+	ext := types.Extrinsic(extBytes)
+
+	// TODO: form valid transaction by decoding tx bytes
+
+	vtx := &transaction.ValidTransaction{
+		Extrinsic: ext,
+		Validity:  nil,
+	}
+
+	cm.txQueueAPI.Push(vtx)
+	hash, err := common.Blake2bHash(extBytes)
+	if err != nil {
+		return err
+	}
+
+	*res = ExtrinsicHashResponse(hash)
+	log.Info("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
+	return nil
 }

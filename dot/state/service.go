@@ -29,10 +29,11 @@ import (
 
 // Service is the struct that holds storage, block and network states
 type Service struct {
-	dbPath  string
-	Storage *StorageState
-	Block   *BlockState
-	Network *NetworkState
+	dbPath           string
+	Storage          *StorageState
+	Block            *BlockState
+	Network          *NetworkState
+	TransactionQueue *TransactionQueue
 }
 
 // NewService create a new instance of Service
@@ -132,6 +133,7 @@ func (s *Service) Start() error {
 	s.Storage = storageState
 	s.Block = blockState
 	s.Network = networkState
+	s.TransactionQueue = NewTransactionQueue()
 
 	return nil
 }

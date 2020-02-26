@@ -121,6 +121,10 @@ func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 
 // validMessage confirms the status message is valid
 func (status *status) validMessage(msg *StatusMessage) bool {
+	if status.hostMessage == nil {
+		return false
+	}
+
 	switch {
 	case msg.GenesisHash != status.hostMessage.GenesisHash:
 		log.Error("Failed to validate status message", "err", "genesis hash")

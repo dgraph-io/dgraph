@@ -19,16 +19,11 @@ package transaction
 import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/scale"
 )
 
-// Pool ValidTransaction
+// Pool represents the transaction pool
 type Pool map[common.Hash]*ValidTransaction
-
-// Queue interface
-type Queue interface {
-	Pop() *ValidTransaction
-	Insert(vt *ValidTransaction)
-}
 
 // Validity struct see: https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/sr-primitives/src/transaction_validity.rs#L178
 type Validity struct {
@@ -52,14 +47,19 @@ func NewValidity(priority uint64, requires, provides [][]byte, longevity uint64,
 
 // ValidTransaction struct
 type ValidTransaction struct {
-	Extrinsic *types.Extrinsic
+	Extrinsic types.Extrinsic
 	Validity  *Validity
 }
 
 // NewValidTransaction returns ValidTransaction
 func NewValidTransaction(extrinsic types.Extrinsic, validity *Validity) *ValidTransaction {
 	return &ValidTransaction{
-		Extrinsic: &extrinsic,
+		Extrinsic: extrinsic,
 		Validity:  validity,
 	}
+}
+
+// Encode SCALE encodes the transaction
+func (vt *ValidTransaction) Encode() ([]byte, error) {
+	return scale.Encode(vt)
 }

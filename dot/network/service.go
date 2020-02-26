@@ -253,7 +253,9 @@ func (s *Service) NetworkState() *common.NetworkState {
 }
 
 // Peers returns information about connected peers needed for the rpc server
-func (s *Service) Peers() (peers []common.PeerInfo) {
+func (s *Service) Peers() []common.PeerInfo {
+	peers := []common.PeerInfo{}
+
 	for _, p := range s.host.peers() {
 		if s.status.confirmed(p) {
 			msg := s.status.peerMessage[p]

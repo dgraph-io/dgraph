@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/bits"
 
-	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
@@ -103,11 +102,8 @@ func (fbha *FreeingBumpHeapAllocator) Allocate(size uint32) (uint32, error) {
 	if item := fbha.heads[listIndex]; item != 0 {
 		// Something from the free list
 		item := fbha.heads[listIndex]
-		log.Trace("[Allocate]", "size", size, "item", item, "listIndex", listIndex)
-
 		fourBytes := fbha.getHeap4bytes(item)
 		fbha.heads[listIndex] = binary.LittleEndian.Uint32(fourBytes)
-		log.Trace("[Allocate] setting head", "listIndex", listIndex, "value", fbha.heads[listIndex])
 		ptr = item + 8
 	} else {
 		// Nothing te be freed. Bump.
@@ -120,7 +116,6 @@ func (fbha *FreeingBumpHeapAllocator) Allocate(size uint32) (uint32, error) {
 	}
 	fbha.setHeap(ptr-8, uint8(listIndex))
 	fbha.TotalSize = fbha.TotalSize + itemSize + 8
-	log.Trace("[Allocate]", "heap_size after allocation", fbha.TotalSize, "ptr", fbha.ptrOffset+ptr)
 	return fbha.ptrOffset + ptr, nil
 }
 
@@ -130,7 +125,6 @@ func (fbha *FreeingBumpHeapAllocator) Deallocate(pointer uint32) error {
 	if ptr < 8 {
 		return errors.New("invalid pointer for deallocation")
 	}
-	log.Trace("[Deallocate]", "ptr", ptr)
 	listIndex := fbha.getHeapByte(ptr - 8)
 
 	// update heads array, and heap "header"
@@ -144,7 +138,6 @@ func (fbha *FreeingBumpHeapAllocator) Deallocate(pointer uint32) error {
 	// update heap total size
 	itemSize := getItemSizeFromIndex(uint(listIndex))
 	fbha.TotalSize = fbha.TotalSize - uint32(itemSize+8)
-	log.Trace("[Deallocate]", "heap total_size after Deallocate", fbha.TotalSize)
 
 	return nil
 }

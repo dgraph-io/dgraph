@@ -29,9 +29,8 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-// runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction
-// and returns *Validity
-func (s *Service) validateTransaction(e types.Extrinsic) (*transaction.Validity, error) {
+// ValidateTransaction runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction and returns *Validity
+func (s *Service) ValidateTransaction(e types.Extrinsic) (*transaction.Validity, error) {
 	ret, err := s.rt.Exec(runtime.TaggedTransactionQueueValidateTransaction, e)
 	if err != nil {
 		return nil, err

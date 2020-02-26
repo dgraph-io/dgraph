@@ -64,6 +64,10 @@ func BytesToStringArray(in [][]byte) []string {
 
 // HexToBytes turns a 0x prefixed hex string into a byte slice
 func HexToBytes(in string) ([]byte, error) {
+	if len(in) < 2 {
+		return nil, errors.New("invalid string")
+	}
+
 	if strings.Compare(in[:2], "0x") != 0 {
 		return nil, errors.New("could not byteify non 0x prefixed string")
 	}

@@ -34,24 +34,26 @@ type HTTPServer struct {
 
 // HTTPServerConfig configures the HTTPServer
 type HTTPServerConfig struct {
-	BlockAPI   modules.BlockAPI
-	StorageAPI modules.StorageAPI
-	NetworkAPI modules.NetworkAPI
-	CoreAPI    modules.CoreAPI
-	Codec      Codec
-	Host       string
-	Port       uint32
-	Modules    []string
+	BlockAPI            modules.BlockAPI
+	StorageAPI          modules.StorageAPI
+	NetworkAPI          modules.NetworkAPI
+	CoreAPI             modules.CoreAPI
+	TransactionQueueAPI modules.TransactionQueueAPI
+	Codec               Codec
+	Host                string
+	Port                uint32
+	Modules             []string
 }
 
 // NewHTTPServer creates a new http server and registers an associated rpc server
 func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
 	stateServerCfg := &ServerConfig{
-		BlockAPI:   cfg.BlockAPI,
-		StorageAPI: cfg.StorageAPI,
-		NetworkAPI: cfg.NetworkAPI,
-		CoreAPI:    cfg.CoreAPI,
-		Modules:    cfg.Modules,
+		BlockAPI:            cfg.BlockAPI,
+		StorageAPI:          cfg.StorageAPI,
+		NetworkAPI:          cfg.NetworkAPI,
+		CoreAPI:             cfg.CoreAPI,
+		TransactionQueueAPI: cfg.TransactionQueueAPI,
+		Modules:             cfg.Modules,
 	}
 
 	server := &HTTPServer{
@@ -68,10 +70,10 @@ func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
 // Start registers the rpc handler function and starts the server listening on `h.port`
 func (h *HTTPServer) Start() error {
 	log.Debug("[rpc] Starting HTTP Server...", "host", h.Host, "port", h.Port)
-	http.HandleFunc("/rpc", h.rpcServer.ServeHTTP)
+	http.HandleFunc("/", h.rpcServer.ServeHTTP)
 
 	go func() {
-		err := http.ListenAndServe(fmt.Sprintf("%s:%d", h.Host, h.Port), nil)
+		err := http.ListenAndServe(fmt.Sprintf(":%d", h.Port), nil)
 		if err != nil {
 			log.Error("[rpc] http error", "err", err)
 		}

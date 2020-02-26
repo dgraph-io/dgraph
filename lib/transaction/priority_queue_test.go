@@ -44,7 +44,7 @@ func TestPriorityQueue(t *testing.T) {
 	expected := []int{3, 1, 2, 4, 0}
 
 	for _, node := range tests {
-		pq.Insert(node)
+		pq.Push(node)
 	}
 
 	for _, exp := range expected {
@@ -78,7 +78,7 @@ func TestPriorityQueueAgain(t *testing.T) {
 	expected := []int{1, 3, 0, 2, 4}
 
 	for _, node := range tests {
-		pq.Insert(node)
+		pq.Push(node)
 	}
 
 	for _, exp := range expected {
@@ -110,7 +110,7 @@ func TestPriorityQueue_Pop(t *testing.T) {
 		t.Errorf("pop on empty list should return nil")
 	}
 
-	pq.Insert(&ValidTransaction{
+	pq.Push(&ValidTransaction{
 		Extrinsic: nil,
 		Validity:  nil,
 	})
@@ -153,7 +153,7 @@ func TestPeek(t *testing.T) {
 	expected := []int{1, 3, 0, 2, 4}
 
 	for _, node := range tests {
-		pq.Insert(node)
+		pq.Push(node)
 	}
 
 	for _, exp := range expected {
@@ -170,14 +170,45 @@ func TestPriorityQueueConcurrentCalls(t *testing.T) {
 	pq := NewPriorityQueue()
 
 	go func() {
-		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
+		pq.Push(&ValidTransaction{Validity: &Validity{Priority: 1}})
 		pq.Peek()
 		pq.Pop()
 	}()
 	go func() {
-		pq.Insert(&ValidTransaction{Validity: &Validity{Priority: 1}})
+		pq.Push(&ValidTransaction{Validity: &Validity{Priority: 1}})
 		pq.Peek()
 		pq.Pop()
 	}()
 
+}
+
+func TestPending(t *testing.T) {
+	tests := []*ValidTransaction{
+		{
+			Validity: &Validity{Priority: 5},
+		},
+		{
+			Validity: &Validity{Priority: 4},
+		},
+		{
+			Validity: &Validity{Priority: 3},
+		},
+		{
+			Validity: &Validity{Priority: 2},
+		},
+		{
+			Validity: &Validity{Priority: 1},
+		},
+	}
+
+	pq := NewPriorityQueue()
+
+	for _, node := range tests {
+		pq.Push(node)
+	}
+
+	pending := pq.Pending()
+	if !reflect.DeepEqual(pending, tests) {
+		t.Fatalf("Fail: got %v expected %v", pending, tests)
+	}
 }

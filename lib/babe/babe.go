@@ -38,31 +38,32 @@ import (
 
 // Session contains the VRF keys for the validator, as well as BABE configuation data
 type Session struct {
-	blockState     BlockState
-	storageState   StorageState
-	keypair        *sr25519.Keypair
-	rt             *runtime.Runtime
-	config         *Configuration
-	randomness     [sr25519.VrfOutputLength]byte
-	authorityIndex uint64
-	authorityData  []*AuthorityData
-	epochThreshold *big.Int // validator threshold for this epoch
-	txQueue        *transaction.PriorityQueue
-	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
-	newBlocks      chan<- types.Block            // send blocks to core service
-	done           chan<- struct{}               // lets core know when the epoch is done
+	blockState       BlockState
+	storageState     StorageState
+	keypair          *sr25519.Keypair
+	rt               *runtime.Runtime
+	config           *Configuration
+	randomness       [sr25519.VrfOutputLength]byte
+	authorityIndex   uint64
+	authorityData    []*AuthorityData
+	epochThreshold   *big.Int // validator threshold for this epoch
+	transactionQueue TransactionQueue
+	slotToProof      map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
+	newBlocks        chan<- types.Block            // send blocks to core service
+	done             chan<- struct{}               // lets core know when the epoch is done
 }
 
 // SessionConfig struct
 type SessionConfig struct {
-	BlockState     BlockState
-	StorageState   StorageState
-	Keypair        *sr25519.Keypair
-	Runtime        *runtime.Runtime
-	NewBlocks      chan<- types.Block
-	AuthData       []*AuthorityData
-	EpochThreshold *big.Int // should only be used for testing
-	Done           chan<- struct{}
+	BlockState       BlockState
+	StorageState     StorageState
+	TransactionQueue TransactionQueue
+	Keypair          *sr25519.Keypair
+	Runtime          *runtime.Runtime
+	NewBlocks        chan<- types.Block
+	AuthData         []*AuthorityData
+	EpochThreshold   *big.Int // should only be used for testing
+	Done             chan<- struct{}
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
@@ -72,16 +73,16 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 	}
 
 	babeSession := &Session{
-		blockState:     cfg.BlockState,
-		storageState:   cfg.StorageState,
-		keypair:        cfg.Keypair,
-		rt:             cfg.Runtime,
-		txQueue:        new(transaction.PriorityQueue),
-		slotToProof:    make(map[uint64]*VrfOutputAndProof),
-		newBlocks:      cfg.NewBlocks,
-		authorityData:  cfg.AuthData,
-		epochThreshold: cfg.EpochThreshold,
-		done:           cfg.Done,
+		blockState:       cfg.BlockState,
+		storageState:     cfg.StorageState,
+		keypair:          cfg.Keypair,
+		rt:               cfg.Runtime,
+		transactionQueue: cfg.TransactionQueue,
+		slotToProof:      make(map[uint64]*VrfOutputAndProof),
+		newBlocks:        cfg.NewBlocks,
+		authorityData:    cfg.AuthData,
+		epochThreshold:   cfg.EpochThreshold,
+		done:             cfg.Done,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -89,7 +90,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		return nil, err
 	}
 
-	log.Info("BABE config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
+	log.Info("[babe] config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
 
 	babeSession.randomness = [sr25519.VrfOutputLength]byte{babeSession.config.Randomness}
 
@@ -98,7 +99,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		return nil, err
 	}
 
-	log.Trace("BABE session", "authority index", babeSession.authorityIndex)
+	log.Trace("[babe]", "authority index", babeSession.authorityIndex)
 
 	return babeSession, nil
 }
@@ -112,30 +113,20 @@ func (b *Session) Start() error {
 		}
 	}
 
-	log.Trace("BABE", "epochThreshold", b.epochThreshold)
+	log.Trace("[babe]", "epochThreshold", b.epochThreshold)
 
 	var i uint64 = 0
 	var err error
 	for ; i < b.config.EpochLength; i++ {
 		b.slotToProof[i], err = b.runLottery(i)
 		if err != nil {
-			return fmt.Errorf("BABE: error running slot lottery at slot %d: error %s", i, err)
+			return fmt.Errorf("error running slot lottery at slot %d: error %s", i, err)
 		}
 	}
 
 	go b.invokeBlockAuthoring()
 
 	return nil
-}
-
-// PushToTxQueue adds a ValidTransaction to BABE's transaction queue
-func (b *Session) PushToTxQueue(vt *transaction.ValidTransaction) {
-	b.txQueue.Insert(vt)
-}
-
-// PeekFromTxQueue returns ValidTransaction
-func (b *Session) PeekFromTxQueue() *transaction.ValidTransaction {
-	return b.txQueue.Peek()
 }
 
 // AuthorityData returns the data related to the authority
@@ -170,17 +161,17 @@ func (b *Session) invokeBlockAuthoring() {
 	var slotNum uint64 = 0
 
 	if b.config == nil {
-		log.Error("BABE block authoring", "error", "config is nil")
+		log.Error("[babe] block authoring", "error", "config is nil")
 		return
 	}
 
 	if b.blockState == nil {
-		log.Error("BABE block authoring", "error", "blockState is nil")
+		log.Error("[babe] block authoring", "error", "blockState is nil")
 		return
 	}
 
 	if b.storageState == nil {
-		log.Error("BABE block authoring", "error", "storageState is nil")
+		log.Error("[babe] block authoring", "error", "storageState is nil")
 		return
 	}
 
@@ -201,7 +192,7 @@ func (b *Session) invokeBlockAuthoring() {
 func (b *Session) handleSlot(slotNum uint64) {
 	parentHeader := b.blockState.LatestHeader()
 	if parentHeader == nil {
-		log.Error("BABE block authoring", "error", "parent header is nil")
+		log.Error("[babe] block authoring", "error", "parent header is nil")
 	} else {
 		currentSlot := Slot{
 			start:    uint64(time.Now().Unix()),
@@ -214,18 +205,18 @@ func (b *Session) handleSlot(slotNum uint64) {
 			log.Error("BABE block authoring", "error", err)
 		} else {
 			hash := block.Header.Hash()
-			log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
-			log.Debug("BABE built block", "header", block.Header, "body", block.Body)
+			log.Info("[babe]", "built block", hash.String(), "number", block.Header.Number)
+			log.Debug("[babe] built block", "header", block.Header, "body", block.Body)
 
 			b.newBlocks <- *block
 			err = b.blockState.AddBlock(block)
 			if err != nil {
-				log.Error("BABE block authoring", "error", err)
+				log.Error("[babe] block authoring", "error", err)
 			}
 
 			err = b.storageState.SetLatestHeaderHash(hash[:])
 			if err != nil {
-				log.Error("BABE block authoring", "error", err)
+				log.Error("[babe] block authoring", "error", err)
 			}
 
 		}
@@ -259,7 +250,7 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 		copy(outbytes[:], output)
 		proofbytes := [sr25519.VrfProofLength]byte{}
 		copy(proofbytes[:], proof)
-		log.Trace("BABE lottery", "won slot", slot)
+		log.Trace("[babe] lottery", "won slot", slot)
 		return &VrfOutputAndProof{
 			output: outbytes,
 			proof:  proofbytes,
@@ -337,13 +328,15 @@ func calculateThreshold(C1, C2, authorityIndex uint64, authorityWeights []uint64
 
 // construct a block for this slot with the given parent
 func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
-	log.Debug("build-block", "parent", parent, "slot", slot)
+	log.Trace("[babe] build block", "parent", parent, "slot", slot)
 
 	// create pre-digest
 	preDigest, err := b.buildBlockPreDigest(slot)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Trace("[babe] built pre-digest")
 
 	// create new block header
 	number := big.NewInt(0).Add(parent.Number, big.NewInt(1))
@@ -362,25 +355,32 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, err
 	}
 
+	log.Trace("[babe] initialized block")
+
 	// add block inherents
 	err = b.buildBlockInherents(slot)
 	if err != nil {
 		return nil, fmt.Errorf("cannot build inherents: %s", err)
 	}
 
+	log.Trace("[babe] built block inherents")
+
 	// add block extrinsics
 	included, err := b.buildBlockExtrinsics(slot)
 	if err != nil {
-		return nil, fmt.Errorf("cannot build extrisnics: %s", err)
+		return nil, fmt.Errorf("cannot build extrinsics: %s", err)
 	}
 
+	log.Trace("[babe] built block extrinsics")
+
 	// finalize block
-	log.Trace("build_block finalize block")
 	header, err = b.finalizeBlock()
 	if err != nil {
 		b.addToQueue(included)
 		return nil, fmt.Errorf("cannot finalize block: %s", err)
 	}
+
+	log.Trace("[babe] finalized block")
 
 	header.ParentHash = parent.Hash()
 	header.Number.Add(parent.Number, big.NewInt(1))
@@ -395,6 +395,8 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 	}
 
 	header.Digest = append(header.Digest, seal.Encode())
+
+	log.Trace("[babe] built block seal")
 
 	body, err := extrinsicsToBody(included)
 	if err != nil {
@@ -468,8 +470,8 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 
 	// TODO: check when block is full
 	for !hasSlotEnded(slot) && extrinsic != nil {
-		log.Trace("build_block", "applying extrinsic", extrinsic)
-		ret, err := b.applyExtrinsic(*extrinsic)
+		log.Trace("[babe] build block", "applying extrinsic", extrinsic)
+		ret, err := b.applyExtrinsic(extrinsic)
 		if err != nil {
 			return nil, err
 		}
@@ -477,20 +479,20 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 		// if ret == 0x0001, there is a dispatch error; if ret == 0x01, there is an apply error
 		if ret[0] == 1 || bytes.Equal(ret[:2], []byte{0, 1}) {
 			// TODO: specific error code checking
-			log.Error("build_block apply extrinsic", "error", ret, "extrinsic", extrinsic)
+			log.Error("[babe] build block apply extrinsic", "error", ret, "extrinsic", extrinsic)
 
 			// remove invalid extrinsic from queue
-			b.txQueue.Pop()
+			b.transactionQueue.Pop()
 
 			// re-add previously popped extrinsics back to queue
 			b.addToQueue(included)
 
 			return nil, errors.New("could not apply extrinsic")
 		}
-		log.Trace("build_block applied extrinsic", "extrinsic", extrinsic)
+		log.Trace("[babe] build block applied extrinsic", "extrinsic", extrinsic)
 
 		// keep track of included transactions; re-add them to queue later if block building fails
-		t := b.txQueue.Pop()
+		t := b.transactionQueue.Pop()
 		included = append(included, t)
 		extrinsic = b.nextReadyExtrinsic()
 	}
@@ -528,13 +530,13 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 
 func (b *Session) addToQueue(txs []*transaction.ValidTransaction) {
 	for _, t := range txs {
-		b.txQueue.Insert(t)
+		b.transactionQueue.Push(t)
 	}
 }
 
 // nextReadyExtrinsic peeks from the transaction queue. it does not remove any transactions from the queue
-func (b *Session) nextReadyExtrinsic() *types.Extrinsic {
-	transaction := b.txQueue.Peek()
+func (b *Session) nextReadyExtrinsic() types.Extrinsic {
+	transaction := b.transactionQueue.Peek()
 	if transaction == nil {
 		return nil
 	}
@@ -549,7 +551,7 @@ func extrinsicsToBody(txs []*transaction.ValidTransaction) (*types.Body, error) 
 	extrinsics := []types.Extrinsic{}
 
 	for _, tx := range txs {
-		extrinsics = append(extrinsics, *tx.Extrinsic)
+		extrinsics = append(extrinsics, tx.Extrinsic)
 	}
 
 	return types.NewBodyFromExtrinsics(extrinsics)

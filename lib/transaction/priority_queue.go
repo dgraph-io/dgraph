@@ -62,10 +62,28 @@ func (q *PriorityQueue) Peek() *ValidTransaction {
 	return q.head.data
 }
 
-// Insert traverses the list and places a valid transaction with priority p directly before the
+// Pending returns all the transactions currently in the queue
+func (q *PriorityQueue) Pending() []*ValidTransaction {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	txs := []*ValidTransaction{}
+
+	curr := q.head
+	for {
+		if curr == nil {
+			return txs
+		}
+
+		txs = append(txs, curr.data)
+		curr = curr.child
+	}
+}
+
+// Push traverses the list and places a valid transaction with priority p directly before the
 // first node with priority p-1. If there are other nodes with priority p, the new node is placed
 // behind them.
-func (q *PriorityQueue) Insert(vt *ValidTransaction) {
+func (q *PriorityQueue) Push(vt *ValidTransaction) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	curr := q.head

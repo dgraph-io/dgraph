@@ -42,7 +42,7 @@ var (
 	// DefaultNetworkBootnodes Must be non-nil to match toml parsing semantics
 	DefaultNetworkBootnodes = []string{}
 	// DefaultRPCModules holds defaults RPC modules
-	DefaultRPCModules = []string{"system"}
+	DefaultRPCModules = []string{"system", "author"}
 )
 
 var (
