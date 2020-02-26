@@ -86,7 +86,7 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
-			// Start batching for the given keys
+			// Start batching for the given keys.
 			for _, itr := range mapItrs {
 				go itr.startBatching(partitionKeys)
 			}
@@ -108,14 +108,13 @@ func (r *reducer) run() error {
 
 func (r *reducer) createBadger(i int) *badger.DB {
 	if r.opt.BadgerKeyFile != "" {
-		// need to set zero addr in WorkerConfig before doing license check.
+		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
-		// non-nil key file
+
 		if !worker.EnterpriseEnabled() {
-			// not licensed --> crash.
+			// Crash since the enterprise license is not enabled..
 			log.Fatal("Enterprise License needed for the Encryption feature.")
 		} else {
-			// licensed --> OK.
 			log.Printf("Encryption feature enabled. Using encryption key file: %v", r.opt.BadgerKeyFile)
 		}
 	}
@@ -125,13 +124,13 @@ func (r *reducer) createBadger(i int) *badger.DB {
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).WithCompression(bo.None)
 
-	// Over-write badger options based on the options provided by the user.
+	// Overwrite badger options based on the options provided by the user.
 	r.setBadgerOptions(&opt)
 
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 
-	// zero out the key from memory.
+	// Zero out the key from memory.
 	opt.EncryptionKey = nil
 
 	r.dbs = append(r.dbs, db)
@@ -216,7 +215,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 				ie.batch = append(ie.batch, eBuf)
 				continue
 			}
-			// present key is not part of this batch so track that we have already read the key.
+
+			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
 			break
 		}
@@ -239,8 +239,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		partitionKey: nil,
 	}
 }
-func (mi *mapIterator) Close() error {
 
+func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
 }
 
@@ -387,17 +387,16 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	encoderCh <- req
 	writerCh <- req
 
-	// Close the encoders
+	// Close the encodes.
 	close(encoderCh)
 	encoderCloser.SignalAndWait()
 
-	// Close the writer
+	// Close the writer.
 	close(writerCh)
 	writerCloser.SignalAndWait()
 }
 
 func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEntry {
-
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
@@ -422,12 +421,14 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		if len(currentBatch) == 0 {
 			return
 		}
-		// calculate count entries
+
+		// Calculate count entries.
 		countEntries = append(countEntries, &countIndexEntry{
 			key:   y.Copy(currentKey),
 			count: len(currentBatch),
 		})
-		// Now make a list and write it to badger
+
+		// Now make a list and write it to badger.
 		sort.Slice(currentBatch, func(i, j int) bool {
 			return less(currentBatch[i], currentBatch[j])
 		})
@@ -485,13 +486,15 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		}
 		size += kv.Size()
 		list.Kv = append(list.Kv, kv)
+
 		uids = uids[:0]
 		pl.Reset()
 		// Now we have written the list. It's time to reuse the current batch.
 		freelist = append(freelist, currentBatch...)
-		// reset the current batch
+		// Reset the current batch.
 		currentBatch = currentBatch[:0]
 	}
+
 	for _, entry := range bufEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 		entryKey, err := GetKeyForMapEntry(entry)
@@ -502,10 +505,10 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		currentKey = append(currentKey[:0], entryKey...)
 		var mapEntry *pb.MapEntry
 		if len(freelist) == 0 {
-			// Create a new map entry
+			// Create a new map entry.
 			mapEntry = &pb.MapEntry{}
 		} else {
-			// Obtain from free list
+			// Obtain from freelist.
 			mapEntry = freelist[0]
 			mapEntry.Reset()
 			freelist = freelist[1:]
@@ -513,6 +516,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		x.Check(mapEntry.Unmarshal(entry))
 		currentBatch = append(currentBatch, mapEntry)
 	}
+
 	appendToList()
 	return countEntries
 }
