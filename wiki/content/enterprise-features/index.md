@@ -66,21 +66,34 @@ environment variables:
 
 ### Create a Backup
 
-To create a backup, make an HTTP POST request to `/admin/backup` to a Dgraph
+To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
+Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
 
 #### Backup to Amazon S3
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amazonaws.com/<bucketname>"
+```graphql
+mutation {
+  backup(input: {destination: "s3://s3.us-west-2.amazonaws.com/<bucketname>"}) {
+    response {
+      message
+    }
+  }
+}
 ```
 
 #### Backup to Minio
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
+```graphql
+mutation {
+  backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>"}) {
+    response {
+      message
+    }
+  }
+}
 ```
 
 #### Disabling HTTPS for S3 and Minio backups
@@ -88,10 +101,16 @@ $ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000
 By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
 the case, the backup will fail. To send a backup to a bucket using HTTP
 (insecure), set the query parameter `secure=false` with the destination
-endpoint:
+endpoint in the `destination` field:
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>?secure=false"
+```graphql
+mutation {
+  backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>?secure=false"}) {
+    response {
+      message
+    }
+  }
+}
 ```
 
 #### Overriding Credentials
@@ -107,9 +126,14 @@ Minio bucket that requires no credentials (i.e a public bucket).
 
 #### Backup to NFS
 
-```
-# localhost:8080 is the default Alpha HTTP port
-$ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
+```graphql
+mutation {
+  backup(input: {destination: "/path/to/local/directory"}) {
+    response {
+      message
+    }
+  }
+}
 ```
 
 A local filesystem will work only if all the Alphas have access to it (e.g all
@@ -120,11 +144,20 @@ multiple machines and/or containers.
 #### Forcing a Full Backup
 
 By default, an incremental backup will be created if there's another full backup
-in the specified location. To create a full backup, set the `force_full` parameter
-to `true`. Each series of backups can be
+in the specified location. To create a full backup, set the `force_full` field
+to `true` in the mutation. Each series of backups can be
 identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
+```graphql
+mutation {
+  backup(input: {destination: "/path/to/local/directory", forceFull: true}) {
+    response {
+      message
+    }
+  }
+}
+```
 
 ### Restore from Backup
 
@@ -235,7 +268,7 @@ If you are using docker-compose, a sample cluster can be set up by:
 ### Set up ACL Rules
 
 Now that your cluster is running with the ACL feature turned on, you can set up the ACL
-rules. This can be done using the web UI Ratel or from the command line.
+rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
 
 A typical workflow is the following:
 
@@ -247,51 +280,100 @@ A typical workflow is the following:
 
 #### Using the Command Line
 
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:9080`
+1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`
 as a demo, make sure to choose the correct IP and port for your environment:
-```bash
-dgraph acl -a localhost:9080 mod -u groot --new_password
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
+    user {
+      name
+    }
+  }
+}
 ```
-Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
-`groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users
-to this group if required.
+The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
 2. Create a regular user
-```bash
-dgraph acl -a localhost:9080 add -u alice
+```graphql
+mutation {
+  addUser(input: [{name: "alice", password: "newpassword"}]) {
+    user {
+      name
+    }
+  }
+}
 ```
 Now you should see the following output
-```console
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-New password for alice:
-Retype new password for alice:
-Created new user with id alice
+```json
+{
+  "data": {
+    "addUser": {
+      "user": [
+        {
+          "name": "alice"
+        }
+      ]
+    }
+  }
+}
 ```
 3. Create a group
-```bash
-dgraph acl -a localhost:9080 add -g dev
+```graphql
+mutation {
+  addGroup(input: [{name: "dev"}]) {
+    group {
+      name
+      users {
+        name
+      }
+    }
+  }
+}
 ```
-Again type in the groot password, and you should see the following output
-```console
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-Created new group with id dev
+Now you should see the following output
+```json
+{
+  "data": {
+    "addGroup": {
+      "group": [
+        {
+          "name": "dev",
+          "users": []
+        }
+      ]
+    }
+  }
+}
 ```
 4. Assign the user to the group
-```bash
-dgraph acl -a localhost:9080 mod -u alice -l dev
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}]}}) {
+    user {
+      name
+    }
+  }
+}
 ```
 The command above will add `alice` to the `dev` group. A user can be assigned to multiple groups.
-The multiple groups should be formated as a single string separated by `,`.
 For example, to assign the user `alice` to both the group `dev` and the group `sre`, the command should be
-```bash
-dgraph acl -a localhost:9080 mod -u alice -l dev,sre
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}, {name: "sre"}]}}) {
+    user {
+      name
+    }
+  }
+}
 ```
 5. Assign predicate permissions to the group
-```bash
-dgraph acl mod -a localhost:9080 -g dev -p friend -m 7
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "friend", permission: 7}]}}) {
+    group {
+      name
+    }
+  }
+}
 ```
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
@@ -302,53 +384,163 @@ multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRI
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for
 a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
-```bash
-dgraph acl mod -a localhost:9080 -g dev -p name -m 7
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "name", permission: 7}]}}) {
+    group {
+      name
+    }
+  }
+}
 ```
 
 ### Retrieve Users and Groups Information 
 
 The following examples show how to retrieve information about users and groups.
 
-#### Using the Command Line
+#### Using a GraphQL tool
 
 1. Check information about a user
-```bash
-dgraph acl info -a localhost:9080 -u alice
+```graphql
+query {
+  getUser(name: "alice") {
+    name
+    groups {
+      name
+    }
+  }
+}
 ```
 and the output should show the groups that the user has been added to, e.g.
-```bash
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-User  : alice
-UID   : 0x3
-Group : dev
-Group : sre
+```json
+{
+  "data": {
+    "getUser": {
+      "name": "alice",
+      "groups": [
+        {
+          "name": "dev"
+        }
+      ]
+    }
+  }
+}
 ```
 2. Check information about a group
-```bash
-dgraph acl info -a localhost:9080 -g dev
+```graphql
+{
+  getGroup(name: "dev") {
+    name
+    users {
+      name
+    }
+    rules {
+      permission
+      predicate
+    }
+  }
+}
+```
+and the output should include the users in the group, as well as the permissions, the
+group's ACL rules, e.g.
+```json
+{
+  "data": {
+    "getGroup": {
+      "name": "dev",
+      "users": [
+        {
+          "name": "alice"
+        }
+      ],
+      "rules": [
+        {
+          "permission": 7,
+          "predicate": "friend"
+        },
+        {
+          "permission": 7,
+          "predicate": "name"
+        }
+      ]
+    }
+  }
+}
+```
+3. Query for users 
+```graphql
+query {
+  queryUser(filter: {name: {eq: "alice"}}) {
+    name
+    groups {
+      name
+    }
+  }
+}
+```
+and the output should show the groups that the user has been added to, e.g.
+```json
+{
+  "data": {
+    "queryUser": [
+      {
+        "name": "alice",
+        "groups": [
+          {
+            "name": "dev"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+4. Query for groups
+```graphql
+query {
+  queryGroup(filter: {name: {eq: "dev"}}) {
+    name
+    users {
+      name
+    }
+    rules {
+      permission
+      predicate
+    }
+  }
+}
 ```
 and the output should include the users in the group, as well as the permissions the
 group's ACL rules, e.g.
-```bash
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-Group: dev
-UID  : 0x4
-ID   : dev
-Users: alice
-ACL  : {friend  7}
-ACL  : {name  7}
+```json
+{
+  "data": {
+    "queryGroup": [
+      {
+        "name": "dev",
+        "users": [
+          {
+            "name": "alice"
+          }
+        ],
+        "rules": [
+          {
+            "permission": 7,
+            "predicate": "friend"
+          },
+          {
+            "permission": 7,
+            "predicate": "name"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
-3. Run ACL commands as another guardian (member of `guardians` group). 
+5. Run ACL commands as another guardian (member of `guardians` group). 
 You can also run ACL commands with other users. Say we have a user `alice` which is member
-of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
-```bash
-dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
-```
-Above command will show information about user `groot`.
+of `guardians` group and its password is `simple_alice`.
 
 ### Access Data Using a Client
 
@@ -359,18 +551,22 @@ A sample code using the dgo client can be found
 [here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go). An example using
 dgraph4j can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
 
-### Access Data Using Curl
+### Access Data Using the GraphQL API
 
 Dgraph's HTTP API also supports authenticated operations to access ACL-protected
 data.
 
-To login, send a POST request to `/login` with the userid and password. For example, to log in as the root user groot:
+To login, send a POST request to `/admin` with the GraphQL mutation. For example, to log in as the root user groot:
 
-```sh
-$ curl -X POST localhost:8080/login -d '{
-  "userid": "groot",
-  "password": "password"
-}'
+```graphql
+mutation {
+  login(userId: "groot", password: "password") {
+    response {
+      accessJWT
+      refreshJWT
+    }
+  }
+}
 ```
 
 Response:
@@ -384,20 +580,29 @@ Response:
 ```
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
-You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. For example:
+You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in the login response in the GraphQL tool which you're using to make the request. For example:
 
-```sh
-$ curl -X POST -H 'Content-Type: application/graphql+-' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/query -d '...'
-$ curl -X POST -H 'Content-Type: application/json' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/mutate -d '...'
-$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/alter -d '...'
+```graphql
+mutation {
+  addUser(input: [{name: "alice", password: "newpassword"}]) {
+    user {
+      name
+    }
+  }
+}
 ```
 
-The refresh token can be used in the `/login` POST body to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
+The refresh token can be used in the `/admin` POST GraphQL mutation to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
 
-```sh
-$ curl -X POST localhost:8080/login -d '{
-  "refresh_token": "<refreshJWT>"
-}'
+```graphql
+mutation {
+  login(userId: "groot", password: "newpassword", refreshToken: "<refreshJWT>") {
+    response {
+      accessJWT
+      refreshJWT
+    }
+  }
+}
 ```
 
 ## Encryption at Rest
