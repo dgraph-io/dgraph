@@ -25,10 +25,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -41,9 +43,21 @@ var (
 	dg          *dgo.Dgraph
 )
 
+func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (*api.Response, error) {
+	for {
+		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+
+		return response, err
+	}
+}
+
 // Just check the first and last entries and assumes everything in between is okay.
 func checkLoadedData(t *testing.T) {
-	resp, err := dg.NewTxn().Query(context.Background(), `
+	resp, err := runQueryWithRetry(context.Background(), dg, `
 		{
 			q(func: anyofterms(name, "Homer")) {
 				name
@@ -68,7 +82,7 @@ func checkLoadedData(t *testing.T) {
 		}
 	`, string(resp.GetJson()))
 
-	resp, err = dg.NewTxn().Query(context.Background(), `
+	resp, err = runQueryWithRetry(context.Background(), dg, `
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				name

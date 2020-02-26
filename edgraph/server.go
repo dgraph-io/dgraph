@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -252,6 +253,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
+		}
+
+		if schema.State().IsBeingModified(update.Predicate) {
+			return nil, fmt.Errorf("schema for %v is already being modified", update.Predicate)
 		}
 	}
 

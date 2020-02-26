@@ -263,7 +263,7 @@ func TestRebuildIndex(t *testing.T) {
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get("name2")
+	currentSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
 		StartTs:       5,
@@ -313,7 +313,7 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get("name2")
+	currentSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
 		StartTs:       5,
@@ -324,7 +324,7 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
 	require.NoError(t, schema.ParseBytes([]byte(mutatedSchemaVal), 1))
-	newSchema, _ := schema.State().Get("name2")
+	newSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
 	rb = IndexRebuild{
 		Attr:          "name2",
 		StartTs:       6,
@@ -368,7 +368,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get("friend")
+	currentSchema, _ := schema.State().Get(schema.ReadCtx, "friend")
 	rb := IndexRebuild{
 		Attr:          "friend",
 		StartTs:       16,
