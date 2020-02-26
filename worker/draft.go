@@ -114,6 +114,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		closer:     y.NewCloser(3), // Matches CLOSER:1
 	}
 
+	if !x.WorkerConfig.LudicrousMode {
+		return n
+	}
+
 	process := func(b batch) error {
 		var retries int
 		for _, edge := range b.data {
@@ -1256,6 +1260,9 @@ func (n *node) rollupLists(readTs uint64) error {
 var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
+	if x.WorkerConfig.LudicrousMode {
+		return nil
+	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return errNoConnection
