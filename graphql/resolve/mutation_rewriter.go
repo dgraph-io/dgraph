@@ -302,20 +302,7 @@ func (mrw *addGroupRewriter) Rewrite(
 	// remove rules with same predicate name for each group input
 	for i, groupInput := range addGroupInput {
 		rules, _ := groupInput.(map[string]interface{})["rules"].([]interface{})
-		predicateMap := make(map[string]bool, len(rules))
-		j := 0
-
-		for _, rule := range rules {
-			predicate, _ := rule.(map[string]interface{})["predicate"].(string)
-
-			if !predicateMap[predicate] {
-				predicateMap[predicate] = true
-				rules[j] = rule
-				j++
-			}
-		}
-
-		rules = rules[:j]
+		rules = removeDuplicateRuleRef(rules)
 		addGroupInput[i].(map[string]interface{})["rules"] = rules
 	}
 
@@ -457,33 +444,6 @@ func (urw *updateRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
 }
 
-func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.GraphQuery {
-	ruleQuery := rewriteUpsertQueryFromMutation(m)
-	ruleQuery.Attr = variable
-	ruleQuery.Var = ""
-	ruleQuery.Children = append(ruleQuery.Children, &gql.GraphQuery{
-		Attr: "dgraph.acl.rule",
-		Var:  variable,
-		Filter: &gql.FilterTree{
-			Op:    "",
-			Child: nil,
-			Func: &gql.Function{
-				Name: "eq",
-				Args: []gql.Arg{
-					{
-						Value: "dgraph.rule.predicate",
-					},
-					{
-						Value: predicate,
-					},
-				},
-			},
-		},
-	})
-
-	return ruleQuery
-}
-
 func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	mutatedType := m.MutatedType()
 
@@ -507,7 +467,8 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*
 	ruleType := ruleField.Type()
 
 	if setArg != nil {
-		rules := setArg.(map[string]interface{})["rules"].([]interface{})
+		rules, _ := setArg.(map[string]interface{})["rules"].([]interface{})
+		rules = removeDuplicateRuleRef(rules)
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
 			variable := varGen.next(ruleType)
@@ -552,7 +513,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*
 	}
 
 	if delArg != nil {
-		rules := delArg.(map[string]interface{})["rules"].([]interface{})
+		rules, _ := delArg.(map[string]interface{})["rules"].([]interface{})
 		for _, predicate := range rules {
 			variable := varGen.next(ruleType)
 
@@ -606,6 +567,57 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
 	return ((*updateRewriter)(urw)).FromMutationResult(mutation, assigned, result)
+}
+
+// writeAclRuleQuery returns a *gql.GraphQuery to query a rule inside a group based on
+// its predicate value
+func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.GraphQuery {
+	ruleQuery := rewriteUpsertQueryFromMutation(m)
+	ruleQuery.Attr = variable
+	ruleQuery.Var = ""
+	ruleQuery.Children = append(ruleQuery.Children, &gql.GraphQuery{
+		Attr: "dgraph.acl.rule",
+		Var:  variable,
+		Filter: &gql.FilterTree{
+			Op:    "",
+			Child: nil,
+			Func: &gql.Function{
+				Name: "eq",
+				Args: []gql.Arg{
+					{
+						Value: "dgraph.rule.predicate",
+					},
+					{
+						Value: predicate,
+					},
+				},
+			},
+		},
+	})
+
+	return ruleQuery
+}
+
+// removeDuplicateRuleRef removes duplicate rules based on predicate value
+// for duplicate rules, only the last rule with duplicate predicate name is preserved
+func removeDuplicateRuleRef(rules []interface{}) []interface{} {
+	predicateMap := make(map[string]int, len(rules))
+	i := 0
+
+	for _, rule := range rules {
+		predicate, _ := rule.(map[string]interface{})["predicate"].(string)
+
+		// this ensures that only the last rule with duplicate predicate name is preserved
+		if idx, ok := predicateMap[predicate]; !ok {
+			predicateMap[predicate] = i
+			rules[i] = rule
+			i++
+		} else {
+			rules[idx] = rule
+		}
+	}
+
+	return rules[:i]
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {
