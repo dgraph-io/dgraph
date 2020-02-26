@@ -1250,7 +1250,7 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 ### More about /health endpoint
 
-The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about the running worker.
 
 ```graphql
 query {

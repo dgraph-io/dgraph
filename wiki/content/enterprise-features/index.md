@@ -441,7 +441,7 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
-and the output should include the users in the group, as well as the permissions the
+and the output should include the users in the group, as well as the permissions, the
 group's ACL rules, e.g.
 ```json
 {
@@ -580,7 +580,7 @@ Response:
 ```
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
-You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in login response, in the GraphQL tool which you're using to make the request. For example:
+You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in the login response in the GraphQL tool which you're using to make the request. For example:
 
 ```graphql
 mutation {
