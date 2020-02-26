@@ -197,58 +197,6 @@ func TestAnnounceBlock(t *testing.T) {
 	}
 }
 
-func TestProcessBlockAnnounceMessage(t *testing.T) {
-	t.Skip()
-	msgRec := make(chan network.Message)
-	msgSend := make(chan network.Message)
-
-	cfg := &Config{
-		MsgRec:  msgRec,
-		MsgSend: msgSend,
-	}
-
-	s, dbSrv := newTestService(t, cfg)
-
-	err := dbSrv.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer func() {
-		err = dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	err = s.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	blockAnnounce := &network.BlockAnnounceMessage{
-		Number: big.NewInt(1),
-	}
-
-	// simulate mssage sent from network service
-	msgRec <- blockAnnounce
-
-	select {
-	case msg := <-msgSend:
-		msgType := msg.GetType()
-		if msgType != network.BlockRequestMsgType {
-			t.Error(
-				"received unexpected message type",
-				"\nexpected:", network.BlockRequestMsgType,
-				"\nreceived:", msgType,
-			)
-		}
-	case <-time.After(TestMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-}
-
 func TestProcessBlockResponseMessage(t *testing.T) {
 	tt := trie.NewEmptyTrie(nil)
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)

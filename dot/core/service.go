@@ -17,12 +17,19 @@
 package core
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
+	mrand "math/rand"
+	"time"
+
+	"golang.org/x/exp/rand"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -39,16 +46,17 @@ var _ services.Service = &Service{}
 // BABE session, and network service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
-	blockState      BlockState
-	storageState    StorageState
-	rt              *runtime.Runtime
-	bs              *babe.Session
-	keys            []crypto.Keypair
-	blkRec          <-chan types.Block     // receive blocks from BABE session
-	msgRec          <-chan network.Message // receive messages from network service
-	epochDone       <-chan struct{}        // receive from this channel when BABE epoch changes
-	msgSend         chan<- network.Message // send messages to network service
-	isBabeAuthority bool
+	blockState        BlockState
+	storageState      StorageState
+	rt                *runtime.Runtime
+	bs                *babe.Session
+	keys              []crypto.Keypair
+	blkRec            <-chan types.Block     // receive blocks from BABE session
+	msgRec            <-chan network.Message // receive messages from network service
+	epochDone         <-chan struct{}        // receive from this channel when BABE epoch changes
+	msgSend           chan<- network.Message // send messages to network service
+	isBabeAuthority   bool
+	requestedBlockIDs map[uint64]bool // track requested block id messages
 }
 
 // Config holds the config obj
@@ -140,6 +148,8 @@ func NewService(cfg *Config) (*Service, error) {
 			isBabeAuthority: false,
 		}
 	}
+
+	srv.requestedBlockIDs = make(map[uint64]bool)
 
 	// core service
 	return srv, nil
@@ -326,25 +336,51 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 // announce messages (block announce messages include the header but the full
 // block is required to execute `core_execute_block`).
 func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
-	data := msg.(*network.BlockAnnounceMessage)
-
-	header, err := types.NewHeader(data.ParentHash, data.Number, data.StateRoot, data.ExtrinsicsRoot, data.Digest)
-	if err != nil {
-		return err
+	blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
+	if !ok {
+		return errors.New("could not cast network.Message to BlockAnnounceMessage")
 	}
 
-	// TODO: check if we should send block request message
-	_, err = s.blockState.GetHeader(header.Hash())
-	if err != nil && err.Error() == "Key not found" {
-		err = s.blockState.SetHeader(header)
+	if s.blockState == nil {
+		return errors.New("ProcessBlockAnnounceMessage error: blockState is nil")
+	}
+
+	latestBlockNum := s.blockState.LatestHeader().Number
+	messageBlockNumMinusOne := big.NewInt(0).Sub(blockAnnounceMessage.Number, big.NewInt(1))
+
+	// check if we should send block request message
+	if latestBlockNum.Cmp(messageBlockNumMinusOne) == -1 {
+
+		//generate random ID
+		s1 := rand.NewSource(uint64(time.Now().UnixNano()))
+		seed := rand.New(s1).Uint64()
+		randomID := mrand.New(mrand.NewSource(int64(seed))).Uint64()
+
+		currentHash := s.blockState.LatestHeader().Hash()
+
+		header, err := types.NewHeader(blockAnnounceMessage.ParentHash, blockAnnounceMessage.Number, blockAnnounceMessage.StateRoot, blockAnnounceMessage.ExtrinsicsRoot, blockAnnounceMessage.Digest)
 		if err != nil {
+			log.Error("failed to create NewHeader from blockAnnounceMessage fields")
 			return err
 		}
-	} else {
-		return err
-	}
 
-	log.Info("[core] imported block", "number", header.Number, "hash", header.Hash())
+		blockRequest := &network.BlockRequestMessage{
+			ID:            randomID, // random
+			RequestedData: 2,        // block body
+			StartingBlock: append([]byte{0}, currentHash[:]...),
+			EndBlockHash:  optional.NewHash(true, header.Hash()),
+			Direction:     1,
+			Max:           optional.NewUint32(false, 0),
+		}
+
+		//track request
+		s.requestedBlockIDs[randomID] = true
+
+		// send block request message to network service
+		log.Debug("send blockRequest message to network service")
+		s.msgSend <- blockRequest
+
+	}
 
 	return nil
 }

@@ -88,7 +88,7 @@ func (status *status) handleConn(conn network.Conn) {
 	}
 }
 
-// handleMessage checks if the peer status message is compatibale with the host
+// handleMessage checks if the peer status message is compatible with the host
 // status message, then either manages peer status or closes peer connection
 func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 	ctx := context.Background()
@@ -101,6 +101,10 @@ func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 
 		// update peer status message
 		status.peerMessage[peer] = msg
+
+		// check if message arrived is a block bigger then our latest one
+		// if so, fallback
+		// BlockRequestMessage
 
 		// wait then send next host status message
 		go status.sendNextMessage(ctx, peer)
