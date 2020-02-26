@@ -182,11 +182,23 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
+{{% notice "note" %}}
+
+In functions, language lists (including the `@*` notation) are not allowed.
+Untagged predicates, Single language tags, and `.` notation work as described
+above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
+In [full-text search functions]({{< relref "#full-text-search" >}})
+(`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
+the default (English) full-text tokenizer is used. This does not mean that
+the value with the `en` tag will be searched when querying the untagged value,
+but that untagged values will be treated as English text. If you don't want that
+to be the case, use the appropriate tag for the desired language, both for
+mutating and querying the value.
+
+{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -1796,19 +1808,31 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 }
 {{< /runnable >}}
 
-
-
 ## Expand Predicates
 
 The `expand()` function can be used to expand the predicates out of a node. To
- use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
 Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
-There are four ways to use the `expand` function.
+There are two ways to use the `expand` function.
 
-* Predicates can be stored in a variable and passed to `expand()` to expand all
-  the predicates in the variable.
+* Types can be passed to `expand()` to expand all the predicates in the type.
+
+Query example: List the movies from the Harry Potter series:
+
+{{< runnable >}}
+{
+  all(func: eq(name@en, "Harry Potter")) @filter(type(Series)) {
+    name@en
+    expand(Series) {
+      name@en
+      expand(Film)
+    }
+  }
+}
+{{< /runnable >}}
+
 * If `_all_` is passed as an argument to `expand()`, the predicates to be
 expanded will be the union of fields in the types assigned to a given node.
 
@@ -1844,9 +1868,11 @@ owner
 veterinarian
 ```
 
+{{% notice "note" %}}
 For `string` predicates, `expand` only returns values not tagged with a language
 (see [language preference]({{< relref "#language-support" >}})).  So it's often 
 required to add `name@fr` or `name@.` as well to an expand query.
+{{% /notice  %}}
 
 ### Filtering during expand.
 

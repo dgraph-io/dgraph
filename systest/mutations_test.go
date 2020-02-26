@@ -563,7 +563,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]`),
+			"list":true}],`+x.InitialTypes),
 		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
@@ -585,7 +585,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]`),
+			"list":true}],`+x.InitialTypes),
 		string(resp.Json))
 }
 

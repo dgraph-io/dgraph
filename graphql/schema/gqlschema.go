@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 const (
@@ -38,8 +38,10 @@ const (
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
+	secretDirective = "secret"
 
 	deprecatedDirective = "deprecated"
+	NumUid              = "numUids"
 
 	Typename = "__typename"
 
@@ -69,6 +71,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -143,6 +146,11 @@ type directiveValidator func(
 type searchTypeIndex struct {
 	gqlType string
 	dgIndex string
+}
+
+var numUids = &ast.FieldDefinition{
+	Name: NumUid,
+	Type: &ast.Type{NamedType: "Int"},
 }
 
 // search arg -> supported GraphQL type
@@ -220,6 +228,7 @@ var scalarToDgraph = map[string]string{
 	"Float":    "float",
 	"String":   "string",
 	"DateTime": "dateTime",
+	"Password": "password",
 }
 
 var directiveValidators = map[string]directiveValidator{
@@ -227,6 +236,7 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:  searchValidation,
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
+	secretDirective:  passwordValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
@@ -287,6 +297,10 @@ func expandSchema(doc *ast.SchemaDocument) {
 					fields = append(fields, copyAstFieldDef(field))
 				}
 				defn.Fields = append(fields, defn.Fields...)
+				passwordDirective := i.Directives.ForName("secret")
+				if passwordDirective != nil {
+					defn.Directives = append(defn.Directives, passwordDirective)
+				}
 			}
 		}
 	}
@@ -330,6 +344,9 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
+				if directiveValidators[dir.Name] == nil {
+					continue
+				}
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
@@ -836,7 +853,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry},
+		Fields: []*ast.FieldDefinition{qry, numUids},
 	}
 }
 
@@ -869,7 +886,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			qry,
+			qry, numUids,
 		},
 	}
 }
@@ -889,6 +906,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 					NamedType: "String",
 				},
 			},
+			numUids,
 		},
 	}
 }
@@ -948,8 +966,47 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+	hasIDField := hasID(defn)
+	hasXIDField := hasXID(defn)
+	if !hasIDField && !hasXIDField {
+		return
+	}
+
+	idField := getIDField(defn)
+	if !hasIDField {
+		idField = getXIDField(defn)
+	}
+	passwordField := getPasswordField(defn)
+	if passwordField == nil {
+		return
+	}
+
+	qry := &ast.FieldDefinition{
+		Name: "check" + defn.Name + "Password",
+		Type: &ast.Type{
+			NamedType: defn.Name,
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			{
+				Name: idField[0].Name,
+				Type: idField[0].Type,
+			},
+			{
+				Name: passwordField.Name,
+				Type: &ast.Type{
+					NamedType: "String",
+					NonNull:   true,
+				},
+			},
+		},
+	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+}
+
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
 	addGetQuery(schema, defn)
+	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
 }
 
@@ -1080,20 +1137,18 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 
 		fldList = append(fldList, createField(schema, fld))
 	}
-	return fldList
+
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
-			continue
-		}
-
-		// Remove edges which have a reverse predicate as they should only be updated through their
-		// forward edge.
-		fname := fieldName(fld, defn.Name)
-		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
 			continue
 		}
 
@@ -1105,7 +1160,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		fldList = append(fldList, createField(schema, fld))
 	}
-	return fldList
+
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getIDField(defn *ast.Definition) ast.FieldList {
@@ -1118,6 +1178,18 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 			fldList = append(fldList, &newFld)
 			break
 		}
+	}
+	return fldList
+}
+
+func getPasswordField(defn *ast.Definition) *ast.FieldDefinition {
+	var fldList *ast.FieldDefinition
+	for _, directive := range defn.Directives {
+		fd := convertPasswordDirective(directive)
+		if fd == nil {
+			continue
+		}
+		fldList = fd
 	}
 	return fldList
 }
@@ -1168,10 +1240,19 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	}
 
 	direcArgs := make([]string, len(direcs))
+	idx := 0
 
-	for idx, dir := range direcs {
+	for _, dir := range direcs {
+		if directiveValidators[dir.Name] == nil {
+			continue
+		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
+		idx++
 	}
+	if idx == 0 {
+		return ""
+	}
+	direcArgs = direcArgs[:idx]
 
 	return " " + strings.Join(direcArgs, " ")
 }

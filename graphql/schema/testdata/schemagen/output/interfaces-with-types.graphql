@@ -64,6 +64,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -121,46 +122,57 @@ input StringHashFilter {
 
 type AddDroidPayload {
 	droid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
+	numUids: Int
 }
 
 type AddHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	numUids: Int
 }
 
 type AddStarshipPayload {
 	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+	numUids: Int
 }
 
 type DeleteCharacterPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteDroidPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteHumanPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteStarshipPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
 }
 
 type UpdateDroidPayload {
 	droid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
+	numUids: Int
 }
 
 type UpdateHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	numUids: Int
 }
 
 type UpdateStarshipPayload {
 	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+	numUids: Int
 }
 
 #######################

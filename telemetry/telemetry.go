@@ -51,12 +51,12 @@ const url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events
 
 // NewZero returns a Telemetry struct that holds information about the state of zero server.
 func NewZero(ms *pb.MembershipState) *Telemetry {
-	if len(ms.Cid) == 0 {
+	if len(ms.GetCid()) == 0 {
 		glog.V(2).Infoln("No CID found yet")
 		return nil
 	}
 	t := &Telemetry{
-		Cid:       ms.Cid,
+		Cid:       ms.GetCid(),
 		NumGroups: len(ms.GetGroups()),
 		NumZeros:  len(ms.GetZeros()),
 		Version:   x.Version(),
@@ -78,7 +78,7 @@ func NewZero(ms *pb.MembershipState) *Telemetry {
 // NewAlpha returns a Telemetry struct that holds information about the state of alpha server.
 func NewAlpha(ms *pb.MembershipState) *Telemetry {
 	return &Telemetry{
-		Cid:     ms.Cid,
+		Cid:     ms.GetCid(),
 		Version: x.Version(),
 		OS:      runtime.GOOS,
 		Arch:    runtime.GOARCH,
