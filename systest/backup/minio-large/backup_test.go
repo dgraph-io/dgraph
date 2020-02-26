@@ -16,12 +16,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -139,9 +140,26 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 }
 
 func runBackup(t *testing.T) {
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{backupDestination},
-	})
+	backupRequest := `mutation backup($dst: String!) {
+		backup(input: {destination: $dst}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDestination,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
