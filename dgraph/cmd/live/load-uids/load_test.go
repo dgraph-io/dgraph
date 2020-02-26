@@ -23,7 +23,9 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
@@ -41,6 +43,20 @@ var (
 	dg          *dgo.Dgraph
 )
 
+func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (
+	*api.Response, error) {
+
+	for {
+		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+
+		return response, err
+	}
+}
+
 func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 	require.NotEqual(t, gotMap["q"].([]interface{})[0].(map[string]interface{})["uid"],
 		wantMap["q"].([]interface{})[0].(map[string]interface{})["uid"],
@@ -52,7 +68,7 @@ func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 }
 
 func checkLoadedData(t *testing.T, newUids bool) {
-	resp, err := dg.NewTxn().Query(context.Background(), `
+	resp, err := runQueryWithRetry(context.Background(), dg, `
 		{
 			q(func: anyofterms(name, "Homer")) {
 				uid
@@ -83,7 +99,7 @@ func checkLoadedData(t *testing.T, newUids bool) {
 		testutil.CompareJSONMaps(t, wantMap, gotMap)
 	}
 
-	resp, err = dg.NewTxn().Query(context.Background(), `
+	resp, err = runQueryWithRetry(context.Background(), dg, `
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				uid

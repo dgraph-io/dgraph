@@ -195,7 +195,7 @@ func checkSchema(t *testing.T, query, key string) {
 		if strings.Contains(res, key) {
 			return
 		}
-		time.Sleep(time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		if i == 9 {
 			t.Fatalf("expected %v, got schema: %v", key, res)
