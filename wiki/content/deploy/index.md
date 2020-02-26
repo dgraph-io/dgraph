@@ -1236,6 +1236,9 @@ to learn more.
 ## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
+{{% notice "warning" %}}
+These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
+{{% /notice %}}
 
 * `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
@@ -1247,15 +1250,49 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 ### More about /health endpoint
 
-The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
-Here’s an example of JSON returned from `/health` endpoint:
+```graphql
+query {
+  health {
+    instance
+    address
+    version
+    status
+    lastEcho
+    group
+    uptime
+    
+  }
+}
+```
+
+Here’s an example of JSON returned from the above query:
 
 ```json
 {
-  "version": "v1.1.1",
-  "instance": "alpha",
-  "uptime": 75011100974
+  "data": {
+    "health": [
+      {
+        "instance": "zero",
+        "address": "localhost:5080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "0",
+        "uptime": 1504
+      },
+      {
+        "instance": "alpha",
+        "address": "localhost:7080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "1",
+        "uptime": 1505
+      }
+    ]
+  }
 }
 ```
 
@@ -2087,17 +2124,22 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ### Export Database
 
-An export of all nodes is started by locally accessing the export endpoint of any Alpha in the cluster.
+An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
-```sh
-$ curl localhost:8080/admin/export
+```graphql
+mutation {
+  export(input: {format: "rdf"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 {{% notice "warning" %}}By default, this won't work if called from outside the server where the Dgraph Alpha is running.
 You can specify a list or range of whitelisted IP addresses from which export or other admin operations
 can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
-
-This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
 This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
@@ -2114,22 +2156,36 @@ directory specified via the `--export` flag (defaults to a directory called `"ex
 entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
-`format` URL parameter. For example:
+`format` field. For example:
 
-```sh
-$ curl 'localhost:8080/admin/export?format=json'
+```graphql
+mutation {
+  export(input: {format: "json"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
 
 ### Shutdown Database
 
-A clean exit of a single Dgraph node is initiated by running the following command on that node.
+A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
 {{% /notice %}}
 
-```sh
-$ curl localhost:8080/admin/shutdown
+```graphql
+mutation {
+  shutdown {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 This stops the Alpha on which the command is executed and not the entire cluster.
