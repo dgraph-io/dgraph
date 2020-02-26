@@ -158,16 +158,26 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 
 	for i := 0; i < num; i++ {
 		go func() {
-			for j := range n.proposalCh {
-				process(j)
+			for {
+				select {
+				case <-ShutdownCh:
+					return
+				case j := <-n.proposalCh:
+					process(j)
+				}
 			}
 		}()
 	}
 
 	for i := 0; i < num*10; i++ {
 		go func() {
-			for j := range n.commitCh {
-				commit(j)
+			for {
+				select {
+				case <-ShutdownCh:
+					return
+				case j := <-n.commitCh:
+					commit(j)
+				}
 			}
 		}()
 	}
