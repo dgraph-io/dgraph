@@ -10,7 +10,7 @@
 
 ### Other components or 3rd party tools affected (or regression areas).
 
-<!-- Add here. -->
+<!-- Add here. e.g. "It breaks/affects Ratel UI behavior." -->
 
 ### Affected releases.
 

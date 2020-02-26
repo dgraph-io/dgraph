@@ -12,7 +12,7 @@
 
 ### Components affected by this PR <!-- (Optional) -->
 
-<!-- Please, take a minute to think about what or who this PR affects. Does it need help for doing documentation? Does it affect third parties (Open Source or not) applications? Make it clear so we can track and fix it. -->
+<!-- Please, take a minute to think about what or who this PR affects. Does it need help for doing documentation? Does it affect third parties (Open Source or not) applications? Make it clear so we can track and fix it. e.g. "It breaks/affects Ratel UI behavior." -->
 
 ### Does this PR break backwards compatibility?  <!-- (Optional) -->
 
