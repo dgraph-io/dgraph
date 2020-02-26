@@ -327,6 +327,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	srcFn := args.srcFn
 	q := args.q
 
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return err
+	}
+
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleValuePostings")
 	defer stop()
@@ -382,20 +387,28 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			vals, fcs, err := retrieveValuesAndFacets(args, pl, listType)
+			// If count is being requested, there is no need to populate value and facets matrix.
+			if q.DoCount {
+				count, err := countForValuePostings(args, pl, facetsTree, listType)
+				if err != nil && err != posting.ErrNoValue {
+					return err
+				}
+				out.Counts = append(out.Counts, uint32(count))
+				// Add an empty UID list to make later processing consistent.
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				continue
+			}
+
+			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
 			case err == posting.ErrNoValue || len(vals) == 0:
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-				if q.DoCount {
-					out.Counts = append(out.Counts, 0)
-				} else {
-					out.ValueMatrix = append(out.ValueMatrix,
-						&pb.ValueList{Values: []*pb.TaskValue{}})
-					if q.ExpandAll {
-						// To keep the cardinality same as that of ValueMatrix.
-						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
-					}
+				out.ValueMatrix = append(out.ValueMatrix,
+					&pb.ValueList{Values: []*pb.TaskValue{}})
+				if q.ExpandAll {
+					// To keep the cardinality same as that of ValueMatrix.
+					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 				}
 				continue
 			case err != nil:
@@ -418,8 +431,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					return err
 				}
 
-				// This means we fetched the value directly instead of fetching index key and intersecting.
-				// Lets compare the value and add filter the uid.
+				// This means we fetched the value directly instead of fetching index key and
+				// intersecting. Lets compare the value and add filter the uid.
 				if srcFn.fnType == compareAttrFn {
 					// Lets convert the val to its type.
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
@@ -439,14 +452,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			out.FacetMatrix = append(out.FacetMatrix, fcs)
 
 			switch {
-			case q.DoCount:
-				len := pl.Length(args.q.ReadTs, 0)
-				if len == -1 {
-					return posting.ErrTsTooOld
-				}
-				out.Counts = append(out.Counts, uint32(len))
-				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
@@ -502,54 +507,33 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	return nil
 }
 
-func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
-	[]types.Val, *pb.FacetsList, error) {
+func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool, fn func(p *pb.Posting)) error {
 	q := args.q
+
+	var langMatch *pb.Posting
 	var err error
-	var vals []types.Val
-	var fcs []*pb.Facets
 
-	// Retrieve values when facet filtering is not being requested.
-	if q.FacetsFilter == nil {
-		// Retrieve values.
-		switch {
-		case q.ExpandAll:
-			vals, err = pl.AllValues(args.q.ReadTs)
-		case listType && len(q.Langs) == 0:
-			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-		default:
-			var val types.Val
-			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
-			vals = append(vals, val)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
+	// We need to pick multiple postings only in two cases:
+	// 1. ExpandAll is true.
+	// 2. Attribute type is of list type and no lang tag is specified in query.
+	pickMultiplePostings := q.ExpandAll || (listType && len(q.Langs) == 0)
 
-		// Retrieve facets.
-		if q.FacetParam != nil {
-			fcs, err = pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs, listType)
+	if !pickMultiplePostings {
+		// Retrieve the posting that matches the language preferences.
+		langMatch, err = pl.PostingFor(q.ReadTs, q.Langs)
+		if err != nil && err != posting.ErrNoValue {
+			return err
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return vals, &pb.FacetsList{FacetsList: fcs}, nil
 	}
 
-	// Retrieve values when facet filtering is being requested.
-	facetsTree, err := preprocessFilter(q.FacetsFilter)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Retrieve the posting that matches the language preferences.
-	langMatch, err := pl.PostingFor(q.ReadTs, q.Langs)
-	if err != nil && err != posting.ErrNoValue {
-		return nil, nil, err
-	}
-	err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-		if listType && len(q.Langs) == 0 {
+	// TODO(Ashish): This function starts iteration from start(afterUID is always 0). This can be
+	// optimized in come cases. For example when we know lang tag to fetch, we can directly jump
+	// to posting starting with that UID(check list.ValueFor()).
+	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+		if q.ExpandAll {
+			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
+		} else if listType && len(q.Langs) == 0 {
 			// Don't retrieve tagged values unless explicitly asked.
 			if len(p.LangTag) > 0 {
 				return nil
@@ -561,26 +545,111 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, listType bool) (
 			}
 		}
 
+		// If filterTree is nil, applyFacetsTree returns true and nil error.
 		picked, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
 		}
 		if picked {
-			vals = append(vals, types.Val{
-				Tid:   types.TypeID(p.ValType),
-				Value: p.Value,
-			})
-			if q.FacetParam != nil {
-				fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-			}
+			fn(p)
 		}
-		return nil // continue iteration.
+
+		if pickMultiplePostings {
+			return nil // Continue iteration.
+		}
+
+		// We have picked the right posting, we can stop iteration now.
+		return posting.ErrStopIteration
+	})
+}
+
+func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool) (int, error) {
+	var filteredCount int
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+		filteredCount++
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return filteredCount, nil
+}
+
+func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	listType bool) ([]types.Val, *pb.FacetsList, error) {
+	q := args.q
+	var vals []types.Val
+	var fcs []*pb.Facets
+
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+		vals = append(vals, types.Val{
+			Tid:   types.TypeID(p.ValType),
+			Value: p.Value,
+		})
+		if q.FacetParam != nil {
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+		}
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
+}
+
+func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
+	fn func(*pb.Posting)) error {
+
+	return pl.Postings(opts, func(p *pb.Posting) error {
+		// If filterTree is nil, applyFacetsTree returns true and nil error.
+		pick, err := applyFacetsTree(p.Facets, facetsTree)
+		if err != nil {
+			return err
+		}
+		if pick {
+			fn(p)
+		}
+		return nil
+	})
+}
+
+func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	opts posting.ListOptions) (int, error) {
+
+	var filteredCount int
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+		filteredCount++
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return filteredCount, nil
+}
+
+func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
+	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
+	q := args.q
+
+	var fcsList []*pb.Facets
+	uidList := &pb.List{
+		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
+	}
+
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+		uidList.Uids = append(uidList.Uids, p.Uid)
+		if q.FacetParam != nil {
+			fcsList = append(fcsList, &pb.Facets{
+				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+			})
+		}
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return uidList, fcsList, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
@@ -652,12 +721,12 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "DoCount")
 				}
-				len := pl.Length(args.q.ReadTs, 0)
-				if len == -1 {
-					return posting.ErrTsTooOld
+				count, err := countForUidPostings(args, pl, facetsTree, opts)
+				if err != nil {
+					return err
 				}
-				out.Counts = append(out.Counts, uint32(len))
-				// Add an empty UID list to make later processing consistent
+				out.Counts = append(out.Counts, uint32(count))
+				// Add an empty UID list to make later processing consistent.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
@@ -706,33 +775,10 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
-				uidList := &pb.List{
-					Uids: make([]uint64, 0, pl.ApproxLen()),
-				}
-
-				var fcsList []*pb.Facets
-				err = pl.Postings(opts, func(p *pb.Posting) error {
-					pick, err := applyFacetsTree(p.Facets, facetsTree)
-					if err != nil {
-						return err
-					}
-					if pick {
-						// TODO: This way of picking Uids differs from how
-						// pl.Uids works. So, have a look to see if we're
-						// catching all the edge cases here.
-						uidList.Uids = append(uidList.Uids, p.Uid)
-						if q.FacetParam != nil {
-							fcsList = append(fcsList, &pb.Facets{
-								Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-							})
-						}
-					}
-					return nil // continue iteration.
-				})
+				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
 				if err != nil {
 					return err
 				}
-
 				out.UidMatrix = append(out.UidMatrix, uidList)
 				if q.FacetParam != nil {
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
