@@ -22,12 +22,14 @@ import (
 	"encoding/json"
 	"io"
 	"mime"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -44,6 +46,9 @@ type IServeGraphQL interface {
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
+
+	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
+	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
 }
 
 type graphqlHandler struct {
@@ -64,6 +69,10 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
 	gh.resolver = resolver
+}
+
+func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+	return gh.resolver.Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
@@ -97,14 +106,23 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("graphqlHandler not initialised")
 	}
 
+	ctx = x.AttachAccessJwt(ctx, r)
+
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		// Add remote addr as peer info so that the remote address can be logged
+		// inside Server.Login
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
+			ctx = peer.NewContext(ctx, &peer.Peer{
+				Addr: &net.TCPAddr{
+					IP:   net.ParseIP(ip),
+					Port: intPort,
+				},
+			})
+		}
+	}
+
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
-
-	if accessJwt := r.Header.Get("accessJwt"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
 
 	if err != nil {
 		res = schema.ErrorResponse(err)
@@ -113,7 +131,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-
 }
 
 func (gh *graphqlHandler) isValid() bool {

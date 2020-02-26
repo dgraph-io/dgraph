@@ -58,6 +58,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -115,46 +116,57 @@ input StringHashFilter {
 
 type AddAnswerPayload {
 	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
 }
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
 }
 
 type DeleteAnswerPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteQuestionPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAnswerPayload {
 	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type UpdateQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
 }
 
 #######################

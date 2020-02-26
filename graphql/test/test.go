@@ -23,9 +23,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // Various helpers used in GQL testing

@@ -66,7 +66,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := BuildTokens("Stemming works!", GetLangTokenizer(tokenizer, "en"))
+	tokens, err := BuildTokens("Stemming works!", GetTokenizerForLang(tokenizer, "en"))
 	require.Nil(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -134,7 +134,7 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := BuildTokens("Katzen und Auffassung und Auffassung", GetLangTokenizer(tokenizer, "de"))
+	tokens, err := BuildTokens("Katzen und Auffassung und Auffassung", GetTokenizerForLang(tokenizer, "de"))
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -216,7 +216,7 @@ func TestFullTextTokenizerCJKChinese(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("他是一个薪水很高的商人", GetLangTokenizer(tokenizer, "zh"))
+	got, err := BuildTokens("他是一个薪水很高的商人", GetTokenizerForLang(tokenizer, "zh"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()
@@ -241,7 +241,7 @@ func TestFullTextTokenizerCJKKorean(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("그는 큰 급여를 가진 사업가입니다.", GetLangTokenizer(tokenizer, "ko"))
+	got, err := BuildTokens("그는 큰 급여를 가진 사업가입니다.", GetTokenizerForLang(tokenizer, "ko"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()
@@ -261,7 +261,7 @@ func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("彼は大きな給与を持つ実業家です", GetLangTokenizer(tokenizer, "ja"))
+	got, err := BuildTokens("彼は大きな給与を持つ実業家です", GetTokenizerForLang(tokenizer, "ja"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()

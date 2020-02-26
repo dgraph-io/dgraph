@@ -435,15 +435,51 @@ func LoadTypesFromDb() error {
 // types to insert.
 func InitialTypes(namespace string) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
-	initialTypes = append(initialTypes, &pb.TypeUpdate{
-		TypeName: x.NamespaceAttr(namespace, "dgraph.graphql"),
-		Fields: []*pb.SchemaUpdate{
-			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
-				ValueType: pb.Posting_STRING,
+	initialTypes = append(initialTypes,
+		&pb.TypeUpdate{
+			TypeName: x.NamespaceAttr(namespace, "dgraph.graphql"),
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
+					ValueType: pb.Posting_STRING,
+				},
+			},
+		})
+
+	if x.WorkerConfig.AclEnabled {
+		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
+		// properly.
+		initialTypes = append(initialTypes, &pb.TypeUpdate{
+			TypeName: x.NamespaceAttr(namespace, "User"),
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
+					ValueType: pb.Posting_STRING,
+				},
+				{
+					Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
+					ValueType: pb.Posting_PASSWORD,
+				},
+				{
+					Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
+					ValueType: pb.Posting_UID,
+				},
 			},
 		},
-	})
+			&pb.TypeUpdate{
+				TypeName: x.NamespaceAttr(namespace, "Group"),
+				Fields: []*pb.SchemaUpdate{
+					{
+						Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
+						ValueType: pb.Posting_STRING,
+					},
+					{
+						Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
+						ValueType: pb.Posting_UID,
+					},
+				},
+			})
+	}
 
 	return initialTypes
 }
