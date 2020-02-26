@@ -17,15 +17,15 @@
 package worker
 
 import (
-	"github.com/dgraph-io/badger/v2"
-
 	"bytes"
+
+	"github.com/dgraph-io/badger/v2"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
