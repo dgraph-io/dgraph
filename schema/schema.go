@@ -384,6 +384,14 @@ func (s *state) HasNoConflict(pred string) bool {
 	return s.predicate[pred].GetNoConflict()
 }
 
+// IsBeingModified checks whether indexing is going on for a given predicate.
+func (s *state) IsBeingModified(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	_, ok := s.writePred[pred]
+	return ok
+}
+
 // Init resets the schema state, setting the underlying DB to the given pointer.
 func Init(ps *badger.DB) {
 	pstore = ps

@@ -41,6 +41,19 @@ var savedir = flag.String("savedir", "",
 var quiet = flag.Bool("quiet", false,
 	"just output whether json differs, not a diff")
 
+func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (
+	*api.Response, error) {
+
+	for {
+		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+
+		return response, err
+	}
+}
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
@@ -78,7 +91,7 @@ func TestQueries(t *testing.T) {
 			// If a query takes too long to run, it probably means dgraph is stuck and there's
 			// no point in waiting longer or trying more tests.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			resp, err := dg.NewTxn().Query(ctx, bodies[0])
+			resp, err := runQueryWithRetry(ctx, dg, bodies[0])
 			cancel()
 			if ctx.Err() == context.DeadlineExceeded {
 				t.Fatal("aborting test due to query timeout")
