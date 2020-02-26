@@ -58,6 +58,9 @@ var personType = &pb.TypeUpdate{
 			Predicate: "friend",
 		},
 		{
+			Predicate: "~friend",
+		},
+		{
 			Predicate: "friend_not_served",
 		},
 	},
@@ -189,6 +192,8 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
 	require.Equal(t, 1, len(result.Types))
+	t.Logf("result %+v", result.Types)
+	t.Logf("person type %+v", personType)
 	require.True(t, proto.Equal(result.Types[0], personType))
 }
 

@@ -333,7 +333,15 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
-	x.Check2(builder.WriteString(update.Predicate))
+	// Write < > brackets in reverse predicates or Dgraph won't be able to
+	// parse the exported schema.
+	if strings.HasPrefix(update.Predicate, "~") {
+		x.Check2(builder.WriteString("<"))
+		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(">"))
+	} else {
+		x.Check2(builder.WriteString(update.Predicate))
+	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
 }
