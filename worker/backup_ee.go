@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -50,7 +49,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 		return nil, err
 	}
 
-	bp := &backup.Processor{DB: pstore, Request: req}
+	bp := &BackupProcessor{DB: pstore, Request: req}
 	return bp.WriteBackup(ctx)
 }
 
@@ -104,7 +103,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	handler, err := backup.NewUriHandler(uri, backup.GetCredentialsFromRequest(req))
+	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(req))
 	if err != nil {
 		return err
 	}
@@ -156,7 +155,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
-	m := backup.Manifest{Since: req.ReadTs, Groups: predMap}
+	m := Manifest{Since: req.ReadTs, Groups: predMap}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)
@@ -167,6 +166,6 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
 
-	bp := &backup.Processor{Request: req}
+	bp := &BackupProcessor{Request: req}
 	return bp.CompleteBackup(ctx, &m)
 }

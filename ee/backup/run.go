@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -184,7 +185,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
+	version, err := worker.RunRestore(opt.pdir, opt.location, opt.backupId)
 	if err != nil {
 		return err
 	}
@@ -209,7 +210,7 @@ func runRestoreCmd() error {
 
 func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
-	manifests, err := ListManifests(opt.location)
+	manifests, err := worker.ListManifests(opt.location)
 	if err != nil {
 		return errors.Wrapf(err, "while listing manifests")
 	}
