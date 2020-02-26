@@ -171,6 +171,10 @@ func gossamer(ctx *cli.Context) error {
 		return err
 	}
 
+	if arguments := ctx.Args(); len(arguments) > 0 {
+		return fmt.Errorf("this command is invalid: %q", arguments[0])
+	}
+
 	node, _, err := makeNode(ctx)
 	if err != nil {
 		log.Error("error starting gossamer", "err", err)

@@ -140,8 +140,8 @@ func TestGetConfig(t *testing.T) {
 	cfgClone.Global.DataDir, err = filepath.Abs(cfgClone.Global.DataDir)
 	require.Nil(t, err)
 
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
+	thisapp := cli.NewApp()
+	thisapp.Writer = ioutil.Discard
 
 	tc := []struct {
 		name     string
@@ -155,7 +155,7 @@ func TestGetConfig(t *testing.T) {
 	for _, c := range tc {
 		set := flag.NewFlagSet(c.name, 0)
 		set.String(c.name, c.value, "")
-		context := cli.NewContext(app, set, nil)
+		context := cli.NewContext(thisapp, set, nil)
 
 		currentConfig, err := getConfig(context)
 		require.Nil(t, err)
@@ -166,8 +166,8 @@ func TestGetConfig(t *testing.T) {
 
 func TestSetGlobalConfig(t *testing.T) {
 	tempPath, _ := filepath.Abs("test1")
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
+	thisapp := cli.NewApp()
+	thisapp.Writer = ioutil.Discard
 	tc := []struct {
 		description string
 		flags       []string
@@ -209,8 +209,8 @@ func TestCreateNetworkService(t *testing.T) {
 
 func TestSetNetworkConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
+	thisapp := cli.NewApp()
+	thisapp.Writer = ioutil.Discard
 	tc := []struct {
 		description string
 		flags       []string
@@ -291,8 +291,8 @@ func TestSetNetworkConfig(t *testing.T) {
 func TestSetRPCConfig(t *testing.T) {
 	tempFile, cfgClone := createTempConfigFile()
 
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
+	thisapp := cli.NewApp()
+	thisapp.Writer = ioutil.Discard
 	tc := []struct {
 		description string
 		flags       []string
@@ -349,8 +349,8 @@ func TestMakeNode(t *testing.T) {
 	genesisPath := createTempGenesisFile(t)
 	defer os.Remove(genesisPath)
 
-	app := cli.NewApp()
-	app.Writer = ioutil.Discard
+	thisapp := cli.NewApp()
+	thisapp.Writer = ioutil.Discard
 	tc := []struct {
 		name     string
 		flags    []string
@@ -401,8 +401,8 @@ func TestCommands(t *testing.T) {
 	for _, c := range tc {
 		c := c // bypass scopelint false positive
 
-		app := cli.NewApp()
-		app.Writer = ioutil.Discard
+		thisapp := cli.NewApp()
+		thisapp.Writer = ioutil.Discard
 
 		context, err := createCliContext(c.description, c.flags, c.values)
 		require.Nil(t, err)
