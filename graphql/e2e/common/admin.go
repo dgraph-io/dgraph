@@ -410,7 +410,6 @@ func adminState(t *testing.T) {
 						moveTs
 					}
 					snapshotTs
-					checksum
 				}
 				zeros {
 					id
@@ -455,7 +454,6 @@ func adminState(t *testing.T) {
 				Members    []*pb.Member
 				Tablets    []*pb.Tablet
 				SnapshotTs uint64
-				Checksum   uint64
 			}
 			Zeros      []*pb.Member
 			MaxLeaseId uint64
@@ -471,16 +469,16 @@ func adminState(t *testing.T) {
 		}
 	}
 
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.NoError(t, err)
 
 	var state pb.MembershipState
 	resp, err := http.Get(adminDgraphStateURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	healthRes, err := ioutil.ReadAll(resp.Body)
+	stateRes, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(healthRes), &state))
+	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
 
 	require.Equal(t, state.Counter, result.State.Counter)
 	for _, group := range result.State.Groups {
@@ -491,44 +489,23 @@ func adminState(t *testing.T) {
 			require.Contains(t, expectedGroup.Members, member.Id)
 			expectedMember := expectedGroup.Members[member.Id]
 
-			require.Equal(t, expectedMember.Id, member.Id)
-			require.Equal(t, expectedMember.GroupId, member.GroupId)
-			require.Equal(t, expectedMember.Addr, member.Addr)
-			require.Equal(t, expectedMember.Leader, member.Leader)
-			require.Equal(t, expectedMember.AmDead, member.AmDead)
-			require.Equal(t, expectedMember.LastUpdate, member.LastUpdate)
-			require.Equal(t, expectedMember.ClusterInfoOnly, member.ClusterInfoOnly)
-			require.Equal(t, expectedMember.ForceGroupId, member.ForceGroupId)
+			require.Equal(t, expectedMember, member)
 		}
 
 		for _, tablet := range group.Tablets {
 			require.Contains(t, expectedGroup.Tablets, tablet.Predicate)
 			expectedTablet := expectedGroup.Tablets[tablet.Predicate]
 
-			require.Equal(t, expectedTablet.GroupId, tablet.GroupId)
-			require.Equal(t, expectedTablet.Predicate, tablet.Predicate)
-			require.Equal(t, expectedTablet.Force, tablet.Force)
-			require.Equal(t, expectedTablet.Space, tablet.Space)
-			require.Equal(t, expectedTablet.Remove, tablet.Remove)
-			require.Equal(t, expectedTablet.ReadOnly, tablet.ReadOnly)
-			require.Equal(t, expectedTablet.MoveTs, tablet.MoveTs)
+			require.Equal(t, expectedTablet, tablet)
 		}
 
 		require.Equal(t, expectedGroup.SnapshotTs, group.SnapshotTs)
-		//require.Equal(t, expectedGroup.Checksum, group.Checksum)
 	}
 	for _, zero := range result.State.Zeros {
 		require.Contains(t, state.Zeros, zero.Id)
 		expectedZero := state.Zeros[zero.Id]
 
-		require.Equal(t, expectedZero.Id, zero.Id)
-		require.Equal(t, expectedZero.GroupId, zero.GroupId)
-		require.Equal(t, expectedZero.Addr, zero.Addr)
-		require.Equal(t, expectedZero.Leader, zero.Leader)
-		require.Equal(t, expectedZero.AmDead, zero.AmDead)
-		require.Equal(t, expectedZero.LastUpdate, zero.LastUpdate)
-		require.Equal(t, expectedZero.ClusterInfoOnly, zero.ClusterInfoOnly)
-		require.Equal(t, expectedZero.ForceGroupId, zero.ForceGroupId)
+		require.Equal(t, expectedZero, zero)
 	}
 	require.Equal(t, state.MaxLeaseId, result.State.MaxLeaseId)
 	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)

@@ -43,15 +43,16 @@ func (hr *stateResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.Grap
 
 func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "state":`))
-
 	var resp *api.Response
 	var err error
+
+	x.Check2(buf.WriteString(`{ "state":`))
+
 	if resp, err = (&edgraph.Server{}).State(ctx); err != nil {
 		err = errors.Errorf("%s: %s", x.Error, err.Error())
 		x.Check2(buf.Write([]byte(` null `)))
 	} else {
-		// unmarshal it back to MembershipState in order to map to graphql response
+		// unmarshal it back to MembershipState proto in order to map to graphql response
 		u := jsonpb.Unmarshaler{}
 		var ms pb.MembershipState
 		err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
@@ -60,11 +61,11 @@ func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 			x.Check2(buf.Write([]byte(` null `)))
 		} else {
 			// map to graphql response
-			graphQlMs := convertToGraphQlResp(ms)
+			state := convertToGraphQLResp(ms)
 
 			// marshal it back to json
 			var b []byte
-			b, err = json.Marshal(graphQlMs)
+			b, err = json.Marshal(state)
 			if err != nil {
 				x.Check2(buf.Write([]byte(` null `)))
 			} else {
@@ -77,10 +78,16 @@ func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 	return buf.Bytes(), err
 }
 
-func convertToGraphQlResp(ms pb.MembershipState) membershipState {
-	var graphQlMs membershipState
+// convertToGraphQLResp converts MembershipState proto to GraphQL layer response
+// MembershipState proto contains some fields which are of type map, and as GraphQL
+// does not have a map type, we convert those maps to lists by using just the map
+// values and not the keys. For pb.MembershipState.Group, the keys are the group IDs
+// and pb.Group didn't contain this ID, so we are creating a custom clusterGroup type,
+// which is same as pb.Group and also contains the ID for the group.
+func convertToGraphQLResp(ms pb.MembershipState) membershipState {
+	var state membershipState
 
-	graphQlMs.Counter = ms.Counter
+	state.Counter = ms.Counter
 	for k, v := range ms.Groups {
 		var members = make([]*pb.Member, 0, len(v.Members))
 		for _, v1 := range v.Members {
@@ -90,7 +97,7 @@ func convertToGraphQlResp(ms pb.MembershipState) membershipState {
 		for _, v1 := range v.Tablets {
 			tablets = append(tablets, v1)
 		}
-		graphQlMs.Groups = append(graphQlMs.Groups, clusterGroup{
+		state.Groups = append(state.Groups, clusterGroup{
 			Id:         k,
 			Members:    members,
 			Tablets:    tablets,
@@ -98,16 +105,16 @@ func convertToGraphQlResp(ms pb.MembershipState) membershipState {
 			Checksum:   v.Checksum,
 		})
 	}
-	graphQlMs.Zeros = make([]*pb.Member, 0, len(ms.Zeros))
+	state.Zeros = make([]*pb.Member, 0, len(ms.Zeros))
 	for _, v := range ms.Zeros {
-		graphQlMs.Zeros = append(graphQlMs.Zeros, v)
+		state.Zeros = append(state.Zeros, v)
 	}
-	graphQlMs.MaxLeaseId = ms.MaxLeaseId
-	graphQlMs.MaxTxnTs = ms.MaxTxnTs
-	graphQlMs.MaxRaftId = ms.MaxRaftId
-	graphQlMs.Removed = ms.Removed
-	graphQlMs.Cid = ms.Cid
-	graphQlMs.License = ms.License
+	state.MaxLeaseId = ms.MaxLeaseId
+	state.MaxTxnTs = ms.MaxTxnTs
+	state.MaxRaftId = ms.MaxRaftId
+	state.Removed = ms.Removed
+	state.Cid = ms.Cid
+	state.License = ms.License
 
-	return graphQlMs
+	return state
 }
