@@ -259,6 +259,16 @@ const (
 }`
 )
 
+type rule struct {
+	Predicate  string `json:"predicate"`
+	Permission uint   `json:"permission"`
+}
+
+type group struct {
+	Name  string `json:"name"`
+	Rules []rule `json:"rules"`
+}
+
 func admin(t *testing.T) {
 	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
 	require.NoError(t, err)
@@ -378,4 +388,179 @@ func health(t *testing.T) {
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func testAddUpdateGroupWithDuplicateRules(t *testing.T) {
+	groupName := "dev"
+	addedRules := []rule{
+		{
+			Predicate:  "test",
+			Permission: 1,
+		},
+		{
+			Predicate:  "test",
+			Permission: 2,
+		},
+		{
+			Predicate:  "test1",
+			Permission: 3,
+		},
+	}
+
+	addedGroup := addGroup(t, groupName, addedRules)
+
+	require.Equal(t, groupName, addedGroup.Name)
+	require.Len(t, addedGroup.Rules, 2)
+	require.Equal(t, addedRules[1:], addedGroup.Rules)
+
+	updatedRules := []rule{
+		{
+			Predicate:  "test",
+			Permission: 3,
+		},
+		{
+			Predicate:  "test2",
+			Permission: 1,
+		},
+		{
+			Predicate:  "test2",
+			Permission: 2,
+		},
+	}
+	updatedGroup := updateGroup(t, groupName, updatedRules, nil)
+
+	require.Equal(t, groupName, updatedGroup.Name)
+	require.Len(t, updatedGroup.Rules, 3)
+	require.Equal(t, updatedRules[0], updatedGroup.Rules[0])
+	require.Equal(t, addedRules[2], updatedGroup.Rules[1])
+	require.Equal(t, updatedRules[2], updatedGroup.Rules[2])
+
+	updatedGroup1 := updateGroup(t, groupName, nil, []string{"test1"})
+
+	require.Equal(t, groupName, updatedGroup1.Name)
+	require.Len(t, updatedGroup1.Rules, 2)
+	require.Equal(t, updatedRules[0], updatedGroup1.Rules[0])
+	require.Equal(t, updatedRules[2], updatedGroup1.Rules[1])
+
+	deleteGroup(t, groupName)
+}
+
+func addGroup(t *testing.T, name string, rules []rule) *group {
+	queryParams := &GraphQLParams{
+		Query: `mutation addGroup($name: String!, $rules: [RuleRef]){
+			addGroup(input: [
+				{
+					name: $name
+					rules: $rules
+				}
+			]) {
+				group {
+					name
+					rules {
+						predicate
+						permission
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name":  name,
+			"rules": rules,
+		},
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddGroup struct {
+			Group []group
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.AddGroup)
+	require.NotNil(t, result.AddGroup.Group)
+	require.Len(t, result.AddGroup.Group, 1)
+
+	return &result.AddGroup.Group[0]
+}
+
+func updateGroup(t *testing.T, name string, setRules []rule, removeRules []string) *group {
+	queryParams := &GraphQLParams{
+		Query: `mutation updateGroup($name: String!, $setRules: [RuleRef], $removeRules: [String]){
+			updateGroup(input: {
+				filter: {
+					name: {
+						eq: $name
+					}
+				}
+				set: {
+					rules: $setRules
+				}
+				remove: {
+					rules: $removeRules
+				}
+			}) {
+				group {
+					name
+					rules {
+						predicate
+						permission
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name":        name,
+			"setRules":    setRules,
+			"removeRules": removeRules,
+		},
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateGroup struct {
+			Group []group
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.UpdateGroup)
+	require.NotNil(t, result.UpdateGroup.Group)
+	require.Len(t, result.UpdateGroup.Group, 1)
+
+	return &result.UpdateGroup.Group[0]
+}
+
+func deleteGroup(t *testing.T, name string) {
+	queryParams := &GraphQLParams{
+		Query: `mutation deleteGroup($name: String!){
+			deleteGroup(filter: {
+				name : {
+					eq: $name
+				}
+			}) {
+				msg
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		DeleteGroup struct {
+			Msg string
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.DeleteGroup)
+	require.Equal(t, result.DeleteGroup.Msg, "Deleted")
 }
