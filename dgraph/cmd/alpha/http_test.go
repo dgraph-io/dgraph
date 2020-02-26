@@ -262,15 +262,23 @@ func createRequest(method, contentType, url string, body string) (*http.Request,
 func runWithRetries(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
 
-	req, err := createRequest(method, contentType, url, body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	qr, respBody, err := runRequest(req)
 	retried := false
-	for err != nil {
-		if strings.Contains(err.Error(), "Token is expired") {
+	for {
+		req, err := createRequest(method, contentType, url, body)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		qr, respBody, err := runRequest(req)
+		if err == nil {
+			return qr, respBody, err
+		}
+
+		switch {
+		case strings.Contains(err.Error(), "is not indexed"):
+			time.Sleep(time.Millisecond * 100)
+			continue
+		case strings.Contains(err.Error(), "Token is expired"):
 			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 				Endpoint:   addr + "/admin",
 				RefreshJwt: grootRefreshJwt,
@@ -278,22 +286,11 @@ func runWithRetries(method, contentType, url string, body string) (
 			if err != nil {
 				return nil, nil, err
 			}
-		}
-
-		if retried && !strings.Contains(err.Error(), "is not indexed") {
+		case retried:
 			return nil, nil, err
 		}
 		retried = true
-
-		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, contentType, url, body)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return runRequest(retryReq)
 	}
-	return qr, respBody, err
 }
 
 // attach the grootAccessJWT to the request and sends the http request

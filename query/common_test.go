@@ -48,12 +48,10 @@ func dropPredicate(pred string) {
 	}
 }
 
-func runQueryWithRetry(ctx context.Context, query string) (
-	*api.Response, error) {
-
+func runQueryWithRetry(ctx context.Context, query string) (*api.Response, error) {
 	for {
 		response, err := client.NewReadOnlyTxn().Query(ctx, query)
-		if err != nil && strings.Contains(err.Error(), "is not indexed") {
+		if err != nil && (strings.Contains(err.Error(), "is not indexed") || strings.Contains(err.Error(), "doesn't have reverse edge")) {
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
