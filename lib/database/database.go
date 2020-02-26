@@ -150,10 +150,10 @@ func (db *BadgerDB) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 	if err := db.db.Close(); err != nil {
-		log.Crit("Failed to close Database *BadgerDB", "err", err)
+		log.Crit("Failed to close *badger.DB", "err", err)
 		return err
 	}
-	log.Info("Database *BadgerDB closed successfully")
+	log.Debug("Database *badger.DB closed successfully")
 	return nil
 }
 
