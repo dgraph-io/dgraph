@@ -2184,7 +2184,7 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [stop Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+* [shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
 * delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 
