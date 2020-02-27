@@ -262,8 +262,9 @@ func createRequest(method, contentType, url string, body string) (*http.Request,
 func runWithRetries(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
 
-	retried := false
+	retries := 0
 	for {
+		retries++
 		req, err := createRequest(method, contentType, url, body)
 		if err != nil {
 			return nil, nil, err
@@ -275,7 +276,10 @@ func runWithRetries(method, contentType, url string, body string) (
 		}
 
 		switch {
-		case strings.Contains(err.Error(), "is not indexed"):
+		case strings.Contains(err.Error(), "is not indexed") ||
+			strings.Contains(err.Error(), "doesn't have reverse edge") ||
+			strings.Contains(err.Error(), "Need @count directive in schema") ||
+			strings.Contains(err.Error(), "already being modified"):
 			time.Sleep(time.Millisecond * 100)
 			continue
 		case strings.Contains(err.Error(), "Token is expired"):
@@ -286,10 +290,9 @@ func runWithRetries(method, contentType, url string, body string) (
 			if err != nil {
 				return nil, nil, err
 			}
-		case retried:
+		case retries > 0:
 			return nil, nil, err
 		}
-		retried = true
 	}
 }
 

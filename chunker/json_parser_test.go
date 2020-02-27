@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
@@ -78,20 +76,6 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	return nqs.nquads, err
 }
 
-func (exp *Experiment) runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph) (
-	*api.Response, error) {
-
-	for {
-		response, err := dg.NewReadOnlyTxn().Query(ctx, exp.query)
-		if err != nil && strings.Contains(err.Error(), "is not indexed") {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
-
-		return response, err
-	}
-}
-
 func (exp *Experiment) verify() {
 	// insert the data into dgraph
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
@@ -108,7 +92,7 @@ func (exp *Experiment) verify() {
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
 	require.NoError(exp.t, err, "mutation failed")
 
-	response, err := exp.runQueryWithRetry(ctx, dg)
+	response, err := testutil.RetryQuery(ctx, dg, exp.query)
 	require.NoError(exp.t, err, "query failed")
 	testutil.CompareJSON(exp.t, exp.expected, string(response.GetJson()))
 }
