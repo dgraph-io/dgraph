@@ -2208,6 +2208,10 @@ do a rolling restart of all your Alpha using the option `--mutations disallow` w
 At this point your application can still read from the old cluster and you can perform the steps 4. and 5. described above.
 When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
 
+{{% notice "note" %}}
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+{{% /notice %}}
+
 ### Post Installation
 
 Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec](/query-language). Also, have a look at [Frequently asked questions](/faq).
