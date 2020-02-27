@@ -355,7 +355,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 					{StartTs: txnTimeStamp, CommitTs: maxTs},
 				},
 			})
-			fmt.Println("maxTs: ", maxTs, " txnTs: ", txnTimeStamp)
 		}
 		span.Annotate(nil, "Done")
 		return nil
@@ -569,7 +568,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	if delta.GroupChecksums != nil {
+		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	}
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
