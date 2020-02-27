@@ -198,7 +198,7 @@ Alpha.
 
 By default, Dgraph will look for a posting directory with the name `p`, so make
 sure to rename the directories after moving them. You can also use the `-p`
-option to specify a different path from the default.
+option of the `dgraph alpha` command to specify a different path from the default.
 
 #### Restore from Amazon S3
 ```sh
