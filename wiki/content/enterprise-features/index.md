@@ -196,6 +196,10 @@ cluster with two Alpha groups and one replica each, `p1` is moved to the
 location of the first Alpha and `p2` is moved to the location of the second
 Alpha.
 
+By default, Dgraph will look for a posting directory with the name `p`, so make
+sure to rename the directories after moving them. You can also use the `-p`
+option to specify a different path from the default.
+
 #### Restore from Amazon S3
 ```sh
 $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/<bucketname>
