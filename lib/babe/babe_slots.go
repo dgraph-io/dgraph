@@ -18,43 +18,14 @@ package babe
 
 import (
 	"errors"
-	"math/big"
 	"sort"
-
-	"github.com/ChainSafe/gossamer/lib/blocktree"
 )
 
 // slotTime calculates the slot time in the form of miliseconds since the unix epoch
 // for a given slot in miliseconds, returns 0 and an error if it can't be calculated
-func (b *Session) slotTime(slot uint64, bt *blocktree.BlockTree, slotTail uint64) (uint64, error) {
-	var at []uint64
-	dl := bt.DeepestBlock()
-	bn := new(big.Int).SetUint64(slotTail)
-	nf := bn.Sub(dl.Header.Number, bn)
-	// check to make sure we have enough blocks before the deepest block to accurately calculate slot time
-	if dl.Header.Number.Cmp(bn) <= 0 {
-		return 0, errors.New("Cannot calculate slot time, deepest leaf block number less than or equal to Slot Tail")
-	}
-	s := bt.GetBlockFromBlockNumber(nf)
-	err := b.configurationFromRuntime()
-	sd := b.config.SlotDuration
-	if err != nil {
-		return 0, err
-	}
-	for _, block := range bt.SubBlockchain(s.Header.Number, dl.Header.Number) {
-		so, offsetErr := slotOffset(bt.ComputeSlotForBlock(block, sd), slot)
-		if offsetErr != nil {
-			return 0, err
-		}
-		st := block.GetBlockArrivalTime() + (so * sd)
-		at = append(at, st)
-	}
-	st, err := median(at)
-	if err != nil {
-		return 0, err
-	}
-	return st, nil
-
+func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) { //nolint
+	// TODO: broken by blocktree updates, has been fixed in next PR
+	return 0, nil
 }
 
 // median calculates the median of a uint64 slice

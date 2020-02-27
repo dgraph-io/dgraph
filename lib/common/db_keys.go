@@ -23,4 +23,6 @@ var (
 	LatestStorageHashKey = []byte("latest_storage_hash")
 	// GenesisDataKey is the db location of the genesis data.
 	GenesisDataKey = []byte("genesis_data")
+	// BlockTreeKey is the db location of the encoded block tree structure.
+	BlockTreeKey = []byte("block_tree")
 )

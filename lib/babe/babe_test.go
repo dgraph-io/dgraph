@@ -27,10 +27,8 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
-	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -234,65 +232,6 @@ func TestSlotOffset(t *testing.T) {
 	}
 
 	var expected uint64 = 1
-
-	if res != expected {
-		t.Errorf("Fail: got %v expected %v\n", res, expected)
-	}
-}
-
-func createFlatBlockTree(t *testing.T, depth int) *blocktree.BlockTree {
-	zeroHash, err := common.HexToHash("0x00")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	genesisBlock := types.Block{
-		Header: &types.Header{
-			ParentHash: zeroHash,
-			Number:     big.NewInt(0),
-		},
-		Body: &types.Body{},
-	}
-	genesisBlock.SetBlockArrivalTime(uint64(1000))
-
-	d := &blocktree.Database{
-		Db: database.NewMemDatabase(),
-	}
-
-	bt := blocktree.NewBlockTreeFromGenesis(genesisBlock, d)
-	previousHash := genesisBlock.Header.Hash()
-	previousAT := genesisBlock.GetBlockArrivalTime()
-
-	for i := 1; i <= depth; i++ {
-		block := types.Block{
-			Header: &types.Header{
-				ParentHash: previousHash,
-				Number:     big.NewInt(int64(i)),
-			},
-			Body: &types.Body{},
-		}
-
-		hash := block.Header.Hash()
-		block.SetBlockArrivalTime(previousAT + uint64(1000))
-
-		bt.AddBlock(block)
-		previousHash = hash
-		previousAT = block.GetBlockArrivalTime()
-	}
-
-	return bt
-}
-
-func TestSlotTime(t *testing.T) {
-	bt := createFlatBlockTree(t, 100)
-	babesession := createTestSession(t, nil)
-
-	res, err := babesession.slotTime(103, bt, 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var expected uint64 = 104000
 
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
