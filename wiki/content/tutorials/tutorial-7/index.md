@@ -292,7 +292,7 @@ Along with the existing features to query and search string predicates, the addi
 This marks the end of our three tutorial-streak exploring string indices and their queries
 using the graph model of tweets.
 
-Check out our next tutorial of the getting started series [here]({{< relref "tutorials/tutorial-8/index.md" >}}).
+See you all in the next tutorial with some more exciting topics. Till then, happy Graphing!
 
 Remember to click the “Join our community” button below and subscribe to our newsletter
 to get the latest tutorial right to your inbox.
