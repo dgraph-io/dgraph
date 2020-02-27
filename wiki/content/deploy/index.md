@@ -2160,6 +2160,8 @@ Currently, "rdf" and "json" are the only formats supported.
 
 A clean exit of a single Dgraph Alpha node is initiated by running the following command on that node.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
+You can specify a list or range of whitelisted IP addresses from which shutdown or other admin operations
+can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
 
 ```graphql
