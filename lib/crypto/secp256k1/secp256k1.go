@@ -181,3 +181,10 @@ func (pk *PrivateKey) Decode(in []byte) error {
 	pk.key = *key
 	return nil
 }
+
+// Hex will return PrivateKey Hex
+func (pk *PrivateKey) Hex() string {
+	enc := pk.Encode()
+	h := hex.EncodeToString(enc)
+	return "0x" + h
+}

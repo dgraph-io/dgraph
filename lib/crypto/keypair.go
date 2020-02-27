@@ -57,6 +57,7 @@ type PrivateKey interface {
 	Public() (PublicKey, error)
 	Encode() []byte
 	Decode([]byte) error
+	Hex() string
 }
 
 var ss58Prefix = []byte("SS58PRE")

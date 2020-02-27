@@ -99,6 +99,34 @@ func NewKeypairFromSeed(seed []byte) (*Keypair, error) {
 	}, nil
 }
 
+// NewKeypairFromPrivateKeyString returns a Keypair given a 0x prefixed private key string
+func NewKeypairFromPrivateKeyString(in string) (*Keypair, error) {
+	privBytes, err := common.HexToBytes(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewKeypairFromPrivateKeyBytes(privBytes)
+}
+
+// NewKeypairFromPrivateKeyBytes returns a Keypair given a private key byte slice
+func NewKeypairFromPrivateKeyBytes(in []byte) (*Keypair, error) {
+	priv, err := NewPrivateKey(in)
+	if err != nil {
+		return nil, err
+	}
+
+	pub, err := priv.Public()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Keypair{
+		private: priv,
+		public:  pub.(*PublicKey),
+	}, nil
+}
+
 // NewPrivateKey creates a new private key using the input bytes
 func NewPrivateKey(in []byte) (*PrivateKey, error) {
 	if len(in) != PrivateKeyLength {
@@ -210,6 +238,13 @@ func (k *PrivateKey) Decode(in []byte) error {
 	copy(b[:], in)
 	k.key = &sr25519.SecretKey{}
 	return k.key.Decode(b)
+}
+
+// Hex returns the private key as a '0x' prefixed hex string
+func (k *PrivateKey) Hex() string {
+	enc := k.Encode()
+	h := hex.EncodeToString(enc)
+	return "0x" + h
 }
 
 // Verify uses the sr25519 signature algorithm to verify that the message was signed by

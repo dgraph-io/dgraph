@@ -168,6 +168,13 @@ func (k *PrivateKey) Decode(in []byte) error {
 	return nil
 }
 
+// Hex will return PrivateKey Hex
+func (k *PrivateKey) Hex() string {
+	enc := k.Encode()
+	h := hex.EncodeToString(enc)
+	return "0x" + h
+}
+
 // Verify checks that Ed25519PublicKey was used to create the signature for the message
 func (k *PublicKey) Verify(msg, sig []byte) (bool, error) {
 	if len(sig) != SignatureLength {

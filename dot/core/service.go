@@ -32,6 +32,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/keyring"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -82,13 +83,15 @@ func NewService(cfg *Config) (*Service, error) {
 
 	keys := cfg.Keystore.Sr25519Keypairs()
 
-	// no validator keypair found, generate a new one
+	// TODO: move this to cli, allow user to specify which test key to use
+	// no validator keypair found, use test keyring
 	if len(keys) == 0 {
-		kp, err := sr25519.GenerateKeypair()
+		ring, err := keyring.NewKeyring()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot create test keyring")
 		}
-		cfg.Keystore.Insert(kp)
+
+		cfg.Keystore.Insert(ring.Alice)
 		keys = cfg.Keystore.Sr25519Keypairs()
 	}
 
