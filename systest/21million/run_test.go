@@ -41,19 +41,6 @@ var savedir = flag.String("savedir", "",
 var quiet = flag.Bool("quiet", false,
 	"just output whether json differs, not a diff")
 
-func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (
-	*api.Response, error) {
-
-	for {
-		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
-		if err != nil && strings.Contains(err.Error(), "is not indexed") {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
-
-		return response, err
-	}
-}
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
