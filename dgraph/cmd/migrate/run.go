@@ -97,7 +97,7 @@ func run(conf *viper.Viper) error {
 
 	initDataTypes()
 
-	pool, err := getPool(user, db, password, ip, port)
+	pool, err := getPool(ip, port, user, password, db)
 	if err != nil {
 		return err
 	}

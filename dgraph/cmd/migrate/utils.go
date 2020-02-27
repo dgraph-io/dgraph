@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getPool(user, db, password, ip, port string) (*sql.DB,
+func getPool(ip, port, user, password, db string) (*sql.DB,
 	error) {
 	return sql.Open("mysql",
 		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, ip, port, db))
