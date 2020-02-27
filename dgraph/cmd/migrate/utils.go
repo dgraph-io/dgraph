@@ -28,10 +28,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getPool(user string, db string, password string) (*sql.DB,
+func getPool(user, db, password, ip, port string) (*sql.DB,
 	error) {
 	return sql.Open("mysql",
-		fmt.Sprintf("%s:%s@/%s?parseTime=true", user, password, db))
+		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, ip, port, db))
 }
 
 // showTables will return a slice of table names using one of the following logic
