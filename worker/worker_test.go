@@ -74,6 +74,11 @@ func addEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	commitTransaction(t, edge, l)
 }
 
+func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	edge.Op = pb.DirectedEdge_DEL
+	commitTransaction(t, edge, l)
+}
+
 func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
 	err := testutil.RetryMutation(dg, mu)

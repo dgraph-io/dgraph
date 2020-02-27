@@ -38,6 +38,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -95,26 +96,32 @@ input StringHashFilter {
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddPostPayload {
 	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 #######################
