@@ -43,6 +43,7 @@ const (
 	alphagRPC       = "localhost:9180"
 
 	adminDgraphHealthURL           = "http://localhost:8280/health?all"
+	adminDgraphStateURL            = "http://localhost:8280/state"
 	graphqlAdminTestURL            = "http://localhost:8280/graphql"
 	graphqlAdminTestAdminURL       = "http://localhost:8280/admin"
 	graphqlAdminTestAdminSchemaURL = "http://localhost:8280/admin/schema"
@@ -195,6 +196,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
 	// schema tests
