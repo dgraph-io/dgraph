@@ -276,12 +276,14 @@ func runWithRetries(method, contentType, url string, body string) (
 		}
 
 		switch {
+		case retries > 20:
+			return qr, respBody, err
+		case strings.Contains(err.Error(), "already being modified"):
+			time.Sleep(time.Second)
 		case strings.Contains(err.Error(), "is not indexed") ||
 			strings.Contains(err.Error(), "doesn't have reverse edge") ||
-			strings.Contains(err.Error(), "Need @count directive in schema") ||
-			strings.Contains(err.Error(), "already being modified"):
+			strings.Contains(err.Error(), "Need @count directive in schema"):
 			time.Sleep(time.Millisecond * 100)
-			continue
 		case strings.Contains(err.Error(), "Token is expired"):
 			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 				Endpoint:   addr + "/admin",
