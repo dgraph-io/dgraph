@@ -215,9 +215,8 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
     }
   }`
 
-	txn = c.NewTxn()
 	for _, tc := range tests {
-		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
+		resp, err := testutil.RetryQuery(ctx, c, fmt.Sprintf(queryFmt, tc.in))
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
@@ -306,9 +305,8 @@ func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 
-	txn = c.NewTxn()
 	for _, tc := range tests {
-		resp, err := txn.Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
@@ -328,6 +326,10 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// wait for schema to get updated
+	_, err = testutil.RetryQuery(ctx, c, `{q(func: eq(name, "")){uid}}`)
+	require.NoError(t, err)
 
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, `schema {}`)
@@ -437,6 +439,10 @@ func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// wait for schema to get updated
+	_, err = testutil.RetryQuery(ctx, c, `{q(func: eq(name, "")){uid}}`)
+	require.NoError(t, err)
 
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, `schema(pred: [name]) {}`)
@@ -700,7 +706,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -738,6 +744,10 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+
+	// wait for indexing to complete
+	_, err = testutil.RetryQuery(ctx, c, `{q(func: eq(name, "")){uid}}`)
+	require.NoError(t, err)
 
 	tests := []struct {
 		in, out string
@@ -818,7 +828,7 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
@@ -832,9 +842,11 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
       name: string @index(term) @lang .
     `,
 	}))
+	_, err := testutil.RetryQuery(ctx, c, `{q(func: anyofterms(name, "")){uid}}`)
+	require.NoError(t, err)
 
 	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:x1 <name> "The luck is in the details" .
       _:x1 <name> "The art is in the details"@en .
@@ -867,7 +879,7 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 
 	t.Log("testing without trigram index")
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
@@ -877,10 +889,12 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
       name: string @index(trigram) @lang .
     `,
 	}))
+	_, err = testutil.RetryQuery(ctx, c, `{q(func: regexp(name, /name/)){uid}}`)
+	require.NoError(t, err)
 
 	t.Log("testing with trigram index")
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
@@ -890,9 +904,11 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
       name: string @index(term) @lang .
     `,
 	}))
+	_, err = testutil.RetryQuery(ctx, c, `{q(func: anyofterms(name, "")){uid}}`)
+	require.NoError(t, err)
 
 	t.Log("testing without trigram index at root")
-	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
+	_, err = testutil.RetryQuery(ctx, c, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
 }
@@ -936,7 +952,7 @@ func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
 		},
 	}
 	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
+		resp, err := testutil.RetryQuery(ctx, c, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
