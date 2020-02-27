@@ -688,9 +688,17 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
+<<<<<<< HEAD
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
+||||||| merged common ancestors
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+=======
+	if delta.GroupChecksums != nil {
+		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	}
+>>>>>>> Skip group checksum
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
