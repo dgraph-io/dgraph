@@ -106,7 +106,9 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
 		err = dg.Login(ctx, x.GrootId, "password")
-		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "user not found for id groot")) {
+
 			break
 		}
 		time.Sleep(time.Second)
@@ -158,14 +160,39 @@ func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 }
 
-// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
-func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+// RetryQuery will call RetryQueryWithTxn.
+func RetryQuery(ctx context.Context, dg *dgo.Dgraph, q string) (*api.Response, error) {
+	return RetryQueryWithTxn(ctx, dg.NewReadOnlyTxn(), q)
+}
+
+// RetryQueryWithVars will retry query until it succeeds.
+func RetryQueryWithVars(ctx context.Context, dg *dgo.Dgraph, q string, vars map[string]string) (
+	*api.Response, error) {
+
+	return retryQuery(ctx, func() (*api.Response, error) {
+		return dg.NewReadOnlyTxn().QueryWithVars(ctx, q, vars)
+	})
+}
+
+// RetryQueryWithTxn will retry a query until it succeeds or a non-retryable error is received.
+func RetryQueryWithTxn(ctx context.Context, txn *dgo.Txn, q string) (*api.Response, error) {
+	return retryQuery(ctx, func() (*api.Response, error) {
+		return txn.Query(ctx, q)
+	})
+}
+
+func retryQuery(ctx context.Context, f func() (*api.Response, error)) (*api.Response, error) {
 	for {
-		resp, err := dg.NewTxn().Query(context.Background(), q)
-		if err != nil && strings.Contains(err.Error(), "Please retry") {
+		resp, err := f()
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "is not indexed") ||
+			strings.Contains(err.Error(), "doesn't have reverse edge") ||
+			strings.Contains(err.Error(), "Need @count directive in schema")) {
+
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
+
 		return resp, err
 	}
 }
