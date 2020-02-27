@@ -156,8 +156,6 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 	}
 
 	go func() {
-		// TODO
-		time.Sleep(time.Second * 5)
 		complete := false
 		defer func() {
 			if complete {

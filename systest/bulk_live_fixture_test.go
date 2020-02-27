@@ -27,11 +27,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
@@ -188,20 +186,6 @@ func (s *suite) cleanup() {
 	s.bulkCluster.Close()
 }
 
-func runQueryWithRetry(ctx context.Context, dg *dgo.Dgraph, query string) (
-	*api.Response, error) {
-
-	for {
-		response, err := dg.NewReadOnlyTxn().Query(ctx, query)
-		if err != nil && strings.Contains(err.Error(), "is not indexed") {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
-
-		return response, err
-	}
-}
-
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		if !s.opts.skipLiveLoader {
@@ -213,7 +197,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
-			resp, err := runQueryWithRetry(ctx, dg, query)
+			resp, err := testutil.RetryQuery(ctx, dg, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
@@ -229,7 +213,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel2()
 
-			resp, err := runQueryWithRetry(ctx2, dg, query)
+			resp, err := testutil.RetryQuery(ctx2, dg, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
