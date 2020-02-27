@@ -1043,8 +1043,8 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 }
 
-func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string) []byte {
-	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
+func removeRuleFromGroup(t *testing.T, accessToken, group string, rulePredicate string) []byte {
+	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [String]) {
 		updateGroup(input: {
 			filter: {
 				name: {
@@ -1069,7 +1069,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 		Query: removeRuleFromGroup,
 		Variables: map[string]interface{}{
 			"name":  group,
-			"rules": []map[string]interface{}{{"id": ruleID}},
+			"rules": []string{rulePredicate},
 		},
 	}
 	b := makeRequest(t, accessToken, params)
@@ -1081,7 +1081,7 @@ func TestDeleteRule(t *testing.T) {
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	assigned := addDataAndRules(ctx, t, dg)
+	_ = addDataAndRules(ctx, t, dg)
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1103,7 +1103,7 @@ func TestDeleteRule(t *testing.T) {
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	removeRuleFromGroup(t, accessJwt, devGroup, assigned["r1"])
+	removeRuleFromGroup(t, accessJwt, devGroup, "name")
 	time.Sleep(6 * time.Second)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)

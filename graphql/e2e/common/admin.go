@@ -411,7 +411,7 @@ func testAddUpdateGroupWithDuplicateRules(t *testing.T) {
 
 	require.Equal(t, groupName, addedGroup.Name)
 	require.Len(t, addedGroup.Rules, 2)
-	require.Equal(t, addedRules[1:], addedGroup.Rules)
+	require.ElementsMatch(t, addedRules[1:], addedGroup.Rules)
 
 	updatedRules := []rule{
 		{
@@ -431,16 +431,13 @@ func testAddUpdateGroupWithDuplicateRules(t *testing.T) {
 
 	require.Equal(t, groupName, updatedGroup.Name)
 	require.Len(t, updatedGroup.Rules, 3)
-	require.Equal(t, updatedRules[0], updatedGroup.Rules[0])
-	require.Equal(t, addedRules[2], updatedGroup.Rules[1])
-	require.Equal(t, updatedRules[2], updatedGroup.Rules[2])
+	require.ElementsMatch(t, []rule{updatedRules[0], addedRules[2], updatedRules[2]}, updatedGroup.Rules)
 
 	updatedGroup1 := updateGroup(t, groupName, nil, []string{"test1"})
 
 	require.Equal(t, groupName, updatedGroup1.Name)
 	require.Len(t, updatedGroup1.Rules, 2)
-	require.Equal(t, updatedRules[0], updatedGroup1.Rules[0])
-	require.Equal(t, updatedRules[2], updatedGroup1.Rules[1])
+	require.ElementsMatch(t, []rule{updatedRules[0], updatedRules[2]}, updatedGroup1.Rules)
 
 	deleteGroup(t, groupName)
 }
