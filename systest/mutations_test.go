@@ -747,8 +747,10 @@ func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
+	_, err := testutil.RetryQuery(ctx, c, `{q(func: eq(pred, "")){uid}}`)
+	require.NoError(t, err)
 
-	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
+	err = c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
 
@@ -1379,7 +1381,6 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			you(func: has(end)) { count(uid) }
 		}`)
 		check(t, err)
-		t.Logf("resp: %s\n", resp.GetJson())
 		m := make(map[string][]U)
 		err = json.Unmarshal(resp.GetJson(), &m)
 		check(t, err)
@@ -1405,7 +1406,6 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	deleteMu.DelNquads = []byte(fmt.Sprintf(`
 		<%s> <end> * .
 	`, ids[len(ids)-1]))
-	t.Logf("deleteMu: %+v\n", deleteMu)
 	_, err = txn.Mutate(ctx, deleteMu)
 	check(t, err)
 
@@ -1478,7 +1478,6 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 		}`)
 	check(t, err)
 
-	t.Logf("resp: %s\n", resp.GetJson())
 	m := make(map[string][]F)
 	err = json.Unmarshal(resp.GetJson(), &m)
 	check(t, err)
