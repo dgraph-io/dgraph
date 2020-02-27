@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Basic Operations"
 
 **Welcome to the second tutorial of getting started with Dgraph.**
 
-In the [previous tutorial]({{< relref "tutorial-1/index.md" >}}) of getting started,
+In the [previous tutorial]({{< relref "tutorials/tutorial-1/index.md" >}}) of getting started,
 we learned some of the basics of Dgraph. 
 Including how to run the database, add new nodes and predicates, and query them back.
 
@@ -95,7 +95,7 @@ In the query below, replace the placeholder `MICHAELS_UID` with the UID you just
 
 You can see that the `uid` function returns the node matching the UID for Michael's node.
 
-Refer to the [previous tutorial]({{< relref "tutorial-1/index.md" >}}) if you have questions related to the structure of the query in general.
+Refer to the [previous tutorial]({{< relref "tutorials/tutorial-1/index.md" >}}) if you have questions related to the structure of the query in general.
 
 ## Updating predicates
 
@@ -371,7 +371,7 @@ Did you know that you could search predicates based on their value?
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series [here]({{< relref "tutorial-3/index.md" >}}).
+Check out our next tutorial of the getting started series [here]({{< relref "tutorials/tutorial-3/index.md" >}}).
 
 ## Need Help
 
