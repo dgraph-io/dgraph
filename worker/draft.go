@@ -51,18 +51,6 @@ import (
 	"golang.org/x/net/trace"
 )
 
-type commitBatch struct {
-	wg *sync.WaitGroup
-	ts uint64
-}
-
-type batch struct {
-	data []*pb.DirectedEdge
-	ctx  context.Context
-	txn  *posting.Txn
-	wg   *sync.WaitGroup
-}
-
 type node struct {
 	*conn.Node
 
@@ -72,9 +60,6 @@ type node struct {
 	ctx      context.Context
 	gid      uint32
 	closer   *y.Closer
-
-	proposalCh chan batch
-	commitCh   chan commitBatch
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -97,8 +82,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 
-	num := 100
-
 	n := &node{
 		Node: m,
 		ctx:  context.Background(),
@@ -106,76 +89,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:    make(chan []*pb.Proposal, 1000),
-		rollupCh:   make(chan uint64, 3),
-		proposalCh: make(chan batch, num),
-		commitCh:   make(chan commitBatch, num*20),
-		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:     y.NewCloser(3), // Matches CLOSER:1
-	}
-
-	process := func(b batch) error {
-		var retries int
-		for _, edge := range b.data {
-			for {
-				err := runMutation(b.ctx, edge, b.txn)
-				if err == nil {
-					break
-				}
-				if err != posting.ErrRetry {
-					return err
-				}
-				retries++
-			}
-		}
-		b.wg.Done()
-		return nil
-	}
-
-	toDisk := func(start, commit uint64) {
-		writer := posting.NewTxnWriter(pstore)
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		txn.Update()
-		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToDisk(writer, commit)
-		})
-
-		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-		}
-
-		txn.ClearCache()
-	}
-
-	for i := 0; i < num; i++ {
-		go func() {
-			for {
-				select {
-				case <-ShutdownCh:
-					return
-				case j := <-n.proposalCh:
-					process(j)
-				}
-			}
-		}()
-	}
-
-	for i := 0; i < num*10; i++ {
-		go func() {
-			for {
-				select {
-				case <-ShutdownCh:
-					return
-				case b := <-n.commitCh:
-					b.wg.Wait()
-					toDisk(b.ts, b.ts)
-				}
-			}
-		}()
+		applyCh:  make(chan []*pb.Proposal, 1000),
+		rollupCh: make(chan uint64, 3),
+		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:   y.NewCloser(3), // Matches CLOSER:1
 	}
 
 	return n
@@ -223,9 +140,7 @@ func detectPendingTxns(attr string) error {
 	if len(tctxs) == 0 {
 		return nil
 	}
-	if !x.WorkerConfig.LudicrousMode {
-		go tryAbortTransactions(tctxs)
-	}
+	go tryAbortTransactions(tctxs)
 	return errHasPendingTxns
 }
 
@@ -234,7 +149,6 @@ func detectPendingTxns(attr string) error {
 // involving the predicate are aborted until schema mutations are done.
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
-	fmt.Println(proposal.Mutations.StartTs)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -397,17 +311,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	processL := func(edges []*pb.DirectedEdge, wg *sync.WaitGroup) error {
-		n.proposalCh <- batch{data: edges, ctx: ctx, txn: txn, wg: wg}
-		return nil
-	}
-
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
-	if numGo == -1 {
+	if numGo == 1 {
 		return process(m.Edges)
 	}
+
 	errCh := make(chan error, numGo)
 	var wg sync.WaitGroup
 	for i := 0; i < numGo; i++ {
@@ -417,25 +327,16 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			end = len(m.Edges)
 		}
 		wg.Add(1)
-		if !x.WorkerConfig.LudicrousMode {
-			go func(start, end int, wg *sync.WaitGroup) {
-				errCh <- process(m.Edges[start:end])
-			}(start, end, &wg)
-		} else {
-			processL(m.Edges[start:end], &wg)
-		}
+		go func(start, end int, wg *sync.WaitGroup) {
+			errCh <- process(m.Edges[start:end])
+		}(start, end, &wg)
 	}
 
-	if !x.WorkerConfig.LudicrousMode {
-		for i := 0; i < numGo; i++ {
-			if err := <-errCh; err != nil {
-				return err
-			}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
 		}
-		return nil
 	}
-
-	n.commitCh <- commitBatch{wg: &wg, ts: proposal.Mutations.StartTs}
 	return nil
 }
 
@@ -613,6 +514,16 @@ func (n *node) processApplyCh() {
 		}
 	}
 
+	handleCh := make(chan []*pb.Proposal, 10)
+
+	if x.WorkerConfig.LudicrousMode {
+		go func() {
+			for proposal := range handleCh {
+				handle(proposal)
+			}
+		}()
+	}
+
 	maxAge := 10 * time.Minute
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
@@ -623,7 +534,11 @@ func (n *node) processApplyCh() {
 			if !ok {
 				return
 			}
-			handle(entries)
+			if x.WorkerConfig.LudicrousMode {
+				handleCh <- entries
+			} else {
+				handle(entries)
+			}
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()

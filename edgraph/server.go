@@ -804,11 +804,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	var startTs uint64
 	if isMutation && req.StartTs == 0 {
 		start := time.Now()
-		startTs = worker.State.GetTimestamp(false)
 		if !x.WorkerConfig.LudicrousMode {
+			startTs = worker.State.GetTimestamp(false)
 			req.StartTs = startTs
 		} else {
 			req.StartTs = posting.Oracle().MaxAssigned()
+			if len(qc.req.GetMutations()) > 0 {
+				startTs = worker.State.GetTimestamp(false)
+			}
 		}
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
