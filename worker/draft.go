@@ -94,6 +94,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
 	}
+
 	return n
 }
 
@@ -309,23 +310,28 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return nil
 	}
+
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
 		return process(m.Edges)
 	}
+
 	errCh := make(chan error, numGo)
+	var wg sync.WaitGroup
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
 		if end > len(m.Edges) {
 			end = len(m.Edges)
 		}
-		go func(start, end int) {
+		wg.Add(1)
+		go func(start, end int, wg *sync.WaitGroup) {
 			errCh <- process(m.Edges[start:end])
-		}(start, end)
+		}(start, end, &wg)
 	}
+
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
 			return err
@@ -517,6 +523,16 @@ func (n *node) processApplyCh() {
 		}
 	}
 
+	handleCh := make(chan []*pb.Proposal, 10)
+
+	if x.WorkerConfig.LudicrousMode {
+		go func() {
+			for proposal := range handleCh {
+				handle(proposal)
+			}
+		}()
+	}
+
 	maxAge := 10 * time.Minute
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
@@ -527,7 +543,11 @@ func (n *node) processApplyCh() {
 			if !ok {
 				return
 			}
-			handle(entries)
+			if x.WorkerConfig.LudicrousMode {
+				handleCh <- entries
+			} else {
+				handle(entries)
+			}
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -1161,6 +1181,9 @@ func (n *node) rollupLists(readTs uint64) error {
 var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
+	if x.WorkerConfig.LudicrousMode {
+		return nil
+	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return errNoConnection
@@ -1204,6 +1227,9 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
+	if x.WorkerConfig.LudicrousMode {
+		return
+	}
 	// Aborts if not already committed.
 	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {

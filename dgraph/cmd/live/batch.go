@@ -237,6 +237,7 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 }
 
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
+	return nil, nil
 	pred, found := l.schema.preds[nq.Predicate]
 
 	// We dont' need to generate conflict keys for predicate with noconflict directive.
