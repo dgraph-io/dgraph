@@ -1170,6 +1170,9 @@ func (n *node) rollupLists(readTs uint64) error {
 var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
+	if x.WorkerConfig.LudicrousMode {
+		return nil
+	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return errNoConnection
