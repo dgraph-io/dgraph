@@ -2246,7 +2246,6 @@ func TestFilterUsingLenFunction(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Log("Running: ", tc.name)
 		js := processQueryNoErr(t, tc.in)
 		require.JSONEq(t, tc.out, js)
 	}
