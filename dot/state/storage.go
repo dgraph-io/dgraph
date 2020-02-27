@@ -26,47 +26,57 @@ import (
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
-// DB stores trie structure in an underlying Database
-type DB struct {
-	DB database.Database
+var storagePrefix = []byte("storage")
+
+// StorageDB stores trie structure in an underlying database
+type StorageDB struct {
+	db database.Database
+}
+
+// Put appends `storage` to the key and sets the key-value pair in the db
+func (storageDB *StorageDB) Put(key, value []byte) error {
+	key = append(storagePrefix, key...)
+	return storageDB.db.Put(key, value)
+}
+
+// Get appends `storage` to the key and retrieves the value from the db
+func (storageDB *StorageDB) Get(key []byte) ([]byte, error) {
+	key = append(storagePrefix, key...)
+	return storageDB.db.Get(key)
 }
 
 // StorageState is the struct that holds the trie, db and lock
 type StorageState struct {
 	trie *trie.Trie
-	DB   *DB
+	db   *StorageDB
 	lock sync.RWMutex
 }
 
 // NewStateDB instantiates badgerDB instance for storing trie structure
-func NewStateDB(dataDir string) (*DB, error) {
-	db, err := database.NewBadgerDB(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DB{
+func NewStateDB(db database.Database) *StorageDB {
+	return &StorageDB{
 		db,
-	}, nil
+	}
 }
 
 // NewStorageState creates a new StorageState backed by the given trie and database located at dataDir.
-func NewStorageState(dataDir string, t *trie.Trie) (*StorageState, error) {
-	stateDb, err := NewStateDB(dataDir)
-	if err != nil {
-		return nil, err
+func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) {
+	if db == nil {
+		return nil, fmt.Errorf("cannot have nil database")
 	}
-	db := trie.NewDatabase(stateDb.DB)
-	t.SetDb(db)
+
+	triedb := trie.NewDatabase(db)
+	t.SetDb(triedb)
+
 	return &StorageState{
 		trie: t,
-		DB:   stateDb,
+		db:   NewStateDB(db),
 	}, nil
 }
 
 // SetLatestHeaderHash sets the LatestHeaderHashKey in the DB to the given hash
 func (s *StorageState) SetLatestHeaderHash(hash []byte) error {
-	err := s.DB.DB.Put(common.LatestHeaderHashKey, hash)
+	err := s.db.Put(common.LatestHeaderHashKey, hash)
 	if err != nil {
 		return fmt.Errorf("cannot get latest hash: %s", err)
 	}
@@ -76,7 +86,7 @@ func (s *StorageState) SetLatestHeaderHash(hash []byte) error {
 
 // GetLatestHeaderHash retrieves the value stored in the DB at LatestHeaderHashKey
 func (s *StorageState) GetLatestHeaderHash() ([]byte, error) {
-	latestHeaderHash, err := s.DB.DB.Get(common.LatestHeaderHashKey)
+	latestHeaderHash, err := s.db.Get(common.LatestHeaderHashKey)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get latest hash: %s", err)
 	}

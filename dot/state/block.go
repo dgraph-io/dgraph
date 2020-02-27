@@ -32,9 +32,23 @@ import (
 	"github.com/ChainSafe/gossamer/lib/database"
 )
 
+var blockPrefix = []byte("block")
+
 // BlockDB stores block's in an underlying Database
 type BlockDB struct {
-	Db database.Database
+	db database.Database
+}
+
+// Put appends `block` to the key and sets the key-value pair in the db
+func (blockDB *BlockDB) Put(key, value []byte) error {
+	key = append(blockPrefix, key...)
+	return blockDB.db.Put(key, value)
+}
+
+// Get appends `block` to the key and retrieves the value from the db
+func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
+	key = append(blockPrefix, key...)
+	return blockDB.db.Get(key)
 }
 
 // BlockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
@@ -46,27 +60,21 @@ type BlockState struct {
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
-func NewBlockDB(dataDir string) (*BlockDB, error) {
-	db, err := database.NewBadgerDB(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
+func NewBlockDB(db database.Database) *BlockDB {
 	return &BlockDB{
 		db,
-	}, nil
+	}
 }
 
 // NewBlockState will create a new BlockState backed by the database located at dataDir
-func NewBlockState(dataDir string, latestHash common.Hash) (*BlockState, error) {
-	blockDb, err := NewBlockDB(dataDir)
-	if err != nil {
-		return nil, err
+func NewBlockState(db database.Database, latestHash common.Hash) (*BlockState, error) {
+	if db == nil {
+		return nil, fmt.Errorf("cannot have nil database")
 	}
 
 	bs := &BlockState{
 		bt: &blocktree.BlockTree{},
-		db: blockDb,
+		db: NewBlockDB(db),
 	}
 
 	latestHeader, err := bs.GetHeader(latestHash)
@@ -79,18 +87,13 @@ func NewBlockState(dataDir string, latestHash common.Hash) (*BlockState, error) 
 }
 
 // NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at dataDir
-func NewBlockStateFromGenesis(dataDir string, header *types.Header) (*BlockState, error) {
-	blockDb, err := NewBlockDB(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
+func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*BlockState, error) {
 	bs := &BlockState{
 		bt: &blocktree.BlockTree{},
-		db: blockDb,
+		db: NewBlockDB(db),
 	}
 
-	err = bs.SetHeader(header)
+	err := bs.SetHeader(header)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +136,7 @@ func blockDataKey(hash common.Hash) []byte {
 func (bs *BlockState) GetHeader(hash common.Hash) (*types.Header, error) {
 	result := new(types.Header)
 
-	data, err := bs.db.Db.Get(headerKey(hash))
+	data, err := bs.db.Get(headerKey(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +154,7 @@ func (bs *BlockState) GetHeader(hash common.Hash) (*types.Header, error) {
 func (bs *BlockState) GetBlockData(hash common.Hash) (*types.BlockData, error) {
 	result := new(types.BlockData)
 
-	data, err := bs.db.Db.Get(blockDataKey(hash))
+	data, err := bs.db.Get(blockDataKey(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +214,7 @@ func (bs *BlockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 // GetBlockByNumber returns a block for a given blockNumber
 func (bs *BlockState) GetBlockByNumber(blockNumber *big.Int) (*types.Block, error) {
 	// First retrieve the block hash in a byte array based on the block number from the database
-	byteHash, err := bs.db.Db.Get(headerHashKey(blockNumber.Uint64()))
+	byteHash, err := bs.db.Get(headerHashKey(blockNumber.Uint64()))
 	if err != nil {
 		return nil, err
 	}
@@ -239,13 +242,13 @@ func (bs *BlockState) SetHeader(header *types.Header) error {
 		return err
 	}
 
-	err = bs.db.Db.Put(headerKey(hash), bh)
+	err = bs.db.Put(headerKey(hash), bh)
 	if err != nil {
 		return err
 	}
 
 	// Add a mapping of [blocknumber : hash] for retrieving the block by number
-	err = bs.db.Db.Put(headerHashKey(header.Number.Uint64()), header.Hash().ToBytes())
+	err = bs.db.Put(headerHashKey(header.Number.Uint64()), header.Hash().ToBytes())
 	return err
 }
 
@@ -270,7 +273,7 @@ func (bs *BlockState) SetBlockData(blockData *types.BlockData) error {
 		return err
 	}
 
-	err = bs.db.Db.Put(blockDataKey(blockData.Hash), bh)
+	err = bs.db.Put(blockDataKey(blockData.Hash), bh)
 	return err
 }
 
@@ -313,7 +316,7 @@ func babeHeaderKey(epoch uint64, slot uint64) []byte {
 func (bs *BlockState) GetBabeHeader(epoch uint64, slot uint64) (*babetypes.BabeHeader, error) {
 	result := new(babetypes.BabeHeader)
 
-	data, err := bs.db.Db.Get(babeHeaderKey(epoch, slot))
+	data, err := bs.db.Get(babeHeaderKey(epoch, slot))
 	if err != nil {
 		return nil, err
 	}
@@ -331,6 +334,6 @@ func (bs *BlockState) SetBabeHeader(epoch uint64, slot uint64, bh *babetypes.Bab
 		return err
 	}
 
-	err = bs.db.Db.Put(babeHeaderKey(epoch, slot), enc)
+	err = bs.db.Put(babeHeaderKey(epoch, slot), enc)
 	return err
 }

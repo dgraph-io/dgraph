@@ -19,11 +19,11 @@ package main
 import (
 	"fmt"
 	"math/big"
-	"path/filepath"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/node/gssmr"
@@ -69,22 +69,22 @@ func loadGenesis(ctx *cli.Context) error {
 		return fmt.Errorf("cannot initialize state service: %s", err)
 	}
 
-	stateDataDir := filepath.Join(dataDir, "state")
-	stateDb, err := state.NewStorageState(stateDataDir, t)
+	// initialize database with genesis storage state
+	db, err := database.NewBadgerDB(dataDir)
 	if err != nil {
-		return fmt.Errorf("cannot create state db: %s", err)
+		return err
 	}
 
 	defer func() {
-		err = stateDb.DB.DB.Close()
+		err = db.Close()
 		if err != nil {
-			log.Error("Loading genesis: cannot close stateDB", "error", err)
+			log.Error("Loading genesis: cannot close db", "error", err)
 		}
 	}()
 
 	// set up trie database
 	t.SetDb(&trie.Database{
-		DB: stateDb.DB.DB,
+		DB: db,
 	})
 
 	// write initial genesis data to DB

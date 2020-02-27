@@ -24,35 +24,36 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestSetAndGetHeader(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "./test_data")
+func newTestBlockState(t *testing.T) *BlockState {
+	datadir, err := ioutil.TempDir("", "./test_data")
 	require.Nil(t, err)
 
-	blockDb, err := NewBlockDB(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := database.NewBadgerDB(datadir)
 
-	defer func() {
-		err = blockDb.Db.Close()
-		require.Nil(t, err, "BlockDB close err: ", err)
-	}()
+	blockDb := NewBlockDB(db)
+	require.Nil(t, err)
 
-	bs := &BlockState{
+	return &BlockState{
 		db: blockDb,
 	}
+}
+
+func TestSetAndGetHeader(t *testing.T) {
+	bs := newTestBlockState(t)
+	defer bs.db.db.Close()
 
 	header := &types.Header{
 		Number:    big.NewInt(0),
 		StateRoot: trie.EmptyHash,
 	}
 
-	err = bs.SetHeader(header)
+	err := bs.SetHeader(header)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,21 +69,8 @@ func TestSetAndGetHeader(t *testing.T) {
 }
 
 func TestGetBlockByNumber(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "TestGetBlockByNumber")
-	require.Nil(t, err)
-
-	// Create & start a new State service
-	stateService := NewService(dataDir)
-	err = stateService.Initialize(&types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}, trie.NewEmptyTrie(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = stateService.Start()
-	require.Nil(t, err)
+	bs := newTestBlockState(t)
+	defer bs.db.db.Close()
 
 	// Create a header & blockData
 	blockHeader := &types.Header{
@@ -101,10 +89,10 @@ func TestGetBlockByNumber(t *testing.T) {
 
 	// Set the block's header & blockData in the blockState
 	// SetHeader also sets mapping [blockNumber : hash] in DB
-	err = stateService.Block.SetHeader(blockHeader)
+	err := bs.SetHeader(blockHeader)
 	require.Nil(t, err)
 
-	err = stateService.Block.SetBlockData(blockData)
+	err = bs.SetBlockData(blockData)
 	require.Nil(t, err)
 
 	// Get block & check if it's the same as the expectedBlock
@@ -113,7 +101,7 @@ func TestGetBlockByNumber(t *testing.T) {
 		Body:   blockBody,
 	}
 
-	retBlock, err := stateService.Block.GetBlockByNumber(blockHeader.Number)
+	retBlock, err := bs.GetBlockByNumber(blockHeader.Number)
 	require.Nil(t, err)
 
 	retBlock.Header.Hash()
@@ -123,22 +111,8 @@ func TestGetBlockByNumber(t *testing.T) {
 }
 
 func TestAddBlock(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "TestAddBlock")
-	require.Nil(t, err)
-
-	blockDb, err := NewBlockDB(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer func() {
-		err = blockDb.Db.Close()
-		require.Nil(t, err, "BlockDB close err: ", err)
-	}()
-
-	blockState := &BlockState{
-		db: blockDb,
-	}
+	bs := newTestBlockState(t)
+	defer bs.db.db.Close()
 
 	// Create header
 	header0 := &types.Header{
@@ -156,7 +130,7 @@ func TestAddBlock(t *testing.T) {
 	}
 
 	// Add the block0 to the DB
-	err = blockState.AddBlock(block0)
+	err := bs.AddBlock(block0)
 	require.Nil(t, err)
 
 	// Create header & blockData for block 1
@@ -174,11 +148,11 @@ func TestAddBlock(t *testing.T) {
 	}
 
 	// Add the block1 to the DB
-	err = blockState.AddBlock(block1)
+	err = bs.AddBlock(block1)
 	require.Nil(t, err)
 
 	// Get the blocks & check if it's the same as the added blocks
-	retBlock, err := blockState.GetBlockByHash(blockHash0)
+	retBlock, err := bs.GetBlockByHash(blockHash0)
 	require.Nil(t, err)
 
 	// this will panic if not successful, so catch and fail it so
@@ -194,7 +168,7 @@ func TestAddBlock(t *testing.T) {
 
 	require.Equal(t, block0, retBlock, "Could not validate returned block0 as expected")
 
-	retBlock, err = blockState.GetBlockByHash(blockHash1)
+	retBlock, err = bs.GetBlockByHash(blockHash1)
 	require.Nil(t, err)
 
 	// this will panic if not successful, so catch and fail it so
@@ -211,6 +185,6 @@ func TestAddBlock(t *testing.T) {
 	require.Equal(t, block1, retBlock, "Could not validate returned block1 as expected")
 
 	// Check if latestBlock is set correctly
-	require.Equal(t, block1.Header, blockState.latestHeader, "Latest Header Block Check Fail")
+	require.Equal(t, block1.Header, bs.latestHeader, "Latest Header Block Check Fail")
 
 }

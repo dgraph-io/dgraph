@@ -29,6 +29,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/transaction"
@@ -215,17 +216,12 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
 
-	datadir, err := ioutil.TempDir("", "./test_data")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	header := &types.Header{
 		Number:    big.NewInt(0),
 		StateRoot: trie.EmptyHash,
 	}
 
-	blockState, err := state.NewBlockStateFromGenesis(datadir, header)
+	blockState, err := state.NewBlockStateFromGenesis(database.NewMemDatabase(), header)
 	if err != nil {
 		t.Fatal(err)
 	}

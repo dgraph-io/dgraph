@@ -24,17 +24,20 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestConcurrencySetHeader(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "./test_data")
+	datadir, err := ioutil.TempDir("", "./test_data")
 	require.Nil(t, err)
 
-	blockDB, err := NewBlockDB(dataDir)
+	db, err := database.NewBadgerDB(datadir)
 	require.Nil(t, err)
+
+	blockDB := NewBlockDB(db)
 
 	threads := runtime.NumCPU()
 	dbs := make([]*BlockDB, threads)
