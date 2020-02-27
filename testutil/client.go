@@ -182,12 +182,20 @@ func RetryQueryWithTxn(ctx context.Context, txn *dgo.Txn, q string) (*api.Respon
 }
 
 func retryQuery(ctx context.Context, f func() (*api.Response, error)) (*api.Response, error) {
+	retries := 0
+	maxRetries := 200
 	for {
+		retries++
 		resp, err := f()
+		if retries > maxRetries {
+			return resp, err
+		}
+
 		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
 			strings.Contains(err.Error(), "is not indexed") ||
 			strings.Contains(err.Error(), "doesn't have reverse edge") ||
-			strings.Contains(err.Error(), "Need @count directive in schema")) {
+			strings.Contains(err.Error(), "Need @count directive in schema") ||
+			strings.Contains(err.Error(), "does not have trigram index")) {
 
 			time.Sleep(10 * time.Millisecond)
 			continue
