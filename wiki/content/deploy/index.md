@@ -2194,7 +2194,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 
 - Start an [export]({{< relref "#export-database">}})
 - Ensure it is successful
-- Bring down the cluster
+- [shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
 - Run Dgraph using new data directories.
 - Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
 - If all looks good, you can delete the old directories (export serves as an insurance)
