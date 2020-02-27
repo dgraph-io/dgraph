@@ -295,6 +295,9 @@ func (mrw *addRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
 }
 
+// Rewrite rewrites schema.Mutation into GraphQL+- upsert mutations only for Group type.
+// It ensures that only the last rule out of all duplicate rules in input is preserved.
+// A rule is duplicate if it has same predicate name as another rule.
 func (mrw *addGroupRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	addGroupInput, _ := m.ArgValue(schema.InputArgName).([]interface{})
@@ -444,7 +447,13 @@ func (urw *updateRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
 }
 
-func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations
+// only for Group type. It ensures that if a rule already exists in db, it is updated;
+// otherwise, it is created. It also ensures that only the last rule out of all
+// duplicate rules in input is preserved. A rule is duplicate if it has same predicate
+// name as another rule.
+func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
+	[]*dgoapi.Mutation, error) {
 	mutatedType := m.MutatedType()
 
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
@@ -570,7 +579,7 @@ func (urw *updateGroupRewriter) FromMutationResult(
 }
 
 // writeAclRuleQuery returns a *gql.GraphQuery to query a rule inside a group based on
-// its predicate value
+// its predicate value.
 func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.GraphQuery {
 	ruleQuery := rewriteUpsertQueryFromMutation(m)
 	ruleQuery.Attr = variable
@@ -598,8 +607,8 @@ func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.Graph
 	return ruleQuery
 }
 
-// removeDuplicateRuleRef removes duplicate rules based on predicate value
-// for duplicate rules, only the last rule with duplicate predicate name is preserved
+// removeDuplicateRuleRef removes duplicate rules based on predicate value.
+// for duplicate rules, only the last rule with duplicate predicate name is preserved.
 func removeDuplicateRuleRef(rules []interface{}) []interface{} {
 	predicateMap := make(map[string]int, len(rules))
 	i := 0
