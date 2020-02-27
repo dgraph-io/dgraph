@@ -26,6 +26,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/rpc"
@@ -36,7 +37,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
-	"github.com/ChainSafe/gossamer/node"
+	"github.com/ChainSafe/gossamer/node/gssmr"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
@@ -44,7 +45,7 @@ import (
 )
 
 // makeNode sets up node; opening badgerDB instance and returning the Node container
-func makeNode(ctx *cli.Context) (*node.Node, *node.Config, error) {
+func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 	currentConfig, err := getConfig(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -122,7 +123,7 @@ func makeNode(ctx *cli.Context) (*node.Node, *node.Config, error) {
 		srvcs = append(srvcs, rpcSrvr)
 	}
 
-	return node.NewNode(gendata.Name, srvcs), currentConfig, nil
+	return dot.NewNode(gendata.Name, srvcs), currentConfig, nil
 }
 
 func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
@@ -145,8 +146,9 @@ func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtim
 }
 
 // getConfig checks for config.toml if --config flag is specified and sets CLI flags
-func getConfig(ctx *cli.Context) (*node.Config, error) {
-	currentConfig := node.DefaultConfig()
+func getConfig(ctx *cli.Context) (*dot.Config, error) {
+	currentConfig := gssmr.DefaultConfig()
+
 	// Load config file.
 	if file := ctx.GlobalString(ConfigFileFlag.Name); file != "" {
 		configFile := ctx.GlobalString(ConfigFileFlag.Name)
@@ -171,7 +173,7 @@ func getConfig(ctx *cli.Context) (*node.Config, error) {
 }
 
 // loadConfig loads the contents from config toml and inits Config object
-func loadConfig(file string, config *node.Config) error {
+func loadConfig(file string, config *dot.Config) error {
 	fp, err := filepath.Abs(file)
 	if err != nil {
 		return err
@@ -187,7 +189,7 @@ func loadConfig(file string, config *node.Config) error {
 	return nil
 }
 
-func setGlobalConfig(ctx *cli.Context, currentConfig *node.GlobalConfig) {
+func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
 	newDataDir := currentConfig.DataDir
 	if dir := ctx.GlobalString(DataDirFlag.Name); dir != "" {
 		newDataDir = expandTildeOrDot(dir)
@@ -206,7 +208,7 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *node.GlobalConfig) {
 	currentConfig.Roles = newRoles
 }
 
-func setNetworkConfig(ctx *cli.Context, fig *node.NetworkConfig) {
+func setNetworkConfig(ctx *cli.Context, fig *dot.NetworkConfig) {
 	// Bootnodes
 	if bnodes := ctx.GlobalString(BootnodesFlag.Name); bnodes != "" {
 		fig.Bootnodes = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
@@ -232,7 +234,7 @@ func setNetworkConfig(ctx *cli.Context, fig *node.NetworkConfig) {
 }
 
 // createNetworkService creates a network service from the command configuration and genesis data
-func createNetworkService(fig *node.Config, gendata *genesis.Data, stateService *state.Service) (*network.Service, chan network.Message, chan network.Message) {
+func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *state.Service) (*network.Service, chan network.Message, chan network.Message) {
 	// Default bootnodes and protocol from genesis file
 	bootnodes := common.BytesToStringArray(gendata.Bootnodes)
 	protocolID := gendata.ProtocolID
@@ -282,7 +284,7 @@ func createCoreService(coreConfig *core.Config) *core.Service {
 	return coreService
 }
 
-func setRPCConfig(ctx *cli.Context, fig *node.RPCConfig) {
+func setRPCConfig(ctx *cli.Context, fig *dot.RPCConfig) {
 	// Modules
 	if mods := ctx.GlobalString(RPCModuleFlag.Name); mods != "" {
 		fig.Modules = strings.Split(ctx.GlobalString(RPCModuleFlag.Name), ",")
@@ -300,7 +302,7 @@ func setRPCConfig(ctx *cli.Context, fig *node.RPCConfig) {
 
 }
 
-func setupRPC(fig node.RPCConfig, stateSrv *state.Service, networkSrvc *network.Service, coreSrvc *core.Service, txQueue *state.TransactionQueue) *rpc.HTTPServer {
+func setupRPC(fig dot.RPCConfig, stateSrv *state.Service, networkSrvc *network.Service, coreSrvc *core.Service, txQueue *state.TransactionQueue) *rpc.HTTPServer {
 	cfg := &rpc.HTTPServerConfig{
 		BlockAPI:            stateSrv.Block,
 		StorageAPI:          stateSrv.Storage,
@@ -376,7 +378,7 @@ var tomlSettings = toml.Config{
 // expandTildeOrDot will expand a tilde prefix path to full home path
 func expandTildeOrDot(targetPath string) string {
 	if strings.HasPrefix(targetPath, "~\\") || strings.HasPrefix(targetPath, "~/") {
-		if homeDir := node.HomeDir(); homeDir != "" {
+		if homeDir := gssmr.HomeDir(); homeDir != "" {
 			targetPath = homeDir + targetPath[1:]
 		}
 	} else if strings.HasPrefix(targetPath, ".\\") || strings.HasPrefix(targetPath, "./") {

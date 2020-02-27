@@ -1,6 +1,6 @@
 [global]
-data-dir = "~/.gossamer/gssmr"
-authority = true
+data-dir = "~/.gossamer/ksmcc"
+authority = false
 
 [network]
 bootstrap-nodes = []
@@ -11,4 +11,4 @@ no-mdns = false
 [rpc]
 port = 8545
 host = "localhost"
-modules = ["system", "author"]
+modules = ["system"]

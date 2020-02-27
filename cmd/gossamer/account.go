@@ -30,7 +30,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
-	"github.com/ChainSafe/gossamer/node"
+	"github.com/ChainSafe/gossamer/node/gssmr"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
@@ -247,20 +247,17 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 	return fp, nil
 }
 
-// keystoreDir returnns the absolute filepath of the keystore directory given gossamer's datadir
-// by default, it is ~/.gossamer/keystore/
-// otherwise, it is datadir/keystore/
+// keystoreDir returns the absolute filepath of the keystore directory
 func keystoreDir(datadir string) (keystorepath string, err error) {
-	// datadir specified, return datadir/keystore as absolute path
+	// datadir specified, set keystore filepath to absolute path of [datadir]/keystore
 	if datadir != "" {
 		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
 			return "", err
 		}
 	} else {
-		// datadir not specified, return ~/.gossamer/keystore as absolute path
-		datadir = node.DefaultDataDir()
-
+		// datadir not specified, use default datadir and set keystore filepath to absolute path of [datadir]/keystore
+		datadir = gssmr.DefaultDataDir()
 		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
 			return "", fmt.Errorf("could not create keystore file path: %s", err)

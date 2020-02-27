@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package node
+package dot
 
 import (
 	"math/big"
@@ -37,7 +37,7 @@ func createTestNode(t *testing.T, testDir string) *Node {
 	networkCfg := &network.Config{
 		BlockState:   &state.BlockState{},   // required
 		NetworkState: &state.NetworkState{}, // required
-		DataDir:      testDir,               // default "~/.gossamer"
+		DataDir:      testDir,               // default "~/.gossamer/gssmr"
 		Roles:        1,                     // required
 		RandSeed:     1,                     // default 0
 	}

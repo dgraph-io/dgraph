@@ -27,10 +27,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
-	"github.com/ChainSafe/gossamer/node"
+	"github.com/ChainSafe/gossamer/node/gssmr"
 	"github.com/ChainSafe/gossamer/tests"
 
 	log "github.com/ChainSafe/log15"
@@ -67,8 +68,8 @@ func removeTestDataDir() {
 	}
 }
 
-func createTempConfigFile() (*os.File, *node.Config) {
-	testConfig := node.DefaultConfig()
+func createTempConfigFile() (*os.File, *dot.Config) {
+	testConfig := gssmr.DefaultConfig()
 	testConfig.Global.Authority = false
 	testConfig.Global.DataDir = TestDataDir
 	tmpFile, err := ioutil.TempFile(os.TempDir(), "prefix-")
@@ -76,7 +77,7 @@ func createTempConfigFile() (*os.File, *node.Config) {
 		log.Crit("Cannot create temporary file", "err", err)
 		os.Exit(1)
 	}
-	f := node.ExportConfig(tmpFile.Name(), testConfig)
+	f := dot.ExportConfig(tmpFile.Name(), testConfig)
 	return f, testConfig
 }
 
@@ -146,9 +147,9 @@ func TestGetConfig(t *testing.T) {
 	tc := []struct {
 		name     string
 		value    string
-		expected *node.Config
+		expected *dot.Config
 	}{
-		{"", "", node.DefaultConfig()},
+		{"", "", gssmr.DefaultConfig()},
 		{"config", tempFile.Name(), cfgClone},
 	}
 
@@ -172,17 +173,17 @@ func TestSetGlobalConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    node.GlobalConfig
+		expected    dot.GlobalConfig
 	}{
 		{"datadir flag",
 			[]string{"datadir"},
 			[]interface{}{"test1"},
-			node.GlobalConfig{DataDir: tempPath},
+			dot.GlobalConfig{DataDir: tempPath},
 		},
 		{"roles flag",
 			[]string{"datadir", "roles"},
 			[]interface{}{"test1", "1"},
-			node.GlobalConfig{DataDir: tempPath, Roles: byte(1)},
+			dot.GlobalConfig{DataDir: tempPath, Roles: byte(1)},
 		},
 	}
 
@@ -192,7 +193,7 @@ func TestSetGlobalConfig(t *testing.T) {
 			context, err := createCliContext(c.description, c.flags, c.values)
 			require.Nil(t, err)
 
-			tCfg := &node.GlobalConfig{}
+			tCfg := &dot.GlobalConfig{}
 
 			setGlobalConfig(context, tCfg)
 
@@ -203,7 +204,9 @@ func TestSetGlobalConfig(t *testing.T) {
 
 func TestCreateNetworkService(t *testing.T) {
 	stateSrv := state.NewService(TestDataDir)
-	srv, _, _ := createNetworkService(node.DefaultConfig(), &genesis.Data{}, stateSrv)
+	cfg := gssmr.DefaultConfig()
+	cfg.Global.DataDir = TestDataDir
+	srv, _, _ := createNetworkService(cfg, &genesis.Data{}, stateSrv)
 	require.NotNil(t, srv, "failed to create network service")
 }
 
@@ -215,7 +218,7 @@ func TestSetNetworkConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    node.NetworkConfig
+		expected    dot.NetworkConfig
 	}{
 		{
 			"config file",
@@ -227,10 +230,10 @@ func TestSetNetworkConfig(t *testing.T) {
 			"no bootstrap, no mdns",
 			[]string{"nobootstrap", "nomdns"},
 			[]interface{}{true, true},
-			node.NetworkConfig{
-				Bootnodes:   node.DefaultNetworkBootnodes,
-				ProtocolID:  node.DefaultNetworkProtocolID,
-				Port:        node.DefaultNetworkPort,
+			dot.NetworkConfig{
+				Bootnodes:   gssmr.DefaultNetworkBootnodes,
+				ProtocolID:  gssmr.DefaultNetworkProtocolID,
+				Port:        gssmr.DefaultNetworkPort,
 				NoBootstrap: true,
 				NoMdns:      true,
 			},
@@ -239,10 +242,10 @@ func TestSetNetworkConfig(t *testing.T) {
 			"bootstrap nodes",
 			[]string{"bootnodes"},
 			[]interface{}{strings.Join(TestBootnodes[:], ",")},
-			node.NetworkConfig{
+			dot.NetworkConfig{
 				Bootnodes:   TestBootnodes,
-				ProtocolID:  node.DefaultNetworkProtocolID,
-				Port:        node.DefaultNetworkPort,
+				ProtocolID:  gssmr.DefaultNetworkProtocolID,
+				Port:        gssmr.DefaultNetworkPort,
 				NoBootstrap: false,
 				NoMdns:      false,
 			},
@@ -251,9 +254,9 @@ func TestSetNetworkConfig(t *testing.T) {
 			"port",
 			[]string{"port"},
 			[]interface{}{uint(1337)},
-			node.NetworkConfig{
-				Bootnodes:   node.DefaultNetworkBootnodes,
-				ProtocolID:  node.DefaultNetworkProtocolID,
+			dot.NetworkConfig{
+				Bootnodes:   gssmr.DefaultNetworkBootnodes,
+				ProtocolID:  gssmr.DefaultNetworkProtocolID,
 				Port:        1337,
 				NoBootstrap: false,
 				NoMdns:      false,
@@ -263,9 +266,9 @@ func TestSetNetworkConfig(t *testing.T) {
 			"protocol id",
 			[]string{"protocol"},
 			[]interface{}{TestProtocolID},
-			node.NetworkConfig{
-				Bootnodes:   node.DefaultNetworkBootnodes,
-				Port:        node.DefaultNetworkPort,
+			dot.NetworkConfig{
+				Bootnodes:   gssmr.DefaultNetworkBootnodes,
+				Port:        gssmr.DefaultNetworkPort,
 				ProtocolID:  TestProtocolID,
 				NoBootstrap: false,
 				NoMdns:      false,
@@ -279,7 +282,7 @@ func TestSetNetworkConfig(t *testing.T) {
 			context, err := createCliContext(c.description, c.flags, c.values)
 			require.Nil(t, err)
 
-			input := node.DefaultConfig()
+			input := gssmr.DefaultConfig()
 			// Must call global setup to set data dir
 			setNetworkConfig(context, &input.Network)
 
@@ -297,7 +300,7 @@ func TestSetRPCConfig(t *testing.T) {
 		description string
 		flags       []string
 		values      []interface{}
-		expected    node.RPCConfig
+		expected    dot.RPCConfig
 	}{
 		{
 			"config file",
@@ -309,19 +312,19 @@ func TestSetRPCConfig(t *testing.T) {
 			"host and port",
 			[]string{"rpchost", "rpcport"},
 			[]interface{}{"someHost", uint(1337)},
-			node.RPCConfig{
+			dot.RPCConfig{
 				Port:    1337,
 				Host:    "someHost",
-				Modules: node.DefaultRPCModules,
+				Modules: gssmr.DefaultRPCModules,
 			},
 		},
 		{
 			"modules",
 			[]string{"rpcmods"},
 			[]interface{}{"system,state"},
-			node.RPCConfig{
-				Port:    node.DefaultRPCHTTPPort,
-				Host:    node.DefaultRPCHTTPHost,
+			dot.RPCConfig{
+				Port:    gssmr.DefaultRPCHTTPPort,
+				Host:    gssmr.DefaultRPCHTTPHost,
 				Modules: []string{"system", "state"},
 			},
 		},
@@ -333,7 +336,7 @@ func TestSetRPCConfig(t *testing.T) {
 			context, err := createCliContext(c.description, c.flags, c.values)
 			require.Nil(t, err)
 
-			input := node.DefaultConfig()
+			input := gssmr.DefaultConfig()
 			setRPCConfig(context, &input.RPC)
 
 			require.Equal(t, c.expected, input.RPC)
@@ -355,7 +358,7 @@ func TestMakeNode(t *testing.T) {
 		name     string
 		flags    []string
 		values   []interface{}
-		expected *node.Config
+		expected *dot.Config
 	}{
 		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesisPath}, cfgClone},
 		{"default node (norpc)", []string{"genesis"}, []interface{}{genesisPath}, cfgClone},

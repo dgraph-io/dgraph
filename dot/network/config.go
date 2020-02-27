@@ -29,7 +29,7 @@ import (
 const DefaultKeyFile = "node.key"
 
 // DefaultDataDir for the gossamer database and related blockchain files
-const DefaultDataDir = "~/.gossamer"
+const DefaultDataDir = "~/.gossamer/gssmr"
 
 // DefaultPort is the default por const
 const DefaultPort = uint32(7000)
@@ -38,7 +38,7 @@ const DefaultPort = uint32(7000)
 const DefaultRandSeed = int64(0)
 
 // DefaultProtocolID ID
-const DefaultProtocolID = "/gossamer/dot/0"
+const DefaultProtocolID = "/gossamer/gssmr/0"
 
 // DefaultRoles full node
 const DefaultRoles = byte(1)

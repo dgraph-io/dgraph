@@ -1,10 +1,10 @@
 {
   "name": "Gossamer Testnet",
-  "id": "gssmr0",
+  "id": "gssmr",
   "bootNodes": [
     "/ip4/104.211.54.233/tcp/30363/p2p/16Uiu2HAmFWPUx45xYYeCpAryQbvU3dY8PWGdMwS2tLm1dB1CsmCj"
   ],
-  "protocolId": "gssmr0",
+  "protocolId": "gssmr",
   "genesis": {
     "raw": [
       {

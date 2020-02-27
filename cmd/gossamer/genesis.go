@@ -26,7 +26,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/ChainSafe/gossamer/node"
+	"github.com/ChainSafe/gossamer/node/gssmr"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
@@ -131,6 +131,6 @@ func getGenesisPath(ctx *cli.Context) string {
 	} else if file := ctx.GlobalString(GenesisFlag.Name); file != "" {
 		return file
 	} else {
-		return node.DefaultGenesisPath
+		return gssmr.DefaultGenesisPath
 	}
 }

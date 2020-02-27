@@ -104,7 +104,7 @@ func loadKey(fp string) (crypto.PrivKey, error) {
 	return crypto.UnmarshalEd25519PrivateKey(dec)
 }
 
-// makeDir creates `.gossamer` if directory does not already exist
+// makeDir makes directory if directory does not already exist
 func makeDir(fp string) error {
 	_, e := os.Stat(fp)
 	if os.IsNotExist(e) {
