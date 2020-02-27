@@ -2158,7 +2158,11 @@ Currently, "rdf" and "json" are the only formats supported.
 
 ### Shutdown Database
 
-A clean exit of a single Dgraph Alpha node is initiated by running the following command on that node.
+To shutdown a Dgraph cluster, shutdown all its Alpha and Zero nodes. This can be done in different ways,
+depending on how Dgraph was started (e.g. sending a `SIGTERM` to the processes, or using `systemctl stop service-name`
+if you are using systemd).
+
+A clean exit of a single Dgraph Alpha node can be initiated by running the following command on that node.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
 You can specify a list or range of whitelisted IP addresses from which shutdown or other admin operations
 can be initiated using the `--whitelist` flag on `dgraph alpha`.
